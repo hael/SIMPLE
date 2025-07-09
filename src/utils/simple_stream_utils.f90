@@ -15,8 +15,8 @@ use simple_nice
 implicit none
 
 public :: stream_chunk, DIR_CHUNK, merge_chunks, update_user_params
-public :: chunks_list
-public :: projrecord, projrecords2proj, class_rejection
+public :: projs_list
+public :: projrecord, projrecords2proj, kill_projrecords, class_rejection
 public :: procrecord, append_procrecord, kill_procrecords
 private
 #include "simple_local_flags.inc"
@@ -48,15 +48,16 @@ type procrecord
     logical                       :: included  = .false.    ! has been post-processed/analyzed
 end type procrecord
 
-! Conveniebce type to keep track of converged chunks
-type chunks_list
+! Convenience type to keep track of converged chunks
+type projs_list
     integer                                :: n = 0         ! # of elements in list
     character(len=LONGSTRLEN), allocatable :: projfiles(:)  ! project file filenames
     integer,                   allocatable :: ids(:)        ! unique ID
+    logical,                   allocatable :: processed(:)  ! chunk: has converged; set: has been clustered/selected/matched
   contains
     procedure :: append
     procedure :: kill_list
-end type chunks_list
+end type projs_list
 
 ! Type to handle a single chunk
 type stream_chunk
@@ -630,40 +631,60 @@ contains
 
     ! Chunks list type
 
-    subroutine append( self, fname, id )
-        class(chunks_list), intent(inout) :: self
-        character(len=*),   intent(in)    :: fname
-        integer,            intent(in)    :: id
+    subroutine append( self, fname, id, processed )
+        class(projs_list), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer,           intent(in)    :: id
+        logical,           intent(in)    :: processed
         character(len=LONGSTRLEN), allocatable :: tmpstr(:)
         integer,                   allocatable :: tmpint(:)
+        logical,                   allocatable :: tmplog(:)
+        integer :: ind
         if( self%n == 0 )then
-            allocate(self%projfiles(1))
+            allocate(self%projfiles(1),self%ids(1),self%processed(1))
             self%projfiles(1) = trim(fname)
-            allocate(self%ids(1))
-            self%ids(1) = id
+            self%ids(1)       = id
+            self%processed(1) = processed
             self%n = 1
         else
+            ind = self%n + 1
             call move_alloc(self%projfiles, tmpstr)
             call move_alloc(self%ids,       tmpint)
-            allocate(self%projfiles(self%n+1), self%ids(self%n+1))
+            call move_alloc(self%processed, tmplog)
+            allocate(self%projfiles(ind), self%ids(ind),self%processed(ind))
             self%projfiles(1:self%n) = tmpstr(:)
-            self%projfiles(self%n+1) = trim(fname)
+            self%projfiles(ind)      = trim(fname)
             self%ids(1:self%n)       = tmpint(:)
-            self%ids(self%n+1)       = id
-            self%n = self%n + 1
+            self%ids(ind)            = id
+            self%processed(1:self%n) = tmplog(:)
+            self%processed(ind)      = processed
+            self%n = ind
             deallocate(tmpstr,tmpint)
         endif
     end subroutine append
 
     subroutine kill_list( self )
-        class(chunks_list), intent(inout) :: self
+        class(projs_list), intent(inout) :: self
         if( self%n > 0 )then
-            deallocate(self%projfiles,self%ids)
+            deallocate(self%projfiles,self%ids,self%processed)
             self%n = 0
         endif
     end subroutine kill_list
 
     ! Public Utility to handle the type projrecord
+
+    elemental subroutine kill_projrecord( rec )
+        type(projrecord), intent(inout) :: rec
+        if( allocated(rec%projname) ) deallocate(rec%projname)
+    end subroutine kill_projrecord
+
+    subroutine kill_projrecords( recs )
+        type(projrecord), allocatable, intent(inout) :: recs(:)
+        if( allocated(recs) )then
+            call kill_projrecord(recs(:))
+            deallocate(recs)
+        endif
+    end subroutine kill_projrecords
 
     !> convert a list of projects into one project
     !  previous mic/stk/ptcl2D,ptcl3D are wipped, other fields untouched

@@ -34,7 +34,7 @@ contains
 
     subroutine exec_stream2D( self, cline )
         class(commander_stream2D), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
+        class(cmdline),            intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         integer,                   parameter   :: PAUSE_NITERS    = 5   ! # of iterations after which 2D analysis is paused
         integer,                   parameter   :: PAUSE_TIMELIMIT = 600 ! time (secs) after which 2D analysis is paused
@@ -42,6 +42,7 @@ contains
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(simple_nice_communicator)         :: nice_communicator
+        type(projs_list)                       :: chunkslist, setslist
         type(guistats)                         :: gui_stats
         type(oris)                             :: moldiamori, chunksizeori
         type(moviewatcher)                     :: project_buff
@@ -50,12 +51,12 @@ contains
         type(json_value),          pointer     :: snapshot_json
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
-        integer(kind=dp)                       :: pool_time_last_chunk, time_last_import
-        integer                                :: nmics_rejected_glob, nchunks_imported_glob, nchunks_imported, nprojects, iter
-        integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs, ncls_in
-        integer                                :: i
-        logical                                :: l_nchunks_maxed, l_pause, l_params_updated
         real                                   :: nptcls_pool, moldiam
+        integer(kind=dp)                       :: pool_time_last_chunk, time_last_import
+        integer                                :: nchunks_glob, nchunks_imported, nprojects, iter
+        integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
+        integer                                :: nsets_prev, i
+        logical                                :: l_nchunks_maxed, l_pause, l_params_updated
         nullify(snapshot_json)
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -74,7 +75,7 @@ contains
         if( .not. cline%defined('tau')          ) call cline%set('tau',          5)
         if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
-        if( .not. cline%defined('cavg_ini')     ) call cline%set('cavg_ini',     'no')
+        if( .not. cline%defined('nchunksperset')) call cline%set('nchunksperset', 2)
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -82,13 +83,7 @@ contains
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
                 THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
             endif
-        endif
-        ncls_in = 0
-        if( cline%defined('ncls') )then
-            ! to circumvent parameters class stringency, restored after params%new
-            ncls_in = cline%get_iarg('ncls')
-            call cline%delete('ncls')
-        endif        
+        endif      
         ! master parameters
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
@@ -98,7 +93,6 @@ contains
         params%ml_reg_pool  = trim(params%ml_reg)
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
-        if( ncls_in > 0 ) call cline%set('ncls', real(ncls_in))
         ! limit to # of chunks
         if( .not. cline%defined('maxnchunks') .or. params%maxnchunks < 1 )then
             params%maxnchunks = huge(params%maxnchunks)
@@ -149,17 +143,17 @@ contains
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         ! Infinite loop
-        nptcls_glob           = 0       ! global number of particles
-        nchunks_imported_glob = 0       ! global number of completed chunks
-        n_imported            = 0       ! global number of imported processed micrographs
-        n_imported_prev       = 0
-        nmics_rejected_glob   = 0       ! global number of micrographs rejected
-        nprojects             = 0
-        iter                  = 0       ! global number of infinite loop iterations
-        n_failed_jobs         = 0
-        l_nchunks_maxed       = .false. ! Whether a minimum number of chunks as been met
-        l_pause               = .false. ! whether pool 2D analysis is skipped
-        time_last_import      = huge(time_last_import)      ! used for flushing unprocessed particles
+        nptcls_glob         = 0       ! global number of particles
+        nchunks_glob        = 0       ! global number of completed chunks
+        nsets_prev          = 0
+        n_imported          = 0       ! global number of imported processed micrographs
+        n_imported_prev     = 0
+        nprojects           = 0
+        iter                = 0       ! global number of infinite loop iterations
+        n_failed_jobs       = 0
+        l_nchunks_maxed     = .false. ! Whether a minimum number of chunks as been met
+        l_pause             = .false. ! whether pool 2D analysis is skipped
+        time_last_import    = huge(time_last_import)      ! used for flushing unprocessed particles
         ! guistats init
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
@@ -183,7 +177,7 @@ contains
                 call spproj_glob%kill
                 call qsys_cleanup
                 call nice_communicator%terminate(stop=.true.)
-                call simple_end('**** SIMPLE_STREAM_CLUSTER2D USER STOP ****')
+                call simple_end('**** SIMPLE_STREAM2D USER STOP ****')
                 call EXIT(0)
             endif
             iter = iter + 1
@@ -221,24 +215,31 @@ contains
             nice_communicator%view_cls2D%mskdiam  = params%mskdiam
             nice_communicator%view_cls2D%boxsizea = get_boxa()
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
-            if( l_params_updated ) l_pause = .false.
+            if( l_params_updated ) l_pause = .false.    ! resuming
             call update_chunks
-            if( l_pause )then
-                call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
-                if( l_params_updated ) l_pause = .false.    ! resuming 2D analysis
-            else
-                call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
-            endif
+            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            if( l_params_updated ) l_pause = .false.    ! resuming
             if( l_nchunks_maxed )then
                 ! ??
             else
-                call import_chunks_into_pool( nchunks_imported )
+                call memoize_chunks(chunkslist, nchunks_imported)
                 if( nchunks_imported > 0 )then
-                    nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
-                    pool_time_last_chunk  = time8()
-                    l_pause = .false.   ! resuming 2D analysis
+                    ! some book-keeping
+                    nchunks_glob         = nchunks_glob + nchunks_imported
+                    pool_time_last_chunk = time8()
+                    l_pause              = .false.   ! resuming
+                    ! handling of sets
+                    nsets_prev = setslist%n
+                    call generate_sets(chunkslist, setslist)
+                    if( setslist%n > nsets_prev )then
+                        if( setslist%n == 1 )then
+                            ! execute cluster_cavgs here
+                        else
+                            ! execute match_cavgs here
+                        endif
+                    endif
                 endif
-                if( nchunks_imported_glob >= params%maxnchunks )then
+                if( nchunks_glob >= params%maxnchunks )then
                     l_nchunks_maxed = .true.
                 endif
                 if( l_pause )then
@@ -415,6 +416,28 @@ contains
                 enddo
                 deallocate(spprojs)
             end subroutine update_records_with_project
+
+            subroutine generate_sets( chunks, sets )
+                class(projs_list), intent(in)    :: chunks
+                class(projs_list), intent(inout) :: sets
+                type(sp_project)              :: spproj
+                character(len=:), allocatable :: tmpl
+                integer :: navail_chunks, n, iset, ic_start, ic_end
+                navail_chunks = chunks%n - sets%n * params%nchunksperset
+                n = floor(real(navail_chunks) / real(params%nchunksperset))
+                if( n < 1 )return
+                do iset = 1,n
+                    ! merge chunks project into designated folder
+                    ic_start = sets%n*params%nchunksperset + 1
+                    ic_end   = ic_start + params%nchunksperset - 1
+                    tmpl     = 'set_'//int2str(sets%n+1)
+                    call simple_mkdir(tmpl)
+                    call merge_chunks(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
+                    ! update global list, also increments sets%n
+                    call sets%append(tmpl//'/'//tmpl//trim(METADATA_EXT), sets%n+1, .false.)
+                enddo
+                call spproj%kill
+            end subroutine generate_sets
 
     end subroutine exec_stream2D
 

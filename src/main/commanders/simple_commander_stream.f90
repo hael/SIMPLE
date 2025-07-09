@@ -1056,10 +1056,10 @@ contains
                 !    params%nmoldiams      = nmoldiams_interactive
                     pause_import   = .true.
                     interactive_waiting = .true.
-                    if(allocated(projrecords_main)) deallocate(projrecords_main)
+                    call kill_projrecords(projrecords_main)
                     allocate(projrecords_main(size(projrecords)))
                     projrecords_main(:) = projrecords(:)
-                    if(allocated(projrecords)) deallocate(projrecords)
+                    call kill_projrecords(projrecords)
                     call spproj_glob%os_mic%kill()
                     call spproj_glob%os_mic%copy(interactive_spproj%os_mic, is_ptcl=.false.)
                     call import_previous_mics( projrecords )
@@ -1223,7 +1223,7 @@ contains
                     nice_communicator%stat_root%stage = "picking with user selected parameters"
                     nice_communicator%stat_root%user_input = .false.
                     call nice_communicator%update_pick(gaussian_diameter=int(params%moldiam_refine))
-                    if(allocated(projrecords)) deallocate(projrecords)
+                    call kill_projrecords(projrecords)
                     if(allocated(projrecords_main)) then
                         allocate(projrecords(size(projrecords_main)))
                         projrecords(:) = projrecords_main(:)
@@ -1241,7 +1241,7 @@ contains
                                 call spproj_tmp%kill
                             end if
                         end do
-                        deallocate(projrecords)
+                        call kill_projrecords(projrecords)
                     end if
                     thumbid_offset = 0
                 end if
@@ -1472,6 +1472,8 @@ contains
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
+        call kill_projrecords(projrecords)
+        call kill_projrecords(projrecords_main)
         ! end gracefully
         call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
@@ -1609,7 +1611,7 @@ contains
                         call move_alloc(projrecords, old_records)
                         allocate(projrecords(n_completed))
                         if( n_old > 0 ) projrecords(1:n_old) = old_records(:)
-                        deallocate(old_records)
+                        call kill_projrecords(old_records)
                     endif
                     ! update records and global project
                     j = n_old
@@ -2190,6 +2192,7 @@ contains
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
+        call kill_projrecords(projrecords)
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
@@ -2239,7 +2242,7 @@ contains
                         call move_alloc(projrecords, old_records)
                         allocate(projrecords(n_completed))
                         if( n_old > 0 ) projrecords(1:n_old) = old_records(:)
-                        deallocate(old_records)
+                    call kill_projrecords(old_records)
                     endif
                     ! update records and global project
                     j = n_old
@@ -2903,6 +2906,7 @@ contains
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
+        call kill_projrecords(projrecords)
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
