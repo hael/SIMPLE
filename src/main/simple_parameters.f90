@@ -118,6 +118,7 @@ type :: parameters
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion (yes|no){yes}
+    character(len=3)          :: reset_boxfiles='no'  !< whether to remove existing boxfiles and set boxfile in current dir (yes|no){no}
     character(len=3)          :: restore_cavgs='yes'  !< Whether to restore images to class averages after orientation search (yes|no){yes}
     character(len=3)          :: ring='no'            !< whether to use ring in interactive stream pick
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
@@ -748,6 +749,7 @@ contains
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('remove_chunks',  self%remove_chunks)
         call check_carg('remap_cls',      self%remap_cls)
+        call check_carg('reset_boxfiles', self%reset_boxfiles)
         call check_carg('restore_cavgs',  self%restore_cavgs)
         call check_carg('ring',           self%ring)
         call check_carg('roavg',          self%roavg)

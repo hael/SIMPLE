@@ -311,9 +311,13 @@ contains
     subroutine exec_update_project( self, cline )
         class(update_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
         call params%new(cline)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! read relevant segments
         call spproj%read_non_data_segments(trim(params%projfile))
         ! update project info
@@ -323,25 +327,32 @@ contains
         ! write the last bit of the project file
         call spproj%write_non_data_segments(trim(params%projfile))
         ! no printing for this program
+        call nice_communicator%terminate()
     end subroutine exec_update_project
 
     subroutine exec_zero_project_shifts( self, cline )
         class(zero_project_shifts_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
         call cline%set('mkdir', 'yes')
         call params%new(cline, silent=.true.)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         call spproj%read(params%projfile)
         call spproj%os_ptcl2D%zero_shifts
         call spproj%os_ptcl3D%zero_shifts
         call spproj%write(params%projfile)
         call spproj%kill
+        call nice_communicator%terminate()
     end subroutine exec_zero_project_shifts
 
     subroutine exec_import_movies( self, cline )
         class(import_movies_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        type(simple_nice_communicator)         :: nice_communicator
         type(parameters)                       :: params
         type(sp_project)                       :: spproj
         type(oris)                             :: deftab
@@ -368,6 +379,9 @@ contains
         if( .not. file_exists(trim(params%projfile)) )then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
         endif
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         call spproj%read(params%projfile)
         nprev_intgs  = spproj%get_nintgs()
         nprev_movies = spproj%get_nmovies()
@@ -468,42 +482,67 @@ contains
         endif 
         ! write project file
         call spproj%write ! full write since projinfo is updated and this is guaranteed to be the first import
+        call nice_communicator%terminate()
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
 
     subroutine exec_import_boxes( self, cline )
         class(import_boxes_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        integer          :: nos_mic, nboxf, i
-        character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        character(len=LONGSTRLEN)              :: boxfname
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
+        integer                        :: nos_mic, nboxf, i
+        character(len=LONGSTRLEN), allocatable :: boxfnames(:), boxname
+        character(len=LONGSTRLEN)              :: boxfname, intg, cwd
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
+        call simple_getcwd(cwd)
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exist! exec_import_boxes')
         endif
-        call spproj%read(params%projfile)
-        ! get boxfiles into os_mic
-        call read_filetable(params%boxtab, boxfnames)
-        nboxf   = size(boxfnames)
-        nos_mic = spproj%os_mic%get_noris()
-        if( nboxf /= nos_mic )then
-            write(logfhandle,*) '# boxfiles       : ', nboxf
-            write(logfhandle,*) '# os_mic entries : ', nos_mic
-            THROW_HARD('# boxfiles .ne. # os_mic entries; exec_import_boxes')
-        endif
-        do i=1,nos_mic
-            if( params%mkdir.eq.'yes' )then
-                if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
+        if(params%reset_boxfiles .eq. 'yes') then
+            call spproj%read(params%projfile)
+            do i=1,spproj%os_mic%get_noris()
+                intg = spproj%os_mic%get_static(i, "intg")
+                boxname = swap_suffix(intg, ".box", ".mrc")
+                boxfname = trim(cwd) // '/' //trim(basename_safe(boxname))
+                call spproj%os_mic%set(i, 'boxfile', trim(boxfname))
+                call spproj%os_mic%set(i, 'nptcls',  0)
+            end do
+            call spproj%os_stk%new(0,    is_ptcl=.false.)
+            call spproj%os_ptcl2D%new(0, is_ptcl=.true.)
+            call spproj%os_cls2D%new(0,  is_ptcl=.false.)
+            call spproj%os_cls3D%new(0,  is_ptcl=.false.)
+            call spproj%os_ptcl3D%new(0, is_ptcl=.true.)
+            call spproj%write(params%projfile)
+            if(allocated(boxname)) deallocate(boxname)
+        else
+            call spproj%read(params%projfile)
+            ! get boxfiles into os_mic
+            call read_filetable(params%boxtab, boxfnames)
+            nboxf   = size(boxfnames)
+            nos_mic = spproj%os_mic%get_noris()
+            if( nboxf /= nos_mic )then
+                write(logfhandle,*) '# boxfiles       : ', nboxf
+                write(logfhandle,*) '# os_mic entries : ', nos_mic
+                THROW_HARD('# boxfiles .ne. # os_mic entries; exec_import_boxes')
             endif
-            boxfname = simple_abspath(boxfnames(i))
-            call spproj%set_boxfile(i, boxfname)
-        end do
-        ! write project file
-        call spproj%write_segment_inside('mic') ! all that's needed here
+            do i=1,nos_mic
+                if( params%mkdir.eq.'yes' )then
+                    if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
+                endif
+                boxfname = simple_abspath(boxfnames(i))
+                call spproj%set_boxfile(i, boxfname)
+            end do
+            ! write project file
+            call spproj%write_segment_inside('mic') ! all that's needed here
+        end if
+        call nice_communicator%terminate()
         call simple_end('**** IMPORT_BOXES NORMAL STOP ****')
     end subroutine exec_import_boxes
 
@@ -513,14 +552,15 @@ contains
         character(len=:),      allocatable :: phaseplate, ctfstr
         character(LONGSTRLEN), allocatable :: stkfnames(:)
         real,                  allocatable :: line(:)
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(oris)       :: os
-        type(nrtxtfile)  :: paramfile
-        type(ctfparams)  :: ctfvars
-        integer          :: ldim1(3), ldim2(3), nptcls1, nptcls2, i, ndatlines, nrecs, n_ori_inputs, nstks
-        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab, inputted_stk_den
-        logical          :: l_stktab_per_stk_parms, is_ptcl
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
+        type(oris)                     :: os
+        type(nrtxtfile)                :: paramfile
+        type(ctfparams)                :: ctfvars
+        integer                        :: ldim1(3), ldim2(3), nptcls1, nptcls2, i, ndatlines, nrecs, n_ori_inputs, nstks
+        logical                        :: inputted_oritab, inputted_plaintexttab, inputted_deftab, inputted_stk_den
+        logical                        :: l_stktab_per_stk_parms, is_ptcl
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         l_stktab_per_stk_parms = .true.
@@ -549,6 +589,9 @@ contains
         else
             THROW_HARD('either stk or stktab needed on command line; exec_import_particles')
         endif
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! set is particle flag for correct field parsing
         is_ptcl = .false.
         if( cline%defined('stk') ) is_ptcl = .true.
@@ -752,16 +795,21 @@ contains
         endif
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import
+        call nice_communicator%terminate()
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_import_particles
 
     subroutine exec_import_cavgs( self, cline )
         class(import_cavgs_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
+        class(cmdline),                intent(inout) :: cline
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
         call spproj%add_cavgs2os_out(params%stk, params%smpd)
         if( cline%defined('frcs') ) call spproj%add_frcs2os_out(params%frcs,'frc2D')
@@ -772,21 +820,26 @@ contains
         call spproj%update_compenv( cline )
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import
+        call nice_communicator%terminate()
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs
 
     subroutine exec_export_cavgs( self, cline )
         class(export_cavgs_commander),   intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(image)                   :: img
-        character(len=:), allocatable :: cavgs_fname, stk_path
-        logical,          allocatable :: lstates(:)
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
+        type(image)                    :: img
+        character(len=:),  allocatable :: cavgs_fname, stk_path
+        logical,           allocatable :: lstates(:)
         integer :: ldim(3), icls, ncls, ncavgs, cnt
         real    :: smpd, smpd_phys
         call cline%set('oritype', 'cls2D')
         call params%new(cline)
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! read files and sanity checks
         if( .not.file_exists(trim(params%projfile)) ) THROW_HARD('Project file does not exist!')
         call spproj%read_segment(params%oritype,params%projfile)
@@ -816,12 +869,14 @@ contains
             endif
         enddo
         ! the end
+        call nice_communicator%terminate()
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
     subroutine exec_sample_classes( self, cline )
         class(sample_classes_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
+        type(simple_nice_communicator)  :: nice_communicator
         type(parameters)                :: params
         type(sp_project)                :: spproj, spproj_part
         integer,            allocatable :: states(:), tmpinds(:), clsinds(:), states_map(:), clustinds(:)
@@ -838,6 +893,9 @@ contains
         if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
         if( .not. cline%defined('ranked_parts')    ) call cline%set('ranked_parts',    'yes')
         call params%new(cline, silent=.true.)
+         ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
         ! check number of oris in field
@@ -922,6 +980,7 @@ contains
         endif
         ! final full write
         call spproj%write(params%projfile)
+        call nice_communicator%terminate()
         call simple_end('**** SAMPLE_CLASSES NORMAL STOP ****')
     end subroutine exec_sample_classes
 
