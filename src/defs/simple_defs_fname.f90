@@ -10,6 +10,7 @@ integer, parameter :: XLONGSTRLEN  = 8192 !< extra longer string length
 ! GLOBAL FILE CONSTANTS
 character(len=*), parameter :: SIMPLE_SUBPROC_OUT   = 'SIMPLE_SUBPROC_OUTPUT'
 character(len=*), parameter :: JOB_FINISHED_FBODY   = 'JOB_FINISHED_'
+character(len=*), parameter :: TASK_FINISHED        = 'TASK_FINISHED'
 ! EXTENSIONS
 character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'

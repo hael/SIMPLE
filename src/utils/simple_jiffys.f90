@@ -1,6 +1,7 @@
 ! jiffy =  the time it takes light to travel one centimeter in vacuum
 module simple_jiffys
 use simple_defs
+use simple_defs_fname, only: TASK_FINISHED
 use simple_timer
 implicit none
 
@@ -63,18 +64,11 @@ contains
     end subroutine simple_print_git_version
 
     !> \brief  is for pretty ending
-    subroutine simple_end( str, print_simple )
-        use simple_syslib,  only: get_process_id, del_file
-        use simple_strings, only: int2str
+    subroutine simple_end( str, print_simple, verbose_exit )
+        use simple_syslib,  only: simple_touch
         character(len=*),  intent(in) :: str
-        logical, optional, intent(in) :: print_simple
-        character(len=:), allocatable :: pid_file
+        logical, optional, intent(in) :: print_simple, verbose_exit
         logical :: pprint_simple
-        integer :: pid
-        ! delete file indicating active process
-        pid = get_process_id()
-        allocate(pid_file, source='.'//int2str(pid)//'.simple.pid')
-        call del_file(pid_file)
         ! pretty ending
         pprint_simple = .true.
         if( present(print_simple) ) pprint_simple = print_simple
@@ -89,6 +83,10 @@ contains
             write(logfhandle,'(A)') ""
         endif
         write(logfhandle,'(A)') str
+        ! write file indicating completed process
+        if( present(verbose_exit) )then
+            if( verbose_exit ) call simple_touch(TASK_FINISHED)
+        endif
     end subroutine simple_end
 
     !> \brief  for pretty haloween ending

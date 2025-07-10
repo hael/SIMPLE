@@ -36,7 +36,6 @@ type :: parameters
     character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)          :: clear='no'           !< clear exising processing upon start (stream)
-    character(len=3)          :: cluster='no'         !< do perform clustering
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
@@ -139,6 +138,7 @@ type :: parameters
     character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
+    character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
     character(len=3)          :: write_cavgs='no'     !< write out cavgs
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
@@ -618,7 +618,6 @@ contains
         call check_carg('chunk',          self%chunk)
         call check_carg('classtats',      self%classtats)
         call check_carg('clear',          self%clear)
-        call check_carg('cluster',        self%cluster)
         call check_carg('cls_init',       self%cls_init)
         call check_carg('clustinds',      self%clustinds)
         call check_carg('cn_type',        self%cn_type)
@@ -777,6 +776,7 @@ contains
         call check_carg('tseries',        self%tseries)
         call check_carg('use_thres',      self%use_thres)
         call check_carg('vis',            self%vis)
+        call check_carg('verbose_exit',   self%verbose_exit)
         call check_carg('volrec',         self%volrec)
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
