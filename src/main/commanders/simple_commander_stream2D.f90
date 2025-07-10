@@ -8,8 +8,8 @@ use simple_sp_project,         only: sp_project
 use simple_guistats,           only: guistats
 use simple_stream_utils
 use simple_qsys_funs
+use simple_qsys_env
 use simple_commander_cluster2D_stream
-use simple_commander_cavgs
 use simple_moviewatcher
 use simple_progress
 use simple_nice
@@ -41,6 +41,7 @@ contains
         integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
+        type(qsys_env)                         :: qenv
         type(simple_nice_communicator)         :: nice_communicator
         type(projs_list)                       :: chunkslist, setslist
         type(guistats)                         :: gui_stats
@@ -51,12 +52,13 @@ contains
         type(json_value),          pointer     :: snapshot_json
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
+        character(len=STDLEN)                  :: chunk_part_env
         real                                   :: nptcls_pool, moldiam
         integer(kind=dp)                       :: pool_time_last_chunk, time_last_import
         integer                                :: nchunks_glob, nchunks_imported, nprojects, iter
         integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
-        integer                                :: nsets_prev, i
-        logical                                :: l_nchunks_maxed, l_pause, l_params_updated
+        integer                                :: i, envlen
+        logical                                :: l_pause, l_params_updated
         nullify(snapshot_json)
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -68,12 +70,11 @@ contains
         call cline%set('wiener',       'full')
         call cline%set('reject_cls',   'no')
         call cline%set('remove_chunks','no')
+        call cline%set('refine',       'snhc_smpl')
+        call cline%set('ml_reg',       'no')
+        call cline%set('objfun',       'euclid')
         if( .not. cline%defined('dir_target')   ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
-        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'no')
-        if( .not. cline%defined('tau')          ) call cline%set('tau',          5)
-        if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
         if( .not. cline%defined('nchunksperset')) call cline%set('nchunksperset', 2)
         ! write cmdline for GUI
@@ -93,11 +94,6 @@ contains
         params%ml_reg_pool  = trim(params%ml_reg)
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
-        ! limit to # of chunks
-        if( .not. cline%defined('maxnchunks') .or. params%maxnchunks < 1 )then
-            params%maxnchunks = huge(params%maxnchunks)
-        endif
-        call cline%delete('maxnchunks')
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
         call nice_communicator%cycle()
@@ -131,6 +127,13 @@ contains
             call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
+        ! Computing environment
+        call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
+        if(envlen > 0) then
+            call qenv%new(1,qsys_partition=trim(chunk_part_env))
+        else
+            call qenv%new(1)
+        end if
         ! Resolution based class rejection
         call set_lpthres_type("off")
         ! Number of particles per class
@@ -143,17 +146,15 @@ contains
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         ! Infinite loop
-        nptcls_glob         = 0       ! global number of particles
-        nchunks_glob        = 0       ! global number of completed chunks
-        nsets_prev          = 0
-        n_imported          = 0       ! global number of imported processed micrographs
-        n_imported_prev     = 0
-        nprojects           = 0
-        iter                = 0       ! global number of infinite loop iterations
-        n_failed_jobs       = 0
-        l_nchunks_maxed     = .false. ! Whether a minimum number of chunks as been met
-        l_pause             = .false. ! whether pool 2D analysis is skipped
-        time_last_import    = huge(time_last_import)      ! used for flushing unprocessed particles
+        nptcls_glob      = 0       ! global number of particles
+        nchunks_glob     = 0       ! global number of completed chunks
+        n_imported       = 0       ! global number of imported processed micrographs
+        n_imported_prev  = 0
+        nprojects        = 0
+        iter             = 0       ! global number of infinite loop iterations
+        n_failed_jobs    = 0
+        l_pause          = .false. ! whether pool 2D analysis is skipped
+        time_last_import = huge(time_last_import)      ! used for flushing unprocessed particles
         ! guistats init
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
@@ -182,12 +183,7 @@ contains
             endif
             iter = iter + 1
             ! detection of new projects
-            if( l_nchunks_maxed )then
-                call project_buff%kill
-                nprojects = 0
-            else
-                call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
-            endif
+            call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
             ! update global records
             if( nprojects > 0 )then
                 call update_records_with_project(projects, n_imported )
@@ -211,47 +207,43 @@ contains
                     n_imported_prev = n_imported
                 endif
             endif
-            ! 2D analysis section
+            ! Chunk book-keeping section
             nice_communicator%view_cls2D%mskdiam  = params%mskdiam
             nice_communicator%view_cls2D%boxsizea = get_boxa()
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) l_pause = .false.    ! resuming
             call update_chunks
+            call memoize_chunks(chunkslist, nchunks_imported)
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) l_pause = .false.    ! resuming
-            if( l_nchunks_maxed )then
-                ! ??
-            else
-                call memoize_chunks(chunkslist, nchunks_imported)
-                if( nchunks_imported > 0 )then
-                    ! some book-keeping
-                    nchunks_glob         = nchunks_glob + nchunks_imported
-                    pool_time_last_chunk = time8()
-                    l_pause              = .false.   ! resuming
-                    ! handling of sets
-                    nsets_prev = setslist%n
-                    call generate_sets(chunkslist, setslist)
-                    if( setslist%n > nsets_prev )then
-                        if( setslist%n == 1 )then
-                            ! execute cluster_cavgs here
-                        else
-                            ! execute match_cavgs here
-                        endif
-                    endif
-                endif
-                if( nchunks_glob >= params%maxnchunks )then
-                    l_nchunks_maxed = .true.
-                endif
-                if( l_pause )then
-                    ! Whether to flush particles
-                    if( (time8()-time_last_import > FLUSH_TIMELIMIT) .and. all_chunks_available() )then
-                        ! Remaining unclassified particles: TBD
-                    endif
-                endif
-                ! 2D analyses
-                if( l_pause ) call generate_pool_stats
-                call analyze2D_new_chunks(projrecords)
+            if( nchunks_imported > 0 )then
+                nchunks_glob         = nchunks_glob + nchunks_imported
+                pool_time_last_chunk = time8()
+                l_pause              = .false.   ! resuming
+                ! build sets
+                call generate_sets(chunkslist, setslist)
             endif
+            ! Sets analysis section
+            if( setslist%n > 0 )then
+                if( setslist%processed(1) )then
+                    call submit_match_cavgs
+                    do i = 1,setslist%n
+                        call is_set_processed(i)
+                    enddo
+                else
+                    call submit_cluster_cavgs
+                    call is_set_processed(1)
+                endif
+            endif
+            if( l_pause )then
+                ! Whether to flush particles
+                if( (time8()-time_last_import > FLUSH_TIMELIMIT) .and. all_chunks_available() )then
+                    ! Remaining unclassified particles: TBD
+                endif
+            endif
+            ! 2D analyses
+            if( l_pause ) call generate_pool_stats
+            call analyze2D_new_chunks(projrecords)
             call sleep(WAITTIME)
             ! guistats
             if(file_exists(POOLSTATS_FILE)) then
@@ -438,6 +430,80 @@ contains
                 enddo
                 call spproj%kill
             end subroutine generate_sets
+
+            subroutine submit_cluster_cavgs
+                type(cmdline)              :: cline_cluster_cavgs
+                character(len=XLONGSTRLEN) :: cwd
+                if( setslist%n <= 1 )       return  ! no sets generated yet
+                if( setslist%busy(1) )      return  ! ongoing
+                if( setslist%processed(1) ) return  ! already done
+                call cline_cluster_cavgs%set('prg',          'cluster_cavgs')
+                call cline_cluster_cavgs%set('projfile',     basename(setslist%projfiles(1)))
+                call cline_cluster_cavgs%set('mkdir',        'no')
+                call cline_cluster_cavgs%set('nthr',         params%nthr)
+                call cline_cluster_cavgs%set('mskdiam',      params%mskdiam)
+                call cline_cluster_cavgs%set('verbose_exit', 'yes')
+                call chdir(stemname(setslist%projfiles(1)))
+                call simple_getcwd(cwd)
+                cwd_glob = trim(cwd)
+                call qenv%exec_simple_prg_in_queue_async(cline_cluster_cavgs,&
+                    &'cluster_cavgs_script', 'cluster_cavgs.log')
+                call chdir('..')
+                call simple_getcwd(cwd_glob)
+                setslist%busy(1)      = .true.
+                setslist%processed(1) = .false.
+                call cline_cluster_cavgs%kill
+            end subroutine submit_cluster_cavgs
+
+            subroutine submit_match_cavgs
+                type(cmdline)                 :: cline_match_cavgs
+                character(len=:), allocatable :: path
+                character(len=XLONGSTRLEN)    :: cwd
+                integer :: iset
+                if( setslist%n <= 1 ) return    ! not enough sets generated
+                ! any unprocessed and not being processed?
+                if( any((.not.setslist%processed(2:)) .and. (.not.setslist%busy(2:))) ) return
+                call cline_match_cavgs%set('prg',          'match_cavgs')
+                call cline_match_cavgs%set('projfile',     basename(setslist%projfiles(1)))
+                call cline_match_cavgs%set('mkdir',        'no')
+                call cline_match_cavgs%set('nthr',         params%nthr)
+                call cline_match_cavgs%set('mskdiam',      params%mskdiam)
+                call cline_match_cavgs%set('verbose_exit', 'yes')
+                call cline_match_cavgs%delete('nparts')
+                call cline_match_cavgs%delete('nparts_chunk')
+                do iset = 2,setslist%n
+                    if( setslist%processed(iset) ) cycle ! already done
+                    if( setslist%busy(iset) )      cycle ! ongoing
+                    call cline_match_cavgs%set('projfile_target', basename(setslist%projfiles(iset)))
+                    path = stemname(setslist%projfiles(iset))
+                    call chdir(path)
+                    call simple_getcwd(cwd)
+                    cwd_glob = trim(cwd)
+                    call qenv%exec_simple_prg_in_queue_async(cline_match_cavgs,&
+                        &'match_cavgs_script', 'match_cavgs.log')
+                    call chdir('..')
+                    call simple_getcwd(cwd_glob)
+                    setslist%busy(iset)      = .true.   ! ongoing
+                    setslist%processed(iset) = .false.  ! not complete
+                enddo
+                call cline_match_cavgs%kill
+            end subroutine submit_match_cavgs
+
+            ! Check for status of individual sets
+            subroutine is_set_processed( i )
+                integer, intent(in) :: i
+                character(len=:), allocatable :: fname
+                if( setslist%n < 1        ) return  ! no sets generated yet
+                if( setslist%processed(i) ) return  ! already done
+                if( setslist%busy(i)      ) return  ! ongoing
+                fname = trim(stemname(setslist%projfiles(i)))//'/'//trim(TASK_FINISHED)
+                if( file_exists(fname) )then
+                    setslist%busy(i)      = .false.
+                    setslist%processed(i) = .true.  ! now ready for pool import
+                else
+                    setslist%processed(i) = .false.
+                endif
+            end subroutine is_set_processed
 
     end subroutine exec_stream2D
 

@@ -99,10 +99,10 @@ integer                          :: pool_iter                         ! Iteratio
 logical                          :: pool_available
 logical                          :: l_no_chunks                       ! for not using chunks (cf gen_picking_refs)
 ! Chunk related
-type(stream_chunk),        allocatable :: chunks(:), converged_chunks(:)
-type(cmdline)                          :: cline_cluster2D_chunk             ! master chunk 2D analysis command line
-type(scaled_dims)                      :: chunk_dims                        ! crop dimensions used for chunks
-integer                                :: glob_chunk_id                     ! ID book-keeping
+type(stream_chunk),  allocatable :: chunks(:), converged_chunks(:)
+type(cmdline)                    :: cline_cluster2D_chunk             ! master chunk 2D analysis command line
+type(scaled_dims)                :: chunk_dims                        ! crop dimensions used for chunks
+integer                          :: glob_chunk_id                     ! ID book-keeping
 ! Book-keeping
 class(cmdline),          pointer :: master_cline
 character(len=:),    allocatable :: orig_projfile
@@ -2944,7 +2944,7 @@ contains
         ! spproj_glob is destroyed on output
         call consolidate_chunks
         ! Cluster & match classes & write final project
-        if( trim(params%cluster).eq.'yes' ) call cluster_and_match_sets
+        call cluster_and_match_sets
         ! cleanup
         call kill_projrecords(micproj_records)
         call spproj_glob%kill
@@ -3190,7 +3190,6 @@ contains
             call chdir(path)
             call simple_getcwd(cwd)
             cwd_glob = trim(cwd)
-            call cline_cluster_cavgs%printline
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
             call chdir('..')
             call simple_getcwd(cwd_glob)

@@ -303,14 +303,11 @@ contains
         call spproj%write(params%projfile)
         ! destruct
         call spproj%kill
-        ! call pows%kill
-        do icls=1,ncls_sel
-            call cavg_imgs(icls)%kill
-        end do
+        call dealloc_imgarr(cavg_imgs)
         ! deallocate anything not specifically allocated above
-        deallocate(cavg_imgs, l_non_junk, labels, clsinds, i_medoids)
+        deallocate(clust_info_arr, l_non_junk, labels, clsinds, i_medoids)
         ! end gracefully
-        call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
     end subroutine exec_cluster_cavgs
 
     subroutine exec_select_clusters( self, cline )
@@ -364,12 +361,10 @@ contains
     end subroutine exec_select_clusters
 
     subroutine exec_match_cavgs( self, cline )
-        use simple_kmedoids, only: kmedoids
         class(match_cavgs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj_ref, spproj_match
-        type(kmedoids)   :: kmed
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
         integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
@@ -451,7 +446,13 @@ contains
         if( trim(params%prune).eq.'yes') call spproj_match%prune_particles
         ! this needs to be a full write as many segments are updated
         call spproj_match%write(params%projfile_target)
-
+        ! cleanup
+        call spproj_match%kill
+        call spproj_ref%kill
+        call dealloc_imgarr(cavg_imgs_ref)
+        call dealloc_imgarr(cavg_imgs_match)
+        ! end gracefully
+        call simple_end('**** SIMPLE_MATCH_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
     contains
         
         function find_label_state( label ) result( state )

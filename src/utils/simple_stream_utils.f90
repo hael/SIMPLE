@@ -53,6 +53,7 @@ type projs_list
     integer                                :: n = 0         ! # of elements in list
     character(len=LONGSTRLEN), allocatable :: projfiles(:)  ! project file filenames
     integer,                   allocatable :: ids(:)        ! unique ID
+    logical,                   allocatable :: busy(:)       ! true after submission and until completion is detected
     logical,                   allocatable :: processed(:)  ! chunk: has converged; set: has been clustered/selected/matched
   contains
     procedure :: append
@@ -641,9 +642,10 @@ contains
         logical,                   allocatable :: tmplog(:)
         integer :: ind
         if( self%n == 0 )then
-            allocate(self%projfiles(1),self%ids(1),self%processed(1))
+            allocate(self%projfiles(1),self%ids(1),self%busy(1),self%processed(1))
             self%projfiles(1) = trim(fname)
             self%ids(1)       = id
+            self%busy(1)      = .false.
             self%processed(1) = processed
             self%n = 1
         else
@@ -658,8 +660,13 @@ contains
             self%ids(ind)            = id
             self%processed(1:self%n) = tmplog(:)
             self%processed(ind)      = processed
+            deallocate(tmpstr,tmpint,tmplog)
+            call move_alloc(self%busy, tmplog)
+            allocate(self%busy(ind))
+            self%busy(1:self%n) = tmplog(:)
+            self%busy(ind)      = .false.
+            deallocate(tmplog)
             self%n = ind
-            deallocate(tmpstr,tmpint)
         endif
     end subroutine append
 
