@@ -3194,11 +3194,11 @@ contains
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
             call chdir('..')
             call simple_getcwd(cwd_glob)
+            setslist%processed(1) = .true.
             if( setslist%n == 1 )then
                 ! update & write final project
                 fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
                 call merge_chunks(setslist%projfiles(1:1), './', spproj_glob, projname_out=fname)
-                setslist%processed(1) = .true.
             else
                 ! run match_cavgs on all other with setslist%projfiles(1) as reference
                 projfile_ref      = simple_abspath(setslist%projfiles(1) ,"in cluster_and_match_sets")
@@ -3222,10 +3222,6 @@ contains
                 ! need to re-consolidate projects into final project
                 fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
                 call merge_chunks(setslist%projfiles(:), './', spproj_glob, projname_out=fname)
-                ! final re-clustering
-                call cline_cluster_cavgs%set('projfile',        params%projfile)
-                call cline_cluster_cavgs%set('have_clustering', 'yes')
-                call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
             endif
             ! cleanup
             call cline_cluster_cavgs%kill
