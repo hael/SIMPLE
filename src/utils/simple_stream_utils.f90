@@ -55,6 +55,7 @@ type projs_list
     integer,                   allocatable :: ids(:)        ! unique ID
     logical,                   allocatable :: busy(:)       ! true after submission and until completion is detected
     logical,                   allocatable :: processed(:)  ! chunk: has converged; set: has been clustered/selected/matched
+    logical,                   allocatable :: imported(:)   ! whether the set has been imported into the pool
   contains
     procedure :: append
     procedure :: kill_list
@@ -642,11 +643,13 @@ contains
         logical,                   allocatable :: tmplog(:)
         integer :: ind
         if( self%n == 0 )then
-            allocate(self%projfiles(1),self%ids(1),self%busy(1),self%processed(1))
+            allocate(self%projfiles(1),self%ids(1),self%busy(1),&
+                &self%processed(1),self%imported(1))
             self%projfiles(1) = trim(fname)
             self%ids(1)       = id
             self%busy(1)      = .false.
             self%processed(1) = processed
+            self%imported(1)  = .false.
             self%n = 1
         else
             ind = self%n + 1
@@ -666,6 +669,11 @@ contains
             self%busy(1:self%n) = tmplog(:)
             self%busy(ind)      = .false.
             deallocate(tmplog)
+            call move_alloc(self%imported, tmplog)
+            allocate(self%imported(ind))
+            self%imported(1:self%n) = tmplog(:)
+            self%imported(ind)      = .false.
+            deallocate(tmplog)
             self%n = ind
         endif
     end subroutine append
@@ -673,7 +681,7 @@ contains
     subroutine kill_list( self )
         class(projs_list), intent(inout) :: self
         if( self%n > 0 )then
-            deallocate(self%projfiles,self%ids,self%processed)
+            deallocate(self%projfiles,self%ids,self%busy,self%processed,self%imported)
             self%n = 0
         endif
     end subroutine kill_list
@@ -1011,13 +1019,19 @@ contains
         type(image)                   :: img
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
-        character(len=:), allocatable :: projname, stkname, evenname, oddname, frc_fname, dir, cavgs
+        character(len=:), allocatable :: projname, stkname, evenname, oddname, frc_fname
+        character(len=:), allocatable :: projfile_out, dir, cavgs
         real    :: smpd
         integer :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
         nchunks = size(chunk_fnames)
         allocate(chunks(nchunks))
         dir = trim(folder)//'/'
+        if( present(projname_out) )then
+            projfile_out = dir//trim(projname_out)//trim(METADATA_EXT)
+        else
+            projfile_out = dir//'set'//METADATA_EXT
+        endif
         call merged_proj%os_mic%kill
         call merged_proj%os_stk%kill
         call merged_proj%os_ptcl2D%kill
@@ -1123,10 +1137,17 @@ contains
                 call merged_proj%os_stk%transfer_ori(istk, chunks(ic)%os_stk, i)
             enddo
             deallocate(clsmap)
+            ! making sure the compenv is informed
+            if( (ic == 1) .and. (merged_proj%compenv%get_noris() == 0) )then
+                call chunks(1)%read_non_data_segments(chunk_fnames(1))
+                merged_proj%compenv = chunks(1)%compenv
+                call merged_proj%update_projinfo(projfile_out)
+            endif
+            ! cleanup
             call chunks(ic)%kill
         enddo
         deallocate(chunks)
-        ! add classes, frcs and write project
+        ! add classes, frcs
         call frcs%write(dir//trim(FRCS_FILE))
         call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
         call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
@@ -1135,11 +1156,8 @@ contains
         call merged_proj%os_cls3D%set_all('state', states)
         merged_proj%os_ptcl3D = merged_proj%os_ptcl2D
         call merged_proj%os_ptcl3D%delete_2Dclustering
-        if( present(projname_out) )then
-            call merged_proj%write(dir//trim(projname_out)//METADATA_EXT)
-        else
-            call merged_proj%write(dir//'set'//METADATA_EXT)
-        endif
+        ! write
+        call merged_proj%write(projfile_out)
     end subroutine merge_chunks
 
     ! Class rejection routine based on image moments & Total Variation Distance
