@@ -287,7 +287,7 @@ contains
         l_polar = trim(params%polar).eq.'yes'
         if( l_polar .and. params%l_comlin )then
             call build%build_general_tbox(params, cline, do3d=.true.)
-            call pftcc%new(1, [1,1], params%kfromto)
+            call pftcc%new(params%nspace, [1,1], params%kfromto)
             call read_write_comlin(pcomlines, pftcc, build%eulspace)
         endif
         ! sanity check
