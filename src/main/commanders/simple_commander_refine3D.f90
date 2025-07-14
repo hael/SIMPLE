@@ -224,6 +224,8 @@ contains
         use simple_commander_rec,    only: reconstruct3D_commander_distr, volassemble_commander
         use simple_fsc,              only: plot_fsc
         use simple_commander_euclid, only: calc_group_sigmas_commander
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_comlin,           only: read_write_comlin
         class(refine3D_distr_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
@@ -236,6 +238,7 @@ contains
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
         type(prob_align_commander)            :: xprob_align_distr
         type(volassemble_commander)           :: xvolassemble
+        type(polarft_corrcalc)                :: pftcc
         ! command lines
         type(cmdline) :: cline_reconstruct3D_distr
         type(cmdline) :: cline_calc_pspec_distr
@@ -256,6 +259,7 @@ contains
         type(image)      :: vol_e, vol_o    
         character(len=:),          allocatable :: prev_refine_path, target_name, fname_vol, fname_even, fname_odd
         character(len=LONGSTRLEN), allocatable :: list(:)
+        type(polar_fmap),          allocatable :: pcomlines(:,:)
         integer,                   allocatable :: state_pops(:)
         real,                      allocatable :: res(:), fsc(:)
         character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
@@ -278,7 +282,15 @@ contains
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init
-        call build%init_params_and_build_spproj(cline, params)
+        if( params%l_comlin )then
+            call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+            call pftcc%new(params%nspace * params%nstates, [1,1], params%kfromto)
+            call read_write_comlin(pcomlines, pftcc, build%eulspace)
+            call pftcc%kill
+            deallocate(pcomlines)
+        else
+            call build%init_params_and_build_spproj(cline, params)
+        endif
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))

@@ -70,7 +70,7 @@ contains
         real    :: frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
-        integer :: ibatch, io_stat, funit
+        integer :: ibatch
         logical :: doprint, l_polar, l_restore
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -128,18 +128,7 @@ contains
         else
             call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max )
         endif
-        if( params_glob%l_comlin )then
-            if( .not. allocated(pcomlines) ) allocate(pcomlines(params_glob%nspace,params_glob%nspace))
-            if( file_exists(trim(POLAR_COMLIN)) )then
-                call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-                read(unit=funit,pos=1) pcomlines
-            else
-                call gen_polar_comlins(pftcc, build_glob%eulspace, pcomlines)
-                call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-                write(unit=funit,pos=1) pcomlines
-            endif
-            call fclose(funit)
-        endif
+        if( params_glob%l_comlin ) call read_write_comlin(pcomlines, pftcc, build_glob%eulspace)
         if( l_polar .and. l_restore )then
             ! for restoration
             if( which_iter == 1 ) call polar_cavger_new(pftcc)

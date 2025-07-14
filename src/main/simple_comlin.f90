@@ -5,7 +5,7 @@ use simple_oris,             only: oris
 use simple_polarft_corrcalc, only: polarft_corrcalc
 implicit none
 
-public :: comlin_map, polar_comlin_pfts, gen_polar_comlins
+public :: comlin_map, polar_comlin_pfts, gen_polar_comlins, read_write_comlin
 
 contains
 
@@ -219,5 +219,22 @@ contains
         enddo
         !$omp end parallel do
     end subroutine polar_comlin_pfts
+
+    subroutine read_write_comlin( pcomlines, pftcc, eulspace )
+        type(polar_fmap), allocatable, intent(inout) :: pcomlines(:,:)
+        class(polarft_corrcalc),       intent(in)    :: pftcc
+        type(oris),                    intent(in)    :: eulspace
+        integer :: io_stat, funit
+        if( .not. allocated(pcomlines) ) allocate(pcomlines(params_glob%nspace,params_glob%nspace))
+        if( file_exists(trim(POLAR_COMLIN)) )then
+            call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            read(unit=funit,pos=1) pcomlines
+        else
+            call gen_polar_comlins(pftcc, eulspace, pcomlines)
+            call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+            write(unit=funit,pos=1) pcomlines
+        endif
+        call fclose(funit)
+    end subroutine read_write_comlin
 
 end module simple_comlin

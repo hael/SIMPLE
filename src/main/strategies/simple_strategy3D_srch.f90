@@ -180,13 +180,14 @@ contains
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
         if( .not. self%doshift ) return
-        if( present(irot_in) ) irot = irot_in
         if( present(ref) )then
             iref = ref
         else
             loc  = maxloc(s3D%proj_space_corrs(:,self%ithr))
             iref = loc(1)
         endif
+        irot = s3D%proj_space_inplinds(iref,self%ithr)
+        if( present(irot_in) ) irot = irot_in
         ! BFGS over shifts with in-plane rot exhaustive callback
         call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
         if( params_glob%l_sh_first )then

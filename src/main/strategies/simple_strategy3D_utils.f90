@@ -34,12 +34,22 @@ contains
         ! Euler angle
         call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
         ! shift
-        shvec      = s%prev_shvec
-        shvec_incr = 0.
-        if( s%doshift ) then
-            shvec_incr = sh
-            shvec      = shvec + shvec_incr
-        end if
+        if( params_glob%l_comlin )then
+            if( s%doshift )then
+                shvec      = sh
+                shvec_incr = sh - s%prev_shvec
+            else
+                shvec      = s%prev_shvec
+                shvec_incr = 0.
+            endif
+        else
+            shvec      = s%prev_shvec
+            shvec_incr = 0.
+            if( s%doshift ) then
+                shvec_incr = sh
+                shvec      = shvec + shvec_incr
+            end if
+        endif
         where( abs(shvec) < 1e-6 ) shvec = 0.
         call build_glob%spproj_field%set_shift(s%iptcl, shvec)
         call build_glob%spproj_field%set(s%iptcl, 'shincarg', arg(shvec_incr))
