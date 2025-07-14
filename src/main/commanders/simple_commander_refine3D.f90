@@ -226,6 +226,7 @@ contains
         use simple_commander_euclid, only: calc_group_sigmas_commander
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_comlin,           only: read_write_comlin
+        use simple_polarops
         class(refine3D_distr_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
@@ -284,10 +285,8 @@ contains
         ! init
         if( params%l_comlin )then
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-            call pftcc%new(params%nspace * params%nstates, [1,1], params%kfromto)
+            call pftcc%new(1, [1,1], params%kfromto)
             call read_write_comlin(pcomlines, pftcc, build%eulspace)
-            call pftcc%kill
-            deallocate(pcomlines)
         else
             call build%init_params_and_build_spproj(cline, params)
         endif
@@ -646,6 +645,18 @@ contains
                             endif
                         enddo
                 end select
+            endif
+            if( params%l_comlin )then
+                params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
+                call polar_cavger_new(pftcc, params%nspace)
+                call polar_cavger_calc_pops(build%spproj)
+                call polar_cavger_assemble_sums_from_parts(pcomlines)
+                call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs)
+                call polar_cavger_writeall(get_fbody(params%refs,params_glob%ext,separator=.false.))
+                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
+                call pftcc%kill
+                call polar_cavger_kill
+                deallocate(pcomlines)
             endif
             if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
             ! CONVERGENCE

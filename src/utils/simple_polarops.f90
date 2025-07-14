@@ -512,8 +512,9 @@ contains
     end subroutine polar_cavger_refs2cartesian
 
     !>  \brief  Reads in and reduces partial matrices prior to restoration
-    subroutine polar_cavger_assemble_sums_from_parts
+    subroutine polar_cavger_assemble_sums_from_parts( pcomlines )
         use simple_imgfile, only: imgfile
+        type(polar_fmap), optional, intent(in) :: pcomlines(ncls,ncls)
         character(len=:), allocatable :: cae, cao, cte, cto
         complex(dp),      allocatable :: pfte(:,:,:), pfto(:,:,:)
         real(dp),         allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
@@ -538,7 +539,7 @@ contains
             !$omp end parallel workshare
         enddo
         ! merge eo-pairs and normalize
-        call polar_cavger_merge_eos_and_norm
+        call polar_cavger_merge_eos_and_norm(pcomlines)
     end subroutine polar_cavger_assemble_sums_from_parts
 
     ! I/O

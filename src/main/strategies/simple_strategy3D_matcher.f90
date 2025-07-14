@@ -322,7 +322,6 @@ contains
             if( l_polar )then
                 if( l_distr_exec_glob )then
                     call polar_cavger_readwrite_partial_sums('write')
-                    if( params_glob%part==1 ) call polar_restoration
                 else
                     call polar_restoration
                 endif
