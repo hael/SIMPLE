@@ -1094,6 +1094,7 @@ contains
         if( trim(params%restore_cavgs).eq.'yes' )then
             finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
             call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
+            if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
             call build%spproj%write_segment_inside('out', params%projfile)
         endif
         call qsys_cleanup
@@ -1338,6 +1339,7 @@ contains
                     if( trim(params%restore_cavgs).eq.'yes' )then
                         finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
                         call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
+                        if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
                         call build%spproj%write_segment_inside('out', params%projfile)
                         if( trim(params%chunk).eq.'yes' )then
                             call cavger_write(params%refs_even,'even')

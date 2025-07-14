@@ -55,7 +55,7 @@ contains
         character(len=STDLEN)                  :: chunk_part_env
         real                                   :: nptcls_pool, moldiam
         integer(kind=dp)                       :: pool_time_last_chunk, time_last_import
-        integer                                :: nchunks_glob, nchunks_imported, nprojects, iter
+        integer                                :: nchunks_glob, nchunks_imported, nprojects, iter, nsets_imported
         integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
         integer                                :: i, envlen
         logical                                :: l_pause, l_params_updated
@@ -130,9 +130,9 @@ contains
         ! Computing environment
         call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(1,qsys_partition=trim(chunk_part_env))
+            call qenv%new(1, exec_bin='simple_exec', qsys_partition=trim(chunk_part_env))
         else
-            call qenv%new(1)
+            call qenv%new(1, exec_bin='simple_exec')
         end if
         ! Resolution based class rejection
         call set_lpthres_type("off")
@@ -225,15 +225,18 @@ contains
             endif
             ! Sets analysis section
             if( setslist%n > 0 )then
-                if( setslist%processed(1) )then
-                    call submit_match_cavgs
-                    do i = 1,setslist%n
+                ! processing with cluster_cavgs / match_cavgs
+                if( setslist%processed(1) .and. (setslist%n > 1) )then
+                    do i = 2,setslist%n
                         call is_set_processed(i)
                     enddo
+                    call submit_match_cavgs
                 else
-                    call submit_cluster_cavgs
                     call is_set_processed(1)
+                    call submit_cluster_cavgs
                 endif
+                ! post-processing import
+                call import_sets_into_pool(nsets_imported)
             endif
             if( l_pause )then
                 ! Whether to flush particles
@@ -434,7 +437,7 @@ contains
             subroutine submit_cluster_cavgs
                 type(cmdline)              :: cline_cluster_cavgs
                 character(len=XLONGSTRLEN) :: cwd
-                if( setslist%n <= 1 )       return  ! no sets generated yet
+                if( setslist%n < 1 )       return  ! no sets generated yet
                 if( setslist%busy(1) )      return  ! ongoing
                 if( setslist%processed(1) ) return  ! already done
                 call cline_cluster_cavgs%set('prg',          'cluster_cavgs')
@@ -460,11 +463,11 @@ contains
                 character(len=:), allocatable :: path
                 character(len=XLONGSTRLEN)    :: cwd
                 integer :: iset
-                if( setslist%n <= 1 ) return    ! not enough sets generated
+                if( setslist%n < 2 ) return    ! not enough sets generated
                 ! any unprocessed and not being processed?
-                if( any((.not.setslist%processed(2:)) .and. (.not.setslist%busy(2:))) ) return
+                if( .not.any((.not.setslist%processed(2:)) .and. (.not.setslist%busy(2:))) ) return
                 call cline_match_cavgs%set('prg',          'match_cavgs')
-                call cline_match_cavgs%set('projfile',     basename(setslist%projfiles(1)))
+                call cline_match_cavgs%set('projfile',     simple_abspath(setslist%projfiles(1) ,"submit_match_cavgs"))
                 call cline_match_cavgs%set('mkdir',        'no')
                 call cline_match_cavgs%set('nthr',         params%nthr)
                 call cline_match_cavgs%set('mskdiam',      params%mskdiam)
@@ -495,7 +498,6 @@ contains
                 character(len=:), allocatable :: fname
                 if( setslist%n < 1        ) return  ! no sets generated yet
                 if( setslist%processed(i) ) return  ! already done
-                if( setslist%busy(i)      ) return  ! ongoing
                 fname = trim(stemname(setslist%projfiles(i)))//'/'//trim(TASK_FINISHED)
                 if( file_exists(fname) )then
                     setslist%busy(i)      = .false.
@@ -504,6 +506,93 @@ contains
                     setslist%processed(i) = .false.
                 endif
             end subroutine is_set_processed
+
+            subroutine import_sets_into_pool( nimported )
+                integer,          intent(out) :: nimported
+                type(sp_project), allocatable :: spprojs(:)
+                class(sp_project),    pointer :: pool
+                integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
+                integer :: i, fromp, fromp_prev, imic, ind, iptcl, jptcl, jmic, nptcls_sel
+                nimported = 0
+                if( setslist%n == 0 )          return
+                if( .not.is_pool_available() ) return
+                nsets2import = count(setslist%processed(:).and.(.not.setslist%imported(:)))
+                if( nsets2import == 0 )        return
+                ! read sets in
+                allocate(spprojs(setslist%n))
+                nptcls2import = 0
+                nmics2import  = 0
+                do iset = 1,setslist%n
+                    if( setslist%imported(iset) )       cycle   ! already imported
+                    if( .not.setslist%processed(iset) ) cycle   ! not processed yet
+                    if( setslist%busy(iset) )           cycle   ! being processed
+                    call spprojs(iset)%read_non_data_segments(setslist%projfiles(iset))
+                    call spprojs(iset)%read_segment('mic',    setslist%projfiles(iset))
+                    call spprojs(iset)%read_segment('stk',    setslist%projfiles(iset))
+                    call spprojs(iset)%read_segment('ptcl2D', setslist%projfiles(iset))
+                    nmics2import  = nmics2import  + spprojs(iset)%os_mic%get_noris()
+                    nptcls2import = nptcls2import + spprojs(iset)%os_ptcl2D%get_noris()
+                    ! global list update
+                    setslist%imported(iset) = .true.
+                enddo
+                ! reallocations
+                call get_pool_ptr(pool)
+                nmics  = pool%os_mic%get_noris()
+                nptcls = pool%os_ptcl2D%get_noris()
+                if( nmics == 0 )then
+                    call pool%os_mic%new(nmics2import, is_ptcl=.false.)
+                    call pool%os_stk%new(nmics2import, is_ptcl=.false.)
+                    call pool%os_ptcl2D%new(nptcls2import, is_ptcl=.true.)
+                    fromp = 1
+                else
+                    call pool%os_mic%reallocate(nmics+nmics2import)
+                    call pool%os_stk%reallocate(nmics+nmics2import)
+                    call pool%os_ptcl2D%reallocate(nptcls+nptcls2import)
+                    fromp = pool%os_stk%get_top(nmics)+1
+                endif
+                ! parameters transfer
+                imic = nmics
+                do iset = 1,nsets2import
+                    fromp_prev = fromp
+                    ind = 1
+                    do jmic = 1,spprojs(iset)%os_mic%get_noris()
+                        imic  = imic+1
+                        ! micrograph
+                        call pool%os_mic%transfer_ori(imic, spprojs(iset)%os_mic, jmic)
+                        ! stack
+                        call pool%os_stk%transfer_ori(imic, spprojs(iset)%os_stk, jmic)
+                        nptcls = spprojs(iset)%os_stk%get_int(jmic,'nptcls')
+                        call pool%os_stk%set(imic, 'fromp', fromp)
+                        call pool%os_stk%set(imic, 'top',   fromp+nptcls-1)
+                        ! particles
+                        !$omp parallel do private(i,iptcl,jptcl) default(shared) proc_bind(close)
+                        do i = 1,nptcls
+                            iptcl = fromp + i - 1
+                            jptcl = ind   + i - 1
+                            call pool%os_ptcl2D%transfer_ori(iptcl, spprojs(iset)%os_ptcl2D, jptcl)
+                            call pool%os_ptcl2D%set_stkind(iptcl, imic)
+                            call pool%os_ptcl2D%set(iptcl, 'updatecnt', 0)  ! new particle
+                            call pool%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
+                        enddo
+                        !$omp end parallel do
+                        ind   = ind   + nptcls
+                        fromp = fromp + nptcls
+                    enddo
+                    nptcls_sel = spprojs(iset)%os_ptcl2D%get_noris(consider_state=.true.)
+                    ! TODO
+                    ! storing sigmas as per stack individual documents
+                    ! if( l_update_sigmas ) call converged_chunks(ichunk)%split_sigmas_into(SIGMAS_DIR)
+                    ! display
+                    write(logfhandle,'(A,I6,A,I6)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM SET ',setslist%ids(iset)
+                    call flush(logfhandle)
+                enddo
+                nimported = nsets2import
+                ! cleanup
+                do iset = 1,setslist%n
+                    call spprojs(iset)%kill
+                enddo
+                nullify(pool)
+            end subroutine import_sets_into_pool
 
     end subroutine exec_stream2D
 

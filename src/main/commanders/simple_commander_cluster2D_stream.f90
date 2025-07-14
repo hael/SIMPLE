@@ -29,7 +29,7 @@ public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
 public :: import_records_into_pool, analyze2D_pool, update_pool_status, update_pool
 public :: reject_from_pool, reject_from_pool_user, write_pool_cls_selected_user
 public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
-public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected
+public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected, get_pool_ptr
 public :: get_pool_n_classes, get_pool_n_classes_rejected, get_pool_iter_time, get_pool_cavgs_jpeg
 public :: get_pool_res, get_pool_cavgs_pop, get_pool_cavgs_res, get_pool_cavgs_res_at
 public :: get_pool_cavgs_mask, get_pool_cavgs_jpeg_ntiles
@@ -89,7 +89,7 @@ logical,               parameter :: DEBUG_HERE           = .false.
 integer(timer_int_kind)          :: t
 
 ! Pool related
-type(sp_project)                 :: pool_proj                         ! master project
+type(sp_project),         target :: pool_proj                         ! master project
 type(sp_project),    allocatable :: pool_proj_history(:)              ! 5 iterations of project history
 type(qsys_env)                   :: qenv_pool
 type(cmdline)                    :: cline_cluster2D_pool              ! master pool 2D analysis command line
@@ -1882,6 +1882,12 @@ contains
         get_pool_rejected = nptcls_rejected_glob
     end function get_pool_rejected
 
+    ! returns pointer to pool project
+    subroutine get_pool_ptr( ptr )
+        class(sp_project), pointer, intent(out) :: ptr
+        ptr => pool_proj
+    end subroutine get_pool_ptr
+
     ! returns number classes
     integer function get_pool_n_classes()
         get_pool_n_classes = ncls_glob
@@ -2454,9 +2460,14 @@ contains
         do i = 1,nchunks2import
             fname = trim(converged_chunks(i)%get_projfile_fname())
             id    = converged_chunks(i)%get_id()
-            call list%append(fname, id, .true.)
+            call list%append(fname, id, .false.)
         enddo
         nchunks_imported = nchunks2import
+        ! kill chunks object
+        do i = 1,nchunks2import
+            call converged_chunks(i)%kill
+        enddo
+        deallocate(converged_chunks)
     end subroutine memoize_chunks
 
     !>  Transfers references & partial arrays from a chunk to the pool
