@@ -44,7 +44,6 @@ contains
         class(polarft_corrcalc), intent(in) :: pftcc
         integer,       optional, intent(in) :: nrefs
         call polar_cavger_kill
-        ncls    = pftcc%get_nrefs()
         pftsz   = pftcc%get_pftsz()
         kfromto = pftcc%get_kfromto()
         if( present(nrefs) )then
@@ -217,7 +216,7 @@ contains
 
     !>  \brief  Restores class-averages
     subroutine polar_cavger_merge_eos_and_norm( pcomlines )
-        type(polar_fmap), optional, intent(in) :: pcomlines(ncls,ncls)
+        type(polar_fmap), allocatable, optional, intent(in) :: pcomlines(:,:)
         real, parameter :: EPSILON = 0.1
         complex     :: pfts(pftsz,kfromto(1):kfromto(2),ncls)
         complex(dp) :: numerator(pftsz,kfromto(1):kfromto(2))
@@ -513,8 +512,7 @@ contains
 
     !>  \brief  Reads in and reduces partial matrices prior to restoration
     subroutine polar_cavger_assemble_sums_from_parts( pcomlines )
-        use simple_imgfile, only: imgfile
-        type(polar_fmap), optional, intent(in) :: pcomlines(ncls,ncls)
+        type(polar_fmap), allocatable, optional, intent(in) :: pcomlines(:,:)
         character(len=:), allocatable :: cae, cao, cte, cto
         complex(dp),      allocatable :: pfte(:,:,:), pfto(:,:,:)
         real(dp),         allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
