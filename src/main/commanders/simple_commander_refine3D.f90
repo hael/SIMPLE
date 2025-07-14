@@ -266,7 +266,7 @@ contains
         character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         logical :: err, vol_defined, have_oris, converged, fall_over, l_multistates, l_automsk
-        logical :: l_combine_eo, l_griddingset, do_automsk
+        logical :: l_combine_eo, l_griddingset, do_automsk, l_polar
         real    :: corr, smpd
         integer :: i, state, iter, box, nfiles, niters, nthr_here
         601 format(A,1X,F12.3)
@@ -283,12 +283,12 @@ contains
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init
-        if( params%l_comlin )then
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call build%init_params_and_build_spproj(cline, params)
+        l_polar = trim(params%polar).eq.'yes'
+        if( l_polar .and. params%l_comlin )then
+            call build%build_general_tbox(params, cline, do3d=.true.)
             call pftcc%new(1, [1,1], params%kfromto)
             call read_write_comlin(pcomlines, pftcc, build%eulspace)
-        else
-            call build%init_params_and_build_spproj(cline, params)
         endif
         ! sanity check
         fall_over = .false.
@@ -646,17 +646,20 @@ contains
                         enddo
                 end select
             endif
-            if( params%l_comlin )then
+            if( l_polar )then
                 params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
                 call polar_cavger_new(pftcc, params%nspace)
                 call polar_cavger_calc_pops(build%spproj)
-                call polar_cavger_assemble_sums_from_parts(pcomlines)
-                call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs)
-                call polar_cavger_writeall(get_fbody(params%refs,params_glob%ext,separator=.false.))
-                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
-                call pftcc%kill
+                if( params%l_comlin )then
+                    call polar_cavger_assemble_sums_from_parts(pcomlines)
+                else
+                    call polar_cavger_assemble_sums_from_parts
+                endif
+                call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
+                call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
+                call polar_cavger_writeall(get_fbody(params%refs,params%ext,separator=.false.))
+                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
                 call polar_cavger_kill
-                deallocate(pcomlines)
             endif
             if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
             ! CONVERGENCE
