@@ -38,7 +38,6 @@ contains
     procedure          :: read_groups
     procedure          :: allocate_ptcls
     procedure          :: calc_sigma2
-    procedure          :: update_sigma2
     procedure          :: write_sigma2
     procedure, private :: read_groups_starfile, read_sigma2_groups
     ! destructor
@@ -215,22 +214,6 @@ contains
         call pftcc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
     end subroutine calc_sigma2
-
-    !>  Calculates and updates sigma2 within search resolution range
-    subroutine update_sigma2( self, pftcc, iptcl, o, refkind )
-        class(euclid_sigma2),    intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        class(ori),              intent(in)    :: o
-        character(len=*),        intent(in)    :: refkind ! 'proj' or 'class'
-        integer :: iref, irot
-        real    :: shvec(2)
-        if ( o%isstatezero() ) return
-        shvec = o%get_2Dshift()
-        iref  = nint(o%get(trim(refkind)))
-        irot  = pftcc_glob%get_roind(360. - o%e3get())
-        call pftcc%gencorr_sigma_contrib(iref, iptcl, shvec, irot)
-    end subroutine update_sigma2
 
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(in) :: self
