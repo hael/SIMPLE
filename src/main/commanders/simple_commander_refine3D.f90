@@ -537,7 +537,37 @@ contains
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
             endif
-            if( trim(params%volrec).eq.'yes' )then
+            if( l_polar )then
+                params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
+                call polar_cavger_new(pftcc, params%nspace)
+                call polar_cavger_calc_pops(build%spproj)
+                if( params%l_comlin )then
+                    call polar_cavger_assemble_sums_from_parts(pcomlines)
+                else
+                    call polar_cavger_assemble_sums_from_parts
+                endif
+                call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
+                call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
+                call polar_cavger_writeall(get_fbody(params%refs,params%ext,separator=.false.))
+                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
+                call polar_cavger_kill
+            endif
+            if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
+            ! CONVERGENCE
+            converged = .false.
+            select case(trim(params%refine))
+                case('eval')
+                    ! nothing to do
+                case DEFAULT
+                    call cline_check_3Dconv%set('nthr', nthr_here)
+                    call xcheck_3Dconv%execute_safe(cline_check_3Dconv)
+                    if( iter >= params%startit + 2 )then
+                        ! after a minimum of 2 iterations
+                        if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
+                    endif
+            end select
+            if( niters == params%maxits ) converged = .true.
+            if( trim(params%volrec).eq.'yes' .or. converged )then
                 ! ASSEMBLE VOLUMES
                 select case(trim(params%refine))
                     case('eval')
@@ -646,36 +676,6 @@ contains
                         enddo
                 end select
             endif
-            if( l_polar )then
-                params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
-                call polar_cavger_new(pftcc, params%nspace)
-                call polar_cavger_calc_pops(build%spproj)
-                if( params%l_comlin )then
-                    call polar_cavger_assemble_sums_from_parts(pcomlines)
-                else
-                    call polar_cavger_assemble_sums_from_parts
-                endif
-                call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
-                call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
-                call polar_cavger_writeall(get_fbody(params%refs,params%ext,separator=.false.))
-                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
-                call polar_cavger_kill
-            endif
-            if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
-            ! CONVERGENCE
-            converged = .false.
-            select case(trim(params%refine))
-                case('eval')
-                    ! nothing to do
-                case DEFAULT
-                    call cline_check_3Dconv%set('nthr', nthr_here)
-                    call xcheck_3Dconv%execute_safe(cline_check_3Dconv)
-                    if( iter >= params%startit + 2 )then
-                        ! after a minimum of 2 iterations
-                        if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
-                    endif
-            end select
-            if( niters == params%maxits ) converged = .true.
             if ( l_combine_eo .and. converged )then
                 converged            = .false.
                 l_combine_eo         = .false.
