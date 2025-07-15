@@ -221,19 +221,22 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
                 if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
-                ! search object(s) & search
+                ! search
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
+                    ! instance & search
                     call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
                     call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
+                    ! keep track of incremental shift
+                    incr_shifts(:,iptcl_batch) = build_glob%spproj_field%get_2Dshift(iptcl) - strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
+                    ! cleanup
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
                 end if
-                ! keep track of incremental shift
-                incr_shifts(:,iptcl_batch) = build_glob%spproj_field%get_2Dshift(iptcl)
             enddo ! Particles loop
             !$omp end parallel do
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
