@@ -18,27 +18,27 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: commander_stream2D
+public :: commander_stream_sieve_cavgs
 
-type, extends(commander_base) :: commander_stream2D
+type, extends(commander_base) :: commander_stream_sieve_cavgs
   contains
-    procedure :: execute => exec_stream2D
-end type commander_stream2D
+    procedure :: execute => exec_sieve_cavgs
+end type commander_stream_sieve_cavgs
 
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
 integer,               parameter :: LONGTIME  = 60                                               ! time lag after which a movie/project is processed
 integer,               parameter :: WAITTIME  = 10                                               ! movie folder watched every WAITTIME seconds
+integer(kind=dp),      parameter :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
 
 contains
 
-    subroutine exec_stream2D( self, cline )
-        class(commander_stream2D), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
+    subroutine exec_sieve_cavgs( self, cline )
+        class(commander_stream_sieve_cavgs), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         integer,                   parameter   :: PAUSE_NITERS    = 5   ! # of iterations after which 2D analysis is paused
         integer,                   parameter   :: PAUSE_TIMELIMIT = 600 ! time (secs) after which 2D analysis is paused
-        integer(kind=dp),          parameter   :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(qsys_env)                         :: qenv
@@ -53,9 +53,9 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
         character(len=STDLEN)                  :: chunk_part_env
-        real                                   :: nptcls_pool, moldiam
-        integer(kind=dp)                       :: pool_time_last_chunk, time_last_import
-        integer                                :: nchunks_glob, nchunks_imported, nprojects, iter, nsets_imported
+        real                                   :: moldiam
+        integer(kind=dp)                       :: time_last_import
+        integer                                :: nchunks_glob, nchunks_imported, nprojects, iter
         integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
         integer                                :: i, envlen
         logical                                :: l_pause, l_params_updated
@@ -65,7 +65,6 @@ contains
         call cline%set('autoscale',    'yes')
         call cline%set('reject_mics',  'no')
         call cline%set('kweight_chunk','default')
-        call cline%set('kweight_pool', 'default')
         call cline%set('prune',        'no')
         call cline%set('wiener',       'full')
         call cline%set('reject_cls',   'no')
@@ -91,7 +90,6 @@ contains
         call params%new(cline)
         params%nthr2D       = params%nthr
         params%ml_reg_chunk = trim(params%ml_reg)
-        params%ml_reg_pool  = trim(params%ml_reg)
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         ! nice communicator init
@@ -153,7 +151,7 @@ contains
         nprojects        = 0
         iter             = 0       ! global number of infinite loop iterations
         n_failed_jobs    = 0
-        l_pause          = .false. ! whether pool 2D analysis is skipped
+        l_pause          = .false.
         time_last_import = huge(time_last_import)      ! used for flushing unprocessed particles
         ! guistats init
         call gui_stats%init(.true.)
@@ -218,7 +216,6 @@ contains
             if( l_params_updated ) l_pause = .false.    ! resuming
             if( nchunks_imported > 0 )then
                 nchunks_glob         = nchunks_glob + nchunks_imported
-                pool_time_last_chunk = time8()
                 l_pause              = .false.   ! resuming
                 ! build sets
                 call generate_sets(chunkslist, setslist)
@@ -235,8 +232,6 @@ contains
                     call is_set_processed(1)
                     call submit_cluster_cavgs
                 endif
-                ! post-processing import
-                call import_sets_into_pool(nsets_imported)
             endif
             if( l_pause )then
                 ! Whether to flush particles
@@ -245,57 +240,17 @@ contains
                 endif
             endif
             ! 2D analyses
-            if( l_pause ) call generate_pool_stats
             call analyze2D_new_chunks(projrecords)
             call sleep(WAITTIME)
             ! guistats
-            if(file_exists(POOLSTATS_FILE)) then
-                call gui_stats%merge(POOLSTATS_FILE)
-                call gui_stats%get('particles', 'particles_processed', nptcls_pool)
-                if(nptcls_pool > 0.0) call gui_stats%set('particles', 'particles_processed', int2commastr(floor(nptcls_pool)) // ' (' // int2str(ceiling(100.0 * real(nptcls_pool) / real(nptcls_glob))) // '%)')
-            end if
             call gui_stats%write_json
             ! nice
             if(l_pause) then
-                nice_communicator%stat_root%stage = "paused pool 2D analysis"
+                nice_communicator%stat_root%stage = "paused chunk 2D analysis"
                 nice_communicator%stat_root%user_input = .true.
             else if(get_nchunks() > 0) then
                 nice_communicator%stat_root%stage = "classifying chunks"
                 nice_communicator%stat_root%user_input = .false.
-            end if
-            call nice_communicator%update_cls2D(iteration=get_pool_iter()-1 , number_classes=get_pool_n_classes(), number_classes_rejected=get_pool_n_classes_rejected(),&
-            number_particles_assigned=get_pool_assigned(), number_particles_rejected=get_pool_rejected(), maximum_resolution=get_pool_res(), &
-            thumbnail=trim(get_pool_cavgs_jpeg()), thumbnail_id=get_pool_iter(), thumbnail_static_id=1, last_iteration=get_pool_iter_time(), thumbnail_n_tiles=get_pool_cavgs_jpeg_ntiles())
-            if(get_pool_rejected_jpeg_ntiles() .gt. 0) then
-                call nice_communicator%update_cls2D(pool_rejected_thumbnail=trim(get_pool_rejected_jpeg()), pool_rejected_thumbnail_id=1000 + get_pool_rejected_thumbnail_id(), pool_rejected_thumbnail_static_id=2, &
-                pool_rejected_thumbnail_n_tiles=get_pool_rejected_jpeg_ntiles(), pool_rejected_scale=get_pool_rejected_jpeg_scale())
-            end if
-            if(get_chunk_rejected_jpeg_ntiles() .gt. 0) then
-                call nice_communicator%update_cls2D(chunk_rejected_thumbnail=trim(get_chunk_rejected_jpeg()), chunk_rejected_thumbnail_id=2000 + get_chunk_rejected_thumbnail_id(), chunk_rejected_thumbnail_static_id=3, &
-                chunk_rejected_thumbnail_n_tiles=get_chunk_rejected_jpeg_ntiles(), chunk_rejected_scale=get_chunk_rejected_jpeg_scale())
-            end if
-            call nice_communicator%update_cls2D(stats_mask=get_pool_cavgs_mask(), stats_resolution=get_pool_cavgs_res(), stats_population=get_pool_cavgs_pop(), rejection_params=get_rejection_params())
-            call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot())
-            call nice_communicator%view_cls2D%res_histogram%zero()
-            do i = 1, get_pool_n_classes()
-                call nice_communicator%view_cls2D%res_histogram%update(get_pool_cavgs_res_at(i))
-            enddo
-            nice_communicator%view_cls2D%cutoff_res = params%lpthres
-            nice_communicator%view_cls2D%cutoff_type = get_lpthres_type()
-            ! project snapshot
-            if(get_pool_iter() .gt. 0 .and. trim(params%snapshot) .ne. "") then
-                call nice_communicator%update_cls2D(snapshot_json_clear=.true.)
-                call write_project_stream2D(snapshot_projfile=trim(params%snapshot))
-                params%snapshot = ""
-                params%updated = "no"
-                if(associated(snapshot_json)) then
-                    call json%destroy(snapshot_json)
-                    nullify(snapshot_json)
-                end if
-                call get_snapshot_json(snapshot_json)
-                call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot(), snapshot_json=snapshot_json)
-            else
-                call nice_communicator%update_cls2D(snapshot_id=get_last_snapshot_id(), snapshot_time=get_last_snapshot())
             end if
             call nice_communicator%cycle()
         end do
@@ -305,7 +260,6 @@ contains
         call terminate_stream2D( projrecords )
         call update_user_params(cline) ! Joe: bit late for this?
         ! final stats
-        if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
         call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%deactivate_section('compute')
         call gui_stats%write_json
@@ -594,6 +548,6 @@ contains
                 nullify(pool)
             end subroutine import_sets_into_pool
 
-    end subroutine exec_stream2D
+    end subroutine exec_sieve_cavgs
 
 end module simple_commander_stream2D

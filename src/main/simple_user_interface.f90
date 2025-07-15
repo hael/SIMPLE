@@ -196,7 +196,7 @@ type(simple_program), target :: split_
 type(simple_program), target :: stack
 type(simple_program), target :: split_stack
 type(simple_program), target :: stackops
-type(simple_program), target :: stream2D
+type(simple_program), target :: sieve_cavgs
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
@@ -518,6 +518,7 @@ contains
         call new_select_
         call new_select_clusters
         call new_sharpvol
+        call new_sieve_cavgs
         call new_simulate_atoms
         call new_simulate_movie
         call new_simulate_noise
@@ -525,7 +526,6 @@ contains
         call new_simulate_subtomogram
         call new_split_
         call new_stack
-        call new_stream2D
         call new_split_stack
         call new_stackops
         call new_symaxis_search
@@ -667,6 +667,7 @@ contains
         call push2prg_ptr_array(select_)
         call push2prg_ptr_array(select_clusters)
         call push2prg_ptr_array(sharpvol)
+        call push2prg_ptr_array(sieve_cavgs)
         call push2prg_ptr_array(simulate_atoms)
         call push2prg_ptr_array(simulate_movie)
         call push2prg_ptr_array(simulate_noise)
@@ -676,7 +677,6 @@ contains
         call push2prg_ptr_array(stack)
         call push2prg_ptr_array(split_stack)
         call push2prg_ptr_array(stackops)
-        call push2prg_ptr_array(stream2D)
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
@@ -960,8 +960,8 @@ contains
                 ptr2prg => split_stack
             case('stackops')
                 ptr2prg => stackops
-            case('stream2D')
-                ptr2prg => stream2D
+            case('sieve_cavgs')
+                ptr2prg => sieve_cavgs
             case('symaxis_search')
                 ptr2prg => symaxis_search
             case('symmetrize_map')
@@ -1135,7 +1135,7 @@ contains
         write(logfhandle,'(A)') gen_picking_refs%name
         write(logfhandle,'(A)') preproc%name
         write(logfhandle,'(A)') pick_extract%name
-        write(logfhandle,'(A)') stream2D%name
+        write(logfhandle,'(A)') sieve_cavgs%name
     end subroutine list_stream_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
@@ -5216,6 +5216,57 @@ contains
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_preproc
 
+    subroutine new_sieve_cavgs
+        ! PROGRAM SPECIFICATION
+        call sieve_cavgs%new(&
+        &'sieve_cavgs', &                                                   ! name
+        &'2D analysis in streaming mode',&                                       ! descr_short
+        &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_stream',&                                                       ! executable
+        &0, 2, 0, 6, 3, 1, 4, .true.,&                                           ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call sieve_cavgs%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_advanced=.false.)
+        call sieve_cavgs%set_input('parm_ios', 2, 'dir_exec', 'file', 'Previous run directory',&
+        &'Directory where previous 2D analysis took place', 'e.g. 3_sieve_cavgs', .false., '', gui_submenu="data")
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call sieve_cavgs%set_input('srch_ctrls', 1, ncls_start, gui_submenu="cluster 2D", gui_advanced=.false.)
+        call sieve_cavgs%set_input('srch_ctrls', 2, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
+        sieve_cavgs%srch_ctrls(2)%required = .true.
+        call sieve_cavgs%set_input('srch_ctrls', 3, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
+        call sieve_cavgs%set_input('srch_ctrls', 4, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
+        &gui_advanced=.false.)
+        call sieve_cavgs%set_input('srch_ctrls', 5, lpthres, gui_submenu="cluster 2D", gui_online=.true.)
+        call sieve_cavgs%set_input('srch_ctrls', 6, nchunksperset, gui_advanced=.false.)
+        ! filter controls
+        call sieve_cavgs%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
+        call sieve_cavgs%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D analysis', 'Static low-pass limit for 2D analysis',&
+        &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
+        call sieve_cavgs%set_input('filt_ctrls', 3, 'reject_cls', 'multi', 'Whether to reject class averages',&
+        &'Whether to automatically reject 2D clusters and associated particles(yes|old|no){yes}', '(yes|old|no){yes}', .false., 'yes', gui_submenu="cluster 2D",&
+        &gui_online=.true.)
+        ! mask controls
+        call sieve_cavgs%set_input('mask_ctrls', 1, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
+        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
+        ! computer controls
+        call sieve_cavgs%set_input('comp_ctrls', 1, nchunks, gui_submenu="compute", gui_advanced=.false.)
+        call sieve_cavgs%set_input('comp_ctrls', 2, nparts_chunk, gui_submenu="compute", gui_advanced=.false.)
+        sieve_cavgs%comp_ctrls(2)%required = .true.
+        call sieve_cavgs%set_input('comp_ctrls', 3, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call sieve_cavgs%set_input('comp_ctrls', 4, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+    end subroutine new_sieve_cavgs
+
     subroutine new_simulate_atoms
         ! PROGRAM SPECIFICATION
         call simulate_atoms%new(&
@@ -5507,59 +5558,6 @@ contains
         ! computer controls
         call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
-
-    subroutine new_stream2D
-        ! PROGRAM SPECIFICATION
-        call stream2D%new(&
-        &'stream2D', &                                                   ! name
-        &'2D analysis in streaming mode',&                                       ! descr_short
-        &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
-        &' in streaming mode as the microscope collects the data',&
-        &'simple_stream',&                                                       ! executable
-        &0, 2, 0, 6, 3, 1, 5, .true.,&                                           ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call stream2D%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_advanced=.false.)
-        call stream2D%set_input('parm_ios', 2, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where previous 2D analysis took place', 'e.g. 3_stream2D', .false., '', gui_submenu="data")
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call stream2D%set_input('srch_ctrls', 1, ncls_start, gui_submenu="cluster 2D", gui_advanced=.false.)
-        call stream2D%set_input('srch_ctrls', 2, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
-        stream2D%srch_ctrls(2)%required = .true.
-        call stream2D%set_input('srch_ctrls', 3, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call stream2D%set_input('srch_ctrls', 4, 'ncls', 'num', 'Maximum number of 2D clusters',&
-        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
-        &gui_advanced=.false.)
-        call stream2D%set_input('srch_ctrls', 5, lpthres, gui_submenu="cluster 2D", gui_online=.true.)
-        call stream2D%set_input('srch_ctrls', 6, nchunksperset, gui_advanced=.false.)
-        ! filter controls
-        call stream2D%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
-        call stream2D%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D analysis', 'Static low-pass limit for 2D analysis',&
-        &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
-        call stream2D%set_input('filt_ctrls', 3, 'reject_cls', 'multi', 'Whether to reject class averages',&
-        &'Whether to automatically reject 2D clusters and associated particles(yes|old|no){yes}', '(yes|old|no){yes}', .false., 'yes', gui_submenu="cluster 2D",&
-        &gui_online=.true.)
-        ! mask controls
-        call stream2D%set_input('mask_ctrls', 1, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
-        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
-        ! computer controls
-        call stream2D%set_input('comp_ctrls', 1, nchunks, gui_submenu="compute", gui_advanced=.false.)
-        call stream2D%set_input('comp_ctrls', 2, nparts_chunk, gui_submenu="compute", gui_advanced=.false.)
-        stream2D%comp_ctrls(2)%required = .true.
-        call stream2D%set_input('comp_ctrls', 3, nparts_pool, gui_submenu="compute", gui_advanced=.false.)
-        stream2D%comp_ctrls(3)%required = .true.
-        call stream2D%set_input('comp_ctrls', 4, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call stream2D%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
-    end subroutine new_stream2D
 
     subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION
