@@ -533,10 +533,7 @@ contains
                 t_merge_algndocs = tic()
             endif
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
-            if( L_BENCH_GLOB )then
-                rt_merge_algndocs = toc(t_merge_algndocs)
-                t_volassemble = tic()
-            endif
+            if( L_BENCH_GLOB ) rt_merge_algndocs = toc(t_merge_algndocs)
             if( l_polar )then
                 params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
                 call polar_cavger_new(pftcc, params%nspace)
@@ -552,7 +549,6 @@ contains
                 call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
                 call polar_cavger_kill
             endif
-            if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
             ! CONVERGENCE
             converged = .false.
             select case(trim(params%refine))
@@ -567,6 +563,7 @@ contains
                     endif
             end select
             if( niters == params%maxits ) converged = .true.
+            if( L_BENCH_GLOB ) t_volassemble = tic()
             if( trim(params%volrec).eq.'yes' .or. converged )then
                 ! ASSEMBLE VOLUMES
                 select case(trim(params%refine))
@@ -676,6 +673,7 @@ contains
                         enddo
                 end select
             endif
+            if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
             if ( l_combine_eo .and. converged )then
                 converged            = .false.
                 l_combine_eo         = .false.
@@ -929,36 +927,11 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         type(convergence) :: conv
-        real, allocatable :: maplp(:)
-        integer           :: istate
-        logical           :: converged, update_res
+        logical           :: converged
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        update_res = .false.
-        allocate( maplp(params%nstates), source=0.)
-        do istate=1,params%nstates
-            if( build%spproj_field%get_pop( istate, 'state' ) == 0 )cycle ! empty state
-            params%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
-            if( file_exists(params%fsc) )then
-                build%fsc(istate,:) = file2rarr(params%fsc)
-                maplp(istate) = calc_lowpass_lim(get_find_at_crit(build%fsc(istate,:),params%lplim_crit), params_glob%box_crop, params_glob%smpd_crop)
-                maplp(istate) = max(maplp(istate), 2.*params%smpd_crop)
-            else
-                THROW_HARD('tried to check the fsc file: '//trim(params%fsc)//' but it does not exist!')
-            endif
-        enddo
-        params%state = maxloc(maplp, dim=1)  ! state with worst low-pass
-        params%lp    = maplp( params%state ) ! worst lp
-        params%fsc   = 'fsc_state'//int2str_pad(params%state,2)//'.bin'
-        deallocate(maplp)
         ! check convergence
-        if( cline%defined('update_res') )then
-            update_res = .false.
-            if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
-            converged = conv%check_conv3D(cline, params%msk)
-        else
-            converged = conv%check_conv3D(cline, params%msk)
-        endif
+        converged = conv%check_conv3D(cline, params%msk)
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
         if( params_glob%l_doshift )then
@@ -968,11 +941,6 @@ contains
             call cline%set('converged', 'yes')
         else
             call cline%set('converged', 'no')
-        endif
-        if( update_res )then
-            call cline%set('update_res', 'yes') ! fourier index to be updated in distr commander
-        else
-            call cline%set('update_res', 'no')
         endif
         call cline%set('frac_srch', conv%get('frac_srch'))
         ! end gracefully
