@@ -9,15 +9,15 @@ use simple_tvfilter, only: tvfilter
 implicit none
 #include "simple_local_flags.inc"
 type(binimage)           :: microg, img_sdevs, img_cc, micraw
-type(image)              :: img_win
+type(image)              :: img_win, img_edge
 type(tvfilter)           :: tvf
 type(parameters), target :: params
 type(stats_struct)       :: sz_stats, diam_stats
 character(len=STDLEN),     parameter   :: filetable='filetab.txt'
 character(len=LONGSTRLEN), allocatable :: micname(:)
-character(len=STDLEN) :: outputfile, fbody
-real, parameter       :: smpd=0.732, LAMBDA=3
-integer               :: nfiles, ldim(3), ifoo, i, j, nboxes, sz_min, sz_max, box_raw, boxcoord(2)
+character(len=STDLEN) :: outputfile, fbody, method
+real, parameter       :: smpd=0.732, LAMBDA=3, moldiam=100.
+integer               :: nfiles, ldim(3), ifoo, i, j, nboxes, sz_min, sz_max, box_raw, boxcoord(2), box
 integer, parameter    :: winsz=24 ! this is the windows size that works for the cryoEM polymeric-NPs
 integer, allocatable  :: sz(:)
 real,    allocatable  :: diams(:), masscens(:,:)
@@ -28,17 +28,25 @@ params_glob%pcontrast = 'black'
 params_glob%hp        = 10.
 call read_filetable(filetable, micname)
 nfiles=size(micname)
+method=trim("diam")
+select case(method)
+case('sauvola')
 
+! PICKING BASED ON SAUVOLA SEGMENTATION
 do i = 1, nfiles
     print *, trim(micname(i))
     call find_ldim_nptcls(micname(i), ldim, ifoo)
     call microg%new_bimg(ldim, smpd)
     call microg%read(micname(i))
-    call micraw%new_bimg(ldim, smpd)
-    call micraw%read(micname(i))
     fbody      = get_fbody(basename(micname(i)),'mrc')
     outputfile = trim(fbody)//'.mrc'
     call microg%write(outputfile)
+    ! canny edge detection
+    call micraw%new_bimg(ldim, smpd)
+    call micraw%read(micname(i))
+    call canny(micraw, img_edge)
+    outputfile = trim(fbody)//'_BIN_CANNY.mrc'
+    call img_edge%write(outputfile)
     ! low pass filter micrograph
     call microg%fft()
     call microg%bp(0., params_glob%hp)
@@ -61,14 +69,22 @@ do i = 1, nfiles
     print *, ">>> SAUVOL BINARISATION          ",trim(outputfile)
     outputfile = trim(fbody)//'_BIN_SAU_SDEVS.mrc'
     call microg%write_bimg(outputfile)
-    call microg%erode()
-    call microg%erode()
+    do j=1,10
+        call microg%erode()
+    enddo
     call microg%set_largestcc2background()
     call microg%inv_bimg()
     outputfile=trim(fbody)//'_BIN_SAU_SDEVS_FH.mrc'
     call microg%write_bimg(outputfile)
 
     ! identify connected components
+
+    ! find connected components as the centers of the ptcls and eliminate the background(biggest cc)
+    ! call microg%find_ccs(img_cc, black=.true.)
+    ! call microg%elim_largestcc()
+    ! call img_cc%get_nccs(nboxes)
+
+
     call microg%find_ccs(img_cc)
     call img_cc%get_nccs(nboxes)
     ! eliminate connected components that are too large or too small
@@ -122,8 +138,10 @@ do i = 1, nfiles
     call img_win%kill()
     call micraw%kill()
     call img_cc%kill_bimg()
+    call img_edge%kill()
 enddo 
-
+case('background_subs')
+! ! BACKGROUND SUBSTRACTION
 do i = 1, nfiles
     print *, trim(micname(i))
     call find_ldim_nptcls(micname(i), ldim, ifoo)
@@ -136,12 +154,15 @@ do i = 1, nfiles
     call microg%write(outputfile)
     call microg%kill()
 enddo
-
+case('otsus')
+! OTSU'S ORIGINAL SEGMENTATION
 do i = 1, nfiles
     print *, trim(micname(i))
     call find_ldim_nptcls(micname(i), ldim, ifoo)
     call microg%new_bimg(ldim, smpd)
     call microg%read(micname(i))
+    call micraw%new_bimg(ldim, smpd)
+    call micraw%read(micname(i))
     ! low pass filter micrograph
     call microg%fft()
     call microg%bp(0., params_glob%hp)
@@ -157,10 +178,148 @@ do i = 1, nfiles
     outputfile = trim(fbody)//'_BIN_OTS.mrc'
     print *, ">>> OTSU'S BINARISATION   ",trim(outputfile)
     call otsu_img(microg,tight=.true.)
-    !call otsu_img(microg)
+    call microg%set_imat()
     call microg%write(outputfile)
+    do j=1,20
+    call microg%erode()
+    enddo
+    call microg%find_ccs(img_cc)
+    call img_cc%get_nccs(nboxes)
+    ! eliminate connected components that are too large or too small
+    sz = img_cc%size_ccs()
+    call calc_stats(real(sz), sz_stats)
+    print *, 'nboxes before elimination: ', nboxes
+    print *, 'avg size: ', sz_stats%avg
+    print *, 'med size: ', sz_stats%med
+    print *, 'sde size: ', sz_stats%sdev
+    print *, 'min size: ', sz_stats%minv
+    print *, 'max size: ', sz_stats%maxv
+    sz_min = nint(sz_stats%avg - params_glob%ndev * sz_stats%sdev)
+    sz_max = nint(sz_stats%avg + params_glob%ndev * sz_stats%sdev)
+    call img_cc%elim_ccs([sz_min,sz_max])
+    call img_cc%get_nccs(nboxes)
+    sz = img_cc%size_ccs()
+    call calc_stats(real(sz), sz_stats)
+    print *, 'nboxes after elimination: ', nboxes
+    print *, 'avg size: ', sz_stats%avg
+    print *, 'med size: ', sz_stats%med
+    print *, 'sde size: ', sz_stats%sdev
+    print *, 'min size: ', sz_stats%minv
+    print *, 'max size: ', sz_stats%maxv
+    allocate(diams(nboxes), source=0.)
+    do j = 1, nboxes
+        call img_cc%diameter_cc(j, diams(j))
+    enddo
+    call calc_stats(diams, diam_stats)
+    print *, 'CC diameter (in Angs) stadistics'
+    print *, 'avg diam: ', diam_stats%avg
+    print *, 'med diam: ', diam_stats%med
+    print *, 'sde diam: ', diam_stats%sdev
+    print *, 'min diam: ', diam_stats%minv
+    print *, 'max diam: ', diam_stats%maxv
+    box_raw = find_magic_box(2 * nint(diam_stats%med/smpd))
+    call img_win%new([box_raw,box_raw,1], smpd)
+    if( allocated(masscens) ) deallocate(masscens)
+    allocate(masscens(nboxes,2), source=0.)
+    do j = 1, nboxes
+        px = center_mass_cc(j)
+        masscens(j,:2) = px(:2)
+        boxcoord = nint((real(masscens(j,:2))-real(box_raw)/2.))
+        call micraw%window_slim(boxcoord, box_raw, img_win, outside)
+        call img_win%write(trim(fbody)//'_extracted_OTSU.mrc', j)
+        ! outputfile=trim(fbody)//'_extracted.mrc'
+    enddo
+    if( allocated(sz) ) deallocate(sz)
+    if( allocated(diams) ) deallocate(diams)
     call microg%kill_bimg()
+    call img_cc%kill_bimg()
+    call img_win%kill()
 enddo
+
+case('diam')
+! OTSU'S ORIGINAL SEGMENTATION
+do i = 1, nfiles
+    print *, trim(micname(i))
+    call find_ldim_nptcls(micname(i), ldim, ifoo)
+    call microg%new_bimg(ldim, smpd)
+    call microg%read(micname(i))
+    call micraw%new_bimg(ldim, smpd)
+    call micraw%read(micname(i))
+    ! low pass filter micrograph
+    call microg%fft()
+    call microg%bp(0., params_glob%hp)
+    call microg%ifft()
+    ! TV denoising
+    call tvf%new()
+    call tvf%apply_filter(microg, LAMBDA)
+    call tvf%kill()
+    fbody      = get_fbody(basename(micname(i)),'mrc')
+    outputfile = trim(fbody)//'_filt.mrc'
+    print *, ">>> FILTERING HIGH FREQUENCIES   ",trim(outputfile)
+    call microg%write(outputfile)
+    outputfile = trim(fbody)//'_BIN_OTS.mrc'
+    print *, ">>> OTSU'S BINARISATION   ",trim(outputfile)
+    call otsu_img(microg,tight=.true.)
+    call microg%set_imat()
+    call microg%write(outputfile)
+    do j=1,20
+    call microg%erode()
+    enddo
+    call microg%find_ccs(img_cc)
+    call img_cc%get_nccs(nboxes)
+    ! eliminate connected components that are too large or too small
+    sz = img_cc%size_ccs()
+    call calc_stats(real(sz), sz_stats)
+    print *, 'nboxes before elimination: ', nboxes
+    print *, 'avg size: ', sz_stats%avg
+    print *, 'med size: ', sz_stats%med
+    print *, 'sde size: ', sz_stats%sdev
+    print *, 'min size: ', sz_stats%minv
+    print *, 'max size: ', sz_stats%maxv
+    box      = nint(PI*(moldiam/2.)**2 / smpd**2)
+    sz_min   = box / 4
+    sz_max   = box * 4
+    call img_cc%elim_ccs([sz_min,sz_max])
+    call img_cc%get_nccs(nboxes)
+    sz = img_cc%size_ccs()
+    call calc_stats(real(sz), sz_stats)
+    print *, 'nboxes after elimination: ', nboxes
+    print *, 'avg size: ', sz_stats%avg
+    print *, 'med size: ', sz_stats%med
+    print *, 'sde size: ', sz_stats%sdev
+    print *, 'min size: ', sz_stats%minv
+    print *, 'max size: ', sz_stats%maxv
+    allocate(diams(nboxes), source=0.)
+    do j = 1, nboxes
+        call img_cc%diameter_cc(j, diams(j))
+    enddo
+    call calc_stats(diams, diam_stats)
+    print *, 'CC diameter (in Angs) stadistics'
+    print *, 'avg diam: ', diam_stats%avg
+    print *, 'med diam: ', diam_stats%med
+    print *, 'sde diam: ', diam_stats%sdev
+    print *, 'min diam: ', diam_stats%minv
+    print *, 'max diam: ', diam_stats%maxv
+    box_raw = find_magic_box(2 * nint(diam_stats%med/smpd))
+    call img_win%new([box_raw,box_raw,1], smpd)
+    if( allocated(masscens) ) deallocate(masscens)
+    allocate(masscens(nboxes,2), source=0.)
+    do j = 1, nboxes
+        px = center_mass_cc(j)
+        masscens(j,:2) = px(:2)
+        boxcoord = nint((real(masscens(j,:2))-real(box_raw)/2.))
+        call micraw%window_slim(boxcoord, box_raw, img_win, outside)
+        call img_win%write(trim(fbody)//'_extracted_OTSU.mrc', j)
+        ! outputfile=trim(fbody)//'_extracted.mrc'
+    enddo
+    if( allocated(sz) ) deallocate(sz)
+    if( allocated(diams) ) deallocate(diams)
+    call microg%kill_bimg()
+    call img_cc%kill_bimg()
+    call img_win%kill()
+enddo
+
+end select 
 
 contains
 
