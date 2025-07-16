@@ -309,7 +309,7 @@ contains
         if( l_restore )then
             ! Volume
             if( L_BENCH_GLOB ) t_rec = tic()
-            if( trim(params_glob%volrec).eq.'yes' )then
+            if( trim(params_glob%volrec).eq.'yes' .or. which_iter == params_glob%maxits )then
                 if( trim(params_glob%projrec).eq.'yes' )then
                     call calc_projdir3Drec( cline, nptcls2update, pinds )
                 else
