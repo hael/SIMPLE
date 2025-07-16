@@ -21,7 +21,6 @@ type convergence
     type(stats_struct) :: lp         !< low-pass limit
     type(stats_struct) :: lp_est     !< low-pass limit, estimated
     type(stats_struct) :: res        !< resolution @ FSC=0.143
-    type(oris)         :: ostats     !< centralize stats for writing
     integer :: iteration   = 0       !< current interation
     real    :: mi_class    = 0.      !< class parameter distribution overlap
     real    :: mi_proj     = 0.      !< projection parameter distribution overlap
@@ -67,6 +66,7 @@ contains
         class(oris),        intent(inout) :: os
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
+        type(oris)           :: ostats
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         integer :: nsamples, n, nptcls
@@ -182,25 +182,26 @@ contains
             endif
         endif
         ! stats
-        call self%ostats%new(1, is_ptcl=.false.)
-        call self%ostats%set(1,'ITERATION',                params_glob%which_iter)
-        call self%ostats%set(1,'CLASS_OVERLAP',            self%mi_class)
-        call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
-        call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
-        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED',percen_avg)
-        call self%ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
-        call self%ostats%set(1,'SCORE',                    self%score%avg)
-        call self%ostats%write(STATS_FILE)
+        call ostats%new(1, is_ptcl=.false.)
+        call ostats%set(1,'ITERATION',                params_glob%which_iter)
+        call ostats%set(1,'CLASS_OVERLAP',            self%mi_class)
+        call ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
+        call ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
+        call ostats%set(1,'PERCEN_PARTICLES_AVERAGED',percen_avg)
+        call ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
+        call ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
+        call ostats%set(1,'SCORE',                    self%score%avg)
+        call ostats%write(STATS_FILE)
         ! destruct
         deallocate(mask, updatecnts, states, scores, sampled)
-        call self%ostats%kill
+        call ostats%kill
     end function check_conv2D
 
     function check_conv3D( self, cline, msk ) result( converged )
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
+        type(oris)           :: ostats
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
@@ -346,49 +347,50 @@ contains
             deallocate( state_mi_joint, statepops )
         endif
         ! stats
-        call self%ostats%new(1, is_ptcl=.false.)
-        call self%ostats%set(1,'ITERATION',                   params_glob%which_iter)
-        call self%ostats%set(1,'ORIENTATION_OVERLAP',         self%mi_proj)
-        if( params_glob%nstates > 1 ) call self%ostats%set(1,'STATE_OVERLAP', self%mi_state)
-        call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED',    percen_sampled)
-        call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED',    percen_updated)
-        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED',   percen_avg)
-        call self%ostats%set(1,'PERCEN_GREEDY_SEARCHES',      self%frac_greedy * 100.)
-        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',          self%dist%avg)
-        call self%ostats%set(1,'IN-PLANE_DIST',               self%dist_inpl%avg)
-        call self%ostats%set(1,'SHIFT_INCR_ARG',              self%shincarg%avg)
-        call self%ostats%set(1,'PERCEN_SEARCH_SPACE_SCANNED', self%frac_srch%avg)
-        call self%ostats%set(1,'LP_MATCHING',                 self%lp%avg)
-        call self%ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
-        call self%ostats%set(1,'RESOLUTION',                  self%res%avg)
-        call self%ostats%set(1,'SCORE',                       self%score%avg)
+        call ostats%new(1, is_ptcl=.false.)
+        call ostats%set(1,'ITERATION',                   params_glob%which_iter)
+        call ostats%set(1,'ORIENTATION_OVERLAP',         self%mi_proj)
+        if( params_glob%nstates > 1 ) call ostats%set(1,'STATE_OVERLAP', self%mi_state)
+        call ostats%set(1,'PERCEN_PARTICLES_SAMPLED',    percen_sampled)
+        call ostats%set(1,'PERCEN_PARTICLES_UPDATED',    percen_updated)
+        call ostats%set(1,'PERCEN_PARTICLES_AVERAGED',   percen_avg)
+        call ostats%set(1,'PERCEN_GREEDY_SEARCHES',      self%frac_greedy * 100.)
+        call ostats%set(1,'DIST_BTW_BEST_ORIS',          self%dist%avg)
+        call ostats%set(1,'IN-PLANE_DIST',               self%dist_inpl%avg)
+        call ostats%set(1,'SHIFT_INCR_ARG',              self%shincarg%avg)
+        call ostats%set(1,'PERCEN_SEARCH_SPACE_SCANNED', self%frac_srch%avg)
+        call ostats%set(1,'LP_MATCHING',                 self%lp%avg)
+        call ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
+        call ostats%set(1,'RESOLUTION',                  self%res%avg)
+        call ostats%set(1,'SCORE',                       self%score%avg)
         if( params_glob%l_ml_reg )then
-            call self%ostats%set(1,'ML_REGULARIZATION',                        1.0)
-            call self%ostats%set(1,'ML_REGULARIZATION_TAU',        params_glob%tau)
+            call ostats%set(1,'ML_REGULARIZATION',                        1.0)
+            call ostats%set(1,'ML_REGULARIZATION_TAU',        params_glob%tau)
         else
-            call self%ostats%set(1,'ML_REGULARIZATION',                        0.0)
+            call ostats%set(1,'ML_REGULARIZATION',                        0.0)
         endif
         if( params_glob%l_icm )then
-            call self%ostats%set(1,'ICM_REGULARIZATION',                       1.0)
-            call self%ostats%set(1,'ICM_REGULARIZATION_LAMBDA', params_glob%lambda)
+            call ostats%set(1,'ICM_REGULARIZATION',                       1.0)
+            call ostats%set(1,'ICM_REGULARIZATION_LAMBDA', params_glob%lambda)
         endif
         if( params_glob%l_update_frac )then
-            call self%ostats%set(1,'TRAIL_REC_UPDATE_FRACTION',    trail_rec_ufrac)
+            call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION',    trail_rec_ufrac)
         endif
         
-        call self%ostats%write(STATS_FILE)
-        call self%append_stats
+        call ostats%write(STATS_FILE)
+        call self%append_stats(ostats)
         call self%plot_projdirs(mask)
         ! destruct
         if( allocated(state_mi_joint) ) deallocate(state_mi_joint)
         if( allocated(statepops)      ) deallocate(statepops)
         deallocate(mask, updatecnts, states, scores, sampled)
-        call self%ostats%kill
+        call ostats%kill
     end function check_conv3D
 
-    subroutine append_stats( self )
+    subroutine append_stats( self, ostats )
         use CPlot2D_wrapper_module, only: plot2D
         class(convergence), intent(in) :: self
+        class(oris),        intent(in) :: ostats
         type(oris)        :: os_prev, os
         real, allocatable :: iter(:), inpl_dist(:), proj_dist(:)
         real, allocatable :: score(:), proj_overlap(:)
@@ -408,7 +410,7 @@ contains
             call os%new(1,is_ptcl=.false.)
             nl = 1
         endif
-        call os%transfer_ori(nl,self%ostats,1)
+        call os%transfer_ori(nl,ostats,1)
         call os%write(ITERSTATS_FILE)
         if( nl > 1 )then
             iter         = os%get_all('ITERATION')
