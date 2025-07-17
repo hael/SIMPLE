@@ -819,6 +819,7 @@ contains
         real, allocatable   :: frc(:), filter(:), gaufilter(:)
         integer :: filtsz, k
         ! Filtering
+        filtsz = build_glob%clsfrcs%get_filtsz()
         if( params_glob%l_ml_reg )then
             ! no filtering, not supported yet
         elseif( trim(params_glob%ref_type).ne.'cavg_clin' )then   ! cavg_clin handling the filtering differently
@@ -833,7 +834,6 @@ contains
                 endif
             else
                 ! FRC-based optimal filter
-                filtsz = build_glob%clsfrcs%get_filtsz()
                 allocate(frc(filtsz),filter(filtsz),source=0.)
                 call build_glob%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
