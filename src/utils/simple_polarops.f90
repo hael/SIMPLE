@@ -819,39 +819,30 @@ contains
         real, allocatable   :: frc(:), filter(:), gaufilter(:)
         integer :: filtsz, k
         ! Filtering
-        filtsz = build_glob%clsfrcs%get_filtsz()
         if( params_glob%l_ml_reg )then
             ! no filtering, not supported yet
         elseif( trim(params_glob%ref_type).ne.'cavg_clin' )then   ! cavg_clin handling the filtering differently
-            if( params_glob%l_lpset )then
-                ! no FSC-based filtering
-                ! optional gaussian filter
-                if(trim(params_glob%gauref).eq.'yes')then
-                    allocate(filter(filtsz),source=.0)
-                    call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, filter)
-                    call filterrefs(icls, filter)
-                    deallocate(filter)
-                endif
-            else
-                ! FRC-based optimal filter
-                allocate(frc(filtsz),filter(filtsz),source=0.)
+            filtsz = build_glob%clsfrcs%get_filtsz()
+            allocate(filter(filtsz),source=1.)
+            ! FRC-based optimal filter
+            if(trim(params_glob%frcref).eq.'yes')then
+                allocate(frc(filtsz),source=0.)
                 call build_glob%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-                else
-                    filter = 1.0
                 endif
-                ! optional gaussian filter
-                if(trim(params_glob%gauref).eq.'yes')then
-                    allocate(gaufilter(filtsz),source=0.)
-                    call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
-                    ! take the minimum of FRC-based & gaussian filters: relevant in 2.5D?
-                    forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
-                    deallocate(gaufilter)
-                endif
-                call filterrefs(icls, filter)
-                deallocate(frc,filter)
+                deallocate(frc)
             endif
+            ! optional gaussian filter
+            if(trim(params_glob%gauref).eq.'yes')then
+                allocate(gaufilter(filtsz),source=0.)
+                call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
+                ! take the minimum of FRC-based & gaussian filters: relevant in 2.5D?
+                forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
+                deallocate(gaufilter)
+            endif
+            call filterrefs(icls, filter)
+            deallocate(filter)
         endif
     end subroutine polar_prep3Dref
 
