@@ -1179,7 +1179,7 @@ contains
             endif
             ! pop size does not matter in comlin
             if( pop > 0 .or. params_glob%l_comlin )then
-                call polar_prep2Dref(iproj)
+                call polar_prep3Dref(iproj)
                 ! transfer to pftcc
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then

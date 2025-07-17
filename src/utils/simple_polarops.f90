@@ -22,7 +22,7 @@ public :: polar_cavger_readwrite_partial_sums, polar_cavger_read_all
 ! Book-keeping
 public :: polar_cavger_gen2Dclassdoc, polar_cavger_calc_pops
 ! Alignment
-public :: polar_prep2Dref
+public :: polar_prep2Dref, polar_prep3Dref
 private
 #include "simple_local_flags.inc"
 
@@ -790,7 +790,7 @@ contains
         ! Filtering
         if( params_glob%l_ml_reg )then
             ! no filtering, not supported yet
-        elseif( trim(params_glob%ref_type).ne.'cavg_clin' )then   ! cavg_clin handling the filtering differently
+        else
             ! FRC-based optimal filter
             filtsz = build_glob%clsfrcs%get_filtsz()
             allocate(frc(filtsz),filter(filtsz),source=0.)
@@ -812,6 +812,48 @@ contains
             deallocate(frc,filter)
         endif
     end subroutine polar_prep2Dref
+
+    !>  \brief  prepares one polar cluster centre image for alignment
+    subroutine polar_prep3Dref( icls )
+        integer, intent(in) :: icls
+        real, allocatable   :: frc(:), filter(:), gaufilter(:)
+        integer :: filtsz, k
+        ! Filtering
+        if( params_glob%l_ml_reg )then
+            ! no filtering, not supported yet
+        elseif( trim(params_glob%ref_type).ne.'cavg_clin' )then   ! cavg_clin handling the filtering differently
+            if( params_glob%l_lpset )then
+                ! no FSC-based filtering
+                ! optional gaussian filter
+                if(trim(params_glob%gauref).eq.'yes')then
+                    allocate(filter(filtsz),source=.0)
+                    call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, filter)
+                    call filterrefs(icls, filter)
+                    deallocate(filter)
+                endif
+            else
+                ! FRC-based optimal filter
+                filtsz = build_glob%clsfrcs%get_filtsz()
+                allocate(frc(filtsz),filter(filtsz),source=0.)
+                call build_glob%clsfrcs%frc_getter(icls, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                else
+                    filter = 1.0
+                endif
+                ! optional gaussian filter
+                if(trim(params_glob%gauref).eq.'yes')then
+                    allocate(gaufilter(filtsz),source=0.)
+                    call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
+                    ! take the minimum of FRC-based & gaussian filters: relevant in 2.5D?
+                    forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
+                    deallocate(gaufilter)
+                endif
+                call filterrefs(icls, filter)
+                deallocate(frc,filter)
+            endif
+        endif
+    end subroutine polar_prep3Dref
 
     ! DESTRUCTOR
 
