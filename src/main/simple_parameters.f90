@@ -67,6 +67,7 @@ type :: parameters
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter
+    character(len=3)          :: linethres='no'       !< whether to consider angular threshold in common lines (yes|no){no}
     character(len=3)          :: linstates='no'       !< linearizing states in alignment (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
@@ -668,6 +669,7 @@ contains
         call check_carg('kweight_chunk',  self%kweight_chunk)
         call check_carg('kweight_pool',   self%kweight_pool)
         call check_carg('lam_anneal',     self%lam_anneal)
+        call check_carg('linethres',      self%linethres)
         call check_carg('linstates',      self%linstates)
         call check_carg('linstates_mode', self%linstates_mode)
         call check_carg('loc_sdev',       self%loc_sdev)

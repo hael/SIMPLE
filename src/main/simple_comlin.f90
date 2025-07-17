@@ -115,7 +115,8 @@ contains
         type(polar_fmap),        intent(inout) :: pcomlines(:,:)
         integer :: iref, jref, irot, kind, irot_l, irot_r, nrefs, pftsz
         real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w, hk1(2), hk2(2),&
-                  &rotmat(3,3),invmats(3,3,pftcc%get_nrefs()), loc1s(3,pftcc%get_nrefs()), loc2s(3,pftcc%get_nrefs()), line3D(3)
+                  &rotmat(3,3),invmats(3,3,pftcc%get_nrefs()), loc1s(3,pftcc%get_nrefs()), loc2s(3,pftcc%get_nrefs()), line3D(3),&
+                  &euls(3,pftcc%get_nrefs()), euldist
         nrefs = pftcc%get_nrefs()
         pftsz = pftcc%get_pftsz()
         ! randomly chosing two sets of (irot, kind) to generate the polar common lines
@@ -134,12 +135,14 @@ contains
             invmats(:,:,iref) = transpose(rotmat)
             loc1s(:,iref)     = matmul([hk1(1), hk1(2), 0.], rotmat)
             loc2s(:,iref)     = matmul([hk2(1), hk2(2), 0.], rotmat)
+            euls( :,iref)     = ref_space%get_euler(iref)
         enddo
         !$omp end parallel do
+        euls(3,:) = 0.
         ! constructing polar common lines
         pcomlines%legit = .false.
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w)
+        !$omp private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,euldist,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w)
         do iref = 1, nrefs
             loc1_3D = loc1s(:,iref)
             loc2_3D = loc2s(:,iref)
@@ -148,6 +151,9 @@ contains
             b1      = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
             do jref = 1, nrefs
                 if( jref == iref )cycle
+                euldist     = euler_dist(euls(:,iref),euls(:,jref))
+                euldist     = rad2deg( euldist )
+                if( trim(params_glob%linethres).eq.'yes' .and. euldist < params_glob%athres )cycle
                 ! getting the 3D common line
                 loc1_3D     = loc1s(:,jref)
                 loc2_3D     = loc2s(:,jref)

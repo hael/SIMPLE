@@ -410,8 +410,8 @@ contains
                 call self%apply(euls_asym, isym, euls)
                 dist = euler_dist(euls, euls_ref)
                 if( dist < euldist )then
-                    euldist = dist
-                    euls_sym  = euls
+                    euldist  = dist
+                    euls_sym = euls
                 endif
             enddo
             inplrotdist = euler_inplrotdist(euls_sym, euls_ref)
