@@ -258,6 +258,9 @@ contains
                 !$omp end parallel do
             case('clin')
                 !$omp workshare
+                ! pfts_even = pfts_clin_even / (ctf2_clin_even + 0.05d0)
+                ! pfts_odd  = pfts_clin_odd  / (ctf2_clin_odd + 0.05d0)
+                ! pfts_cavg = (pfts_clin_even + pfts_clin_odd) / (ctf2_clin_even + ctf2_clin_odd + 0.05d0)
                 pfts_cavg = ctf2_clin_even + ctf2_clin_odd
                 where( abs(pfts_cavg     ) < DSMALL ) pfts_cavg = DCMPLX_ZERO
                 where( abs(ctf2_clin_even) < DSMALL ) pfts_even = DCMPLX_ZERO
@@ -354,43 +357,88 @@ contains
       contains
 
         subroutine comlin_pfts
-            complex(dp) :: pft_line_c(params_glob%kfromto(1):params_glob%kfromto(2))
-            real(dp)    :: pft_line_r(params_glob%kfromto(1):params_glob%kfromto(2))
-            integer     :: iref, jref, ori_irot_l, ori_irot_r, tar_irot_l, tar_irot_r
-            real        :: tar_w, ori_w
+            complex(dp) :: cline_e(kfromto(1):kfromto(2))
+            complex(dp) :: cline_o(kfromto(1):kfromto(2))
+            real(dp)    :: rline_e(kfromto(1):kfromto(2))
+            real(dp)    :: rline_o(kfromto(1):kfromto(2))
+            integer     :: iref, jref, orotl, orotr, trotl, trotr, pftsz
+            real(dp)    :: tw, ow
+            pftsz = size(pfts_clin_even,1)
             pfts_clin_even = DCMPLX_ZERO
             pfts_clin_odd  = DCMPLX_ZERO
             ctf2_clin_even = 0._dp
             ctf2_clin_odd  = 0._dp
-            !$omp parallel do default(shared) private(iref,jref,ori_irot_l,ori_irot_r,tar_irot_l,tar_irot_r,tar_w,ori_w,pft_line_c,pft_line_r)&
+            !$omp parallel do default(shared) private(iref,jref,orotl,orotr,trotl,trotr,tw,ow,cline_e,cline_o,rline_e,rline_o)&
             !$omp proc_bind(close) schedule(static)
             do iref = 1, ncls
                 do jref = 1, ncls
                     if( .not. pcomlines(jref,iref)%legit )cycle
                     ! compute the interpolated polar common line, between irot_j and irot_j+1
-                    tar_irot_l = pcomlines(jref,iref)%targ_irot_l
-                    tar_irot_r = pcomlines(jref,iref)%targ_irot_r
-                    tar_w      = pcomlines(jref,iref)%targ_w
+                    trotl = pcomlines(jref,iref)%targ_irot_l
+                    trotr = pcomlines(jref,iref)%targ_irot_r
+                    tw    = real(pcomlines(jref,iref)%targ_w,dp)
                     ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
-                    ori_irot_l = pcomlines(jref,iref)%self_irot_l
-                    ori_irot_r = pcomlines(jref,iref)%self_irot_r
-                    ori_w      = pcomlines(jref,iref)%self_w
+                    orotl = pcomlines(jref,iref)%self_irot_l
+                    orotr = pcomlines(jref,iref)%self_irot_r
+                    ow    = real(pcomlines(jref,iref)%self_w,dp)
+                    ! intersecting lines interpolation
+                    if( trotl < 1 )then
+                        trotl = trotl + pftsz
+                        cline_e = (1.d0-tw) * conjg(pfts_even(trotl,:,jref))
+                        cline_o = (1.d0-tw) * conjg(pfts_odd(trotl,:,jref))
+                    elseif( trotl > pftsz )then
+                        trotl   = trotl - pftsz
+                        cline_e = (1.d0-tw) * conjg(pfts_even(trotl,:,jref))
+                        cline_o = (1.d0-tw) * conjg(pfts_odd(trotl,:,jref))
+                    else
+                        cline_e = (1.d0-tw) * pfts_even(trotl,:,jref)
+                        cline_o = (1.d0-tw) * pfts_odd(trotl,:,jref)
+                    endif
+                    rline_e = (1.d0-tw) * ctf2_even(trotl,:,jref)
+                    rline_o = (1.d0-tw) * ctf2_odd(trotl,:,jref)
+                    if( trotr < 1 )then
+                        trotr = trotr + pftsz
+                        cline_e = cline_e + tw * conjg(pfts_even(trotr,:,jref))
+                        cline_o = cline_o + tw * conjg(pfts_odd(trotr,:,jref))
+                    elseif( trotr > pftsz )then
+                        trotr   = trotr - pftsz
+                        cline_e = cline_e + tw * conjg(pfts_even(trotr,:,jref))
+                        cline_o = cline_o + tw * conjg(pfts_odd(trotr,:,jref))
+                    else
+                        cline_e = cline_e + tw * pfts_even(trotr,:,jref)
+                        cline_o = cline_o + tw * pfts_odd(trotr,:,jref)
+                    endif
+                    rline_e = rline_e + tw * ctf2_even(trotr,:,jref)
+                    rline_o = rline_o + tw * ctf2_odd(trotr,:,jref)
                     !
-                    pft_line_c = dcmplx(1.-tar_w) * pfts_even(tar_irot_l,:,jref) + dcmplx(tar_w) * pfts_even(tar_irot_r,:,jref)
-                    pfts_clin_even(ori_irot_l,:,iref) = pfts_clin_even(ori_irot_l,:,iref) + dcmplx(1.-ori_w) * pft_line_c
-                    pfts_clin_even(ori_irot_r,:,iref) = pfts_clin_even(ori_irot_r,:,iref) + dcmplx(   ori_w) * pft_line_c
-                    !
-                    pft_line_c = dcmplx(1.-tar_w) * pfts_odd(tar_irot_l,:,jref) + dcmplx(tar_w) * pfts_odd(tar_irot_r,:,jref)
-                    pfts_clin_odd(ori_irot_l,:,iref) = pfts_clin_odd(ori_irot_l,:,iref) + dcmplx(1.-ori_w) * pft_line_c
-                    pfts_clin_odd(ori_irot_r,:,iref) = pfts_clin_odd(ori_irot_r,:,iref) + dcmplx(   ori_w) * pft_line_c
-                    !
-                    pft_line_r = real(1.-tar_w,dp) * ctf2_even(tar_irot_l,:,jref) + real(tar_w,dp) * ctf2_even(tar_irot_r,:,jref)
-                    ctf2_clin_even(ori_irot_l,:,iref) = ctf2_clin_even(ori_irot_l,:,iref) + real(1.-ori_w,dp) * pft_line_r
-                    ctf2_clin_even(ori_irot_r,:,iref) = ctf2_clin_even(ori_irot_r,:,iref) + real(   ori_w,dp) * pft_line_r
-                    !
-                    pft_line_r = real(1.-tar_w,dp) * ctf2_odd(tar_irot_l,:,jref) + real(tar_w,dp) * ctf2_odd(tar_irot_r,:,jref)
-                    ctf2_clin_odd(ori_irot_l,:,iref) = ctf2_clin_odd(ori_irot_l,:,iref) + real(1.-ori_w,dp) * pft_line_r
-                    ctf2_clin_odd(ori_irot_r,:,iref) = ctf2_clin_odd(ori_irot_r,:,iref) + real(   ori_w,dp) * pft_line_r
+                    if( orotl < 1 )then
+                        orotl = orotl + pftsz
+                        pfts_clin_even(orotl,:,iref) = pfts_clin_even(orotl,:,iref) + (1.d0-ow) * conjg(cline_e)
+                        pfts_clin_odd(orotl,:,iref)  = pfts_clin_odd(orotl,:,iref)  + (1.d0-ow) * conjg(cline_o)
+                    elseif( orotl > pftsz )then
+                        orotl = orotl - pftsz
+                        pfts_clin_even(orotl,:,iref) = pfts_clin_even(orotl,:,iref) + (1.d0-ow) * conjg(cline_e)
+                        pfts_clin_odd(orotl,:,iref)  = pfts_clin_odd(orotl,:,iref)  + (1.d0-ow) * conjg(cline_o)
+                    else
+                        pfts_clin_even(orotl,:,iref) = pfts_clin_even(orotl,:,iref) + (1.d0-ow) * cline_e
+                        pfts_clin_odd(orotl,:,iref)  = pfts_clin_odd(orotl,:,iref)  + (1.d0-ow) * cline_o
+                    endif
+                    ctf2_clin_even(orotl,:,iref) = ctf2_clin_even(orotl,:,iref) + (1.d0-ow) * rline_e
+                    ctf2_clin_odd(orotl,:,iref)  = ctf2_clin_odd(orotl,:,iref)  + (1.d0-ow) * rline_o
+                    if( orotr < 1 )then
+                        orotr = orotr + pftsz
+                        pfts_clin_even(orotr,:,iref) = pfts_clin_even(orotr,:,iref) + ow * conjg(cline_e)
+                        pfts_clin_odd(orotr,:,iref)  = pfts_clin_odd(orotr,:,iref)  + ow * conjg(cline_o)
+                    elseif( orotr > pftsz )then
+                        orotr = orotr - pftsz
+                        pfts_clin_even(orotr,:,iref) = pfts_clin_even(orotr,:,iref) + ow * conjg(cline_e)
+                        pfts_clin_odd(orotr,:,iref)  = pfts_clin_odd(orotr,:,iref)  + ow * conjg(cline_o)
+                    else
+                        pfts_clin_even(orotr,:,iref) = pfts_clin_even(orotr,:,iref) + ow * cline_e
+                        pfts_clin_odd(orotr,:,iref)  = pfts_clin_odd(orotr,:,iref)  + ow * cline_o
+                    endif
+                    ctf2_clin_even(orotr,:,iref) = ctf2_clin_even(orotr,:,iref) + ow * rline_e
+                    ctf2_clin_odd(orotr,:,iref)  = ctf2_clin_odd(orotr,:,iref)  + ow * rline_o
                 enddo
             enddo
             !$omp end parallel do
