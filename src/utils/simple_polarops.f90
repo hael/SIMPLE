@@ -214,9 +214,9 @@ contains
         real, allocatable :: res(:)
         complex(dp) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls), pfts_clin(pftsz,kfromto(1):kfromto(2),ncls),&
                       &pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
-                      &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                       &numerator(pftsz,kfromto(1):kfromto(2))
-        real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)), numer, denom1, denom2
+        real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)), numer, denom1, denom2, &
+                      &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
         integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops
         real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05,&
                       &cavg_clin_frcs(kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
@@ -234,9 +234,9 @@ contains
             do icls = 1, ncls
                 if( pops(icls) < 2 )cycle
                 do k = kfromto(1), kfromto(2)
-                    numer  = sum(    pfts_cavg(:,k,icls) * conjg(pfts_clin(:,k,icls)))
-                    denom1 = sum(csq(pfts_cavg(:,k,icls)))
-                    denom2 = sum(csq(pfts_clin(:,k,icls)))
+                    numer  = real(sum(    pfts_cavg(:,k,icls) * conjg(pfts_clin(:,k,icls))),dp)
+                    denom1 =      sum(csq(pfts_cavg(:,k,icls)))
+                    denom2 =      sum(csq(pfts_clin(:,k,icls)))
                     if( dsqrt(denom1*denom2) > DTINY ) cavg_clin_frcs(k,icls) = real(numer / dsqrt(denom1*denom2))
                 enddo
             enddo
@@ -361,9 +361,9 @@ contains
         !$omp private(icls,k,numer,denom1,denom2)
         do icls = 1, ncls
             do k = kfromto(1), kfromto(2)
-                numer  = sum(    pfts_even(:,k,icls) * conjg(pfts_odd(:,k,icls)))
-                denom1 = sum(csq(pfts_even(:,k,icls)))
-                denom2 = sum(csq(pfts_odd( :,k,icls)))
+                numer  = real(sum(    pfts_even(:,k,icls) * conjg(pfts_odd(:,k,icls))), dp)
+                denom1 =      sum(csq(pfts_even(:,k,icls)))
+                denom2 =      sum(csq(pfts_odd( :,k,icls)))
                 if( dsqrt(denom1*denom2) > DTINY ) dfrcs(k,icls) = real(numer / dsqrt(denom1*denom2))
             enddo
         enddo
