@@ -301,6 +301,15 @@ contains
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
                 !$omp private(icls,denominator)
                 do icls = 1,ncls
+                    ! handling the merged first before pfts_even and pfts_odd got ctf-corrected
+                    denominator = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls) + ctf2_odd(:,:,icls) + ctf2_clin_odd(:,:,icls)
+                    call safe_norm(denominator)
+                    where( denominator > DSMALL)
+                        pfts_merg(:,:,icls) = (pfts_even(:,:,icls) + pfts_clin_even(:,:,icls) + pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls)) / denominator
+                    elsewhere
+                        pfts_merg(:,:,icls) = DCMPLX_ZERO
+                    end where
+                    ! even/odd ctf correction
                     denominator = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls)
                     call safe_norm(denominator)
                     where( denominator > DSMALL)
@@ -314,13 +323,6 @@ contains
                         pfts_odd(:,:,icls) = (pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls)) / denominator
                     elsewhere
                         pfts_odd(:,:,icls) = DCMPLX_ZERO
-                    end where
-                    denominator = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls) + ctf2_odd(:,:,icls) + ctf2_clin_odd(:,:,icls)
-                    call safe_norm(denominator)
-                    where( denominator > DSMALL)
-                        pfts_merg(:,:,icls) = (pfts_even(:,:,icls) + pfts_clin_even(:,:,icls) + pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls)) / denominator
-                    elsewhere
-                        pfts_merg(:,:,icls) = DCMPLX_ZERO
                     end where
                 enddo
                 !$omp end parallel do
