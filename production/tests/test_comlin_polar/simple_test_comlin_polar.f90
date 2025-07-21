@@ -11,7 +11,7 @@ implicit none
 integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55
 character(len=:), allocatable :: cmd
 type(image),      allocatable :: pad_fplanes(:)
-complex,          allocatable :: cmat(:,:), pfts(:,:,:), even_pfts(:,:,:)
+complex,          allocatable :: cmat(:,:), pfts(:,:,:), even_pfts(:,:,:), line1(:), line2(:)
 complex,          pointer     :: ref_ptrs_even(:,:,:), ref_ptrs_odd(:,:,:)
 type(parameters)              :: p
 type(polarft_corrcalc)        :: pftcc
@@ -22,9 +22,9 @@ type(oris)                    :: spiral
 type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
 type(polar_fmap)              :: pcomlines(NPLANES,NPLANES)
-integer :: ifoo, rc, i, lims(3,2), ithr, box, errflg, kfromto(2)
-real    :: ave, sdev, maxv, minv
-logical :: mrc_exists
+integer :: ifoo, rc, i, lims(3,2), ithr, box, errflg, kfromto(2), j,k
+real    :: ave, sdev, maxv, minv, ang, ang1, d, dang
+logical :: mrc_exists, lineinterp
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_comlin_polar smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -116,6 +116,42 @@ do i = 1, spiral%get_noris()
 enddo
 ! Testing polar line generation
 call pftcc%get_refs_ptr(ref_ptrs_even, ref_ptrs_odd)
+! Test that reproduces the strategy in gen_polar_comlins
+lineinterp = .true.
+allocate(line1(kfromto(1):kfromto(2)), line2(kfromto(1):kfromto(2)))
+dang = pftcc%get_rot(2)-pftcc%get_rot(1)
+do i = 1,pftcc%get_nrots()
+    ang1 = pftcc%get_rot(i)     ! angle in pftcc
+    ang  = ang1 + ran3()*dang   ! random angle between two lines
+    ! line1: line at ang from intepolated pftcc lines
+    d    = ang-ang1
+    j    = i - pftcc%get_pftsz()
+    if( i < pftcc%get_pftsz() )then
+        line1 = (1.0-d)*ref_ptrs_even(i,:,1) + d*ref_ptrs_even(i+1,:,1)
+    elseif( i == pftcc%get_pftsz() )then
+        line1 = (1.0-d)*ref_ptrs_even(i,:,1) + d*conjg(ref_ptrs_even(j+1,:,1))
+    elseif( i < pftcc%get_nrots() )then
+        line1 = (1.0-d)*conjg(ref_ptrs_even(j,:,1)) + d*conjg(ref_ptrs_even(j+1,:,1))
+    else
+        line1 = (1.0-d)*conjg(ref_ptrs_even(j,:,1))  + d*ref_ptrs_even(1,:,1)
+    endif
+    ! line2: line at ang from image pixel interpolation
+    do k = kfromto(1), kfromto(2)
+        line2(k) = img_polarizer%extract_pixel(ang,k,fplanes(1))
+    enddo
+    if( sum(csq_fast(line1-line2)) > 1.e-8 )then
+        print *,'Line intepolation test failed for line: '
+        print *,i,ang1,ang,sum(csq_fast(line1-line2))
+        print *,line1
+        print *,line2
+        lineinterp = .false.
+    endif
+enddo
+if( lineinterp )then
+    print *,' TEST FOR INTERPOLATION STRATEGY PASSED'
+else
+    print *,' TEST FOR INTERPOLATION STRATEGY FAILED'
+endif
 allocate(pfts(pftcc%get_pftsz(), kfromto(1):kfromto(2), NPLANES), source=cmplx(0.,0.))
 allocate(even_pfts(pftcc%get_pftsz(), kfromto(1):kfromto(2), NPLANES), source=ref_ptrs_even) ! backup
 call gen_polar_comlins(pftcc, spiral, pcomlines)

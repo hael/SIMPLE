@@ -3,8 +3,9 @@ module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,      only: image
-use simple_parameters, only: params_glob
+use simple_image,            only: image
+use simple_parameters,       only: params_glob
+use simple_polarft_corrcalc, only: polarft_corrcalc
 implicit none
 
 public :: polarizer
@@ -27,6 +28,7 @@ type, extends(image) :: polarizer
     procedure          :: div_by_instrfun
     procedure, private :: polarize_1, polarize_2
     generic            :: polarize => polarize_1, polarize_2
+    procedure          :: extract_pixel
     procedure          :: cartesian2polar
     procedure          :: polarizer_initialized
     procedure          :: kill_polarizer
@@ -38,7 +40,6 @@ contains
 
     !> \brief  initialises the image polarizer
     subroutine init_polarizer( self, pftcc, alpha )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_gridding,         only: gen_instrfun_img
         class(polarizer),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
@@ -154,7 +155,6 @@ contains
     !> \brief  creates the polar Fourier transform from self
     !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize_1( self, pftcc, img_ind, isptcl, iseven, mask )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(in)    :: self    !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
         integer,                 intent(in)    :: img_ind !< image index
@@ -167,7 +167,6 @@ contains
     !> \brief  creates the polar Fourier transform from a given image
     !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize_2( self, pftcc, img, img_ind, isptcl, iseven, mask )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(in)    :: self    !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
         class(image),            intent(in)    :: img
@@ -208,8 +207,45 @@ contains
         nullify(pft)
     end subroutine polarize_2
 
+    complex(kind=sp) function extract_pixel( self, theta, ring, img )
+        class(polarizer),        intent(in)    :: self
+        real,                    intent(in)    :: theta   ! angel in degrees
+        integer,                 intent(in)    :: ring    ! resolution ring
+        class(image),            intent(in)    :: img
+        type(kbinterpol)  :: kbwin
+
+        real    :: ang, kbh, rh, rk, sumw, w
+        integer :: win(2,2), h,k, i,j
+        ang   = deg2rad(theta)
+        rh    =  sin(ang)*real(ring)
+        rk    = -cos(ang)*real(ring)
+        kbwin = kbinterpol(KBWINSZ, params_glob%alpha)
+        call sqwin_2d(rh, rk, kbwin%get_winsz(), win)
+        sumw = 0.
+        extract_pixel = 0.
+        do i = 1,3
+            h   = win(1,1) + i-1
+            kbh = kbwin%apod(real(h)-rh)
+            do j = 1,3
+                k    = win(2,1) + j-1
+                w    = kbh * kbwin%apod(real(k)-rk)
+                sumw = sumw + w
+                extract_pixel = extract_pixel + w*img%get_fcomp2D(h,k)
+            enddo
+        enddo
+        extract_pixel = extract_pixel / sumw
+        ! bilinear interpolation
+        ! h   = floor(rh)
+        ! k   = floor(rk)
+        ! dh  = rh - real(h)
+        ! dk  = rk - real(k)
+        ! extract_pixel =                 (1.-dh) * (1.-dk) * img%get_fcomp2D(h,  k)
+        ! extract_pixel = extract_pixel +     dh  * (1.-dk) * img%get_fcomp2D(h+1,k)
+        ! extract_pixel = extract_pixel + (1.-dh) *      dk * img%get_fcomp2D(h,  k+1)
+        ! extract_pixel = extract_pixel +     dh  *      dk * img%get_fcomp2D(h+1,k+1)
+    end function extract_pixel
+
     subroutine cartesian2polar( self, pftcc, img, img_ind, isptcl, iseven, mask )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(in)    :: self    !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
         class(image),            intent(in)    :: img

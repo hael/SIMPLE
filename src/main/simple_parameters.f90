@@ -1516,7 +1516,14 @@ contains
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
         ! comlin generation
-        self%l_comlin = (trim(self%ref_type).eq.'clin' .or. trim(self%ref_type).eq.'cavg_clin')
+        select case(trim(self%ref_type))
+        case('clin', 'cavg_clin', 'vol')
+            self%l_comlin = .true.  ! 3D
+        case('cavg')
+            self%l_comlin = .false. ! 2D
+        case DEFAULT
+            THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))
+        end select
         ! image normalization
         self%l_noise_norm = trim(self%noise_norm).eq.'yes'
         ! set lpset flag
