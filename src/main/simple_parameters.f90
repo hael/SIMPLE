@@ -260,7 +260,7 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
-    character(len=STDLEN)     :: ref_type='cavg'      !< polar reference type(cavg|clin|cavg_clin){cavg}
+    character(len=STDLEN)     :: ref_type='cavg'      !< polar reference type(cavg|clin|vol){cavg}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -1517,7 +1517,7 @@ contains
         endif
         ! comlin generation
         select case(trim(self%ref_type))
-        case('clin', 'cavg_clin', 'vol')
+        case('clin', 'vol')
             self%l_comlin = .true.  ! 3D
         case('cavg')
             self%l_comlin = .false. ! 2D
