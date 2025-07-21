@@ -532,7 +532,7 @@ contains
         real,             allocatable :: res(:)
         logical, parameter :: DEBUG=.false.
         type(image) :: mskvol
-        integer     :: npix, s, loc(1)
+        integer     :: npix, s, loc
         real        :: lpest(params_glob%nstates), lpopt, res_fsc05, res_fsc0143, llpfromto(2)
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,F12.3)
@@ -550,17 +550,17 @@ contains
         do s = 1, params_glob%nstates
             call get_resolution_at_fsc(build_glob%fsc(s,:), res, 0.5, lpest(s))
         end do
-        loc = minloc(lpest)
+        loc = minloc(lpest,dim=1)
         ! set range for low-pass limit estimation
         if( present(lpfromto) )then
             llpfromto = lpfromto
         else
-            call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.6, llpfromto(1))
-            call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.1, llpfromto(2))
+            call get_resolution_at_fsc(build_glob%fsc(loc,:), res, 0.6, llpfromto(1))
+            call get_resolution_at_fsc(build_glob%fsc(loc,:), res, 0.1, llpfromto(2))
         endif
         ! read volumes
-        vol_even = params_glob%vols_even(loc(1))
-        vol_odd  = params_glob%vols_odd(loc(1))
+        vol_even = params_glob%vols_even(loc)
+        vol_odd  = params_glob%vols_odd(loc)
         if( params_glob%l_ml_reg )then
             ! estimate low-pass limit from unfiltered volumes
             tmp = add2fbody(vol_even,params_glob%ext,'_unfil')
@@ -573,8 +573,8 @@ contains
         ! estimate low-pass limit
         call estimate_lplim(build_glob%vol_odd, build_glob%vol, mskvol, llpfromto, lpopt)
         ! generate output
-        call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.50,  res_fsc05)
-        call get_resolution_at_fsc(build_glob%fsc(loc(1),:), res, 0.143, res_fsc0143)
+        call get_resolution_at_fsc(build_glob%fsc(loc,:), res, 0.50,  res_fsc05)
+        call get_resolution_at_fsc(build_glob%fsc(loc,:), res, 0.143, res_fsc0143)
         call build_glob%spproj_field%set_all2single('res', res_fsc0143)
         if( params_glob%part == 1 .and. DEBUG )then
         write(logfhandle,601) '>>> RESOLUTION @ FSC=0.5:                     ', res_fsc05
