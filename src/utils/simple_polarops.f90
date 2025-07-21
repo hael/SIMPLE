@@ -217,7 +217,7 @@ contains
                       &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                       &numerator(pftsz,kfromto(1):kfromto(2))
         real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)), numer, denom1, denom2
-        integer     :: icls, eo_pop(2), pop, k
+        integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops
         real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05,&
                       &cavg_clin_frcs(kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
         if( params_glob%l_comlin )then
@@ -232,6 +232,7 @@ contains
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
             !$omp private(icls,k,numer,denom1,denom2)
             do icls = 1, ncls
+                if( pops(icls) < 2 )cycle
                 do k = kfromto(1), kfromto(2)
                     numer  = sum(    pfts_cavg(:,k,icls) * conjg(pfts_clin(:,k,icls)))
                     denom1 = sum(csq(pfts_cavg(:,k,icls)))
@@ -332,7 +333,10 @@ contains
         max_res_fsc0143 = 0.
         avg_res_fsc0143 = 0.
         avg_res_fsc05   = 0.
+        npops           = 0
         do icls = 1, ncls
+            if( pops(icls) < 2 )cycle
+            npops = npops + 1
             call get_resolution_at_fsc(cavg_clin_frcs(:,icls), res, 0.5,   res_fsc05)
             call get_resolution_at_fsc(cavg_clin_frcs(:,icls), res, 0.143, res_fsc0143)
             avg_res_fsc0143 = avg_res_fsc0143 + res_fsc0143
@@ -340,8 +344,8 @@ contains
             if( res_fsc0143 < min_res_fsc0143 ) min_res_fsc0143 = res_fsc0143
             if( res_fsc0143 > max_res_fsc0143 ) max_res_fsc0143 = res_fsc0143
         enddo
-        avg_res_fsc05   = avg_res_fsc05   / real(ncls)
-        avg_res_fsc0143 = avg_res_fsc0143 / real(ncls)
+        avg_res_fsc05   = avg_res_fsc05   / real(npops)
+        avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
         print *, '>>> AVG CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.5  : ', avg_res_fsc05
         print *, '>>> AVG CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ', avg_res_fsc0143
         print *, '>>> MIN CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ', min_res_fsc0143
@@ -367,7 +371,10 @@ contains
         max_res_fsc0143 = 0.
         avg_res_fsc0143 = 0.
         avg_res_fsc05   = 0.
+        npops           = 0
         do icls = 1, ncls
+            if( pops(icls) < 2 )cycle
+            npops = npops + 1
             call get_resolution_at_fsc(dfrcs(:,icls), res, 0.5,   res_fsc05)
             call get_resolution_at_fsc(dfrcs(:,icls), res, 0.143, res_fsc0143)
             avg_res_fsc0143 = avg_res_fsc0143 + res_fsc0143
@@ -375,8 +382,8 @@ contains
             if( res_fsc0143 < min_res_fsc0143 ) min_res_fsc0143 = res_fsc0143
             if( res_fsc0143 > max_res_fsc0143 ) max_res_fsc0143 = res_fsc0143
         enddo
-        avg_res_fsc05   = avg_res_fsc05   / real(ncls)
-        avg_res_fsc0143 = avg_res_fsc0143 / real(ncls)
+        avg_res_fsc05   = avg_res_fsc05   / real(npops)
+        avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
         print *, '>>> AVG ODD/EVEN DIRECTIONAL RESOLUTION @ FSC=0.5  : ', avg_res_fsc05
         print *, '>>> AVG ODD/EVEN DIRECTIONAL RESOLUTION @ FSC=0.143: ', avg_res_fsc0143
         print *, '>>> MIN ODD/EVEN DIRECTIONAL RESOLUTION @ FSC=0.143: ', min_res_fsc0143
@@ -392,8 +399,9 @@ contains
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
             !$omp private(icls,eo_pop,pop,numerator,denominator)
             do icls = 1,ncls
-                eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls) ! eo_pops has to be calculated differently
-                pop    = sum(eo_pop)
+                eo_pop     = prev_eo_pops(:,icls) + eo_pops(:,icls) ! eo_pops has to be calculated differently
+                pop        = sum(eo_pop)
+                pops(icls) = pop
                 if(pop == 0)then
                     pfts_cavg(:,:,icls) = DCMPLX_ZERO
                 else
