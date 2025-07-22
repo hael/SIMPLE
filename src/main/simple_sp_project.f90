@@ -103,7 +103,7 @@ contains
     ! setters
     procedure          :: copy
     procedure          :: set_cavgs_thumb
-    procedure          :: create_ptcl2D_thumb
+    procedure          :: set_ptcl2D_thumb
     ! modifiers
     procedure          :: split_stk
     procedure          :: write_substk
@@ -4108,22 +4108,23 @@ contains
         end select
     end subroutine print_segment
 
-    subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist )
+    subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist, nran )
         class(sp_project),           intent(inout) :: self
         character(len=*),            intent(in)    :: oritype, projfile
         character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist
-        integer,           optional, intent(in)    :: fromto(2)
+        integer,           optional, intent(in)    :: fromto(2), nran
         type(json_core)                            :: json
         type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori
         type(oris)                                 :: vol_oris, fsc_oris
+        type(ori)                                  :: tmp_ori
         character(len=:),  allocatable             :: stkname
         character(len=STDLEN)                      :: stkjpeg
         integer,           allocatable             :: indices(:), pinds(:)
-        integer                                    :: ffromto(2), iori, noris, ncls, isprite
+        integer                                    :: ffromto(2), iori, noris, ncls, isprite, boxsize
         logical,           allocatable             :: l_mask(:)
-        logical                                    :: fromto_present, sort, sort_ascending
+        logical                                    :: fromto_present, sort, sort_ascending, copy_oris
         real,              allocatable             :: projections(:,:)
-        real                                       :: smpd
+        real                                       :: smpd, rnd
         fromto_present = present(fromto)
         if( fromto_present ) ffromto = fromto
         sort = .false.
@@ -4167,15 +4168,45 @@ contains
                     write(logfhandle,*) 'No stk-type oris available to print; sp_project :: print_segment_json'
                 endif
             case('ptcl2D')
+                copy_oris=.false.
                 noris = self%os_ptcl2D%get_noris()
                 if( noris > 0 )then
                     call self%read_segment('stk', projfile)
-                    call self%create_ptcl2D_thumb(trim(projfile))
-                    call calculate_indices(self%os_ptcl2D)
-                    do iori=1, size(indices)
-                        call self%os_ptcl2D%ori2json(indices(iori), json_ori)
-                        call json%add(json_data, json_ori)
-                    end do
+                    if(present(nran)) then
+                        if(nran .gt. 0) then
+                            ! randomly choose nran particles
+                            call random_seed()
+                            allocate(indices(nran))
+                            iori = 1
+                            do while (iori <= nran)   
+                                call random_number(rnd)
+                                if(self%os_ptcl2D%get(ceiling(noris * rnd), "state") .gt. 0.0) then
+                                    indices(iori) = ceiling(noris * rnd)
+                                    iori = iori + 1
+                                end if
+                            end do
+                            call self%set_ptcl2D_thumb(projfile, indices, boxsize)
+                            do iori=1, size(indices)
+                                call self%os_ptcl2D%get_ori(indices(iori), tmp_ori)
+                                call tmp_ori%ori2json(json_ori)
+                                call json%add(json_ori, 'n', iori) 
+                                call json%add(json_ori, "thumbn",   size(indices))
+                                call json%add(json_ori, "thumbdim", JPEG_DIM)
+                                call json%add(json_ori, "thumbidx", iori)
+                                call json%add(json_ori, "box",      boxsize)
+                                call json%add(json_data, json_ori)
+                            end do
+                            copy_oris = .true.
+                        end if
+                    end if
+                    if(.not. copy_oris) then
+                        call calculate_indices(self%os_ptcl2D)
+                        do iori=1, size(indices)
+                            call self%os_ptcl2D%print(iori)
+                            call self%os_ptcl2D%ori2json(indices(iori), json_ori)
+                            call json%add(json_data, json_ori)
+                        end do
+                    end if
                     call json%add(json_root, json_data)
                     if(present(hist)) call calculate_histogram(self%os_ptcl2D)
                     deallocate(indices)
@@ -4602,42 +4633,44 @@ contains
         end do
     end subroutine set_cavgs_thumb
 
-    subroutine create_ptcl2D_thumb( self, projfile )
+    subroutine set_ptcl2D_thumb( self, projfile, indices, boxsize )
         use simple_image
         use simple_imgproc
         use simple_stack_io
-        class(sp_project),  intent(inout) :: self
-        character(len=*),   intent(in)    :: projfile
+        class(sp_project),               intent(inout) :: self
+        character(len=*),                intent(in)    :: projfile
+        integer,            allocatable, intent(in)    :: indices(:)
+        integer,                         intent(out)   :: boxsize
         character(len=:),   allocatable   :: thumbfile, tmpfile, stkname
         integer,            allocatable   :: arr(:)
         real,               allocatable   :: sort_vals(:)
         type(image)                       :: stkimg
         type(stack_io)                    :: stkio_w
-        integer                           :: iori, ithumb, delta, idx, ldim_stk(3), nptcls
+        integer                           :: iori, iidx, idx, ldim_stk(3), nptcls
         real                              :: smpd
         logical                           :: first = .true.
         thumbfile = stemname(projfile) // "/thumbptcl2D.jpeg"
-        if(file_exists(thumbfile)) return
+        ! always recreate
+        if(file_exists(thumbfile)) call del_file(thumbfile)
         tmpfile = stemname(projfile) // "/thumbptcl2D.mrcs"
         if(file_exists(tmpfile)) call del_file(tmpfile)
-        sort_vals = self%os_ptcl2D%get_all('dfx')
-        allocate(arr(size(sort_vals)))
-        do iori=1,size(sort_vals)
-            arr(iori) = iori
-        end do
-        call hpsort(sort_vals, arr)
-        delta = (real(size(sort_vals)) / 24.0)
-        do ithumb=1, 25
-            call self%get_stkname_and_ind('ptcl2D', 1 + (ithumb - 1) * delta, stkname, idx)
+        do iidx=1, size(indices)
+            iori = indices(iidx)
+            call self%get_stkname_and_ind('ptcl2D', iori, stkname, idx)
             call find_ldim_nptcls(trim(stkname), ldim_stk, nptcls, smpd)
             call stkimg%new([ldim_stk(1), ldim_stk(1), 1], smpd)
             if(first) then
                 call stkio_w%open(tmpfile, smpd, 'write', box=ldim_stk(1))
+                boxsize = ldim_stk(1)
                 first = .false.
             end if
             call stkimg%read(trim(stkname), idx)
-            call stkio_w%write(ithumb, stkimg)
+            call stkimg%fft()
+            call stkimg%bpgau2D(0.0, 4.0)
+            call stkimg%ifft()
+            call stkio_w%write(iidx, stkimg)
             call stkimg%kill()
+            call self%os_ptcl2D%set(iori, "thumb",    thumbfile)
         end do
         call stkio_w%close()
         call mrc2jpeg_tiled(tmpfile, thumbfile)
@@ -4647,7 +4680,7 @@ contains
         if(allocated(thumbfile)) deallocate(thumbfile)
         if(allocated(tmpfile))   deallocate(tmpfile)
         if(allocated(stkname))   deallocate(stkname)
-    end subroutine create_ptcl2D_thumb
+    end subroutine set_ptcl2D_thumb
 
     subroutine write_star_segments( self )
         class(sp_project),  intent(inout) :: self

@@ -1418,11 +1418,11 @@ contains
     subroutine new_afm
         ! PROGRAM SPECIFICATION
         call afm%new(&
-        &'afm', &                                      ! name
-        &'analysis of afm',&                          ! descr_short
+        &'afm', &                                            ! name
+        &'analysis of afm',&                                 ! descr_short
         &'picking, clustering, and additional analysis of high SNR/conformationally dynamic images',& ! descr long
-        &'all',&                                           ! executable
-        &0, 0, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        &'all',&                                             ! executable
+        &0, 0, 0, 0, 0, 0, 0, .false., gui_advanced=.false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1447,7 +1447,7 @@ contains
         &'2D analysis (centering, diameter estimation & clustering) for nanocrystal time-series',& ! descr_short
         &'is a program for 2D analysis for nanycrystal time-series',& ! descr long
         &'single_exec',&                                              ! executable
-        &0, 1, 0, 1, 0, 0, 2, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 1, 0, 0, 2, .true., gui_advanced=.false.)           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1623,7 +1623,7 @@ contains
         &'extraction of a substack segment of time-series of metallic nanoparticles',&                                 ! descr_short
         &'is a shared-memory workflow for extraction of a substack segment of time-series of metallic nanoparticles',& ! descr_long
         &'single_exec',&                                                                                               ! executable
-        &0, 3, 0, 0, 0, 0, 0, .true.)                                                                                  ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 0, 0, 0, .true., gui_advanced=.false.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1650,7 +1650,7 @@ contains
         &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! descr_short
         &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! descr_long
         &'single_exec',&                                                                                         ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true.)                                                                            ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 0, .true., gui_advanced=.false.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1679,7 +1679,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 6, 3, 1, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 6, 3, 1, 2, .true., gui_advanced=.false.)                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1773,7 +1773,7 @@ contains
         &'Analysis of class averages along nanocrystal time-series',& ! descr_short
         &'is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections',& ! descr_long
         &'single_exec',&                                              ! executable
-        &1, 1, 0, 1, 0, 1, 2, .true.)                                 ! # entries in each group, requires sp_project
+        &1, 1, 0, 1, 0, 1, 2, .true., gui_advanced=.false.)           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cavgsproc_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
@@ -1799,7 +1799,7 @@ contains
         &'Analysis of even and odd class averages along nanocrystal time-series',& ! descr_short
         &'is a program to analyze the core/surface dynamics of nanocrystals using even and odd class averages',& ! descr_long
         &'single_exec',&                                              ! executable
-        &1, 1, 0, 1, 0, 1, 2, .true.)                                 ! # entries in each group, requires sp_project
+        &1, 1, 0, 1, 0, 1, 2, .true., gui_advanced=.false.)           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cavgseoproc_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
@@ -1825,7 +1825,7 @@ contains
         &'Analysis of particle images inside a class along nanocrystal time-series using radial cross-correlation',& ! descr_short
         &'is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class',& ! descr_long
         &'single_exec',&                                              ! executable
-        &0, 1, 0, 1, 0, 1, 2, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 1, 0, 1, 2, .true., gui_advanced=.false.)           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -1930,7 +1930,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
         &'single_exec',&                                                        ! executable
-        &0, 0, 0, 2, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 2, 0, 0, 2, .true., gui_advanced=.false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2010,7 +2010,7 @@ contains
         &'Denoise atomic-resolution nanoparticle map through atom convolution',& ! descr_short
         &'is a program for denoising atomic-resolution nanoparticle maps exactly as in detect_atoms',& ! descr long
         &'single_exec',&                                        ! executable
-        &1, 1, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 1, 1, 1, .false., gui_advanced=.false.)    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call conv_atom_denoise%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -2099,7 +2099,7 @@ contains
         &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! descr_long
         &'single_exec',&                                                                    ! executable
-        &0, 1, 0, 5, 5, 1, 3, .true.)                                                       ! # entries in each group, requires sp_project
+        &0, 1, 0, 5, 5, 1, 3, .true., gui_advanced=.false.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2420,11 +2420,11 @@ contains
     subroutine new_denoise_trajectory
         ! PROGRAM SPECIFICATION
         call denoise_trajectory%new(&
-        &'denoise_trajectory',&                        ! name
-        &'kPCA-based denoising',&                     ! descr_short
+        &'denoise_trajectory',&                                       ! name
+        &'kPCA-based denoising',&                                     ! descr_short
         &'is a program for kPCA-based denoising of an image stack',&  ! descr_long
-        &'single_exec',&                              ! executable
-        &2, 1, 0, 0, 1, 0, 1, .false.)                ! # entries in each group, requires sp_project
+        &'single_exec',&                                              ! executable
+        &2, 1, 0, 0, 1, 0, 1, .false., gui_advanced=.false.)          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call denoise_trajectory%set_input('img_ios', 1, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
@@ -2450,7 +2450,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map',& ! descr long
         &'single_exec',&                                        ! executable
-        &2, 1, 0, 0, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 0, 1, .false., gui_advanced=.false.)    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -2532,11 +2532,11 @@ contains
     subroutine new_estimate_diam
         ! PROGRAM SPECIFICATION
         call estimate_diam%new(&
-        &'estimate_diam',&                                                                                            ! name
+        &'estimate_diam',&                                                                                              ! name
         &'Estimation of a suitable mask diameter for nanoparticle time-series',&                                        ! descr_short
         &'is a program for estimation of a suitable mask diameter for spherical masking of nanoparticle time-series ',& ! descr_long
-        &'single_exec',&                                                                                              ! executable
-        &1, 2, 0, 0, 1, 1, 1, .false.)                                               ! # entries in each group, requires sp_project
+        &'single_exec',&                                                                                                ! executable
+        &1, 2, 0, 0, 1, 1, 1, .false., gui_advanced=.false.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call estimate_diam%set_input('img_ios', 1, stk)
@@ -3942,8 +3942,8 @@ contains
         &'pdb2mrc', &                                      ! name
         &'PDB to MRC simulator',&                          ! descr_short
         &'is a program to simulate a 3D density map in MRC format using a PDB format coordinadinates file',& ! descr long
-        &'all',&                                           ! executable
-        &1, 5, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
+        &'all',&                                             ! executable
+        &1, 5, 0, 0, 0, 0, 0, .false., gui_advanced=.false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pdb2mrc%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
@@ -4829,7 +4829,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                      ! executable
-        &3, 0, 0, 8, 3, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
+        &3, 0, 0, 8, 3, 2, 2, .true., gui_advanced=.false.)                                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -5270,11 +5270,11 @@ contains
     subroutine new_simulate_atoms
         ! PROGRAM SPECIFICATION
         call simulate_atoms%new(&
-        &'simulate_atoms',&                                 ! name
-        &'Simulate atoms or FCC lattice density',&          ! descr_short
+        &'simulate_atoms',&                                              ! name
+        &'Simulate atoms or FCC lattice density',&                       ! descr_short
         &'is a program for simulation of atoms or FCC lattice density',& ! descr_long
-        &'single_exec',&                                    ! executable
-        &2, 4, 0, 0, 0, 0, 1, .false.)                     ! # entries in each group, requires sp_project
+        &'single_exec',&                                                 ! executable
+        &2, 4, 0, 0, 0, 0, 1, .false., gui_advanced=.false.)             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_atoms%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
@@ -5668,7 +5668,7 @@ contains
         &'Statistical test for radial dependent symmetry',&                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &3, 4, 0, 0, 1, 0, 1, .false.)                                                                ! # entries in each group, requires sp_project
+        &3, 4, 0, 0, 1, 0, 1, .false., gui_advanced=.false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
@@ -5697,11 +5697,11 @@ contains
     subroutine new_tseries_atoms_rmsd
         ! PROGRAM SPECIFICATION
         call tseries_atoms_rmsd%new(&
-        &'tseries_atoms_rmsd',&                                                   ! name
+        &'tseries_atoms_rmsd',&                                                       ! name
         &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
-        &0, 3, 0, 0, 1, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 1, 0, 0, .false., gui_advanced=.false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5724,11 +5724,11 @@ contains
     subroutine new_tseries_core_atoms_analysis
         ! PROGRAM SPECIFICATION
         call tseries_core_atoms_analysis%new(&
-        &'tseries_core_atoms_analysis',&                                                   ! name
+        &'tseries_core_atoms_analysis',&                                              ! name
         &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
-        &0, 3, 0, 0, 1, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 1, 0, 0, .false., gui_advanced=.false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5751,11 +5751,11 @@ contains
     subroutine new_tseries_core_finder
         ! PROGRAM SPECIFICATION
         call tseries_core_finder%new(&
-        &'tseries_core_finder',&                                                      ! name
+        &'tseries_core_finder',&                                                          ! name
         &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! descr_short
-        &'is a program that analyses docked time-series density maps',&               ! descr long
-        &'single_exec',&                                                              ! executable
-        &1, 1, 0, 0, 0, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
+        &'is a program that analyses docked time-series density maps',&                   ! descr long
+        &'single_exec',&                                                                  ! executable
+        &1, 1, 0, 0, 0, 0, 0, .false., gui_advanced=.false.)                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_core_finder%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
@@ -5777,11 +5777,11 @@ contains
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
-        &'tseries_import',&                               ! name
-        &'Imports time-series datasets',&                 ! descr_short
-        &'is a workflow for importing time-series data',& ! descr_long
-        &'single_exec',&                                  ! executable
-        &1, 4, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
+        &'tseries_import',&                                 ! name
+        &'Imports time-series datasets',&                   ! descr_short
+        &'is a workflow for importing time-series data',&   ! descr_long
+        &'single_exec',&                                    ! executable
+        &1, 4, 0, 0, 0, 0, 0, .true., gui_advanced=.false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_import%set_input('img_ios', 1, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
@@ -5806,11 +5806,11 @@ contains
     subroutine new_tseries_import_particles
         ! PROGRAM SPECIFICATION
         call tseries_import_particles%new(&
-        &'tseries_import_particles',&                     ! name
-        &'Imports time-series particles stack',&          ! descr_short
-        &'is a workflow for importing time-series data',& ! descr_long
-        &'single_exec',&                                  ! executable
-        &1, 2, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
+        &'tseries_import_particles',&                       ! name
+        &'Imports time-series particles stack',&            ! descr_short
+        &'is a workflow for importing time-series data',&   ! descr_long
+        &'single_exec',&                                    ! executable
+        &1, 2, 0, 0, 0, 0, 0, .true., gui_advanced=.false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_import_particles%set_input('img_ios', 1, stk)
@@ -5833,11 +5833,11 @@ contains
     subroutine new_tseries_motion_correct
         ! PROGRAM SPECIFICATION
         call tseries_motion_correct%new(&
-        &'tseries_motion_correct', &                                       ! name
-        &'Anisotropic motion correction of time-series of nanoparticles',& ! descr_short
+        &'tseries_motion_correct', &                                                                               ! name
+        &'Anisotropic motion correction of time-series of nanoparticles',&                                         ! descr_short
         &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.',& ! descr_long
-        &'single_exec',&                                                   ! executable
-        &0, 1, 0, 7, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &'single_exec',&                                                                                           ! executable
+        &0, 1, 0, 7, 3, 0, 2, .true., gui_advanced=.false.)                                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5880,7 +5880,7 @@ contains
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
         &'single_exec',&                                                                 ! executable
-        &0, 2, 0, 5, 3, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        &0, 2, 0, 5, 3, 0, 1, .true., gui_advanced=.false.)                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5921,7 +5921,7 @@ contains
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
         &'single_exec',&                                                                 ! executable
-        &0, 2, 0, 0, 0, 1, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 1, 1, .true., gui_advanced=.false.)                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5947,7 +5947,7 @@ contains
         &'Substitutes stack into an existing project',&                   ! descr_short
         &'is a program for substituting stack into an existing project',& ! descr_long
         &'single_exec',&                                                  ! executable
-        &1, 0, 0, 0, 0, 0, 0, .true.)                                     ! # entries in each group, requires sp_project
+        &1, 0, 0, 0, 0, 0, 0, .true., gui_advanced=.false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_swap_stack%set_input('img_ios', 1, stk)
@@ -5973,7 +5973,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'single_exec',&                                                         ! executable
-        &0, 4, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
+        &0, 4, 0, 2, 4, 0, 1, .true., gui_advanced=.false.)                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -6014,7 +6014,7 @@ contains
         &'Time windowed 3D reconstruction from oriented particles',&     ! descr_long
         &'Time windowed 3D reconstruction from oriented particles',&
         &'single_exec',&                                                 ! executable
-        &0, 3, 0, 1, 0, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
+        &0, 3, 0, 1, 0, 2, 2, .true., gui_advanced=.false.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -6040,11 +6040,11 @@ contains
     subroutine new_graphene_subtr
         ! PROGRAM SPECIFICATION
         call graphene_subtr%new(&
-        &'graphene_subtr',&                        ! name
-        &'Removes graphene Fourier peaks in time-series',& ! descr_short
-        &'Removes graphene Fourier peaks in time-series',& ! descr_long
-        &'single_exec',&                                   ! executable
-        &3, 1, 0, 0, 0, 0, 1, .false.)                     ! # entries in each group, requires sp_project
+        &'graphene_subtr',&                                  ! name
+        &'Removes graphene Fourier peaks in time-series',&   ! descr_short
+        &'Removes graphene Fourier peaks in time-series',&   ! descr_long
+        &'single_exec',&                                     ! executable
+        &3, 1, 0, 0, 0, 0, 1, .false., gui_advanced=.false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call graphene_subtr%set_input('img_ios', 1, stk)

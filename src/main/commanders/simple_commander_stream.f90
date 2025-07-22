@@ -858,8 +858,8 @@ contains
             if( l_templates_provided )then
                 if( .not.file_exists(params%pickrefs) ) then
                     if(params%clear .eq. "yes") then
-                        write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '//trim(params%pickrefs)
-                        do i=1, 30
+                        write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 60 MINUTES FOR '//trim(params%pickrefs)
+                        do i=1, 360
                             if(file_exists(trim(params%pickrefs))) exit
                             call sleep(10)
                         end do
@@ -2664,8 +2664,8 @@ contains
             ! nice communicator status
             nice_communicator%stat_root%stage = "waiting for mask diameter"
             call nice_communicator%cycle()
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '//trim(STREAM_MOLDIAM)
-            do i=1, 30
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 60 MINUTES FOR '//trim(STREAM_MOLDIAM)
+            do i=1, 360
                 if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
                 call sleep(10)
             end do
@@ -3077,11 +3077,11 @@ contains
             ! nice communicator status
             nice_communicator%stat_root%stage = "waiting for initial mask diameter"
             call nice_communicator%cycle()
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 10 MINUTES FOR '// trim(STREAM_MOLDIAM)
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 60 MINUTES FOR '// trim(STREAM_MOLDIAM)
             moldiam_fname = trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM)
-            do i=1, 30
+            do i=1, 360
                 if(file_exists(moldiam_fname)) exit
-                call sleep(20)
+                call sleep(10)
             end do
             if( .not. file_exists(moldiam_fname)) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
             ! read mskdiam from file
@@ -3098,11 +3098,11 @@ contains
             ! nice communicator status
             nice_communicator%stat_root%stage = "waiting for chunk size"
             call nice_communicator%cycle()
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 10 MINUTES FOR '// trim(STREAM_CHUNKSIZE)
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 60 MINUTES FOR '// trim(STREAM_CHUNKSIZE)
             chunksize_fname = trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE)
-            do i=1, 30
+            do i=1, 360
                 if(file_exists(chunksize_fname)) exit
-                call sleep(20)
+                call sleep(10)
             end do
             if( .not. file_exists(chunksize_fname)) THROW_HARD('either nptcls must be given or '//trim(STREAM_CHUNKSIZE)//' exists in target_dir')
             ! read nptcls from file
