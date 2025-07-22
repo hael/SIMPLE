@@ -298,9 +298,9 @@ contains
             if(params%fromp .lt. params%top) then
                 fromto(1) = params%fromp
                 fromto(2) = params%top
-                call spproj%print_segment_json(params%oritype, params%projfile, fromto=fromto, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist)
+                call spproj%print_segment_json(params%oritype, params%projfile, fromto=fromto, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist, nran=params%nran)
             else
-                call spproj%print_segment_json(params%oritype, params%projfile, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist)
+                call spproj%print_segment_json(params%oritype, params%projfile, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist, nran=params%nran)
             end if
         else
             call spproj%print_segment(params%oritype)

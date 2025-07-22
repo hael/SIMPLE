@@ -24,6 +24,7 @@ use simple_qsys_funs
 use simple_procimgstk
 use simple_progress
 use simple_default_clines
+use simple_nice
 implicit none
 
 public :: cleanup2D_commander_hlev
@@ -754,6 +755,7 @@ contains
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(cavgassemble_commander)      :: xcavgassemble
         type(prob_tab2D_commander_distr)  :: xprob_tab2D_distr
+         type(simple_nice_communicator)   :: nice_communicator
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
@@ -792,6 +794,12 @@ contains
         endif
         ! deal with # threads for the master process
         call set_master_num_threads(nthr_here, 'CLUSTER2D')
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        nice_communicator%stat_root%stage = "initialising"
+        call nice_communicator%cycle()
+        if(cline%defined("niceserver")) call cline%delete('niceserver')
+        if(cline%defined("niceprocid")) call cline%delete('niceprocid')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
@@ -967,6 +975,9 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
+            ! nice
+            nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
+            call nice_communicator%cycle()
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
@@ -1090,6 +1101,8 @@ contains
                 call fclose(fnr)
             endif
         end do
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
         ! updates os_out
         if( trim(params%restore_cavgs).eq.'yes' )then
             finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
@@ -1103,6 +1116,7 @@ contains
         call cline%set('endit', iter)
         ! end gracefully
         call build%spproj_field%kill
+        call nice_communicator%terminate()
         call simple_touch(CLUSTER2D_FINISHED)
         call simple_end('**** SIMPLE_DISTR_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D_distr
@@ -1115,6 +1129,7 @@ contains
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(scale_commander)             :: xscale
         type(prob_tab2D_commander_distr)  :: xprob_tab2D_distr
+        type(simple_nice_communicator)    :: nice_communicator
         type(cmdline)             :: cline_make_cavgs, cline_scalerefs, cline_prob_tab2D
         type(parameters)          :: params
         type(builder),     target :: build
@@ -1139,6 +1154,10 @@ contains
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'
         endif
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        nice_communicator%stat_root%stage = "initialising"
+        call nice_communicator%cycle()
         startit = 1
         if( cline%defined('startit') )startit = params%startit
         if( (startit == 1) .and. (.not.str_has_substr(params%refine,'prob')) )then
@@ -1288,6 +1307,8 @@ contains
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
+                nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
+                call nice_communicator%cycle()
                 call cline%set('which_iter', params%which_iter)
                 if( params%which_iter == iter_switch2euclid )then
                     call cline%set('needs_sigma','yes')
@@ -1361,6 +1382,8 @@ contains
                 ! update iteration counter
                 params%startit = params%startit + 1
             end do
+            nice_communicator%stat_root%stage = "terminating"
+            call nice_communicator%cycle()
             ! print CSV file of correlation vs particle number
             if( trim(params_glob%print_corrs).eq.'yes' )then
                 class_all = build%spproj%os_ptcl2D%get_all_asint('class')
@@ -1410,6 +1433,7 @@ contains
                 enddo
             endif
             ! end gracefully
+            call nice_communicator%terminate()
             call simple_touch(CLUSTER2D_FINISHED)
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         endif
