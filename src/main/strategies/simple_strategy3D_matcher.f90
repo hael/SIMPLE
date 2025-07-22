@@ -318,10 +318,7 @@ contains
             endif
             call eucl_sigma%kill
             call killimgbatch
-            if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
-            ! 2.5D Pseudo-cavgs
-            ! Both cartesian & polar restorations are performed for testing
-            ! they will be exclusive in the future
+            ! polar restoration
             if( l_polar )then
                 if( l_distr_exec_glob )then
                     call polar_cavger_readwrite_partial_sums('write')
@@ -329,6 +326,7 @@ contains
                     call polar_restoration
                 endif
             endif
+            if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
         endif
 
         ! MORE CLEANUP
