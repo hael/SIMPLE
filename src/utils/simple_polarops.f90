@@ -535,18 +535,13 @@ contains
     subroutine polar_cavger_calc_and_write_frcs_and_eoavg( fname )
         character(len=*), intent(in) :: fname
         real, allocatable :: frc(:)
-        integer           :: eo_pop(2), icls, find, pop, filtsz
+        integer           :: icls, find, pop, filtsz
         filtsz = fdim(params_glob%box_crop) - 1
         allocate(frc(filtsz),source=0.)
-        !$omp parallel do default(shared) private(icls,frc,find,pop,eo_pop) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
         do icls = 1,ncls
-            eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls)
-            pop    = sum(eo_pop)
-            if( pop == 0 )then
-                frc = 0.
-                call build_glob%clsfrcs%set_frc(icls, frc, 1)
-            else
-                ! calculate FRC
+            if( params_glob%l_comlin )then
+                ! calculate FRC (pseudo-cavgs are never empty)
                 call calc_frc(pfts_even(:,:,icls), pfts_odd(:,:,icls), filtsz, frc)
                 call build_glob%clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
@@ -554,6 +549,22 @@ contains
                 if( find >= kfromto(1) )then
                     pfts_even(:,kfromto(1):find,icls) = pfts_merg(:,kfromto(1):find,icls)
                     pfts_odd(:,kfromto(1):find,icls)  = pfts_merg(:,kfromto(1):find,icls)
+                endif
+            else
+                pop = sum(prev_eo_pops(:,icls) + eo_pops(:,icls))
+                if( pop == 0 )then
+                    frc = 0.
+                    call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                else
+                    ! calculate FRC
+                    call calc_frc(pfts_even(:,:,icls), pfts_odd(:,:,icls), filtsz, frc)
+                    call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                    ! average low-resolution info between eo pairs to keep things in register
+                    find = min(kfromto(2), build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1))
+                    if( find >= kfromto(1) )then
+                        pfts_even(:,kfromto(1):find,icls) = pfts_merg(:,kfromto(1):find,icls)
+                        pfts_odd(:,kfromto(1):find,icls)  = pfts_merg(:,kfromto(1):find,icls)
+                    endif
                 endif
             endif
         end do
@@ -760,8 +771,8 @@ contains
         else
             THROW_HARD('Unsupported file format: '//ext)
         endif
-        refs_even = get_fbody(refs,BIN_EXT,separator=.false.)//'_even'//BIN_EXT
-        refs_odd  = get_fbody(refs,BIN_EXT,separator=.false.)//'_odd'//BIN_EXT
+        refs_even = trim(get_fbody(refs,BIN_EXT,separator=.false.))//'_even'//BIN_EXT
+        refs_odd  = trim(get_fbody(refs,BIN_EXT,separator=.false.))//'_odd'//BIN_EXT
         if( .not. file_exists(refs) )then
             THROW_HARD('Polar references do not exist in cwd: '//trim(refs))
         endif
