@@ -2195,7 +2195,7 @@ contains
         &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                       ! executable
-        &0, 2, 0, 9, 3, 1, 5, .true.,&                                           ! # entries in each group, requires sp_project
+        &0, 2, 0, 3, 0, 1, 5, .true.,&                                           ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI
         ! image input/output
         ! <empty>
@@ -2210,29 +2210,11 @@ contains
         call cluster2D_stream%set_input('srch_ctrls', 1, ncls_start, gui_submenu="cluster 2D", gui_advanced=.false.)
         call cluster2D_stream%set_input('srch_ctrls', 2, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
         cluster2D_stream%srch_ctrls(2)%required = .true.
-        call cluster2D_stream%set_input('srch_ctrls', 3, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call cluster2D_stream%set_input('srch_ctrls', 4, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        call cluster2D_stream%set_input('srch_ctrls', 3, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
         &gui_advanced=.false.)
-        call cluster2D_stream%set_input('srch_ctrls', 5, lpthres, gui_submenu="cluster 2D", gui_online=.true.)
-        call cluster2D_stream%set_input('srch_ctrls', 6, objfun, gui_submenu="cluster 2D")
-        call cluster2D_stream%set_input('srch_ctrls', 7, maxnchunks, gui_submenu="cluster 2D", gui_online=.true.)
-        call cluster2D_stream%set_input('srch_ctrls', 8, ml_reg, gui_submenu="cluster 2D")
-        cluster2D_stream%srch_ctrls(8)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
-        cluster2D_stream%srch_ctrls(8)%descr_placeholder = '(yes|no){no}'
-        cluster2D_stream%srch_ctrls(8)%cval_default      = 'no'
-        call cluster2D_stream%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(snhc|snhc_smpl){snhc_smpl}', &
-        &'(snhc|snhc_smpl){snhc_smpl}', .false., 'snhc', gui_submenu="cluster 2D")
         ! filter controls
-        call cluster2D_stream%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
-        call cluster2D_stream%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D analysis', 'Static low-pass limit for 2D analysis',&
-        &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
-        call cluster2D_stream%set_input('filt_ctrls', 3, 'reject_cls', 'multi', 'Whether to reject class averages',&
-        &'Whether to automatically reject 2D clusters and associated particles(yes|old|no){yes}', '(yes|old|no){yes}', .false., 'yes', gui_submenu="cluster 2D",&
-        &gui_online=.true.)
+        ! <empty>
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
         &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
@@ -5151,7 +5133,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate'//&          ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                                  ! executable
-        &4, 12, 0, 13, 4, 0, 3, .true.,&                                                    ! # entries in each group, requires sp_project
+        &4, 11, 0, 4, 0, 0, 3, .true.,&                                                    ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "data,motion correction,CTF estimation")  ! GUI                 
         ! image input/output
         call preproc%set_input('img_ios', 1, dir_movies, gui_submenu="data", gui_advanced=.false.)
@@ -5175,38 +5157,18 @@ contains
         preproc%parm_ios(9)%required = .true.
         call preproc%set_input('parm_ios',10, smpd, gui_submenu="data", gui_advanced=.false.)
         preproc%parm_ios(10)%required = .true.
-        call preproc%set_input('parm_ios',11, ctfpatch, gui_submenu="CTF estimation")
-        call preproc%set_input('parm_ios', 12,  flipgain, gui_submenu="motion correction")
+        call preproc%set_input('parm_ios',11, flipgain, gui_submenu="motion correction")
         ! alternative inputs
         ! <empty>
         ! search controls
-        call preproc%set_input('srch_ctrls', 1, trs, gui_submenu="motion correction")
-        preproc%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        preproc%srch_ctrls(1)%rval_default      = 20.
-        call preproc%set_input('srch_ctrls', 2, dfmin, gui_submenu="CTF estimation")
-        call preproc%set_input('srch_ctrls', 3, dfmax, gui_submenu="CTF estimation")
-        call preproc%set_input('srch_ctrls', 4, astigtol, gui_submenu="CTF estimation")
-        call preproc%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false.,&
-        &50., gui_submenu="motion correction")
-        call preproc%set_input('srch_ctrls', 6, mcpatch, gui_submenu="motion correction")
-        call preproc%set_input('srch_ctrls', 7, nxpatch, gui_submenu="motion correction")
-        call preproc%set_input('srch_ctrls', 8, nypatch, gui_submenu="motion correction")
-        call preproc%set_input('srch_ctrls', 9, mcconvention, gui_submenu="motion correction")
-        call preproc%set_input('srch_ctrls',10, algorithm, gui_submenu="motion correction")
-        call preproc%set_input('srch_ctrls',11, mcpatch_thres, gui_submenu="motion correction")
-        call preproc%set_input('srch_ctrls',12, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
+        call preproc%set_input('srch_ctrls', 1, dfmin, gui_submenu="CTF estimation")
+        call preproc%set_input('srch_ctrls', 2, dfmax, gui_submenu="CTF estimation")
+        call preproc%set_input('srch_ctrls', 3, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
         & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05, gui_submenu="optics groups", gui_online=.true.)
-        call preproc%set_input('srch_ctrls',13, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
+        call preproc%set_input('srch_ctrls', 4, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
         & 'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}', 'beamtilt(yes|no){no}', .false., 'no', gui_submenu="optics groups")
         ! filter controls
-        call preproc%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8., gui_submenu="motion correction")
-        call preproc%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5., gui_submenu="motion correction")
-        call preproc%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
-        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5., gui_submenu="CTF estimation")
-        call preproc%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
-        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30., gui_submenu="CTF estimation")
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
