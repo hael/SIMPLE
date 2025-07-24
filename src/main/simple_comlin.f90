@@ -109,11 +109,11 @@ contains
     end subroutine comlin_coord
 
     subroutine gen_polar_comlins( pftcc, ref_space, pcomlines)
-        use simple_oris
         class(polarft_corrcalc), intent(in)    :: pftcc
         type(oris),              intent(in)    :: ref_space
         type(polar_fmap),        intent(inout) :: pcomlines(:,:)
-        integer :: iref, jref, irot, kind, irot_l, irot_r, nrefs, nrots
+        logical, parameter :: l_kb = .true. ! K-B or linear interpolation
+        integer :: iref, jref, irot, kind, irot_l, nrefs, nrots
         real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w, hk1(2), hk2(2),&
                   &rotmat(3,3),invmats(3,3,pftcc%get_nrefs()), loc1s(3,pftcc%get_nrefs()), loc2s(3,pftcc%get_nrefs()), line3D(3),&
                   &euls(3,pftcc%get_nrefs()), euldist
@@ -145,7 +145,7 @@ contains
         ! constructing polar common lines
         pcomlines%legit = .false.
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,euldist,a2,b2,line3D,line2D,irot_real,k_real,irot_l,irot_r,w)
+        !$omp private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,euldist,a2,b2,line3D,line2D,irot_real,k_real,irot_l,w)
         do iref = 1, nrefs
             loc1_3D = loc1s(:,iref)
             loc2_3D = loc2s(:,iref)
@@ -172,21 +172,25 @@ contains
                 line2D      = matmul(line3D, invmats(:,:,jref))
                 call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
                 ! caching the indices irot_j and irot_j+1 and the corresponding linear weight
-                irot_l = floor(irot_real)
-                irot_r = irot_l + 1
-                w      = irot_real - real(irot_l)
+                if( l_kb )then
+                    irot_l = nint(irot_real)
+                else
+                    irot_l = floor(irot_real)
+                endif
+                w = irot_real - real(irot_l)
                 pcomlines(jref,iref)%targ_irot_l = irot_l
-                pcomlines(jref,iref)%targ_irot_r = irot_r
                 pcomlines(jref,iref)%targ_w      = w
                 ! projecting the 3D common line to a polar line on the iref-th reference
                 line2D = matmul(line3D, invmats(:,:,iref))
                 call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
                 ! caching the indices irot_i and irot_i+1 and the corresponding linear weight
-                irot_l = floor(irot_real)
-                irot_r = irot_l + 1
-                w      = irot_real - real(irot_l)
+                if( l_kb )then
+                    irot_l = nint(irot_real)
+                else
+                    irot_l = floor(irot_real)
+                endif
+                w = irot_real - real(irot_l)
                 pcomlines(jref,iref)%self_irot_l = irot_l
-                pcomlines(jref,iref)%self_irot_r = irot_r
                 pcomlines(jref,iref)%self_w      = w
                 pcomlines(jref,iref)%legit       = .true.
             enddo
@@ -211,7 +215,7 @@ contains
                 if( .not. pcomlines(jref,iref)%legit )cycle
                 ! compute the interpolated polar common line, between irot_j and irot_j+1
                 irot_l   = pcomlines(jref,iref)%targ_irot_l
-                irot_r   = pcomlines(jref,iref)%targ_irot_r
+                irot_r   = irot_l + 1
                 w        = pcomlines(jref,iref)%targ_w
                 if( irot_l < 1 )then
                     pft_line = (1.-w) * conjg(pfts_in(irot_l+pftsz,:,jref))
@@ -229,7 +233,7 @@ contains
                 endif
                 ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
                 irot_l   = pcomlines(jref,iref)%self_irot_l
-                irot_r   = pcomlines(jref,iref)%self_irot_r
+                irot_r   = irot_l + 1
                 w        = pcomlines(jref,iref)%self_w
                 if( irot_l < 1 )then
                     irot_l              = irot_l + pftsz

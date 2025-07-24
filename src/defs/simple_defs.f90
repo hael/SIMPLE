@@ -164,10 +164,8 @@ end type points_polar_fmap
 type polar_fmap
     logical :: legit
     integer :: targ_irot_l
-    integer :: targ_irot_r
     real    :: targ_w
     integer :: self_irot_l
-    integer :: self_irot_r
     real    :: self_w
 end type polar_fmap
 
