@@ -709,8 +709,6 @@ contains
                 call cavgs_even(icls)%zero_and_unflag_ft
                 call cavgs_odd(icls)%zero_and_unflag_ft
                 call ctfsqsums_merged(icls)%zero_and_flag_ft
-                call cavgs_even_part(icls)%zero_and_flag_ft
-                call cavgs_odd_part(icls)%zero_and_flag_ft
                 if( l_stream )then
                     call cavgs_merged_wfilt(icls)%zero_and_unflag_ft
                     call cavgs_even_wfilt(icls)%zero_and_unflag_ft
