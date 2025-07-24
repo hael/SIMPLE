@@ -210,8 +210,9 @@ contains
     !>  \brief  Restores class-averages
     subroutine polar_cavger_merge_eos_and_norm( pcomlines )
         type(polar_fmap), allocatable, optional, intent(in) :: pcomlines(:,:)
-        real, parameter   :: EPSILON = 0.1
-        real, allocatable :: res(:)
+        real,    parameter :: EPSILON = 0.1
+        logical, parameter :: l_kb = .true.
+        real, allocatable  :: res(:)
         complex(dp) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls), pfts_clin(pftsz,kfromto(1):kfromto(2),ncls),&
                       &pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                       &numerator(pftsz,kfromto(1):kfromto(2))
@@ -222,11 +223,14 @@ contains
                       &cavg_clin_frcs(kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
         if( params_glob%l_comlin )then
             if( .not. present(pcomlines) ) THROW_HARD('pcomlines needs to be inputted in polar_cavger_merge_eos_and_norm')
-            call comlin_pfts
-        endif
-        pfts_merg = DCMPLX_ZERO
-        ! need to compute the cavg/clin frcs here before pfts_even, pfts_odd are ctf-corrected
-        if( params_glob%l_comlin )then
+            if( l_kb )then
+                ! 1D KB interpolation
+                call comlin_pfts_kb
+            else
+                ! 1D Linear interpolation
+                call comlin_pfts
+            endif
+            ! need to compute the cavg/clin frcs here before pfts_even, pfts_odd are ctf-corrected
             call get_cavg_clin
             cavg_clin_frcs = 0.
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
@@ -242,6 +246,7 @@ contains
             enddo
             !$omp end parallel do
         endif
+        pfts_merg = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
             case('cavg')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
@@ -348,13 +353,10 @@ contains
         enddo
         avg_res_fsc05   = avg_res_fsc05   / real(npops)
         avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
-        print *, '>>> AVG CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.5  : ', avg_res_fsc05
-        print *, '>>> AVG CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ', avg_res_fsc0143
-        print *, '>>> MIN CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ', min_res_fsc0143
-        print *, '>>> MAX CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ', max_res_fsc0143
+        write(logfhandle,'(A,2F8.2)')'>>> AVG CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.5/0.143: ',avg_res_fsc05, avg_res_fsc0143
+        write(logfhandle,'(A,2F8.2)')'>>> MIN/MAX CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ',min_res_fsc0143, max_res_fsc0143
         ! 3D FSC = AVERAGE RESOLUTION
-        print *, '>>> 3D CAVG/CLIN RESOLUTION @ FSC=0.5  : ', avg_res_fsc05
-        print *, '>>> 3D CAVG/CLIN RESOLUTION @ FSC=0.143: ', avg_res_fsc0143
+        write(logfhandle,'(A,2F8.2)')'>>> 3D CAVG/CLIN RESOLUTION @ FSC=0.5/0.143             : ',avg_res_fsc05,avg_res_fsc0143
         ! computing directional frcs
         dfrcs = 0.
         !$omp parallel do default(shared) schedule(static) proc_bind(close)&
@@ -386,18 +388,14 @@ contains
         enddo
         avg_res_fsc05   = avg_res_fsc05   / real(npops)
         avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
-        print *, '>>> AVG ODD/EVEN DIRECTIONAL RESOLUTION @ FSC=0.5  : ', avg_res_fsc05
-        print *, '>>> AVG ODD/EVEN DIRECTIONAL RESOLUTION @ FSC=0.143: ', avg_res_fsc0143
-        print *, '>>> MIN ODD/EVEN DIRECTIONAL RESOLUTION @ FSC=0.143: ', min_res_fsc0143
-        print *, '>>> MAX ODD/EVEN DIRECTIONAL RESOLUTION @ FSC=0.143: ', max_res_fsc0143
+        write(logfhandle,'(A,2F8.2)')'>>> AVG EVEN/ODD DIRECTIONAL RESOLUTION @ FSC=0.5/0.143 : ',avg_res_fsc05,avg_res_fsc0143
+        write(logfhandle,'(A,2F8.2)')'>>> MIN/MAX EVEN/ODD DIRECTIONAL RESOLUTION @ FSC=0.143 : ', min_res_fsc0143,max_res_fsc0143
         ! 3D FSC = AVERAGE RESOLUTION
-        print *, '>>> 3D ODD/EVEN RESOLUTION @ FSC=0.5  : ', avg_res_fsc05
-        print *, '>>> 3D ODD/EVEN RESOLUTION @ FSC=0.143: ', avg_res_fsc0143
-
+        write(logfhandle,'(A,2F8.2)')'>>> 3D EVEN/ODD RESOLUTION @ FSC=0.5/0.143              : ',avg_res_fsc05,avg_res_fsc0143
       contains
 
         subroutine get_cavg_clin
-            pfts_cavg = cmplx(0.,0.)
+            pfts_cavg = DCMPLX_ZERO
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
             !$omp private(icls,eo_pop,pop,numerator,denominator)
             do icls = 1,ncls
@@ -442,88 +440,190 @@ contains
             enddo
         end subroutine safe_norm
 
-        subroutine comlin_pfts
-            complex(dp) :: cline_e(kfromto(1):kfromto(2))
-            complex(dp) :: cline_o(kfromto(1):kfromto(2))
-            real(dp)    :: rline_e(kfromto(1):kfromto(2))
-            real(dp)    :: rline_o(kfromto(1):kfromto(2))
-            integer     :: iref, jref, orotl, orotr, trotl, trotr
-            real(dp)    :: tw, ow
-            pfts_clin_even = DCMPLX_ZERO
-            pfts_clin_odd  = DCMPLX_ZERO
-            ctf2_clin_even = 0._dp
-            ctf2_clin_odd  = 0._dp
-            !$omp parallel do default(shared) private(iref,jref,orotl,orotr,trotl,trotr,tw,ow,cline_e,cline_o,rline_e,rline_o)&
-            !$omp proc_bind(close) schedule(static)
+        ! Returns complex and ctf2 polar lines given ref and rotational indices
+        subroutine get_line( ref, rot, even, pftline, ctf2line )
+            integer,     intent(in)    :: ref, rot
+            logical,     intent(in)    :: even
+            complex(dp), intent(out)   :: pftline(kfromto(1):kfromto(2))
+            real(dp),    intent(out)   :: ctf2line(kfromto(1):kfromto(2))
+            integer :: irot
+            if( even )then
+                if( rot < 1 )then
+                    irot    = rot + pftsz
+                    pftline = conjg(pfts_even(irot,:,ref))
+                elseif( rot > pftsz )then
+                    irot    = rot - pftsz
+                    pftline = conjg(pfts_even(irot,:,ref))
+                else
+                    irot    = rot
+                    pftline = pfts_even(irot,:,ref)
+                endif
+                ctf2line = ctf2_even(irot,:,ref)
+            else
+                if( rot < 1 )then
+                    irot    = rot + pftsz
+                    pftline = conjg(pfts_odd(irot,:,ref))
+                elseif( rot > pftsz )then
+                    irot    = rot - pftsz
+                    pftline = conjg(pfts_odd(irot,:,ref))
+                else
+                    irot    = rot
+                    pftline = pfts_odd(irot,:,ref)
+                endif
+                ctf2line = ctf2_odd(irot,:,ref)
+            endif
+        end subroutine get_line
+
+        ! Inserts the intersecting common line contribution of all to all planes (KB interpolation)
+        ! cf simple_comlin%gen_polar_comlins for index convention stored in polar_fmap
+        subroutine comlin_pfts_kb
+            type(kbinterpol) :: kbwin
+            complex(dp) :: cline_l(kfromto(1):kfromto(2)), cline_r(kfromto(1):kfromto(2))
+            complex(dp) :: cline_e(kfromto(1):kfromto(2)), cline_o(kfromto(1):kfromto(2))
+            real(dp)    :: rline_l(kfromto(1):kfromto(2)), rline_r(kfromto(1):kfromto(2))
+            real(dp)    :: rline_e(kfromto(1):kfromto(2)), rline_o(kfromto(1):kfromto(2))
+            integer     :: iref, jref, rot, rotl, rotr
+            real(dp)    :: d, w,wl,wr,sumw
+            kbwin = kbinterpol(1.5, 2.0)
+            pfts_clin_even = DCMPLX_ZERO; pfts_clin_odd  = DCMPLX_ZERO
+            ctf2_clin_even = 0.d0; ctf2_clin_odd  = 0.d0
+            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp private(iref,jref,rot,rotl,rotr,w,wl,wr,sumw,d,cline_e,cline_o,rline_e,rline_o,cline_l,cline_r,rline_l,rline_r)
             do iref = 1, ncls
                 do jref = 1, ncls
                     if( .not. pcomlines(jref,iref)%legit )cycle
                     ! compute the interpolated polar common line, between irot_j and irot_j+1
-                    trotl = pcomlines(jref,iref)%targ_irot_l
-                    trotr = pcomlines(jref,iref)%targ_irot_r
-                    tw    = real(pcomlines(jref,iref)%targ_w,dp)
+                    rot  = pcomlines(jref,iref)%targ_irot_l
+                    d    = real(pcomlines(jref,iref)%targ_w,dp)
+                    w    = kbwin%apod_dp(d); wl = kbwin%apod_dp(d-1.d0); wr = kbwin%apod_dp(d+1.d0)
+                    sumw = wl + w + wr
+                    w    = w / sumw; wl = wl / sumw; wr = wr / sumw
+                    call get_line(jref, rot,   .true., cline_e, rline_e)
+                    call get_line(jref, rot-1, .true., cline_l, rline_l)
+                    call get_line(jref, rot+1, .true., cline_r, rline_r)
+                    cline_e = wl*cline_l + w*cline_e + wr*cline_r
+                    rline_e = wl*rline_l + w*rline_e + wr*rline_r
+                    call get_line(jref, rot,   .false., cline_o, rline_o)
+                    call get_line(jref, rot-1, .false., cline_l, rline_l)
+                    call get_line(jref, rot+1, .false., cline_r, rline_r)
+                    cline_o = wl*cline_l + w*cline_o + wr*cline_r
+                    rline_o = wl*rline_l + w*rline_o + wr*rline_r
                     ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
-                    orotl = pcomlines(jref,iref)%self_irot_l
-                    orotr = pcomlines(jref,iref)%self_irot_r
-                    ow    = real(pcomlines(jref,iref)%self_w,dp)
-                    ! intersecting lines interpolation
-                    if( trotl < 1 )then
-                        trotl = trotl + pftsz
-                        cline_e = (1.d0-tw) * conjg(pfts_even(trotl,:,jref))
-                        cline_o = (1.d0-tw) * conjg(pfts_odd(trotl,:,jref))
-                    elseif( trotl > pftsz )then
-                        trotl   = trotl - pftsz
-                        cline_e = (1.d0-tw) * conjg(pfts_even(trotl,:,jref))
-                        cline_o = (1.d0-tw) * conjg(pfts_odd(trotl,:,jref))
+                    rot  = pcomlines(jref,iref)%self_irot_l
+                    rotl = rot - 1
+                    rotr = rot + 1
+                    d    = real(pcomlines(jref,iref)%self_w,dp)
+                    w    = kbwin%apod_dp(d); wl = kbwin%apod_dp(d-1.d0); wr = kbwin%apod_dp(d+1.d0)
+                    sumw = wl + w + wr
+                    w    = w / sumw; wl = wl / sumw; wr = wr / sumw
+                    ! leftmost line
+                    if( rotl < 1 )then
+                        rotl = rotl + pftsz
+                        pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + wl * conjg(cline_e)
+                        pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + wl * conjg(cline_o)
+                    elseif( rotl > pftsz )then
+                        rotl = rotl - pftsz
+                        pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + wl * conjg(cline_e)
+                        pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + wl * conjg(cline_o)
                     else
-                        cline_e = (1.d0-tw) * pfts_even(trotl,:,jref)
-                        cline_o = (1.d0-tw) * pfts_odd(trotl,:,jref)
+                        pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + wl * cline_e
+                        pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + wl * cline_o
                     endif
-                    rline_e = (1.d0-tw) * ctf2_even(trotl,:,jref)
-                    rline_o = (1.d0-tw) * ctf2_odd(trotl,:,jref)
-                    if( trotr < 1 )then
-                        trotr = trotr + pftsz
-                        cline_e = cline_e + tw * conjg(pfts_even(trotr,:,jref))
-                        cline_o = cline_o + tw * conjg(pfts_odd(trotr,:,jref))
-                    elseif( trotr > pftsz )then
-                        trotr   = trotr - pftsz
-                        cline_e = cline_e + tw * conjg(pfts_even(trotr,:,jref))
-                        cline_o = cline_o + tw * conjg(pfts_odd(trotr,:,jref))
+                    ctf2_clin_even(rotl,:,iref) = ctf2_clin_even(rotl,:,iref) + wl * rline_e
+                    ctf2_clin_odd(rotl,:,iref)  = ctf2_clin_odd(rotl,:,iref)  + wl * rline_o
+                    ! nearest line
+                    if( rot < 1 )then
+                        rot = rot + pftsz
+                        pfts_clin_even(rot,:,iref) = pfts_clin_even(rot,:,iref) + w * conjg(cline_e)
+                        pfts_clin_odd(rot,:,iref)  = pfts_clin_odd(rot,:,iref)  + w * conjg(cline_o)
+                    elseif( rot > pftsz )then
+                        rot = rot - pftsz
+                        pfts_clin_even(rot,:,iref) = pfts_clin_even(rot,:,iref) + w * conjg(cline_e)
+                        pfts_clin_odd(rot,:,iref)  = pfts_clin_odd(rot,:,iref)  + w * conjg(cline_o)
                     else
-                        cline_e = cline_e + tw * pfts_even(trotr,:,jref)
-                        cline_o = cline_o + tw * pfts_odd(trotr,:,jref)
+                        pfts_clin_even(rot,:,iref) = pfts_clin_even(rot,:,iref) + w * cline_e
+                        pfts_clin_odd(rot,:,iref)  = pfts_clin_odd(rot,:,iref)  + w * cline_o
                     endif
-                    rline_e = rline_e + tw * ctf2_even(trotr,:,jref)
-                    rline_o = rline_o + tw * ctf2_odd(trotr,:,jref)
-                    !
-                    if( orotl < 1 )then
-                        orotl = orotl + pftsz
-                        pfts_clin_even(orotl,:,iref) = pfts_clin_even(orotl,:,iref) + (1.d0-ow) * conjg(cline_e)
-                        pfts_clin_odd(orotl,:,iref)  = pfts_clin_odd(orotl,:,iref)  + (1.d0-ow) * conjg(cline_o)
-                    elseif( orotl > pftsz )then
-                        orotl = orotl - pftsz
-                        pfts_clin_even(orotl,:,iref) = pfts_clin_even(orotl,:,iref) + (1.d0-ow) * conjg(cline_e)
-                        pfts_clin_odd(orotl,:,iref)  = pfts_clin_odd(orotl,:,iref)  + (1.d0-ow) * conjg(cline_o)
+                    ctf2_clin_even(rot,:,iref) = ctf2_clin_even(rot,:,iref) + w * rline_e
+                    ctf2_clin_odd(rot,:,iref)  = ctf2_clin_odd(rot,:,iref)  + w * rline_o
+                    ! rightmost line
+                    if( rotr < 1 )then
+                        rotr = rotr + pftsz
+                        pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + wr * conjg(cline_e)
+                        pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + wr * conjg(cline_o)
+                    elseif( rotr > pftsz )then
+                        rotr = rotr - pftsz
+                        pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + wr * conjg(cline_e)
+                        pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + wr * conjg(cline_o)
                     else
-                        pfts_clin_even(orotl,:,iref) = pfts_clin_even(orotl,:,iref) + (1.d0-ow) * cline_e
-                        pfts_clin_odd(orotl,:,iref)  = pfts_clin_odd(orotl,:,iref)  + (1.d0-ow) * cline_o
+                        pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + wr * cline_e
+                        pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + wr * cline_o
                     endif
-                    ctf2_clin_even(orotl,:,iref) = ctf2_clin_even(orotl,:,iref) + (1.d0-ow) * rline_e
-                    ctf2_clin_odd(orotl,:,iref)  = ctf2_clin_odd(orotl,:,iref)  + (1.d0-ow) * rline_o
-                    if( orotr < 1 )then
-                        orotr = orotr + pftsz
-                        pfts_clin_even(orotr,:,iref) = pfts_clin_even(orotr,:,iref) + ow * conjg(cline_e)
-                        pfts_clin_odd(orotr,:,iref)  = pfts_clin_odd(orotr,:,iref)  + ow * conjg(cline_o)
-                    elseif( orotr > pftsz )then
-                        orotr = orotr - pftsz
-                        pfts_clin_even(orotr,:,iref) = pfts_clin_even(orotr,:,iref) + ow * conjg(cline_e)
-                        pfts_clin_odd(orotr,:,iref)  = pfts_clin_odd(orotr,:,iref)  + ow * conjg(cline_o)
+                    ctf2_clin_even(rotr,:,iref) = ctf2_clin_even(rotr,:,iref) + wr * rline_e
+                    ctf2_clin_odd(rotr,:,iref)  = ctf2_clin_odd(rotr,:,iref)  + wr * rline_o
+                enddo
+            enddo
+            !$omp end parallel do
+        end subroutine comlin_pfts_kb
+
+        ! Inserts the intersecting common line contribution of all to all planes (linear interpolation)
+        ! cf simple_comlin%gen_polar_comlins for index convention stored in polar_fmap
+        subroutine comlin_pfts
+            complex(dp) :: cline_e(kfromto(1):kfromto(2)), cline_o(kfromto(1):kfromto(2)), cline_r(kfromto(1):kfromto(2))
+            real(dp)    :: rline_e(kfromto(1):kfromto(2)), rline_o(kfromto(1):kfromto(2)), rline_r(kfromto(1):kfromto(2))
+            integer     :: iref, jref, rotl, rotr
+            real(dp)    :: w
+            pfts_clin_even = DCMPLX_ZERO; pfts_clin_odd  = DCMPLX_ZERO
+            ctf2_clin_even = 0.d0; ctf2_clin_odd  = 0.d0
+            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp private(iref,jref,rotl,rotr,w,cline_e,cline_o,rline_e,rline_o,cline_r,rline_r)
+            do iref = 1, ncls
+                do jref = 1, ncls
+                    if( .not. pcomlines(jref,iref)%legit )cycle
+                    ! compute the interpolated polar common line, between rotl and rotr of jref-th reference
+                    rotl = pcomlines(jref,iref)%targ_irot_l
+                    rotr = rotl+1
+                    w    = real(pcomlines(jref,iref)%targ_w,dp)
+                    call get_line(jref, rotl, .true., cline_e, rline_e)
+                    call get_line(jref, rotr, .true., cline_r, rline_r)
+                    cline_e = (1.d0-w)*cline_e + w*cline_r
+                    rline_e = (1.d0-w)*rline_e + w*rline_r
+                    call get_line(jref, rotl, .false., cline_o, rline_o)
+                    call get_line(jref, rotr, .false., cline_r, rline_r)
+                    cline_o = (1.d0-w)*cline_o + w*cline_r
+                    rline_o = (1.d0-w)*rline_o + w*rline_r
+                    ! extrapolate the interpolated polar common line to rotl and rotr of iref-th reference
+                    rotl = pcomlines(jref,iref)%self_irot_l
+                    rotr = rotl + 1
+                    w    = real(pcomlines(jref,iref)%self_w,dp)
+                    if( rotl < 1 )then
+                        rotl = rotl + pftsz
+                        pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + (1.d0-w) * conjg(cline_e)
+                        pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + (1.d0-w) * conjg(cline_o)
+                    elseif( rotl > pftsz )then
+                        rotl = rotl - pftsz
+                        pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + (1.d0-w) * conjg(cline_e)
+                        pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + (1.d0-w) * conjg(cline_o)
                     else
-                        pfts_clin_even(orotr,:,iref) = pfts_clin_even(orotr,:,iref) + ow * cline_e
-                        pfts_clin_odd(orotr,:,iref)  = pfts_clin_odd(orotr,:,iref)  + ow * cline_o
+                        pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + (1.d0-w) * cline_e
+                        pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + (1.d0-w) * cline_o
                     endif
-                    ctf2_clin_even(orotr,:,iref) = ctf2_clin_even(orotr,:,iref) + ow * rline_e
-                    ctf2_clin_odd(orotr,:,iref)  = ctf2_clin_odd(orotr,:,iref)  + ow * rline_o
+                    ctf2_clin_even(rotl,:,iref) = ctf2_clin_even(rotl,:,iref) + (1.d0-w) * rline_e
+                    ctf2_clin_odd(rotl,:,iref)  = ctf2_clin_odd(rotl,:,iref)  + (1.d0-w) * rline_o
+                    if( rotr < 1 )then
+                        rotr = rotr + pftsz
+                        pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + w * conjg(cline_e)
+                        pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + w * conjg(cline_o)
+                    elseif( rotr > pftsz )then
+                        rotr = rotr - pftsz
+                        pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + w * conjg(cline_e)
+                        pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + w * conjg(cline_o)
+                    else
+                        pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + w * cline_e
+                        pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + w * cline_o
+                    endif
+                    ctf2_clin_even(rotr,:,iref) = ctf2_clin_even(rotr,:,iref) + w * rline_e
+                    ctf2_clin_odd(rotr,:,iref)  = ctf2_clin_odd(rotr,:,iref)  + w * rline_o
                 enddo
             enddo
             !$omp end parallel do
@@ -1260,100 +1360,5 @@ contains
         call write_cavgs(cavgs, 'cavgs2_merged.mrc')
         call polar_cavger_kill
     end subroutine test_polarops
-
-    ! ! Convenience function for testing
-    ! subroutine polar_cavger_restore_classes( pinds )
-    !     use simple_ctf,                 only: ctf
-    !     use simple_strategy2D3D_common, only: discrete_read_imgbatch, killimgbatch, prepimgbatch
-    !     use simple_timer
-    !     integer,   intent(in)    :: pinds(:)
-    !     type(ctfparams)          :: ctfparms
-    !     type(polarft_corrcalc)   :: pftcc
-    !     type(ctf)                :: tfun
-    !     type(image), allocatable :: cavgs(:)
-    !     real,        allocatable :: incr_shifts(:,:)
-    !     integer(timer_int_kind)  :: t
-    !     real    :: sdevnoise
-    !     integer :: iptcl, ithr, i, nptcls
-    !     logical :: eo, l_ctf
-    !     ! Dimensions
-    !     params_glob%kfromto = [2, nint(real(params_glob%box_crop)/2.)-1]
-    !     ! Use pftcc to hold particles
-    !     t = tic()
-    !     nptcls = size(pinds)
-    !     call pftcc%new(params_glob%ncls, [1,nptcls], params_glob%kfromto)
-    !     l_ctf = build_glob%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
-    !     call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
-    !     ! read images
-    !     t = tic()
-    !     call prepimgbatch(nptcls)
-    !     call discrete_read_imgbatch(nptcls, pinds, [1,nptcls])
-    !     call pftcc%reallocate_ptcls(nptcls, pinds)
-    !     print *,'read: ',toc(t)
-    !     ! ctf
-    !     t = tic()
-    !     if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
-    !     allocate(incr_shifts(2,nptcls),source=0.)
-    !     print *,'ctf: ',toc(t)
-    !     t = tic()
-    !     !$omp parallel do default(shared) private(iptcl,i,ithr,eo,sdevnoise,ctfparms,tfun)&
-    !     !$omp schedule(static) proc_bind(close)
-    !     do i = 1,nptcls
-    !         ithr  = omp_get_thread_num() + 1
-    !         iptcl = pinds(i)
-    !         ! normalization
-    !         call build_glob%imgbatch(i)%norm_noise(build_glob%lmsk, sdevnoise)
-    !         if( trim(params_glob%gridding).eq.'yes' )then
-    !             call build_glob%img_crop_polarizer%div_by_instrfun(build_glob%imgbatch(i))
-    !         endif
-    !         call build_glob%imgbatch(i)%fft
-    !         ! shift
-    !         incr_shifts(:,i) = build_glob%spproj_field%get_2Dshift(iptcl)
-    !         ! phase-flipping
-    !         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-    !         select case(ctfparms%ctfflag)
-    !             case(CTFFLAG_NO, CTFFLAG_FLIP)
-    !             case(CTFFLAG_YES)
-    !                 tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-    !                 call tfun%apply_serial(build_glob%imgbatch(i), 'flip', ctfparms)
-    !             case DEFAULT
-    !                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' polar_cavger_restore_classes')
-    !         end select
-    !         ! even/odd
-    !         eo = build_glob%spproj_field%get_eo(iptcl) < 0.5
-    !         ! polar transform
-    !         call build_glob%img_crop_polarizer%polarize(pftcc, build_glob%imgbatch(i), iptcl, .true., eo, mask=build_glob%l_resmsk)
-    !     end do
-    !     !$omp end parallel do
-    !     print *,'loop: ',toc(t)
-    !     call killimgbatch
-    !     t = tic()
-    !     call polar_cavger_new(pftcc)
-    !     print *,'polar_cavger_new: ',toc(t)
-    !     t = tic()
-    !     call polar_cavger_update_sums(nptcls, pinds, build_glob%spproj, pftcc, incr_shifts)
-    !     print *,'polar_cavger_update_sums: ',toc(t)
-    !     t = tic()
-    !     call polar_cavger_merge_eos_and_norm
-    !     print *,'polar_cavger_merge_eos_and_norm: ',toc(t)
-    !     t = tic()
-    !     call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
-    !     print *,'polar_cavger_calc_and_write_frcs_and_eoavg: ',toc(t)
-    !     call polar_cavger_gen2Dclassdoc(build_glob%spproj)
-    !     ! write
-    !     call polar_cavger_write('cavgs_even.bin', 'even')
-    !     call polar_cavger_write('cavgs_odd.bin',  'odd')
-    !     call polar_cavger_write('cavgs.bin',      'merged')
-    !     allocate(cavgs(params_glob%ncls))
-    !     call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
-    !     call write_cavgs(cavgs, 'cavgs_even.mrc')
-    !     call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
-    !     call write_cavgs(cavgs, 'cavgs_odd.mrc')
-    !     call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
-    !     call write_cavgs(cavgs, 'cavgs_merged.mrc')
-    !     call pftcc%kill
-    !     call polar_cavger_kill
-    !     call dealloc_imgarr(cavgs)
-    ! end subroutine polar_cavger_restore_classes
 
 end module simple_polarops
