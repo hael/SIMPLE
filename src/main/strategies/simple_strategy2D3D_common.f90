@@ -13,7 +13,7 @@ implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
 public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align, prep2Dref
-public :: build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec, prepare_polar_refs_sigmas_ptcls
+public :: build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -1108,7 +1108,8 @@ contains
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
 
-    subroutine prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_imgs, batchsz )
+    subroutine prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter, do_polar )
+        use simple_polarops
         use simple_polarft_corrcalc,        only:  polarft_corrcalc
         use simple_euclid_sigma2,           only:  euclid_sigma2
         class(polarft_corrcalc),  intent(inout) :: pftcc
@@ -1116,11 +1117,64 @@ contains
         class(euclid_sigma2),     intent(inout) :: eucl_sigma
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         integer,                  intent(in)    :: batchsz
-        character(len=:), allocatable :: fname
-        integer :: ithr
+        integer,                  intent(in)    :: which_iter
+        logical,     optional,    intent(in)    :: do_polar
+        character(len=:),         allocatable   :: fname
+        integer :: ithr, iproj, pop, pop_even, pop_odd, nrefs
+        logical :: l_polar, has_been_searched
+        l_polar = .false.
+        if( present(do_polar) ) l_polar = do_polar
         ! PREPARATION OF PFTCC AND REFERENCES
-        ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
-        call prepare_polar_references(pftcc, cline, batchsz)
+        if( l_polar )then
+            ! PREPARATION OF PFTCC AND REFERENCES
+            nrefs = params_glob%nspace * params_glob%nstates
+            call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
+            call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+            ! Read polar references
+            call polar_cavger_new(pftcc)
+            call polar_cavger_read_all(trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter-1,3)//params_glob%ext)
+            call build_glob%clsfrcs%read(FRCS_FILE)
+            has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+            ! PREPARATION OF REFERENCES IN PFTCC
+            !$omp parallel do default(shared) private(iproj,pop,pop_even,pop_odd)&
+            !$omp schedule(static) proc_bind(close)
+            do iproj = 1,params_glob%nspace
+                ! populations
+                pop      = 1
+                pop_even = 0
+                pop_odd  = 0
+                if( has_been_searched )then
+                    pop      = build_glob%spproj_field%get_pop(iproj, 'proj'      )
+                    pop_even = build_glob%spproj_field%get_pop(iproj, 'proj', eo=0)
+                    pop_odd  = build_glob%spproj_field%get_pop(iproj, 'proj', eo=1)
+                endif
+                ! pop size does not matter in comlin
+                if( pop > 0 .or. params_glob%l_comlin )then
+                    call polar_prep3Dref(iproj)
+                    ! transfer to pftcc
+                    if( .not.params_glob%l_lpset )then
+                        if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
+                            ! transfer e/o refs to pftcc
+                            call polar_cavger_set_ref_pftcc(iproj, 'even', pftcc)
+                            call polar_cavger_set_ref_pftcc(iproj, 'odd',  pftcc)
+                        else
+                            ! put the merged class average in both even and odd positions
+                            call polar_cavger_set_ref_pftcc(iproj, 'merged', pftcc)
+                            call pftcc%cp_even2odd_ref(iproj)
+                        endif
+                    else
+                        ! put the merged class average in both even and odd positions
+                        call polar_cavger_set_ref_pftcc(iproj, 'merged', pftcc)
+                        call pftcc%cp_even2odd_ref(iproj)
+                    endif
+                endif
+            end do
+            !$omp end parallel do
+            call pftcc%memoize_refs
+        else
+            ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
+            call prepare_polar_references(pftcc, cline, batchsz)
+        endif
         ! PREPARATION OF SIGMAS
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
@@ -1140,85 +1194,6 @@ contains
         call build_glob%vol_odd%kill
         call build_glob%vol2%kill
     end subroutine prepare_refs_sigmas_ptcls
-
-    ! Only one state supported
-    subroutine prepare_polar_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter )
-        use simple_polarops
-        use simple_polarft_corrcalc,        only:  polarft_corrcalc
-        use simple_euclid_sigma2,           only:  euclid_sigma2
-        class(polarft_corrcalc),  intent(inout) :: pftcc
-        class(cmdline),           intent(in)    :: cline !< command line
-        class(euclid_sigma2),     intent(inout) :: eucl_sigma
-        type(image), allocatable, intent(inout) :: ptcl_imgs(:)
-        integer,                  intent(in)    :: batchsz
-        integer,                  intent(in)    :: which_iter
-        character(len=:), allocatable :: fname
-        integer :: ithr, iproj, pop, pop_even, pop_odd, nrefs
-        logical :: has_been_searched
-        ! PREPARATION OF PFTCC AND REFERENCES
-        nrefs = params_glob%nspace * params_glob%nstates
-        call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
-        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
-        ! Read polar references
-        call polar_cavger_new(pftcc)
-        call polar_cavger_read_all(trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter-1,3)//params_glob%ext)
-        call build_glob%clsfrcs%read(FRCS_FILE)
-        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
-        ! PREPARATION OF REFERENCES IN PFTCC
-        !$omp parallel do default(shared) private(iproj,pop,pop_even,pop_odd)&
-        !$omp schedule(static) proc_bind(close)
-        do iproj = 1,params_glob%nspace
-            ! populations
-            pop      = 1
-            pop_even = 0
-            pop_odd  = 0
-            if( has_been_searched )then
-                pop      = build_glob%spproj_field%get_pop(iproj, 'proj'      )
-                pop_even = build_glob%spproj_field%get_pop(iproj, 'proj', eo=0)
-                pop_odd  = build_glob%spproj_field%get_pop(iproj, 'proj', eo=1)
-            endif
-            ! pop size does not matter in comlin
-            if( pop > 0 .or. params_glob%l_comlin )then
-                call polar_prep3Dref(iproj)
-                ! transfer to pftcc
-                if( .not.params_glob%l_lpset )then
-                    if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
-                        ! transfer e/o refs to pftcc
-                        call polar_cavger_set_ref_pftcc(iproj, 'even', pftcc)
-                        call polar_cavger_set_ref_pftcc(iproj, 'odd',  pftcc)
-                    else
-                        ! put the merged class average in both even and odd positions
-                        call polar_cavger_set_ref_pftcc(iproj, 'merged', pftcc)
-                        call pftcc%cp_even2odd_ref(iproj)
-                    endif
-                else
-                    ! put the merged class average in both even and odd positions
-                    call polar_cavger_set_ref_pftcc(iproj, 'merged', pftcc)
-                    call pftcc%cp_even2odd_ref(iproj)
-                endif
-            endif
-        end do
-        !$omp end parallel do
-        call pftcc%memoize_refs
-        ! PREPARATION OF SIGMAS
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field)
-            call eucl_sigma%read_groups(build_glob%spproj_field)
-        end if
-        ! PREPARATION OF PARTICLES
-        call prepimgbatch(batchsz)
-        allocate(ptcl_imgs(nthr_glob))
-        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
-            call ptcl_imgs(ithr)%new([params_glob%box_crop,params_glob%box_crop,1], params_glob%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        call build_glob%vol%kill
-        call build_glob%vol_odd%kill
-        call build_glob%vol2%kill
-    end subroutine prepare_polar_refs_sigmas_ptcls
 
     subroutine prepare_polar_references( pftcc, cline, batchsz )
         use simple_polarft_corrcalc,       only:  polarft_corrcalc
