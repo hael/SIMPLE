@@ -123,11 +123,8 @@ contains
             rt_init                    = toc(t_init)
             t_prepare_polar_references = tic()
         endif
-        if( l_polar .and. which_iter>1)then
-            call prepare_polar_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter )
-        else
-            call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max )
-        endif
+        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter,&
+                                        &do_polar=(l_polar .and. which_iter>1) )
         if( params_glob%l_comlin ) call read_write_comlin(pcomlines, pftcc, build_glob%eulspace)
         if( l_polar .and. l_restore )then
             ! for restoration
