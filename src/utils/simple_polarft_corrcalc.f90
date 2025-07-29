@@ -543,11 +543,10 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         real(sp),                intent(in) :: rot !<  continuous rotation
         real(sp) :: dists(self%nrots)
-        integer  :: ind, loc(1)
+        integer  :: ind
         dists = abs(self%angtab-rot)
         where(dists>180.)dists = 360.-dists
-        loc = minloc(dists)
-        ind = loc(1)
+        ind = minloc(dists, dim=1)
     end function get_roind
 
     !>  \brief returns polar coordinate for rotation rot

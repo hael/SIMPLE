@@ -215,12 +215,15 @@ contains
         real, allocatable  :: res(:)
         complex(dp) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls), pfts_clin(pftsz,kfromto(1):kfromto(2),ncls),&
                       &pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
-                      &numerator(pftsz,kfromto(1):kfromto(2))
-        real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)), numer, denom1, denom2, &
-                      &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
-        integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops
+                      &numerator(pftsz,kfromto(1):kfromto(2)),pfte(pftsz,kfromto(1):kfromto(2)),pfto(pftsz,kfromto(1):kfromto(2)),&
+                      &pftm(pftsz,kfromto(1):kfromto(2))
+        real(dp)    :: denominator(pftsz,kfromto(1):kfromto(2)),ctf2e(pftsz,kfromto(1):kfromto(2)),ctf2o(pftsz,kfromto(1):kfromto(2)),&
+                      &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls), ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
+                      &ctf2m(pftsz,kfromto(1):kfromto(2)),numer, denom1, denom2
+        integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops, nrots, m
         real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05,&
                       &cavg_clin_frcs(kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
+        nrots = 2*pftsz
         if( params_glob%l_comlin )then
             if( .not. present(pcomlines) ) THROW_HARD('pcomlines needs to be inputted in polar_cavger_merge_eos_and_norm')
             if( l_kb )then
@@ -239,9 +242,9 @@ contains
                 if( pops(icls) < 2 )cycle
                 do k = kfromto(1), kfromto(2)
                     numer  = real(sum(    pfts_cavg(:,k,icls) * conjg(pfts_clin(:,k,icls))),dp)
-                    denom1 =      sum(csq(pfts_cavg(:,k,icls)))
-                    denom2 =      sum(csq(pfts_clin(:,k,icls)))
-                    if( dsqrt(denom1*denom2) > DTINY ) cavg_clin_frcs(k,icls) = real(numer / dsqrt(denom1*denom2))
+                    denom1 =      sum(csq_fast(pfts_cavg(:,k,icls)))
+                    denom2 =      sum(csq_fast(pfts_clin(:,k,icls)))
+                    if( denom1*denom2 > DTINY ) cavg_clin_frcs(k,icls) = real(numer / dsqrt(denom1*denom2))
                 enddo
             enddo
             !$omp end parallel do
@@ -302,6 +305,49 @@ contains
                     end where
                 enddo
                 !$omp end parallel do
+            case('clinm')
+                !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+                !$omp private(icls,m,numerator,denominator,pfte,pfto,ctf2e,ctf2o,pftm,ctf2m)
+                do icls = 1,ncls/2
+                    ! generate mirror Fourier image pair
+                    m = ncls/2 + icls
+                    call mirror_pft(pfts_clin_even(:,:,m), pftm)
+                    pfte  = pfts_clin_even(:,:,icls) + pftm
+                    call mirror_pft(pfts_clin_odd(:,:,m),  pftm)
+                    pfto  = pfts_clin_odd(:,:,icls)  + pftm
+                    call mirror_ctf2(ctf2_clin_even(:,:,m),ctf2m)
+                    ctf2e = ctf2_clin_even(:,:,icls) + ctf2m
+                    call mirror_ctf2(ctf2_clin_odd(:,:,m), ctf2m)
+                    ctf2o = ctf2_clin_odd(:,:,icls) + ctf2m
+                    ! handling the merged first before pfts_even and pfts_odd got ctf-corrected
+                    numerator   = pfte  + pfto
+                    denominator = ctf2e + ctf2o
+                    call safe_norm(denominator)
+                    where( denominator > DSMALL)
+                        pfts_merg(:,:,icls) = numerator / denominator
+                    elsewhere
+                        pfts_merg(:,:,icls) = DCMPLX_ZERO
+                    end where
+                    ! even
+                    call safe_norm(ctf2e)
+                    where( ctf2e > DSMALL)
+                        pfts_even(:,:,icls) = pfte / ctf2e
+                    elsewhere
+                        pfts_even(:,:,icls) = DCMPLX_ZERO
+                    end where
+                    ! odd
+                    call safe_norm(ctf2o)
+                    where( ctf2o > DSMALL)
+                        pfts_odd(:,:,icls) = pfto / ctf2o
+                    elsewhere
+                        pfts_odd(:,:,icls) = DCMPLX_ZERO
+                    end where
+                    ! mirroring the restored image
+                    call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
+                    call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
+                    call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                enddo
+                !$omp end parallel do
             case('vol')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
                 !$omp private(icls,denominator)
@@ -329,6 +375,53 @@ contains
                     elsewhere
                         pfts_odd(:,:,icls) = DCMPLX_ZERO
                     end where
+                enddo
+                !$omp end parallel do
+            case('volm')
+                !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+                !$omp private(icls,m,numerator,denominator,pfte,pfto,ctf2e,ctf2o,pftm,ctf2m)
+                do icls = 1,ncls/2
+                    ! calculate sum of image + mirror of mirror image pair
+                    m     = ncls/2 + icls
+                    pfte  = pfts_even(:,:,m) + pfts_clin_even(:,:,m)
+                    call mirror_pft(pfte, pftm)
+                    pfte  = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls) + pftm
+                    pfto  = pfts_odd(:,:,m) + pfts_clin_odd(:,:,m)
+                    call mirror_pft(pfto, pftm)
+                    pfto  = pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls) + pftm
+                    ctf2e = ctf2_even(:,:,m) + ctf2_clin_even(:,:,m)
+                    call mirror_ctf2(ctf2e,ctf2m)
+                    ctf2e = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls) + ctf2m
+                    ctf2o = ctf2_odd(:,:,m)  + ctf2_clin_odd(:,:,m)
+                    call mirror_ctf2(ctf2o,ctf2m)
+                    ctf2o = ctf2_odd(:,:,icls)  + ctf2_clin_odd(:,:,icls) + ctf2m
+                    ! e+o
+                    numerator   = pfte  + pfto
+                    denominator = ctf2e + ctf2o
+                    call safe_norm(denominator)
+                    where( denominator > DSMALL)
+                        pfts_merg(:,:,icls) = numerator / denominator
+                    elsewhere
+                        pfts_merg(:,:,icls) = DCMPLX_ZERO
+                    end where
+                    ! even
+                    call safe_norm(ctf2e)
+                    where( ctf2e > DSMALL)
+                        pfts_even(:,:,icls) = pfte / ctf2e
+                    elsewhere
+                        pfts_even(:,:,icls) = DCMPLX_ZERO
+                    end where
+                    ! odd
+                    call safe_norm(ctf2o)
+                    where( ctf2o > DSMALL)
+                        pfts_odd(:,:,icls) = pfto / ctf2o
+                    elsewhere
+                        pfts_odd(:,:,icls) = DCMPLX_ZERO
+                    end where
+                    ! mirroring the restored images
+                    call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
+                    call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
+                    call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
                 enddo
                 !$omp end parallel do
             case DEFAULT
@@ -364,9 +457,9 @@ contains
         do icls = 1, ncls
             do k = kfromto(1), kfromto(2)
                 numer  = real(sum(    pfts_even(:,k,icls) * conjg(pfts_odd(:,k,icls))), dp)
-                denom1 =      sum(csq(pfts_even(:,k,icls)))
-                denom2 =      sum(csq(pfts_odd( :,k,icls)))
-                if( dsqrt(denom1*denom2) > DTINY ) dfrcs(k,icls) = real(numer / dsqrt(denom1*denom2))
+                denom1 =      sum(csq_fast(pfts_even(:,k,icls)))
+                denom2 =      sum(csq_fast(pfts_odd( :,k,icls)))
+                if( denom1*denom2 > DTINY ) dfrcs(k,icls) = real(numer / dsqrt(denom1*denom2))
             enddo
         enddo
         !$omp end parallel do
@@ -447,27 +540,30 @@ contains
             complex(dp), intent(out)   :: pftline(kfromto(1):kfromto(2))
             real(dp),    intent(out)   :: ctf2line(kfromto(1):kfromto(2))
             integer :: irot
+            if( rot >  nrots )then
+                irot = rot - nrots
+            else
+                irot = rot
+            endif
             if( even )then
-                if( rot < 1 )then
-                    irot    = rot + pftsz
+                if( irot < 1 )then
+                    irot    = irot + pftsz
                     pftline = conjg(pfts_even(irot,:,ref))
-                elseif( rot > pftsz )then
-                    irot    = rot - pftsz
+                elseif( irot > pftsz )then
+                    irot    = irot - pftsz
                     pftline = conjg(pfts_even(irot,:,ref))
                 else
-                    irot    = rot
                     pftline = pfts_even(irot,:,ref)
                 endif
                 ctf2line = ctf2_even(irot,:,ref)
             else
-                if( rot < 1 )then
-                    irot    = rot + pftsz
+                if( irot < 1 )then
+                    irot    = irot + pftsz
                     pftline = conjg(pfts_odd(irot,:,ref))
-                elseif( rot > pftsz )then
-                    irot    = rot - pftsz
+                elseif( irot > pftsz )then
+                    irot    = irot - pftsz
                     pftline = conjg(pfts_odd(irot,:,ref))
                 else
-                    irot    = rot
                     pftline = pfts_odd(irot,:,ref)
                 endif
                 ctf2line = ctf2_odd(irot,:,ref)
@@ -493,7 +589,7 @@ contains
                 do jref = 1, ncls
                     if( .not. pcomlines(jref,iref)%legit )cycle
                     ! compute the interpolated polar common line, between irot_j and irot_j+1
-                    rot  = pcomlines(jref,iref)%targ_irot_l
+                    rot  = pcomlines(jref,iref)%targ_irot
                     d    = real(pcomlines(jref,iref)%targ_w,dp)
                     w    = kbwin%apod_dp(d); wl = kbwin%apod_dp(d-1.d0); wr = kbwin%apod_dp(d+1.d0)
                     sumw = wl + w + wr
@@ -509,9 +605,10 @@ contains
                     cline_o = wl*cline_l + w*cline_o + wr*cline_r
                     rline_o = wl*rline_l + w*rline_o + wr*rline_r
                     ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
-                    rot  = pcomlines(jref,iref)%self_irot_l
+                    rot  = pcomlines(jref,iref)%self_irot
                     rotl = rot - 1
                     rotr = rot + 1
+                    if( rotr > nrots ) rotr = rotr - nrots
                     d    = real(pcomlines(jref,iref)%self_w,dp)
                     w    = kbwin%apod_dp(d); wl = kbwin%apod_dp(d-1.d0); wr = kbwin%apod_dp(d+1.d0)
                     sumw = wl + w + wr
@@ -581,7 +678,7 @@ contains
                 do jref = 1, ncls
                     if( .not. pcomlines(jref,iref)%legit )cycle
                     ! compute the interpolated polar common line, between rotl and rotr of jref-th reference
-                    rotl = pcomlines(jref,iref)%targ_irot_l
+                    rotl = pcomlines(jref,iref)%targ_irot
                     rotr = rotl+1
                     w    = real(pcomlines(jref,iref)%targ_w,dp)
                     call get_line(jref, rotl, .true., cline_e, rline_e)
@@ -593,8 +690,9 @@ contains
                     cline_o = (1.d0-w)*cline_o + w*cline_r
                     rline_o = (1.d0-w)*rline_o + w*rline_r
                     ! extrapolate the interpolated polar common line to rotl and rotr of iref-th reference
-                    rotl = pcomlines(jref,iref)%self_irot_l
+                    rotl = pcomlines(jref,iref)%self_irot
                     rotr = rotl + 1
+                    if( rotr > nrots ) rotr = rotr - nrots
                     w    = real(pcomlines(jref,iref)%self_w,dp)
                     if( rotl < 1 )then
                         rotl = rotl + pftsz
@@ -1102,6 +1200,36 @@ contains
     end subroutine polar_cavger_kill
 
     ! PRIVATE UTILITIES
+
+    ! produces y-mirror of real (reciprocal) matrix 
+    subroutine mirror_ctf2( ctf2in, ctf2out )
+        real(dp), intent(in)    :: ctf2in(pftsz,kfromto(1):kfromto(2))
+        real(dp), intent(inout) :: ctf2out(pftsz,kfromto(1):kfromto(2))
+        integer :: i,j
+        ctf2out(1,:) = ctf2in(1,:)
+        do i = 2,pftsz/2
+            j = pftsz-i+2
+            ctf2out(i,:) = ctf2in(j,:)
+            ctf2out(j,:) = ctf2in(i,:)
+        enddo
+        i = pftsz/2 + 1
+        ctf2out(i,:) = ctf2in(i,:)
+    end subroutine mirror_ctf2
+
+    ! produces y-mirror of complex (reciprocal) matrix 
+    subroutine mirror_pft( pftin, pftout )
+        complex(dp), intent(in)    :: pftin(pftsz,kfromto(1):kfromto(2))
+        complex(dp), intent(inout) :: pftout(pftsz,kfromto(1):kfromto(2))
+        integer :: i,j
+        pftout(1,:) = conjg(pftin(1,:))
+        do i = 2,pftsz/2
+            j = pftsz-i+2
+            pftout(i,:) = pftin(j,:)
+            pftout(j,:) = pftin(i,:)
+        enddo
+        i = pftsz/2 + 1
+        pftout(i,:) = pftin(i,:)
+    end subroutine mirror_pft
 
     !>  \brief  Filter references
     subroutine filterrefs( icls, filter )
