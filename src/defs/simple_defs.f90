@@ -36,7 +36,7 @@ real(sp),    parameter :: FTOL         = 1e-4
 real(dp),    parameter :: DSMALL       = 1.d-6
 real(dp),    parameter :: PISQR        = DPI*DPI
 complex(sp), parameter :: CMPLX_ZERO  = cmplx(0.,0.)
-complex(dp), parameter :: DCMPLX_ZERO = cmplx(0.d0,0.d0)
+complex(dp), parameter :: DCMPLX_ZERO = cmplx(0.d0,0.d0, kind=dp)
 
 ! directory-based execution model
 character(len=:), allocatable :: cwd_glob_orig, cwd_glob
@@ -163,9 +163,9 @@ end type points_polar_fmap
 
 type polar_fmap
     logical :: legit
-    integer :: targ_irot_l
+    integer :: targ_irot
     real    :: targ_w
-    integer :: self_irot_l
+    integer :: self_irot
     real    :: self_w
 end type polar_fmap
 
