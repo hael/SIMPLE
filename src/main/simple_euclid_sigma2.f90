@@ -315,7 +315,7 @@ contains
             if ((eo_char .ne. '1').and.(eo_char .ne. '2')) cycle
             eo = 1
             if (eo_char == '2') eo = 2
-            call str2int( names(idx)%str(9:len_trim(names(idx)%str)), stat, igroup )
+            igroup = str2int( names(idx)%str(9:len_trim(names(idx)%str)), stat )
             if( stat > 0 ) cycle
             if( (igroup < 1).or.(igroup>ngroups) ) cycle
             call starfile_table__read( istarfile, starfile_fname, names(idx)%str )
@@ -390,12 +390,12 @@ contains
                 enddo
                 l = len_trim(line)
                 i = index(line(6:l), '_')
-                call str2int(line(6:6+i-2), iostat, ieo)
+                ieo = str2int(line(6:6+i-2), iostat)
                 call fileiochk('Invalid formatting: '//trim(line)//'; read_sigma2_groups', iostat)
                 if( ieo /= eo ) THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
                 if( line(6+i-1:6+i+5).ne.'_group_')THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
                 i = index(line, '_', back=.true.)
-                call str2int(line(i+1:l), iostat, igroup)
+                igroup = str2int(line(i+1:l), iostat)
                 call fileiochk('Invalid formatting: '//trim(line)//'; read_sigma2_groups', iostat)
                 if( igroup /= group ) THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
                 do
@@ -436,7 +436,7 @@ contains
                 tmp1 = trim(string)
                 call split(tmp1,' ',tmp2)
                 if( trim(tmp2).ne.trim(key) ) THROW_HARD('Unrecognized formatting: '//trim(string)//'; parse_key_int_pair')
-                call str2int(tmp1, iostat, val)
+                val = str2int(tmp1, iostat)
                 call fileiochk('Unrecognized formatting: '//trim(string)//'; parse_key_int_pair', iostat)
             end subroutine parse_key_int_pair
         

@@ -146,9 +146,9 @@ contains
             read(filnum,'(A11)')elevenfirst
             if( .not.is_valid_entry(elevenfirst(1:6)) )cycle
             ! support for over 100000 entries
-            call str2int(elevenfirst(7:11), io_stat, num )
-            if( io_stat .ne. 0 )call str2int(elevenfirst(6:11), io_stat, num )
-            if( io_stat .ne. 0 )call str2int(elevenfirst(5:11), io_stat, num )
+            num = str2int(elevenfirst(7:11), io_stat )
+            if( io_stat .ne. 0 )num = str2int(elevenfirst(6:11), io_stat )
+            if( io_stat .ne. 0 )num = str2int(elevenfirst(5:11), io_stat )
             if( io_stat .ne. 0 )cycle
             n = n + 1
         enddo
@@ -162,9 +162,9 @@ contains
         do l = 1, nl
             read(filnum,'(A)')line
             if( .not.is_valid_entry(line(1:6)) )cycle
-            call str2int(line(7:11), io_stat, num )
-            if( io_stat .ne. 0 )call str2int(line(6:11), io_stat, num )
-            if( io_stat .ne. 0 )call str2int(line(5:11), io_stat, num )
+            num = str2int(line(7:11), io_stat)
+            if( io_stat .ne. 0 )num = str2int(line(6:11), io_stat)
+            if( io_stat .ne. 0 )num = str2int(line(5:11), io_stat)
             if( io_stat .ne. 0 )cycle
             i = i + 1
             if( len_trim(line) < 68 )then

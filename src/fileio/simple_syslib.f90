@@ -556,7 +556,7 @@ contains
                         exit
                     endif
                 enddo
-                call str2int(str(1:last_nr_ind), io_stat, dirinds(i))
+                dirinds(i) = str2int(str(1:last_nr_ind), io_stat)
             endif
         end do
         if( any(dirinds > 0) )then

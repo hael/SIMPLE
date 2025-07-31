@@ -224,8 +224,8 @@ module simple_nice
             this%remote_active = .true.
             port_str(:) = serveraddr(:)
             call split_str(port_str, ':', ip)
-            this%ip = trim(ip)
-            call str2int(trim(port_str), io_stat, this%port)
+            this%ip   = trim(ip)
+            this%port = str2int(trim(port_str), io_stat)
             if(io_stat .gt. 0) then
                 this%remote_active = .false.
                 write(logfhandle, *) ">>> REMOTE COMMUNICATION TO NICE DISABLED DUE TO MALFORMED ADDRESS STRING ", trim(serveraddr)

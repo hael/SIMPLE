@@ -147,7 +147,7 @@ contains
         integer               :: envlen, iostat,nthr_here
         call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_str, envlen)
         if( envlen > 0 )then
-            call str2int(trim(nthr_str), iostat, nthr_here)
+            nthr_here = str2int(trim(nthr_str), iostat)
         else
             nthr_here = omp_get_max_threads()
             nthr_here = min(NTHR_SHMEM_MAX, nthr_here)
