@@ -234,20 +234,22 @@ contains
                 call comlin_pfts
             endif
             ! need to compute the cavg/clin frcs here before pfts_even, pfts_odd are ctf-corrected
-            call get_cavg_clin
-            cavg_clin_frcs = 0.
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,k,numer,denom1,denom2)
-            do icls = 1, ncls
-                if( pops(icls) < 2 )cycle
-                do k = kfromto(1), kfromto(2)
-                    numer  = real(sum(    pfts_cavg(:,k,icls) * conjg(pfts_clin(:,k,icls))),dp)
-                    denom1 =      sum(csq_fast(pfts_cavg(:,k,icls)))
-                    denom2 =      sum(csq_fast(pfts_clin(:,k,icls)))
-                    if( denom1*denom2 > DTINY ) cavg_clin_frcs(k,icls) = real(numer / dsqrt(denom1*denom2))
+            if( trim(params_glob%polar_frcs) .eq. 'yes' )then
+                call get_cavg_clin
+                cavg_clin_frcs = 0.
+                !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+                !$omp private(icls,k,numer,denom1,denom2)
+                do icls = 1, ncls
+                    if( pops(icls) < 2 )cycle
+                    do k = kfromto(1), kfromto(2)
+                        numer  = real(sum(    pfts_cavg(:,k,icls) * conjg(pfts_clin(:,k,icls))),dp)
+                        denom1 =      sum(csq_fast(pfts_cavg(:,k,icls)))
+                        denom2 =      sum(csq_fast(pfts_clin(:,k,icls)))
+                        if( denom1*denom2 > DTINY ) cavg_clin_frcs(k,icls) = real(numer / dsqrt(denom1*denom2))
+                    enddo
                 enddo
-            enddo
-            !$omp end parallel do
+                !$omp end parallel do
+            endif
         endif
         pfts_merg = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
@@ -427,64 +429,67 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or vol')
         end select
-        res = get_resarr(params_glob%box_crop, params_glob%smpd_crop)
-        ! min/max frc between cavg and clin
-        min_res_fsc0143 = HUGE(min_res_fsc0143)
-        max_res_fsc0143 = 0.
-        avg_res_fsc0143 = 0.
-        avg_res_fsc05   = 0.
-        npops           = 0
-        do icls = 1, ncls
-            if( pops(icls) < 2 )cycle
-            npops = npops + 1
-            call get_resolution_at_fsc(cavg_clin_frcs(:,icls), res, 0.5,   res_fsc05)
-            call get_resolution_at_fsc(cavg_clin_frcs(:,icls), res, 0.143, res_fsc0143)
-            avg_res_fsc0143 = avg_res_fsc0143 + res_fsc0143
-            avg_res_fsc05   = avg_res_fsc05   + res_fsc05
-            if( res_fsc0143 < min_res_fsc0143 ) min_res_fsc0143 = res_fsc0143
-            if( res_fsc0143 > max_res_fsc0143 ) max_res_fsc0143 = res_fsc0143
-        enddo
-        avg_res_fsc05   = avg_res_fsc05   / real(npops)
-        avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
-        write(logfhandle,'(A,2F8.2)')'>>> AVG CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.5/0.143: ',avg_res_fsc05, avg_res_fsc0143
-        write(logfhandle,'(A,2F8.2)')'>>> MIN/MAX CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ',min_res_fsc0143, max_res_fsc0143
-        ! 3D FSC = AVERAGE RESOLUTION
-        write(logfhandle,'(A,2F8.2)')'>>> 3D CAVG/CLIN RESOLUTION @ FSC=0.5/0.143             : ',avg_res_fsc05,avg_res_fsc0143
-        ! computing directional frcs
-        dfrcs = 0.
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(icls,k,numer,denom1,denom2)
-        do icls = 1, ncls
-            do k = kfromto(1), kfromto(2)
-                numer  = real(sum(    pfts_even(:,k,icls) * conjg(pfts_odd(:,k,icls))), dp)
-                denom1 =      sum(csq_fast(pfts_even(:,k,icls)))
-                denom2 =      sum(csq_fast(pfts_odd( :,k,icls)))
-                if( denom1*denom2 > DTINY ) dfrcs(k,icls) = real(numer / dsqrt(denom1*denom2))
+        if( trim(params_glob%polar_frcs) .eq. 'yes' )then
+            res = get_resarr(params_glob%box_crop, params_glob%smpd_crop)
+            ! min/max frc between cavg and clin
+            min_res_fsc0143 = HUGE(min_res_fsc0143)
+            max_res_fsc0143 = 0.
+            avg_res_fsc0143 = 0.
+            avg_res_fsc05   = 0.
+            npops           = 0
+            do icls = 1, ncls
+                if( pops(icls) < 2 )cycle
+                npops = npops + 1
+                call get_resolution_at_fsc(cavg_clin_frcs(:,icls), res, 0.5,   res_fsc05)
+                call get_resolution_at_fsc(cavg_clin_frcs(:,icls), res, 0.143, res_fsc0143)
+                avg_res_fsc0143 = avg_res_fsc0143 + res_fsc0143
+                avg_res_fsc05   = avg_res_fsc05   + res_fsc05
+                if( res_fsc0143 < min_res_fsc0143 ) min_res_fsc0143 = res_fsc0143
+                if( res_fsc0143 > max_res_fsc0143 ) max_res_fsc0143 = res_fsc0143
             enddo
-        enddo
-        !$omp end parallel do
-        ! min/max directional frcs
-        min_res_fsc0143 = HUGE(min_res_fsc0143)
-        max_res_fsc0143 = 0.
-        avg_res_fsc0143 = 0.
-        avg_res_fsc05   = 0.
-        npops           = 0
-        do icls = 1, ncls
-            if( pops(icls) < 2 )cycle
-            npops = npops + 1
-            call get_resolution_at_fsc(dfrcs(:,icls), res, 0.5,   res_fsc05)
-            call get_resolution_at_fsc(dfrcs(:,icls), res, 0.143, res_fsc0143)
-            avg_res_fsc0143 = avg_res_fsc0143 + res_fsc0143
-            avg_res_fsc05   = avg_res_fsc05   + res_fsc05
-            if( res_fsc0143 < min_res_fsc0143 ) min_res_fsc0143 = res_fsc0143
-            if( res_fsc0143 > max_res_fsc0143 ) max_res_fsc0143 = res_fsc0143
-        enddo
-        avg_res_fsc05   = avg_res_fsc05   / real(npops)
-        avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
-        write(logfhandle,'(A,2F8.2)')'>>> AVG EVEN/ODD DIRECTIONAL RESOLUTION @ FSC=0.5/0.143 : ',avg_res_fsc05,avg_res_fsc0143
-        write(logfhandle,'(A,2F8.2)')'>>> MIN/MAX EVEN/ODD DIRECTIONAL RESOLUTION @ FSC=0.143 : ', min_res_fsc0143,max_res_fsc0143
-        ! 3D FSC = AVERAGE RESOLUTION
-        write(logfhandle,'(A,2F8.2)')'>>> 3D EVEN/ODD RESOLUTION @ FSC=0.5/0.143              : ',avg_res_fsc05,avg_res_fsc0143
+            avg_res_fsc05   = avg_res_fsc05   / real(npops)
+            avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
+            write(logfhandle,'(A,2F8.2)')'>>> AVG CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.5/0.143: ',avg_res_fsc05, avg_res_fsc0143
+            write(logfhandle,'(A,2F8.2)')'>>> MIN/MAX CAVG/CLIN DIRECTIONAL RESOLUTION @ FSC=0.143: ',min_res_fsc0143, max_res_fsc0143
+            ! 3D FSC = AVERAGE RESOLUTION
+            write(logfhandle,'(A,2F8.2)')'>>> 3D CAVG/CLIN RESOLUTION @ FSC=0.5/0.143             : ',avg_res_fsc05,avg_res_fsc0143
+            ! computing directional frcs
+            dfrcs = 0.
+            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+            !$omp private(icls,k,numer,denom1,denom2)
+            do icls = 1, ncls
+                do k = kfromto(1), kfromto(2)
+                    numer  = real(sum(    pfts_even(:,k,icls) * conjg(pfts_odd(:,k,icls))), dp)
+                    denom1 =      sum(csq_fast(pfts_even(:,k,icls)))
+                    denom2 =      sum(csq_fast(pfts_odd( :,k,icls)))
+                    if( denom1*denom2 > DTINY ) dfrcs(k,icls) = real(numer / dsqrt(denom1*denom2))
+                enddo
+            enddo
+            !$omp end parallel do
+            ! min/max directional frcs
+            min_res_fsc0143 = HUGE(min_res_fsc0143)
+            max_res_fsc0143 = 0.
+            avg_res_fsc0143 = 0.
+            avg_res_fsc05   = 0.
+            npops           = 0
+            do icls = 1, ncls
+                if( pops(icls) < 2 )cycle
+                npops = npops + 1
+                call get_resolution_at_fsc(dfrcs(:,icls), res, 0.5,   res_fsc05)
+                call get_resolution_at_fsc(dfrcs(:,icls), res, 0.143, res_fsc0143)
+                avg_res_fsc0143 = avg_res_fsc0143 + res_fsc0143
+                avg_res_fsc05   = avg_res_fsc05   + res_fsc05
+                if( res_fsc0143 < min_res_fsc0143 ) min_res_fsc0143 = res_fsc0143
+                if( res_fsc0143 > max_res_fsc0143 ) max_res_fsc0143 = res_fsc0143
+            enddo
+            avg_res_fsc05   = avg_res_fsc05   / real(npops)
+            avg_res_fsc0143 = avg_res_fsc0143 / real(npops)
+            write(logfhandle,'(A,2F8.2)')'>>> AVG EVEN/ODD DIRECTIONAL RESOLUTION @ FSC=0.5/0.143 : ',avg_res_fsc05,avg_res_fsc0143
+            write(logfhandle,'(A,2F8.2)')'>>> MIN/MAX EVEN/ODD DIRECTIONAL RESOLUTION @ FSC=0.143 : ', min_res_fsc0143,max_res_fsc0143
+            ! 3D FSC = AVERAGE RESOLUTION
+            write(logfhandle,'(A,2F8.2)')'>>> 3D EVEN/ODD RESOLUTION @ FSC=0.5/0.143              : ',avg_res_fsc05,avg_res_fsc0143
+        endif
+
       contains
 
         subroutine get_cavg_clin

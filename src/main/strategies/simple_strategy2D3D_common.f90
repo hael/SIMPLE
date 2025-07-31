@@ -1324,16 +1324,34 @@ contains
         call pftcc%memoize_refs
     end subroutine prepare_polar_references
 
-    subroutine build_batch_particles( pftcc, nptcls_here, pinds_here, tmp_imgs )
+    subroutine build_batch_particles( pftcc, nptcls_here, pinds_here, tmp_imgs, ibatch )
         use simple_polarft_corrcalc,       only:  polarft_corrcalc
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: nptcls_here
         integer,                 intent(in)    :: pinds_here(nptcls_here)
         type(image),             intent(inout) :: tmp_imgs(params_glob%nthr)
-        integer :: iptcl_batch, iptcl, ithr
-        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
+        integer,     optional,   intent(in)    :: ibatch
+        integer :: iptcl_batch, iptcl, ithr, cur_batch
+        logical :: success
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
+        if( trim(params_glob%ptcl_cache).eq.'yes' )then
+            cur_batch = 1
+            if( present(ibatch) ) cur_batch = ibatch
+            call pftcc%read_ptcls_ctfs(cur_batch, success)
+            if( success )then
+                !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
+                do iptcl_batch = 1,nptcls_here
+                    iptcl = pinds_here(iptcl_batch)
+                    call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+                    call pftcc%memoize_sqsum_ptcl(iptcl)
+                end do
+                !$omp end parallel do
+                call pftcc%memoize_ptcls
+                return
+            endif
+        endif
+        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -1349,6 +1367,7 @@ contains
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
+        if( trim(params_glob%ptcl_cache).eq.'yes' )call pftcc%write_ptcls_ctfs(cur_batch)
     end subroutine build_batch_particles
 
 end module simple_strategy2D3D_common

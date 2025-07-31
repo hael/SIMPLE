@@ -99,7 +99,7 @@ type :: parameters
     character(len=3)          :: pick_roi='no'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: polar='no'           !< To use polar FT representation(yes|no){no}
-    character(len=3)          :: polar_scale='no'     !< polarized energy scaling(yes|no){no}
+    character(len=3)          :: polar_frcs='no'      !< calculate/print FRCs in polar comlin(yes|no){no}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
@@ -108,6 +108,7 @@ type :: parameters
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: projrec='no'         !< Whether to reconstruct from summed projection directions (yes|no){no}
+    character(len=3)          :: ptcl_cache ='no'     !< caching polarized ptcls/ctfs (yes|no){no}
     character(len=3)          :: ptcl_norm ='no'
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
@@ -719,7 +720,7 @@ contains
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('polar',          self%polar)
-        call check_carg('polar_scale',    self%polar_scale)
+        call check_carg('polar_frcs',     self%polar_frcs)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)
         call check_carg('print_corrs',    self%print_corrs)
@@ -732,6 +733,7 @@ contains
         call check_carg('projstats',      self%projstats)
         call check_carg('protocol',       self%protocol)
         call check_carg('prune',          self%prune)
+        call check_carg('ptcl_cache',     self%ptcl_cache)
         call check_carg('ptcl_norm',      self%ptcl_norm)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
