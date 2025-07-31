@@ -305,7 +305,7 @@ contains
                 case('real')
                     self%cmds(i)%rarg = rval
                 case('int')
-                    call str2int(adjustl(arg(pos1+1:)), io_stat, ival)
+                    ival = str2int(adjustl(arg(pos1+1:)), io_stat)
                     if( io_stat == 0 )then
                         self%cmds(i)%rarg = real(ival,kind=dp)
                     else

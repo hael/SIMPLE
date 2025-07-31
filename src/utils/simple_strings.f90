@@ -31,6 +31,11 @@ interface str2format
     module procedure str2format_2
 end interface str2format
 
+interface str2int
+    module procedure str2int_1
+    module procedure str2int_2
+end interface str2int
+
 contains
 
     pure function spaces( n ) result( str )
@@ -287,7 +292,7 @@ contains
         index = scan(str, ',')
         if( index == 0 )then
             allocate(iarr(1), source=0)
-            call str2int(str, iostat, iarr(1))
+            iarr(1) = str2int(str, iostat)
             return
         endif
         ! first, count commas
@@ -308,13 +313,13 @@ contains
             cnt = cnt + 1
             index = scan(str, ',')
             if( index == 0 )then
-                str = adjustl(str(index+1:))
-                call str2int(str, iostat, iarr(cnt))
+                str       = adjustl(str(index+1:))
+                iarr(cnt) = str2int(str, iostat)
                 exit
             else
-                before = adjustl(trim(str(1:index-1)))
-                call str2int(before, iostat, iarr(cnt))
-                str    = adjustl(str(index+1:))
+                before    = adjustl(trim(str(1:index-1)))
+                iarr(cnt) = str2int(before, iostat)
+                str       = adjustl(str(index+1:))
             endif    
         end do
     end function listofints2arr
@@ -510,11 +515,17 @@ contains
     end function str_pad
 
     !>  \brief  turns a string into an integer variable
-    pure subroutine str2int( string, io_stat, ivar )
+    integer function str2int_1( string )
         character(len=*), intent(in)  :: string
-        integer,          intent(out) :: io_stat, ivar
-        read(string,*, iostat=io_stat) ivar
-    end subroutine str2int
+        read(string,*) str2int_1
+    end function str2int_1
+
+        !>  \brief  turns a string into an integer variable
+    integer function str2int_2( string, io_stat )
+        character(len=*), intent(in)  :: string
+        integer,          intent(out) :: io_stat
+        read(string,*, iostat=io_stat) str2int_2
+    end function str2int_2
 
     !>  \brief  maps out the number characters in a string
     !!          .true. means is number, .false. means is not

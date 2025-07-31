@@ -721,7 +721,7 @@ contains
             call fileiochk("read_state_order ; read ,Error when opening file for reading: "//trim(fname)//':'//trim(io_message), file_stat)
             do i = 1, nstates
                 read(fnr, fmt='(A)') line
-                call str2int( trim(line), io_stat, order(i) )
+                order(i) = str2int( trim(line), io_stat )
             enddo
             call fclose(fnr)
         end subroutine read_state_order

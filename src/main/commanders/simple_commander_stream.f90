@@ -87,12 +87,12 @@ contains
         type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
-        character(len=STDLEN)                  :: preproc_nthr_env, preproc_part_env
+        character(len=STDLEN)                  :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         integer                                :: movies_set_counter, import_counter
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
         logical                                :: l_movies_left, l_haschanged
-        real                                   :: avg_tmp, preproc_nthr, stat_dfx_threshold, stat_dfy_threshold
+        real                                   :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real                                   :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
@@ -121,10 +121,9 @@ contains
         if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_PREPROC_NTHR, preproc_nthr_env, envlen)
-        if(envlen > 0) then
-            read(preproc_nthr_env,*) preproc_nthr
-            call cline%set('nthr', preproc_nthr)
-        end if
+        if( envlen > 0)  call cline%set('nthr', str2int(preproc_nthr_env))
+        call get_environment_variable(SIMPLE_STREAM_PREPROC_NPARTS, preproc_nparts_env, envlen)
+        if( envlen > 0 ) call cline%set('nparts', str2int(preproc_nparts_env))
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -165,7 +164,6 @@ contains
         movies_set_counter = 0  ! global number of movies set
         import_counter     = 0  ! global import id
         nmic_star          = 0
-        
         if( cline%defined('dir_exec') )then
             call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
@@ -734,7 +732,7 @@ contains
                 do iproj = 1,n_spprojs
                     fname = basename_safe(completed_fnames(iproj))
                     fname = trim(get_fbody(trim(fname),trim(METADATA_EXT),separator=.false.))
-                    call str2int(fname, iostat, id)
+                    id    = str2int(fname)
                     if( iostat==0 ) movies_set_counter = max(movies_set_counter, id)
                 enddo
                 ! update import id counter
@@ -779,7 +777,7 @@ contains
         character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real,                      allocatable :: moldiams(:)
-        real                                   :: pick_nthr, jpg_scale, pickrefs_thumbnail_scale, rnd
+        real                                   :: jpg_scale, pickrefs_thumbnail_scale, rnd
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen, imic
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
@@ -808,10 +806,7 @@ contains
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',   'no')
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, pick_nthr_env, envlen)
-        if(envlen > 0) then
-            read(pick_nthr_env,*) pick_nthr
-            call cline%set('nthr', pick_nthr)
-        end if
+        if(envlen > 0)  call cline%set('nthr', str2int(pick_nthr_env))
         ! sanity check for restart
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
@@ -963,11 +958,9 @@ contains
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
         if(envlen > 0) then
-          !  call qenv%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
             call qenv_main%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
             call qenv_interactive%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
         else
-            !call qenv%new(1,stream=.true.)
             call qenv_main%new(1,stream=.true.)
             call qenv_interactive%new(1,stream=.true.)
         end if
@@ -1813,7 +1806,7 @@ contains
                 do iproj = 1,n_spprojs
                     fname = basename_safe(completed_fnames(iproj))
                     fname = trim(get_fbody(trim(fname),trim(METADATA_EXT),separator=.false.))
-                    call str2int(fname, iostat, id)
+                    id    = str2int(fname, iostat)
                     if( iostat==0 ) pick_extract_set_counter = max(pick_extract_set_counter, id)
                 enddo
                 nmics_rejected_glob = nmics - nsel_mics
@@ -1847,7 +1840,6 @@ contains
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
         character(len=LONGSTRLEN)              :: cwd_job
         character(len=STDLEN)                  :: refgen_nthr_env, refgen_part_env
-        real                                   :: refgen_nthr
         integer                                :: extract_set_counter    ! Internal counter of projects to be processed
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, iproj, envlen
@@ -1883,9 +1875,8 @@ contains
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
         if(envlen > 0) then
-            read(refgen_nthr_env,*) refgen_nthr
-            call cline%set('nthr', refgen_nthr)
-            call cline%set('nthr2D', refgen_nthr)
+            call cline%set('nthr',   str2int(refgen_nthr_env))
+            call cline%set('nthr2D', str2int(refgen_nthr_env))
         end if
         ! sanity check for restart
         if( cline%defined('dir_exec') )then

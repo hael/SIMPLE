@@ -17,9 +17,9 @@ contains
             top   = 0
             fromp = 0
             part  = 1
-            if(job_descr%isthere("top"))   call str2int(job_descr%get("top"),   io_stat, top)
-            if(job_descr%isthere("fromp")) call str2int(job_descr%get("fromp"), io_stat, fromp)
-            if(job_descr%isthere("part"))  call str2int(job_descr%get("part"),  io_stat, part)
+            if(job_descr%isthere("top"))   top   = str2int(job_descr%get("top"),   io_stat)
+            if(job_descr%isthere("fromp")) fromp = str2int(job_descr%get("fromp"), io_stat)
+            if(job_descr%isthere("part"))  part  = str2int(job_descr%get("part"),  io_stat)
             np = top - fromp + 1
             select case(prg)
                 case("calc_pspec")

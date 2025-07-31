@@ -1503,7 +1503,7 @@ contains
         else if( cline%defined('refs') .and. index(params%refs, trim(CAVGS_ITER_FBODY)) > 0 ) then
             iterstr_start = index(params%refs, trim(CAVGS_ITER_FBODY)) + 10
             iterstr_end = index(params%refs, trim(params%ext)) - 1
-            call str2int(params%refs(iterstr_start:iterstr_end), io_stat, iter)
+            iter = str2int(params%refs(iterstr_start:iterstr_end), io_stat)
             call starproj%export_cls2D(build%spproj, iter)
         end if
         ! updates project

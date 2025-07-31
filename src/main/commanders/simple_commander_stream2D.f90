@@ -25,20 +25,25 @@ type, extends(commander_base) :: commander_stream_sieve_cavgs
     procedure :: execute => exec_sieve_cavgs
 end type commander_stream_sieve_cavgs
 
+type, extends(commander_base) :: commander_stream_cluster2D
+  contains
+    procedure :: execute => exec_stream_cluster2D
+end type commander_stream_cluster2D
+
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
+character(len=STDLEN), parameter :: micspproj_fname = './streamdata.simple'
 integer,               parameter :: LONGTIME  = 60                                               ! time lag after which a movie/project is processed
 integer,               parameter :: WAITTIME  = 10                                               ! movie folder watched every WAITTIME seconds
-integer(kind=dp),      parameter :: FLUSH_TIMELIMIT = 900 ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
+integer(kind=dp),      parameter :: FLUSH_TIMELIMIT = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
+integer,               parameter :: PAUSE_NITERS    = 5     ! # of iterations after which 2D analysis is paused
+integer,               parameter :: PAUSE_TIMELIMIT = 600   ! time (secs) after which 2D analysis is paused
 
 contains
 
     subroutine exec_sieve_cavgs( self, cline )
         class(commander_stream_sieve_cavgs), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        integer,                   parameter   :: PAUSE_NITERS    = 5   ! # of iterations after which 2D analysis is paused
-        integer,                   parameter   :: PAUSE_TIMELIMIT = 600 ! time (secs) after which 2D analysis is paused
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(qsys_env)                         :: qenv
@@ -51,7 +56,6 @@ contains
         type(json_core)                        :: json
         type(json_value),          pointer     :: snapshot_json
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=LONGSTRLEN)              :: cwd_job
         character(len=STDLEN)                  :: chunk_part_env
         real                                   :: moldiam
         integer(kind=dp)                       :: time_last_import
@@ -90,7 +94,6 @@ contains
         call params%new(cline)
         params%nthr2D       = params%nthr
         params%ml_reg_chunk = trim(params%ml_reg)
-        call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -141,8 +144,9 @@ contains
         ! master project file
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
-        ! movie watcher init
+        ! project watcher
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
+        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
         ! Infinite loop
         nptcls_glob      = 0       ! global number of particles
         nchunks_glob     = 0       ! global number of completed chunks
@@ -269,7 +273,7 @@ contains
         call qsys_cleanup
         ! end gracefully
         call nice_communicator%terminate()
-        call simple_end('**** SIMPLE_STREAM2D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_EXEC_CAVGS NORMAL STOP ****')
         contains
 
             ! updates global records
@@ -384,6 +388,8 @@ contains
                     call merge_chunks(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
                     ! update global list, also increments sets%n
                     call sets%append(tmpl//'/'//tmpl//trim(METADATA_EXT), sets%n+1, .false.)
+                    ! make completed project files visible to the watcher of the next application
+                    call spproj%write(trim(DIR_STREAM_COMPLETED)//tmpl//trim(METADATA_EXT))
                 enddo
                 call spproj%kill
             end subroutine generate_sets
@@ -460,6 +466,61 @@ contains
                     setslist%processed(i) = .false.
                 endif
             end subroutine is_set_processed
+
+    end subroutine exec_sieve_cavgs
+
+    subroutine exec_stream_cluster2D( self, cline )
+        class(commander_stream_cluster2D), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(projrecord),          allocatable :: projrecords(:)
+        type(parameters)                       :: params
+        type(qsys_env)                         :: qenv
+        type(simple_nice_communicator)         :: nice_communicator
+        type(projs_list)                       :: setslist
+        type(guistats)                         :: gui_stats
+        type(moviewatcher)                     :: project_buff
+        type(sp_project)                       :: spproj_glob
+        type(json_core)                        :: json
+        type(json_value),          pointer     :: snapshot_json => null()
+        ! write cmdline for GUI
+        call cline%writeline(".cline")
+        ! sanity check for restart
+        if( cline%defined('dir_exec') )then
+            if( .not.file_exists(cline%get_carg('dir_exec')) )then
+                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+            endif
+        endif
+        ! master parameters
+        call cline%set('numlen', 5)
+        call cline%set('stream','yes')
+        call params%new(cline)
+        params%nthr2D       = params%nthr
+        params%ml_reg_chunk = trim(params%ml_reg)
+        call cline%set('mkdir', 'no')
+        ! nice communicator init
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%cycle()
+        ! restart
+        if( cline%defined('dir_exec') )then
+            call cline%delete('dir_exec')
+            call del_file(micspproj_fname)
+            call cleanup_root_folder
+        endif
+        ! initialise progress monitor
+        call progressfile_init()
+        ! master project file
+        call spproj_glob%read( params%projfile )
+        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
+        ! project watcher
+        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
+        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+        ! cleanup
+        call spproj_glob%kill
+        call qsys_cleanup
+        ! end gracefully
+        call nice_communicator%terminate()
+        call simple_end('**** SIMPLE_STREAM2D NORMAL STOP ****')
+        contains
 
             subroutine import_sets_into_pool( nimported )
                 integer,          intent(out) :: nimported
@@ -548,6 +609,6 @@ contains
                 nullify(pool)
             end subroutine import_sets_into_pool
 
-    end subroutine exec_sieve_cavgs
+    end subroutine exec_stream_cluster2D
 
 end module simple_commander_stream2D

@@ -428,7 +428,7 @@ contains
         endif
     end function fname2ext
 
-    pure integer function fname2iter( fname )
+    integer function fname2iter( fname )
         use simple_strings, only: map_str_nrs, str2int
         character(len=*), intent(in)  :: fname
         character(len=:), allocatable :: iter_num_ext, nrstr
@@ -445,7 +445,7 @@ contains
         do i=1,len_trim(iter_num_ext)
             if( lnrs(i) ) nrstr = nrstr//iter_num_ext(i:i)
         end do
-        call str2int(nrstr, istat, fname2iter)
+        fname2iter = str2int(nrstr, istat)
     end function fname2iter
 
     pure function basename( fname ) result( new_fname )

@@ -18,7 +18,7 @@ type :: fplane
     complex, allocatable, public :: cmplx_plane(:,:)             !< On output image pre-multiplied by CTF
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
-    real,    allocatable         :: hcos(:), hsin(:)             !< For fast shift
+    real(dp),allocatable         :: hcos(:), hsin(:)             !< For fast shift
     real,    allocatable         :: sigma2_noise(:)              !< Noise power
     integer,              public :: ldim(3)       = 0            !< dimensions of original image
     integer,              public :: frlims_crop(3,2)   = 0       !< Redundant Fourier cropped limits
@@ -127,7 +127,7 @@ contains
         type(ctf) :: tfun
         complex   :: c, s
         real(dp)  :: pshift(2), arg, kcos,ksin
-        real      :: invldim(2),inv(2),tval,tvalsq,sqSpatFreq,add_phshift,ang
+        real      :: invldim(2),inv(2),tval,tvalsq,sqSpatFreq,add_phshift
         integer   :: sigma2_kfromto(2), h,k,sh
         logical   :: use_sigmas
         if( ctfvars%ctfflag /= CTFFLAG_NO )then
@@ -438,7 +438,6 @@ contains
         class(fplane), intent(in)    :: self
         class(image),  intent(inout) :: fcimg, ctfsqimg
         complex, pointer :: pcmat(:,:,:)
-        real,    pointer :: prmat(:,:,:)
         integer :: c
         if( self%padded )then
             call fcimg%new([params_glob%box_croppd,params_glob%box_croppd,1], params_glob%smpd_crop)
