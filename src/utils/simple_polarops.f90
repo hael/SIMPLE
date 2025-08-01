@@ -851,7 +851,6 @@ contains
             call cavgs(icls)%set_cmat(cmplx(cmat,kind=sp))
             call cavgs(icls)%shift_phorig()
             call cavgs(icls)%ifft
-            ! call cavgs(icls)%div_w_instrfun('linear')
         enddo
         !$omp end parallel do
     end subroutine polar_cavger_refs2cartesian

@@ -147,7 +147,6 @@ contains
         logical, optional, intent(in)    :: reference_generation    ! Joe: redundant with l_no_chunks (nchunks==0), will remove
         character(len=:), allocatable    :: carg
         character(len=STDLEN)            :: chunk_nthr_env, pool_nthr_env, pool_part_env, refgen_nthr_env, refgen_part_env
-        real    :: chunk_nthr, pool_nthr, refgen_nthr
         integer :: ichunk, envlen, nthr2D
         logical :: refgen
         call seed_rnd
@@ -246,8 +245,7 @@ contains
             ! EV override
             call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
             if(envlen > 0) then
-                read(chunk_nthr_env,*) chunk_nthr
-                call cline_cluster2D_chunk%set('nthr', chunk_nthr)
+                call cline_cluster2D_chunk%set('nthr', str2int(chunk_nthr_env))
             else
                 call cline_cluster2D_chunk%set('nthr', params_glob%nthr2D)
             end if
@@ -293,8 +291,7 @@ contains
         if( refgen )then
             call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
             if(envlen > 0) then
-                read(refgen_nthr_env,*) refgen_nthr
-                call cline_cluster2D_pool%set('nthr', refgen_nthr)
+                call cline_cluster2D_pool%set('nthr', str2int(refgen_nthr_env))
             else
                 call cline_cluster2D_pool%set('nthr', params_glob%nthr2D)
             end if
@@ -307,9 +304,8 @@ contains
         else
             call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
             if(envlen > 0) then
-                read(pool_nthr_env,*) pool_nthr
-                call cline_cluster2D_pool%set('nthr',   pool_nthr)
-                call cline_cluster2D_pool%set('nthr2D', pool_nthr)
+                call cline_cluster2D_pool%set('nthr',   str2int(pool_nthr_env))
+                call cline_cluster2D_pool%set('nthr2D', str2int(pool_nthr_env))
             else
                 call cline_cluster2D_pool%set('nthr', params_glob%nthr2D)
             end if

@@ -756,35 +756,38 @@ contains
             cnt = cnt + 1
             call os%set_euler(i, os_nomirr%get_euler(cnt))
         enddo
+        ! flag mirror pairs
+        do i=1,nos_nomirr
+            call os%set(i,           'mirr', i+nos_nomirr)
+            call os%set(i+nos_nomirr,'mirr', i)
+        enddo
         ! cleanup
         call os_nomirr%kill
         call tmp%kill
         deallocate(avail)
-
         contains
 
             subroutine gen_c1
                 integer   :: j, north_pole_ind
-                type(ori) :: o, o2, o_tmp, north_pole
+                type(ori) :: o, o_tmp, north_pole
                 real      :: min_dist, dist
                 if( allocated(avail) )deallocate(avail)
                 allocate(avail(n), source=.false.)
                 call tmp%new(n, is_ptcl=.false.)
                 call tmp%spiral
-                call north_pole%new(is_ptcl=.false.)
+                call north_pole%new(is_ptcl=.true.)
                 call north_pole%set_euler([0.,0.,0.])
                 north_pole_ind = 0
                 min_dist = PI
                 do j=1,n
-                    call tmp%get_ori(j, o)
-                    dist = north_pole.euldist.o
+                    dist = tmp%euldist(j, north_pole)
                     if(dist < 0.001 )then !in radians
                         ! the north pole shall always be present
                         avail(j) = .true.
                         north_pole_ind = j
                     else
-                        call tmp%get_ori(j, o2)
-                        avail(j) = self%within_asymunit(o2, incl_mirr=.false.)
+                        call tmp%get_ori(j, o)
+                        avail(j) = self%within_asymunit(o, incl_mirr=.false.)
                         if(avail(j)) min_dist = min(dist,min_dist)
                     endif
                 end do
@@ -794,16 +797,15 @@ contains
                     ! its mirror symmetric is not the north pole
                     if(north_pole_ind>0)then
                         min_dist = min(0.5,rad2deg(min_dist)/5.)
+                        call o%new(.true.)
                         call o%set_euler([min_dist,min_dist,0.])
                         call o%compose(north_pole, o_tmp)
-                        o_tmp = o
-                        call tmp%set_euler(north_pole_ind,o%get_euler())
+                        call tmp%set_euler(north_pole_ind,o_tmp%get_euler())
                     endif
                 case DEFAULT
                     ! all is good
                 end select
                 call o%kill
-                call o2%kill
                 call o_tmp%kill
                 call north_pole%kill
             end subroutine gen_c1
