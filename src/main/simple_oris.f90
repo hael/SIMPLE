@@ -223,7 +223,8 @@ type :: oris
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
     procedure          :: find_best_classes
-    procedure          :: euldist
+    procedure, private :: euldist_1, euldist_2
+    generic            :: euldist => euldist_1, euldist_2
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
@@ -3637,12 +3638,18 @@ contains
         endif
     end subroutine calc_soft_weights2D
 
-    pure function euldist( self, i, j ) result( dist )
+    pure real function euldist_1( self, i, j )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i, j
-        real :: dist
-        dist = self%o(i).euldist.self%o(j)
-    end function euldist
+        euldist_1 = self%o(i).euldist.self%o(j)
+    end function euldist_1
+
+    pure real function euldist_2( self, i, o )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        class(ori),  intent(in) :: o
+        euldist_2 = self%o(i).euldist.o
+    end function euldist_2
 
     !>  \brief  to find the closest matching projection direction
     !! KEEP THIS ROUTINE SERIAL

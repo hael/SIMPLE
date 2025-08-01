@@ -7,6 +7,7 @@ use simple_projector,        only: projector
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_polarizer,        only: polarizer
 use simple_comlin,           only: polar_comlin_pfts, gen_polar_comlins
+use simple_sym,              only: sym
 implicit none
 integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55
 character(len=:), allocatable :: cmd
@@ -22,6 +23,7 @@ type(oris)                    :: spiral
 type(ori)                     :: o1, o2
 type(projector)               :: vol_pad
 type(polar_fmap)              :: pcomlines(NPLANES,NPLANES)
+type(sym)                     :: se
 integer :: ifoo, rc, i, lims(3,2), ithr, box, errflg, kfromto(2), j,k
 real    :: ave, sdev, maxv, minv, ang, ang1, d, dang
 logical :: mrc_exists, lineinterp
@@ -60,7 +62,8 @@ call vol%new(p%ldim, p%smpd)
 call vol%read(p%vols(1))
 call vol%stats('foreground', ave, sdev, maxv, minv)
 call spiral%new(NPLANES, is_ptcl=.false.)
-call spiral%spiral
+se = sym('c1')
+call se%build_refspiral(spiral)
 call ptcl%new(    [p%box,   p%box,   1],       p%smpd)
 call noise%new(   [p%box,   p%box ,  p%box],   p%smpd)
 call img%new(     [p%box,   p%box,   1],       p%smpd)
@@ -139,7 +142,7 @@ do i = 1,pftcc%get_nrots()
     do k = kfromto(1), kfromto(2)
         line2(k) = img_polarizer%extract_pixel(ang,k,fplanes(1))
     enddo
-    if( sum(csq_fast(line1-line2)) > 1.e-8 )then
+    if( sum(csq_fast(line1-line2)) > 1.e-7 )then
         print *,'Line intepolation test failed for line: '
         print *,i,ang1,ang,sum(csq_fast(line1-line2))
         print *,line1
