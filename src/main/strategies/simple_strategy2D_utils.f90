@@ -177,11 +177,11 @@ contains
             mm(i,:) = cavg_imgs(i)%minmax(mskrad)
         end do
         !$omp end parallel do
-        if( DEBUG )then
-            do i = 1, ncls_sel
-                call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
-            enddo
-        endif
+        ! if( DEBUG )then
+        !     do i = 1, ncls_sel
+        !         call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
+        !     enddo
+        ! endif
         call clsfrcs%kill
     end subroutine prep_cavgs4clustering
 

@@ -5181,13 +5181,13 @@ contains
     subroutine new_sieve_cavgs
         ! PROGRAM SPECIFICATION
         call sieve_cavgs%new(&
-        &'sieve_cavgs', &                                                   ! name
-        &'2D analysis in streaming mode',&                                       ! descr_short
-        &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
+        &'sieve_cavgs', &                                                       ! name
+        &'2D analysis in streaming mode',&                                      ! descr_short
+        &'is a distributed workflow that executes 2D analysis'//&               ! descr_long
         &' in streaming mode as the microscope collects the data',&
-        &'simple_stream',&                                                       ! executable
-        &0, 2, 0, 6, 3, 1, 4, .true.,&                                           ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI
+        &'simple_stream',&                                                      ! executable
+        &0, 2, 0, 3, 0, 1, 4, .true.,&                                          ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")    ! GUI
         ! image input/output
         ! <empty>
         ! parameter input/output
@@ -5201,22 +5201,9 @@ contains
         call sieve_cavgs%set_input('srch_ctrls', 1, ncls_start, gui_submenu="cluster 2D", gui_advanced=.false.)
         call sieve_cavgs%set_input('srch_ctrls', 2, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
         sieve_cavgs%srch_ctrls(2)%required = .true.
-        call sieve_cavgs%set_input('srch_ctrls', 3, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call sieve_cavgs%set_input('srch_ctrls', 4, 'ncls', 'num', 'Maximum number of 2D clusters',&
-        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
-        &gui_advanced=.false.)
-        call sieve_cavgs%set_input('srch_ctrls', 5, lpthres, gui_submenu="cluster 2D", gui_online=.true.)
-        call sieve_cavgs%set_input('srch_ctrls', 6, nchunksperset, gui_advanced=.false.)
+        call sieve_cavgs%set_input('srch_ctrls', 3, nchunksperset, gui_advanced=.false.)
         ! filter controls
-        call sieve_cavgs%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
-        call sieve_cavgs%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D analysis', 'Static low-pass limit for 2D analysis',&
-        &'low-pass limit in Angstroms', .false., 15., gui_submenu="cluster 2D")
-        call sieve_cavgs%set_input('filt_ctrls', 3, 'reject_cls', 'multi', 'Whether to reject class averages',&
-        &'Whether to automatically reject 2D clusters and associated particles(yes|old|no){yes}', '(yes|old|no){yes}', .false., 'yes', gui_submenu="cluster 2D",&
-        &gui_online=.true.)
+        ! <empty>
         ! mask controls
         call sieve_cavgs%set_input('mask_ctrls', 1, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
         &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
