@@ -38,6 +38,7 @@ public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_reject
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
 public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_snapshot_json, get_lpthres_type, set_lpthres_type
 ! Chunks
+public :: init_chunk_clustering, terminate_chunks
 public :: update_chunks, analyze2D_new_chunks, import_chunks_into_pool
 public :: flush_remaining_particles, all_chunks_available
 ! New implementation
@@ -368,6 +369,178 @@ contains
         ! module variables
         stream2D_active = .true.
     end subroutine init_cluster2D_stream
+
+    subroutine init_chunk_clustering( cline, spproj )
+        class(cmdline),    target, intent(inout) :: cline
+        class(sp_project), intent(inout) :: spproj
+        character(len=STDLEN)            :: chunk_nthr_env
+        integer :: ichunk, envlen
+        call seed_rnd
+        ! general parameters
+        master_cline => cline
+        l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
+        l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
+        nptcls_per_chunk    = params_glob%nptcls_per_cls*params_glob%ncls_start
+        ncls_glob           = 0
+        l_update_sigmas     = params_glob%l_needs_sigma
+        nmics_last          = 0
+        numlen              = len(int2str(params_glob%nparts_chunk))
+        l_no_chunks         = .false. ! will be using chunk indeed
+        l_abinitio2D        = cline%defined('algorithm')
+        if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
+        ! bookkeeping & directory structure
+        if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
+        ! pool_proj is only iused as a placeholder for computational info here
+        ! used upon chunk generation
+        call pool_proj%kill
+        pool_proj%projinfo = spproj%projinfo
+        pool_proj%compenv  = spproj%compenv
+        call pool_proj%projinfo%delete_entry('projname')
+        call pool_proj%projinfo%delete_entry('projfile')
+        if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
+        ! chunk master command line
+        if( l_abinitio2D )then
+            call cline_cluster2D_chunk%set('prg', 'abinitio2D')
+            if( params_glob%nparts_chunk > 1 )then
+                call cline_cluster2D_chunk%set('nparts',       params_glob%nparts_chunk)
+            endif
+            if( cline%defined('cls_init') )then
+                call cline_cluster2D_chunk%set('cls_init',     params_glob%cls_init)
+            else
+                call cline_cluster2D_chunk%set('cls_init',     'rand')
+            endif
+            if( master_cline%defined('focusmskdiam') )then
+                call cline_cluster2D_chunk%set('focusmskdiam', params_glob%focusmskdiam)
+            endif
+            if( cline%defined('gaufreq') )then
+                call cline_cluster2D_chunk%set('gaufreq',      params_glob%gaufreq)
+            endif
+        else
+            if( params_glob%nparts_chunk > 1 )then
+                call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
+                call cline_cluster2D_chunk%set('nparts', params_glob%nparts_chunk)
+            else
+                ! shared memory execution
+                call cline_cluster2D_chunk%set('prg',    'cluster2D')
+            endif
+            call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
+            call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
+            call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
+            call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
+            call cline_cluster2D_chunk%set('startit',   1)
+            if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
+            if( cline%defined('cls_init') )then
+                call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
+            else
+                call cline_cluster2D_chunk%set('cls_init','ptcl')
+            endif
+        endif
+        call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
+        call cline_cluster2D_chunk%set('center',    'no')
+        call cline_cluster2D_chunk%set('autoscale', 'no')
+        call cline_cluster2D_chunk%set('mkdir',     'no')
+        call cline_cluster2D_chunk%set('stream',    'no')
+        call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
+        call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
+        call cline_cluster2D_chunk%set('sigma_est', params_glob%sigma_est)
+        call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
+        call cline_cluster2D_chunk%set('rank_cavgs','no')
+        call cline_cluster2D_chunk%set('chunk',     'yes')
+        if( l_wfilt )then
+            call cline_cluster2D_chunk%set('wiener',     'partial')
+        endif
+        ! objective function
+        select case(params_glob%cc_objfun)
+        case(OBJFUN_CC)
+            call cline_cluster2D_chunk%set('objfun', 'cc')
+        case(OBJFUN_EUCLID)
+            call cline_cluster2D_chunk%set('objfun', 'euclid')
+            call cline_cluster2D_chunk%set('ml_reg', params_glob%ml_reg)
+            call cline_cluster2D_chunk%set('tau',    params_glob%tau)
+        end select
+        ! refinement
+        select case(trim(params_glob%refine))
+        case('snhc','snhc_smpl','prob','prob_smpl')
+            if( (.not.l_abinitio2D) .and. str_has_substr(params_glob%refine,'prob') )then
+                THROW_HARD('REFINE=PROBXX only compatible with algorithm=abinitio2D')
+            endif
+            call cline_cluster2D_chunk%set('refine', params_glob%refine)
+        case DEFAULT
+            THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
+        end select
+        ! polar representation
+        if( master_cline%defined('polar') ) call cline_cluster2D_chunk%set('polar', params_glob%polar)
+        ! Determines dimensions for downscaling
+        call set_chunk_dimensions
+        ! updates command-line with resolution limits, defaults are handled by abinitio2D
+        if( master_cline%defined('lpstart') )then
+            lpstart = max(params_glob%lpstart, 2.0*params_glob%smpd_crop)
+            call cline_cluster2D_chunk%set('lpstart', lpstart)
+            write(logfhandle,'(A,F5.1)') '>>> CHUNK STARTING RESOLUTION LIMIT (IN A): ', lpstart
+        endif
+        if( master_cline%defined('lpstop') )then
+            lpstop = max(params_glob%lpstop, 2.0*params_glob%smpd_crop)
+            call cline_cluster2D_chunk%set('lpstop', lpstop)
+            write(logfhandle,'(A,F5.1)') '>>> CHUNK HARD     RESOLUTION LIMIT (IN A): ', lpstop
+        endif
+        if( master_cline%defined('cenlp') )then
+            lpcen = max(params_glob%cenlp, 2.0*params_glob%smpd_crop)
+            call cline_cluster2D_chunk%set('cenlp', lpcen)
+            write(logfhandle,'(A,F5.1)') '>>> CENTERING      LOW-PASS   LIMIT (IN A): ', lpcen
+        endif
+        ! EV override
+        call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
+        if(envlen > 0) then
+            call cline_cluster2D_chunk%set('nthr', str2int(chunk_nthr_env))
+        else
+            call cline_cluster2D_chunk%set('nthr', params_glob%nthr) ! cf comment just below about nthr2D
+        end if
+        ! Initialize subsets
+        allocate(chunks(params_glob%nchunks))
+        ! deal with nthr2d .ne. nthr
+        ! Joe: the whole nthr/2d is confusing. Why not pass the number of threads to chunk%init?
+        params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr') ! only used here  for backwards compatibility
+        glob_chunk_id      = 0
+        do ichunk = 1,params_glob%nchunks
+            glob_chunk_id = glob_chunk_id + 1
+            call chunks(ichunk)%init_chunk(ichunk, cline_cluster2D_chunk, pool_proj)
+        enddo
+        ! module variables
+        stream2D_active = .true.
+    end subroutine init_chunk_clustering
+
+    ! Dimensions
+
+    subroutine set_chunk_dimensions
+        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
+        real    :: smpd, scale_factor
+        integer :: box
+        ! Determines dimensions for downscaling
+        if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
+        scale_factor          = 1.0
+        params_glob%smpd_crop = params_glob%smpd
+        params_glob%box_crop  = params_glob%box
+        if( l_scaling .and. params_glob%box >= MINBOXSZ )then
+            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+            l_scaling = box < params_glob%box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',box
+                params_glob%smpd_crop = smpd
+                params_glob%box_crop  = box
+            endif
+        endif
+        params_glob%msk_crop = round2even(params_glob%mskdiam / params_glob%smpd_crop / 2.)
+        chunk_dims%smpd  = params_glob%smpd_crop
+        chunk_dims%box   = params_glob%box_crop
+        chunk_dims%boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
+        chunk_dims%msk   = params_glob%msk_crop
+        ! Scaling-related command lines update
+        call cline_cluster2D_chunk%set('smpd_crop', chunk_dims%smpd)
+        call cline_cluster2D_chunk%set('box_crop',  chunk_dims%box)
+        call cline_cluster2D_chunk%set('msk_crop',  chunk_dims%msk)
+        call cline_cluster2D_chunk%set('box',       params_glob%box)
+        call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
+    end subroutine set_chunk_dimensions
 
     subroutine set_dimensions
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
@@ -719,10 +892,8 @@ contains
     ! ends processing, generates project & cleanup
     subroutine terminate_stream2D( records )
         type(projrecord), allocatable, intent(in) :: records(:)
-        integer :: ichunk, ipart
-        do ichunk = 1,params_glob%nchunks
-            call chunks(ichunk)%terminate_chunk
-        enddo
+        integer :: ipart
+        call terminate_chunks
         if( pool_iter == 0 )then
             ! no pool 2D analysis performed, all available info is written down
             if( allocated(records) )then
@@ -756,6 +927,14 @@ contains
             call qsys_cleanup
         endif
     end subroutine terminate_stream2D
+
+    ! ends chunks processing
+    subroutine terminate_chunks
+        integer :: ichunk
+        do ichunk = 1,params_glob%nchunks
+            call chunks(ichunk)%terminate_chunk
+        enddo
+    end subroutine terminate_chunks
 
     !> produces consolidated project
     subroutine write_project_stream2D( write_star, clspath, snapshot_projfile)
@@ -2456,13 +2635,14 @@ contains
         do i = 1,nchunks2import
             fname = trim(converged_chunks(i)%get_projfile_fname())
             id    = converged_chunks(i)%get_id()
+            ! append to list
             call list%append(fname, id, .false.)
-        enddo
-        nchunks_imported = nchunks2import
-        ! kill chunks object
-        do i = 1,nchunks2import
+            ! sigma2 book-keeping
+            call converged_chunks(i)%split_sigmas_into(SIGMAS_DIR)
+            ! destroy chunk
             call converged_chunks(i)%kill
         enddo
+        nchunks_imported = nchunks2import
         deallocate(converged_chunks)
     end subroutine memoize_chunks
 

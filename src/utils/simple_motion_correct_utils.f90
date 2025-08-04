@@ -2,13 +2,8 @@ module simple_motion_correct_utils
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-! use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
-! use simple_motion_patched,                only: motion_patched
-! use simple_motion_align_hybrid,           only: motion_align_hybrid
-! use simple_opt_image_weights,             only: opt_image_weights
-use simple_image,                         only: image
-use simple_eer_factory,                   only: eer_decoder
-! use simple_parameters,                    only: params_glob
+use simple_image,       only: image
+use simple_eer_factory, only: eer_decoder
 implicit none
 
 public :: correct_gain, flip_gain, apply_dose_weighing, micrograph_interp, calc_eer_fraction

@@ -31,16 +31,18 @@ type, extends(commander_base) :: commander_stream_cluster2D
 end type commander_stream_cluster2D
 
 ! module constants
-character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
+character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for processed projects
 character(len=STDLEN), parameter :: micspproj_fname = './streamdata.simple'
-integer,               parameter :: LONGTIME  = 60                                               ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME  = 10                                               ! movie folder watched every WAITTIME seconds
+integer,               parameter :: LONGTIME        = 60    ! time lag after which a movie/project is processed
+integer,               parameter :: WAITTIME        = 10    ! movie folder watched every WAITTIME seconds
 integer(kind=dp),      parameter :: FLUSH_TIMELIMIT = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
 integer,               parameter :: PAUSE_NITERS    = 5     ! # of iterations after which 2D analysis is paused
 integer,               parameter :: PAUSE_TIMELIMIT = 600   ! time (secs) after which 2D analysis is paused
 
 contains
 
+    ! Manages individual chunks/sets classification & rejection
+    ! TODO: pausing & handling of un-classified particles
     subroutine exec_sieve_cavgs( self, cline )
         class(commander_stream_sieve_cavgs), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -54,32 +56,31 @@ contains
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
         type(json_core)                        :: json
-        type(json_value),          pointer     :: snapshot_json
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=STDLEN)                  :: chunk_part_env
-        real                                   :: moldiam
-        integer(kind=dp)                       :: time_last_import
-        integer                                :: nchunks_glob, nchunks_imported, nprojects, iter
-        integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
-        integer                                :: i, envlen
-        logical                                :: l_pause, l_params_updated
-        nullify(snapshot_json)
+        real             :: moldiam
+        integer(kind=dp) :: time_last_import
+        integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
+        integer          :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
+        logical          :: l_pause, l_params_updated
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
         call cline%set('reject_mics',  'no')
+        call cline%set('reject_cls',   'no') ! refers to previous implementation
         call cline%set('kweight_chunk','default')
         call cline%set('prune',        'no')
         call cline%set('wiener',       'full')
-        call cline%set('reject_cls',   'no')
-        call cline%set('remove_chunks','no')
         call cline%set('refine',       'snhc_smpl')
         call cline%set('ml_reg',       'no')
         call cline%set('objfun',       'euclid')
-        if( .not. cline%defined('dir_target')   ) THROW_HARD('DIR_TARGET must be defined!')
+        call cline%set('sigma_est',    'global')
         if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
         if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
         if( .not. cline%defined('nchunksperset')) call cline%set('nchunksperset', 2)
+        if( .not.cline%defined('remove_chunks') ) call cline%set('remove_chunks','no')
+        if( .not.cline%defined('center')        ) call cline%set('center',       'yes')
+        if( .not.cline%defined('algorithm')     ) call cline%set('algorithm',    'abinitio2D')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -92,8 +93,6 @@ contains
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
         call params%new(cline)
-        params%nthr2D       = params%nthr
-        params%ml_reg_chunk = trim(params%ml_reg)
         call cline%set('mkdir', 'no')
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -101,7 +100,6 @@ contains
         ! restart
         if( cline%defined('dir_exec') )then
             call cline%delete('dir_exec')
-            call del_file(micspproj_fname)
             call cleanup_root_folder
         endif
         ! mskdiam
@@ -168,11 +166,8 @@ contains
         call nice_communicator%update_cls2D(particles_imported=0)
         call nice_communicator%cycle()
         do
-            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit)then
-                ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
-                exit
-            endif
+            ! termination
+            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit ) exit
             if( nice_communicator%stop .or. test_repick() ) then
                 if(test_repick()) call write_repick_refs("../repick_refs.mrc")
                 ! termination
@@ -226,13 +221,14 @@ contains
             endif
             ! Sets analysis section
             if( setslist%n > 0 )then
-                ! processing with cluster_cavgs / match_cavgs
                 if( setslist%processed(1) .and. (setslist%n > 1) )then
+                    ! all sets but the first employ match_cavgs
                     do i = 2,setslist%n
                         call is_set_processed(i)
                     enddo
                     call submit_match_cavgs
                 else
+                    ! first set uses cluster_cavgs
                     call is_set_processed(1)
                     call submit_cluster_cavgs
                 endif
@@ -240,7 +236,7 @@ contains
             if( l_pause )then
                 ! Whether to flush particles
                 if( (time8()-time_last_import > FLUSH_TIMELIMIT) .and. all_chunks_available() )then
-                    ! Remaining unclassified particles: TBD
+                    ! Remaining unclassified particles: TODO
                 endif
             endif
             ! 2D analyses
@@ -259,10 +255,10 @@ contains
             call nice_communicator%cycle()
         end do
         ! termination
+        write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
         nice_communicator%stat_root%stage = "terminating"
         call nice_communicator%cycle()
-        call terminate_stream2D( projrecords )
-        call update_user_params(cline) ! Joe: bit late for this?
+        call terminate_chunks
         ! final stats
         call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%deactivate_section('compute')
@@ -273,7 +269,7 @@ contains
         call qsys_cleanup
         ! end gracefully
         call nice_communicator%terminate()
-        call simple_end('**** SIMPLE_STREAM_EXEC_CAVGS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS NORMAL STOP ****')
         contains
 
             ! updates global records
@@ -348,7 +344,7 @@ contains
                         params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                         call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                        call init_cluster2D_stream(cline, spproj_glob, micspproj_fname)
+                        call init_chunk_clustering(cline, spproj_glob)
                         call cline%delete('ncls')
                         ! write out for stream3d to pick up
                         call chunksizeori%new(1, .false.)
@@ -360,7 +356,7 @@ contains
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                     call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                    call init_cluster2D_stream(cline, spproj_glob, micspproj_fname)
+                    call init_chunk_clustering(cline, spproj_glob)
                     call cline%delete('ncls')
                 endif
                 ! cleanup
@@ -469,6 +465,7 @@ contains
 
     end subroutine exec_sieve_cavgs
 
+    ! Manages Global 2D Clustering
     subroutine exec_stream_cluster2D( self, cline )
         class(commander_stream_cluster2D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
