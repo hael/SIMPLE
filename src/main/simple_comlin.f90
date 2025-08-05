@@ -7,6 +7,9 @@ implicit none
 
 public :: comlin_map, polar_comlin_pfts, gen_polar_comlins, gen_polar_comlinsm, read_write_comlin
 
+private
+#include "simple_local_flags.inc"
+
 contains
 
     subroutine comlin_map( lims, e_ind, eall, coord_map, all_coords )
@@ -209,33 +212,36 @@ contains
         logical, parameter :: l_kb = .true. ! K-B or linear interpolation
         real    :: eulers(3), euldist, R(3,3,pftcc%get_nrefs()), Rj(3,3), tRi(3,3)
         real    :: psii, psij, drot, d
-        integer :: iref, jref, irot, nrefs, nrots
+        integer :: iref, jref, irot, nrefs, nrots, imirr
         logical :: l_exclude_cone
+        if( .not.ref_space%isthere('mirr') )then
+            THROW_HARD('Mirror index missing in reference search space')
+        endif
         nrefs = pftcc%get_nrefs()
         nrots = pftcc%get_nrots()
         drot  = 360.0 / real(nrots)
         ! angular threshold
         l_exclude_cone = trim(params_glob%linethres).eq.'yes'
+        !$omp parallel default(shared) proc_bind(close)&
+        !$omp private(iref,jref,imirr,tRi,euldist,Rj,eulers,irot,d,psii,psij)
         ! caching rotation matrices
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
+        !$omp do schedule(static)
         do iref = 1, nrefs
             R(:,:,iref) = ref_space%get_mat(iref)
         enddo
-        !$omp end parallel do
+        !$omp end do
         ! constructing polar common lines
-        pcomlines%legit = .false.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(iref,jref,tRi,euldist,Rj,eulers,irot,d,psii,psij)
+        !$omp do schedule(static)
         do iref = 1,nrefs
-            tRi = transpose(R(:,:,iref))
+            tRi   = transpose(R(:,:,iref))
+            imirr = ref_space%get_int(iref,'mirr')
             do jref = 1,nrefs
                 pcomlines(jref,iref)%legit  = .false.
-                if( jref == iref ) cycle
-                euldist = rad2deg(ref_space%euldist(iref,jref))
-                ! Mirror pair excluded
-                if( euldist > 179.9 ) cycle
+                if( jref == iref  ) cycle   ! self   exclusion
+                if( jref == imirr ) cycle   ! mirror exclusion
                 ! Cone exclusion
                 if( l_exclude_cone )then
+                    euldist = rad2deg(ref_space%euldist(iref,jref))
                     if( euldist < params_glob%athres )cycle
                 endif
                 ! Rotation of both planes by transpose of Ri such plane i has euler triplet (0,0,0)
@@ -279,7 +285,8 @@ contains
                 pcomlines(jref,iref)%legit = .true.
             enddo
         enddo
-        !$omp end parallel do
+        !$omp end do
+        !$omp end parallel
     end subroutine gen_polar_comlinsm
 
     subroutine polar_comlin_pfts( pcomlines, pfts_in, pfts)

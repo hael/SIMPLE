@@ -15,7 +15,7 @@ use simple_nrtxtfile
 implicit none
 
 public :: ori, test_ori
-public :: euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
+public :: euler2m, m2euler, m2euler_fast, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
 public :: geodesic_frobdev
 private
 #include "simple_local_flags.inc"
@@ -1722,6 +1722,30 @@ contains
             euls(1)=euls(1)+360.
         end do
     end function m2euler
+
+    ! Intrinsic zy'z" convention
+    ! [r11 r21 r31]   [...         ...         sΘcΦ]
+    ! [r12 r22 r32] = [cΘcΨsΦ+cΦsΨ cΦcΨ-cΘsΦsΨ sΘsΦ]
+    ! [r13 r23 r33]   [-sΘcΨ       sΘsΨ        cΘ  ]
+    pure function m2euler_fast( R )result( e )
+        real, intent(in)  :: R(3,3)
+        real :: e(3)
+        if( R(3,3) < 0.9999999 )then
+            if( R(3,3) > -0.9999999 )then
+                e = rad2deg([atan2(R(3,2),R(3,1)), acos(R(3,3)), atan2(R(2,3),-R(1,3))])
+            else
+                e = [rad2deg(-atan2(R(1,2),R(2,2))), 180., 0.]
+            endif
+        else
+            e = [rad2deg(atan2(R(1,2),R(2,2))), 0., 0.]
+        endif
+        do while( e(1) < 0. )
+            e(1) = e(1) + 360.
+        end do
+        do while( e(3) < 0. )
+            e(3) = e(3) + 360.
+        end do
+    end function m2euler_fast
 
     !>  in-plane parameters to 3x3 transformation matrix
     function make_transfmat( psi, tx, ty )result( R )
