@@ -53,6 +53,7 @@ type :: polarft_corrcalc
     integer                          :: ldim(3)    = 0              !< logical dimensions of original cartesian image
     integer                          :: kfromto(2)                  !< band-pass Fourier index limits
     integer                          :: nk                          !< number of shells used during alignment
+    real                             :: dang                        !< angular increment
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
     logical,             allocatable :: has_cache(:,:)              !< whether the corr is cached
     logical,             allocatable :: do_cache(:)                 !< should do caching or not
@@ -117,7 +118,7 @@ type :: polarft_corrcalc
     procedure          :: get_kfromto
     procedure          :: get_pftsz
     procedure          :: get_rot
-    procedure          :: get_roind
+    procedure          :: get_roind, get_roind_fast
     procedure          :: get_coord
     procedure, private :: get_polar_coord_1, get_polar_coord_2
     generic            :: get_polar_coord => get_polar_coord_1, get_polar_coord_2
@@ -214,7 +215,6 @@ contains
         integer, optional,               intent(in)    :: eoarr(pfromto(1):pfromto(2))
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
-        real(sp)              :: ang
         integer               :: irot, k, ithr, i
         logical               :: even_dims, test(2)
         call self%kill
@@ -249,9 +249,9 @@ contains
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
-        ang = twopi/real(self%nrots)
+        self%dang = twopi/real(self%nrots)
         do irot=1,self%nrots
-            self%angtab(irot) = real(irot-1)*ang
+            self%angtab(irot) = real(irot-1)*self%dang
             ! cycling over non-redundant logical dimensions
             do k=self%kfromto(1),self%kfromto(2)
                 self%polar(irot,k)            =  sin(self%angtab(irot))*real(k) ! x-coordinate
@@ -263,6 +263,7 @@ contains
             ! angle (in degrees) from now
             self%angtab(irot) = rad2deg(self%angtab(irot))
         end do
+        self%dang = rad2deg(self%dang)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         self%pinds = (/(i,i=1,self%nptcls)/)
@@ -547,6 +548,14 @@ contains
         where(dists>180.)dists = 360.-dists
         ind = minloc(dists, dim=1)
     end function get_roind
+
+    integer function get_roind_fast( self, psi )
+        class(polarft_corrcalc), intent(in) :: self
+        real,                    intent(in) :: psi
+        get_roind_fast = nint(psi / self%dang)
+        if( get_roind_fast <=         0 ) get_roind_fast = get_roind_fast + self%nrots
+        if( get_roind_fast > self%nrots ) get_roind_fast = get_roind_fast - self%nrots
+    end function get_roind_fast
 
     !>  \brief returns polar coordinate for rotation rot
     !!         and Fourier index k
