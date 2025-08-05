@@ -18,17 +18,17 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: commander_stream_sieve_cavgs
+public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D
 
 type, extends(commander_base) :: commander_stream_sieve_cavgs
   contains
     procedure :: execute => exec_sieve_cavgs
 end type commander_stream_sieve_cavgs
 
-type, extends(commander_base) :: commander_stream_cluster2D
+type, extends(commander_base) :: commander_stream_abinitio2D
   contains
-    procedure :: execute => exec_stream_cluster2D
-end type commander_stream_cluster2D
+    procedure :: execute => exec_stream_abinitio2D
+end type commander_stream_abinitio2D
 
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for processed projects
@@ -175,7 +175,7 @@ contains
                 call spproj_glob%kill
                 call qsys_cleanup
                 call nice_communicator%terminate(stop=.true.)
-                call simple_end('**** SIMPLE_STREAM2D USER STOP ****')
+                call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
                 call EXIT(0)
             endif
             iter = iter + 1
@@ -466,12 +466,11 @@ contains
     end subroutine exec_sieve_cavgs
 
     ! Manages Global 2D Clustering
-    subroutine exec_stream_cluster2D( self, cline )
-        class(commander_stream_cluster2D), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        type(projrecord),          allocatable :: projrecords(:)
+    subroutine exec_stream_abinitio2D( self, cline )
+        class(commander_stream_abinitio2D), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        character(len=STDLEN),     parameter   :: micsspproj_fname = './streamdata.simple'
         type(parameters)                       :: params
-        type(qsys_env)                         :: qenv
         type(simple_nice_communicator)         :: nice_communicator
         type(projs_list)                       :: setslist
         type(guistats)                         :: gui_stats
@@ -479,6 +478,24 @@ contains
         type(sp_project)                       :: spproj_glob
         type(json_core)                        :: json
         type(json_value),          pointer     :: snapshot_json => null()
+        character(len=LONGSTRLEN), allocatable :: projects(:)
+        integer :: i, iter, nprojects, nimported, nptcls_glob
+        logical :: l_pause
+        call cline%set('oritype',      'mic')
+        call cline%set('mkdir',        'yes')
+        call cline%set('autoscale',    'yes')
+        call cline%set('reject_mics',  'no')
+        call cline%set('reject_cls',   'no') ! refers to previous implementation
+        call cline%set('kweight_chunk','default')
+        call cline%set('wiener',       'full')
+        call cline%set('refine',       'snhc_smpl')
+        call cline%set('ml_reg',       'no')
+        call cline%set('objfun',       'euclid')
+        call cline%set('sigma_est',    'global')
+        ! if( .not. cline%defined('walltime')  ) call cline%set('walltime',     29*60) ! 29 minutes
+        if( .not. cline%defined('dynreslim') ) call cline%set('dynreslim',    'yes')
+        if( .not.cline%defined('center')     ) call cline%set('center',       'yes')
+        if( .not.cline%defined('algorithm')  ) call cline%set('algorithm',    'abinitio2D')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -491,8 +508,6 @@ contains
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
         call params%new(cline)
-        params%nthr2D       = params%nthr
-        params%ml_reg_chunk = trim(params%ml_reg)
         call cline%set('mkdir', 'no')
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -511,14 +526,43 @@ contains
         ! project watcher
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+        ! Infinite loop
+        iter        = 0
+        nprojects   = 0
+        nimported   = 0
+        nptcls_glob = 0         ! global # of particles present in the pool
+        l_pause     = .false.   ! pause clustering
+        do
+            ! termination
+            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit ) exit
+            iter = iter + 1
+            ! detection of new projects
+            call project_buff%watch(nprojects, projects)
+            if( nprojects > 0 )then
+                ! memoize detected projects
+                call project_buff%add2history(projects)
+                do i = 1,nprojects
+                    call setslist%append(projects(i), setslist%n+1, .true.)
+                enddo
+            endif
+            ! import new particles & clustering init
+            call import_sets_into_pool( nimported )
+            ! classify here
+            !
+            !
+            ! cycle
+            call sleep(WAITTIME)
+        enddo
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
         call nice_communicator%terminate()
-        call simple_end('**** SIMPLE_STREAM2D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
         contains
 
+            ! imports new sets of pre-classified particles into the pool
+            ! and initialize the clustering module
             subroutine import_sets_into_pool( nimported )
                 integer,          intent(out) :: nimported
                 type(sp_project), allocatable :: spprojs(:)
@@ -526,10 +570,15 @@ contains
                 integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
                 integer :: i, fromp, fromp_prev, imic, ind, iptcl, jptcl, jmic, nptcls_sel
                 nimported = 0
-                if( setslist%n == 0 )          return
-                if( .not.is_pool_available() ) return
+                if( setslist%n == 0 ) return
+                if( nptcls_glob == 0 )then
+                    ! first import
+                else
+                    ! at other times only import when the pool is free
+                    if( .not.is_pool_available() ) return
+                endif
                 nsets2import = count(setslist%processed(:).and.(.not.setslist%imported(:)))
-                if( nsets2import == 0 )        return
+                if( nsets2import == 0 ) return
                 ! read sets in
                 allocate(spprojs(setslist%n))
                 nptcls2import = 0
@@ -591,21 +640,30 @@ contains
                         fromp = fromp + nptcls
                     enddo
                     nptcls_sel = spprojs(iset)%os_ptcl2D%get_noris(consider_state=.true.)
-                    ! TODO
-                    ! storing sigmas as per stack individual documents
-                    ! if( l_update_sigmas ) call converged_chunks(ichunk)%split_sigmas_into(SIGMAS_DIR)
+                    !!!
+                    ! TODO : import sigma2
+                    !!!
                     ! display
                     write(logfhandle,'(A,I6,A,I6)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM SET ',setslist%ids(iset)
                     call flush(logfhandle)
                 enddo
                 nimported = nsets2import
+                ! initialize fundamental parameters & clustering
+                if( nptcls_glob == 0 )then
+                    params%smpd = pool%get_smpd()
+                    params%box  = pool%get_box()
+                    call init_pool_clustering(cline, spproj_glob, micsspproj_fname, reference_generation=.false.)
+                endif
+                ! global count
+                nptcls_glob = nptcls_glob + nptcls_sel
                 ! cleanup
                 do iset = 1,setslist%n
                     call spprojs(iset)%kill
                 enddo
+                deallocate(spprojs)
                 nullify(pool)
             end subroutine import_sets_into_pool
 
-    end subroutine exec_stream_cluster2D
+    end subroutine exec_stream_abinitio2D
 
 end module simple_commander_stream2D

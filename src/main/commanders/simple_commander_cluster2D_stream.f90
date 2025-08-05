@@ -37,6 +37,7 @@ public :: write_pool_cls_selected_nice, generate_pool_jpeg, get_pool_cavgs_jpeg_
 public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_rejected_jpeg_scale, get_pool_rejected_thumbnail_id
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
 public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_snapshot_json, get_lpthres_type, set_lpthres_type
+public :: init_pool_clustering
 ! Chunks
 public :: init_chunk_clustering, terminate_chunks
 public :: update_chunks, analyze2D_new_chunks, import_chunks_into_pool
@@ -140,6 +141,8 @@ logical  :: l_update_sigmas = .false.   ! flags objective function (cc/euclid)
 logical  :: l_abinitio2D    = .false.   ! Whether to use abinitio2D/cluster2D
 
 contains
+
+    ! Inititalization
 
     subroutine init_cluster2D_stream( cline, spproj, projfilegui, reference_generation )
         class(cmdline),    target, intent(inout) :: cline
@@ -450,14 +453,9 @@ contains
             call cline_cluster2D_chunk%set('wiener',     'partial')
         endif
         ! objective function
-        select case(params_glob%cc_objfun)
-        case(OBJFUN_CC)
-            call cline_cluster2D_chunk%set('objfun', 'cc')
-        case(OBJFUN_EUCLID)
-            call cline_cluster2D_chunk%set('objfun', 'euclid')
-            call cline_cluster2D_chunk%set('ml_reg', params_glob%ml_reg)
-            call cline_cluster2D_chunk%set('tau',    params_glob%tau)
-        end select
+        call cline_cluster2D_chunk%set('objfun', 'euclid')
+        call cline_cluster2D_chunk%set('ml_reg', params_glob%ml_reg)
+        call cline_cluster2D_chunk%set('tau',    params_glob%tau)
         ! refinement
         select case(trim(params_glob%refine))
         case('snhc','snhc_smpl','prob','prob_smpl')
@@ -476,17 +474,17 @@ contains
         if( master_cline%defined('lpstart') )then
             lpstart = max(params_glob%lpstart, 2.0*params_glob%smpd_crop)
             call cline_cluster2D_chunk%set('lpstart', lpstart)
-            write(logfhandle,'(A,F5.1)') '>>> CHUNK STARTING RESOLUTION LIMIT (IN A): ', lpstart
+            write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', lpstart
         endif
         if( master_cline%defined('lpstop') )then
             lpstop = max(params_glob%lpstop, 2.0*params_glob%smpd_crop)
             call cline_cluster2D_chunk%set('lpstop', lpstop)
-            write(logfhandle,'(A,F5.1)') '>>> CHUNK HARD     RESOLUTION LIMIT (IN A): ', lpstop
+            write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT     (IN A): ', lpstop
         endif
         if( master_cline%defined('cenlp') )then
             lpcen = max(params_glob%cenlp, 2.0*params_glob%smpd_crop)
             call cline_cluster2D_chunk%set('cenlp', lpcen)
-            write(logfhandle,'(A,F5.1)') '>>> CENTERING      LOW-PASS   LIMIT (IN A): ', lpcen
+            write(logfhandle,'(A,F5.1)') '>>> CENTERING LOW-PASS LIMIT  (IN A): ', lpcen
         endif
         ! EV override
         call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
@@ -509,13 +507,149 @@ contains
         stream2D_active = .true.
     end subroutine init_chunk_clustering
 
+    subroutine init_pool_clustering( cline, spproj, projfilegui, reference_generation )
+        class(cmdline),    target, intent(inout) :: cline
+        class(sp_project), intent(inout) :: spproj
+        character(len=*),  intent(in)    :: projfilegui
+        logical, optional, intent(in)    :: reference_generation
+        character(len=:), allocatable    :: carg
+        character(len=STDLEN)            :: pool_nthr_env, pool_part_env, refgen_nthr_env, refgen_part_env
+        integer :: envlen
+        call seed_rnd
+        nullify(snapshot_json)
+        ! reference generation: used for generating references from raw particles
+        l_no_chunks = .false.
+        if( present(reference_generation) ) l_no_chunks = reference_generation
+        ! general parameters
+        master_cline => cline
+        call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
+        if( cline%defined('lp') ) lpstart = params_glob%lp
+        l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
+        l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
+        max_ncls            = floor(cline%get_rarg('ncls')/real(params_glob%ncls_start))*params_glob%ncls_start ! effective maximum # of classes
+        ncls_glob           = 0
+        ncls_rejected_glob  = 0
+        orig_projfile       = trim(params_glob%projfile)
+        projfile4gui        = trim(projfilegui)
+        l_update_sigmas     = params_glob%l_needs_sigma
+        nmics_last          = 0
+        l_abinitio2D        = cline%defined('algorithm')
+        if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
+        ! bookkeeping & directory structure
+        numlen         = len(int2str(params_glob%nparts_pool))
+        refs_glob      = 'start_cavgs'//params_glob%ext
+        pool_available = .true.
+        pool_iter      = 0
+        call simple_mkdir(POOL_DIR, verbose=.false.)
+        call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
+        call simple_mkdir(DIR_SNAPSHOT)
+        if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
+        call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
+        call pool_proj%kill
+        pool_proj%projinfo = spproj%projinfo
+        pool_proj%compenv  = spproj%compenv
+        call pool_proj%projinfo%delete_entry('projname')
+        call pool_proj%projinfo%delete_entry('projfile')
+        ! update to computational parameters to pool, will be transferred to chunks upon init
+        if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
+        ! commit to disk
+        call pool_proj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
+        ! reference generation
+        if( l_no_chunks )then
+            iterswitch2euclid = 0
+            ncls_glob         = params_glob%ncls
+        endif
+        ! Pool command line
+        call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
+        call cline_cluster2D_pool%set('oritype',   'ptcl2D')
+        call cline_cluster2D_pool%set('trs',       MINSHIFT)
+        call cline_cluster2D_pool%set('projfile',  PROJFILE_POOL)
+        call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
+        call cline_cluster2D_pool%set('sigma_est', params_glob%sigma_est)
+        call cline_cluster2D_pool%set('kweight',   params_glob%kweight_pool)
+        if( cline%defined('center') )then
+            carg = cline%get_carg('center')
+            call cline_cluster2D_pool%set('center',carg)
+            deallocate(carg)
+        else
+            call cline_cluster2D_pool%set('center','yes')
+        endif
+        if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
+        call cline_cluster2D_pool%set('extr_iter', 99999)
+        call cline_cluster2D_pool%set('extr_lim',  MAX_EXTRLIM2D)
+        call cline_cluster2D_pool%set('mkdir',     'no')
+        call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
+        call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
+        call cline_cluster2D_pool%set('stream',    'yes')
+        call cline_cluster2D_pool%set('nparts',    params_glob%nparts_pool)
+        call cline_cluster2D_pool%delete('autoscale')
+        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
+        ! when the 2D analysis is started from raw particles
+        if( l_no_chunks ) l_update_sigmas = .false.
+        ! set # of ptcls beyond which fractional updates will be used
+        lim_ufrac_nptcls = MAX_STREAM_NPTCLS
+        if( master_cline%defined('nsample_max') ) lim_ufrac_nptcls = params_glob%nsample_max
+        ! EV override
+        params_glob%nthr2D = params_glob%nthr ! will be deprecated
+        if( l_no_chunks )then
+            call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
+            if(envlen > 0) then
+                call cline_cluster2D_pool%set('nthr', str2int(refgen_nthr_env))
+            else
+                call cline_cluster2D_pool%set('nthr', params_glob%nthr)
+            end if
+            call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
+            if(envlen > 0) then
+                call qenv_pool%new(params_glob%nparts,exec_bin='simple_private_exec',qsys_name='local', qsys_partition=trim(refgen_part_env))
+            else
+                call qenv_pool%new(params_glob%nparts,exec_bin='simple_private_exec',qsys_name='local')
+            end if
+        else
+            call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
+            if(envlen > 0) then
+                call cline_cluster2D_pool%set('nthr',   str2int(pool_nthr_env))
+                call cline_cluster2D_pool%set('nthr2D', str2int(pool_nthr_env))
+            else
+                call cline_cluster2D_pool%set('nthr', params_glob%nthr)
+            end if
+            call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
+            if(envlen > 0) then
+                call qenv_pool%new(params_glob%nparts,exec_bin='simple_private_exec',qsys_name='local', qsys_partition=trim(pool_part_env))
+            else
+                call qenv_pool%new(params_glob%nparts,exec_bin='simple_private_exec',qsys_name='local')
+            end if
+        end if
+        ! objective function
+        call cline_cluster2D_pool%set('objfun',  'euclid')
+        call cline_cluster2D_pool%set('ml_reg',  params_glob%ml_reg)
+        call cline_cluster2D_pool%set('tau',     params_glob%tau)
+        ! refinement
+        select case(trim(params_glob%refine))
+        case('snhc','snhc_smpl','prob','prob_smpl')
+            if( (.not.l_abinitio2D) .and. str_has_substr(params_glob%refine,'prob') )then
+                THROW_HARD('REFINE=PROBXX only compatible with algorithm=abinitio2D')
+            endif
+            call cline_cluster2D_pool%set( 'refine', params_glob%refine)
+        case DEFAULT
+            THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
+        end select
+        ! polar representation
+        if( master_cline%defined('polar') ) call cline_cluster2D_pool%set('polar', params_glob%polar)
+        ! Determines dimensions for downscaling
+        call set_pool_dimensions
+        ! updates command-lines with resolution limits
+        call set_pool_resolution_limits
+        ! module variables
+        stream2D_active = .true.
+    end subroutine init_pool_clustering
+
     ! Dimensions
 
-    subroutine set_chunk_dimensions
+    ! Determines dimensions for downscaling
+    subroutine setup_downscaling
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: smpd, scale_factor
         integer :: box
-        ! Determines dimensions for downscaling
         if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
         scale_factor          = 1.0
         params_glob%smpd_crop = params_glob%smpd
@@ -530,6 +664,10 @@ contains
             endif
         endif
         params_glob%msk_crop = round2even(params_glob%mskdiam / params_glob%smpd_crop / 2.)
+    end subroutine setup_downscaling
+
+    subroutine set_chunk_dimensions
+        call setup_downscaling
         chunk_dims%smpd  = params_glob%smpd_crop
         chunk_dims%box   = params_glob%box_crop
         chunk_dims%boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
@@ -542,25 +680,24 @@ contains
         call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
     end subroutine set_chunk_dimensions
 
+    subroutine set_pool_dimensions
+        call setup_downscaling
+        pool_dims%smpd  = params_glob%smpd_crop
+        pool_dims%box   = params_glob%box_crop
+        pool_dims%boxpd = 2*round2even(params_glob%alpha*real(params_glob%box_crop/2)) ! logics from parameters
+        pool_dims%msk   = params_glob%msk_crop
+        ! chunk & pool have the same dimensions to start with (used for import)
+        chunk_dims = pool_dims
+        ! Scaling-related command lines update
+        call cline_cluster2D_pool%set('smpd_crop',  pool_dims%smpd)
+        call cline_cluster2D_pool%set('box_crop',   pool_dims%box)
+        call cline_cluster2D_pool%set('msk_crop',   pool_dims%msk)
+        call cline_cluster2D_pool%set('box',        params_glob%box)
+        call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
+    end subroutine set_pool_dimensions
+
     subroutine set_dimensions
-        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
-        real    :: smpd, scale_factor
-        integer :: box
-        ! Determines dimensions for downscaling
-        if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
-        scale_factor          = 1.0
-        params_glob%smpd_crop = params_glob%smpd
-        params_glob%box_crop  = params_glob%box
-        if( l_scaling .and. params_glob%box >= MINBOXSZ )then
-            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
-            l_scaling = box < params_glob%box
-            if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',box
-                params_glob%smpd_crop = smpd
-                params_glob%box_crop  = box
-            endif
-        endif
-        params_glob%msk_crop = round2even(params_glob%mskdiam / params_glob%smpd_crop / 2.)
+        call setup_downscaling
         pool_dims%smpd  = params_glob%smpd_crop
         pool_dims%box   = params_glob%box_crop
         pool_dims%boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
@@ -578,6 +715,30 @@ contains
         call cline_cluster2D_pool%set('box',        params_glob%box)
         call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
     end subroutine set_dimensions
+
+    ! private routine for pool resolution-related updates to command-lines
+    subroutine set_pool_resolution_limits
+        lpstart = max(lpstart, 2.0*params_glob%smpd_crop)
+        if( l_no_chunks )then
+            params_glob%lpstop = lpstop
+        else
+            if( master_cline%defined('lpstop') )then
+                params_glob%lpstop = max(2.0*params_glob%smpd_crop,params_glob%lpstop)
+            else
+                params_glob%lpstop = 2.0*params_glob%smpd_crop
+            endif
+        endif
+        call cline_cluster2D_pool%set('lpstart',  lpstart)
+        call cline_cluster2D_pool%set('lpstop',   params_glob%lpstop)
+        if( .not.master_cline%defined('cenlp') )then
+            call cline_cluster2D_pool%set( 'cenlp', lpcen)
+        else
+            call cline_cluster2D_pool%set( 'cenlp', params_glob%cenlp)
+        endif
+        write(logfhandle,'(A,F5.1)') '>>> STARTING LOW-PASS LIMIT  (IN A): ', lpstart
+        write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT    (IN A): ', params_glob%lpstop
+        write(logfhandle,'(A,F5.1)') '>>> CENTERING LOW-PASS LIMIT (IN A): ', lpcen
+    end subroutine set_pool_resolution_limits
 
     ! private routine for resolution-related updates to command-lines
     subroutine set_resolution_limits
