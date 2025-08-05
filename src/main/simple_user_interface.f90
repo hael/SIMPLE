@@ -74,6 +74,7 @@ end type simple_program
 ! instances of this class - special
 
 type(simple_program), target :: abinitio2D
+type(simple_program), target :: abinitio2D_stream
 type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D_cavgs_fast
 type(simple_program), target :: abinitio3D
@@ -405,6 +406,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_abinitio2D
+        call new_abinitio2D_stream
         call new_abinitio3D_cavgs
         call new_abinitio3D_cavgs_fast
         call new_abinitio3D
@@ -557,6 +559,7 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0        
         call push2prg_ptr_array(abinitio2D)
+        call push2prg_ptr_array(abinitio2D_stream)
         call push2prg_ptr_array(abinitio3D_cavgs)
         call push2prg_ptr_array(abinitio3D_cavgs_fast)
         call push2prg_ptr_array(abinitio3D)
@@ -716,6 +719,8 @@ contains
         select case(trim(which_program))
             case('abinitio2D')
                 ptr2prg => abinitio2D
+            case('abinitio2D_stream')
+                ptr2prg => abinitio2D_stream
             case('abinitio3D_cavgs')
                 ptr2prg => abinitio3D_cavgs
             case('abinitio3D_cavgs_fast')
@@ -1129,6 +1134,7 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
+        write(logfhandle,'(A)') abinitio2D_stream%name
         write(logfhandle,'(A)') abinitio3D_stream%name
         write(logfhandle,'(A)') assign_optics%name
         write(logfhandle,'(A)') cluster2D_stream%name
@@ -2931,6 +2937,41 @@ contains
         abinitio2D%comp_ctrls(1)%required = .false.
         call abinitio2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio2D
+
+    subroutine new_abinitio2D_stream
+        ! PROGRAM SPECIFICATION
+        call abinitio2D_stream%new(&
+        &'abinitio2D_stream', &                                                   ! name
+        &'2D analysis in streaming mode',&                                       ! descr_short
+        &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_stream',&                                                       ! executable
+        &0, 2, 0, 1, 0, 1, 3, .true.,&                                           ! # entries in each group, requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call abinitio2D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_advanced=.false.)
+        call abinitio2D_stream%set_input('parm_ios', 2, 'dir_exec', 'file', 'Previous run directory',&
+        &'Directory where previous 2D analysis took place', 'e.g. 3_abinitio2D_stream', .false., '', gui_submenu="data")
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call abinitio2D_stream%set_input('srch_ctrls', 1, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
+        &gui_advanced=.false.)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call abinitio2D_stream%set_input('mask_ctrls', 1, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
+        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
+        ! computer controls
+        call abinitio2D_stream%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D_stream%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D_stream%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+    end subroutine new_abinitio2D_stream
 
     subroutine new_abinitio3D_cavgs
         ! PROGRAM SPECIFICATION
