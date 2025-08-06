@@ -1521,7 +1521,7 @@ contains
         endif
         ! comlin generation
         select case(trim(self%ref_type))
-        case('clin', 'vol','clinm', 'volm')
+        case('clin', 'vol')
             self%l_comlin = .true.  ! 3D
         case('cavg')
             self%l_comlin = .false. ! 2D

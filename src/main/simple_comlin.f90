@@ -359,12 +359,7 @@ contains
             call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='READ',status='OLD', iostat=io_stat)
             read(unit=funit,pos=1) pcomlines
         else
-            select case(trim(params_glob%ref_type))
-            case('clin','vol')
-                call gen_polar_comlins(pftcc, eulspace, pcomlines)
-            case('clinm','volm')
-                call gen_polar_comlinsm(pftcc, eulspace, pcomlines)
-            end select
+            call gen_polar_comlinsm(pftcc, eulspace, pcomlines)
             call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
             write(unit=funit,pos=1) pcomlines
         endif

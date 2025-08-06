@@ -41,7 +41,7 @@ integer                        :: nptcls2update
 type(euclid_sigma2)            :: eucl_sigma
 type(polarft_corrcalc)         :: pftcc
 ! benchmarking
-integer(timer_int_kind)        :: t_init,   t_build_batch_particles,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
+integer(timer_int_kind)        :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
 integer(timer_int_kind)        :: t_prepare_polar_references
 real(timer_int_kind)           :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
 real(timer_int_kind)           :: rt_prepare_polar_references
