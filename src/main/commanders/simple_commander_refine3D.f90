@@ -823,32 +823,34 @@ contains
                     ! update project with the new orientations
                     call build%spproj%write_segment_inside(params%oritype)
                     call del_file(params%outfile)
-                    do state = 1, params%nstates
-                        if( build%spproj_field%get_pop(state, 'state') == 0 )then
-                            ! cleanup empty state
-                            if( trim(params%oritype).eq.'cls3D' )then
-                                call build%spproj%remove_entry_from_osout('vol_cavg', state)
+                    if( trim(params%volrec) .eq. 'yes' )then
+                        do state = 1, params%nstates
+                            if( build%spproj_field%get_pop(state, 'state') == 0 )then
+                                ! cleanup empty state
+                                if( trim(params%oritype).eq.'cls3D' )then
+                                    call build%spproj%remove_entry_from_osout('vol_cavg', state)
+                                else
+                                    call build%spproj%remove_entry_from_osout('vol', state)
+                                endif
+                                call build%spproj%remove_entry_from_osout('fsc', state)
                             else
-                                call build%spproj%remove_entry_from_osout('vol', state)
+                                ! add state volume, fsc to os_out
+                                str_state = int2str_pad(state,2)
+                                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                                call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
+                                vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
+                                vol_iter  = trim(vol)
+                                if( trim(params%oritype).eq.'cls3D' )then
+                                    call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
+                                else
+                                    call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
+                                endif
                             endif
-                            call build%spproj%remove_entry_from_osout('fsc', state)
-                        else
-                            ! add state volume, fsc to os_out
-                            str_state = int2str_pad(state,2)
-                            fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                            call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
-                            vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
-                            vol_iter  = trim(vol)
-                            if( trim(params%oritype).eq.'cls3D' )then
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
-                            else
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
-                            endif
-                        endif
-                    end do
-                    ! volume mask, one for all states
-                    if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
-                    call build%spproj%write_segment_inside('out')
+                        end do
+                        ! volume mask, one for all states
+                        if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                        call build%spproj%write_segment_inside('out')
+                    endif
                     if( l_sigma )then
                         ! so final sigma2 can be used for a subsequent refine3D run
                         call cline_calc_group_sigmas%set('which_iter',params%which_iter+1)

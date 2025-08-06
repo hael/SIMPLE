@@ -655,7 +655,7 @@ contains
         endif
         call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
         call cline_cluster2D_stage1%set('ml_reg',     'no')
-        call cline_cluster2D_stage1%set('maxits', MAXITS_STAGE1)
+        call cline_cluster2D_stage1%set('maxits', min(params%maxits,MAXITS_STAGE1))
         if( l_euclid )then
             if( l_cc_iters )then
                 params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
