@@ -154,9 +154,9 @@ contains
         if( l_ctf )call pftcc%get_ctfmats_ptr(pctfmats)
         ! update classes
         eopops = 0
-        !$omp parallel do schedule(guided) proc_bind(close) default(shared)&
-        !$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf)&
-        !$omp reduction(+:eopops,pfts_even,ctf2_even,pfts_odd,ctf2_odd)
+        !!$omp parallel do schedule(guided) proc_bind(close) default(shared)&
+        !!$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf)&
+        !!$omp reduction(+:eopops,pfts_even,ctf2_even,pfts_odd,ctf2_odd)
         do i = 1,nptcls
             ! particles parameters
             iptcl = pinds(i)
@@ -201,7 +201,7 @@ contains
                 eopops(2,icls) = eopops(2,icls) + 1
             endif
         enddo
-        !$omp end parallel do
+        !!$omp end parallel do
         eo_pops = eo_pops + eopops
         ! cleanup
         nullify(spproj_field,rptcl,rctf,pptcls,pctfmats)
