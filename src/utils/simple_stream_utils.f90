@@ -405,7 +405,7 @@ contains
                 fname   = basename(self%orig_stks(i))
                 ext     = fname2ext(fname)
                 fbody   = get_fbody(fname, ext)
-                stks(i) = trim(folder)//'/'//trim(fbody)//'.star'
+                stks(i) = trim(folder)//'/'//trim(fbody)//trim(STAR_EXT)
             enddo
             fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
             call split_sigma2_into_groups(fname, stks)
@@ -413,7 +413,7 @@ contains
         else
             ! one star file
             fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
-            dest  = trim(folder)//'/chunk_'//int2str(self%id)//'.star'
+            dest  = trim(folder)//'/chunk_'//int2str(self%id)//trim(STAR_EXT)
             call simple_copy_file(fname,dest)
         endif
     end subroutine split_sigmas_into

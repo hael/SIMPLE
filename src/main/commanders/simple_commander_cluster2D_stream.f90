@@ -81,7 +81,6 @@ integer,               parameter :: NPREV_RES            = 5                ! # 
 character(len=STDLEN), parameter :: USER_PARAMS2D        = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
 character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
-character(len=STDLEN), parameter :: SIGMAS_DIR           = './sigma2/'
 character(len=STDLEN), parameter :: DISTR_EXEC_FNAME     = './distr_cluster2D_pool'
 character(len=STDLEN), parameter :: LOGFILE              = 'simple_log_cluster2D_pool'
 character(len=STDLEN), parameter :: CHECKPOINT_DIR       = 'checkpoint/'
@@ -381,16 +380,17 @@ contains
         call seed_rnd
         ! general parameters
         master_cline => cline
-        l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
-        l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
+        l_wfilt             = .false.
+        l_scaling           = .true.
         nptcls_per_chunk    = params_glob%nptcls_per_cls*params_glob%ncls_start
         ncls_glob           = 0
         l_update_sigmas     = params_glob%l_needs_sigma
         nmics_last          = 0
-        numlen              = len(int2str(params_glob%nparts_chunk))
+        numlen              = len(int2str(params_glob%nparts))
         l_no_chunks         = .false. ! will be using chunk indeed
         l_abinitio2D        = cline%defined('algorithm')
         if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
+        params_glob%nparts_chunk = params_glob%nparts ! required by chunk object, to remove
         ! bookkeeping & directory structure
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         ! pool_proj is only iused as a placeholder for computational info here
@@ -404,8 +404,8 @@ contains
         ! chunk master command line
         if( l_abinitio2D )then
             call cline_cluster2D_chunk%set('prg', 'abinitio2D')
-            if( params_glob%nparts_chunk > 1 )then
-                call cline_cluster2D_chunk%set('nparts',       params_glob%nparts_chunk)
+            if( params_glob%nparts > 1 )then
+                call cline_cluster2D_chunk%set('nparts',       params_glob%nparts)
             endif
             if( cline%defined('cls_init') )then
                 call cline_cluster2D_chunk%set('cls_init',     params_glob%cls_init)
@@ -419,9 +419,9 @@ contains
                 call cline_cluster2D_chunk%set('gaufreq',      params_glob%gaufreq)
             endif
         else
-            if( params_glob%nparts_chunk > 1 )then
+            if( params_glob%nparts > 1 )then
                 call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
-                call cline_cluster2D_chunk%set('nparts', params_glob%nparts_chunk)
+                call cline_cluster2D_chunk%set('nparts', params_glob%nparts)
             else
                 ! shared memory execution
                 call cline_cluster2D_chunk%set('prg',    'cluster2D')
@@ -524,10 +524,10 @@ contains
         master_cline => cline
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
         if( cline%defined('lp') ) lpstart = params_glob%lp
-        l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
-        l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
-        max_ncls            = floor(cline%get_rarg('ncls')/real(params_glob%ncls_start))*params_glob%ncls_start ! effective maximum # of classes
-        ncls_glob           = 0
+        l_wfilt             = .false.
+        l_scaling           = .true.
+        max_ncls            = params_glob%ncls
+        ncls_glob           = params_glob%ncls
         ncls_rejected_glob  = 0
         orig_projfile       = trim(params_glob%projfile)
         projfile4gui        = trim(projfilegui)
@@ -536,8 +536,8 @@ contains
         l_abinitio2D        = cline%defined('algorithm')
         if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
         ! bookkeeping & directory structure
-        numlen         = len(int2str(params_glob%nparts_pool))
-        refs_glob      = 'start_cavgs'//params_glob%ext
+        numlen         = len(int2str(params_glob%nparts))
+        refs_glob      = ''
         pool_available = .true.
         pool_iter      = 0
         call simple_mkdir(POOL_DIR, verbose=.false.)
@@ -545,7 +545,6 @@ contains
         call simple_mkdir(DIR_SNAPSHOT)
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
-        call pool_proj%kill
         pool_proj%projinfo = spproj%projinfo
         pool_proj%compenv  = spproj%compenv
         call pool_proj%projinfo%delete_entry('projname')
@@ -567,6 +566,7 @@ contains
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D_pool%set('sigma_est', params_glob%sigma_est)
         call cline_cluster2D_pool%set('kweight',   params_glob%kweight_pool)
+        call cline_cluster2D_pool%set('cls_init',  params_glob%cls_init)
         if( cline%defined('center') )then
             carg = cline%get_carg('center')
             call cline_cluster2D_pool%set('center',carg)
@@ -574,14 +574,13 @@ contains
         else
             call cline_cluster2D_pool%set('center','yes')
         endif
-        if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%set('extr_iter', 99999)
         call cline_cluster2D_pool%set('extr_lim',  MAX_EXTRLIM2D)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes')
-        call cline_cluster2D_pool%set('nparts',    params_glob%nparts_pool)
+        call cline_cluster2D_pool%set('nparts',    params_glob%nparts)
         call cline_cluster2D_pool%delete('autoscale')
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
         ! when the 2D analysis is started from raw particles
@@ -620,9 +619,9 @@ contains
             end if
         end if
         ! objective function
-        call cline_cluster2D_pool%set('objfun',  'euclid')
-        call cline_cluster2D_pool%set('ml_reg',  params_glob%ml_reg)
-        call cline_cluster2D_pool%set('tau',     params_glob%tau)
+        call cline_cluster2D_pool%set('objfun', 'euclid')
+        call cline_cluster2D_pool%set('ml_reg', params_glob%ml_reg)
+        call cline_cluster2D_pool%set('tau',    params_glob%tau)
         ! refinement
         select case(trim(params_glob%refine))
         case('snhc','snhc_smpl','prob','prob_smpl')
@@ -1353,11 +1352,20 @@ contains
             if(pool_iter .gt. 5) call pool_proj_history(pool_iter - 5)%kill()
         end if
         pool_iter = pool_iter + 1 ! Global iteration counter update
-        call cline_cluster2D_pool%set('refs',    refs_glob)
         call cline_cluster2D_pool%set('ncls',    ncls_glob)
         call cline_cluster2D_pool%set('startit', pool_iter)
         call cline_cluster2D_pool%set('maxits',  pool_iter)
         call cline_cluster2D_pool%set('frcs',    FRCS_FILE)
+        if( pool_iter==1 )then
+            if( cline_cluster2D_pool%defined('cls_init') )then
+                ! taken care of by cluster2D_distr
+            else
+                call cline_cluster2D_pool%set('refs', refs_glob)
+            endif
+        else
+            call cline_cluster2D_pool%delete('cls_init')
+            call cline_cluster2D_pool%set('refs', refs_glob)
+        endif
         if( l_no_chunks )then
             ! for reference generation everything is defined here
             call cline_cluster2D_pool%set('extr_iter', CHUNK_EXTR_ITER+pool_iter-1)
@@ -1532,7 +1540,7 @@ contains
                     stack_fname = basename(stack_fname)
                     ext         = fname2ext(stack_fname)
                     fbody       = get_fbody(stack_fname, ext)
-                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
+                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
                 enddo
                 call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
                 deallocate(sigma_fnames)
@@ -1541,7 +1549,7 @@ contains
                 if( pool_iter==1 )then
                     allocate(sigma_fnames(glob_chunk_id))
                     do i = 1,glob_chunk_id
-                        sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//'.star'
+                        sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//trim(STAR_EXT)
                     enddo
                     call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
                     deallocate(sigma_fnames)
@@ -1685,7 +1693,7 @@ contains
                         stack_fname = basename(stack_fname)
                         ext         = fname2ext(stack_fname)
                         fbody       = get_fbody(stack_fname, ext)
-                        sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
+                        sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
                     enddo
                     call split_sigma2_into_groups(sigma2_star_from_iter(pool_iter+1), sigma_fnames)
                     deallocate(sigma_fnames)
@@ -2079,9 +2087,9 @@ contains
         integer                   :: iter_loc
         real                      :: lpthres_sugg
         call simple_getcwd(cwd)
-        if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//'.star')) then
+        if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//trim(STAR_EXT))) then
             iter_loc = pool_iter
-        else if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter - 1,3)//'.star')) then
+        else if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter - 1,3)//trim(STAR_EXT))) then
             iter_loc = pool_iter - 1
         endif
         call pool_stats%init
@@ -3115,7 +3123,7 @@ contains
                 call del_file(prefix//trim(WFILT_SUFFIX)//'_odd'//trim(params_glob%ext))
                 call del_file(prefix//trim(WFILT_SUFFIX)//trim(params_glob%ext))
             endif
-            call del_file(trim(POOL_DIR)//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter-5,3)//'.star')
+            call del_file(trim(POOL_DIR)//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter-5,3)//trim(STAR_EXT))
             call del_file(trim(prefix) // '.jpg')
             if( l_update_sigmas ) call del_file(trim(POOL_DIR)//trim(sigma2_star_from_iter(pool_iter-5)))
         endif
@@ -3554,7 +3562,6 @@ contains
                 call cline_match_cavgs%set('prg',      'cluster_cavgs')
                 call cline_match_cavgs%set('projfile', projfile_ref)
                 call cline_match_cavgs%delete('nparts')
-                call cline_match_cavgs%delete('nparts_chunk')
                 do ic = 2,setslist%n
                     call cline_match_cavgs%set('projfile_target', basename(setslist%projfiles(ic)))
                     path = stemname(setslist%projfiles(ic))

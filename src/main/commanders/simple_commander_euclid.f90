@@ -297,9 +297,9 @@ contains
         end do
         ! write group sigmas to starfile
         if( cline%defined('which_iter') )then
-            starfile_fname = trim(SIGMA2_GROUP_FBODY)//int2str(params%which_iter)//'.star'
+            starfile_fname = trim(SIGMA2_GROUP_FBODY)//int2str(params%which_iter)//trim(STAR_EXT)
         else
-            starfile_fname = trim(SIGMA2_GROUP_FBODY)//'1.star'
+            starfile_fname = trim(SIGMA2_GROUP_FBODY)//'1'//trim(STAR_EXT)
         endif
         call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
         ! update sigmas in binfiles to match averages
@@ -458,7 +458,7 @@ contains
             end do
         end do
         ! write group sigmas to starfile
-        starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
+        starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//trim(STAR_EXT)
         call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
         ! cleanup
         call build%kill_general_tbox

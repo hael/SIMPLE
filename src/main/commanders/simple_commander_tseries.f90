@@ -1141,12 +1141,12 @@ contains
             call simple_copy_file(CCS,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_CC.mrc')
             call simple_copy_file(SPLITTED, iter_dir//trim(fbody_split)//'_iter'//int2str_pad(i,3)//'.mrc')
             if( params%l_needs_sigma )then
-                call simple_copy_file(trim(SIGMA2_GROUP_FBODY)//trim(int2str(endit))//'.star',&
-                    &iter_dir//trim(SIGMA2_GROUP_FBODY)//int2str_pad(i,3)//'.star')
+                call simple_copy_file(trim(SIGMA2_GROUP_FBODY)//trim(int2str(endit))//trim(STAR_EXT),&
+                    &iter_dir//trim(SIGMA2_GROUP_FBODY)//int2str_pad(i,3)//trim(STAR_EXT))
             endif
             ! clean
             call exec_cmdline('rm -f recvol_state01_iter*')
-            if( params%l_needs_sigma ) call exec_cmdline('rm -f '//trim(SIGMA2_GROUP_FBODY)//'*.star')
+            if( params%l_needs_sigma ) call exec_cmdline('rm -f '//trim(SIGMA2_GROUP_FBODY)//'*'//trim(STAR_EXT))
             call del_file(ATOMS)
             call del_file(BINARY)
             call del_file(CCS)
