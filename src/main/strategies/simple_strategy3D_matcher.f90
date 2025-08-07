@@ -156,6 +156,7 @@ contains
             rt_prep_orisrch          = toc(t_prep_orisrch)
             rt_build_batch_particles = 0.
             rt_align                 = 0.
+            rt_rec                   = 0.
         endif
 
         ! BATCH LOOP
@@ -243,8 +244,10 @@ contains
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
             ! restore polar cavgs
             if( l_polar .and. l_restore )then
+                if( L_BENCH_GLOB ) t_rec = tic()
                 call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
                     &build_glob%spproj, pftcc, incr_shifts(:,1:batchsz), is3D=.true.)
+                if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo
         ! report fraction of greedy searches
@@ -327,7 +330,7 @@ contains
                     call polar_restoration
                 endif
             endif
-            if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
+            if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
         endif
 
         ! MORE CLEANUP
