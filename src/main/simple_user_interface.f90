@@ -5250,7 +5250,7 @@ contains
         &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
         call sieve_cavgs%set_input('comp_ctrls', 1, nchunks, gui_submenu="compute", gui_advanced=.false.)
-        call sieve_cavgs%set_input('comp_ctrls', 2, nparts_chunk, gui_submenu="compute", gui_advanced=.false.)
+        call sieve_cavgs%set_input('comp_ctrls', 2, nparts, gui_submenu="compute", gui_advanced=.false.)
         sieve_cavgs%comp_ctrls(2)%required = .true.
         call sieve_cavgs%set_input('comp_ctrls', 3, nthr, gui_submenu="compute", gui_advanced=.false.)
         call sieve_cavgs%set_input('comp_ctrls', 4, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&

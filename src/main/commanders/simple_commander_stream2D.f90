@@ -42,7 +42,7 @@ integer,               parameter :: PAUSE_TIMELIMIT = 600   ! time (secs) after 
 contains
 
     ! Manages individual chunks/sets classification & rejection
-    ! TODO: pausing & handling of un-classified particles
+    ! TODO: pausing, handling of un-classified particles & restart
     subroutine exec_sieve_cavgs( self, cline )
         class(commander_stream_sieve_cavgs), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -103,7 +103,7 @@ contains
             call cleanup_root_folder
         endif
         ! mskdiam
-        if( .not. cline%defined('mskdiam') ) then
+        if( .not. cline%defined('mskdiam') )then
             ! nice communicator status
             nice_communicator%stat_root%stage = "waiting for mask diameter"
             call nice_communicator%cycle()
@@ -367,11 +367,13 @@ contains
             end subroutine update_records_with_project
 
             subroutine generate_sets( chunks, sets )
+                use simple_euclid_sigma2, only: average_sigma2_groups
                 class(projs_list), intent(in)    :: chunks
                 class(projs_list), intent(inout) :: sets
-                type(sp_project)              :: spproj
-                character(len=:), allocatable :: tmpl
-                integer :: navail_chunks, n, iset, ic_start, ic_end
+                type(sp_project)                       :: spproj
+                character(len=LONGSTRLEN), allocatable :: starfiles(:)
+                character(len=:),          allocatable :: tmpl
+                integer :: navail_chunks, n, iset, i, ic, ic_start, ic_end, nc
                 navail_chunks = chunks%n - sets%n * params%nchunksperset
                 n = floor(real(navail_chunks) / real(params%nchunksperset))
                 if( n < 1 )return
@@ -382,6 +384,14 @@ contains
                     tmpl     = 'set_'//int2str(sets%n+1)
                     call simple_mkdir(tmpl)
                     call merge_chunks(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
+                    ! averages and stashes sigma2
+                    allocate(starfiles(params%nchunksperset))
+                    do i = 1,params%nchunksperset
+                        ic = ic_start + i - 1
+                        starfiles(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(chunks%ids(ic))//trim(STAR_EXT)
+                    enddo
+                    call average_sigma2_groups(tmpl//'/'//tmpl//trim(STAR_EXT), starfiles)
+                    deallocate(starfiles)
                     ! update global list, also increments sets%n
                     call sets%append(tmpl//'/'//tmpl//trim(METADATA_EXT), sets%n+1, .false.)
                     ! make completed project files visible to the watcher of the next application
@@ -429,7 +439,6 @@ contains
                 call cline_match_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_match_cavgs%set('verbose_exit', 'yes')
                 call cline_match_cavgs%delete('nparts')
-                call cline_match_cavgs%delete('nparts_chunk')
                 do iset = 2,setslist%n
                     if( setslist%processed(iset) ) cycle ! already done
                     if( setslist%busy(iset) )      cycle ! ongoing
@@ -466,6 +475,7 @@ contains
     end subroutine exec_sieve_cavgs
 
     ! Manages Global 2D Clustering
+    ! TODO: pausing, handling of un-classified particles & restart
     subroutine exec_stream_abinitio2D( self, cline )
         class(commander_stream_abinitio2D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -492,10 +502,12 @@ contains
         call cline%set('ml_reg',       'no')
         call cline%set('objfun',       'euclid')
         call cline%set('sigma_est',    'global')
-        ! if( .not. cline%defined('walltime')  ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('dynreslim') ) call cline%set('dynreslim',    'yes')
-        if( .not.cline%defined('center')     ) call cline%set('center',       'yes')
-        if( .not.cline%defined('algorithm')  ) call cline%set('algorithm',    'abinitio2D')
+        call cline%set('cls_init',     'rand')
+        ! if( .not. cline%defined('walltime')  ) call cline%set('walltime',  29*60) ! 29 minutes
+        if( .not. cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
+        if( .not.cline%defined('center')     ) call cline%set('center',    'yes')
+        if( .not.cline%defined('algorithm')  ) call cline%set('algorithm', 'abinitio2D')
+        if( .not.cline%defined('ncls')       ) call cline%set('ncls',       200)
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -548,8 +560,9 @@ contains
             ! import new particles & clustering init
             call import_sets_into_pool( nimported )
             ! classify here
-            !
-            !
+            call update_pool_status
+            call update_pool
+            call analyze2D_pool
             ! cycle
             call sleep(WAITTIME)
         enddo
@@ -564,9 +577,11 @@ contains
             ! imports new sets of pre-classified particles into the pool
             ! and initialize the clustering module
             subroutine import_sets_into_pool( nimported )
-                integer,          intent(out) :: nimported
-                type(sp_project), allocatable :: spprojs(:)
-                class(sp_project),    pointer :: pool
+                use simple_euclid_sigma2, only: average_sigma2_groups, sigma2_star_from_iter
+                integer,                   intent(out) :: nimported
+                type(sp_project),          allocatable :: spprojs(:)
+                character(len=LONGSTRLEN), allocatable :: sigmas(:)
+                class(sp_project),             pointer :: pool
                 integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
                 integer :: i, fromp, fromp_prev, imic, ind, iptcl, jptcl, jmic, nptcls_sel
                 nimported = 0
@@ -640,14 +655,22 @@ contains
                         fromp = fromp + nptcls
                     enddo
                     nptcls_sel = spprojs(iset)%os_ptcl2D%get_noris(consider_state=.true.)
-                    !!!
-                    ! TODO : import sigma2
-                    !!!
                     ! display
                     write(logfhandle,'(A,I6,A,I6)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM SET ',setslist%ids(iset)
                     call flush(logfhandle)
                 enddo
                 nimported = nsets2import
+                ! average all previously imported sigmas
+                allocate(sigmas(count(setslist%imported(:))))
+                i = 0
+                do iset = 1,setslist%n
+                    if( .not.setslist%imported(iset) ) cycle
+                    i         = i+1
+                    ind       = setslist%ids(iset)
+                    sigmas(i) = trim(params%dir_target)//'/set_'//int2str(ind)//'/set_'//int2str(ind)//trim(STAR_EXT)
+                enddo
+                call average_sigma2_groups(sigma2_star_from_iter(get_pool_iter()+1), sigmas)
+                deallocate(sigmas)
                 ! initialize fundamental parameters & clustering
                 if( nptcls_glob == 0 )then
                     params%smpd = pool%get_smpd()

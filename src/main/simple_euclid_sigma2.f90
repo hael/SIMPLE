@@ -551,7 +551,7 @@ contains
     function sigma2_star_from_iter( iter )
         integer, intent(in) :: iter
         character(len=:), allocatable :: sigma2_star_from_iter
-        sigma2_star_from_iter = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+        sigma2_star_from_iter = trim(SIGMA2_GROUP_FBODY)//trim(int2str(iter))//trim(STAR_EXT)
     end function sigma2_star_from_iter
 
     ! Destructor
@@ -587,7 +587,7 @@ contains
         ! testing bookkeeping
         allocate(fnames(ngroups))
         do igroup = 1,ngroups
-            fnames(igroup) = 'test_'//int2str(igroup)//'.star'
+            fnames(igroup) = 'test_'//int2str(igroup)//trim(STAR_EXT)
         enddo
         allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
         ! call seed_rnd()

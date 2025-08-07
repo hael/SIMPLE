@@ -760,7 +760,7 @@ contains
                 call cline%set('needs_sigma','yes')
                 params%l_needs_sigma    = .true.
                 cline_calc_group_sigmas = cline
-                if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//'.star') )then
+                if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//trim(STAR_EXT)) )then
                     ! it is assumed that we already have precalculated sigmas2 and all corresponding flags have been set
                 else
                     ! sigma2 not provided & are calculated

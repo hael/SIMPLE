@@ -1730,8 +1730,8 @@ contains
     pure function m2euler_fast( R )result( e )
         real, intent(in)  :: R(3,3)
         real :: e(3)
-        if( R(3,3) < 0.9999999 )then
-            if( R(3,3) > -0.9999999 )then
+        if( R(3,3) < 0.99999999 )then
+            if( R(3,3) > -0.99999999 )then
                 e = rad2deg([atan2(R(3,2),R(3,1)), acos(R(3,3)), atan2(R(2,3),-R(1,3))])
             else
                 e = [rad2deg(-atan2(R(1,2),R(2,2))), 180., 0.]

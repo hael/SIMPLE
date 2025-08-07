@@ -74,7 +74,7 @@ contains
         endif
         ! shifts & star output
         patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
-        star_fname          = trim(dir_out)//trim(adjustl(fbody_here))//'.star'
+        star_fname          = trim(dir_out)//trim(adjustl(fbody_here))//trim(STAR_EXT)
         poly_fname          = trim(dir_out)//trim(adjustl(fbody_here))//'.poly'
         ! isotropic ones
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)

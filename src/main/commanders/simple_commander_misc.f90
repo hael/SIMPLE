@@ -665,7 +665,7 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported convention!')
             end select
-            star_fname = trim(adjustl(mic_fbody))//'.star'
+            star_fname = trim(adjustl(mic_fbody))//trim(STAR_EXT)
             ! write
             if( .not.micrograph_dw%exists() )then
                 ! doses not defined
