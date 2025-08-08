@@ -647,7 +647,7 @@ contains
         character(len=*), intent(in) :: fname
         real, allocatable :: frc(:)
         integer           :: icls, find, pop, filtsz
-        filtsz = kfromto(2) - kfromto(1) + 1
+        filtsz = fdim(params_glob%box_crop) - 1
         allocate(frc(filtsz),source=0.)
         !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
         do icls = 1,ncls
