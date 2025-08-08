@@ -37,7 +37,7 @@ public :: write_pool_cls_selected_nice, generate_pool_jpeg, get_pool_cavgs_jpeg_
 public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_rejected_jpeg_scale, get_pool_rejected_thumbnail_id
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
 public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_snapshot_json, get_lpthres_type, set_lpthres_type
-public :: init_pool_clustering
+public :: init_pool_clustering, update_pool_aln_params
 ! Chunks
 public :: init_chunk_clustering, terminate_chunks
 public :: update_chunks, analyze2D_new_chunks, import_chunks_into_pool
@@ -523,7 +523,6 @@ contains
         ! general parameters
         master_cline => cline
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
-        if( cline%defined('lp') ) lpstart = params_glob%lp
         l_wfilt             = .false.
         l_scaling           = .true.
         max_ncls            = params_glob%ncls
@@ -1315,6 +1314,41 @@ contains
         call spproj%kill
     end subroutine import_records_into_pool
 
+    subroutine update_pool_aln_params
+        real,    parameter :: ICM_LAMBDA = 2.0
+        integer, parameter :: ITERLIM    = 20
+        integer, parameter :: ITERSHIFT  = 5
+        real :: startlp, stoplp, lpcen, lp, lambda, gamma
+        if( .not. stream2D_active ) return
+        if( .not. pool_available )  return
+        if( pool_iter < ITERLIM )then
+            gamma = min(1., max(0., real(ITERLIM-pool_iter)/real(ITERLIM)))
+            ! offset
+            if( pool_iter < ITERSHIFT )then
+                call cline_cluster2D_pool%set('trs', 0.)
+            else
+                call cline_cluster2D_pool%set('trs', MINSHIFT)
+            endif
+            ! resolution limit
+            call mskdiam2lplimits(params_glob%mskdiam, startlp, stoplp, lpcen)
+            lp = lpstop + (lpstart-lpstop) * gamma
+            call cline_cluster2D_pool%set('lp', lp)
+            ! Extremal iteration
+            call cline_cluster2D_pool%set('extr_iter', pool_iter+1)
+            call cline_cluster2D_pool%set('extr_lim',  ITERLIM)
+            ! ICM
+            lambda = ICM_LAMBDA * gamma
+            call cline_cluster2D_pool%set('icm',    'yes')
+            call cline_cluster2D_pool%set('lambda', lambda)
+        else
+            call cline_cluster2D_pool%set('trs', MINSHIFT)
+            call cline_cluster2D_pool%set('icm', 'no')
+            call cline_cluster2D_pool%delete('extr_iter')
+            call cline_cluster2D_pool%delete('lambda')
+            call cline_cluster2D_pool%delete('lp')
+        endif
+    end subroutine update_pool_aln_params
+
     ! Performs one iteration:
     ! updates to command-line, particles sampling, temporary project & execution
     subroutine analyze2D_pool
@@ -1356,15 +1390,15 @@ contains
         call cline_cluster2D_pool%set('startit', pool_iter)
         call cline_cluster2D_pool%set('maxits',  pool_iter)
         call cline_cluster2D_pool%set('frcs',    FRCS_FILE)
+        call cline_cluster2D_pool%set('refs', refs_glob)
         if( pool_iter==1 )then
             if( cline_cluster2D_pool%defined('cls_init') )then
-                ! taken care of by cluster2D_distr
-            else
-                call cline_cluster2D_pool%set('refs', refs_glob)
+                ! references taken care of by cluster2D_distr
+                call cline_cluster2D_pool%delete('frcs')
+                call cline_cluster2D_pool%delete('refs')
             endif
         else
             call cline_cluster2D_pool%delete('cls_init')
-            call cline_cluster2D_pool%set('refs', refs_glob)
         endif
         if( l_no_chunks )then
             ! for reference generation everything is defined here
