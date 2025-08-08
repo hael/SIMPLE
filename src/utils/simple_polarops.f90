@@ -647,7 +647,7 @@ contains
         character(len=*), intent(in) :: fname
         real, allocatable :: frc(:)
         integer           :: icls, find, pop, filtsz
-        filtsz = fdim(params_glob%box_crop) - 1
+        filtsz = kfromto(2) - kfromto(1) + 1
         allocate(frc(filtsz),source=0.)
         !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
         do icls = 1,ncls
@@ -1148,8 +1148,12 @@ contains
     !>  \brief  Filter references
     subroutine filterrefs( icls, filter )
         integer, intent(in) :: icls
-        real,    intent(in) :: filter(kfromto(1):kfromto(2))
-        integer :: k
+        real,    intent(in) :: filter(:)
+        integer :: n, k
+        n = size(filter)
+        if( n < kfromto(2) )then
+            THROW_HARD('Incompatible filter size!; polar_cavger_filterref')
+        endif
         do k = kfromto(1),kfromto(2)
             pfts_merg(:,k,icls) = filter(k) * pfts_merg(:,k,icls)
             pfts_even(:,k,icls) = filter(k) * pfts_even(:,k,icls)
@@ -1160,9 +1164,10 @@ contains
     subroutine calc_frc( pft1, pft2, n, frc )
         complex(dp), intent(in)    :: pft1(pftsz,kfromto(1):kfromto(2)), pft2(pftsz,kfromto(1):kfromto(2))
         integer,     intent(in)    :: n
-        real(sp),    intent(inout) :: frc(kfromto(1):kfromto(2))
+        real(sp),    intent(inout) :: frc(1:n)
         real(dp) :: var1, var2, denom
         integer  :: k
+        frc(1:kfromto(1)-1) = 0.999
         do k = kfromto(1), kfromto(2)
             var1  = sum(csq_fast(pft1(:,k)))
             var2  = sum(csq_fast(pft2(:,k)))
@@ -1173,6 +1178,7 @@ contains
                 frc(k) = 0.0
             endif
         enddo
+        if( kfromto(2) < n ) frc(kfromto(2)+1:) = 0.0
     end subroutine calc_frc
 
     ! Format for PFT I/O
