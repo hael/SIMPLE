@@ -559,9 +559,11 @@ contains
             endif
             ! import new particles & clustering init
             call import_sets_into_pool( nimported )
-            ! classify here
+            ! check on progress, updates particles & alignement parameters
+            ! TODO: class remapping
             call update_pool_status
             call update_pool
+            call update_pool_aln_params
             call analyze2D_pool
             ! cycle
             call sleep(WAITTIME)
@@ -649,6 +651,7 @@ contains
                             call pool%os_ptcl2D%set_stkind(iptcl, imic)
                             call pool%os_ptcl2D%set(iptcl, 'updatecnt', 0)  ! new particle
                             call pool%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
+                            call pool%os_ptcl2D%delete_2Dclustering(iptcl, keepshifts=.true.)
                         enddo
                         !$omp end parallel do
                         ind   = ind   + nptcls
