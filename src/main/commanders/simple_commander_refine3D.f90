@@ -623,7 +623,7 @@ contains
                         ! per state post-process
                         do state = 1,params%nstates
                             str_state = int2str_pad(state,2)
-                            if( state_pops(state) == 0 ) cycle
+                            if( state_pops(state) == 0 .or. params%l_comlin ) cycle
                             call cline_postprocess%set('state',    state)
                             call cline_postprocess%set('nthr', nthr_here)
                             if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
