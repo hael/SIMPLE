@@ -481,6 +481,32 @@ contains
             endif
         end subroutine get_line
 
+        ! Extrapolate cline, rline to pfts_clin and ctf2_clin
+        subroutine extrapolate_line(ref, rot, w, cline_e, cline_o, rline_e, rline_o)
+            integer,     intent(in) :: ref, rot
+            real(dp),    intent(in) :: w
+            complex(dp), intent(in) :: cline_e(kfromto(1):kfromto(2))
+            complex(dp), intent(in) :: cline_o(kfromto(1):kfromto(2))
+            real(dp),    intent(in) :: rline_e(kfromto(1):kfromto(2))
+            real(dp),    intent(in) :: rline_o(kfromto(1):kfromto(2))
+            integer :: irot
+            irot = rot
+            if( irot < 1 )then
+                irot = irot + pftsz
+                pfts_clin_even(irot,:,ref) = pfts_clin_even(irot,:,ref) + w * conjg(cline_e)
+                pfts_clin_odd( irot,:,ref) = pfts_clin_odd( irot,:,ref) + w * conjg(cline_o)
+            elseif( irot > pftsz )then
+                irot = irot - pftsz
+                pfts_clin_even(irot,:,ref) = pfts_clin_even(irot,:,ref) + w * conjg(cline_e)
+                pfts_clin_odd( irot,:,ref) = pfts_clin_odd( irot,:,ref) + w * conjg(cline_o)
+            else
+                pfts_clin_even(irot,:,ref) = pfts_clin_even(irot,:,ref) + w * cline_e
+                pfts_clin_odd( irot,:,ref) = pfts_clin_odd( irot,:,ref) + w * cline_o
+            endif
+            ctf2_clin_even(irot,:,ref) = ctf2_clin_even(irot,:,ref) + w * rline_e
+            ctf2_clin_odd( irot,:,ref) = ctf2_clin_odd( irot,:,ref) + w * rline_o
+        end subroutine extrapolate_line
+
         ! Inserts the intersecting common line contribution of all to all planes
         ! output is mirrored: X[i+ncls/2] = mirror(X[i])
         subroutine calc_comlin_contribution
@@ -528,50 +554,11 @@ contains
                         sumw = wl + w + wr
                         w    = w / sumw; wl = wl / sumw; wr = wr / sumw
                         ! leftmost line
-                        if( rotl < 1 )then
-                            rotl = rotl + pftsz
-                            pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + wl * conjg(cline_e)
-                            pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + wl * conjg(cline_o)
-                        elseif( rotl > pftsz )then
-                            rotl = rotl - pftsz
-                            pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + wl * conjg(cline_e)
-                            pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + wl * conjg(cline_o)
-                        else
-                            pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + wl * cline_e
-                            pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + wl * cline_o
-                        endif
-                        ctf2_clin_even(rotl,:,iref) = ctf2_clin_even(rotl,:,iref) + wl * rline_e
-                        ctf2_clin_odd(rotl,:,iref)  = ctf2_clin_odd(rotl,:,iref)  + wl * rline_o
+                        call extrapolate_line(iref, rotl, wl, cline_e, cline_o, rline_e, rline_o)
                         ! nearest line
-                        if( rot < 1 )then
-                            rot = rot + pftsz
-                            pfts_clin_even(rot,:,iref) = pfts_clin_even(rot,:,iref) + w * conjg(cline_e)
-                            pfts_clin_odd(rot,:,iref)  = pfts_clin_odd(rot,:,iref)  + w * conjg(cline_o)
-                        elseif( rot > pftsz )then
-                            rot = rot - pftsz
-                            pfts_clin_even(rot,:,iref) = pfts_clin_even(rot,:,iref) + w * conjg(cline_e)
-                            pfts_clin_odd(rot,:,iref)  = pfts_clin_odd(rot,:,iref)  + w * conjg(cline_o)
-                        else
-                            pfts_clin_even(rot,:,iref) = pfts_clin_even(rot,:,iref) + w * cline_e
-                            pfts_clin_odd(rot,:,iref)  = pfts_clin_odd(rot,:,iref)  + w * cline_o
-                        endif
-                        ctf2_clin_even(rot,:,iref) = ctf2_clin_even(rot,:,iref) + w * rline_e
-                        ctf2_clin_odd(rot,:,iref)  = ctf2_clin_odd(rot,:,iref)  + w * rline_o
+                        call extrapolate_line(iref, rot,  w,  cline_e, cline_o, rline_e, rline_o)
                         ! rightmost line
-                        if( rotr < 1 )then
-                            rotr = rotr + pftsz
-                            pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + wr * conjg(cline_e)
-                            pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + wr * conjg(cline_o)
-                        elseif( rotr > pftsz )then
-                            rotr = rotr - pftsz
-                            pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + wr * conjg(cline_e)
-                            pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + wr * conjg(cline_o)
-                        else
-                            pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + wr * cline_e
-                            pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + wr * cline_o
-                        endif
-                        ctf2_clin_even(rotr,:,iref) = ctf2_clin_even(rotr,:,iref) + wr * rline_e
-                        ctf2_clin_odd(rotr,:,iref)  = ctf2_clin_odd(rotr,:,iref)  + wr * rline_o
+                        call extrapolate_line(iref, rotr, wr, cline_e, cline_o, rline_e, rline_o)
                     enddo
                     ! mirror to southern hemisphere
                     m = iref + ncls/2
@@ -605,34 +592,8 @@ contains
                         rotr = rotl + 1
                         if( rotr > nrots ) rotr = rotr - nrots
                         w    = real(pcomlines(jref,iref)%self_w,dp)
-                        if( rotl < 1 )then
-                            rotl = rotl + pftsz
-                            pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + (1.d0-w) * conjg(cline_e)
-                            pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + (1.d0-w) * conjg(cline_o)
-                        elseif( rotl > pftsz )then
-                            rotl = rotl - pftsz
-                            pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + (1.d0-w) * conjg(cline_e)
-                            pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + (1.d0-w) * conjg(cline_o)
-                        else
-                            pfts_clin_even(rotl,:,iref) = pfts_clin_even(rotl,:,iref) + (1.d0-w) * cline_e
-                            pfts_clin_odd(rotl,:,iref)  = pfts_clin_odd(rotl,:,iref)  + (1.d0-w) * cline_o
-                        endif
-                        ctf2_clin_even(rotl,:,iref) = ctf2_clin_even(rotl,:,iref) + (1.d0-w) * rline_e
-                        ctf2_clin_odd(rotl,:,iref)  = ctf2_clin_odd(rotl,:,iref)  + (1.d0-w) * rline_o
-                        if( rotr < 1 )then
-                            rotr = rotr + pftsz
-                            pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + w * conjg(cline_e)
-                            pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + w * conjg(cline_o)
-                        elseif( rotr > pftsz )then
-                            rotr = rotr - pftsz
-                            pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + w * conjg(cline_e)
-                            pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + w * conjg(cline_o)
-                        else
-                            pfts_clin_even(rotr,:,iref) = pfts_clin_even(rotr,:,iref) + w * cline_e
-                            pfts_clin_odd(rotr,:,iref)  = pfts_clin_odd(rotr,:,iref)  + w * cline_o
-                        endif
-                        ctf2_clin_even(rotr,:,iref) = ctf2_clin_even(rotr,:,iref) + w * rline_e
-                        ctf2_clin_odd(rotr,:,iref)  = ctf2_clin_odd(rotr,:,iref)  + w * rline_o
+                        call extrapolate_line(iref, rotl, 1.d0-w, cline_e, cline_o, rline_e, rline_o)
+                        call extrapolate_line(iref, rotr,      w, cline_e, cline_o, rline_e, rline_o)
                     enddo
                     ! mirror to southern hemisphere
                     m = iref + ncls/2
