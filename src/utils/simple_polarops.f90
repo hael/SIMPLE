@@ -295,22 +295,18 @@ contains
                 !$omp end parallel do
             case('vol')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-                !$omp private(icls,eo_pop,pop,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o)
+                !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,pftm,ctf2m)
                 do icls = 1,ncls/2
-                    eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls) ! eo_pops has to be calculated differently
-                    pop    = sum(eo_pop)
-                    ! calculate sum of: class + common-line contribution
-                    if( pop <= 5 )then
-                        pfte  = pfts_clin_even(:,:,icls)
-                        pfto  = pfts_clin_odd(:,:,icls)
-                        ctf2e = ctf2_clin_even(:,:,icls)
-                        ctf2o = ctf2_clin_odd(:,:,icls)
-                    else
-                        pfte  = pfts_even(:,:,icls)/real(pop,dp) + pfts_clin_even(:,:,icls)
-                        pfto  = pfts_odd(:,:,icls) /real(pop,dp) + pfts_clin_odd(:,:,icls)
-                        ctf2e = ctf2_even(:,:,icls)/real(pop,dp) + ctf2_clin_even(:,:,icls)
-                        ctf2o = ctf2_odd(:,:,icls) /real(pop,dp) + ctf2_clin_odd(:,:,icls)
-                    endif
+                    ! calculate sum of: class + mirror of class pair + already mirrored common-line contribution
+                    m = ncls/2 + icls
+                    call mirror_pft(pfts_even(:,:,m), pftm)
+                    pfte  = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls) + pftm
+                    call mirror_pft(pfts_odd(:,:,m), pftm)
+                    pfto  = pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls)   + pftm
+                    call mirror_ctf2(ctf2_even(:,:,m), ctf2m)
+                    ctf2e = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls) + ctf2m
+                    call mirror_ctf2(ctf2_odd(:,:,m), ctf2m)
+                    ctf2o = ctf2_odd(:,:,icls)  + ctf2_clin_odd(:,:,icls)  + ctf2m
                     ! merged then e/o
                     pft   = pfte  + pfto
                     ctf2  = ctf2e + ctf2o
@@ -318,7 +314,6 @@ contains
                     call safe_norm(pfte, ctf2e, pfts_even(:,:,icls))
                     call safe_norm(pfto, ctf2o, pfts_odd(:,:,icls))
                     ! mirroring the restored images
-                    m = ncls/2 + icls
                     call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
                     call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
                     call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
