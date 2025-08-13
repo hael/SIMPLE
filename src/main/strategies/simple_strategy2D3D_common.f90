@@ -138,7 +138,7 @@ contains
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05
         real                  :: mapres(params_glob%nstates)
-        integer               :: s, loc(1), lp_ind, arr_sz, fsc_sz
+        integer               :: s, loc(1), lp_ind, arr_sz, fsc_sz, nyqcrop_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         if( params_glob%l_lpset )then
@@ -230,6 +230,10 @@ contains
             ! re-set the low-pass limit
             params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
+        ! making sure the resolution limit does not exceed limits of box_crop
+        nyqcrop_ind            = calc_fourier_index(2.*params_glob%smpd_crop, params_glob%box_crop, params_glob%smpd_crop)
+        params_glob%kfromto(2) = min(params_glob%kfromto(2), nyqcrop_ind)
+        params_glob%lp         = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         ! update low-pass limit in project
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
