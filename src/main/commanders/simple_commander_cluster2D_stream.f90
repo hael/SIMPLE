@@ -1314,6 +1314,8 @@ contains
         call spproj%kill
     end subroutine import_records_into_pool
 
+    ! This controls the evolution of the pool alignement parameters:
+    ! lp, ICM, trs, extr_iter
     subroutine update_pool_aln_params
         real,    parameter :: ICM_LAMBDA = 2.0
         integer, parameter :: ITERLIM    = 20

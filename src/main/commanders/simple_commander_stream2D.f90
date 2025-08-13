@@ -42,7 +42,7 @@ integer,               parameter :: PAUSE_TIMELIMIT = 600   ! time (secs) after 
 contains
 
     ! Manages individual chunks/sets classification & rejection
-    ! TODO: pausing, handling of un-classified particles & restart
+    ! TODO: handling of un-classified particles & restart
     subroutine exec_sieve_cavgs( self, cline )
         class(commander_stream_sieve_cavgs), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -62,7 +62,7 @@ contains
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
         integer          :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
-        logical          :: l_pause, l_params_updated
+        logical          :: l_params_updated
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
@@ -153,8 +153,7 @@ contains
         nprojects        = 0
         iter             = 0       ! global number of infinite loop iterations
         n_failed_jobs    = 0
-        l_pause          = .false.
-        time_last_import = huge(time_last_import)      ! used for flushing unprocessed particles
+        time_last_import = huge(time_last_import)   ! used for flushing unprocessed particles
         ! guistats init
         call gui_stats%init(.true.)
         call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
@@ -208,14 +207,11 @@ contains
             nice_communicator%view_cls2D%mskdiam  = params%mskdiam
             nice_communicator%view_cls2D%boxsizea = get_boxa()
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
-            if( l_params_updated ) l_pause = .false.    ! resuming
             call update_chunks
             call memoize_chunks(chunkslist, nchunks_imported)
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
-            if( l_params_updated ) l_pause = .false.    ! resuming
             if( nchunks_imported > 0 )then
-                nchunks_glob         = nchunks_glob + nchunks_imported
-                l_pause              = .false.   ! resuming
+                nchunks_glob = nchunks_glob + nchunks_imported
                 ! build sets
                 call generate_sets(chunkslist, setslist)
             endif
@@ -233,22 +229,13 @@ contains
                     call submit_cluster_cavgs
                 endif
             endif
-            if( l_pause )then
-                ! Whether to flush particles
-                if( (time8()-time_last_import > FLUSH_TIMELIMIT) .and. all_chunks_available() )then
-                    ! Remaining unclassified particles: TODO
-                endif
-            endif
             ! 2D analyses
             call analyze2D_new_chunks(projrecords)
             call sleep(WAITTIME)
             ! guistats
             call gui_stats%write_json
             ! nice
-            if(l_pause) then
-                nice_communicator%stat_root%stage = "paused chunk 2D analysis"
-                nice_communicator%stat_root%user_input = .true.
-            else if(get_nchunks() > 0) then
+            if(get_nchunks() > 0) then
                 nice_communicator%stat_root%stage = "classifying chunks"
                 nice_communicator%stat_root%user_input = .false.
             end if
@@ -489,14 +476,15 @@ contains
         type(json_core)                        :: json
         type(json_value),          pointer     :: snapshot_json => null()
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        integer :: i, iter, nprojects, nimported, nptcls_glob
-        logical :: l_pause
+        integer(kind=dp) :: time_last_import, time_last_iter
+        integer :: i, iter, nprojects, nimported, nptcls_glob, nsets_imported, pool_iter, iter_last_import
+        logical :: l_pause, l_params_updated
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
         call cline%set('reject_mics',  'no')
         call cline%set('reject_cls',   'no') ! refers to previous implementation
-        call cline%set('kweight_chunk','default')
+        call cline%set('kweight_pool', 'default')
         call cline%set('wiener',       'full')
         call cline%set('refine',       'snhc_smpl')
         call cline%set('ml_reg',       'no')
@@ -537,13 +525,15 @@ contains
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! project watcher
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
-        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
         ! Infinite loop
-        iter        = 0
-        nprojects   = 0
-        nimported   = 0
-        nptcls_glob = 0         ! global # of particles present in the pool
-        l_pause     = .false.   ! pause clustering
+        iter             = 0
+        nprojects        = 0        ! # of projects per iteration
+        nimported        = 0        ! # of sets per iteration
+        nptcls_glob      = 0        ! global # of particles present in the pool
+        l_pause          = .false.  ! pause clustering
+        nsets_imported   = 0        ! Global # of sets imported
+        time_last_import = huge(time_last_import)
+        iter_last_import = -1       ! Pool iteration # when set(s) last imported
         do
             ! termination
             if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit ) exit
@@ -559,13 +549,38 @@ contains
             endif
             ! import new particles & clustering init
             call import_sets_into_pool( nimported )
+            if( nimported > 1 )then
+                time_last_import = time8()
+                iter_last_import = get_pool_iter()
+                call unpause_pool
+            endif
+            ! some gui interaction? Joe
+            nsets_imported = count(setslist%imported)
+            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            if( l_params_updated ) call unpause_pool
             ! check on progress, updates particles & alignement parameters
             ! TODO: class remapping
-            call update_pool_status
-            call update_pool
-            call update_pool_aln_params
-            call analyze2D_pool
-            ! cycle
+            if( l_pause )then
+                call generate_pool_stats
+                ! TODO Flush raw particles
+            else
+                ! progress
+                call update_pool_status
+                ! updates particles if iteration completes
+                call update_pool
+                ! optionally updates alignement parameters
+                call update_pool_aln_params
+                ! initiates new iteration
+                pool_iter = get_pool_iter()
+                call analyze2D_pool
+                if( get_pool_iter() > pool_iter )then
+                    nice_communicator%stat_root%user_input = .true.
+                    time_last_iter = time8()
+                endif
+                ! pause?
+                call pause_pool
+            endif
+            ! Wait
             call sleep(WAITTIME)
         enddo
         ! cleanup
@@ -575,6 +590,21 @@ contains
         call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
         contains
+
+            ! pause pool in absence of new sets,
+            subroutine pause_pool
+                if( (pool_iter >= iter_last_import+PAUSE_NITERS) .or.&
+                    & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
+                    l_pause = is_pool_available()
+                    if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+                endif
+            end subroutine pause_pool
+
+            ! resumes with new sets or analysis parameters have been updated
+            subroutine unpause_pool
+                if( l_pause ) write(logfhandle,'(A)')'>>> RESUMING 2D ANALYSIS'
+                l_pause = .false.
+            end subroutine unpause_pool
 
             ! imports new sets of pre-classified particles into the pool
             ! and initialize the clustering module
@@ -649,8 +679,9 @@ contains
                             jptcl = ind   + i - 1
                             call pool%os_ptcl2D%transfer_ori(iptcl, spprojs(iset)%os_ptcl2D, jptcl)
                             call pool%os_ptcl2D%set_stkind(iptcl, imic)
-                            call pool%os_ptcl2D%set(iptcl, 'updatecnt', 0)  ! new particle
-                            call pool%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
+                            ! new particle
+                            call pool%os_ptcl2D%set(iptcl, 'updatecnt', 0)
+                            call pool%os_ptcl2D%set(iptcl, 'frac',      0.)
                             call pool%os_ptcl2D%delete_2Dclustering(iptcl, keepshifts=.true.)
                         enddo
                         !$omp end parallel do
