@@ -143,7 +143,7 @@ contains
         real(sp),    pointer :: pctfmats(:,:,:), rctf(:,:)
         real(dp) :: w
         real     :: incr_shift(2)
-        integer  :: eopops(2,ncls), i, icls, iptcl, irot
+        integer  :: i, icls, iptcl, irot
         logical  :: l_ctf, l_even, l_3D
         l_3D = .false.
         if( present(is3D) ) l_3D = is3D
@@ -151,12 +151,12 @@ contains
         call spproj%ptr2oritype(params_glob%oritype, spproj_field)
         call pftcc%get_ptcls_ptr(pptcls)
         l_ctf = pftcc%is_with_ctf()
-        if( l_ctf )call pftcc%get_ctfmats_ptr(pctfmats)
+        if( l_ctf )then
+            call pftcc%get_ctfmats_ptr(pctfmats)
+            call pftcc%get_work_rpft_ptr(rctf)
+        endif
+        call pftcc%get_work_pft_ptr(rptcl)
         ! update classes
-        eopops = 0
-        !!$omp parallel do schedule(guided) proc_bind(close) default(shared)&
-        !!$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf)&
-        !!$omp reduction(+:eopops,pfts_even,ctf2_even,pfts_odd,ctf2_odd)
         do i = 1,nptcls
             ! particles parameters
             iptcl = pinds(i)
@@ -173,10 +173,8 @@ contains
             incr_shift = incr_shifts(:,i)
             ! weighted restoration
             if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
-            call pftcc%get_work_pft_ptr(rptcl)
             call pftcc%rotate_pft(pptcls(:,:,i), irot, rptcl)
             if( l_ctf )then
-                call pftcc%get_work_rpft_ptr(rctf)
                 call pftcc%rotate_pft(pctfmats(:,:,i), irot, rctf)
                 if( l_even )then
                     pfts_even(:,:,icls) = pfts_even(:,:,icls) + w * cmplx(rptcl,kind=dp) * real(rctf,kind=dp)
@@ -196,13 +194,11 @@ contains
             endif
             ! total population
             if( l_even )then
-                eopops(1,icls) = eopops(1,icls) + 1
+                eo_pops(1,icls) = eo_pops(1,icls) + 1
             else
-                eopops(2,icls) = eopops(2,icls) + 1
+                eo_pops(2,icls) = eo_pops(2,icls) + 1
             endif
         enddo
-        !!$omp end parallel do
-        eo_pops = eo_pops + eopops
         ! cleanup
         nullify(spproj_field,rptcl,rctf,pptcls,pctfmats)
     end subroutine polar_cavger_update_sums
