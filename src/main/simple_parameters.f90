@@ -113,6 +113,7 @@ type :: parameters
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
+    character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
     character(len=3)          :: refs_delin='no'      !< delinearizing reprojections of different states (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
@@ -485,6 +486,7 @@ type :: parameters
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: pool_threshold_factor=POOL_THRESHOLD_FACTOR  !< stream pool class rejection adjustment
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
+    real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
@@ -742,6 +744,7 @@ contains
         call check_carg('rank_cavgs',     self%rank_cavgs)
         call check_carg('ranked_parts',   self%ranked_parts)
         call check_carg('real_filter',    self%real_filter)
+        call check_carg('recthres',       self%recthres)
         call check_carg('ref_type',       self%ref_type)
         call check_carg('refine',         self%refine)
         call check_carg('refine_type',    self%refine_type)
@@ -1013,6 +1016,7 @@ contains
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('pool_threshold_factor', self%pool_threshold_factor)
         call check_rarg('prob_athres',    self%prob_athres)
+        call check_rarg('rec_athres',     self%rec_athres)
         call check_rarg('res_target',     self%res_target)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)

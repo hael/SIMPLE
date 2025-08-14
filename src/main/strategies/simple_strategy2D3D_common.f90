@@ -741,10 +741,14 @@ contains
         integer,           intent(in)    :: pinds(nptcls2update)
         type(fplane),      allocatable   :: fpls(:)
         type(ctfparams),   allocatable   :: ctfparms(:)
-        type(ori) :: orientation
+        type(ori) :: orientation, o_thres
         real      :: shift(2), sdev_noise
         integer   :: batchlims(2), iptcl, i, i_batch, ibatch
         logical   :: l_rec_state
+        if( trim(params_glob%recthres).eq.'yes' )then
+            call o_thres%new(is_ptcl=.true.)
+            call o_thres%set_euler([params_glob%e1, params_glob%e2, params_glob%e3])
+        endif
         l_rec_state = cline%defined('state')
         ! init volumes
         call preprecvols
@@ -774,10 +778,13 @@ contains
             !$omp end parallel do
             ! gridding
             do i=batchlims(1),batchlims(2)
-                iptcl       = pinds(i)
-                ibatch      = i - batchlims(1) + 1
+                iptcl  = pinds(i)
+                ibatch = i - batchlims(1) + 1
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
+                if( trim(params_glob%recthres).eq.'yes' )then
+                    if( rad2deg(orientation .euldist. o_thres) < params_glob%rec_athres ) cycle
+                endif
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
             end do
         end do
@@ -806,7 +813,7 @@ contains
         integer,           allocatable   :: eopops(:,:,:), states(:), state_pinds(:)
         type(ctfparams) :: ctfparms
         type(image)     :: instrimg, numimg, denomimg
-        type(ori)       :: orientation
+        type(ori)       :: orientation, o_thres
         real            :: shift(2), e3, sdev_noise, w
         integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
         integer         :: s, state_nptcls, pop
@@ -814,6 +821,10 @@ contains
         logical         :: BILINEAR = .true.
         integer(timer_int_kind) :: t
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
+        if( trim(params_glob%recthres).eq.'yes' )then
+            call o_thres%new(is_ptcl=.true.)
+            call o_thres%set_euler([params_glob%e1, params_glob%e2, params_glob%e3])
+        endif
         if( DEBUG ) t = tic()
         ! init volumes
         call preprecvols
@@ -831,6 +842,12 @@ contains
             iproj = build_glob%spproj_field%get_int(iptcl, 'proj')
             eo    = build_glob%spproj_field%get_eo(iptcl)+1
             s     = build_glob%spproj_field%get_state(iptcl)
+            if( trim(params_glob%recthres).eq.'yes' )then
+                if( rad2deg(orientation .euldist. o_thres) < params_glob%rec_athres )then
+                    states(i) = 0
+                    cycle
+                endif
+            endif
             states(i) = s
             eopops(iproj,eo,s) = eopops(iproj,eo,s) + 1
         end do
@@ -865,7 +882,7 @@ contains
         ! state loop
         do s = 1,params_glob%nstates
             ! particle indices for this state
-            state_pinds  = pack(pinds, mask=(states==s))
+            state_pinds = pack(pinds, mask=(states==s))
             if( allocated(state_pinds) )then
                 state_nptcls = size(state_pinds)
             else
@@ -921,8 +938,8 @@ contains
                     pop = eopops(iproj,eo,s) ! e/o projection direction population
                     if( pop == 0 ) cycle
                     do i = batchlims(1),batchlims(2)
-                        iptcl  = state_pinds(i)
-                        pproj  = build_glob%spproj_field%get_int(iptcl, 'proj')
+                        iptcl = state_pinds(i)
+                        pproj = build_glob%spproj_field%get_int(iptcl, 'proj')
                         if( iproj /= pproj ) cycle
                         peo = build_glob%spproj_field%get_eo(iptcl)+1
                         if( peo /= eo ) cycle
