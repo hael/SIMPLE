@@ -835,7 +835,7 @@ contains
             &eopops(params_glob%nspace,2,params_glob%nstates), states(nptcls2update))
         ! e/o projection directions populations
         eopops = 0
-        !$omp parallel default(shared) private(i,iptcl,iproj,eo,ibatch,s) proc_bind(close)
+        !$omp parallel default(shared) private(i,iptcl,iproj,eo,ibatch,s,orientation) proc_bind(close)
         !$omp do schedule(static) reduction(+:eopops)
         do i = 1,nptcls2update
             iptcl = pinds(i)
@@ -843,6 +843,7 @@ contains
             eo    = build_glob%spproj_field%get_eo(iptcl)+1
             s     = build_glob%spproj_field%get_state(iptcl)
             if( trim(params_glob%recthres).eq.'yes' )then
+                call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( rad2deg(orientation .euldist. o_thres) < params_glob%rec_athres )then
                     states(i) = 0
                     cycle
