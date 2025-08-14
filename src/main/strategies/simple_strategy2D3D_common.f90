@@ -741,13 +741,17 @@ contains
         integer,           intent(in)    :: pinds(nptcls2update)
         type(fplane),      allocatable   :: fpls(:)
         type(ctfparams),   allocatable   :: ctfparms(:)
-        type(ori) :: orientation, o_thres
-        real      :: shift(2), sdev_noise
-        integer   :: batchlims(2), iptcl, i, i_batch, ibatch
+        type(ori) :: orientation, o_thres, o_mirr
+        real      :: shift(2), sdev_noise, euls(3), euls_mirr(3)
+        integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff
         logical   :: l_rec_state
         if( trim(params_glob%recthres).eq.'yes' )then
+            euls = [params_glob%e1, params_glob%e2, params_glob%e3]
+            call euler_mirror(euls, euls_mirr)
             call o_thres%new(is_ptcl=.true.)
-            call o_thres%set_euler([params_glob%e1, params_glob%e2, params_glob%e3])
+            call o_thres%set_euler(euls)
+            call o_mirr%new(is_ptcl=.true.)
+            call o_mirr%set_euler(euls_mirr)
         endif
         l_rec_state = cline%defined('state')
         ! init volumes
@@ -757,6 +761,7 @@ contains
         ! allocate array
         allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
         ! gridding batch loop
+        nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
@@ -783,11 +788,14 @@ contains
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 if( trim(params_glob%recthres).eq.'yes' )then
-                    if( rad2deg(orientation .euldist. o_thres) < params_glob%rec_athres ) cycle
+                    if( rad2deg(orientation .euldist. o_thres) < params_glob%rec_athres .or.&
+                       &rad2deg(orientation .euldist. o_mirr ) < params_glob%rec_athres ) cycle
                 endif
+                nptcls_eff = nptcls_eff + 1
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
             end do
         end do
+        if( trim(params_glob%recthres).eq.'yes' ) print *, 'nptcls in 3D reconstruction = ', nptcls_eff
         ! normalise structure factors
         call norm_struct_facts( cline )
         ! destruct
@@ -813,8 +821,8 @@ contains
         integer,           allocatable   :: eopops(:,:,:), states(:), state_pinds(:)
         type(ctfparams) :: ctfparms
         type(image)     :: instrimg, numimg, denomimg
-        type(ori)       :: orientation, o_thres
-        real            :: shift(2), e3, sdev_noise, w
+        type(ori)       :: orientation, o_thres, o_mirr
+        real            :: shift(2), e3, sdev_noise, w, euls(3), euls_mirr(3)
         integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
         integer         :: s, state_nptcls, pop
         logical         :: DEBUG    = .false.
@@ -822,8 +830,12 @@ contains
         integer(timer_int_kind) :: t
         real(timer_int_kind)    :: t_ini, t_pad, t_sum, t_rec
         if( trim(params_glob%recthres).eq.'yes' )then
+            euls = [params_glob%e1, params_glob%e2, params_glob%e3]
+            call euler_mirror(euls, euls_mirr)
             call o_thres%new(is_ptcl=.true.)
-            call o_thres%set_euler([params_glob%e1, params_glob%e2, params_glob%e3])
+            call o_thres%set_euler(euls)
+            call o_mirr%new(is_ptcl=.true.)
+            call o_mirr%set_euler(euls_mirr)
         endif
         if( DEBUG ) t = tic()
         ! init volumes
@@ -844,7 +856,8 @@ contains
             s     = build_glob%spproj_field%get_state(iptcl)
             if( trim(params_glob%recthres).eq.'yes' )then
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
-                if( rad2deg(orientation .euldist. o_thres) < params_glob%rec_athres )then
+                if( rad2deg(orientation .euldist. o_thres) < params_glob%rec_athres .or.&
+                   &rad2deg(orientation .euldist. o_mirr ) < params_glob%rec_athres )then
                     states(i) = 0
                     cycle
                 endif
