@@ -378,7 +378,7 @@ contains
             ! polar restoration
             params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
             if( params_glob%l_comlin )then
-                call polar_cavger_merge_eos_and_norm(pcomlines)
+                call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace , pcomlines=pcomlines)
             else
                 call polar_cavger_merge_eos_and_norm
             endif

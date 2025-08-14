@@ -539,7 +539,7 @@ contains
                 call polar_cavger_new(pftcc, params%nspace)
                 call polar_cavger_calc_pops(build%spproj)
                 if( params%l_comlin )then
-                    call polar_cavger_assemble_sums_from_parts(pcomlines)
+                    call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace, pcomlines=pcomlines)
                 else
                     call polar_cavger_assemble_sums_from_parts
                 endif

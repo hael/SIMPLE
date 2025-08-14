@@ -119,6 +119,7 @@ type :: polarft_corrcalc
     procedure          :: get_pftsz
     procedure          :: get_rot
     procedure          :: get_roind, get_roind_fast
+    procedure          :: get_dang
     procedure          :: get_coord
     procedure, private :: get_polar_coord_1, get_polar_coord_2
     generic            :: get_polar_coord => get_polar_coord_1, get_polar_coord_2
@@ -549,13 +550,18 @@ contains
         ind = minloc(dists, dim=1)
     end function get_roind
 
-    integer function get_roind_fast( self, psi )
+    pure integer function get_roind_fast( self, psi )
         class(polarft_corrcalc), intent(in) :: self
         real,                    intent(in) :: psi
-        get_roind_fast = nint(psi / self%dang)
+        get_roind_fast = nint(psi / self%dang) + 1
         if( get_roind_fast <=         0 ) get_roind_fast = get_roind_fast + self%nrots
         if( get_roind_fast > self%nrots ) get_roind_fast = get_roind_fast - self%nrots
     end function get_roind_fast
+
+    pure real function get_dang( self )
+        class(polarft_corrcalc), intent(in) :: self
+        get_dang = self%dang
+    end function get_dang
 
     !>  \brief returns polar coordinate for rotation rot
     !!         and Fourier index k
