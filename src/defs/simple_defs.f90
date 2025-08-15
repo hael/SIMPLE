@@ -145,30 +145,6 @@ type class_sample
     real,    allocatable :: ccs(:)
 end type class_sample
 
-type fplan_map
-    integer              :: n_points
-    integer, allocatable :: tar_find(:)
-    integer, allocatable :: ori_phys(:,:)
-    integer, allocatable :: tar_phys(:,:)
-    integer, allocatable :: ori_four(:,:)
-    integer, allocatable :: tar_four(:,:)
-end type fplan_map
-
-type points_polar_fmap
-    integer              :: n_points
-    integer, allocatable :: tar_find(:)
-    integer, allocatable :: ori_inds(:,:)
-    integer, allocatable :: tar_inds(:,:)
-end type points_polar_fmap
-
-type polar_fmap
-    logical :: legit
-    integer :: targ_irot
-    real    :: targ_w
-    integer :: self_irot
-    real    :: self_w
-end type polar_fmap
-
 ! oritype enumeration
 enum, bind(c)
     enumerator :: ENUM_ORISEG  = 0
@@ -316,9 +292,6 @@ integer, parameter :: QSYS_SUBMISSION_RETRY_MULTI = 3
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
 integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100          !< seconds
 integer, parameter :: WALLTIME_DEFAULT            = 172740       !< seconds, 47h59mins
-
-! precision constants
-integer, parameter :: fp_kind  = DP
 
 ! C-compatible boolean constants
 logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)

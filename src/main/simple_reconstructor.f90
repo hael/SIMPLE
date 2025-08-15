@@ -257,7 +257,7 @@ contains
         if( pwght < TINY )return
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
-        ! sride along h dimension for interpolation: all threads are at least
+        ! stride along h dimension for interpolation: all threads are at least
         ! wdim pixels away from each other to avoid race conditions
         stride = self%wdim
         ! setup rotation matrices

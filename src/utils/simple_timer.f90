@@ -32,7 +32,7 @@ implicit none
 private
 #include "simple_local_flags.inc"
 #ifndef TIMER_I4
-integer, parameter :: timer_int_kind = fp_kind
+integer, parameter :: timer_int_kind = dp
 #else
 integer, parameter :: timer_int_kind = sp
 #endif

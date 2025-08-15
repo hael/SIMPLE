@@ -5,10 +5,27 @@ use simple_oris,             only: oris
 use simple_polarft_corrcalc, only: polarft_corrcalc
 implicit none
 
-public :: comlin_map, polar_comlin_pfts, gen_polar_comlins, gen_polar_comlinsm, read_write_comlin
+public :: polar_fmap, fplan_map, comlin_map, polar_comlin_pfts, gen_polar_comlins
 
 private
 #include "simple_local_flags.inc"
+
+type fplan_map
+    integer              :: n_points
+    integer, allocatable :: tar_find(:)
+    integer, allocatable :: ori_phys(:,:)
+    integer, allocatable :: tar_phys(:,:)
+    integer, allocatable :: ori_four(:,:)
+    integer, allocatable :: tar_four(:,:)
+end type fplan_map
+
+type polar_fmap
+    logical :: legit
+    integer :: targ_irot
+    real    :: targ_w
+    integer :: self_irot
+    real    :: self_w
+end type polar_fmap
 
 contains
 
