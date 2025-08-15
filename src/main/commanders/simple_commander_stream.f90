@@ -758,8 +758,8 @@ contains
         type(parameters)                       :: params
         type(simple_nice_communicator)         :: nice_communicator
         type(guistats)                         :: gui_stats
-        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time triggers writing of project file
-        logical,                   parameter   :: DEBUG_HERE      = .true.
+        integer,                   parameter   :: INACTIVE_TIME = 900  ! inactive time triggers writing of project file
+        logical,                   parameter   :: DEBUG_HERE    = .false.
         logical,                   allocatable :: jobs_done(:), jobs_submitted(:)
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(projrecord),          allocatable :: projrecords(:), projrecords_main(:)

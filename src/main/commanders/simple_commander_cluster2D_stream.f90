@@ -523,17 +523,18 @@ contains
         ! general parameters
         master_cline => cline
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
-        l_wfilt             = .false.
-        l_scaling           = .true.
-        max_ncls            = params_glob%ncls
-        ncls_glob           = params_glob%ncls
-        ncls_rejected_glob  = 0
-        orig_projfile       = trim(params_glob%projfile)
-        projfile4gui        = trim(projfilegui)
-        l_update_sigmas     = params_glob%l_needs_sigma
-        nmics_last          = 0
-        l_abinitio2D        = cline%defined('algorithm')
+        l_wfilt            = .false.
+        l_scaling          = .true.
+        max_ncls           = params_glob%ncls
+        ncls_glob          = params_glob%ncls
+        ncls_rejected_glob = 0
+        orig_projfile      = trim(params_glob%projfile)
+        projfile4gui       = trim(projfilegui)
+        l_update_sigmas    = params_glob%l_needs_sigma
+        nmics_last         = 0
+        l_abinitio2D       = cline%defined('algorithm')
         if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
+        params_glob%nparts_pool = params_glob%nparts ! backwards compatibility
         ! bookkeeping & directory structure
         numlen         = len(int2str(params_glob%nparts))
         refs_glob      = ''
@@ -543,7 +544,6 @@ contains
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_mkdir(DIR_SNAPSHOT)
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
-        call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         pool_proj%projinfo = spproj%projinfo
         pool_proj%compenv  = spproj%compenv
         call pool_proj%projinfo%delete_entry('projname')
@@ -556,6 +556,8 @@ contains
         if( l_no_chunks )then
             iterswitch2euclid = 0
             ncls_glob         = params_glob%ncls
+        else
+            iterswitch2euclid = -1 ! because objfun=euclid always
         endif
         ! Pool command line
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
@@ -1050,17 +1052,19 @@ contains
 
     ! ends processing, generates project & cleanup
     subroutine terminate_stream2D( records )
-        type(projrecord), allocatable, intent(in) :: records(:)
+        type(projrecord), optional, allocatable, intent(in) :: records(:)
         integer :: ipart
         call terminate_chunks
         if( pool_iter == 0 )then
-            ! no pool 2D analysis performed, all available info is written down
-            if( allocated(records) )then
-                call projrecords2proj(records, pool_proj)
-                call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
-                call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
-                call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
-                call pool_proj%write(orig_projfile)
+            if( present(records) )then
+                ! no pool 2D analysis performed, all available info is written down
+                if( allocated(records) )then
+                    call projrecords2proj(records, pool_proj)
+                    call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
+                    call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
+                    call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
+                    call pool_proj%write(orig_projfile)
+                endif
             endif
         else
             if( .not.pool_available )then

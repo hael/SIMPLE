@@ -462,7 +462,7 @@ contains
     end subroutine exec_sieve_cavgs
 
     ! Manages Global 2D Clustering
-    ! TODO: pausing, handling of un-classified particles & restart
+    ! TODO: handling of un-classified particles & restart
     subroutine exec_stream_abinitio2D( self, cline )
         class(commander_stream_abinitio2D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -547,17 +547,6 @@ contains
                     call setslist%append(projects(i), setslist%n+1, .true.)
                 enddo
             endif
-            ! import new particles & clustering init
-            call import_sets_into_pool( nimported )
-            if( nimported > 1 )then
-                time_last_import = time8()
-                iter_last_import = get_pool_iter()
-                call unpause_pool
-            endif
-            ! some gui interaction? Joe
-            nsets_imported = count(setslist%imported)
-            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
-            if( l_params_updated ) call unpause_pool
             ! check on progress, updates particles & alignement parameters
             ! TODO: class remapping
             if( l_pause )then
@@ -568,6 +557,21 @@ contains
                 call update_pool_status
                 ! updates particles if iteration completes
                 call update_pool
+            endif
+            ! Import new particles & clustering init
+            call import_sets_into_pool( nimported )
+            if( nimported > 1 )then
+                time_last_import = time8()
+                iter_last_import = get_pool_iter()
+                call unpause_pool
+            endif
+            nsets_imported = count(setslist%imported)
+            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            if( l_params_updated ) call unpause_pool
+            ! Performs clustering iteration
+            if( l_pause )then
+                ! skip iteration
+            else
                 ! optionally updates alignement parameters
                 call update_pool_aln_params
                 ! initiates new iteration
@@ -583,6 +587,8 @@ contains
             ! Wait
             call sleep(WAITTIME)
         enddo
+        ! Cleanup and final project
+        call terminate_stream2D
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
@@ -640,8 +646,6 @@ contains
                     call spprojs(iset)%read_segment('ptcl2D', setslist%projfiles(iset))
                     nmics2import  = nmics2import  + spprojs(iset)%os_mic%get_noris()
                     nptcls2import = nptcls2import + spprojs(iset)%os_ptcl2D%get_noris()
-                    ! global list update
-                    setslist%imported(iset) = .true.
                 enddo
                 ! reallocations
                 call get_pool_ptr(pool)
@@ -660,7 +664,10 @@ contains
                 endif
                 ! parameters transfer
                 imic = nmics
-                do iset = 1,nsets2import
+                do iset = 1,setslist%n
+                    if( setslist%imported(iset) )       cycle   ! already imported
+                    if( .not.setslist%processed(iset) ) cycle   ! not processed yet
+                    if( setslist%busy(iset) )           cycle   ! being processed
                     fromp_prev = fromp
                     ind = 1
                     do jmic = 1,spprojs(iset)%os_mic%get_noris()
@@ -692,6 +699,8 @@ contains
                     ! display
                     write(logfhandle,'(A,I6,A,I6)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM SET ',setslist%ids(iset)
                     call flush(logfhandle)
+                    ! global list update
+                    setslist%imported(iset) = .true.
                 enddo
                 nimported = nsets2import
                 ! average all previously imported sigmas
