@@ -62,7 +62,6 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(class_sample),        allocatable :: clssmp(:)
-        type(polar_fmap),          allocatable :: pcomlines(:,:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(convergence) :: conv
@@ -125,7 +124,6 @@ contains
         endif
         call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter,&
                                         &do_polar=(l_polar .and. which_iter>1) )
-        if( params_glob%l_comlin ) call read_write_comlin(pcomlines, pftcc, build_glob%eulspace)
         if( l_polar .and. l_restore )then
             ! for restoration
             if( which_iter == 1 ) call polar_cavger_new(pftcc)
@@ -378,7 +376,7 @@ contains
             ! polar restoration
             params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
             if( params_glob%l_comlin )then
-                call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace , pcomlines=pcomlines)
+                call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
             else
                 call polar_cavger_merge_eos_and_norm
             endif

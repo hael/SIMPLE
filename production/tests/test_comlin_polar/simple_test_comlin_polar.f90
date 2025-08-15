@@ -6,7 +6,7 @@ use simple_image,            only: image
 use simple_projector,        only: projector
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_polarizer,        only: polarizer
-use simple_comlin,           only: polar_comlin_pfts, gen_polar_comlins
+use simple_comlin,           only: polar_comlin_pfts, gen_polar_comlins, polar_fmap
 use simple_sym,              only: sym
 implicit none
 integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55

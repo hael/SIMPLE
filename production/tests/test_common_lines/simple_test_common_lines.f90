@@ -4,7 +4,7 @@ use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 use simple_image,      only: image
 use simple_projector,  only: projector
-use simple_comlin,     only: comlin_map
+use simple_comlin,     only: comlin_map, fplan_map
 implicit none
 integer,          parameter   :: NPLANES = 20, ORI_IND1 = 3, ORI_IND2 = 15, NTHETAS = 18
 character(len=:), allocatable :: cmd

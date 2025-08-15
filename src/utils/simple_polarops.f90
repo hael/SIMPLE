@@ -204,9 +204,8 @@ contains
     end subroutine polar_cavger_update_sums
 
     !>  \brief  Restores class-averages
-    subroutine polar_cavger_merge_eos_and_norm( reforis, pcomlines )
-        type(oris),                    optional, intent(in) :: reforis
-        type(polar_fmap), allocatable, optional, intent(in) :: pcomlines(:,:)
+    subroutine polar_cavger_merge_eos_and_norm( reforis )
+        type(oris), optional, intent(in) :: reforis
         real,    parameter :: EPSILON = 0.1
         logical, parameter :: l_kb = .true.
         real, allocatable  :: res(:)
@@ -222,11 +221,9 @@ contains
                       &cavg_clin_frcs(kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
         nrots = 2*pftsz
         if( params_glob%l_comlin )then
-            if( .not. present(pcomlines) ) THROW_HARD('pcomlines needs to be inputted in polar_cavger_merge_eos_and_norm')
-            if( .not. present(reforis) )   THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
+            if( .not. present(reforis) )THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
             ! common-lines conribution
-            call calc_comlin_contribution
-            ! call calc_comlin_contrib( reforis ) ! functional, not active yet
+            call calc_comlin_contrib( reforis ) ! functional, not active yet
             ! need to compute the cavg/clin frcs here before pfts_even, pfts_odd are ctf-corrected
             if( trim(params_glob%polar_frcs) .eq. 'yes' )then
                 call get_cavg_clin
@@ -501,105 +498,6 @@ contains
             ctf2_clin_odd( irot,:,ref) = ctf2_clin_odd( irot,:,ref) + w * rline_o
         end subroutine extrapolate_line
 
-        ! Inserts the intersecting common line contribution of all to all planes
-        ! output is mirrored: X[i+ncls/2] = mirror(X[i])
-        subroutine calc_comlin_contribution
-            type(kbinterpol) :: kbwin
-            complex(dp) :: cline_l(kfromto(1):kfromto(2)), cline_r(kfromto(1):kfromto(2))
-            complex(dp) :: cline_e(kfromto(1):kfromto(2)), cline_o(kfromto(1):kfromto(2))
-            real(dp)    :: rline_l(kfromto(1):kfromto(2)), rline_r(kfromto(1):kfromto(2))
-            real(dp)    :: rline_e(kfromto(1):kfromto(2)), rline_o(kfromto(1):kfromto(2))
-            integer     :: iref, jref, rot, rotl, rotr, m
-            real(dp)    :: d, w,wl,wr,sumw
-            pfts_clin_even = DCMPLX_ZERO; pfts_clin_odd  = DCMPLX_ZERO
-            ctf2_clin_even = 0.d0; ctf2_clin_odd  = 0.d0
-            if( l_kb )then
-                ! KB interpolation
-                kbwin = kbinterpol(1.5, 2.0)
-                !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-                !$omp private(iref,jref,rot,rotl,rotr,w,wl,wr,sumw,d,cline_e,cline_o,rline_e,rline_o,cline_l,cline_r,rline_l,rline_r,m)
-                do iref = 1, ncls/2
-                    ! calculate all jref intersecting lines contribution to reference iref of northern hemisphere
-                    do jref = 1, ncls
-                        if( .not. pcomlines(jref,iref)%legit )cycle
-                        ! interpolated polar common line of slice jref on slice iref
-                        rot  = pcomlines(jref,iref)%targ_irot
-                        d    = real(pcomlines(jref,iref)%targ_w,dp)
-                        w    = kbwin%apod_dp(d); wl = kbwin%apod_dp(d-1.d0); wr = kbwin%apod_dp(d+1.d0)
-                        sumw = wl + w + wr
-                        w    = w / sumw; wl = wl / sumw; wr = wr / sumw
-                        call get_line(jref, rot,   .true., cline_e, rline_e)
-                        call get_line(jref, rot-1, .true., cline_l, rline_l)
-                        call get_line(jref, rot+1, .true., cline_r, rline_r)
-                        cline_e = wl*cline_l + w*cline_e + wr*cline_r
-                        rline_e = wl*rline_l + w*rline_e + wr*rline_r
-                        call get_line(jref, rot,   .false., cline_o, rline_o)
-                        call get_line(jref, rot-1, .false., cline_l, rline_l)
-                        call get_line(jref, rot+1, .false., cline_r, rline_r)
-                        cline_o = wl*cline_l + w*cline_o + wr*cline_r
-                        rline_o = wl*rline_l + w*rline_o + wr*rline_r
-                        ! extrapolate the interpolated polar common line to iref-th slice
-                        rot  = pcomlines(jref,iref)%self_irot
-                        rotl = rot - 1
-                        rotr = rot + 1
-                        if( rotr > nrots ) rotr = rotr - nrots
-                        d    = real(pcomlines(jref,iref)%self_w,dp)
-                        w    = kbwin%apod_dp(d); wl = kbwin%apod_dp(d-1.d0); wr = kbwin%apod_dp(d+1.d0)
-                        sumw = wl + w + wr
-                        w    = w / sumw; wl = wl / sumw; wr = wr / sumw
-                        ! leftmost line
-                        call extrapolate_line(iref, rotl, wl, cline_e, cline_o, rline_e, rline_o)
-                        ! nearest line
-                        call extrapolate_line(iref, rot,  w,  cline_e, cline_o, rline_e, rline_o)
-                        ! rightmost line
-                        call extrapolate_line(iref, rotr, wr, cline_e, cline_o, rline_e, rline_o)
-                    enddo
-                    ! mirror to southern hemisphere
-                    m = iref + ncls/2
-                    call mirror_pft( pfts_clin_even(:,:,iref), pfts_clin_even(:,:,m))
-                    call mirror_pft( pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,m))
-                    call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,m))
-                    call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,m))
-                enddo
-                !$omp end parallel do
-            else
-                ! Linear interpolation
-                !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-                !$omp private(iref,jref,rotl,rotr,w,cline_e,cline_o,rline_e,rline_o,cline_r,rline_r,m)
-                do iref = 1, ncls/2
-                    do jref = 1, ncls
-                        if( .not. pcomlines(jref,iref)%legit )cycle
-                        ! compute the interpolated polar common line, between rotl and rotr of jref-th reference
-                        rotl = pcomlines(jref,iref)%targ_irot
-                        rotr = rotl+1
-                        w    = real(pcomlines(jref,iref)%targ_w,dp)
-                        call get_line(jref, rotl, .true., cline_e, rline_e)
-                        call get_line(jref, rotr, .true., cline_r, rline_r)
-                        cline_e = (1.d0-w)*cline_e + w*cline_r
-                        rline_e = (1.d0-w)*rline_e + w*rline_r
-                        call get_line(jref, rotl, .false., cline_o, rline_o)
-                        call get_line(jref, rotr, .false., cline_r, rline_r)
-                        cline_o = (1.d0-w)*cline_o + w*cline_r
-                        rline_o = (1.d0-w)*rline_o + w*rline_r
-                        ! extrapolate the interpolated polar common line to rotl and rotr of iref-th reference
-                        rotl = pcomlines(jref,iref)%self_irot
-                        rotr = rotl + 1
-                        if( rotr > nrots ) rotr = rotr - nrots
-                        w    = real(pcomlines(jref,iref)%self_w,dp)
-                        call extrapolate_line(iref, rotl, 1.d0-w, cline_e, cline_o, rline_e, rline_o)
-                        call extrapolate_line(iref, rotr,      w, cline_e, cline_o, rline_e, rline_o)
-                    enddo
-                    ! mirror to southern hemisphere
-                    m = iref + ncls/2
-                    call mirror_pft( pfts_clin_even(:,:,iref), pfts_clin_even(:,:,m))
-                    call mirror_pft( pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,m))
-                    call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,m))
-                    call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,m))
-                enddo
-                !$omp end parallel do
-            endif
-        end subroutine calc_comlin_contribution
-
         subroutine calc_comlin_contrib( ref_space )
             use simple_polarft_corrcalc, only: pftcc_glob
             type(oris), intent(in) :: ref_space
@@ -862,9 +760,8 @@ contains
     end subroutine polar_cavger_refs2cartesian
 
     !>  \brief  Reads in and reduces partial matrices prior to restoration
-    subroutine polar_cavger_assemble_sums_from_parts( reforis, pcomlines )
-        type(oris),                    optional, intent(in) :: reforis
-        type(polar_fmap), allocatable, optional, intent(in) :: pcomlines(:,:)
+    subroutine polar_cavger_assemble_sums_from_parts( reforis )
+        type(oris), optional, intent(in) :: reforis
         character(len=:), allocatable :: cae, cao, cte, cto
         complex(dp),      allocatable :: pfte(:,:,:), pfto(:,:,:)
         real(dp),         allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
@@ -889,7 +786,7 @@ contains
             !$omp end parallel workshare
         enddo
         ! merge eo-pairs and normalize
-        call polar_cavger_merge_eos_and_norm(reforis=reforis, pcomlines=pcomlines)
+        call polar_cavger_merge_eos_and_norm(reforis=reforis)
     end subroutine polar_cavger_assemble_sums_from_parts
 
     ! I/O

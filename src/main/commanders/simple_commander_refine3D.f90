@@ -225,7 +225,6 @@ contains
         use simple_fsc,              only: plot_fsc
         use simple_commander_euclid, only: calc_group_sigmas_commander
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_comlin,           only: read_write_comlin
         use simple_polarops
         class(refine3D_distr_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -260,7 +259,6 @@ contains
         type(image)      :: vol_e, vol_o    
         character(len=:),          allocatable :: prev_refine_path, target_name, fname_vol, fname_even, fname_odd
         character(len=LONGSTRLEN), allocatable :: list(:)
-        type(polar_fmap),          allocatable :: pcomlines(:,:)
         integer,                   allocatable :: state_pops(:)
         real,                      allocatable :: res(:), fsc(:)
         character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
@@ -288,7 +286,6 @@ contains
         if( l_polar .and. params%l_comlin )then
             call build%build_general_tbox(params, cline, do3d=.true.)
             call pftcc%new(params%nspace, [1,1], params%kfromto)
-            call read_write_comlin(pcomlines, pftcc, build%eulspace)
         endif
         ! sanity check
         fall_over = .false.
@@ -539,7 +536,7 @@ contains
                 call polar_cavger_new(pftcc, params%nspace)
                 call polar_cavger_calc_pops(build%spproj)
                 if( params%l_comlin )then
-                    call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace, pcomlines=pcomlines)
+                    call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
                 else
                     call polar_cavger_assemble_sums_from_parts
                 endif
