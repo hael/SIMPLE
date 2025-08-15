@@ -228,6 +228,8 @@ contains
                     call is_set_processed(1)
                     call submit_cluster_cavgs
                 endif
+                ! make completed sets available to abinitio2D_stream
+                call flag_complete_sets
             endif
             ! 2D analyses
             call analyze2D_new_chunks(projrecords)
@@ -360,7 +362,7 @@ contains
                 type(sp_project)                       :: spproj
                 character(len=LONGSTRLEN), allocatable :: starfiles(:)
                 character(len=:),          allocatable :: tmpl
-                integer :: navail_chunks, n, iset, i, ic, ic_start, ic_end, nc
+                integer :: navail_chunks, n, iset, i, ic, ic_start, ic_end
                 navail_chunks = chunks%n - sets%n * params%nchunksperset
                 n = floor(real(navail_chunks) / real(params%nchunksperset))
                 if( n < 1 )return
@@ -381,8 +383,6 @@ contains
                     deallocate(starfiles)
                     ! update global list, also increments sets%n
                     call sets%append(tmpl//'/'//tmpl//trim(METADATA_EXT), sets%n+1, .false.)
-                    ! make completed project files visible to the watcher of the next application
-                    call spproj%write(trim(DIR_STREAM_COMPLETED)//tmpl//trim(METADATA_EXT))
                 enddo
                 call spproj%kill
             end subroutine generate_sets
@@ -390,7 +390,7 @@ contains
             subroutine submit_cluster_cavgs
                 type(cmdline)              :: cline_cluster_cavgs
                 character(len=XLONGSTRLEN) :: cwd
-                if( setslist%n < 1 )       return  ! no sets generated yet
+                if( setslist%n < 1 )        return  ! no sets generated yet
                 if( setslist%busy(1) )      return  ! ongoing
                 if( setslist%processed(1) ) return  ! already done
                 call cline_cluster_cavgs%set('prg',          'cluster_cavgs')
@@ -458,6 +458,20 @@ contains
                     setslist%processed(i) = .false.
                 endif
             end subroutine is_set_processed
+
+            ! make completed project files visible to the watcher of the next application
+            subroutine flag_complete_sets
+                character(len=:), allocatable :: destination
+                integer :: iset
+                do iset = 1,setslist%n
+                    if( setslist%imported(iset) ) cycle
+                    if( setslist%processed(iset) )then
+                        destination = trim(DIR_STREAM_COMPLETED)//'set_'//int2str(iset)//trim(METADATA_EXT)
+                        call simple_copy_file(setslist%projfiles(iset), destination)
+                        setslist%imported(iset) = .true.
+                    endif
+                enddo
+            end subroutine flag_complete_sets
 
     end subroutine exec_sieve_cavgs
 
