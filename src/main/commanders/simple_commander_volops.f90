@@ -348,6 +348,8 @@ contains
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//trim(fname_vol)//' does not exist')
         endif
+        ! using the input volume for postprocessing
+        if( cline%defined('vol'//int2str(state)) ) fname_vol = trim(params%vols(state))
         ! generate file names
         fname_even  = add2fbody(trim(fname_vol), params%ext, '_even')
         fname_odd   = add2fbody(trim(fname_vol), params%ext, '_odd' )

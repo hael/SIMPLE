@@ -1952,7 +1952,7 @@ contains
         ind = 0
         cnt = 0
         select case(trim(imgkind))
-        case('vol_msk')
+            case('vol_msk')
                 do i=1,self%os_out%get_noris()
                     if( self%os_out%isthere(i,'imgkind') )then
                         call self%os_out%getter(i,'imgkind',imgkind_here)
