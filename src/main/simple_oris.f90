@@ -2951,9 +2951,9 @@ contains
 
     !>  \brief  writes orientation info to file
     subroutine write_1( self, orifile, fromto )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: orifile
-        integer, optional, intent(in)    :: fromto(2)
+        class(oris),       intent(in) :: self
+        character(len=*),  intent(in) :: orifile
+        integer, optional, intent(in) :: fromto(2)
         character(len=100) :: io_message
         integer            :: file_stat, fnr, i, ffromto(2), cnt
         ffromto(1) = 1
