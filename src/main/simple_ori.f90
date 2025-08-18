@@ -1360,8 +1360,8 @@ contains
     end subroutine print_ori
 
     subroutine write( self, fhandle )
-        class(ori), intent(inout) :: self
-        integer,    intent(in)    :: fhandle
+        class(ori), intent(in) :: self
+        integer,    intent(in) :: fhandle
         character(len=:), allocatable :: str
         str = self%ori2str()
         if( allocated(str) ) write(fhandle,'(a)') str

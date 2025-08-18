@@ -32,6 +32,7 @@ type sym
     procedure          :: get_nsym
     procedure          :: get_pgrp
     procedure          :: get_symori
+    procedure          :: get_sym_rmat
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
     procedure          :: has_subgrp
@@ -207,10 +208,9 @@ contains
     end function get_eullims
 
     !>  \brief  is a getter
-    pure function get_nsym( self ) result( n )
-        class(sym), intent(in) :: self !< this instance
-        integer :: n
-        n = self%n
+    pure integer function get_nsym( self )
+        class(sym), intent(in) :: self
+        get_nsym = self%n
     end function get_nsym
 
     !>  \brief  is a getter
@@ -422,11 +422,19 @@ contains
 
     !>  \brief  is a getter
     subroutine get_symori( self, symop, e_sym )
-        class(sym), intent(inout) :: self
+        class(sym), intent(in)    :: self
         integer,    intent(in)    :: symop !< symmetry orientation
         type(ori),  intent(inout) :: e_sym
         call self%e_sym%get_ori(symop, e_sym)
     end subroutine get_symori
+
+    !>  \brief  returns rotation matrix associated with symmetry operation
+    subroutine get_sym_rmat( self, nsym, R )
+        class(sym), intent(in)  :: self
+        integer,    intent(in)  :: nsym
+        real,       intent(out) :: R(3,3)
+        R = self%e_sym%get_mat(nsym)
+    end subroutine get_sym_rmat
 
     !>  \brief  whether or not an orientation falls within the asymetric unit excluding mirror
     logical function within_asymunit( self, o, incl_mirr )
