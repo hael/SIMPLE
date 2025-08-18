@@ -176,7 +176,7 @@ contains
     subroutine inpl_srch( self, ref, irot_in )
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: ref
-        integer, optional,      intent(in)    :: irot_in
+        integer, optional,      intent(inout) :: irot_in
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
         if( .not. self%doshift ) return
@@ -196,6 +196,7 @@ contains
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
         endif
         if( irot > 0 ) call self%store_solution(iref, irot, cxy(1), sh=cxy(2:3))
+        if( present(irot_in) ) irot_in = irot
     end subroutine inpl_srch
 
     subroutine inpl_srch_peaks( self )
