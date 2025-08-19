@@ -76,10 +76,11 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        type(ori)        :: orientation
+        type(ori)        :: orientation, o_thres, o_mirr
+        type(oris)       :: packed_oris
         type(ctf)        :: tfun
         type(projector)  :: vol_pad
-        real             :: bfac, bfacerr
+        real             :: bfac, bfacerr, euls(3), euls_mirr(3)
         integer          :: i, j, cnt, ntot
         logical          :: apply_ctf, l_ptcl_frames
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'no')
@@ -115,7 +116,6 @@ contains
         endif
         call build%spproj_field%set_all2single('state', 1.0)
         call build%spproj_field%set_all2single('w',     1.0)
-        call build%spproj_field%write(params%outfile, [1,params%nptcls])
         ! prepare for image generation
         call build%vol%read(params%vols(1))
         call build%vol%mask(params%msk, 'soft', backgr=0.)
@@ -130,13 +130,25 @@ contains
             params%snr = params%snr / real(params%nframes)
         endif
         write(logfhandle,'(A)') '>>> GENERATING IMAGES'
-        cnt = 0
+        cnt  = 0
         ntot = params%top-params%fromp+1
+        if( trim(params%recthres).eq.'yes' )then
+            euls = [params%e1, params%e2, params%e3]
+            call euler_mirror(euls, euls_mirr)
+            call o_thres%new(is_ptcl=.true.)
+            call o_thres%set_euler(euls)
+            call o_mirr%new(is_ptcl=.true.)
+            call o_mirr%set_euler(euls_mirr)
+        endif
         do i=params%fromp,params%top
-            cnt = cnt+1
-            call progress(cnt,ntot)
             ! extract ori
             call build%spproj_field%get_ori(i, orientation)
+            if( trim(params%recthres).eq.'yes' )then
+                if( rad2deg(orientation .euldist. o_thres) < params%rec_athres .or.&
+                   &rad2deg(orientation .euldist. o_mirr ) < params%rec_athres ) cycle
+            endif
+            cnt = cnt+1
+            call progress(cnt,ntot)
             ! project vol
             call build%img_pad%zero_and_flag_ft
             call vol_pad%fproject(orientation, build%img_pad)
@@ -187,10 +199,25 @@ contains
                 if( cline%defined('part') )then
                     call build%img%write('simulated_particles_part'//int2str_pad(params%part,params%numlen)//params%ext, cnt)
                 else
-                    call build%img%write(params%outstk, i)
+                    call build%img%write(params%outstk, cnt)
                 endif
             endif
         end do
+        if( trim(params%recthres).eq.'yes' )then
+            call packed_oris%new(cnt, is_ptcl=.true.)
+            cnt = 0
+            do i=params%fromp,params%top
+                ! extract ori
+                call build%spproj_field%get_ori(i, orientation)
+                if( rad2deg(orientation .euldist. o_thres) < params%rec_athres .or.&
+                   &rad2deg(orientation .euldist. o_mirr ) < params%rec_athres ) cycle
+                cnt = cnt + 1
+                call packed_oris%set_ori(cnt, orientation)
+            enddo
+            call packed_oris%write(params%outfile, [1,cnt])
+        else
+            call build%spproj_field%write(params%outfile, [1,params%nptcls])
+        endif
         call vol_pad%kill_expanded
         call killimgbatch
         call orientation%kill
