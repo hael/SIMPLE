@@ -26,7 +26,7 @@ implicit none
 
 public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
 ! Pool
-public :: import_records_into_pool, analyze2D_pool, update_pool_status, update_pool
+public :: import_records_into_pool, analyze2D_pool, iterate_pool, update_pool_status, update_pool
 public :: reject_from_pool, reject_from_pool_user, write_pool_cls_selected_user
 public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
 public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected, get_pool_ptr
@@ -1652,6 +1652,279 @@ contains
         if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
         call tidy_2Dstream_iter
     end subroutine analyze2D_pool
+
+    ! Performs one iteration:
+    ! updates to command-line, particles sampling, temporary project & execution
+    subroutine iterate_pool
+        use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
+        use simple_ran_tabu
+        logical,                   parameter   :: L_BENCH = .false.
+        type(ran_tabu)                         :: random_generator
+        type(sp_project)                       :: spproj, spproj_history
+        type(cmdline),             allocatable :: clines(:)
+        integer,                   allocatable :: nptcls_per_stk(:), stk_order(:)
+        integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:)
+        character(len=:),          allocatable :: stack_fname, ext, fbody, stkname
+        character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
+        real                    :: frac_update, smpd
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
+        integer(timer_int_kind) :: t_tot
+        if( .not. stream2D_active ) return
+        if( .not. pool_available )  return
+        if( L_BENCH ) t_tot  = tic()
+        nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
+        nptcls_glob          = nptcls_tot
+        nptcls_rejected_glob = 0
+        if( nptcls_tot == 0 ) return
+        ! save pool project to history
+        if(pool_iter .gt. 0) then
+            call spproj_history%copy(pool_proj)
+            call simple_copy_file(trim(POOL_DIR)//trim(FRCS_FILE), trim(POOL_DIR)//swap_suffix(FRCS_FILE, "_iter"//int2str_pad(pool_iter, 3)//".bin", ".bin"))
+            call spproj_history%get_cavgs_stk(stkname, ncls, smpd)
+            call spproj_history%os_out%kill
+            call spproj_history%add_cavgs2os_out(stkname, smpd, 'cavg')
+            call spproj_history%add_frcs2os_out(trim(POOL_DIR)//swap_suffix(FRCS_FILE, "_iter"//int2str_pad(pool_iter, 3)//".bin", ".bin"), 'frc2D')
+            if(.not. allocated(pool_proj_history)) allocate(pool_proj_history(0))
+            pool_proj_history = [pool_proj_history(:), spproj_history]
+            if(pool_iter .gt. 5) call pool_proj_history(pool_iter - 5)%kill()
+        end if
+        pool_iter = pool_iter + 1 ! Global iteration counter update
+        call cline_cluster2D_pool%set('ncls',    ncls_glob)
+        call cline_cluster2D_pool%set('startit', pool_iter)
+        call cline_cluster2D_pool%set('maxits',  pool_iter)
+        call cline_cluster2D_pool%set('frcs',    FRCS_FILE)
+        call cline_cluster2D_pool%set('refs', refs_glob)
+        if( pool_iter==1 )then
+            if( cline_cluster2D_pool%defined('cls_init') )then
+                ! references taken care of by cluster2D_distr
+                call cline_cluster2D_pool%delete('frcs')
+                call cline_cluster2D_pool%delete('refs')
+            endif
+        else
+            call cline_cluster2D_pool%delete('cls_init')
+        endif
+        if( l_no_chunks )then
+            ! for reference generation everything is defined here
+            call cline_cluster2D_pool%set('extr_iter', CHUNK_EXTR_ITER+pool_iter-1)
+            if( pool_iter == 1 )then
+                call cline_cluster2D_pool%delete('frcs')
+                call cline_cluster2D_pool%delete('refs')
+            endif
+            call cline_cluster2D_pool%set('center','no')
+            if( pool_iter < 5 )then
+                call cline_cluster2D_pool%delete('lpstart')
+                call cline_cluster2D_pool%delete('lpstop')
+                call cline_cluster2D_pool%set('lp', lpstart)
+                call cline_cluster2D_pool%set('trs', 0)
+            else
+                call cline_cluster2D_pool%set('trs',    MINSHIFT)
+                call cline_cluster2D_pool%set('center', params_glob%center)
+            endif
+            call cline_cluster2D_pool%set('needs_sigma', 'no')
+            call cline_cluster2D_pool%set('objfun',      'cc')
+            call cline_cluster2D_pool%set('ml_reg',      'no')
+            call cline_cluster2D_pool%delete('cc_iters')
+            if( params_glob%cc_objfun .eq. OBJFUN_EUCLID )then
+                if( iterswitch2euclid == 0 )then
+                    ! switch to objfun=euclid when good enough resolution
+                    if( current_resolution < lpstart .and. pool_iter > CHUNK_CC_ITERS )then
+                        iterswitch2euclid = pool_iter+1
+                    endif
+                else if( iterswitch2euclid == pool_iter )then
+                    ! switch
+                    call cline_cluster2D_pool%set('needs_sigma','yes')
+                    call cline_cluster2D_pool%set('objfun',     'euclid')
+                    call cline_cluster2D_pool%set('cc_iters',    0)
+                    call cline_cluster2D_pool%set('sigma_est',  'global')
+                    call cline_cluster2D_pool%set('ml_reg',     params_glob%ml_reg_pool)
+                    call cline_cluster2D_pool%set('lpstart',    lpstart)
+                    call cline_cluster2D_pool%set('lpstop',     params_glob%lpstop)
+                    call cline_cluster2D_pool%delete('lp')
+                    allocate(clines(2))
+                    ! sigmas2 are calculated first thing
+                    call clines(1)%set('prg',        'calc_pspec_distr')
+                    call clines(1)%set('oritype',    'ptcl2D')
+                    call clines(1)%set('projfile',   PROJFILE_POOL)
+                    call clines(1)%set('nthr',       cline_cluster2D_pool%get_iarg('nthr'))
+                    call clines(1)%set('which_iter', pool_iter)
+                    call clines(1)%set('mkdir',      'yes')
+                    call clines(1)%set('sigma_est',  'global')
+                    call clines(1)%set('nparts',     params_glob%nparts_pool)
+                    clines(2) = cline_cluster2D_pool
+                else
+                    ! after switch
+                    call cline_cluster2D_pool%set('needs_sigma','yes')
+                    call cline_cluster2D_pool%set('objfun',     'euclid')
+                    call cline_cluster2D_pool%set('cc_iters',   0)
+                    call cline_cluster2D_pool%set('sigma_est',  'global')
+                    call cline_cluster2D_pool%set('ml_reg',      params_glob%ml_reg_pool)
+                    call cline_cluster2D_pool%set('lpstart',     lpstart)
+                    call cline_cluster2D_pool%set('lpstop',      params_glob%lpstop)
+                    do i = 1,params_glob%nparts_pool
+                        call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
+                    enddo
+                endif
+            else
+                ! objfun = cc
+                if( current_resolution < lpstart .and. pool_iter > CHUNK_CC_ITERS )then
+                    call cline_cluster2D_pool%set('lpstart',lpstart)
+                    call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
+                    call cline_cluster2D_pool%delete('lp')
+                endif
+            endif
+        endif
+        ! Project metadata update
+        spproj%projinfo = pool_proj%projinfo
+        spproj%compenv  = pool_proj%compenv
+        call spproj%projinfo%delete_entry('projname')
+        call spproj%projinfo%delete_entry('projfile')
+        call spproj%update_projinfo( cline_cluster2D_pool )
+        ! Sampling of stacks that will be used for this iteration
+        ! counting number of stacks & selected particles
+        nstks_tot  = pool_proj%os_stk%get_noris()
+        allocate(nptcls_per_stk(nstks_tot), source=0)
+        nptcls_old = 0 ! Total # of particles with state=1
+        !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl)&
+        !$omp default(shared) reduction(+:nptcls_old)
+        do istk = 1,nstks_tot
+            fromp = pool_proj%os_stk%get_fromp(istk)
+            top   = pool_proj%os_stk%get_top(istk)
+            do iptcl = fromp,top
+                if( pool_proj%os_ptcl2D%get_state(iptcl) > 0 )then
+                    nptcls_per_stk(istk)  = nptcls_per_stk(istk) + 1 ! # ptcls with state=1
+                endif
+            enddo
+            nptcls_old = nptcls_old + nptcls_per_stk(istk)
+        enddo
+        !$omp end parallel do
+        nptcls_rejected_glob = nptcls_glob - sum(nptcls_per_stk)
+        ! Update info for gui
+        call spproj%projinfo%set(1,'nptcls_tot',     nptcls_glob)
+        call spproj%projinfo%set(1,'nptcls_rejected',nptcls_rejected_glob)
+        ! Uniformly sample stacks (to try q-powered distribution)
+        if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
+        allocate(pool_stacks_mask(nstks_tot), source=.false.)
+        allocate(stk_order(nstks_tot), source=(/(istk,istk=1,nstks_tot)/))
+        random_generator = ran_tabu(nstks_tot)
+        call random_generator%shuffle(stk_order)
+        nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
+        nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
+        do i = 1,nstks_tot
+            istk = stk_order(i)
+            if( nptcls_sel > lim_ufrac_nptcls ) cycle
+            nptcls_sel    = nptcls_sel + nptcls_per_stk(istk)
+            nptcls2update = nptcls2update + pool_proj%os_stk%get_int(istk, 'nptcls')
+            pool_stacks_mask(istk) = .true.
+        enddo
+        call random_generator%kill
+        nstks2update = count(pool_stacks_mask)
+        ! Transfer stacks and particles
+        call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
+        call spproj%os_ptcl2D%new(nptcls2update, is_ptcl=.true.)
+        allocate(prev_eo_pops(ncls_glob,2),prev_eo_pops_thread(ncls_glob,2),source=0)
+        i     = 0
+        jptcl = 0
+        do istk = 1,nstks_tot
+            fromp = pool_proj%os_stk%get_fromp(istk)
+            top   = pool_proj%os_stk%get_top(istk)
+            if( pool_stacks_mask(istk) )then
+                ! transfer alignement parameters for selected particles
+                i = i + 1 ! stack index in spproj
+                call spproj%os_stk%transfer_ori(i, pool_proj%os_stk, istk)
+                call spproj%os_stk%set(i, 'fromp', jptcl+1)
+                !$omp parallel do private(iptcl,jjptcl) proc_bind(close) default(shared)
+                do iptcl = fromp,top
+                    jjptcl = jptcl+iptcl-fromp+1
+                    call spproj%os_ptcl2D%transfer_ori(jjptcl, pool_proj%os_ptcl2D, iptcl)
+                    call spproj%os_ptcl2D%set_stkind(jjptcl, i)
+                enddo
+                !$omp end parallel do
+                jptcl = jptcl + (top-fromp+1)
+                call spproj%os_stk%set(i, 'top', jptcl)
+            else
+                ! keeps track of skipped particles
+                prev_eo_pops_thread = 0
+                !$omp parallel do private(iptcl,icls,eo) proc_bind(close) default(shared)&
+                !$omp reduction(+:prev_eo_pops_thread)
+                do iptcl = fromp,top
+                    if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+                    icls = pool_proj%os_ptcl2D%get_class(iptcl)
+                    eo   = pool_proj%os_ptcl2D%get_eo(iptcl) + 1
+                    prev_eo_pops_thread(icls,eo) = prev_eo_pops_thread(icls,eo) + 1
+                enddo
+                !$omp end parallel do
+                prev_eo_pops = prev_eo_pops + prev_eo_pops_thread
+            endif
+        enddo
+        call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
+        spproj%os_cls2D = pool_proj%os_cls2D
+        ! Consolidate sigmas doc
+        if( l_update_sigmas )then
+            if( trim(params_glob%sigma_est).eq.'group' )then
+                allocate(sigma_fnames(nstks2update))
+                do istk = 1,nstks2update
+                    call spproj%os_stk%getter(istk,'stk',stack_fname)
+                    stack_fname = basename(stack_fname)
+                    ext         = fname2ext(stack_fname)
+                    fbody       = get_fbody(stack_fname, ext)
+                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
+                enddo
+                call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                deallocate(sigma_fnames)
+            else
+                ! sigma_est=global & first iteration
+                if( pool_iter==1 )then
+                    allocate(sigma_fnames(glob_chunk_id))
+                    do i = 1,glob_chunk_id
+                        sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//trim(STAR_EXT)
+                    enddo
+                    call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                    deallocate(sigma_fnames)
+                endif
+            endif
+            do i = 1,params_glob%nparts_pool
+                call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
+            enddo
+        endif
+        ! update command line with fractional update parameters
+        call cline_cluster2D_pool%delete('update_frac')
+        frac_update = 1.0
+        if( nptcls_sel > lim_ufrac_nptcls )then
+            if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
+                frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
+            endif
+        endif
+        ! User override
+        if( frac_update < 0.99999 )then
+            if( master_cline%defined('update_frac') ) frac_update = params_glob%update_frac
+            call cline_cluster2D_pool%set('update_frac', frac_update)
+            call cline_cluster2D_pool%set('center',      'no')
+            do icls = 1,ncls_glob
+                call spproj%os_cls2D%set(icls,'prev_pop_even',prev_eo_pops(icls,1))
+                call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
+            enddo
+        endif
+        ! write project
+        call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
+        call spproj%kill
+        ! pool stats
+        call generate_pool_stats
+        ! execution
+        if( l_no_chunks .and. pool_iter == iterswitch2euclid )then
+            write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
+            call qenv_pool%exec_simple_prgs_in_queue_async(clines, DISTR_EXEC_FNAME, LOGFILE)
+            call clines(:)%kill
+            deallocate(clines)
+        else
+            call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, LOGFILE)
+        endif
+        pool_available = .false.
+        write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
+        &' / ', sum(nptcls_per_stk),' PARTICLES'
+        if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
+        call tidy_2Dstream_iter
+    end subroutine iterate_pool
 
     ! Flags pool availibility & updates the global name of references
     subroutine update_pool_status

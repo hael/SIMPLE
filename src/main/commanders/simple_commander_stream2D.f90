@@ -552,6 +552,7 @@ contains
         nptcls_glob      = 0        ! global # of particles present in the pool
         l_pause          = .false.  ! pause clustering
         nsets_imported   = 0        ! Global # of sets imported
+        pool_iter        = 0
         time_last_import = huge(time_last_import)
         iter_last_import = -1       ! Pool iteration # when set(s) last imported
         do
@@ -580,7 +581,7 @@ contains
             endif
             ! Import new particles & clustering init
             call import_sets_into_pool( nimported )
-            if( nimported > 1 )then
+            if( nimported > 0 )then
                 time_last_import = time8()
                 iter_last_import = get_pool_iter()
                 call unpause_pool
@@ -602,7 +603,7 @@ contains
                 call update_pool_aln_params
                 ! initiates new iteration
                 pool_iter = get_pool_iter()
-                call analyze2D_pool
+                call iterate_pool
                 if( get_pool_iter() > pool_iter )then
                     nice_communicator%stat_root%user_input = .true.
                     time_last_iter = time8()
