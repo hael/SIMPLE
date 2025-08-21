@@ -1416,7 +1416,7 @@ contains
         integer,                 intent(in)    :: ithr
         real(dp),                intent(in)    :: shift_8(2)
         complex(dp),    pointer, intent(inout) :: shmat_8(:,:)
-        integer     :: k
+        integer :: k
         ! first shell, analytic
         self%heap_vars(ithr)%argvec = self%argtransf(:self%pftsz,  self%kfromto(1)) * shift_8(1) +&
                                     & self%argtransf(self%pftsz+1:,self%kfromto(1)) * shift_8(2)
