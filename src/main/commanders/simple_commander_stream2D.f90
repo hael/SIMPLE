@@ -75,12 +75,12 @@ contains
         call cline%set('ml_reg',       'no')
         call cline%set('objfun',       'euclid')
         call cline%set('sigma_est',    'global')
-        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
-        if( .not. cline%defined('nchunksperset')) call cline%set('nchunksperset', 2)
-        if( .not.cline%defined('remove_chunks') ) call cline%set('remove_chunks','no')
-        if( .not.cline%defined('center')        ) call cline%set('center',       'yes')
-        if( .not.cline%defined('algorithm')     ) call cline%set('algorithm',    'abinitio2D')
+        if( .not.cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
+        if( .not.cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
+        if( .not.cline%defined('nchunksperset')) call cline%set('nchunksperset', 2)
+        if( .not.cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
+        if( .not.cline%defined('center')       ) call cline%set('center',       'yes')
+        if( .not.cline%defined('algorithm')    ) call cline%set('algorithm',    'abinitio2D')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -373,7 +373,7 @@ contains
                     tmpl     = 'set_'//int2str(sets%n+1)
                     call simple_mkdir(tmpl)
                     call merge_chunks(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
-                    ! averages and stashes sigma2
+                    ! average and stash sigma2
                     allocate(starfiles(params%nchunksperset))
                     do i = 1,params%nchunksperset
                         ic = ic_start + i - 1
@@ -381,8 +381,14 @@ contains
                     enddo
                     call average_sigma2_groups(tmpl//'/'//tmpl//trim(STAR_EXT), starfiles)
                     deallocate(starfiles)
-                    ! update global list, also increments sets%n
+                    ! update global list and increment sets%n
                     call sets%append(tmpl//'/'//tmpl//trim(METADATA_EXT), sets%n+1, .false.)
+                    ! remove imported chunk
+                    if( trim(params%remove_chunks).eq.'yes' )then
+                        do ic = ic_start,ic_end
+                            call simple_rmdir(stemname(chunks%projfiles(ic)))
+                        enddo
+                    endif
                 enddo
                 call spproj%kill
             end subroutine generate_sets
@@ -582,6 +588,12 @@ contains
             nsets_imported = count(setslist%imported)
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) call unpause_pool
+            ! pause?
+            if( (pool_iter >= iter_last_import+PAUSE_NITERS) .or.&
+                & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
+                l_pause = is_pool_available()
+                if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+            endif
             ! Performs clustering iteration
             if( l_pause )then
                 ! skip iteration
@@ -595,8 +607,6 @@ contains
                     nice_communicator%stat_root%user_input = .true.
                     time_last_iter = time8()
                 endif
-                ! pause?
-                call pause_pool
             endif
             ! Wait
             call sleep(WAITTIME)
@@ -610,15 +620,6 @@ contains
         call nice_communicator%terminate()
         call simple_end('**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
         contains
-
-            ! pause pool in absence of new sets,
-            subroutine pause_pool
-                if( (pool_iter >= iter_last_import+PAUSE_NITERS) .or.&
-                    & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
-                    l_pause = is_pool_available()
-                    if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
-                endif
-            end subroutine pause_pool
 
             ! resumes with new sets or analysis parameters have been updated
             subroutine unpause_pool
