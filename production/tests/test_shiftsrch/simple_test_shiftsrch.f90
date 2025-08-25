@@ -21,7 +21,7 @@ logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 9
 real,    allocatable   :: corrs(:), norm_const(:, :)
-real                   :: corrmax, corr, cxy(3), lims(2,2)
+real                   :: corrmax, corr, cxy(3), lims(2,2), sh(2)
 integer                :: xsh, ysh, xbest, ybest, i, irot, rc
 real, allocatable      :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 logical                :: mrc_exists
@@ -109,8 +109,6 @@ call pftcc%shift_ptcl(8, [SHMAG,-SHMAG,0.]) ! left + up
 call img_copy%polarize(pftcc, b%img, 9, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call img_copy%polarize(pftcc, b%img, 9, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
 call pftcc%shift_ptcl(9, [0.,0.,0.]) ! no shift
-call img_copy%ifft()
-call img_copy%write('shifted.mrc', 1)
 call pftcc%set_with_ctf(.false.)
 call b%img%ifft
 call b%img%read(p%stk, 5)
@@ -154,4 +152,6 @@ do i=5,5
     enddo
     print *, xbest, ybest, corrmax
 enddo
+call pftcc%calc_shift(5, 2, sh)
+print *, 'calculated shift = ', sh
 end program simple_test_shiftsrch
