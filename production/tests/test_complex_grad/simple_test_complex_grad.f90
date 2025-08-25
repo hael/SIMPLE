@@ -10,7 +10,7 @@ type(opt_factory) :: ofac                           ! the optimization factory o
 type(opt_spec)    :: spec                           ! the optimizer specification object
 character(len=8)  :: str_opts                       ! string descriptors for the NOPTS optimizers
 real              :: lowest_cost, truth_xy(2), xy(2), lims(2,2), carg(NPOINTS), C(NPOINTS), T(NPOINTS),&
-                    &C_odd, T_odd, C_even, T_even, RHS_odd(NPI), RHS_even(NPI), x_comp, y_comp,&
+                    &C_1st, T_1st, C_2nd, T_2nd, RHS_1st(NPI), RHS_2nd(NPI), x_comp, y_comp,&
                     &cand1_x(NPI*NPI), cand1_y(NPI*NPI), cand2_x(NPI*NPI), cand2_y(NPI*NPI), minval, minx, miny, val
 complex           :: A(NPOINTS), B(NPOINTS), AB
 integer           :: i, j, cand1_cnt, cand2_cnt
@@ -49,93 +49,85 @@ print *, 'CASE: unstable complex-variable cost function'
 print *, 'starting xy = ', xy
 print *, 'truth    xy = ', truth_xy
 print *, 'searched xy = ', spec%x
-! shift computation using odd/even equations
-RHS_odd = 0.
-C_odd   = 0.
-T_odd   = 0.
-do i = 1, 2, 2
-    if( real(A(i)) < TINY .or. aimag(A(i)) < TINY )cycle
-    AB    = B(i)/A(i)
-    do j = 1, NPI
-        RHS_odd(j) = RHS_odd(j) + atan(aimag(AB)/real(AB))
-    enddo
-    C_odd = C_odd + C(i)
-    T_odd = T_odd + T(i)
-enddo
+! shift computation using two random equations
+RHS_1st = 0.
+C_1st   = 0.
+T_1st   = 0.
+i       = 1     ! first equation
+if( real(A(i)) < TINY .and. aimag(A(i)) < TINY )then
+    print *, 'bad choice of candidate for the equation'
+    stop
+endif
+AB      = B(i)/A(i)
+RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
+C_1st   = C_1st + C(i)
+T_1st   = T_1st + T(i)
 do j = 1, NPI
-    RHS_odd(j) = RHS_odd(j) + (j-1-NPI/2)*PI
+    RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
 enddo
-RHS_even = 0.
-C_even   = 0.
-T_even   = 0.
-do i = 2, 2, 2
-    if( real(A(i)) < TINY .or. aimag(A(i)) < TINY )cycle
-    AB     = B(i)/A(i)
-    do j = 1, NPI
-        RHS_even(j) = RHS_even(j) + atan(aimag(AB)/real(AB))
-    enddo
-    C_even = C_even + C(i)
-    T_even = T_even + T(i)
-enddo
+RHS_2nd = 0.
+C_2nd   = 0.
+T_2nd   = 0.
+i       = 2     ! second equation
+if( real(A(i)) < TINY .and. aimag(A(i)) < TINY )then
+    print *, 'bad choice of candidate for the equation'
+    stop
+endif
+AB      = B(i)/A(i)
+RHS_2nd = RHS_2nd + atan(aimag(AB)/real(AB))
+C_2nd   = C_2nd + C(i)
+T_2nd   = T_2nd + T(i)
 do j = 1, NPI
-    RHS_even(j) = RHS_even(j) + (j-1-NPI/2)*PI
+    RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
 enddo
-print *, '-------------------------------------------------'
 cand1_cnt = 0
 do i = 1, NPI
     do j = 1, NPI
-        x_comp = -(RHS_odd(i)*T_even - RHS_even(j)*T_odd)/(T_odd*C_even - T_even*C_odd)
-        y_comp =  (RHS_odd(i)*C_even - RHS_even(j)*C_odd)/(T_odd*C_even - T_even*C_odd)
+        x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
+        y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
         if( x_comp < -5. .or. x_comp > 5. .or. y_comp < -5. .or. y_comp > 5. )cycle
-        ! print *, 'i = ', (i-1-NPI/2) , '; j = ', (j-1-NPI/2)
-        ! print *, 'x = ', x_comp
-        ! print *, 'y = ', y_comp
         cand1_cnt = cand1_cnt + 1
         cand1_x(cand1_cnt) = x_comp
         cand1_y(cand1_cnt) = y_comp
     enddo
 enddo
 ! another pair
-RHS_odd = 0.
-C_odd   = 0.
-T_odd   = 0.
-do i = 3, 4, 2
-    if( real(A(i)) < TINY .or. aimag(A(i)) < TINY )cycle
-    AB    = B(i)/A(i)
-    do j = 1, NPI
-        RHS_odd(j) = RHS_odd(j) + atan(aimag(AB)/real(AB))
-    enddo
-    C_odd = C_odd + C(i)
-    T_odd = T_odd + T(i)
-enddo
+RHS_1st = 0.
+C_1st   = 0.
+T_1st   = 0.
+i       = 3     ! first equation
+if( real(A(i)) < TINY .and. aimag(A(i)) < TINY )then
+    print *, 'bad choice of candidate for the equation'
+    stop
+endif
+AB      = B(i)/A(i)
+RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
+C_1st   = C_1st + C(i)
+T_1st   = T_1st + T(i)
 do j = 1, NPI
-    RHS_odd(j) = RHS_odd(j) + (j-1-NPI/2)*PI
+    RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
 enddo
-RHS_even = 0.
-C_even   = 0.
-T_even   = 0.
-do i = 4, 4, 2
-    if( real(A(i)) < TINY .or. aimag(A(i)) < TINY )cycle
-    AB     = B(i)/A(i)
-    do j = 1, NPI
-        RHS_even(j) = RHS_even(j) + atan(aimag(AB)/real(AB))
-    enddo
-    C_even = C_even + C(i)
-    T_even = T_even + T(i)
-enddo
+RHS_2nd = 0.
+C_2nd   = 0.
+T_2nd   = 0.
+i       = 4     ! second equation
+if( real(A(i)) < TINY .and. aimag(A(i)) < TINY )then
+    print *, 'bad choice of candidate for the equation'
+    stop
+endif
+AB      = B(i)/A(i)
+RHS_2nd = RHS_2nd(j) + atan(aimag(AB)/real(AB))
+C_2nd   = C_2nd + C(i)
+T_2nd   = T_2nd + T(i)
 do j = 1, NPI
-    RHS_even(j) = RHS_even(j) + (j-1-NPI/2)*PI
+    RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
 enddo
-print *, '-------------------------------------------------'
 cand2_cnt = 0
 do i = 1, NPI
     do j = 1, NPI
-        x_comp = -(RHS_odd(i)*T_even - RHS_even(j)*T_odd)/(T_odd*C_even - T_even*C_odd)
-        y_comp =  (RHS_odd(i)*C_even - RHS_even(j)*C_odd)/(T_odd*C_even - T_even*C_odd)
+        x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
+        y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
         if( x_comp < -5. .or. x_comp > 5. .or. y_comp < -5. .or. y_comp > 5. )cycle
-        ! print *, 'i = ', (i-1-NPI/2) , '; j = ', (j-1-NPI/2)
-        ! print *, 'x = ', x_comp
-        ! print *, 'y = ', y_comp
         cand2_cnt = cand2_cnt + 1
         cand2_x(cand2_cnt) = x_comp
         cand2_y(cand2_cnt) = y_comp
@@ -153,6 +145,7 @@ do i = 1, cand1_cnt
         endif
     enddo
 enddo
+print *, '-------------------------------------------------'
 print *, 'minx = ', minx
 print *, 'miny = ', miny
 

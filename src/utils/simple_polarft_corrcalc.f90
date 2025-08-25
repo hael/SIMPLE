@@ -161,6 +161,7 @@ type :: polarft_corrcalc
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
+    procedure          :: calc_shift
     procedure          :: calc_corr_rot_shift, calc_magcorr_rot
     procedure          :: bidirectional_shift_search
     procedure          :: gencorrs_mag, gencorrs_mag_cc
@@ -1434,6 +1435,108 @@ contains
         ! argmat  =  self%argtransf(:self%pftsz,:)*shvec(1) + self%argtransf(self%pftsz + 1:,:)*shvec(2)
         ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
     end subroutine gen_shmat_8
+
+    subroutine calc_shift( self, iref, iptcl, sh )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl
+        real,                    intent(inout) :: sh(2)
+        integer, parameter :: NPI = 5
+        integer :: ind, i, j, k, irot, cand1_cnt, cand2_cnt
+        complex :: AB
+        real    :: C_1st, T_1st, C_2nd, T_2nd, RHS_1st(NPI), RHS_2nd(NPI), x_comp, y_comp,&
+                &cand1_x(NPI*NPI), cand1_y(NPI*NPI), cand2_x(NPI*NPI), cand2_y(NPI*NPI), minval, minx, miny, val
+        ind = self%pinds(iptcl)
+        ! first pair
+        k       = self%kfromto(1) + 16
+        irot    = 10
+        RHS_1st = 0.
+        C_1st   = 0.
+        T_1st   = 0.
+        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
+        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
+        C_1st   = C_1st + self%argtransf(             irot,k)
+        T_1st   = T_1st + self%argtransf(self%pftsz + irot,k)
+        do j = 1, NPI
+            RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
+        enddo
+        k       = self%kfromto(1) + 17
+        irot    = 11
+        RHS_2nd = 0.
+        C_2nd   = 0.
+        T_2nd   = 0.
+        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
+        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        RHS_2nd = RHS_2nd + atan(aimag(AB)/real(AB))
+        C_2nd   = C_2nd + self%argtransf(             irot,k)
+        T_2nd   = T_2nd + self%argtransf(self%pftsz + irot,k)
+        do j = 1, NPI
+            RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
+        enddo
+        cand1_cnt = 0
+        do i = 1, NPI
+            do j = 1, NPI
+                x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
+                y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
+                if( x_comp < -5. .or. x_comp > 5. .or. y_comp < -5. .or. y_comp > 5. )cycle
+                cand1_cnt = cand1_cnt + 1
+                cand1_x(cand1_cnt) = x_comp
+                cand1_y(cand1_cnt) = y_comp
+            enddo
+        enddo
+        ! another pair
+        k       = self%kfromto(1) + 10
+        irot    = 20
+        RHS_1st = 0.
+        C_1st   = 0.
+        T_1st   = 0.
+        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
+        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
+        C_1st   = C_1st + self%argtransf(             irot,k)
+        T_1st   = T_1st + self%argtransf(self%pftsz + irot,k)
+        do j = 1, NPI
+            RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
+        enddo
+        k       = self%kfromto(1) + 11
+        irot    = 21
+        RHS_2nd = 0.
+        C_2nd   = 0.
+        T_2nd   = 0.
+        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
+        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        RHS_2nd = RHS_2nd + atan(aimag(AB)/real(AB))
+        C_2nd   = C_2nd + self%argtransf(             irot,k)
+        T_2nd   = T_2nd + self%argtransf(self%pftsz + irot,k)
+        do j = 1, NPI
+            RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
+        enddo
+        cand2_cnt = 0
+        do i = 1, NPI
+            do j = 1, NPI
+                x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
+                y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
+                if( x_comp < -5. .or. x_comp > 5. .or. y_comp < -5. .or. y_comp > 5. )cycle
+                cand2_cnt = cand2_cnt + 1
+                cand2_x(cand2_cnt) = x_comp
+                cand2_y(cand2_cnt) = y_comp
+            enddo
+        enddo
+        ! finding the min between cand1 and cand2
+        minval = huge(minval)
+        do i = 1, cand1_cnt
+            do j = 1, cand2_cnt
+                val = sqrt((cand1_x(i)-cand2_x(j))**2 + (cand1_y(i)-cand2_y(j))**2)
+                if( val < minval )then
+                    minval = val
+                    minx   = (cand1_x(i)+cand2_x(j)) / 2.
+                    miny   = (cand1_y(i)+cand2_y(j)) / 2.
+                endif
+            enddo
+        enddo
+        sh = -[minx, miny]
+    end subroutine calc_shift
 
     !>  Generate shift matrix following de Moivre's formula, single precision
     subroutine gen_shmat( self, ithr, shift, shmat )
