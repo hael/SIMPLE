@@ -38,6 +38,7 @@ type sym
     procedure          :: has_subgrp
     procedure          :: get_subgrp_descr
     procedure          :: get_all_subgrps_descr
+    procedure          :: is_circular, is_dihedral, is_platonic, is_icosahedral
     ! setters
     procedure, private :: set_subgrps
     ! modifiers
@@ -283,6 +284,28 @@ contains
         end do
     end function get_all_subgrps_descr
 
+    logical function is_circular( self )
+        class(sym), intent(in) :: self
+        is_circular = uppercase(self%pgrp(1:1))=='C'
+    end function is_circular
+
+    logical function is_dihedral( self )
+        class(sym), intent(in) :: self
+        is_dihedral = uppercase(self%pgrp(1:1))=='D'
+    end function is_dihedral
+
+    logical function is_platonic( self )
+        class(sym), intent(in) :: self
+        is_platonic = .not.self%c_or_d
+    end function is_platonic
+
+    logical function is_icosahedral( self )
+        class(sym), intent(in) :: self
+        is_icosahedral = uppercase(self%pgrp(1:1))=='I'
+    end function is_icosahedral
+
+    !> Modifiers
+
     !>  \brief  is a symmetry adaptor
     subroutine apply_1( self, e_in, symop, e_sym )
         class(sym), intent(in)    :: self
@@ -327,7 +350,7 @@ contains
 
     ! !>  \brief  rotates any orientation to the asymmetric unit
     subroutine rot_to_asym( self, osym )
-        class(sym), intent(inout) :: self
+        class(sym), intent(in)    :: self
         class(ori), intent(inout) :: osym !< orientation
         type(ori) :: oasym
         integer   :: nsym
@@ -345,7 +368,7 @@ contains
 
     !>  \brief  rotates orientations to the asymmetric unit
     subroutine rotall_to_asym( self, osyms )
-        class(sym),  intent(inout) :: self
+        class(sym),  intent(in)    :: self
         class(oris), intent(inout) :: osyms     !< orientations
         type(ori) :: o
         integer   :: i
@@ -438,9 +461,9 @@ contains
 
     !>  \brief  whether or not an orientation falls within the asymetric unit excluding mirror
     logical function within_asymunit( self, o, incl_mirr )
-        class(sym),        intent(inout) :: self
-        class(ori),        intent(in)    :: o !< symmetry orientation
-        logical, optional, intent(in)    :: incl_mirr
+        class(sym),        intent(in) :: self
+        class(ori),        intent(in) :: o !< symmetry orientation
+        logical, optional, intent(in) :: incl_mirr
         real    :: e1, e2
         logical :: incl_mirr_here
         within_asymunit = .false.
@@ -465,9 +488,9 @@ contains
 
     !>  Modified from SPARX
     logical function within_platonic_asymunit(self, e1, e2, incl_mirr)
-        class(sym), intent(inout) :: self
-        real,       intent(in)    :: e1,e2
-        logical,    intent(in)    :: incl_mirr
+        class(sym), intent(in) :: self
+        real,       intent(in) :: e1,e2
+        logical,    intent(in) :: incl_mirr
         real :: e1_here
         within_platonic_asymunit = .true.
         if( self%c_or_d )return
@@ -702,7 +725,7 @@ contains
 
     !>  \brief  is for building a spiral INCLUDING mirror projections
     subroutine build_refspiral( self, os )
-        class(sym), intent(inout) :: self
+        class(sym), intent(in)    :: self
         type(oris), intent(inout) :: os
         type(oris) :: tmp, os_nomirr
         integer    :: cnt, i, n, nprojs, lim, nos, nos_nomirr

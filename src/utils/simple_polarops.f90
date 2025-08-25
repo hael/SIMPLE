@@ -6,7 +6,7 @@ use simple_builder,           only: builder, build_glob
 use simple_parameters,        only: params_glob
 use simple_sp_project,        only: sp_project
 use simple_image,             only: image
-use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_polarft_corrcalc,  only: polarft_corrcalc, pftcc_glob
 use simple_strategy2D_utils
 implicit none
 
@@ -34,6 +34,7 @@ real                     :: smpd       = 0.                                     
 integer                  :: ncls       = 0                                      ! # classes
 integer                  :: kfromto(2) = 0                                      ! Resolution range
 integer                  :: pftsz      = 0                                      ! Size of PFT in pftcc along rotation dimension
+integer                  :: nrots      = 0                                      ! # of in-plane rotations; =2*pftsz
 
 contains
 
@@ -42,6 +43,7 @@ contains
         class(polarft_corrcalc), intent(in) :: pftcc
         integer,       optional, intent(in) :: nrefs
         call polar_cavger_kill
+        nrots   = pftcc%get_nrots()
         pftsz   = pftcc%get_pftsz()
         kfromto = pftcc%get_kfromto()
         if( present(nrefs) )then
@@ -169,7 +171,7 @@ contains
             else
                 icls = spproj_field%get_class(iptcl)
             endif
-            irot       = pftcc%get_roind(spproj_field%e3get(iptcl))
+            irot       = pftcc%get_roind_fast(spproj_field%e3get(iptcl))
             incr_shift = incr_shifts(:,i)
             ! weighted restoration
             if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
@@ -206,27 +208,37 @@ contains
     !>  \brief  Restores class-averages
     subroutine polar_cavger_merge_eos_and_norm( reforis )
         type(oris), optional, intent(in) :: reforis
-        real,    parameter :: EPSILON = 0.1
-        logical, parameter :: l_kb = .true.
-        real, allocatable  :: res(:)
-        complex(dp) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls), pfts_clin(pftsz,kfromto(1):kfromto(2),ncls),&
+        real,          parameter :: EPSILON = 0.1
+        logical,       parameter :: l_kb = .true.
+        complex(dp), allocatable :: pfts_cavg(:,:,:)
+        real,        allocatable :: res(:)
+        complex(dp) :: pfts_clin(pftsz,kfromto(1):kfromto(2),ncls),&
                       &pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
-                      &pft(pftsz,kfromto(1):kfromto(2)),pfte(pftsz,kfromto(1):kfromto(2)),pfto(pftsz,kfromto(1):kfromto(2)),&
-                      &pftm(pftsz,kfromto(1):kfromto(2))
+                      &pft(pftsz,kfromto(1):kfromto(2)),pfte(pftsz,kfromto(1):kfromto(2)),pfto(pftsz,kfromto(1):kfromto(2))
         real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)),ctf2e(pftsz,kfromto(1):kfromto(2)),ctf2o(pftsz,kfromto(1):kfromto(2)),&
                       &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls), ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
-                      &ctf2m(pftsz,kfromto(1):kfromto(2)),numer, denom1, denom2
-        integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops, nrots, m
+                      &numer, denom1, denom2
+        integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops, m
         real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05,&
                       &cavg_clin_frcs(kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
-        nrots = 2*pftsz
+        logical     :: ymirror
         if( params_glob%l_comlin )then
+            ! handling of mirroring
+            ymirror = .false.
+            if( build_glob%pgrpsyms%is_circular() )then
+                ymirror = .true.
+            else
+                ymirror = build_glob%pgrpsyms%is_icosahedral()
+            endif
+            ! 3D-related tasks
             if( .not. present(reforis) )THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
-            ! common-lines conribution
-            call calc_comlin_contrib( reforis )
-            ! call calc_comlin_contrib_sym( reforis, build_glob%pgrpsyms ) ! work in progress
-            ! need to compute the cavg/clin frcs here before pfts_even, pfts_odd are ctf-corrected
+            ! Mirroring etc.
+            call mirror_slices(reforis, build_glob%pgrpsyms)
+            ! Common-lines conribution
+            call calc_comlin_contrib(reforis, build_glob%pgrpsyms)
+            ! need to compute the cavg/clin frcs prior to their summing
             if( trim(params_glob%polar_frcs) .eq. 'yes' )then
+                allocate(pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls),source=DCMPLX_ZERO)
                 call get_cavg_clin
                 cavg_clin_frcs = 0.
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
@@ -241,6 +253,7 @@ contains
                     enddo
                 enddo
                 !$omp end parallel do
+                deallocate(pfts_cavg)
             endif
         endif
         pfts_merg = DCMPLX_ZERO
@@ -288,26 +301,27 @@ contains
                     call safe_norm(pfte, ctf2e, pfts_even(:,:,icls))
                     call safe_norm(pfto, ctf2o, pfts_odd(:,:,icls))
                     ! mirroring the restored images
-                    m = ncls/2 + icls
-                    call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
-                    call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
-                    call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    m = reforis%get_int(icls,'mirr')
+                    if( ymirror )then
+                        call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
+                        call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
+                        call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    else
+                        call mirrorx_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
+                        call mirrorx_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
+                        call mirrorx_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    endif
                 enddo
                 !$omp end parallel do
             case('vol')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-                !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,pftm,ctf2m)
+                !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o)
                 do icls = 1,ncls/2
-                    ! calculate sum of: class + mirror of class pair + already mirrored common-line contribution
-                    m = ncls/2 + icls
-                    call mirror_pft(pfts_even(:,:,m), pftm)
-                    pfte  = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls) + pftm
-                    call mirror_pft(pfts_odd(:,:,m), pftm)
-                    pfto  = pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls)   + pftm
-                    call mirror_ctf2(ctf2_even(:,:,m), ctf2m)
-                    ctf2e = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls) + ctf2m
-                    call mirror_ctf2(ctf2_odd(:,:,m), ctf2m)
-                    ctf2o = ctf2_odd(:,:,icls)  + ctf2_clin_odd(:,:,icls)  + ctf2m
+                    ! calculate sum of already mirrored class + common-line contribution
+                    pfte  = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls)
+                    pfto  = pfts_odd(:,:,icls)  + pfts_clin_odd(:,:,icls)
+                    ctf2e = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls)
+                    ctf2o = ctf2_odd(:,:,icls)  + ctf2_clin_odd(:,:,icls)
                     ! merged then e/o
                     pft   = pfte  + pfto
                     ctf2  = ctf2e + ctf2o
@@ -315,14 +329,22 @@ contains
                     call safe_norm(pfte, ctf2e, pfts_even(:,:,icls))
                     call safe_norm(pfto, ctf2o, pfts_odd(:,:,icls))
                     ! mirroring the restored images
-                    call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
-                    call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
-                    call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    m = reforis%get_int(icls,'mirr')
+                    if( ymirror )then
+                        call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
+                        call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
+                        call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    else
+                        call mirrorx_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
+                        call mirrorx_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
+                        call mirrorx_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    endif
                 enddo
                 !$omp end parallel do
             case DEFAULT
                 THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or vol')
         end select
+        ! Directional FRCs
         if( trim(params_glob%polar_frcs) .eq. 'yes' )then
             res = get_resarr(params_glob%box_crop, params_glob%smpd_crop)
             ! min/max frc between cavg and clin
@@ -383,11 +405,47 @@ contains
             ! 3D FSC = AVERAGE RESOLUTION
             write(logfhandle,'(A,2F8.2)')'>>> 3D EVEN/ODD RESOLUTION @ FSC=0.5/0.143              : ',avg_res_fsc05,avg_res_fsc0143
         endif
-
       contains
 
+        ! Deals with summing slices and their mirror
+        subroutine mirror_slices( ref_space, symop )
+            type(oris), intent(in) :: ref_space
+            type(sym),  intent(in) :: symop
+            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
+            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
+            integer     :: iref, mref
+            if( .not.ref_space%isthere('mirr') )then
+                THROW_HARD('Mirror index missing in reference search space')
+            endif
+            !$omp parallel do default(shared) proc_bind(close) private(iref,mref,pft,ctf2)
+            do iref = 1,ncls/2
+                mref = ref_space%get_int(iref,'mirr')
+                if( ymirror )then
+                    call mirror_pft(pfts_even(:,:,mref), pft)
+                    pfts_even(:,:,iref) = pfts_even(:,:,iref) + pft
+                    call mirror_pft(pfts_odd(:,:,mref), pft)
+                    pfts_odd(:,:,iref)  = pfts_odd(:,:,iref)  + pft
+                    call mirror_pft( pfts_even(:,:,iref), pfts_even(:,:,mref))
+                    call mirror_pft( pfts_odd(:,:,iref),  pfts_odd(:,:,mref))
+                else
+                    call mirrorx_pft(pfts_even(:,:,mref), pft)
+                    pfts_even(:,:,iref) = pfts_even(:,:,iref) + pft
+                    call mirrorx_pft(pfts_odd(:,:,mref), pft)
+                    pfts_odd(:,:,iref)  = pfts_odd(:,:,iref)  + pft
+                    call mirrorx_pft( pfts_even(:,:,iref), pfts_even(:,:,mref))
+                    call mirrorx_pft( pfts_odd(:,:,iref),  pfts_odd(:,:,mref))
+                endif
+                call mirror_ctf2(ctf2_even(:,:,mref), ctf2)
+                ctf2_even(:,:,iref) = ctf2_even(:,:,iref) + ctf2
+                call mirror_ctf2(ctf2_odd(:,:,mref),  ctf2)
+                ctf2_odd(:,:,iref)  = ctf2_odd(:,:,iref)  + ctf2
+                call mirror_ctf2(ctf2_even(:,:,iref), ctf2_even(:,:,mref))
+                call mirror_ctf2(ctf2_odd(:,:,iref),  ctf2_odd(:,:,mref))
+            enddo
+            !$omp end parallel do
+        end subroutine mirror_slices
+
         subroutine get_cavg_clin
-            pfts_cavg = DCMPLX_ZERO
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
             !$omp private(icls,eo_pop,pop,pft,ctf2)
             do icls = 1,ncls
@@ -416,63 +474,6 @@ contains
             !$omp end parallel do
         end subroutine get_cavg_clin
 
-        pure subroutine safe_norm( Mnum, Mdenom, Mout )
-            complex(dp), intent(in)    :: Mnum(pftsz,kfromto(1):kfromto(2))
-            real(dp),    intent(inout) :: Mdenom(pftsz,kfromto(1):kfromto(2))
-            complex(dp), intent(inout) :: Mout(pftsz,kfromto(1):kfromto(2))
-            logical  :: msk(pftsz)
-            real(dp) :: avg, t
-            integer  :: k
-            do k = kfromto(1),kfromto(2)
-                msk = Mdenom(:,k) > DSMALL
-                avg = sum(Mdenom(:,k),mask=msk) / real(count(msk),dp)
-                t   = avg/50.d0
-                where((Mdenom(:,k) < t).and.msk) Mdenom(:,k) = Mdenom(:,k) + t
-            enddo
-            where( Mdenom > DSMALL)
-                Mout = Mnum / Mdenom
-            elsewhere
-                Mout = DCMPLX_ZERO
-            end where
-        end subroutine safe_norm
-
-        ! Returns complex and ctf2 polar lines given ref and rotational indices
-        pure subroutine get_line( ref, rot, even, pftline, ctf2line )
-            integer,     intent(in)    :: ref, rot
-            logical,     intent(in)    :: even
-            complex(dp), intent(out)   :: pftline(kfromto(1):kfromto(2))
-            real(dp),    intent(out)   :: ctf2line(kfromto(1):kfromto(2))
-            integer :: irot
-            if( rot >  nrots )then
-                irot = rot - nrots
-            else
-                irot = rot
-            endif
-            if( even )then
-                if( irot < 1 )then
-                    irot    = irot + pftsz
-                    pftline = conjg(pfts_even(irot,:,ref))
-                elseif( irot > pftsz )then
-                    irot    = irot - pftsz
-                    pftline = conjg(pfts_even(irot,:,ref))
-                else
-                    pftline = pfts_even(irot,:,ref)
-                endif
-                ctf2line = ctf2_even(irot,:,ref)
-            else
-                if( irot < 1 )then
-                    irot    = irot + pftsz
-                    pftline = conjg(pfts_odd(irot,:,ref))
-                elseif( irot > pftsz )then
-                    irot    = irot - pftsz
-                    pftline = conjg(pfts_odd(irot,:,ref))
-                else
-                    pftline = pfts_odd(irot,:,ref)
-                endif
-                ctf2line = ctf2_odd(irot,:,ref)
-            endif
-        end subroutine get_line
-
         ! Extrapolate cline, rline to pfts_clin and ctf2_clin
         subroutine extrapolate_line(ref, rot, w, cline_e, cline_o, rline_e, rline_o)
             integer,     intent(in) :: ref, rot
@@ -499,144 +500,7 @@ contains
             ctf2_clin_odd( irot,:,ref) = ctf2_clin_odd( irot,:,ref) + w * rline_o
         end subroutine extrapolate_line
 
-        subroutine calc_comlin_contrib( ref_space )
-            use simple_polarft_corrcalc, only: pftcc_glob
-            type(oris), intent(in) :: ref_space
-            type(kbinterpol) :: kbwin
-            complex(dp) :: cline_l(kfromto(1):kfromto(2)), cline_r(kfromto(1):kfromto(2))
-            complex(dp) :: cline_e(kfromto(1):kfromto(2)), cline_o(kfromto(1):kfromto(2))
-            real(dp)    :: rline_l(kfromto(1):kfromto(2)), rline_r(kfromto(1):kfromto(2))
-            real(dp)    :: rline_e(kfromto(1):kfromto(2)), rline_o(kfromto(1):kfromto(2))
-            real(dp)    :: dd, w, wl, wr, sumw
-            real        :: eulers(3),R(3,3,ncls),Rj(3,3),tRi(3,3),psi,drot,d,targ_w,self_w
-            integer     :: rotl,rotr, iref, jref, m, self_irot, targ_irot
-            if( .not.ref_space%isthere('mirr') )then
-                THROW_HARD('Mirror index missing in reference search space')
-            endif
-            drot = pftcc_glob%get_dang()
-            pfts_clin_even = DCMPLX_ZERO; pfts_clin_odd  = DCMPLX_ZERO
-            ctf2_clin_even = 0.d0; ctf2_clin_odd  = 0.d0
-            if( l_kb ) kbwin = kbinterpol(1.5, KBALPHA)
-            !$omp parallel default(shared) proc_bind(close)&
-            !$omp private(iref,jref,m,tRi,Rj,eulers,targ_irot,self_irot,targ_w,self_w,d,dd,w,wl,wr,sumw,psi)&
-            !$omp& private(cline_l,cline_r,cline_e,cline_o,rline_l,rline_r,rline_e,rline_o,rotl,rotr)
-            ! caching rotation matrices
-            !$omp do schedule(static)
-            do iref = 1,ncls
-                R(:,:,iref) = ref_space%get_mat(iref)
-            enddo
-            !$omp end do
-            ! polar common lines interpolation
-            !$omp do schedule(static)
-            do iref = 1,ncls/2
-                tRi = transpose(R(:,:,iref))
-                m   = ref_space%get_int(iref,'mirr')
-                do jref = 1,ncls
-                    if( jref == iref ) cycle   ! self   exclusion
-                    if( jref == m    ) cycle   ! mirror exclusion
-                    ! Rotation of both planes by transpose of Ri
-                    Rj = matmul(R(:,:,jref), tRi)
-                    ! Euler angles identification
-                    eulers = m2euler_fast(Rj)
-                    ! Interpolation
-                    if( l_kb )then
-                        ! KB
-                        ! in plane rotation index of jref slice intersecting iref
-                        psi       = 360.0 - eulers(3)
-                        targ_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(targ_irot)
-                        if( d > drot ) d = d - 360.0
-                        targ_w    = d / drot
-                        ! in plane rotation index of iref slice
-                        psi       = eulers(1)
-                        self_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(self_irot)
-                        if( d > drot ) d = d - 360.0
-                        self_w    = d / drot
-                        ! intepolate common line in jref-th slice
-                        rotl = targ_irot - 1; rotr = targ_irot + 1
-                        dd   = real(targ_w,dp)
-                        w    = kbwin%apod_dp(dd); wl = kbwin%apod_dp(dd-1.d0); wr = kbwin%apod_dp(dd+1.d0)
-                        sumw = wl + w + wr
-                        w    = w / sumw; wl = wl / sumw; wr = wr / sumw
-                        call get_line(jref, targ_irot, .true., cline_e, rline_e)
-                        call get_line(jref, rotl,      .true., cline_l, rline_l)
-                        call get_line(jref, rotr,      .true., cline_r, rline_r)
-                        cline_e = wl*cline_l + w*cline_e + wr*cline_r
-                        rline_e = wl*rline_l + w*rline_e + wr*rline_r
-                        call get_line(jref, targ_irot, .false., cline_o, rline_o)
-                        call get_line(jref, rotl,      .false., cline_l, rline_l)
-                        call get_line(jref, rotr,      .false., cline_r, rline_r)
-                        cline_o = wl*cline_l + w*cline_o + wr*cline_r
-                        rline_o = wl*rline_l + w*rline_o + wr*rline_r
-                        ! extrapolate the common line to iref-th slice
-                        rotl = self_irot - 1; rotr = self_irot + 1
-                        if( rotr > nrots ) rotr = rotr - nrots
-                        dd   = real(self_w,dp)
-                        w    = kbwin%apod_dp(dd); wl = kbwin%apod_dp(dd-1.d0); wr = kbwin%apod_dp(dd+1.d0)
-                        sumw = wl + w + wr
-                        w    = w / sumw; wl = wl / sumw; wr = wr / sumw
-                        ! leftmost line
-                        call extrapolate_line(iref, rotl,      wl, cline_e, cline_o, rline_e, rline_o)
-                        ! nearest line
-                        call extrapolate_line(iref, self_irot, w,  cline_e, cline_o, rline_e, rline_o)
-                        ! rightmost line
-                        call extrapolate_line(iref, rotr,      wr, cline_e, cline_o, rline_e, rline_o)
-                    else
-                        ! Linear interpolation
-                        ! in plane rotation index of jref slice intersecting iref
-                        psi       = 360.0 - eulers(3)
-                        targ_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(targ_irot)
-                        if( d > drot ) d = d - 360.0
-                        if( d < 0. )then
-                            targ_irot = targ_irot - 1
-                            if( targ_irot < 1 ) targ_irot = targ_irot + nrots
-                            d = d + drot
-                        endif
-                        targ_w = d / drot
-                        ! in plane rotation index of iref slice
-                        psi       = eulers(1)
-                        self_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(self_irot)
-                        if( d > drot ) d = d - 360.0
-                        if( d < 0. )then
-                            self_irot = self_irot - 1
-                            if( self_irot < 1 ) self_irot = self_irot + nrots
-                            d = d + drot
-                        endif
-                        self_w = d / drot
-                        ! intepolate common line in jref-th slice
-                        rotl = targ_irot; rotr = rotl+1
-                        wl   = real(targ_w,dp); wr = 1.d0 - wl
-                        call get_line(jref, rotl, .true., cline_e, rline_e)
-                        call get_line(jref, rotr, .true., cline_r, rline_r)
-                        cline_e = wr*cline_e + wl*cline_r
-                        rline_e = wr*rline_e + wl*rline_r
-                        call get_line(jref, rotl, .false., cline_o, rline_o)
-                        call get_line(jref, rotr, .false., cline_r, rline_r)
-                        cline_o = wr*cline_o + wl*cline_r
-                        rline_o = wr*rline_o + wl*rline_r
-                        ! extrapolate the common line to iref-th slice
-                        rotl = self_irot; rotr = rotl + 1
-                        if( rotr > nrots ) rotr = rotr - nrots
-                        w  = real(self_w,dp)
-                        call extrapolate_line(iref, rotl, 1.d0-w, cline_e, cline_o, rline_e, rline_o)
-                        call extrapolate_line(iref, rotr,      w, cline_e, cline_o, rline_e, rline_o)
-                    endif
-                enddo
-                ! mirror to southern hemisphere
-                call mirror_pft( pfts_clin_even(:,:,iref), pfts_clin_even(:,:,m))
-                call mirror_pft( pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,m))
-                call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,m))
-                call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,m))
-            enddo
-            !$omp end do
-            !$omp end parallel
-        end subroutine calc_comlin_contrib
-
-        subroutine calc_comlin_contrib_sym( ref_space, symop )
-            use simple_polarft_corrcalc, only: pftcc_glob
+        subroutine calc_comlin_contrib( ref_space, symop )
             type(oris), intent(in) :: ref_space
             type(sym),  intent(in) :: symop
             type(kbinterpol)  :: kbwin
@@ -647,7 +511,7 @@ contains
             real(dp)    :: rline_e(kfromto(1):kfromto(2)), rline_o(kfromto(1):kfromto(2))
             real(dp)    :: dd, w, wl, wr, sumw
             real        :: eulers(3),R(3,3,ncls),Rj(3,3),tRi(3,3),psi,drot,d,targ_w,self_w
-            integer     :: rotl,rotr, iref, jref, m, self_irot, targ_irot, isym, nsym
+            integer     :: rotl,rotr, iref, jref, mref, self_irot, targ_irot, isym, nsym
             if( .not.ref_space%isthere('mirr') )then
                 THROW_HARD('Mirror index missing in reference search space')
             endif
@@ -658,30 +522,30 @@ contains
             ! Symmetry rotation matrices
             nsym = symop%get_nsym()
             allocate(Rsym(3,3,nsym),source=0.)
-            do isym = 1,nsym
-                call symop%get_sym_rmat(isym, Rsym(:,:,isym))
-            end do
             !$omp parallel default(shared) proc_bind(close)&
-            !$omp private(iref,jref,m,tRi,Rj,eulers,targ_irot,self_irot,targ_w,self_w,d,dd,w,wl,wr,sumw,psi)&
-            !$omp& private(cline_l,cline_r,cline_e,cline_o,rline_l,rline_r,rline_e,rline_o,rotl,rotr,isym)
-            ! caching rotation matrices
+            !$omp private(iref,jref,mref,tRi,Rj,eulers,targ_irot,self_irot,targ_w,self_w,d,dd,w,wl,wr,sumw,psi)&
+            !$omp& private(cline_l,cline_r,cline_e,cline_o,rline_l,rline_r,rline_e,rline_o,pft,ctf2,rotl,rotr,isym)
+            ! Caching rotation matrices
             !$omp do schedule(static)
             do iref = 1,ncls
                 R(:,:,iref) = ref_space%get_mat(iref)
             enddo
+            !$omp end do nowait
+            !$omp do schedule(static)
+            do isym = 1,nsym
+                call symop%get_sym_rmat(isym, Rsym(:,:,isym))
+            end do
             !$omp end do
-            ! polar common lines interpolation
+            ! Common lines contribution
             !$omp do schedule(static)
             do iref = 1,ncls/2
-                tRi = transpose(R(:,:,iref))
-                m   = ref_space%get_int(iref,'mirr')
-                do jref = 1,ncls !!
+                tRi  = transpose(R(:,:,iref))
+                mref = ref_space%get_int(iref,'mirr')
+                do jref = 1,ncls/2
                     do isym = 1,nsym
-                        if( jref == iref ) cycle   ! self   exclusion
-                        if( jref == m )    cycle   ! mirror exclusion
                         if( isym == 1 )then
-                            ! if( jref == iref ) cycle   ! self   exclusion
-                            ! if( jref == m )    cycle   ! mirror exclusion
+                            if( jref == iref ) cycle    ! self   exclusion
+                            if( jref == mref ) cycle    ! mirror exclusion
                             ! Rotation of both planes by transpose of Ri (tRixRi=I & Rsym=I)
                             Rj = matmul(R(:,:,jref), tRi)
                         else
@@ -780,15 +644,25 @@ contains
                         endif
                     enddo
                 enddo
-                ! mirror to southern hemisphere
-                call mirror_pft( pfts_clin_even(:,:,iref), pfts_clin_even(:,:,m))
-                call mirror_pft( pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,m))
-                call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,m))
-                call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,m))
+            enddo
+            !$omp end do
+            ! Mirroring contributions
+            !$omp do schedule(static)
+            do iref = 1,ncls/2
+                mref = ref_space%get_int(iref,'mirr')
+                if( ymirror )then
+                    call mirror_pft(pfts_clin_even(:,:,iref), pfts_clin_even(:,:,mref))
+                    call mirror_pft(pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,mref))
+                else
+                    call mirrorx_pft(pfts_clin_even(:,:,iref), pfts_clin_even(:,:,mref))
+                    call mirrorx_pft(pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,mref))
+                endif
+                call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,mref))
+                call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,mref))
             enddo
             !$omp end do
             !$omp end parallel
-        end subroutine calc_comlin_contrib_sym
+        end subroutine calc_comlin_contrib
 
     end subroutine polar_cavger_merge_eos_and_norm
 
@@ -1259,6 +1133,7 @@ contains
         endif
         smpd       = 0.
         ncls       = 0
+        nrots      = 0
         kfromto(2) = 0
         pftsz      = 0
     end subroutine polar_cavger_kill
@@ -1266,7 +1141,7 @@ contains
     ! PRIVATE UTILITIES
 
     ! produces y-mirror of real (reciprocal) matrix 
-    subroutine mirror_ctf2( ctf2in, ctf2out )
+    pure subroutine mirror_ctf2( ctf2in, ctf2out )
         real(dp), intent(in)    :: ctf2in(pftsz,kfromto(1):kfromto(2))
         real(dp), intent(inout) :: ctf2out(pftsz,kfromto(1):kfromto(2))
         integer :: i,j
@@ -1281,7 +1156,7 @@ contains
     end subroutine mirror_ctf2
 
     ! produces y-mirror of complex (reciprocal) matrix 
-    subroutine mirror_pft( pftin, pftout )
+    pure subroutine mirror_pft( pftin, pftout )
         complex(dp), intent(in)    :: pftin(pftsz,kfromto(1):kfromto(2))
         complex(dp), intent(inout) :: pftout(pftsz,kfromto(1):kfromto(2))
         integer :: i,j
@@ -1294,6 +1169,72 @@ contains
         i = pftsz/2 + 1
         pftout(i,:) = pftin(i,:)
     end subroutine mirror_pft
+
+    ! produces x-mirror of complex matrix (=complex conjugate of y-mirror)
+    pure subroutine mirrorx_pft( pftin, pftout )
+        complex(dp), intent(in)    :: pftin(pftsz,kfromto(1):kfromto(2))
+        complex(dp), intent(inout) :: pftout(pftsz,kfromto(1):kfromto(2))
+        call mirror_pft(pftin, pftout)
+        pftout = conjg(pftout)
+    end subroutine mirrorx_pft
+
+    ! Private utility
+    pure subroutine safe_norm( Mnum, Mdenom, Mout )
+        complex(dp), intent(in)    :: Mnum(pftsz,kfromto(1):kfromto(2))
+        real(dp),    intent(inout) :: Mdenom(pftsz,kfromto(1):kfromto(2))
+        complex(dp), intent(inout) :: Mout(pftsz,kfromto(1):kfromto(2))
+        logical  :: msk(pftsz)
+        real(dp) :: avg, t
+        integer  :: k
+        do k = kfromto(1),kfromto(2)
+            msk = Mdenom(:,k) > DSMALL
+            avg = sum(Mdenom(:,k),mask=msk) / real(count(msk),dp)
+            t   = avg/50.d0
+            where((Mdenom(:,k) < t).and.msk) Mdenom(:,k) = Mdenom(:,k) + t
+        enddo
+        where( Mdenom > DSMALL)
+            Mout = Mnum / Mdenom
+        elsewhere
+            Mout = DCMPLX_ZERO
+        end where
+    end subroutine safe_norm
+
+    ! Returns complex and ctf2 polar lines given ref and rotational indices
+    pure subroutine get_line( ref, rot, even, pftline, ctf2line )
+        integer,     intent(in)    :: ref, rot
+        logical,     intent(in)    :: even
+        complex(dp), intent(out)   :: pftline(kfromto(1):kfromto(2))
+        real(dp),    intent(out)   :: ctf2line(kfromto(1):kfromto(2))
+        integer :: irot
+        if( rot >  nrots )then
+            irot = rot - nrots
+        else
+            irot = rot
+        endif
+        if( even )then
+            if( irot < 1 )then
+                irot    = irot + pftsz
+                pftline = conjg(pfts_even(irot,:,ref))
+            elseif( irot > pftsz )then
+                irot    = irot - pftsz
+                pftline = conjg(pfts_even(irot,:,ref))
+            else
+                pftline = pfts_even(irot,:,ref)
+            endif
+            ctf2line = ctf2_even(irot,:,ref)
+        else
+            if( irot < 1 )then
+                irot    = irot + pftsz
+                pftline = conjg(pfts_odd(irot,:,ref))
+            elseif( irot > pftsz )then
+                irot    = irot - pftsz
+                pftline = conjg(pfts_odd(irot,:,ref))
+            else
+                pftline = pfts_odd(irot,:,ref)
+            endif
+            ctf2line = ctf2_odd(irot,:,ref)
+        endif
+    end subroutine get_line
 
     !>  \brief  Filter references
     subroutine filterrefs( icls, filter )
