@@ -91,7 +91,7 @@ call img_copy%polarize(pftcc, b%img, 3, isptcl=.true.,  iseven=.true., mask=b%l_
 call pftcc%shift_ptcl(3, [-SHMAG,0.,0.]) ! right
 call img_copy%polarize(pftcc, b%img, 4, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call img_copy%polarize(pftcc, b%img, 4, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-call pftcc%shift_ptcl(4, [0.,SHMAG,0.]) ! up
+call pftcc%shift_ptcl(4, [0.,-SHMAG,0.]) ! up
 call img_copy%polarize(pftcc, b%img, 5, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call img_copy%polarize(pftcc, b%img, 5, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
 call pftcc%gencorr_sigma_contrib(5,5,[SHMAG,SHMAG],1,sigma2_noise(:,5))
@@ -152,6 +152,6 @@ do i=5,5
     enddo
     print *, xbest, ybest, corrmax
 enddo
-call pftcc%calc_shift(5, 2, sh)
+call pftcc%calc_shift(5, 4, sh, rot_in=1)
 print *, 'calculated shift = ', sh
 end program simple_test_shiftsrch

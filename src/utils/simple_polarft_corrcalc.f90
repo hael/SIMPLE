@@ -40,6 +40,7 @@ type heap_vars
     complex(dp), pointer :: shvec(:)           => null()
     complex(dp), pointer :: shmat_8(:,:)       => null()
     real(dp),    pointer :: pft_r1_8(:,:)      => null()
+    real(dp),    pointer :: pft_r2_8(:,:)      => null()
     real(sp),    pointer :: pft_r(:,:)         => null()
 end type heap_vars
 
@@ -193,8 +194,8 @@ type :: polarft_corrcalc
     procedure, private :: calc_frc, linear_ft_refs
     generic            :: linear_ft_ref2s => linear_ft_ref2s_1, linear_ft_ref2s_2
     procedure, private :: linear_ft_ref2s_1, linear_ft_ref2s_2
-    procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3
-    generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3
+    procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
+    generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
     procedure, private :: rotate_iref_1, rotate_iref_2
     generic            :: rotate_iref => rotate_iref_1, rotate_iref_2
     ! DESTRUCTOR
@@ -319,6 +320,7 @@ contains
                     &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                    &self%heap_vars(ithr)%pft_r2_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r(self%pftsz,self%kfromto(1):self%kfromto(2)))
         end do
         self%pfts_refs_even = zero
@@ -1066,6 +1068,27 @@ contains
         endif
     end subroutine rotate_pft_3
 
+    subroutine rotate_pft_4( self, pft, irot, pft_rot )
+        class(polarft_corrcalc), intent(in)  :: self
+        real(dp),                intent(in)  :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)  :: irot
+        real(dp),                intent(out) :: pft_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: mid
+        if( irot == 1 )then
+            pft_rot = pft
+        elseif( irot >= 2 .and. irot <= self%pftsz )then
+            mid = self%pftsz - irot + 1
+            pft_rot(   1:irot-1,    :) = pft(mid+1:self%pftsz,:)
+            pft_rot(irot:self%pftsz,:) = pft(    1:mid,       :)
+        elseif( irot == self%pftsz + 1 )then
+            pft_rot = pft
+        else
+            mid = self%nrots - irot + 1
+            pft_rot(irot-self%pftsz:self%pftsz       ,:) = pft(1    :mid,       :)
+            pft_rot(1              :irot-self%pftsz-1,:) = pft(mid+1:self%pftsz,:)
+        endif
+    end subroutine rotate_pft_4
+
     subroutine rotate_iref_1( self, iref, irot, sh )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
@@ -1436,41 +1459,88 @@ contains
         ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
     end subroutine gen_shmat_8
 
-    subroutine calc_shift( self, iref, iptcl, sh )
+    subroutine calc_shift( self, iref, iptcl, sh, rot_in )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
         integer,                 intent(in)    :: iptcl
         real,                    intent(inout) :: sh(2)
-        integer, parameter :: NPI = 5
-        integer :: ind, i, j, k, irot, cand1_cnt, cand2_cnt
+        integer,  optional,      intent(in)    :: rot_in
+        complex,  pointer   :: pft_ref(:,:), pft_ref_tmp(:,:)
+        real(dp), pointer   :: args1(:,:), args2(:,:)
+        integer,  parameter :: NPI   = 5,&       ! maximum number of trigonometry periods
+                              &NLINS = 2,&       ! maximum number of 2x2 linear systems
+                              &NEQS  = 2*NLINS
+        integer :: ind, ithr, i, j, k, irot, cand1_cnt, cand2_cnt, eq_cnt, k_cands(NEQS), r_cands(NEQs)
         complex :: AB
-        real    :: C_1st, T_1st, C_2nd, T_2nd, RHS_1st(NPI), RHS_2nd(NPI), x_comp, y_comp,&
+        real    :: C_1st, T_1st, C_2nd, T_2nd, RHS_1st(NPI), RHS_2nd(NPI), x_comp, y_comp, trs, abspft,&
                 &cand1_x(NPI*NPI), cand1_y(NPI*NPI), cand2_x(NPI*NPI), cand2_y(NPI*NPI), minval, minx, miny, val
-        ind = self%pinds(iptcl)
+        ind  = self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp
+        args1       => self%heap_vars(ithr)%pft_r1_8
+        args2       => self%heap_vars(ithr)%pft_r2_8
+        if( present(rot_in) )then
+            if( self%iseven(ind) )then
+                pft_ref_tmp = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref_tmp = self%pfts_refs_odd(:,:,iref)
+            endif
+            call self%rotate_pft(pft_ref_tmp, rot_in, pft_ref)
+            call self%rotate_pft(self%argtransf(           1:self%pftsz,:), rot_in, args1)
+            call self%rotate_pft(self%argtransf(self%pftsz+1:          ,:), rot_in, args2)
+        else
+            if( self%iseven(ind) )then
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            endif
+            args1 = self%argtransf(           1:self%pftsz,:)
+            args2 = self%argtransf(self%pftsz+1:          ,:)
+        endif
+        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,ind)
+        trs    = params_glob%trs
+        eq_cnt = 0
+        ! generating candidates for equations
+        do k = self%kfromto(1), self%kfromto(2)
+            do irot = 1, self%pftsz
+                if( eq_cnt > NEQS )exit
+                abspft = real(self%pfts_ptcls(irot,k,ind) * conjg(self%pfts_ptcls(irot,k,ind)))
+                if( abspft < TINY )cycle
+                abspft = real(pft_ref(irot,k) * conjg(pft_ref(irot,k)))
+                if( abspft < TINY )cycle
+                eq_cnt          = eq_cnt + 1
+                k_cands(eq_cnt) = k
+                r_cands(eq_cnt) = irot
+            enddo
+        enddo
+        ! not enough candiates to calculate the shifts
+        if( eq_cnt < NEQS )then
+            sh = 0.
+            return
+        endif
         ! first pair
-        k       = self%kfromto(1) + 16
-        irot    = 10
+        k       = k_cands(1)
+        irot    = r_cands(1)
         RHS_1st = 0.
         C_1st   = 0.
         T_1st   = 0.
-        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
-        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
         RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
-        C_1st   = C_1st + self%argtransf(             irot,k)
-        T_1st   = T_1st + self%argtransf(self%pftsz + irot,k)
+        C_1st   =   C_1st + args1(irot,k)
+        T_1st   =   T_1st + args2(irot,k)
         do j = 1, NPI
             RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
         enddo
-        k       = self%kfromto(1) + 17
-        irot    = 11
+        k       = k_cands(2)
+        irot    = r_cands(2)
         RHS_2nd = 0.
         C_2nd   = 0.
         T_2nd   = 0.
-        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
-        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
         RHS_2nd = RHS_2nd + atan(aimag(AB)/real(AB))
-        C_2nd   = C_2nd + self%argtransf(             irot,k)
-        T_2nd   = T_2nd + self%argtransf(self%pftsz + irot,k)
+        C_2nd   =   C_2nd + args1(irot,k)
+        T_2nd   =   T_2nd + args2(irot,k)
         do j = 1, NPI
             RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
         enddo
@@ -1479,36 +1549,34 @@ contains
             do j = 1, NPI
                 x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
                 y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
-                if( x_comp < -5. .or. x_comp > 5. .or. y_comp < -5. .or. y_comp > 5. )cycle
+                if( x_comp < -trs .or. x_comp > trs .or. y_comp < -trs .or. y_comp > trs )cycle
                 cand1_cnt = cand1_cnt + 1
                 cand1_x(cand1_cnt) = x_comp
                 cand1_y(cand1_cnt) = y_comp
             enddo
         enddo
         ! another pair
-        k       = self%kfromto(1) + 10
-        irot    = 20
+        k       = k_cands(3)
+        irot    = r_cands(3)
         RHS_1st = 0.
         C_1st   = 0.
         T_1st   = 0.
-        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
-        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
         RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
-        C_1st   = C_1st + self%argtransf(             irot,k)
-        T_1st   = T_1st + self%argtransf(self%pftsz + irot,k)
+        C_1st   =   C_1st + args1(irot,k)
+        T_1st   =   T_1st + args2(irot,k)
         do j = 1, NPI
             RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
         enddo
-        k       = self%kfromto(1) + 11
-        irot    = 21
+        k       = k_cands(4)
+        irot    = r_cands(4)
         RHS_2nd = 0.
         C_2nd   = 0.
         T_2nd   = 0.
-        if( real(self%pfts_ptcls(irot,k,ind)) < TINY .and. aimag(self%pfts_ptcls(irot,k,ind)) < TINY )return
-        AB      = self%pfts_refs_even(irot,k,iref)/self%pfts_ptcls(irot,k,ind)
+        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
         RHS_2nd = RHS_2nd + atan(aimag(AB)/real(AB))
-        C_2nd   = C_2nd + self%argtransf(             irot,k)
-        T_2nd   = T_2nd + self%argtransf(self%pftsz + irot,k)
+        C_2nd   =   C_2nd + args1(irot,k)
+        T_2nd   =   T_2nd + args2(irot,k)
         do j = 1, NPI
             RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
         enddo
@@ -1517,7 +1585,7 @@ contains
             do j = 1, NPI
                 x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
                 y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
-                if( x_comp < -5. .or. x_comp > 5. .or. y_comp < -5. .or. y_comp > 5. )cycle
+                if( x_comp < -trs .or. x_comp > trs .or. y_comp < -trs .or. y_comp > trs )cycle
                 cand2_cnt = cand2_cnt + 1
                 cand2_x(cand2_cnt) = x_comp
                 cand2_y(cand2_cnt) = y_comp
@@ -3294,7 +3362,7 @@ contains
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_ptcl_8,&
                     &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
-                    &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8)
+                    &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,self%heap_vars(ithr)%pft_r2_8)
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
