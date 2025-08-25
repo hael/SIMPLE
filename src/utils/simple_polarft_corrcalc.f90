@@ -1471,6 +1471,7 @@ contains
                               &NLINS = 2,&       ! maximum number of 2x2 linear systems
                               &NEQS  = 2*NLINS
         integer :: ind, ithr, i, j, k, irot, cand1_cnt, cand2_cnt, eq_cnt, k_cands(NEQS), r_cands(NEQs)
+        logical :: rots(self%pftsz), ks(self%kfromto(1):self%kfromto(2))
         complex :: AB
         real    :: C_1st, T_1st, C_2nd, T_2nd, RHS_1st(NPI), RHS_2nd(NPI), x_comp, y_comp, trs, abspft,&
                 &cand1_x(NPI*NPI), cand1_y(NPI*NPI), cand2_x(NPI*NPI), cand2_y(NPI*NPI), minval, minx, miny, val
@@ -1502,8 +1503,12 @@ contains
         trs    = params_glob%trs
         eq_cnt = 0
         ! generating candidates for equations
+        rots = .false.
+        ks   = .false.
         do k = self%kfromto(1), self%kfromto(2)
+            if( ks(k) )cycle
             do irot = 1, self%pftsz
+                if( rots(irot) .or. ks(k) )cycle
                 if( eq_cnt > NEQS )exit
                 abspft = real(self%pfts_ptcls(irot,k,ind) * conjg(self%pfts_ptcls(irot,k,ind)))
                 if( abspft < TINY )cycle
@@ -1512,9 +1517,11 @@ contains
                 eq_cnt          = eq_cnt + 1
                 k_cands(eq_cnt) = k
                 r_cands(eq_cnt) = irot
+                rots(irot)      = .true.
+                ks(k)           = .true.
             enddo
         enddo
-        ! not enough candiates to calculate the shifts
+        ! not enough candidates to calculate the shifts
         if( eq_cnt < NEQS )then
             sh = 0.
             return
@@ -1522,25 +1529,19 @@ contains
         ! first pair
         k       = k_cands(1)
         irot    = r_cands(1)
-        RHS_1st = 0.
-        C_1st   = 0.
-        T_1st   = 0.
         AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
-        RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
-        C_1st   =   C_1st + args1(irot,k)
-        T_1st   =   T_1st + args2(irot,k)
+        RHS_1st = atan(aimag(AB)/real(AB))
+        C_1st   = args1(irot,k)
+        T_1st   = args2(irot,k)
         do j = 1, NPI
             RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
         enddo
         k       = k_cands(2)
         irot    = r_cands(2)
-        RHS_2nd = 0.
-        C_2nd   = 0.
-        T_2nd   = 0.
         AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
-        RHS_2nd = RHS_2nd + atan(aimag(AB)/real(AB))
-        C_2nd   =   C_2nd + args1(irot,k)
-        T_2nd   =   T_2nd + args2(irot,k)
+        RHS_2nd = atan(aimag(AB)/real(AB))
+        C_2nd   = args1(irot,k)
+        T_2nd   = args2(irot,k)
         do j = 1, NPI
             RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
         enddo
@@ -1550,7 +1551,7 @@ contains
                 x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
                 y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
                 if( x_comp < -trs .or. x_comp > trs .or. y_comp < -trs .or. y_comp > trs )cycle
-                cand1_cnt = cand1_cnt + 1
+                cand1_cnt          = cand1_cnt + 1
                 cand1_x(cand1_cnt) = x_comp
                 cand1_y(cand1_cnt) = y_comp
             enddo
@@ -1558,25 +1559,19 @@ contains
         ! another pair
         k       = k_cands(3)
         irot    = r_cands(3)
-        RHS_1st = 0.
-        C_1st   = 0.
-        T_1st   = 0.
         AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
-        RHS_1st = RHS_1st + atan(aimag(AB)/real(AB))
-        C_1st   =   C_1st + args1(irot,k)
-        T_1st   =   T_1st + args2(irot,k)
+        RHS_1st = atan(aimag(AB)/real(AB))
+        C_1st   = args1(irot,k)
+        T_1st   = args2(irot,k)
         do j = 1, NPI
             RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
         enddo
         k       = k_cands(4)
         irot    = r_cands(4)
-        RHS_2nd = 0.
-        C_2nd   = 0.
-        T_2nd   = 0.
         AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
-        RHS_2nd = RHS_2nd + atan(aimag(AB)/real(AB))
-        C_2nd   =   C_2nd + args1(irot,k)
-        T_2nd   =   T_2nd + args2(irot,k)
+        RHS_2nd = atan(aimag(AB)/real(AB))
+        C_2nd   = args1(irot,k)
+        T_2nd   = args2(irot,k)
         do j = 1, NPI
             RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
         enddo
@@ -1586,7 +1581,7 @@ contains
                 x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
                 y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
                 if( x_comp < -trs .or. x_comp > trs .or. y_comp < -trs .or. y_comp > trs )cycle
-                cand2_cnt = cand2_cnt + 1
+                cand2_cnt          = cand2_cnt + 1
                 cand2_x(cand2_cnt) = x_comp
                 cand2_y(cand2_cnt) = y_comp
             enddo

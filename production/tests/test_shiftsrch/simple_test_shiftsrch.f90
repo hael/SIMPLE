@@ -152,6 +152,6 @@ do i=5,5
     enddo
     print *, xbest, ybest, corrmax
 enddo
-call pftcc%calc_shift(5, 4, sh, rot_in=1)
+call pftcc%calc_shift(5, 5, sh, rot_in=1)
 print *, 'calculated shift = ', sh
 end program simple_test_shiftsrch
