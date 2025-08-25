@@ -1467,8 +1467,8 @@ contains
         integer,  optional,      intent(in)    :: rot_in
         complex,  pointer   :: pft_ref(:,:), pft_ref_tmp(:,:)
         real(dp), pointer   :: args1(:,:), args2(:,:)
-        integer,  parameter :: NPI   = 5,&       ! maximum number of trigonometry periods
-                              &NLINS = 2,&       ! maximum number of 2x2 linear systems
+        integer,  parameter :: NPI   = 5,&       ! number of trigonometry periods
+                              &NLINS = 2,&       ! number of 2x2 linear systems
                               &NEQS  = 2*NLINS
         integer :: ind, ithr, i, j, k, irot, cand1_cnt, cand2_cnt, eq_cnt, k_cands(NEQS), r_cands(NEQs)
         logical :: rots(self%pftsz), ks(self%kfromto(1):self%kfromto(2))
@@ -1509,7 +1509,7 @@ contains
             if( ks(k) )cycle
             do irot = 1, self%pftsz
                 if( rots(irot) .or. ks(k) )cycle
-                if( eq_cnt > NEQS )exit
+                if( eq_cnt > NEQS )cycle
                 abspft = real(self%pfts_ptcls(irot,k,ind) * conjg(self%pfts_ptcls(irot,k,ind)))
                 if( abspft < TINY )cycle
                 abspft = real(pft_ref(irot,k) * conjg(pft_ref(irot,k)))
@@ -1529,7 +1529,7 @@ contains
         ! first pair
         k       = k_cands(1)
         irot    = r_cands(1)
-        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
+        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
         RHS_1st = atan(aimag(AB)/real(AB))
         C_1st   = args1(irot,k)
         T_1st   = args2(irot,k)
@@ -1538,7 +1538,7 @@ contains
         enddo
         k       = k_cands(2)
         irot    = r_cands(2)
-        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
+        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
         RHS_2nd = atan(aimag(AB)/real(AB))
         C_2nd   = args1(irot,k)
         T_2nd   = args2(irot,k)
@@ -1559,7 +1559,7 @@ contains
         ! another pair
         k       = k_cands(3)
         irot    = r_cands(3)
-        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
+        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
         RHS_1st = atan(aimag(AB)/real(AB))
         C_1st   = args1(irot,k)
         T_1st   = args2(irot,k)
@@ -1568,7 +1568,7 @@ contains
         enddo
         k       = k_cands(4)
         irot    = r_cands(4)
-        AB      = pft_ref(irot,k)/self%pfts_ptcls(irot,k,ind)
+        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
         RHS_2nd = atan(aimag(AB)/real(AB))
         C_2nd   = args1(irot,k)
         T_2nd   = args2(irot,k)
@@ -1598,7 +1598,7 @@ contains
                 endif
             enddo
         enddo
-        sh = -[minx, miny]
+        sh = [minx, miny]
     end subroutine calc_shift
 
     !>  Generate shift matrix following de Moivre's formula, single precision
