@@ -207,10 +207,18 @@ contains
             dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max])
             ! cluster
             call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
-            if( nclust > 5 .and. nclust < 20 )then
-                nclust = 20
-                deallocate(i_medoids, labels)
-                call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+            if( cline%defined('ncls') )then
+                if( nclust > params%ncls )then
+                    nclust = params%ncls
+                    deallocate(i_medoids, labels)
+                    call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+                endif
+            else
+                if( nclust > 5 .and. nclust < 20 )then
+                    nclust = 20
+                    deallocate(i_medoids, labels)
+                    call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+                endif
             endif
             clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
         endif
