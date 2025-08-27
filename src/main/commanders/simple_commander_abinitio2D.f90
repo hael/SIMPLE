@@ -89,19 +89,21 @@ contains
         ! check refinement flag and set stages
         l_inpl = .false.
         select case(trim(params%refine))
-        case('inpl','inpl_smpl')
-            ! in-plane refinement, one stage only
-            nstages = NSTAGES_SINGLE
-            l_inpl  = .true.
-        case('snhc','snhc_smpl')
-            ! usual suspects
-            nstages = NSTAGES_CLS
-        case('prob','prob_smpl','prob_smpl_shc','prob_greedy')
-            ! prob family of algorithms
-            nstages = NSTAGES_CLS
-        case DEFAULT
-            THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
+            case('inpl','inpl_smpl')
+                ! in-plane refinement, one stage only
+                nstages = NSTAGES_SINGLE
+                l_inpl  = .true.
+            case('snhc','snhc_smpl')
+                ! usual suspects
+                nstages = NSTAGES_CLS
+            case('prob','prob_smpl','prob_smpl_shc','prob_greedy')
+                ! prob family of algorithms
+                nstages = NSTAGES_CLS
+            case DEFAULT
+                THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
         end select
+        ! override # stages
+        if( cline%defined('nstages') ) nstages = min(params%nstages,NSTAGES_CLS)
         allocate(stage_parms(nstages))
         ! read project
         call spproj%read(params%projfile)
