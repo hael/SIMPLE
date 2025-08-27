@@ -286,8 +286,8 @@ contains
         class(pftcc_shsrch_grad), intent(inout) :: self
         real(dp),                 intent(out)   :: init_xy(2)
         integer,                  intent(out)   :: irot
-        real(dp) :: x, y, cost, stepx,stepy
-        real     :: corrs(self%nrots), lowest_cost
+        real(dp) :: x, y, stepx,stepy
+        real     :: corrs(self%nrots), lowest_cost, cost
         integer  :: loc, ix,iy
         init_xy = 0.d0
         irot    = 0

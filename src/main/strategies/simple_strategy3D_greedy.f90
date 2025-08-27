@@ -34,8 +34,8 @@ contains
     subroutine srch_greedy( self, ithr )
         class(strategy3D_greedy), intent(inout) :: self
         integer,                  intent(in)    :: ithr
-        integer   :: iref, isample, loc(1)
-        real      :: inpl_corrs(self%s%nrots)
+        integer :: iref, isample, loc(1)
+        real    :: inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
