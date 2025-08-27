@@ -609,11 +609,7 @@ contains
         states  = nint(build%spproj%os_cls2D%get_all('state'))
         filtsz = build%clsfrcs%get_filtsz()
         allocate(frcs_avg(filtsz), source=0.)
-        if( params%frc_weight .eq. 'yes' )then
-            call build%clsfrcs%avg_frc_getter(frcs_avg, states, cur_oris=build%spproj%os_ptcl2D)
-        else
-            call build%clsfrcs%avg_frc_getter(frcs_avg, states)
-        endif
+        call build%clsfrcs%avg_frc_getter(frcs_avg, states)
         allocate(lpinfo(params%nstages))
         lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
         lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)

@@ -1606,7 +1606,6 @@ contains
         if( l_stream )then
             select case(trim(params_glob%refine))
             case('prob_smpl')
-                if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
                 call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
             case DEFAULT
                 THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
@@ -1622,11 +1621,9 @@ contains
                         call eulprob%normalize_table
                         call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
                     else
-                        if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
                         call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
                     endif
                 case('prob_smpl')
-                    if( trim(params_glob%ptcl_norm).eq.'yes' ) call eulprob%normalize_ptcl
                     call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
                 case('prob_greedy')
                     call eulprob%assign_greedy(l_maxpop)

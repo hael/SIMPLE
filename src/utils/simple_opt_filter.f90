@@ -9,7 +9,7 @@ use simple_butterworth
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt3D, estimate_lplim, estimate_lplims2D, uni_delinear
+public :: nonuni_filt3D, estimate_lplim, estimate_lplims2D
 private
 
 interface estimate_lplim
@@ -271,56 +271,5 @@ contains
         end do
         deallocate(masks)
     end subroutine estimate_lplims2D
-
-    subroutine uni_delinear(nvol, npix, vols, vols_out, verbose)
-        integer,           intent(in)    :: nvol, npix
-        real,              intent(in)    :: vols(npix,nvol)
-        real,              intent(inout) :: vols_out(npix,nvol)
-        logical, optional, intent(in)    :: verbose
-        logical :: l_verbose
-        integer :: ivol, ivar, jvol, errflg, var_inds(nvol), dist_ind
-        real    :: probs_inv(nvol,nvol), avg_vol(npix), var(nvol), probs_dist(nvol,nvol), var_sorted(nvol)
-        l_verbose = .false.
-        if( present(verbose) ) l_verbose = verbose
-        avg_vol = sum(vols, dim=2)/real(nvol)
-        do ivol = 1, nvol
-            var(ivol) = sum((vols(:,ivol) - avg_vol(:))**2)
-        enddo
-        var        = var/sum(var)
-        var_inds   = (/(jvol,jvol=1,nvol)/)
-        var_sorted = var
-        call hpsort(var_sorted, var_inds)
-        if( l_verbose )then
-            print *, 'var_sorted = ', var_sorted
-            print *, 'var_inds   = ', var_inds
-        endif
-        ! distribution guess
-        do ivol = 1, nvol
-            dist_ind = 0
-            probs_dist(ivol,ivol) = exp(-(dist_ind - 0.)**2/2./var(ivol))/sqrt(2. * PI * var(ivol))
-            dist_ind = dist_ind + 1
-            do ivar = 1, nvol
-                jvol = var_inds(ivar)
-                if( jvol == ivol ) cycle
-                probs_dist(ivol,jvol) = exp(-(dist_ind - 0.)**2/2./var(ivol))/sqrt(2. * PI * var(ivol))
-                dist_ind = dist_ind + 1
-            enddo
-            probs_dist(ivol,:) = probs_dist(ivol,:) / sum(probs_dist(ivol,:))
-            if( l_verbose ) print *, 'probs', ivol, ' = ', probs_dist(ivol,:)
-        enddo
-        call matinv(probs_dist, probs_inv, nvol, errflg)
-        if( l_verbose )then
-            do ivol = 1, nvol
-                print *, 'probs_inv', ivol, ' = ', probs_inv(ivol,:)
-            enddo
-        endif
-        ! recovering
-        vols_out = 0.
-        do ivol = 1, nvol
-            do jvol = 1, nvol
-                vols_out(:,ivol) = vols_out(:,ivol) + probs_inv(ivol,jvol) * vols(:,jvol)
-            enddo
-        enddo
-    end subroutine uni_delinear
 
 end module simple_opt_filter

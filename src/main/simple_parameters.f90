@@ -51,7 +51,6 @@ type :: parameters
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
-    character(len=3)          :: frc_weight='no'      !< considering particle numbers of classes in computing frc (yes|no){no}
     character(len=3)          :: frcref='no'          !< Whether to apply a FRC filter to the 3D polar reference(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -107,13 +106,10 @@ type :: parameters
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: projrec='no'         !< Whether to reconstruct from summed projection directions (yes|no){no}
-    character(len=3)          :: ptcl_cache ='no'     !< caching polarized ptcls/ctfs (yes|no){no}
-    character(len=3)          :: ptcl_norm ='no'
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
-    character(len=3)          :: refs_delin='no'      !< delinearizing reprojections of different states (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: remap_cls='no'
@@ -216,7 +212,6 @@ type :: parameters
     character(len=STDLEN)     :: boxtype='eman'
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
-    character(len=STDLEN)     :: coord='cart'         !< Coordinate system for cluster2D(cart|polar|both){cart}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
@@ -550,7 +545,6 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_prob_inpl    = .false.
     logical :: l_prob_sh      = .false.
-    logical :: l_refs_delin   = .false.
     logical :: l_sh_first     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_trail_rec    = .false.
@@ -623,7 +617,6 @@ contains
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)
-        call check_carg('coord',          self%coord)
         call check_carg('crowded',        self%crowded)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
@@ -647,7 +640,6 @@ contains
         call check_carg('flag',           self%flag)
         call check_carg('flipgain',       self%flipgain)
         call check_carg('ft2img',         self%ft2img)
-        call check_carg('frc_weight',     self%frc_weight)
         call check_carg('frcref',         self%frcref)
         call check_carg('gauref',         self%gauref)
         call check_carg('guinier',        self%guinier)
@@ -730,8 +722,6 @@ contains
         call check_carg('projstats',      self%projstats)
         call check_carg('protocol',       self%protocol)
         call check_carg('prune',          self%prune)
-        call check_carg('ptcl_cache',     self%ptcl_cache)
-        call check_carg('ptcl_norm',      self%ptcl_norm)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
@@ -743,7 +733,6 @@ contains
         call check_carg('ref_type',       self%ref_type)
         call check_carg('refine',         self%refine)
         call check_carg('refine_type',    self%refine_type)
-        call check_carg('refs_delin',     self%refs_delin)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('remove_chunks',  self%remove_chunks)
@@ -1745,8 +1734,6 @@ contains
         endif
         ! resolution limit
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
-        ! refs delinearization
-        self%l_refs_delin = trim(self%refs_delin) == 'yes'
         ! B-facor
         self%l_bfac = cline%defined('bfac')
         ! smoothing extension
