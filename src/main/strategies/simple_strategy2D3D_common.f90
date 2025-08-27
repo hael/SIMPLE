@@ -1231,19 +1231,14 @@ contains
     end subroutine prepare_refs_sigmas_ptcls
 
     subroutine prepare_polar_references( pftcc, cline, batchsz )
-        use simple_polarft_corrcalc,       only:  polarft_corrcalc
-        use simple_projector,              only:  projector
-        use simple_opt_filter,             only:  uni_delinear
+        use simple_polarft_corrcalc, only:  polarft_corrcalc
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(in)    :: cline !< command line
         integer,                 intent(in)    :: batchsz
-        real,        allocatable :: imgvecs(:,:,:), imgvecs_delin(:,:,:)
-        type(image), allocatable :: imgs(:)
-        type(projector) :: vols(params_glob%nstates), vols_odd(params_glob%nstates)
-        type(ori)       :: o_tmp
-        real    :: xyz(3), smpd
-        integer :: s, iproj, iref, nrefs, ldim(3), box, ithr
-        logical :: do_center
+        type(ori) :: o_tmp
+        real      :: xyz(3)
+        integer   :: s, iproj, iref, nrefs
+        logical   :: do_center
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols([params_glob%lpstart,params_glob%lpstop])
         else
@@ -1254,138 +1249,40 @@ contains
         call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         ! read reference volumes and create polar projections
-        if( params_glob%l_refs_delin .and. params_glob%nstates > 1 )then
-            ! allocations
-            allocate(imgs(nthr_glob))
-            ! initializing 2D refs
-            ldim = build_glob%vol%get_ldim()
-            box  = ldim(1)
-            smpd = build_glob%vol%get_smpd()
-            do ithr = 1, nthr_glob
-                call imgs(ithr)%new([box,box,1], smpd, wthreads=.false.)
-            enddo
-            ! get all the vols of different states
-            do s=1,params_glob%nstates
-                if( str_has_substr(params_glob%refine, 'prob') )then
-                    ! already mapping shifts in prob_tab with shared-memory execution
-                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
-                else
-                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
-                endif
-                call read_mask_and_filter_refvols(s)
-                ! PREPARE E/O VOLUMES
-                call preprefvol(cline, s, do_center, xyz, .false.)
-                call preprefvol(cline, s, do_center, xyz, .true.)
-                ! Copying vols
-                call vols(s)%copy(build_glob%vol)
-                call vols_odd(s)%copy(build_glob%vol_odd)
-                call vols(s)%expand_cmat(params_glob%alpha,norm4proj=.true.)
-                call vols_odd(s)%expand_cmat(params_glob%alpha,norm4proj=.true.)
-            enddo
-            ! cartesian reprojections and do delinearization for the reprojections of all states of the same reprojection direction
-            allocate(imgvecs(box*box,params_glob%nstates,nthr_glob),imgvecs_delin(box*box,params_glob%nstates,nthr_glob), source=0.)
-            !$omp parallel do default(shared) private(iproj,ithr,o_tmp,s,iref) schedule(static) proc_bind(close)
+        do s=1,params_glob%nstates
+            if( str_has_substr(params_glob%refine, 'prob') )then
+                ! already mapping shifts in prob_tab with shared-memory execution
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
+            else
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
+            endif
+            call read_mask_and_filter_refvols(s)
+            ! PREPARE E/O VOLUMES
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
+            ! PREPARE REFERENCES
+            !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
             do iproj=1,params_glob%nspace
-                ithr = omp_get_thread_num() + 1
+                iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                ! for even vols
-                do s=1,params_glob%nstates
-                    call vols(s)%fproject_serial(o_tmp, imgs(ithr))
-                    ! back FT
-                    call imgs(ithr)%ifft
-                    imgvecs(:,s,ithr) = imgs(ithr)%serialize()
-                enddo
-                ! delinearizing and transfer to pftcc
-                call uni_delinear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
-                do s=1,params_glob%nstates
-                    iref = (s - 1) * params_glob%nspace + iproj
-                    call imgs(ithr)%unserialize(imgvecs_delin(:,s,ithr))
-                    call imgs(ithr)%fft
-                    ! transfer to polar coordinates
-                    call build_glob%img_crop_polarizer%polarize(pftcc, imgs(ithr), iref, .false., .true., mask=build_glob%l_resmsk)
-                enddo
-                ! for odd vols
-                do s=1,params_glob%nstates
-                    call vols_odd(s)%fproject_serial(o_tmp, imgs(ithr))
-                    ! back FT
-                    call imgs(ithr)%ifft
-                    imgvecs(:,s,ithr) = imgs(ithr)%serialize()
-                enddo
-                ! delinearizing and transfer to pftcc
-                call uni_delinear(params_glob%nstates, box*box, imgvecs(:,:,ithr), imgvecs_delin(:,:,ithr))
-                do s=1,params_glob%nstates
-                    iref = (s - 1) * params_glob%nspace + iproj
-                    call imgs(ithr)%unserialize(imgvecs_delin(:,s,ithr))
-                    call imgs(ithr)%fft
-                    ! transfer to polar coordinates
-                    call build_glob%img_crop_polarizer%polarize(pftcc, imgs(ithr), iref, .false., .false., mask=build_glob%l_resmsk)
-                enddo
+                call build_glob%vol_odd%fproject_polar(iref, o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol%fproject_polar(    iref, o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
-            ! cleaning up
-            deallocate(imgvecs,imgvecs_delin)
-            do s=1,params_glob%nstates
-                call vols(s)%kill
-                call vols_odd(s)%kill
-            enddo
-            do ithr = 1, nthr_glob
-                call imgs(ithr)%kill
-            enddo
-        else
-            do s=1,params_glob%nstates
-                if( str_has_substr(params_glob%refine, 'prob') )then
-                    ! already mapping shifts in prob_tab with shared-memory execution
-                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
-                else
-                    call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz, map_shift=.true.)
-                endif
-                call read_mask_and_filter_refvols(s)
-                ! PREPARE E/O VOLUMES
-                call preprefvol(cline, s, do_center, xyz, .false.)
-                call preprefvol(cline, s, do_center, xyz, .true.)
-                ! PREPARE REFERENCES
-                !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
-                do iproj=1,params_glob%nspace
-                    iref = (s - 1) * params_glob%nspace + iproj
-                    call build_glob%eulspace%get_ori(iproj, o_tmp)
-                    call build_glob%vol_odd%fproject_polar(iref, o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
-                    call build_glob%vol%fproject_polar(    iref, o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
-                    call o_tmp%kill
-                end do
-                !$omp end parallel do
-            end do
-        endif
+        end do
         call pftcc%memoize_refs
     end subroutine prepare_polar_references
 
-    subroutine build_batch_particles( pftcc, nptcls_here, pinds_here, tmp_imgs, ibatch )
+    subroutine build_batch_particles( pftcc, nptcls_here, pinds_here, tmp_imgs )
         use simple_polarft_corrcalc,       only:  polarft_corrcalc
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: nptcls_here
         integer,                 intent(in)    :: pinds_here(nptcls_here)
         type(image),             intent(inout) :: tmp_imgs(params_glob%nthr)
-        integer,     optional,   intent(in)    :: ibatch
-        integer :: iptcl_batch, iptcl, ithr, cur_batch
-        logical :: success
+        integer :: iptcl_batch, iptcl, ithr
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        if( trim(params_glob%ptcl_cache).eq.'yes' )then
-            cur_batch = 1
-            if( present(ibatch) ) cur_batch = ibatch
-            call pftcc%read_ptcls_ctfs(cur_batch, success)
-            if( success )then
-                !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
-                do iptcl_batch = 1,nptcls_here
-                    iptcl = pinds_here(iptcl_batch)
-                    call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-                    call pftcc%memoize_sqsum_ptcl(iptcl)
-                end do
-                !$omp end parallel do
-                call pftcc%memoize_ptcls
-                return
-            endif
-        endif
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
@@ -1402,7 +1299,6 @@ contains
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
-        if( trim(params_glob%ptcl_cache).eq.'yes' )call pftcc%write_ptcls_ctfs(cur_batch)
     end subroutine build_batch_particles
 
 end module simple_strategy2D3D_common

@@ -166,11 +166,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_build_batch_particles = tic()
-            if( trim(params_glob%ptcl_cache) .eq. 'yes' )then
-                call build_batch_particles(pftcc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs, ibatch)
-            else
-                call build_batch_particles(pftcc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs)
-            endif
+            call build_batch_particles(pftcc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs)
             if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
