@@ -69,7 +69,6 @@ type :: parameters
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter
     character(len=3)          :: linethres='no'       !< whether to consider angular threshold in common lines (yes|no){no}
-    character(len=3)          :: linstates='no'       !< linearizing states in alignment (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
@@ -230,7 +229,6 @@ type :: parameters
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
-    character(len=STDLEN)     :: linstates_mode='ppca'  !< linearized state mode(forprob|backprob){forprob}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -542,7 +540,6 @@ type :: parameters
     logical :: l_icm          = .false.
     logical :: l_incrreslim   = .false.
     logical :: l_lam_anneal   = .false.
-    logical :: l_linstates    = .false.
     logical :: l_lpauto       = .false.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
@@ -673,8 +670,6 @@ contains
         call check_carg('kweight_pool',   self%kweight_pool)
         call check_carg('lam_anneal',     self%lam_anneal)
         call check_carg('linethres',      self%linethres)
-        call check_carg('linstates',      self%linstates)
-        call check_carg('linstates_mode', self%linstates_mode)
         call check_carg('loc_sdev',       self%loc_sdev)
         call check_carg('lp_auto',        self%lp_auto)
         call check_carg('makemovie',      self%makemovie)
@@ -1750,8 +1745,6 @@ contains
         endif
         ! resolution limit
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
-        ! linearized states
-        self%l_linstates = trim(self%linstates) == 'yes'
         ! refs delinearization
         self%l_refs_delin = trim(self%refs_delin) == 'yes'
         ! B-facor

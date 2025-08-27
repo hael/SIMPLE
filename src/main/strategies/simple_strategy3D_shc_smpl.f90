@@ -48,7 +48,6 @@ contains
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
             ! search
-            call pftcc_glob%reset_cache
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then

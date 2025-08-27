@@ -56,9 +56,6 @@ type :: polarft_corrcalc
     integer                          :: nk                          !< number of shells used during alignment
     real                             :: dang                        !< angular increment
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
-    logical,             allocatable :: has_cache(:,:)              !< whether the corr is cached
-    logical,             allocatable :: do_cache(:)                 !< should do caching or not
-    real,                allocatable :: cached_vals(:,:)            !< cached vals
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(dp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),            allocatable :: ksqsums_ptcls(:)            !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
@@ -80,9 +77,8 @@ type :: polarft_corrcalc
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)    !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_absptcl_ctf(:,:,:) !< Fourier Transform of (particle times CTF)**2
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)        !< Fourier Transform of CTF squared modulus
-    complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),     ft_ref_odd(:,:,:)     !< Fourier Transform of even/odd references
-    complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:),    ft_ref2_odd(:,:,:)    !< Fourier Transform of even/odd references squared modulus
-    complex(kind=c_float_complex), allocatable :: ft_refs2_even(:,:,:,:), ft_refs2_odd(:,:,:,:) !< Fourier Transform of even/odd references of different pairs
+    complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),  ft_ref_odd(:,:,:)     !< Fourier Transform of even/odd references
+    complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:)    !< Fourier Transform of even/odd references squared modulus
     ! Convenience vectors, thread memoization
     type(heap_vars),     allocatable :: heap_vars(:)
     type(fftw_cvec),     allocatable :: cvec1(:), cvec2(:)
@@ -135,10 +131,6 @@ type :: polarft_corrcalc
     procedure          :: get_ptcls_ptr
     procedure          :: get_ctfmats_ptr
     procedure          :: get_refs_ptr
-    procedure          :: get_linstates_irefs
-    procedure          :: get_linstates_prefs
-    procedure          :: set_cache
-    procedure          :: reset_cache
     procedure          :: is_with_ctf
     ! PRINTERS/VISUALISERS
     procedure          :: print
@@ -168,18 +160,14 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_mag, gencorrs_mag_cc
     procedure          :: gencorrs_weighted_cc,      gencorrs_shifted_weighted_cc
     procedure          :: gencorrs_cc,               gencorrs_shifted_cc
-    procedure, private :: gencorrs_euclid_1,         gencorrs_euclid_2
-    procedure, private :: gencorrs_shifted_euclid_1, gencorrs_shifted_euclid_2
-    generic            :: gencorrs_euclid         => gencorrs_euclid_1, gencorrs_euclid_2
-    generic            :: gencorrs_shifted_euclid => gencorrs_shifted_euclid_1, gencorrs_shifted_euclid_2
-    procedure, private :: gencorrs_1, gencorrs_2, gencorrs_3, gencorrs_4
-    generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3, gencorrs_4
-    procedure, private :: gencorr_for_rot_8_1, gencorr_for_rot_8_2, gencorr_for_rot_8_3, gencorr_for_rot_8_4
-    generic            :: gencorr_for_rot_8 => gencorr_for_rot_8_1, gencorr_for_rot_8_2, gencorr_for_rot_8_3, gencorr_for_rot_8_4
-    procedure, private :: gencorr_grad_for_rot_8_1,      gencorr_grad_for_rot_8_2
-    procedure, private :: gencorr_grad_only_for_rot_8_1, gencorr_grad_only_for_rot_8_2
-    generic            :: gencorr_grad_for_rot_8      => gencorr_grad_for_rot_8_1,      gencorr_grad_for_rot_8_2
-    generic            :: gencorr_grad_only_for_rot_8 => gencorr_grad_only_for_rot_8_1, gencorr_grad_only_for_rot_8_2
+    procedure          :: gencorrs_euclid
+    procedure          :: gencorrs_shifted_euclid
+    procedure, private :: gencorrs_1, gencorrs_2
+    generic            :: gencorrs => gencorrs_1, gencorrs_2
+    procedure, private :: gencorr_for_rot_8_1, gencorr_for_rot_8_2
+    generic            :: gencorr_for_rot_8 => gencorr_for_rot_8_1, gencorr_for_rot_8_2
+    procedure          :: gencorr_grad_for_rot_8
+    procedure          :: gencorr_grad_only_for_rot_8
     procedure          :: gencorr_cc_for_rot_8
     procedure          :: gencorr_cc_grad_for_rot_8
     procedure          :: gencorr_cc_grad_only_for_rot_8
@@ -191,9 +179,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cont_grad_euclid_for_rot_8
     procedure          :: gencorr_cont_shift_grad_euclid_for_rot_8
     procedure          :: gencorr_sigma_contrib
-    procedure, private :: calc_frc, linear_ft_refs
-    generic            :: linear_ft_ref2s => linear_ft_ref2s_1, linear_ft_ref2s_2
-    procedure, private :: linear_ft_ref2s_1, linear_ft_ref2s_2
+    procedure, private :: calc_frc
     procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
     generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
     procedure, private :: rotate_iref_1, rotate_iref_2
@@ -677,64 +663,6 @@ contains
         ptre => self%pfts_refs_even
         ptro => self%pfts_refs_odd
     end subroutine get_refs_ptr
-
-    ! return irefs for all states of the same reprojection direction
-    subroutine get_linstates_irefs( self, iref, irefs )
-        class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iref
-        integer,                 intent(inout) :: irefs(params_glob%nstates)
-        integer :: istate, iproj
-        iproj = mod(iref-1, params_glob%nspace) + 1
-        do istate = 1, params_glob%nstates
-            irefs(istate) = (istate - 1) * params_glob%nspace + iproj
-        enddo
-    end subroutine get_linstates_irefs
-
-    ! compute weights of irefs, given the current prefs
-    subroutine get_linstates_prefs( self, iref, irefs, prefs )
-        class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iref
-        integer,                 intent(in)    :: irefs(params_glob%nstates)
-        real,                    intent(inout) :: prefs(params_glob%nstates)
-        real    :: prefs_ori( params_glob%nstates), A( params_glob%nstates, params_glob%nstates),&
-                  &prefs_comp(params_glob%nstates), Ai(params_glob%nstates, params_glob%nstates)
-        integer :: istate, j, errflg
-        prefs_ori = prefs / sum(prefs)
-        select case(trim(params_glob%linstates_mode))
-            case('forprob')
-                do istate = 1, params_glob%nstates
-                    prefs(istate) = 1.
-                    if( iref == irefs(istate) ) cycle
-                    do j = 1, params_glob%nstates
-                        if( j == istate ) cycle
-                        prefs(istate) = prefs(istate) * (1. - prefs_ori(j))
-                    enddo
-                enddo
-                prefs = prefs / sum(prefs)
-            case('backprob')
-                prefs_comp = 1.
-                do istate = 1, params_glob%nstates
-                    do j = 1, params_glob%nstates
-                        if( j == istate ) cycle
-                        prefs_comp(istate) = prefs_comp(istate) * (1. - prefs_ori(j))
-                    enddo
-                enddo
-                A = 1.
-                do istate = 1, params_glob%nstates
-                    do j = 1, params_glob%nstates
-                        if( j == istate ) cycle
-                        A(istate, j) = prefs_comp(j)
-                    enddo
-                enddo
-                call matinv(A, Ai, params_glob%nstates, errflg)
-                do istate = 1, params_glob%nstates
-                    if( iref == irefs(istate) )then
-                        prefs = Ai(istate,:)
-                        exit
-                    endif
-                enddo
-        end select
-    end subroutine get_linstates_prefs
 
     ! PRINTERS/VISUALISERS
 
@@ -1252,29 +1180,6 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        if( params_glob%l_linstates )then
-            !$omp parallel do private(iref,k,ithr,istate,irefs,jref) default(shared) proc_bind(close) schedule(static)
-            do iref = 1,self%nrefs
-                call self%get_linstates_irefs(iref,irefs)
-                do istate = 1,params_glob%nstates
-                    jref = irefs(istate)
-                    do k = self%kfromto(1),self%kfromto(2)
-                        ithr = omp_get_thread_num() + 1
-                        ! FT(iREFeven x jREFeven)*
-                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,iref)*conjg(self%pfts_refs_even(:,k,jref))
-                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                        self%ft_refs2_even(:,k,iref,istate) = conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                        ! FT(iREFodd x jREFodd)*
-                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,iref)*conjg(self%pfts_refs_odd(:,k,jref))
-                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                        self%ft_refs2_odd(:,k,iref,istate) = conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
     end subroutine memoize_refs
 
     subroutine kill_memoized_ptcls( self )
@@ -1298,7 +1203,6 @@ contains
             call fftwf_destroy_plan(self%plan_bwd1)
             call fftwf_destroy_plan(self%plan_mem_r2c)
         endif
-        if( allocated(self%ft_refs2_even) ) deallocate(self%ft_refs2_even,self%ft_refs2_odd)
     end subroutine kill_memoized_refs
 
     subroutine allocate_ptcls_memoization( self )
@@ -1322,12 +1226,6 @@ contains
                 &self%ft_ref2_odd( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%rvec1(nthr_glob), self%cvec1(nthr_glob),self%cvec2(nthr_glob),&
                 &self%drvec(nthr_glob))
-        if( params_glob%l_linstates )then
-            allocate(self%ft_refs2_even(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,params_glob%nstates),&
-                    &self%ft_refs2_odd( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,params_glob%nstates),&
-                    &self%has_cache(self%nrefs,nthr_glob),self%cached_vals(self%nrefs,nthr_glob),self%do_cache(nthr_glob))
-            self%do_cache = .false.
-        endif
         ! convenience objects
         do ithr = 1,nthr_glob
             self%cvec1(ithr)%p = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
@@ -1867,283 +1765,63 @@ contains
         end do
     end subroutine calc_frc
 
-    subroutine set_cache( self, val )
-        class(polarft_corrcalc), intent(inout) :: self
-        logical,                 intent(in)    :: val
-        integer :: ithr
-        ithr = omp_get_thread_num() + 1
-        self%do_cache(ithr) = val
-    end subroutine set_cache
-
-    subroutine reset_cache( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer :: ithr
-        if( .not. params_glob%l_linstates ) return
-        ithr = omp_get_thread_num() + 1
-        self%do_cache(ithr)      = .true.
-        self%has_cache(:,  ithr) = .false.
-        self%cached_vals(:,ithr) = 0.
-    end subroutine reset_cache
-
     pure logical function is_with_ctf( self )
         class(polarft_corrcalc), intent(in) :: self
         is_with_ctf = self%with_ctf
     end function is_with_ctf
 
-    subroutine linear_ft_refs( self, iptcl, irefs, prefs, ft_ref, pft_ref_or_ft_ref )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        complex(sp),    pointer, intent(inout) :: ft_ref(:,:)
-        logical,       optional, intent(in)    :: pft_ref_or_ft_ref     ! true for pft_ref
-        integer  :: i, ithr, j, jref
-        logical  :: even, l_pft
-        l_pft = .false.
-        if( present(pft_ref_or_ft_ref) ) l_pft = pft_ref_or_ft_ref
-        ithr  = omp_get_thread_num() + 1
-        i     = self%pinds(iptcl)
-        even  = self%iseven(i)
-        if( l_pft )then
-            ft_ref => self%heap_vars(ithr)%pft_ref
-        else
-            ft_ref => self%heap_vars(ithr)%pft_tmp
-        endif
-        ft_ref = cmplx(0.)
-        do j = 1, size(irefs)
-            jref = irefs(j)
-            if( even )then
-                if( l_pft )then
-                    ft_ref = ft_ref + prefs(j) * self%pfts_refs_even(:,:,jref)
-                else
-                    ft_ref = ft_ref + prefs(j) * self%ft_ref_even(:,:,jref)
-                endif
-            else
-                if( l_pft )then
-                    ft_ref = ft_ref + prefs(j) * self%pfts_refs_odd(:,:,jref)
-                else
-                    ft_ref = ft_ref + prefs(j) * self%ft_ref_odd(:,:,jref)
-                endif
-            endif
-        enddo
-    end subroutine linear_ft_refs
-
-    subroutine linear_ft_ref2s_1( self, iptcl, irefs, prefs, k, ft_ref2 )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        integer,                 intent(in)    :: k
-        complex(sp),    pointer, intent(inout) :: ft_ref2(:,:)
-        integer  :: i, ithr, j, r, jref, rref, istate
-        logical  :: even
-        real     :: pjr
-        ithr         = omp_get_thread_num() + 1
-        i            = self%pinds(iptcl)
-        even         = self%iseven(i)
-        ft_ref2(:,k) = cmplx(0.)
-        do j = 1, size(irefs)
-            jref = irefs(j)
-            do r = 1, size(irefs)
-                rref   = irefs(r)
-                pjr    = prefs(j) * prefs(r)
-                istate = floor(real(rref-1) / real(params_glob%nspace)) + 1
-                if( even )then
-                    ! ft_refs2_even is cached when linstates is on
-                    if( params_glob%l_linstates )then
-                        ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_even(:,k,jref,istate)
-                    else
-                        ! FT(jREFeven x rREFeven)*
-                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,k,jref)*conjg(self%pfts_refs_even(:,k,rref))
-                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                        ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                    endif
-                else
-                    ! ft_refs2_odd is cached when linstates is on
-                    if( params_glob%l_linstates )then
-                        ft_ref2(:,k) = ft_ref2(:,k) + pjr * self%ft_refs2_odd(:,k,jref,istate)
-                    else
-                        ! FT(jREFodd x rREFodd)*
-                        self%cvec2(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,k,jref)*conjg(self%pfts_refs_odd(:,k,rref))
-                        self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                        call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                        ft_ref2(:,k) = ft_ref2(:,k) + pjr * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-                    endif
-                endif
-            enddo
-        enddo
-    end subroutine linear_ft_ref2s_1
-
-    subroutine linear_ft_ref2s_2( self, iptcl, irefs, prefs, ft_ref2 )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        complex(sp),    pointer, intent(inout) :: ft_ref2(:,:)
-        integer  :: i, j, r, jref, rref, istate
-        logical  :: even
-        real     :: pjr
-        i       = self%pinds(iptcl)
-        even    = self%iseven(i)
-        ft_ref2 = cmplx(0.)
-        do r = 1, size(irefs)
-            rref   = irefs(r)
-            istate = floor(real(rref-1) / real(params_glob%nspace)) + 1
-            do j = 1, size(irefs)
-                jref = irefs(j)
-                pjr  = prefs(j) * prefs(r)
-                if( even )then
-                    ft_ref2 = ft_ref2 + pjr * self%ft_refs2_even(:,:,jref,istate)
-                else
-                    ft_ref2 = ft_ref2 + pjr * self%ft_refs2_odd(:,:,jref,istate)
-                endif
-            enddo
-        enddo
-    end subroutine linear_ft_ref2s_2
-
-    subroutine gencorrs_1( self, iref, iptcl, cc, kweight, onestate )
+    subroutine gencorrs_1( self, iref, iptcl, cc, kweight )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
         logical,       optional, intent(in)    :: kweight
-        logical,       optional, intent(in)    :: onestate
-        logical :: kw, l_onestate
-        integer :: istate, irefs(params_glob%nstates), ithr
-        real    :: prefs(params_glob%nstates)
-        l_onestate = .false.
-        if( present(onestate) ) l_onestate = onestate
-        if( params_glob%l_linstates .and. .not.(l_onestate) )then
-            ithr = omp_get_thread_num() + 1
-            call self%get_linstates_irefs(iref, irefs)
-            do istate = 1, params_glob%nstates
-                if( self%do_cache(ithr) )then
-                    if( self%has_cache(irefs(istate), ithr) )then
-                        prefs(istate) = self%cached_vals(irefs(istate), ithr)
-                        cycle
-                    endif
+        logical :: kw
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                kw = params_glob%l_kweight
+                if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+                if( kw )then
+                    call self%gencorrs_weighted_cc(iptcl, iref, cc)
+                else
+                    call self%gencorrs_cc(iptcl, iref, cc)
                 endif
-                call self%gencorrs_1(irefs(istate), iptcl, cc, kweight, onestate=.true.)
-                prefs(istate) = maxval(cc)
-                if( self%do_cache(ithr) )then
-                    self%has_cache(  irefs(istate), ithr) = .true.
-                    self%cached_vals(irefs(istate), ithr) = prefs(istate)
-                endif
-            enddo
-            call self%get_linstates_prefs(iref, irefs, prefs)
-            call self%gencorrs_3( irefs, prefs, iptcl, cc, kweight )
-        else
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_CC)
-                    kw = params_glob%l_kweight
-                    if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
-                    if( kw )then
-                        call self%gencorrs_weighted_cc(iptcl, iref, cc)
-                    else
-                        call self%gencorrs_cc(iptcl, iref, cc)
-                    endif
-                case(OBJFUN_EUCLID)
-                    call self%gencorrs_euclid(iptcl, iref, cc)
-            end select
-        endif
+            case(OBJFUN_EUCLID)
+                call self%gencorrs_euclid(iptcl, iref, cc)
+        end select
     end subroutine gencorrs_1
 
-    subroutine gencorrs_2( self, iref, iptcl, shift, cc, kweight, onestate )
+    subroutine gencorrs_2( self, iref, iptcl, shift, cc, kweight )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shift(2)
         real(sp),                intent(out)   :: cc(self%nrots)
         logical,       optional, intent(in)    :: kweight
-        logical,       optional, intent(in)    :: onestate
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer :: i, ithr
-        logical :: kw, l_onestate
-        integer :: istate, irefs(params_glob%nstates)
-        real    :: prefs(params_glob%nstates)
-        ithr       = omp_get_thread_num() + 1
-        l_onestate = .false.
-        if( present(onestate) ) l_onestate = onestate
-        if( params_glob%l_linstates .and. .not.(l_onestate) )then
-            call self%get_linstates_irefs(iref, irefs)
-            do istate = 1, params_glob%nstates
-                if( self%do_cache(ithr) )then
-                    if( self%has_cache(irefs(istate), ithr) )then
-                        prefs(istate) = self%cached_vals(irefs(istate), ithr)
-                        cycle
-                    endif
-                endif
-                call self%gencorrs_2(irefs(istate), iptcl, shift, cc, kweight, onestate=.true.)
-                prefs(istate) = maxval(cc)
-                if( self%do_cache(ithr) )then
-                    self%has_cache(  irefs(istate), ithr) = .true.
-                    self%cached_vals(irefs(istate), ithr) = prefs(istate)
-                endif
-            enddo
-            call self%get_linstates_prefs(iref, irefs, prefs)
-            call self%gencorrs_4( irefs, prefs, iptcl, shift, cc, kweight )
-        else
-            i       = self%pinds(iptcl)
-            shmat   => self%heap_vars(ithr)%shmat
-            pft_ref => self%heap_vars(ithr)%pft_ref
-            call self%gen_shmat(ithr, shift, shmat)
-            if( self%iseven(i) )then
-                pft_ref = shmat * self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
-            endif
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_CC)
-                    kw = params_glob%l_kweight
-                    if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
-                    if( kw )then
-                        call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
-                    else
-                        call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
-                    endif
-                case(OBJFUN_EUCLID)
-                    call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, cc)
-            end select
-        endif
-    end subroutine gencorrs_2
-
-    subroutine gencorrs_3( self, irefs, prefs, iptcl, cc, kweight )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        integer,                 intent(in)    :: iptcl
-        real(sp),                intent(out)   :: cc(self%nrots)
-        logical,       optional, intent(in)    :: kweight
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                THROW_HARD('multi-refs gencorrs are not supported for cc yet!')
-            case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid(iptcl, irefs, prefs, cc)
-        end select
-    end subroutine gencorrs_3
-
-    subroutine gencorrs_4( self, irefs, prefs, iptcl, shift, cc, kweight )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        integer,                 intent(in)    :: iptcl
-        real(sp),                intent(in)    :: shift(2)
-        real(sp),                intent(out)   :: cc(self%nrots)
-        logical,       optional, intent(in)    :: kweight
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        integer :: i, ithr
-        ithr  = omp_get_thread_num() + 1
-        i     = self%pinds(iptcl)
-        shmat => self%heap_vars(ithr)%shmat
-        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, .true.)
+        logical :: kw
+        ithr    = omp_get_thread_num() + 1
+        i       = self%pinds(iptcl)
+        shmat   => self%heap_vars(ithr)%shmat
+        pft_ref => self%heap_vars(ithr)%pft_ref
         call self%gen_shmat(ithr, shift, shmat)
-        pft_ref = shmat * pft_ref
+        if( self%iseven(i) )then
+            pft_ref = shmat * self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
+        endif
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                THROW_HARD('multi-refs gencorrs are not supported for cc yet!')
+                kw = params_glob%l_kweight
+                if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+                if( kw )then
+                    call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
+                else
+                    call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
+                endif
             case(OBJFUN_EUCLID)
-                call self%gencorrs_shifted_euclid(pft_ref, iptcl, irefs, prefs, cc)
+                call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, cc)
         end select
-    end subroutine gencorrs_4
+    end subroutine gencorrs_2
 
     subroutine gencorrs_cc( self, iptcl, iref, corrs)
         class(polarft_corrcalc), intent(inout) :: self
@@ -2377,7 +2055,7 @@ contains
         endif
     end subroutine gencorrs_shifted_weighted_cc
 
-    subroutine gencorrs_euclid_1( self, iptcl, iref, euclids )
+    subroutine gencorrs_euclid( self, iptcl, iref, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         real(sp),                intent(out)   :: euclids(self%nrots)
@@ -2407,40 +2085,9 @@ contains
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gencorrs_euclid_1
+    end subroutine gencorrs_euclid
 
-    subroutine gencorrs_euclid_2( self, iptcl, irefs, prefs, euclids )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        real(sp),                intent(out)   :: euclids(self%nrots)
-        complex(sp), pointer :: ft_ref(:,:), ft_ref2(:,:)
-        real(dp) :: w, sumsqptcl
-        integer  :: k, i, ithr
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        ft_ref2 => self%heap_vars(ithr)%pft_tmp2
-        call self%linear_ft_refs(iptcl, irefs, prefs, ft_ref, .false.)
-        if( params_glob%l_linstates ) call self%linear_ft_ref2s(iptcl, irefs, prefs, ft_ref2)
-        self%heap_vars(ithr)%kcorrs = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            if( .not. params_glob%l_linstates ) call self%linear_ft_ref2s(iptcl, irefs, prefs, k, ft_ref2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
-            sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
-            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
-            self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * ft_ref2(:,k) - 2.0*self%ft_ptcl_ctf(:,k,i) * ft_ref(:,k)
-            ! X.CTF.REF = IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
-        end do
-        euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gencorrs_euclid_2
-
-    subroutine gencorrs_shifted_euclid_1( self, pft_ref, iptcl, iref, euclids )
+    subroutine gencorrs_shifted_euclid( self, pft_ref, iptcl, iref, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
         integer,                 intent(in)    :: iptcl, iref
@@ -2475,44 +2122,7 @@ contains
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gencorrs_shifted_euclid_1
-
-    subroutine gencorrs_shifted_euclid_2( self, pft_ref, iptcl, irefs, prefs, euclids )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        real(sp),                intent(out)   :: euclids(self%nrots)
-        complex(sp), pointer :: ft_ref2(:,:)
-        real(dp) :: w, sumsqptcl
-        integer  :: k, i, ithr
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        self%heap_vars(ithr)%kcorrs = 0.d0
-        ft_ref2 => self%heap_vars(ithr)%pft_tmp2
-        if( params_glob%l_linstates ) call self%linear_ft_ref2s(iptcl, irefs, prefs, ft_ref2)
-        do k = self%kfromto(1),self%kfromto(2)
-            if( .not. params_glob%l_linstates ) call self%linear_ft_ref2s(iptcl, irefs, prefs, k, ft_ref2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
-            sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
-            ! FT(CTF2) x FT(REF2)*
-            self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * ft_ref2(:,k)
-            ! FT(S.REF), shifted reference
-            self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
-            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
-            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
-            self%cvec1(ithr)%c = self%cvec1(ithr)%c - 2.0 * self%ft_ptcl_ctf(:,k,i) * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-            ! IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
-        end do
-        euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gencorrs_shifted_euclid_2
+    end subroutine gencorrs_shifted_euclid
 
     subroutine bidirectional_shift_search( self, iref, iptcl, irot, hn, shifts, grid1, grid2 )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2594,140 +2204,50 @@ contains
         end select
     end subroutine bidirectional_shift_search
 
-    real(dp) function gencorr_for_rot_8_1( self, iref, iptcl, irot, onestate )
+    real(dp) function gencorr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
-        logical, optional,       intent(in)    :: onestate
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:)
-        integer :: ithr, i, istate, irefs(params_glob%nstates)
-        logical :: l_onestate
-        real    :: prefs(params_glob%nstates)
-        l_onestate = .false.
-        if( present(onestate) ) l_onestate = onestate
-        if( params_glob%l_linstates .and. .not.(l_onestate) )then
-            call self%get_linstates_irefs(iref, irefs)
-            do istate = 1, params_glob%nstates
-                prefs(istate) = real(self%gencorr_for_rot_8_1(irefs(istate), iptcl, irot, onestate=.true.))
-            enddo
-            call self%get_linstates_prefs(iref, irefs, prefs)
-            gencorr_for_rot_8_1 = self%gencorr_for_rot_8_3( irefs, prefs, iptcl, irot )
-        else
-            i    =  self%pinds(iptcl)
-            ithr = omp_get_thread_num() + 1
-            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-            if( self%iseven(i) )then
-                pft_ref_8 = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-            endif
-            ! rotation
-            call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
-            ! ctf
-            if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
-            gencorr_for_rot_8_1 = 0.d0
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_CC)
-                    gencorr_for_rot_8_1 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
-                case(OBJFUN_EUCLID)
-                    gencorr_for_rot_8_1 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
-            end select
-        endif
-    end function gencorr_for_rot_8_1
-
-    real(dp) function gencorr_for_rot_8_2( self, iref, iptcl, shvec, irot, onestate )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(dp),                intent(in)    :: shvec(2)
-        integer,                 intent(in)    :: irot
-        logical, optional,       intent(in)    :: onestate
-        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), shmat_8(:,:)
-        integer :: ithr, i, istate, irefs(params_glob%nstates)
-        logical :: l_onestate
-        real    :: prefs(params_glob%nstates)
-        l_onestate = .false.
-        if( present(onestate) ) l_onestate = onestate
-        if( params_glob%l_linstates .and. .not.(l_onestate) )then
-            call self%get_linstates_irefs(iref, irefs)
-            do istate = 1, params_glob%nstates
-                prefs(istate) = real(self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.))
-            enddo
-            call self%get_linstates_prefs(iref, irefs, prefs)
-            gencorr_for_rot_8_2 = self%gencorr_for_rot_8_4(irefs, prefs, iptcl, shvec, irot )
-        else
-            i    =  self%pinds(iptcl)
-            ithr = omp_get_thread_num() + 1
-            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-            shmat_8       => self%heap_vars(ithr)%shmat_8
-            if( self%iseven(i) )then
-                pft_ref_8 = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-            endif
-            ! shift
-            call self%gen_shmat_8(ithr, shvec, shmat_8)
-            pft_ref_8 = pft_ref_8 * shmat_8
-            ! rotation
-            call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
-            ! ctf
-            if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
-            gencorr_for_rot_8_2 = 0.d0
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_CC)
-                    gencorr_for_rot_8_2 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
-                case(OBJFUN_EUCLID)
-                    gencorr_for_rot_8_2 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
-            end select
-        endif
-    end function gencorr_for_rot_8_2
-
-    real(dp) function gencorr_for_rot_8_3( self, irefs, prefs, iptcl, irot )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        integer,                 intent(in)    :: iptcl, irot
-        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:)
-        complex(sp), pointer :: pft_ref(:,:)
-        integer              :: ithr, i
+        integer :: ithr, i
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
-        pft_ref       => self%heap_vars(ithr)%pft_ref
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
-        pft_ref_8 = dcmplx(pft_ref)
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         ! rotation
         call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
-        gencorr_for_rot_8_3 = 0.d0
+        gencorr_for_rot_8_1 = 0.d0
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                gencorr_for_rot_8_3 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
+                gencorr_for_rot_8_1 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
             case(OBJFUN_EUCLID)
-                gencorr_for_rot_8_3 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
+                gencorr_for_rot_8_1 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
         end select
-    end function gencorr_for_rot_8_3
+    end function gencorr_for_rot_8_1
 
-    real(dp) function gencorr_for_rot_8_4( self, irefs, prefs, iptcl, shvec, irot )
+    real(dp) function gencorr_for_rot_8_2( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        integer,                 intent(in)    :: iptcl
+        integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), shmat_8(:,:)
-        complex(sp), pointer :: pft_ref(:,:)
-        integer              :: ithr, i
+        integer :: ithr, i
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
-        pft_ref       => self%heap_vars(ithr)%pft_ref
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
-        pft_ref_8 = dcmplx(pft_ref)
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         ! shift
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
@@ -2735,14 +2255,14 @@ contains
         call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
-        gencorr_for_rot_8_4 = 0.d0
+        gencorr_for_rot_8_2 = 0.d0
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                gencorr_for_rot_8_4 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
+                gencorr_for_rot_8_2 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
             case(OBJFUN_EUCLID)
-                gencorr_for_rot_8_4 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
+                gencorr_for_rot_8_2 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
         end select
-    end function gencorr_for_rot_8_4
+    end function gencorr_for_rot_8_2
 
     real(dp) function gencorr_cc_for_rot_8( self, pft_ref, i )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2782,67 +2302,24 @@ contains
         gencorr_euclid_for_rot_8 = dexp( -gencorr_euclid_for_rot_8 / self%wsqsums_ptcls(i))
     end function gencorr_euclid_for_rot_8
 
-    subroutine gencorr_grad_for_rot_8_1( self, iref, iptcl, shvec, irot, f, grad, onestate )
+    subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: f, grad(2)
-        logical, optional,       intent(in)    :: onestate
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        integer :: ithr, i, istate, irefs(params_glob%nstates)
-        logical :: l_onestate
-        real    :: prefs(params_glob%nstates)
-        l_onestate = .false.
-        if( present(onestate) ) l_onestate = onestate
-        if( params_glob%l_linstates .and. .not.(l_onestate) )then
-            call self%get_linstates_irefs(iref, irefs)
-            do istate = 1, params_glob%nstates
-                prefs(istate) = real(self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.))
-            enddo
-            call self%get_linstates_prefs(iref, irefs, prefs)
-            call self%gencorr_grad_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, f, grad)
-        else
-            i    = self%pinds(iptcl)
-            ithr = omp_get_thread_num() + 1
-            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-            shmat_8       => self%heap_vars(ithr)%shmat_8
-            if( self%iseven(i) )then
-                pft_ref_8 = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-            endif
-            call self%gen_shmat_8(ithr, shvec, shmat_8)
-            pft_ref_8 = pft_ref_8 * shmat_8
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_CC)
-                    call self%gencorr_cc_grad_for_rot_8(    pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-                case(OBJFUN_EUCLID)
-                    call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-            end select
-        endif
-    end subroutine gencorr_grad_for_rot_8_1
-
-    subroutine gencorr_grad_for_rot_8_2( self, irefs, prefs, iptcl, shvec, irot, f, grad )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        integer,                 intent(in)    :: iptcl
-        real(dp),                intent(in)    :: shvec(2)
-        integer,                 intent(in)    :: irot
-        real(dp),                intent(out)   :: f, grad(2)
-        complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        complex(sp), pointer :: pft_ref(:,:)
-        integer              :: ithr, i
+        integer :: ithr, i
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
-        pft_ref       => self%heap_vars(ithr)%pft_ref
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
-        pft_ref_8 = dcmplx(pft_ref)
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
@@ -2851,7 +2328,7 @@ contains
             case(OBJFUN_EUCLID)
                 call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
         end select
-    end subroutine gencorr_grad_for_rot_8_2
+    end subroutine gencorr_grad_for_rot_8
 
     subroutine gencorr_cc_grad_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2968,69 +2445,25 @@ contains
         grad = -f * 2.d0 * grad / denom
     end subroutine gencorr_euclid_grad_for_rot_8
 
-    subroutine gencorr_grad_only_for_rot_8_1( self, iref, iptcl, shvec, irot, grad, onestate )
+    subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: grad(2)
-        logical, optional,       intent(in)    :: onestate
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        real(dp) :: f
-        integer  :: ithr, i, istate, irefs(params_glob%nstates)
-        logical  :: l_onestate
-        real     :: prefs(params_glob%nstates)
-        l_onestate = .false.
-        if( present(onestate) ) l_onestate = onestate
-        if( params_glob%l_linstates .and. .not.(l_onestate) )then
-            call self%get_linstates_irefs(iref, irefs)
-            do istate = 1, params_glob%nstates
-                prefs(istate) = real(self%gencorr_for_rot_8_2(irefs(istate), iptcl, shvec, irot, onestate=.true.))
-            enddo
-            call self%get_linstates_prefs(iref, irefs, prefs)
-            call self%gencorr_grad_only_for_rot_8_2(irefs, prefs, iptcl, shvec, irot, grad)
-        else
-            i    = self%pinds(iptcl)
-            ithr = omp_get_thread_num() + 1
-            pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-            pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-            shmat_8       => self%heap_vars(ithr)%shmat_8
-            if( self%iseven(i) )then
-                pft_ref_8 = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-            endif
-            call self%gen_shmat_8(ithr, shvec, shmat_8)
-            pft_ref_8 = pft_ref_8 * shmat_8
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_CC)
-                    call self%gencorr_cc_grad_only_for_rot_8(pft_ref_8, pft_ref_tmp_8, i, irot, grad)
-                case(OBJFUN_EUCLID)
-                    call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-            end select
-        endif
-    end subroutine gencorr_grad_only_for_rot_8_1
-
-    subroutine gencorr_grad_only_for_rot_8_2( self, irefs, prefs, iptcl, shvec, irot, grad )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: irefs(:)
-        real,                    intent(in)    :: prefs(:)
-        integer,                 intent(in)    :: iptcl
-        real(dp),                intent(in)    :: shvec(2)
-        integer,                 intent(in)    :: irot
-        real(dp),                intent(out)   :: grad(2)
-        complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        complex(sp), pointer :: pft_ref(:,:)
         real(dp) :: f
         integer  :: ithr, i
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
-        pft_ref       => self%heap_vars(ithr)%pft_ref
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        call self%linear_ft_refs(iptcl, irefs, prefs, pft_ref, pft_ref_or_ft_ref=.true.)
-        pft_ref_8 = dcmplx(pft_ref)
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
@@ -3039,7 +2472,7 @@ contains
             case(OBJFUN_EUCLID)
                 call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
         end select
-    end subroutine gencorr_grad_only_for_rot_8_2
+    end subroutine gencorr_grad_only_for_rot_8
 
     subroutine gencorr_cc_grad_only_for_rot_8( self, pft_ref, pft_ref_tmp, i, irot, grad )
         class(polarft_corrcalc), intent(inout) :: self
@@ -3361,9 +2794,6 @@ contains
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            if( allocated(self%has_cache)      ) deallocate(self%has_cache)
-            if( allocated(self%do_cache)       ) deallocate(self%do_cache)
-            if( allocated(self%cached_vals)    ) deallocate(self%cached_vals)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)

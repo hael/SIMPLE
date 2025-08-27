@@ -30,11 +30,9 @@ type :: pftcc_shsrch_grad
     real                      :: max_shift    = 0.      !< maximal shift
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
-    logical                   :: multirefs    = .false. !< using multirefs
 contains
     procedure          :: new         => grad_shsrch_new
-    procedure, private :: grad_shsrch_set_indices_1, grad_shsrch_set_indices_2
-    generic            :: set_indices => grad_shsrch_set_indices_1, grad_shsrch_set_indices_2
+    procedure          :: set_indices => grad_shsrch_set_indices
     procedure          :: minimize    => grad_shsrch_minimize
     procedure          :: kill        => grad_shsrch_kill
     procedure          :: does_opt_angle
@@ -45,7 +43,7 @@ end type pftcc_shsrch_grad
 
 contains
 
-    subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, multirefs )
+    subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init )
         use simple_opt_factory, only: opt_factory
         class(pftcc_shsrch_grad),   intent(inout) :: self           !< instance
         real,                       intent(in)    :: lims(:,:)      !< limits for barrier constraint
@@ -54,7 +52,6 @@ contains
         integer,          optional, intent(in)    :: maxits         !< maximum iterations
         logical,          optional, intent(in)    :: opt_angle      !< optimise in-plane angle with callback flag
         logical,          optional, intent(in)    :: coarse_init    !< coarse inital search
-        logical,          optional, intent(in)    :: multirefs    !< multi-ref polarft_corrcalc
         type(opt_factory) :: opt_fact
         call self%kill
         ! flag the barrier constraint
@@ -68,8 +65,6 @@ contains
         if( present(opt_angle) ) self%opt_angle = opt_angle
         self%coarse_init = .false.
         if( present(coarse_init) ) self%coarse_init = coarse_init
-        self%multirefs = .false.
-        if( present(multirefs) ) self%multirefs = multirefs
         ! make optimizer spec
         call self%ospec%specify('lbfgsb', 2, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
@@ -102,11 +97,7 @@ contains
         real(dp)                :: cost
         select type(self)
             class is (pftcc_shsrch_grad)
-                if( self%multirefs )then
-                    cost = - pftcc_glob%gencorr_for_rot_8(self%irefs, self%prefs, self%particle, vec, self%cur_inpl_idx)
-                else
-                    cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
-                endif
+                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -121,11 +112,7 @@ contains
         grad = 0.
         select type(self)
             class is (pftcc_shsrch_grad)
-                if( self%multirefs )then
-                    call pftcc_glob%gencorr_grad_only_for_rot_8(self%irefs, self%prefs, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-                else
-                    call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-                endif
+                call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
@@ -143,11 +130,7 @@ contains
         grad = 0.
         select type(self)
             class is (pftcc_shsrch_grad)
-                if( self%multirefs )then
-                    call pftcc_glob%gencorr_grad_for_rot_8(self%irefs, self%prefs, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
-                else
-                    call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
-                endif
+                call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                 f    = - corrs
                 grad = - corrs_grad
             class default
@@ -158,11 +141,7 @@ contains
     subroutine grad_shsrch_optimize_angle( self )
         class(pftcc_shsrch_grad), intent(inout) :: self
         real                                    :: corrs(self%nrots)
-        if( self%multirefs )then
-            call pftcc_glob%gencorrs(self%irefs, self%prefs, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
-        else
-            call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
-        endif
+        call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
         self%cur_inpl_idx = maxloc(corrs, dim=1)
     end subroutine grad_shsrch_optimize_angle
 
@@ -177,26 +156,12 @@ contains
     end subroutine grad_shsrch_optimize_angle_wrapper
 
     !> set indicies for shift search
-    subroutine grad_shsrch_set_indices_1( self, ref, ptcl )
+    subroutine grad_shsrch_set_indices( self, ref, ptcl )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(in)    :: ref, ptcl
-        if( self%multirefs ) THROW_HARD('grad_shsrch_set_indices for one ref is called for multi-ref cases')
         self%reference = ref
         self%particle  = ptcl
-    end subroutine grad_shsrch_set_indices_1
-
-    subroutine grad_shsrch_set_indices_2( self, irefs, prefs, ptcl )
-        class(pftcc_shsrch_grad), intent(inout) :: self
-        integer,                  intent(in)    :: irefs(:)
-        real,                     intent(in)    :: prefs(:)
-        integer,                  intent(in)    :: ptcl
-        if( .not. self%multirefs ) THROW_HARD('grad_shsrch_set_indices for multi-ref is called for one-ref cases')
-        if( allocated(self%irefs) ) deallocate(self%irefs)
-        if( allocated(self%prefs) ) deallocate(self%prefs)
-        allocate(self%irefs(size(irefs)), source=irefs)
-        allocate(self%prefs(size(prefs)), source=prefs)
-        self%particle = ptcl
-    end subroutine grad_shsrch_set_indices_2
+    end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
     function grad_shsrch_minimize( self, irot, sh_rot, xy_in ) result( cxy )
@@ -209,7 +174,6 @@ contains
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better, l_sh_rot, coarse_init_orig
         l_sh_rot = .true.
-        if( params_glob%l_linstates ) call pftcc_glob%set_cache(.false.)     ! no caching in shift searching
         if( present(sh_rot)  ) l_sh_rot = sh_rot
         if( present(xy_in)   )then
             coarse_init_orig = self%coarse_init
@@ -221,11 +185,7 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         if( self%opt_angle )then
-            if( self%multirefs )then
-                call pftcc_glob%gencorrs(self%irefs, self%prefs, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
-            else
-                call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
-            endif
+            call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
@@ -240,11 +200,7 @@ contains
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-                if( self%multirefs )then
-                    call pftcc_glob%gencorrs(self%irefs, self%prefs, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
-                else
-                    call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
-                endif
+                call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
                 loc = maxloc(corrs,dim=1)
                 if( loc == self%cur_inpl_idx ) exit
                 self%cur_inpl_idx = loc
@@ -270,13 +226,9 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         else
-            self%cur_inpl_idx = irot
-            if( self%multirefs )then
-                lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%irefs, self%prefs, self%particle, self%ospec%x_8, self%cur_inpl_idx)
-            else
-                lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
-            endif
-            initial_cost = lowest_cost_overall
+            self%cur_inpl_idx   = irot
+            lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
+            initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
                 call self%coarse_search(coarse_cost, init_xy)
                 if( coarse_cost < lowest_cost_overall )then
@@ -320,12 +272,8 @@ contains
         do ix = 1,coarse_num_steps
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
-                y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                if( self%multirefs )then
-                    cost = -pftcc_glob%gencorr_for_rot_8(self%irefs, self%prefs, self%particle, [x,y], self%cur_inpl_idx)
-                else
-                    cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
-                endif
+                y    = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
+                cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]
@@ -351,11 +299,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                if( self%multirefs )then
-                    call pftcc_glob%gencorrs(self%irefs, self%prefs, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
-                else
-                    call pftcc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
-                endif
+                call pftcc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
                 if (cost < lowest_cost) then
