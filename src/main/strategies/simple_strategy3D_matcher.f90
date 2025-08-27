@@ -25,7 +25,6 @@ use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 use simple_polarops
-use simple_comlin
 implicit none
 
 public :: refine3D_exec
