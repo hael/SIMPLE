@@ -236,7 +236,6 @@ contains
                     cxy(2:3) = 0.
                 endif
                 ! (2) search projection directions using those shifts for all references
-                call pftcc%reset_cache
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
                     iproj  = self%jinds(ri)
@@ -291,7 +290,6 @@ contains
                 ! fill the table
                 !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot,j,cxy) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
-                    call pftcc%reset_cache
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do ri = 1, self%nrefs
@@ -327,7 +325,6 @@ contains
                 ! fill the table
                 !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
-                    call pftcc%reset_cache
                     iptcl = self%pinds(i)
                     ithr  = omp_get_thread_num() + 1
                     do ri = 1, self%nrefs

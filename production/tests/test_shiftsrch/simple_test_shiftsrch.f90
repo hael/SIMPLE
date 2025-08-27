@@ -126,19 +126,19 @@ lims(1,1) = -6.
 lims(1,2) =  6.
 lims(2,1) = -6.
 lims(2,2) =  6.
-call grad_shsrch_obj%new(lims, opt_angle=.false., multirefs=.true.)
-call grad_shsrch_obj%set_indices([5, 5], [.3, .7], 5)
+call grad_shsrch_obj%new(lims, opt_angle=.false.)
+call grad_shsrch_obj%set_indices(5, 5)
 irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
 params_glob%nstates = 2
 do i=5,5
-    call pftcc%gencorrs([i, i], [.5, .5], i, corrs)
+    call pftcc%gencorrs(i, i, corrs)
     print *, 'corr: ', maxval(corrs)
     corrmax = 0.
     do xsh=-2,2
         do ysh=-2,2
-            call pftcc%gencorrs([i, i], [.5, .5], i, real([xsh,ysh]), corrs)
+            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
             corr  = maxval(corrs)
 
             print *, 'corr: ', corr, xsh, ysh
