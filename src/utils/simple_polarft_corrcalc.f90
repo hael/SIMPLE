@@ -37,7 +37,6 @@ type heap_vars
     complex(dp), pointer :: shvec(:)           => null()
     complex(dp), pointer :: shmat_8(:,:)       => null()
     real(dp),    pointer :: pft_r1_8(:,:)      => null()
-    real(dp),    pointer :: pft_r2_8(:,:)      => null()
     real(sp),    pointer :: pft_r(:,:)         => null()
 end type heap_vars
 
@@ -297,7 +296,6 @@ contains
                     &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_r2_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r(self%pftsz,self%kfromto(1):self%kfromto(2)))
         end do
         self%pfts_refs_even = zero
@@ -1120,7 +1118,7 @@ contains
 
     subroutine memoize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: k, ithr, iref, istate, jref, irefs(params_glob%nstates)
+        integer :: k, ithr, iref
         ! allocations
         call self%allocate_refs_memoization
         ! memoization
@@ -2617,7 +2615,7 @@ contains
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
-                    &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,self%heap_vars(ithr)%pft_r2_8)
+                    &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8)
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
