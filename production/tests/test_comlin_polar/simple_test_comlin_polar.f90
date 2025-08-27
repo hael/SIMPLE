@@ -216,6 +216,16 @@ call fplane_polar%write('polar_comlin.mrc', 6)
 
 contains
 
+    subroutine get_polar_coord( pftcc, xy, rot, k )
+        class(polarft_corrcalc), intent(in)  :: pftcc
+        real,                    intent(in)  :: xy(2)
+        real,                    intent(out) :: rot, k
+        real :: tan_inv
+        k       = sqrt(sum(xy**2))
+        tan_inv = atan(xy(2), xy(1)) * 2 + PI
+        rot     = 1. + tan_inv * real(pftcc%get_pftsz()) / TWOPI
+    end subroutine get_polar_coord
+
     subroutine gen_polar_comlins( pftcc, ref_space, pcomlines)
         class(polarft_corrcalc), intent(in)    :: pftcc
         type(oris),              intent(in)    :: ref_space
@@ -278,7 +288,7 @@ contains
                 line3D(3)   = a2*line3D(1) + b2*line3D(2)
                 ! projecting the 3D common line to a polar line on the jref-th reference
                 line2D      = matmul(line3D, invmats(:,:,jref))
-                call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
+                call get_polar_coord(pftcc, line2D(1:2), irot_real, k_real)
                 ! caching the indices irot_j and irot_j+1 and the corresponding linear weight
                 if( l_kb )then
                     ! nearest grid point
@@ -292,7 +302,7 @@ contains
                 pcomlines(jref,iref)%targ_w    = w
                 ! projecting the 3D common line to a polar line on the iref-th reference
                 line2D = matmul(line3D, invmats(:,:,iref))
-                call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
+                call get_polar_coord(pftcc, line2D(1:2), irot_real, k_real)
                 ! caching the indices irot_i and irot_i+1 and the corresponding linear weight
                 if( l_kb )then
                     ! nearest grid point
