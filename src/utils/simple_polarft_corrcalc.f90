@@ -26,8 +26,6 @@ type fftw_drvec
 end type fftw_drvec
 
 type heap_vars
-    complex(sp), pointer :: pft_tmp(:,:)       => null()
-    complex(sp), pointer :: pft_tmp2(:,:)      => null()
     complex(sp), pointer :: pft_ref(:,:)       => null()
     complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
     real(dp),    pointer :: argvec(:)          => null()
@@ -35,7 +33,6 @@ type heap_vars
     real(dp),    pointer :: kcorrs(:)          => null()
     complex(dp), pointer :: pft_ref_8(:,:)     => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
-    complex(dp), pointer :: pft_ptcl_8(:,:)    => null()
     complex(dp), pointer :: pft_dref_8(:,:,:)  => null()
     complex(dp), pointer :: shvec(:)           => null()
     complex(dp), pointer :: shmat_8(:,:)       => null()
@@ -154,7 +151,6 @@ type :: polarft_corrcalc
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
-    procedure          :: calc_shift
     procedure          :: calc_corr_rot_shift, calc_magcorr_rot
     procedure          :: bidirectional_shift_search
     procedure          :: gencorrs_mag, gencorrs_mag_cc
@@ -294,15 +290,12 @@ contains
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_tmp(self%pftsz+1,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_tmp2(self%pftsz+1,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%argvec(self%pftsz),&
                     &self%heap_vars(ithr)%shvec(self%pftsz),&
                     &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%kcorrs(self%nrots),&
                     &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_ptcl_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -1357,148 +1350,6 @@ contains
         ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
     end subroutine gen_shmat_8
 
-    subroutine calc_shift( self, iref, iptcl, sh, rot_in )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        integer,                 intent(in)    :: iptcl
-        real,                    intent(inout) :: sh(2)
-        integer,  optional,      intent(in)    :: rot_in
-        complex,  pointer   :: pft_ref(:,:), pft_ref_tmp(:,:)
-        real(dp), pointer   :: args1(:,:), args2(:,:)
-        integer,  parameter :: NPI   = 5,&       ! number of trigonometry periods
-                              &NLINS = 2,&       ! number of 2x2 linear systems
-                              &NEQS  = 2*NLINS
-        integer :: ind, ithr, i, j, k, irot, cand1_cnt, cand2_cnt, eq_cnt, k_cands(NEQS), r_cands(NEQs)
-        logical :: rots(self%pftsz), ks(self%kfromto(1):self%kfromto(2))
-        complex :: AB
-        real    :: C_1st, T_1st, C_2nd, T_2nd, RHS_1st(NPI), RHS_2nd(NPI), x_comp, y_comp, trs, abspft,&
-                &cand1_x(NPI*NPI), cand1_y(NPI*NPI), cand2_x(NPI*NPI), cand2_y(NPI*NPI), minval, minx, miny, val
-        ind  = self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        pft_ref     => self%heap_vars(ithr)%pft_ref
-        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp
-        args1       => self%heap_vars(ithr)%pft_r1_8
-        args2       => self%heap_vars(ithr)%pft_r2_8
-        if( present(rot_in) )then
-            if( self%iseven(ind) )then
-                pft_ref_tmp = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref_tmp = self%pfts_refs_odd(:,:,iref)
-            endif
-            call self%rotate_pft(pft_ref_tmp, rot_in, pft_ref)
-            call self%rotate_pft(self%argtransf(           1:self%pftsz,:), rot_in, args1)
-            call self%rotate_pft(self%argtransf(self%pftsz+1:          ,:), rot_in, args2)
-        else
-            if( self%iseven(ind) )then
-                pft_ref = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref = self%pfts_refs_odd(:,:,iref)
-            endif
-            args1 = self%argtransf(           1:self%pftsz,:)
-            args2 = self%argtransf(self%pftsz+1:          ,:)
-        endif
-        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,ind)
-        trs    = params_glob%trs
-        eq_cnt = 0
-        ! generating candidates for equations
-        rots = .false.
-        ks   = .false.
-        do k = self%kfromto(1), self%kfromto(2)
-            if( ks(k) )cycle
-            do irot = 1, self%pftsz
-                if( rots(irot) .or. ks(k) )cycle
-                if( eq_cnt > NEQS )cycle
-                abspft = real(self%pfts_ptcls(irot,k,ind) * conjg(self%pfts_ptcls(irot,k,ind)))
-                if( abspft < TINY )cycle
-                abspft = real(pft_ref(irot,k) * conjg(pft_ref(irot,k)))
-                if( abspft < TINY )cycle
-                eq_cnt          = eq_cnt + 1
-                k_cands(eq_cnt) = k
-                r_cands(eq_cnt) = irot
-                rots(irot)      = .true.
-                ks(k)           = .true.
-            enddo
-        enddo
-        ! not enough candidates to calculate the shifts
-        if( eq_cnt < NEQS )then
-            sh = 0.
-            return
-        endif
-        ! first pair
-        k       = k_cands(1)
-        irot    = r_cands(1)
-        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
-        RHS_1st = atan(aimag(AB)/real(AB))
-        C_1st   = args1(irot,k)
-        T_1st   = args2(irot,k)
-        do j = 1, NPI
-            RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
-        enddo
-        k       = k_cands(2)
-        irot    = r_cands(2)
-        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
-        RHS_2nd = atan(aimag(AB)/real(AB))
-        C_2nd   = args1(irot,k)
-        T_2nd   = args2(irot,k)
-        do j = 1, NPI
-            RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
-        enddo
-        cand1_cnt = 0
-        do i = 1, NPI
-            do j = 1, NPI
-                x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
-                y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
-                if( x_comp < -trs .or. x_comp > trs .or. y_comp < -trs .or. y_comp > trs )cycle
-                cand1_cnt          = cand1_cnt + 1
-                cand1_x(cand1_cnt) = x_comp
-                cand1_y(cand1_cnt) = y_comp
-            enddo
-        enddo
-        ! another pair
-        k       = k_cands(3)
-        irot    = r_cands(3)
-        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
-        RHS_1st = atan(aimag(AB)/real(AB))
-        C_1st   = args1(irot,k)
-        T_1st   = args2(irot,k)
-        do j = 1, NPI
-            RHS_1st(j) = RHS_1st(j) + (j-1-NPI/2)*PI
-        enddo
-        k       = k_cands(4)
-        irot    = r_cands(4)
-        AB      = self%pfts_ptcls(irot,k,ind)/pft_ref(irot,k)
-        RHS_2nd = atan(aimag(AB)/real(AB))
-        C_2nd   = args1(irot,k)
-        T_2nd   = args2(irot,k)
-        do j = 1, NPI
-            RHS_2nd(j) = RHS_2nd(j) + (j-1-NPI/2)*PI
-        enddo
-        cand2_cnt = 0
-        do i = 1, NPI
-            do j = 1, NPI
-                x_comp = -(RHS_1st(i)*T_2nd - RHS_2nd(j)*T_1st)/(T_1st*C_2nd - T_2nd*C_1st)
-                y_comp =  (RHS_1st(i)*C_2nd - RHS_2nd(j)*C_1st)/(T_1st*C_2nd - T_2nd*C_1st)
-                if( x_comp < -trs .or. x_comp > trs .or. y_comp < -trs .or. y_comp > trs )cycle
-                cand2_cnt          = cand2_cnt + 1
-                cand2_x(cand2_cnt) = x_comp
-                cand2_y(cand2_cnt) = y_comp
-            enddo
-        enddo
-        ! finding the min between cand1 and cand2
-        minval = huge(minval)
-        do i = 1, cand1_cnt
-            do j = 1, cand2_cnt
-                val = sqrt((cand1_x(i)-cand2_x(j))**2 + (cand1_y(i)-cand2_y(j))**2)
-                if( val < minval )then
-                    minval = val
-                    minx   = (cand1_x(i)+cand2_x(j)) / 2.
-                    miny   = (cand1_y(i)+cand2_y(j)) / 2.
-                endif
-            enddo
-        enddo
-        sh = [minx, miny]
-    end subroutine calc_shift
-
     !>  Generate shift matrix following de Moivre's formula, single precision
     subroutine gen_shmat( self, ithr, shift, shmat )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1509,7 +1360,7 @@ contains
         shmat = cmplx(self%heap_vars(ithr)%shmat_8)
     end subroutine gen_shmat
 
-    ! Benchmarck for correlation calculation
+    ! Benchmark for correlation calculation
     ! Is not FFT-accelerated, does not rely on memoization, for reference only
     real function calc_corr_rot_shift( self, iref, iptcl, shvec, irot, kweight )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2786,9 +2637,7 @@ contains
                 deallocate(self%heap_vars(ithr)%pft_ref,self%heap_vars(ithr)%pft_ref_tmp,&
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
-                    &self%heap_vars(ithr)%pft_tmp,self%heap_vars(ithr)%pft_tmp2,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
-                    &self%heap_vars(ithr)%pft_ptcl_8,&
                     &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,self%heap_vars(ithr)%pft_r2_8)
             end do
