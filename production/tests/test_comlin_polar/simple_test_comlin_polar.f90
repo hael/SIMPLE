@@ -6,9 +6,17 @@ use simple_image,            only: image
 use simple_projector,        only: projector
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_polarizer,        only: polarizer
-use simple_comlin,           only: polar_comlin_pfts, gen_polar_comlins, polar_fmap
 use simple_sym,              only: sym
 implicit none
+
+type polar_fmap
+    logical :: legit
+    integer :: targ_irot
+    real    :: targ_w
+    integer :: self_irot
+    real    :: self_w
+end type polar_fmap
+
 integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55
 character(len=:), allocatable :: cmd
 type(image),      allocatable :: pad_fplanes(:)
@@ -205,4 +213,263 @@ call fplane_polar%set_cmat(cmat)
 call fplane_polar%shift_phorig()
 call fplane_polar%ifft
 call fplane_polar%write('polar_comlin.mrc', 6)
+
+contains
+
+    subroutine gen_polar_comlins( pftcc, ref_space, pcomlines)
+        class(polarft_corrcalc), intent(in)    :: pftcc
+        type(oris),              intent(in)    :: ref_space
+        type(polar_fmap),        intent(inout) :: pcomlines(:,:)
+        logical, parameter :: l_kb = .true. ! K-B or linear interpolation
+        integer :: iref, jref, irot, kind, irot_l, nrefs, nrots
+        real    :: loc1_3D(3), loc2_3D(3), denom, a1, a2, b1, b2, line2D(3), irot_real, k_real, w, hk1(2), hk2(2),&
+                  &rotmat(3,3),invmats(3,3,pftcc%get_nrefs()), loc1s(3,pftcc%get_nrefs()), loc2s(3,pftcc%get_nrefs()), line3D(3),&
+                  &euls(3,pftcc%get_nrefs()), euldist
+        logical :: l_exclude_cone
+        nrefs = pftcc%get_nrefs()
+        nrots = pftcc%get_nrots()
+        ! randomly chosing two sets of (irot, kind) to generate the polar common lines
+        irot  = 5
+        kind  = p%kfromto(1) + 5
+        if( kind >= p%kfromto(2) ) kind = p%kfromto(1) ! using kfromto(1) as kind in the first set of (irot,kind)
+        hk1   = pftcc%get_coord(irot,kind)
+        irot  = 16
+        kind  = p%kfromto(1) + 15
+        if( kind >= p%kfromto(2) ) kind = p%kfromto(2) ! using kfromto(2) as kind in the second set of (irot,kind)
+        hk2   = pftcc%get_coord(irot,kind)
+        ! angular threshold
+        l_exclude_cone = trim(p%linethres).eq.'yes'
+        ! caching rotation matrices and their corresponding inverse matrices
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,rotmat)
+        do iref = 1, nrefs
+            rotmat            = ref_space%get_mat(iref)
+            invmats(:,:,iref) = transpose(rotmat)
+            loc1s(:,iref)     = matmul([hk1(1), hk1(2), 0.], rotmat)
+            loc2s(:,iref)     = matmul([hk2(1), hk2(2), 0.], rotmat)
+            euls( :,iref)     = ref_space%get_euler(iref)
+        enddo
+        !$omp end parallel do
+        euls(3,:) = 0.
+        ! constructing polar common lines
+        pcomlines%legit = .false.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(iref,loc1_3D,loc2_3D,denom,a1,b1,jref,euldist,a2,b2,line3D,line2D,irot_real,k_real,irot_l,w)
+        do iref = 1, nrefs
+            loc1_3D = loc1s(:,iref)
+            loc2_3D = loc2s(:,iref)
+            denom   = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
+            a1      = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
+            b1      = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
+            do jref = 1, nrefs
+                if( jref == iref )cycle
+                if( l_exclude_cone )then
+                    euldist = rad2deg(euler_dist(euls(:,iref),euls(:,jref)))
+                    if( euldist < p%athres )cycle
+                endif
+                ! getting the 3D common line
+                loc1_3D     = loc1s(:,jref)
+                loc2_3D     = loc2s(:,jref)
+                denom       = (loc1_3D(1) * loc2_3D(2) - loc1_3D(2) * loc2_3D(1))
+                if( abs(denom) < TINY )cycle
+                a2          = (loc1_3D(3) * loc2_3D(2) - loc1_3D(2) * loc2_3D(3)) / denom
+                b2          = (loc1_3D(1) * loc2_3D(3) - loc1_3D(3) * loc2_3D(1)) / denom
+                if( abs(b1-b2) < TINY )cycle
+                line3D(1:2) = [1., -(a1-a2)/(b1-b2)]
+                line3D(3)   = a2*line3D(1) + b2*line3D(2)
+                ! projecting the 3D common line to a polar line on the jref-th reference
+                line2D      = matmul(line3D, invmats(:,:,jref))
+                call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
+                ! caching the indices irot_j and irot_j+1 and the corresponding linear weight
+                if( l_kb )then
+                    ! nearest grid point
+                    irot_l = nint(irot_real)
+                else
+                    ! leftmost grid point
+                    irot_l = floor(irot_real)
+                endif
+                w = irot_real - real(irot_l)
+                pcomlines(jref,iref)%targ_irot = irot_l
+                pcomlines(jref,iref)%targ_w    = w
+                ! projecting the 3D common line to a polar line on the iref-th reference
+                line2D = matmul(line3D, invmats(:,:,iref))
+                call pftcc%get_polar_coord(line2D(1:2), irot_real, k_real)
+                ! caching the indices irot_i and irot_i+1 and the corresponding linear weight
+                if( l_kb )then
+                    ! nearest grid point
+                    irot_l = nint(irot_real)
+                else
+                    ! leftmost grid point
+                    irot_l = floor(irot_real)
+                endif
+                w = irot_real - real(irot_l)
+                pcomlines(jref,iref)%self_irot = irot_l
+                pcomlines(jref,iref)%self_w    = w
+                pcomlines(jref,iref)%legit     = .true.
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine gen_polar_comlins
+
+    subroutine gen_polar_comlinsm( pftcc, ref_space, pcomlines)
+        class(polarft_corrcalc), intent(in)    :: pftcc
+        type(oris),              intent(in)    :: ref_space
+        type(polar_fmap),        intent(inout) :: pcomlines(:,:)
+        logical, parameter :: l_kb = .true. ! K-B or linear interpolation
+        real    :: eulers(3), euldist, R(3,3,pftcc%get_nrefs()), Rj(3,3), tRi(3,3)
+        real    :: psii, psij, drot, d
+        integer :: iref, jref, irot, nrefs, nrots, imirr
+        logical :: l_exclude_cone
+        if( .not.ref_space%isthere('mirr') )then
+            print *, 'Mirror index missing in reference search space'
+            stop
+        endif
+        nrefs = pftcc%get_nrefs()
+        nrots = pftcc%get_nrots()
+        drot  = 360.0 / real(nrots)
+        ! angular threshold
+        l_exclude_cone = trim(p%linethres).eq.'yes'
+        !$omp parallel default(shared) proc_bind(close)&
+        !$omp private(iref,jref,imirr,tRi,euldist,Rj,eulers,irot,d,psii,psij)
+        ! caching rotation matrices
+        !$omp do schedule(static)
+        do iref = 1, nrefs
+            R(:,:,iref) = ref_space%get_mat(iref)
+        enddo
+        !$omp end do
+        ! constructing polar common lines
+        !$omp do schedule(static)
+        do iref = 1,nrefs
+            tRi   = transpose(R(:,:,iref))
+            imirr = ref_space%get_int(iref,'mirr')
+            do jref = 1,nrefs
+                pcomlines(jref,iref)%legit  = .false.
+                if( jref == iref  ) cycle   ! self   exclusion
+                if( jref == imirr ) cycle   ! mirror exclusion
+                ! Cone exclusion
+                if( l_exclude_cone )then
+                    euldist = rad2deg(ref_space%euldist(iref,jref))
+                    if( euldist < p%athres )cycle
+                endif
+                ! Rotation of both planes by transpose of Ri such plane i has euler triplet (0,0,0)
+                Rj     = matmul(R(:,:,jref), tRi)
+                eulers = m2euler(Rj)
+                ! in plane rotation index of jref plane intersecting iref
+                psij = 360.0 - eulers(3)
+                irot = pftcc%get_roind(psij)
+                d    = psij - pftcc%get_rot(irot)
+                if( d > drot ) d = d - 360.0
+                if( l_kb )then
+                    ! nearest point with get_roind routine
+                else
+                    ! leftmost point
+                    if( d < 0. )then
+                        irot = irot - 1
+                        d    = d + drot
+                        if( irot < 1 ) irot = irot + nrots
+                    endif
+                endif
+                pcomlines(jref,iref)%targ_irot = irot
+                pcomlines(jref,iref)%targ_w    = d / drot
+                ! in plane rotation index of iref plane (ccw)
+                psii = eulers(1)
+                irot = pftcc%get_roind(psii)
+                d    = psii - pftcc%get_rot(irot)
+                if( d > drot ) d = d - 360.0
+                if( l_kb )then
+                    ! nearest point with get_roind routine
+                else
+                    ! leftmost point
+                    if( d < 0. )then
+                        irot = irot - 1
+                        d    = d + drot
+                        if( irot < 1 ) irot = irot + nrots
+                    endif
+                endif
+                pcomlines(jref,iref)%self_irot = irot
+                pcomlines(jref,iref)%self_w    = d / drot
+                ! green lighting pair
+                pcomlines(jref,iref)%legit = .true.
+            enddo
+        enddo
+        !$omp end do
+        !$omp end parallel
+    end subroutine gen_polar_comlinsm
+
+    subroutine polar_comlin_pfts( pcomlines, pfts_in, pfts)
+        type(polar_fmap), intent(in)    :: pcomlines(:,:)
+        complex,          intent(in)    :: pfts_in(:,:,:)
+        complex,          intent(inout) :: pfts(:,:,:)
+        complex :: pft_line(p%kfromto(1):p%kfromto(2))
+        integer :: iref, jref, irot_l, irot_r, nrefs, pftsz
+        real    :: w
+        pftsz = size(pfts_in, 1)
+        nrefs = size(pcomlines,1)
+        pfts  = CMPLX_ZERO
+        !$omp parallel do default(shared) private(iref,jref,irot_l,irot_r,w,pft_line)&
+        !$omp proc_bind(close) schedule(static)
+        do iref = 1, nrefs
+            do jref = 1, nrefs
+                if( .not. pcomlines(jref,iref)%legit )cycle
+                ! compute the interpolated polar common line, between irot_j and irot_j+1
+                irot_l = pcomlines(jref,iref)%targ_irot
+                irot_r = irot_l + 1
+                w      = pcomlines(jref,iref)%targ_w
+                if( irot_l < 1 )then
+                    pft_line = (1.-w) * conjg(pfts_in(irot_l+pftsz,:,jref))
+                elseif( irot_l > pftsz )then
+                    pft_line = (1.-w) * conjg(pfts_in(irot_l-pftsz,:,jref))
+                else
+                    pft_line = (1.-w) * pfts_in(irot_l,:,jref)
+                endif
+                if( irot_r < 1 )then
+                    pft_line = pft_line + w * conjg(pfts_in(irot_r+pftsz,:,jref))
+                elseif( irot_r > pftsz )then
+                    pft_line = pft_line + w * conjg(pfts_in(irot_r-pftsz,:,jref))
+                else
+                    pft_line = pft_line + w * pfts_in(irot_r,:,jref)
+                endif
+                ! extrapolate the interpolated polar common line to irot_i and irot_i+1 of iref-th reference
+                irot_l   = pcomlines(jref,iref)%self_irot
+                irot_r   = irot_l + 1
+                w        = pcomlines(jref,iref)%self_w
+                if( irot_l < 1 )then
+                    irot_l              = irot_l + pftsz
+                    pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w) * conjg(pft_line)
+                elseif( irot_l > pftsz )then
+                    irot_l              = irot_l - pftsz
+                    pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w) * conjg(pft_line)
+                else
+                    pfts(irot_l,:,iref) = pfts(irot_l,:,iref) + (1.-w) * pft_line
+                endif
+                if( irot_r < 1 )then
+                    irot_r              = irot_r + pftsz
+                    pfts(irot_r,:,iref) = pfts(irot_r,:,iref) + w * conjg(pft_line)
+                elseif( irot_r > pftsz )then
+                    irot_r              = irot_r - pftsz
+                    pfts(irot_r,:,iref) = pfts(irot_r,:,iref) + w * conjg(pft_line)
+                else
+                    pfts(irot_r,:,iref) = pfts(irot_r,:,iref) + w * pft_line
+                endif
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine polar_comlin_pfts
+
+    subroutine read_write_comlin( pcomlines, pftcc, eulspace )
+        type(polar_fmap), allocatable, intent(inout) :: pcomlines(:,:)
+        class(polarft_corrcalc),       intent(in)    :: pftcc
+        type(oris),                    intent(in)    :: eulspace
+        integer :: io_stat, funit
+        if( .not. allocated(pcomlines) ) allocate(pcomlines(p%nspace,p%nspace))
+        if( file_exists(trim(POLAR_COMLIN)) )then
+            call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            read(unit=funit,pos=1) pcomlines
+        else
+            call gen_polar_comlinsm(pftcc, eulspace, pcomlines)
+            call fopen(funit,trim(POLAR_COMLIN),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+            write(unit=funit,pos=1) pcomlines
+        endif
+        call fclose(funit)
+    end subroutine read_write_comlin
+
 end program simple_test_comlin_polar
