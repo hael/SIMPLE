@@ -52,22 +52,22 @@ type :: simple_program
     ! existence flag
     logical :: exists = .false.
     contains
-    procedure, private :: new
-    procedure, private :: set_input_1
-    procedure, private :: set_input_2
-    procedure, private :: set_input_3
-    generic,   private :: set_input => set_input_1, set_input_2, set_input_3
-    procedure          :: print_ui
-    procedure          :: print_cmdline
-    procedure          :: print_cmdline_latex
-    procedure          :: print_prg_descr_long
-    procedure          :: write2json
-    procedure          :: get_name
-    procedure          :: get_executable
-    procedure          :: get_nrequired_keys
-    procedure          :: get_required_keys
-    procedure          :: requires_sp_project
-    procedure, private :: kill
+        procedure, private :: new
+        procedure, private :: set_input_1
+        procedure, private :: set_input_2
+        procedure, private :: set_input_3
+        generic,   private :: set_input => set_input_1, set_input_2, set_input_3
+        procedure          :: print_ui
+        procedure          :: print_cmdline
+        procedure          :: print_cmdline_latex
+        procedure          :: print_prg_descr_long
+        procedure          :: write2json
+        procedure          :: get_name
+        procedure          :: get_executable
+        procedure          :: get_nrequired_keys
+        procedure          :: get_required_keys
+        procedure          :: requires_sp_project
+        procedure, private :: kill
 end type simple_program
 
 ! declare simple_exec and single_exec program specifications here
