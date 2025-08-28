@@ -16,28 +16,34 @@ public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
 public :: select_clusters_commander
 public :: match_cavgs_commander
+public :: match_cavgs2afm_commander
 private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: rank_cavgs_commander
-  contains
+    contains
     procedure :: execute      => exec_rank_cavgs
 end type rank_cavgs_commander
 
 type, extends(commander_base) :: cluster_cavgs_commander
-  contains
+    contains
     procedure :: execute      => exec_cluster_cavgs
 end type cluster_cavgs_commander
 
 type, extends(commander_base) :: select_clusters_commander
-  contains
+    contains
     procedure :: execute      => exec_select_clusters
 end type select_clusters_commander
 
 type, extends(commander_base) :: match_cavgs_commander
-  contains
+    contains
     procedure :: execute      => exec_match_cavgs
 end type match_cavgs_commander
+
+type, extends(commander_base) :: match_cavgs2afm_commander
+    contains
+    procedure :: execute      => exec_match_cavgs2afm
+end type match_cavgs2afm_commander
 
 contains
 
@@ -378,7 +384,6 @@ contains
         integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:), dmat(:,:)
-        type(inpl_struct), allocatable :: algninfo(:,:)
         integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch
         real    :: smpd, oa_minmax(2)
         ! defaults
@@ -476,5 +481,115 @@ contains
         end function find_label_state
 
     end subroutine exec_match_cavgs
+
+    subroutine exec_match_cavgs2afm( self, cline )
+        class(match_cavgs2afm_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj_ref
+        type(stack_io)   :: stkio_r
+        type(image)      :: img_msk   
+        type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_rescale(:), afm_imgs(:)
+        logical,           allocatable :: l_msk(:,:,:)
+        integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
+        integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
+        logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
+        real,              allocatable :: mm_ref(:,:), mm_afm(:,:), corrmat(:,:), dmat_clust(:,:), dmat(:,:), rank_cavgs(:,:)
+        integer :: nmatch, nrefs, ldim(3), ldim_afm(3), i, j, ncls_match, nclust, nafm, icls, iclust, imatch, box_new, dmat_shape(2)
+        real    :: smpd, smpd_target, oa_minmax(2), mskrad
+        ! defaults
+        ! stk parameter, pass stk into subroutine 
+        call cline%set('oritype', 'cls2D')
+        call cline%set('ctf',        'no')
+        call cline%set('objfun',     'cc')
+        call cline%set('sh_inv',    'yes') ! shift invariant search
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',       10.)
+        if( .not. cline%defined('kweight')    ) call cline%set('kweight', 'all')
+        if( .not. cline%defined('lp')         ) call cline%set('lp',         6.)
+        if( .not. cline%defined('prune')      ) call cline%set('prune',    'no')
+        ! master parameters
+        call params%new(cline)
+        ! read base project file, write to image array
+        call spproj_ref%read(params%projfile)
+        if( .not. spproj_ref%os_cls2D%isthere('cluster') ) THROW_HARD('Reference project lacks clustering information in cls2D field')
+        cavg_imgs_ref = read_cavgs_into_imgarr(spproj_ref)
+        ! read afm stack
+        call find_ldim_nptcls(params%stk, ldim_afm, nafm)
+        call stkio_r%open(params%stk, params%smpd_target, 'read', bufsz=nafm)
+        call stkio_r%read_whole 
+        allocate(afm_imgs(nafm))
+        do i = 1, nafm
+            call stkio_r%get_image(i, afm_imgs(i))
+        end do 
+        nrefs       = size(cavg_imgs_ref)
+        smpd        = cavg_imgs_ref(1)%get_smpd()
+        ldim        = cavg_imgs_ref(1)%get_ldim()
+        allocate(cavg_imgs_rescale(nrefs))
+        ! ensure correct smpd/box in params class
+        params%smpd = smpd
+        params%box  = ldim(1)
+        ! image normalization within mask
+        ! circular masking or binary masking?
+        ! use state 1 cavgs 
+
+        ! box_new = ceiling(params%box * params%smpd / params%smpd_target)
+        box_new        = ldim_afm(1)
+        params%mskdiam = nint(0.8 * real(box_new))
+        params%msk     = min(real(box_new/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        call img_msk%new([box_new,box_new,1], smpd_target)
+        img_msk = 1.
+        call img_msk%mask(mskrad, 'hard')
+        l_msk = img_msk%bin2logical()
+        call img_msk%kill
+        ! downscale and prepare cavgs 
+        do i = 1, nrefs 
+            call cavg_imgs_rescale(i)%new([box_new, box_new, 1], params%smpd_target)
+            call cavg_imgs_ref(i)%fft
+            call cavg_imgs_ref(i)%pad(cavg_imgs_rescale(i), 0., .false.)
+            call cavg_imgs_rescale(i)%lp(nint(params%lp))
+            call cavg_imgs_rescale(i)%ifft
+            call cavg_imgs_rescale(i)%norm_within(l_msk)
+            call cavg_imgs_rescale(i)%mask(params%msk, 'soft', backgr=0.)
+            mm_ref(i,:) = cavg_imgs_ref(i)%minmax(params%msk)
+        end do 
+        ! prepare afm 
+        do i = 1, nafm 
+            call afm_imgs(i)%fft
+            call afm_imgs(i)%lp(nint(params%lp))
+            call afm_imgs(i)%ifft
+            call afm_imgs(i)%norm_within(l_msk)
+            call afm_imgs(i)%mask(params%msk, 'soft', backgr=0.)
+            mm_afm(i,:) = afm_imgs(i)%minmax(params%msk)
+        end do 
+        ! turn cavgs into binary object, add soft edge 
+        ! Have some way to simulate AFM, maybe from volume 
+        ! extract nonzero cluster labels
+        labels = spproj_ref%os_cls2D%get_all_asint('cluster')
+        labels = pack(labels, mask=l_non_junk_ref)
+        nclust = maxval(labels)
+        states = spproj_ref%os_cls2D%get_all_asint('state')
+        states = pack(states, mask=l_non_junk_ref)
+        ! calculate overall minmax, not sure... 
+        oa_minmax(1) = (minval(mm_ref(:,1)) + minval(mm_afm(:,1))) / 2.
+        oa_minmax(2) = (maxval(mm_ref(:,2)) + minval(mm_afm(:,2))) / 2.
+        ! generate matching distance matrix
+        dmat = calc_match_cavgs_dmat(params, afm_imgs, cavg_imgs_ref, oa_minmax)
+        ! go through rows and visualize afm + 3 best cavgs
+        ! mean of each cavgs columns and rank 
+        dmat_shape = shape(dmat)
+        allocate(rank_cavgs(2, dmat_shape(1)))
+        do j = 1, dmat_shape(1)
+            rank_cavgs(1,j) = real(j)
+            rank_cavgs(2,j) = sum(dmat(:,j)) / real(nafm)
+        end do 
+        print *, rank_cavgs
+        call dealloc_imgarr(cavg_imgs_ref)
+        call dealloc_imgarr(afm_imgs)
+        call dealloc_imgarr(cavg_imgs_rescale)
+        ! end gracefully
+        ! based on frequency of view match + corr value of matched view
+        call simple_end('**** SIMPLE_match_cavgs2afmS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
+    end subroutine exec_match_cavgs2afm
 
 end module simple_commander_cavgs
