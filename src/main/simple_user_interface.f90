@@ -51,7 +51,7 @@ type :: simple_program
     logical :: sp_required = .true.
     ! existence flag
     logical :: exists = .false.
-  contains
+    contains
     procedure, private :: new
     procedure, private :: set_input_1
     procedure, private :: set_input_2
@@ -140,6 +140,7 @@ type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
 type(simple_program), target :: match_cavgs
+type(simple_program), target :: match_cavgs2afm
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
 type(simple_program), target :: map_validation
@@ -473,6 +474,7 @@ contains
         call new_map_cavgs_states
         call new_mask
         call new_match_cavgs
+        call new_match_cavgs2afm
         call new_merge_projects
         call new_mkdir_
         call new_motion_correct
@@ -623,6 +625,7 @@ contains
         call push2prg_ptr_array(map_cavgs_states)
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(match_cavgs)
+        call push2prg_ptr_array(match_cavgs2afm)
         call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
@@ -726,7 +729,7 @@ contains
                 ptr2prg => abinitio3D
             case('abinitio3D_parts')
                 ptr2prg => abinitio3D_parts
-             case('analyze_pspecs')
+                case('analyze_pspecs')
                 ptr2prg => analyze_pspecs
             case('afm')
                 ptr2prg => afm
@@ -852,6 +855,8 @@ contains
                 ptr2prg => mask
             case('match_cavgs')
                 ptr2prg => match_cavgs
+            case('match_cavgs2afm')
+                ptr2prg => match_cavgs2afm
             case('merge_projects')
                 ptr2prg => merge_projects
             case('mkdir')
@@ -1066,6 +1071,7 @@ contains
         write(logfhandle,'(A)') map2model_fsc%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') match_cavgs%name
+        write(logfhandle,'(A)') match_cavgs2afm%name
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
@@ -1590,7 +1596,7 @@ contains
         call automask2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_automask2D
 
-     subroutine new_auto_spher_mask
+        subroutine new_auto_spher_mask
         ! PROGRAM SPECIFICATION
         call auto_spher_mask%new(&
         &'auto_spher_mask',&                              ! name
@@ -2158,7 +2164,7 @@ contains
         call cluster2D_subsets%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 5, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}',&
-             &'(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'no', gui_submenu="cluster 2D")
+                &'(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'no', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 6, objfun, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
         call cluster2D_subsets%set_input('srch_ctrls', 8, 'algorithm', 'binary', '2D analysis algorithm',&
@@ -2584,7 +2590,7 @@ contains
         &0, 0, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-       ! call export_starproject%set_input('parm_ios', 1, projfile)
+        ! call export_starproject%set_input('parm_ios', 1, projfile)
         ! parameter input/output
         ! alternative inputs
         ! <empty>
@@ -3099,7 +3105,7 @@ contains
         &'simple_exec',&                                                        ! executable
         &0, 2, 0, 4, 3, 1, 3, .true.,&                                          ! # entries in each group, requires sp_project    
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute" ) ! GUI                                                      
-         ! INPUT PARAMETER SPECIFICATIONS
+            ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
@@ -3563,6 +3569,33 @@ contains
         ! computer controls
         call match_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_match_cavgs
+
+    subroutine new_match_cavgs2afm
+        ! PROGRAM SPECIFICATION
+        call match_cavgs2afm%new(&
+        &'match_cavgs2afm',&                                              ! name
+        &'Analysis of class averages against AFM particles',&                ! descr_short
+        &'is a program for analyzing class averages with AFM particles',& ! descr_long
+        &'simple_exec',&                                              ! executable
+        &1, 1, 0, 0, 2, 0, 1, .true.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call match_cavgs2afm%set_input('img_ios', 1, 'stk',  'file', 'Stack of AFM particles',  'Stack of AFM particles for comparison', 'e.g. stk.mrcs', .true., '')
+        ! parameter input/output
+        call match_cavgs2afm%set_input('parm_ios', 1, smpd_target)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call match_cavgs2afm%set_input('filt_ctrls', 1, hp)
+        call match_cavgs2afm%set_input('filt_ctrls', 2, lp)
+        ! mask controls
+        ! <empty> 
+        ! computer controls
+        call match_cavgs2afm%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_match_cavgs2afm
+
 
     subroutine new_merge_projects
         ! PROGRAM SPECIFICATION
@@ -6282,19 +6315,19 @@ contains
                 if( .not. arr(i)%required ) arr(i)%rval_default = default_value
                 ! GUI options
                 if( present(gui_submenu) ) then
-                  allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
+                    allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
                 endif
                 if( present (gui_exclusive_group) ) then
-                  allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
+                    allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
                 endif
                 if( present(gui_active_flags) ) then
-                  allocate(arr(i)%active_flags, source=trim(gui_active_flags))
+                    allocate(arr(i)%active_flags, source=trim(gui_active_flags))
                 endif
                 if( present(gui_online) ) then
-                  arr(i)%online = gui_online
+                    arr(i)%online = gui_online
                 endif
                 if( present(gui_advanced) ) then
-                  arr(i)%advanced = gui_advanced
+                    arr(i)%advanced = gui_advanced
                 endif
             end subroutine set
 
@@ -6343,19 +6376,19 @@ contains
                 if( .not. arr(i)%required ) allocate(arr(i)%cval_default, source=trim(default_value))
                 ! GUI options
                 if( present(gui_submenu) ) then
-                  allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
+                    allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
                 endif
                 if( present (gui_exclusive_group) ) then
-                  allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
+                    allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
                 endif
                 if( present(gui_active_flags) ) then
-                  allocate(arr(i)%active_flags, source=trim(gui_active_flags))
+                    allocate(arr(i)%active_flags, source=trim(gui_active_flags))
                 endif
                 if( present(gui_online) ) then
-                  arr(i)%online = gui_online
+                    arr(i)%online = gui_online
                 endif
                 if( present(gui_advanced) ) then
-                  arr(i)%advanced = gui_advanced
+                    arr(i)%advanced = gui_advanced
                 endif
             end subroutine set
 
@@ -6400,19 +6433,19 @@ contains
                 arr(i)%required = param%required
                 ! GUI options
                 if( present(gui_submenu) ) then
-                  allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
+                    allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
                 endif
                 if( present (gui_exclusive_group) ) then
-                  allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
+                    allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
                 endif
                 if( present(gui_active_flags) ) then
-                  allocate(arr(i)%active_flags, source=trim(gui_active_flags))
+                    allocate(arr(i)%active_flags, source=trim(gui_active_flags))
                 endif
                 if( present(gui_online) ) then
-                  arr(i)%online = gui_online
+                    arr(i)%online = gui_online
                 endif
                 if( present(gui_advanced) ) then
-                  arr(i)%advanced = gui_advanced
+                    arr(i)%advanced = gui_advanced
                 endif
             end subroutine set
 
@@ -6662,13 +6695,13 @@ contains
                         call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
                         call json%add(entry, 'required', arr(i)%required)
                         if( allocated(arr(i)%gui_submenu) ) then
-                          call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
+                            call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
                         endif
                         if( allocated(arr(i)%exclusive_group) ) then
-                          call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
+                            call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
                         endif
                         if( allocated(arr(i)%active_flags) ) then
-                          call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
+                            call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
                         endif
                         call json%add(entry, 'advanced', arr(i)%advanced)
                         call json%add(entry, 'online', arr(i)%online)
@@ -6764,13 +6797,13 @@ contains
                         call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
                         call json%add(entry, 'required', arr(i)%required)
                         if( allocated(arr(i)%gui_submenu) ) then
-                          call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
+                            call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
                         endif
                         if( allocated(arr(i)%exclusive_group) ) then
-                          call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
+                            call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
                         endif
                         if( allocated(arr(i)%active_flags) ) then
-                          call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
+                            call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
                         endif
                         call json%add(entry, 'advanced', arr(i)%advanced)
                         call json%add(entry, 'online', arr(i)%online)
