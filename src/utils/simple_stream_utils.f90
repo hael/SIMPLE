@@ -14,14 +14,13 @@ use simple_nice
 
 implicit none
 
-public :: stream_chunk, DIR_CHUNK, merge_chunks, update_user_params
+public :: stream_chunk, merge_chunks, update_user_params
 public :: projs_list
 public :: projrecord, projrecords2proj, kill_projrecords, class_rejection
 public :: procrecord, append_procrecord, kill_procrecords
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter   :: DIR_CHUNK          = 'chunk_'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK     = 'chunk'
 character(len=STDLEN), parameter   :: CLS_CHUNK_REJECTED = 'cls_rejected_chunks.mrc'
 logical,               parameter   :: DEBUG_HERE         = .false.

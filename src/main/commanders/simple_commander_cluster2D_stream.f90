@@ -78,7 +78,6 @@ integer,               parameter :: CHUNK_EXTR_ITER      = 3                ! st
 integer,               parameter :: FREQ_POOL_REJECTION  = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
 integer,               parameter :: MIN_NPTCLS_REJECTION = 200000           ! Minimum number of particles required to activate rejection
 integer,               parameter :: NPREV_RES            = 5                ! # of previous resolution resolutions to store for resolution update (>=2)
-character(len=STDLEN), parameter :: USER_PARAMS2D        = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter :: PROJFILE_POOL        = 'cluster2D.simple'
 character(len=STDLEN), parameter :: POOL_DIR             = ''               ! should be './pool/' for tidyness but difficult with gui
 character(len=STDLEN), parameter :: DISTR_EXEC_FNAME     = './distr_cluster2D_pool'
@@ -1324,7 +1323,7 @@ contains
         real,    parameter :: ICM_LAMBDA = 2.0
         integer, parameter :: ITERLIM    = 20
         integer, parameter :: ITERSHIFT  = 5
-        real :: startlp, stoplp, lpcen, lp, lambda, gamma
+        real :: lp, lambda, gamma
         if( .not. stream2D_active ) return
         if( .not. pool_available )  return
         if( pool_iter < ITERLIM )then
@@ -1336,7 +1335,6 @@ contains
                 call cline_cluster2D_pool%set('trs', MINSHIFT)
             endif
             ! resolution limit
-            call mskdiam2lplimits(params_glob%mskdiam, startlp, stoplp, lpcen)
             lp = lpstop + (lpstart-lpstop) * gamma
             call cline_cluster2D_pool%set('lp', lp)
             ! Extremal iteration
@@ -1658,15 +1656,18 @@ contains
     subroutine iterate_pool
         use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
         use simple_ran_tabu
-        logical,                   parameter   :: L_BENCH = .false.
+        real,    parameter :: LAMBDA_REFGEN    = 1.8
+        integer, parameter :: ITERLIM_REFGEN   = 10
+        integer, parameter :: ITERSHIFT_REFGEN = 5
+        logical, parameter :: L_BENCH          = .false.
         type(ran_tabu)                         :: random_generator
         type(sp_project)                       :: spproj, spproj_history
         type(cmdline),             allocatable :: clines(:)
         integer,                   allocatable :: nptcls_per_stk(:), stk_order(:)
-        integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:)
+        integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:), clspops(:)
         character(len=:),          allocatable :: stack_fname, ext, fbody, stkname
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
-        real                    :: frac_update, smpd
+        real                    :: frac_update, smpd, gamma, lambda, lp_refgen
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
         integer(timer_int_kind) :: t_tot
@@ -1706,73 +1707,68 @@ contains
         endif
         if( l_no_chunks )then
             ! for reference generation everything is defined here
-            call cline_cluster2D_pool%set('extr_iter', CHUNK_EXTR_ITER+pool_iter-1)
+            call cline_cluster2D_pool%set('center',    'no')
+            call cline_cluster2D_pool%set('cc_iters',  0)
+            call cline_cluster2D_pool%set('sigma_est', 'global')
+            call cline_cluster2D_pool%set('ml_reg',    'no')
+            call cline_cluster2D_pool%set('lpstop',    params_glob%lpstop)
+            call cline_cluster2D_pool%set('extr_lim',  ITERLIM_REFGEN)
+            call cline_cluster2D_pool%delete('lpstart')
+            ! First iteration
             if( pool_iter == 1 )then
                 call cline_cluster2D_pool%delete('frcs')
                 call cline_cluster2D_pool%delete('refs')
-            endif
-            call cline_cluster2D_pool%set('center','no')
-            if( pool_iter < 5 )then
-                call cline_cluster2D_pool%delete('lpstart')
-                call cline_cluster2D_pool%delete('lpstop')
-                call cline_cluster2D_pool%set('lp', lpstart)
-                call cline_cluster2D_pool%set('trs', 0)
+                call cline_cluster2D_pool%set('extr_iter', 1)
+                lambda    = LAMBDA_REFGEN + 0.2
+                lp_refgen = lpstart
+                ! sigmas2 are calculated first thing
+                allocate(clines(2))
+                call clines(1)%set('prg',        'calc_pspec_distr')
+                call clines(1)%set('oritype',    'ptcl2D')
+                call clines(1)%set('projfile',   PROJFILE_POOL)
+                call clines(1)%set('nthr',       cline_cluster2D_pool%get_iarg('nthr'))
+                call clines(1)%set('which_iter', pool_iter)
+                call clines(1)%set('mkdir',      'yes')
+                call clines(1)%set('sigma_est',  'global')
+                call clines(1)%set('nparts',     params_glob%nparts_pool)
+                clines(2) = cline_cluster2D_pool
             else
-                call cline_cluster2D_pool%set('trs',    MINSHIFT)
-                call cline_cluster2D_pool%set('center', params_glob%center)
-            endif
-            call cline_cluster2D_pool%set('needs_sigma', 'no')
-            call cline_cluster2D_pool%set('objfun',      'cc')
-            call cline_cluster2D_pool%set('ml_reg',      'no')
-            call cline_cluster2D_pool%delete('cc_iters')
-            if( params_glob%cc_objfun .eq. OBJFUN_EUCLID )then
-                if( iterswitch2euclid == 0 )then
-                    ! switch to objfun=euclid when good enough resolution
-                    if( current_resolution < lpstart .and. pool_iter > CHUNK_CC_ITERS )then
-                        iterswitch2euclid = pool_iter+1
-                    endif
-                else if( iterswitch2euclid == pool_iter )then
-                    ! switch
-                    call cline_cluster2D_pool%set('needs_sigma','yes')
-                    call cline_cluster2D_pool%set('objfun',     'euclid')
-                    call cline_cluster2D_pool%set('cc_iters',    0)
-                    call cline_cluster2D_pool%set('sigma_est',  'global')
-                    call cline_cluster2D_pool%set('ml_reg',     params_glob%ml_reg_pool)
-                    call cline_cluster2D_pool%set('lpstart',    lpstart)
-                    call cline_cluster2D_pool%set('lpstop',     params_glob%lpstop)
-                    call cline_cluster2D_pool%delete('lp')
-                    allocate(clines(2))
-                    ! sigmas2 are calculated first thing
-                    call clines(1)%set('prg',        'calc_pspec_distr')
-                    call clines(1)%set('oritype',    'ptcl2D')
-                    call clines(1)%set('projfile',   PROJFILE_POOL)
-                    call clines(1)%set('nthr',       cline_cluster2D_pool%get_iarg('nthr'))
-                    call clines(1)%set('which_iter', pool_iter)
-                    call clines(1)%set('mkdir',      'yes')
-                    call clines(1)%set('sigma_est',  'global')
-                    call clines(1)%set('nparts',     params_glob%nparts_pool)
-                    clines(2) = cline_cluster2D_pool
+                if( pool_iter < ITERLIM_REFGEN )then
+                    gamma = min(1.0, max(0.0, real(ITERLIM_REFGEN-pool_iter)/real(ITERLIM_REFGEN)))
+                    ! resolution limit
+                    lp_refgen = (lpstart + lpstop)/2.0 + gamma * (lpstart - lpstop)/2.0
+                    ! Extremal iteration
+                    call cline_cluster2D_pool%set('extr_iter', pool_iter+1)
+                    call cline_cluster2D_pool%set('extr_lim',  ITERLIM_REFGEN)
+                    ! ICM
+                    lambda = 0.2 + LAMBDA_REFGEN * gamma
                 else
-                    ! after switch
-                    call cline_cluster2D_pool%set('needs_sigma','yes')
-                    call cline_cluster2D_pool%set('objfun',     'euclid')
-                    call cline_cluster2D_pool%set('cc_iters',   0)
-                    call cline_cluster2D_pool%set('sigma_est',  'global')
-                    call cline_cluster2D_pool%set('ml_reg',      params_glob%ml_reg_pool)
-                    call cline_cluster2D_pool%set('lpstart',     lpstart)
-                    call cline_cluster2D_pool%set('lpstop',      params_glob%lpstop)
-                    do i = 1,params_glob%nparts_pool
-                        call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
-                    enddo
+                    gamma     = 0.0
+                    lp_refgen = (lpstart + lpstop)/2.0
+                    if( current_resolution < (lpstart + lpstop)/2.0 )then
+                        lp_refgen = 0.25*lpstart + 0.75*lpstop
+                    endif
+                    call cline_cluster2D_pool%delete('extr_iter')
+                    lambda = 0.2
                 endif
-            else
-                ! objfun = cc
-                if( current_resolution < lpstart .and. pool_iter > CHUNK_CC_ITERS )then
-                    call cline_cluster2D_pool%set('lpstart',lpstart)
-                    call cline_cluster2D_pool%set('lpstop', params_glob%lpstop)
-                    call cline_cluster2D_pool%delete('lp')
-                endif
+                ! remove previous particle files
+                do i = 1,params_glob%nparts_pool
+                    call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
+                enddo
             endif
+            ! Resolution limit
+            call cline_cluster2D_pool%set('lp', lp_refgen)
+            ! offset
+            if( pool_iter < ITERSHIFT_REFGEN )then
+                call cline_cluster2D_pool%set('trs', 0.)
+            else
+                call cline_cluster2D_pool%set('trs', MINSHIFT)
+            endif
+            ! ICM filter
+            call cline_cluster2D_pool%set('icm',    'yes')
+            call cline_cluster2D_pool%set('lambda', lambda)
+            ! for first iteration
+            ! if( pool_iter == 1 ) clines(2) = cline_cluster2D_pool
         endif
         ! Project metadata update
         spproj%projinfo = pool_proj%projinfo
@@ -1860,6 +1856,22 @@ contains
         enddo
         call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
         spproj%os_cls2D = pool_proj%os_cls2D
+        ! making sure the new particles are asigned a populated class
+        if( pool_iter >= 2 )then
+            clspops = spproj%os_cls2D%get_all_asint('pop')
+            !$omp parallel do private(iptcl,icls) proc_bind(close) default(shared) schedule(static)
+            do iptcl = 1,nptcls2update
+                if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+                if( spproj%os_ptcl2D%get_updatecnt(iptcl) == 0 )then
+                    icls = irnd_uni(ncls_glob)
+                    do while( clspops(icls) == 0 )
+                        icls = irnd_uni(ncls_glob)
+                    enddo
+                    call spproj%os_ptcl2D%set_class(iptcl, icls)
+                endif
+            enddo
+            !$omp end parallel do
+        endif
         ! Consolidate sigmas doc
         if( l_update_sigmas )then
             if( trim(params_glob%sigma_est).eq.'group' )then
@@ -1912,8 +1924,7 @@ contains
         ! pool stats
         call generate_pool_stats
         ! execution
-        if( l_no_chunks .and. pool_iter == iterswitch2euclid )then
-            write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
+        if( l_no_chunks .and. pool_iter == 1 )then
             call qenv_pool%exec_simple_prgs_in_queue_async(clines, DISTR_EXEC_FNAME, LOGFILE)
             call clines(:)%kill
             deallocate(clines)
@@ -3833,7 +3844,7 @@ contains
                 do i = 1,chunkslist%n,params%nchunksperset
                     j    = j + 1
                     k    = min(i+params%nchunksperset-1,chunkslist%n)
-                    tmpl = 'set_'//int2str(j)
+                    tmpl = trim(DIR_SET)//int2str(j)
                     call simple_mkdir(tmpl)
                     call merge_chunks(chunkslist%projfiles(i:k), tmpl, spproj_glob, projname_out=tmpl)
                     call setslist%append(tmpl//'/'//tmpl//METADATA_EXT, j, .false.)
@@ -3940,7 +3951,7 @@ contains
             do i = 1,nchunks,params%nchunksperset
                 j    = j + 1
                 k    = min(i+params%nchunksperset-1,nchunks)
-                tmpl = 'set_'//int2str(j)
+                tmpl = trim(DIR_SET)//int2str(j)
                 call simple_mkdir(tmpl)
                 call merge_chunks(projfiles(i:k), tmpl, spproj, projname_out=tmpl)
                 write(*,'(A,I4,A,I8,A)')'>>> GENERATED SET',j,' WITH',spproj%get_nptcls(),' PARTICLES'

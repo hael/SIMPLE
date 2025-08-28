@@ -25,7 +25,6 @@ public :: commander_stream_gen_picking_refs
 public :: commander_stream_pick_extract
 public :: commander_stream_assign_optics
 public :: commander_stream_cluster2D
-public :: commander_stream_abinitio3D
 
 private
 #include "simple_local_flags.inc"
@@ -55,18 +54,14 @@ type, extends(commander_base) :: commander_stream_cluster2D
     procedure :: execute => exec_stream_cluster2D
 end type commander_stream_cluster2D
 
-type, extends(commander_base) :: commander_stream_abinitio3D
-  contains
-    procedure :: execute => exec_stream_abinitio3D
-end type commander_stream_abinitio3D
-
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spprojs/'           ! location for projects to be processed
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
-integer,               parameter :: NMOVS_SET = 5                                                ! number of movies processed at once (>1)
-integer,               parameter :: LONGTIME  = 60                                               ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME  = 10                                               ! movie folder watched every WAITTIME seconds
-integer,               parameter :: SHORTWAIT = 2                                                ! movie folder watched every SHORTTIME seconds in shmem
+integer,               parameter :: NMOVS_SET      = 5                                           ! number of movies processed at once (>1)
+integer,               parameter :: NMOVS_SET_TIFF = 3                                           ! number of TIFF movies processed at once (>1)
+integer,               parameter :: LONGTIME       = 60                                          ! time lag after which a movie/project is processed
+integer,               parameter :: WAITTIME       = 10                                          ! movie folder watched every WAITTIME seconds
+integer,               parameter :: SHORTWAIT      = 2                                           ! movie folder watched every SHORTTIME seconds in shmem
 
 contains
 
@@ -3000,182 +2995,5 @@ contains
             end subroutine update_records_with_project
 
     end subroutine exec_stream_cluster2D
-
-    subroutine exec_stream_abinitio3D( self, cline )
-        use simple_commander_abinitio3D_stream
-        class(commander_stream_abinitio3D), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        type(parameters)                       :: params
-        type(cmdline)                          :: cline4exec
-        type(sp_project)                       :: spproj_glob
-        type(moviewatcher)                     :: project_buff
-        type(oris)                             :: moldiamori, chunksizeori, vol_oris, fsc_oris
-        type(simple_nice_communicator)         :: nice_communicator
-        character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=:),          allocatable :: moldiam_fname, chunksize_fname
-        integer :: nprojects, iter, i, ncompleted
-        logical :: l_params_updated
-        call cline%set('oritype',      'ptcl3D')
-        call cline%set('mkdir',        'yes')
-        call cline%set('objfun',    'euclid')
-        call cline%set('sigma_est', 'global')
-        call cline%set('bfac',            0.)
-        if( .not. cline%defined('maxnruns')    ) call cline%set('maxnruns',          1)
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
-        if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
-        if( .not. cline%defined('center')      ) call cline%set('center',         'no')
-        if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',           'c1')
-        if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
-        if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
-        if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
-        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
-        if( .not. cline%defined('walltime')    ) call cline%set('walltime',      29*60) ! 29 minutes, needs to change
-        if( .not. cline%defined('nptcls')      ) call cline%set('nptcls',       100000) ! is default for now, will be updated
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
-        ! sanity check for restart
-        if( cline%defined('dir_exec') )then
-            if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
-            endif
-        endif
-        ! master parameters
-        call cline%set('numlen', 5)
-        call cline%set('stream','yes')
-        call params%new(cline)
-        call cline%set('mkdir', 'no')
-        call cline%delete('maxnruns')
-        call cline%delete('nptcls')
-        call cline%delete('numlen')
-        ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
-        ! restart
-        if( cline%defined('dir_exec') )then
-            call cline%delete('dir_exec')
-            call restart_cleanup
-        endif
-        ! some initialization
-        call init_abinitio3D
-        ! initialise progress monitor
-        call progressfile_init()
-        ! master project file
-        call spproj_glob%read( params%projfile )
-        call spproj_glob%update_projinfo(cline)
-        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
-        ! get mskdiam from 2D
-        if( params%mskdiam .eq. 0.0 ) then
-            ! nice communicator status
-            nice_communicator%stat_root%stage = "waiting for initial mask diameter"
-            call nice_communicator%cycle()
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 60 MINUTES FOR '// trim(STREAM_MOLDIAM)
-            moldiam_fname = trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM)
-            do i=1, 360
-                if(file_exists(moldiam_fname)) exit
-                call sleep(10)
-            end do
-            if( .not. file_exists(moldiam_fname)) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
-            ! read mskdiam from file
-            call moldiamori%new(1, .false.)
-            call moldiamori%read(moldiam_fname)
-            if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD('moldiam missing from '//trim(moldiam_fname))
-            params%mskdiam = 1.2 * moldiamori%get(1, "moldiam")
-            call moldiamori%kill
-            call cline%set('mskdiam', params%mskdiam)
-            write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
-        endif
-        ! get nptcls from 2D
-        if( params%nptcls .eq. 0) then
-            ! nice communicator status
-            nice_communicator%stat_root%stage = "waiting for chunk size"
-            call nice_communicator%cycle()
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 60 MINUTES FOR '// trim(STREAM_CHUNKSIZE)
-            chunksize_fname = trim(params%dir_target)//'/'//trim(STREAM_CHUNKSIZE)
-            do i=1, 360
-                if(file_exists(chunksize_fname)) exit
-                call sleep(10)
-            end do
-            if( .not. file_exists(chunksize_fname)) THROW_HARD('either nptcls must be given or '//trim(STREAM_CHUNKSIZE)//' exists in target_dir')
-            ! read nptcls from file
-            call chunksizeori%new(1, .false.)
-            call chunksizeori%read(chunksize_fname)
-            if( .not. chunksizeori%isthere(1, "nptcls_per_cls") )THROW_HARD('nptcls_per_cls missing from '//trim(chunksize_fname))
-            params%nptcls = chunksizeori%get_int(1, "nptcls_per_cls") * 100
-            call chunksizeori%kill
-            write(logfhandle,'(A,I8)')'>>> NPTCLS SET TO', params%nptcls
-        endif
-        nice_communicator%stat_root%stage = "waiting for > "// int2str(params%nptcls) // " particles"
-        call nice_communicator%cycle()
-        ! preps command line used for execution of abinitio3D
-        cline4exec = cline
-        call cline4exec%set('prg',    'abinitio3D')
-        call cline4exec%set('mkdir',  'no')
-        call cline4exec%set('stream', 'yes')
-        call cline4exec%delete('projname')
-        call cline4exec%delete('dir_target')
-        call cline4exec%delete('niceserver')
-        call cline4exec%delete('niceprocid')
-        call cline4exec%delete('walltime') !! TODO
-        ! movie watcher init
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_SNAPSHOT), spproj=.true.)
-        ! Ask 2D process for snapshot
-        call request_snapshot( params%nptcls )
-        iter = 0
-        ! Infinite loop
-        do
-            iter = iter + 1
-            ! Termination
-            if( file_exists(TERM_STREAM) )then
-                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
-                exit
-            endif
-            if( nice_communicator%stop ) then
-                ! termination
-                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                call spproj_glob%kill
-                call qsys_cleanup
-                call nice_communicator%terminate(stop=.true.)
-                call simple_end('**** SIMPLE_STREAM_ABINITIO3D USER STOP ****')
-                call EXIT(0)
-            endif
-            ! Pause
-            do while( file_exists(PAUSE_STREAM) )
-                call sleep(WAITTIME)
-            enddo
-            ! Parameters update
-            call update_user_params3D(cline4exec, l_params_updated)
-            ! New snapshots management
-            call project_buff%watch(nprojects, projects, chrono=.true.)
-            if( nprojects > 0 )then
-                nice_communicator%stat_root%stage = "running" ! Joe: not running, just packaged, cf below
-                call project_buff%add2history( projects )
-                call add_projects2jobslist( projects )
-            endif
-            ! Submit to queue
-            call submit_jobs( cline4exec ) ! Joe: this where jobs can be considered 'running' when appropriate
-            ! Current runs complete?
-            call check_processes( ncompleted )
-            if( ncompleted > 0 )then
-                call request_snapshot( params%nptcls )
-            endif
-            ! Volumes & parameters analysis
-            call analysis( spproj_glob )
-            ! nice
-            if( ncompleted > 0 )then
-                call nice_communicator%update_ini3D(stage=iter, number_states=params%nstates, last_stage_completed=.true.)
-                call spproj_glob%get_all_vols( vol_oris )
-                call spproj_glob%get_all_fscs( fsc_oris )
-                call nice_communicator%update_ini3D(vol_oris=vol_oris, fsc_oris=fsc_oris)
-            end if
-            call nice_communicator%cycle()
-            ! Global wait
-            call sleep(WAITTIME)
-        end do
-        ! end gracefully
-        nice_communicator%stat_root%stage = "terminating"
-        call nice_communicator%cycle()
-        call nice_communicator%terminate()
-        call simple_end('**** SIMPLE_STREAM_ABINITIO3D NORMAL STOP ****')
-    end subroutine exec_stream_abinitio3D
 
 end module simple_commander_stream
