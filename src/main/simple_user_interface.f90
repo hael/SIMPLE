@@ -729,7 +729,7 @@ contains
                 ptr2prg => abinitio3D
             case('abinitio3D_parts')
                 ptr2prg => abinitio3D_parts
-                case('analyze_pspecs')
+            case('analyze_pspecs')
                 ptr2prg => analyze_pspecs
             case('afm')
                 ptr2prg => afm
@@ -1596,7 +1596,7 @@ contains
         call automask2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_automask2D
 
-        subroutine new_auto_spher_mask
+    subroutine new_auto_spher_mask
         ! PROGRAM SPECIFICATION
         call auto_spher_mask%new(&
         &'auto_spher_mask',&                              ! name
@@ -2164,7 +2164,7 @@ contains
         call cluster2D_subsets%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 5, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}',&
-                &'(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'no', gui_submenu="cluster 2D")
+            &'(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'no', gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 6, objfun, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
         call cluster2D_subsets%set_input('srch_ctrls', 8, 'algorithm', 'binary', '2D analysis algorithm',&
@@ -3105,7 +3105,7 @@ contains
         &'simple_exec',&                                                        ! executable
         &0, 2, 0, 4, 3, 1, 3, .true.,&                                          ! # entries in each group, requires sp_project    
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute" ) ! GUI                                                      
-            ! INPUT PARAMETER SPECIFICATIONS
+        ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
