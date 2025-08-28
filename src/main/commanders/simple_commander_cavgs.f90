@@ -22,27 +22,27 @@ private
 
 type, extends(commander_base) :: rank_cavgs_commander
     contains
-    procedure :: execute      => exec_rank_cavgs
+        procedure :: execute      => exec_rank_cavgs
 end type rank_cavgs_commander
 
 type, extends(commander_base) :: cluster_cavgs_commander
     contains
-    procedure :: execute      => exec_cluster_cavgs
+        procedure :: execute      => exec_cluster_cavgs
 end type cluster_cavgs_commander
 
 type, extends(commander_base) :: select_clusters_commander
     contains
-    procedure :: execute      => exec_select_clusters
+        procedure :: execute      => exec_select_clusters
 end type select_clusters_commander
 
 type, extends(commander_base) :: match_cavgs_commander
     contains
-    procedure :: execute      => exec_match_cavgs
+        procedure :: execute      => exec_match_cavgs
 end type match_cavgs_commander
 
 type, extends(commander_base) :: match_cavgs2afm_commander
     contains
-    procedure :: execute      => exec_match_cavgs2afm
+        procedure :: execute      => exec_match_cavgs2afm
 end type match_cavgs2afm_commander
 
 contains
