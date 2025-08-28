@@ -79,7 +79,6 @@ type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D_cavgs_fast
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_parts
-type(simple_program), target :: abinitio3D_stream
 type(simple_program), target :: analyze_pspecs
 type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
@@ -411,7 +410,6 @@ contains
         call new_abinitio3D_cavgs_fast
         call new_abinitio3D
         call new_abinitio3D_parts
-        call new_abinitio3D_stream
         call new_analyze_pspecs
         call new_afm
         call new_analysis2D_nano
@@ -564,7 +562,6 @@ contains
         call push2prg_ptr_array(abinitio3D_cavgs_fast)
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_parts)
-        call push2prg_ptr_array(abinitio3D_stream)
         call push2prg_ptr_array(analyze_pspecs)
         call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
@@ -729,8 +726,6 @@ contains
                 ptr2prg => abinitio3D
             case('abinitio3D_parts')
                 ptr2prg => abinitio3D_parts
-            case('abinitio3D_stream')
-                ptr2prg => abinitio3D_stream
              case('analyze_pspecs')
                 ptr2prg => analyze_pspecs
             case('afm')
@@ -1135,7 +1130,6 @@ contains
 
     subroutine list_stream_prgs_in_ui
         write(logfhandle,'(A)') abinitio2D_stream%name
-        write(logfhandle,'(A)') abinitio3D_stream%name
         write(logfhandle,'(A)') assign_optics%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') gen_picking_refs%name
@@ -3135,63 +3129,6 @@ contains
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
         abinitio3D_parts%comp_ctrls(3)%required = .false.
     end subroutine new_abinitio3D_parts
-
-    subroutine new_abinitio3D_stream
-        ! PROGRAM SPECIFICATION
-        call abinitio3D_stream%new(&
-        &'abinitio3D_stream',&                                                   ! name
-        &'3D ab initio online model generation & analysis from particles',&      ! descr_short
-        &'3D ab initio online model generation & analysis from particles',&      ! descr_long
-        &'simple_stream',&                                                       ! executable
-        &0, 1, 0, 9, 6, 1, 4, .true.,&                                           ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  ) ! GUI
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call abinitio3D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the cluster2D_stream application is running', 'e.g. 7_cluster2D_stream', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call abinitio3D_stream%set_input('srch_ctrls',  1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio3D_stream%set_input('srch_ctrls',  2, pgrp, gui_submenu="model", gui_advanced=.false.)
-        call abinitio3D_stream%set_input('srch_ctrls',  3, pgrp_start, gui_submenu="model")
-        call abinitio3D_stream%set_input('srch_ctrls',  4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio3D_stream%set_input('srch_ctrls',  5, nsample, gui_submenu="search", gui_advanced=.false.)
-        call abinitio3D_stream%set_input('srch_ctrls',  6, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D_stream%set_input('srch_ctrls',  7, 'nsample_stop',  'num', 'Dynamic particle sampling upper bound', 'Dynamic particle sampling upper bound', 'max # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D_stream%set_input('srch_ctrls',  8, update_frac, gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D_stream%set_input('srch_ctrls',  9, nptcls)
-        abinitio3D_stream%srch_ctrls(9)%descr_long        = 'Default number of particles in a snapshot{100000}'
-        abinitio3D_stream%srch_ctrls(9)%descr_placeholder = 'Number of particles in a snapshot{100000}'
-        abinitio3D_stream%srch_ctrls(9)%rval_default      = 100000.0
-        abinitio3D_stream%srch_ctrls(9)%required          = .false.
-        ! filter controls
-        call abinitio3D_stream%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call abinitio3D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio3D_stream%set_input('filt_ctrls', 3, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
-            &'low-pass limit for the initial stage in Angstroms',  .false., 20., gui_submenu="filter")
-        call abinitio3D_stream%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the final stage in Angstroms',    .false., 8., gui_submenu="filter")
-        call abinitio3D_stream%set_input('filt_ctrls', 5, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
-            &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., gui_submenu="filter")
-        call abinitio3D_stream%set_input('filt_ctrls', 6, 'lpstop_ini3D',  'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&
-            &'low-pass limit for the final stage of ini3D in Angstroms',    .false., 8., gui_submenu="filter")
-        ! mask controls
-        call abinitio3D_stream%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        ! computer controls
-        call abinitio3D_stream%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        abinitio3D_stream%comp_ctrls(1)%required = .false.
-        call abinitio3D_stream%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
-        call abinitio3D_stream%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
-        &logical threads in a socket.', '# shared-memory CPU threads', .false., 0., gui_submenu="compute", gui_advanced=.false.)
-        call abinitio3D_stream%set_input('comp_ctrls', 4, 'maxnruns', 'num', 'Maximum number of concurrent runs',&
-        &'Maximum number of concurrent and independent runs{1}', 'Max # of concurrent runs{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_abinitio3D_stream
 
     subroutine new_analyze_pspecs
         ! PROGRAM SPECIFICATION

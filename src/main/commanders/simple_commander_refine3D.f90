@@ -285,7 +285,7 @@ contains
         l_polar = trim(params%polar).eq.'yes'
         if( l_polar .and. params%l_comlin )then
             call build%build_general_tbox(params, cline, do3d=.true.)
-            call pftcc%new(params%nspace, [1,1], params%kfromto)
+            call pftcc%new(1, [1,1], params%kfromto)
         endif
         ! sanity check
         fall_over = .false.
@@ -533,7 +533,7 @@ contains
             if( L_BENCH_GLOB ) rt_merge_algndocs = toc(t_merge_algndocs)
             if( l_polar )then
                 params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
-                call polar_cavger_new(pftcc, params%nspace)
+                call polar_cavger_new(pftcc, nrefs=params%nspace)
                 call polar_cavger_calc_pops(build%spproj)
                 if( params%l_comlin )then
                     call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
@@ -708,6 +708,7 @@ contains
         call cline%set('endit', real(iter))
         ! end gracefully
         call build%spproj_field%kill
+        call pftcc%kill
         call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D_distr
 

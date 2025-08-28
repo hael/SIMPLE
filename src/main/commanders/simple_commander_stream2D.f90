@@ -41,8 +41,8 @@ integer,               parameter :: PAUSE_TIMELIMIT = 600   ! time (secs) after 
 
 contains
 
-    ! Manages individual chunks/sets classification & rejection
-    ! TODO: handling of un-classified particles & restart
+    ! Manages individual chunks/sets classification, matching & rejection
+    ! TODO: handling of un-classified particles
     subroutine exec_sieve_cavgs( self, cline )
         class(commander_stream_sieve_cavgs), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -55,7 +55,6 @@ contains
         type(oris)                             :: moldiamori, chunksizeori
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
-        type(json_core)                        :: json
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=STDLEN)                  :: chunk_part_env
         real             :: moldiam
@@ -83,12 +82,8 @@ contains
         if( .not.cline%defined('algorithm')    ) call cline%set('algorithm',    'abinitio2D')
         ! write cmdline for GUI
         call cline%writeline(".cline")
-        ! sanity check for restart
-        if( cline%defined('dir_exec') )then
-            if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
-            endif
-        endif      
+        ! restart
+        call cleanup4restart
         ! master parameters
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
@@ -97,11 +92,6 @@ contains
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
         call nice_communicator%cycle()
-        ! restart
-        if( cline%defined('dir_exec') )then
-            call cline%delete('dir_exec')
-            call cleanup_root_folder
-        endif
         ! mskdiam
         if( .not. cline%defined('mskdiam') )then
             ! nice communicator status
@@ -370,7 +360,7 @@ contains
                     ! merge chunks project into designated folder
                     ic_start = sets%n*params%nchunksperset + 1
                     ic_end   = ic_start + params%nchunksperset - 1
-                    tmpl     = 'set_'//int2str(sets%n+1)
+                    tmpl     = trim(DIR_SET)//int2str(sets%n+1)
                     call simple_mkdir(tmpl)
                     call merge_chunks(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
                     ! average and stash sigma2
@@ -472,17 +462,44 @@ contains
                 do iset = 1,setslist%n
                     if( setslist%imported(iset) ) cycle
                     if( setslist%processed(iset) )then
-                        destination = trim(DIR_STREAM_COMPLETED)//'set_'//int2str(iset)//trim(METADATA_EXT)
+                        destination = trim(DIR_STREAM_COMPLETED)//trim(DIR_SET)//int2str(iset)//trim(METADATA_EXT)
                         call simple_copy_file(setslist%projfiles(iset), destination)
                         setslist%imported(iset) = .true.
                     endif
                 enddo
             end subroutine flag_complete_sets
 
+            ! Remove previous files from folder to restart
+            subroutine cleanup4restart
+                character(len=STDLEN), allocatable :: folders(:)
+                integer :: i
+                if( .not.cline%defined('dir_exec') )then
+                    ! nothing to do
+                else
+                    if( .not.file_exists(cline%get_carg('dir_exec')) )then
+                        THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+                    endif
+                    call cline%delete('dir_exec')
+                    call del_file(TERM_STREAM)
+                    call del_file(USER_PARAMS2D)
+                    call simple_rmdir(SIGMAS_DIR)
+                    call simple_rmdir(DIR_STREAM_COMPLETED)
+                    folders = simple_list_dirs('.')
+                    if( allocated(folders) )then
+                        do i = 1,size(folders)
+                            if( str_has_substr(folders(i),trim(DIR_CHUNK)).or.&
+                                &str_has_substr(folders(i),trim(DIR_SET)) )then
+                                call simple_rmdir(folders(i))
+                            endif
+                        enddo
+                    endif
+                endif
+            end subroutine cleanup4restart
+
     end subroutine exec_sieve_cavgs
 
     ! Manages Global 2D Clustering
-    ! TODO: handling of un-classified particles & restart
+    ! TODO: handling of un-classified particles
     subroutine exec_stream_abinitio2D( self, cline )
         class(commander_stream_abinitio2D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -490,11 +507,8 @@ contains
         type(parameters)                       :: params
         type(simple_nice_communicator)         :: nice_communicator
         type(projs_list)                       :: setslist
-        type(guistats)                         :: gui_stats
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
-        type(json_core)                        :: json
-        type(json_value),          pointer     :: snapshot_json => null()
         character(len=LONGSTRLEN), allocatable :: projects(:)
         integer(kind=dp) :: time_last_import, time_last_iter
         integer :: i, iter, nprojects, nimported, nptcls_glob, nsets_imported, pool_iter, iter_last_import
@@ -518,12 +532,8 @@ contains
         if( .not.cline%defined('ncls')       ) call cline%set('ncls',       200)
         ! write cmdline for GUI
         call cline%writeline(".cline")
-        ! sanity check for restart
-        if( cline%defined('dir_exec') )then
-            if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
-            endif
-        endif
+        ! restart
+        call cleanup4restart
         ! master parameters
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
@@ -532,12 +542,6 @@ contains
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
         call nice_communicator%cycle()
-        ! restart
-        if( cline%defined('dir_exec') )then
-            call cline%delete('dir_exec')
-            call del_file(micspproj_fname)
-            call cleanup_root_folder
-        endif
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -592,8 +596,10 @@ contains
             ! pause?
             if( (pool_iter >= iter_last_import+PAUSE_NITERS) .or.&
                 & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
-                l_pause = is_pool_available()
-                if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+                if( .not.l_pause )then
+                    l_pause = is_pool_available()
+                    if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+                endif
             endif
             ! Performs clustering iteration
             if( l_pause )then
@@ -745,6 +751,21 @@ contains
                 deallocate(spprojs)
                 nullify(pool)
             end subroutine import_sets_into_pool
+
+            ! Remove previous files from folder to restart
+            subroutine cleanup4restart
+                if( .not.cline%defined('dir_exec') )then
+                    ! nothing to do
+                else
+                    if( .not.file_exists(cline%get_carg('dir_exec')) )then
+                        THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+                    endif
+                    call cline%delete('dir_exec')
+                    call del_file(micspproj_fname)
+                    call cleanup_root_folder
+                endif
+            end subroutine cleanup4restart
+
 
     end subroutine exec_stream_abinitio2D
 
