@@ -7,7 +7,7 @@ use simple_ctf,               only: ctf
 use simple_image,             only: image, image_ptr
 use simple_stack_io,          only: stack_io
 use simple_discrete_stack_io, only: dstack_io
-use simple_euclid_sigma2
+use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
