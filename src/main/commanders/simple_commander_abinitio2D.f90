@@ -320,22 +320,29 @@ contains
                 endif
                 if( .not. cline%defined('lpstart') ) params%lpstart = lpstart
                 if( .not. cline%defined('lpstop')  ) params%lpstop  = lpstop
-                if( .not. cline%defined('cenlp') )   params%cenlp   = cenlp
             else
-                ! Frequency marching
-                if( .not. cline%defined('lpstart') ) params%lpstart = lpstart
-                if( .not. cline%defined('lpstop')  ) params%lpstop  = lpstop
-                if( .not. cline%defined('cenlp') )   params%cenlp   = cenlp
-                stage_parms(1)%lp      = params%lpstart
-                stage_parms(1)%l_lpset = .true.
-                do istage = 2, NSTAGES-1
-                    stage_parms(istage)%lp      = stage_parms(istage-1)%lp - (stage_parms(istage-1)%lp - params%lpstop)/2.0
-                    stage_parms(istage)%l_lpset = .true.
-                end do
-                stage_parms(NSTAGES-1)%lp    = params%lpstop
-                stage_parms(NSTAGES)%l_lpset = .false.
-                stage_parms(NSTAGES)%lp      = params%lpstop
+                if( cline%defined('lp') )then
+                    ! Set lp throughout
+                    stage_parms(:)%lp      = params%lp
+                    stage_parms(:)%l_lpset = .true.
+                    params%lpstart = params%lp
+                    params%lpstop  = params%lp
+                else
+                    ! Frequency marching
+                    if( .not. cline%defined('lpstart') ) params%lpstart = lpstart
+                    if( .not. cline%defined('lpstop')  ) params%lpstop  = lpstop
+                    stage_parms(1)%lp      = params%lpstart
+                    stage_parms(1)%l_lpset = .true.
+                    do istage = 2, NSTAGES-1
+                        stage_parms(istage)%lp      = stage_parms(istage-1)%lp - (stage_parms(istage-1)%lp - params%lpstop)/2.0
+                        stage_parms(istage)%l_lpset = .true.
+                    end do
+                    stage_parms(NSTAGES-1)%lp    = params%lpstop
+                    stage_parms(NSTAGES)%l_lpset = .false.
+                    stage_parms(NSTAGES)%lp      = params%lpstop
+                endif
             endif
+            if( .not. cline%defined('cenlp') ) params%cenlp   = cenlp
             write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', params%lpstart
             write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', params%lpstop
             write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params%cenlp
@@ -394,6 +401,14 @@ contains
                 ! ICM used for cartesian filtering of random refs
                 params%l_icm    = istage==1
             endif
+            ! objective function
+            if( params%cc_objfun == OBJFUN_CC )then
+                objfun   = 'cc'
+                cc_iters = 999
+            else
+                objfun   = 'euclid'
+                cc_iters = 0
+            endif
             ! iteration number book-keeping
             iter = 0
             if( cline_cluster2D%defined('endit') ) iter = cline_cluster2D%get_iarg('endit')
@@ -447,12 +462,6 @@ contains
                         else
                             refs     = NIL
                         endif
-                        cc_iters     = 0
-                        if( params%cc_objfun == OBJFUN_CC )then
-                            objfun   = 'cc'
-                        else
-                            objfun   = 'euclid'
-                        endif
                         if( params%l_icm )then
                             icm      = 'yes'
                             lambda   = params%lambda
@@ -474,13 +483,6 @@ contains
                         sh_first     = trim(params%sh_first)
                         center       = trim(params%center)
                         refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                        if( params%cc_objfun == OBJFUN_CC )then
-                            objfun   = 'cc'
-                            cc_iters = imaxits
-                        else
-                            objfun   = 'euclid'
-                            cc_iters = 0
-                        endif
                         if( params%l_icm )then
                             icm      = 'yes'
                             lambda   = params%lambda/2.
@@ -502,8 +504,6 @@ contains
                         sh_first     = trim(params%sh_first)
                         center       = trim(params%center)
                         refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                        cc_iters     = 0
-                        objfun       = 'euclid'
                         if( params%l_icm )then
                             icm      = 'yes'
                             lambda   = params%lambda/4.
@@ -525,8 +525,6 @@ contains
                         sh_first     = trim(params%sh_first)
                         center       = trim(params%center)
                         refs         = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
-                        cc_iters     = 0
-                        objfun       = 'euclid'
                         icm          = 'no'
                         gauref       = 'no'
                         if( l_gauref )then
@@ -543,8 +541,6 @@ contains
                     sh_first  = trim(params%sh_first)
                     trs       = stage_parms(istage)%trslim
                     center    = trim(params%center)
-                    cc_iters  = 0
-                    objfun    = 'euclid'
                     extr_iter = params%extr_lim+1
                     refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
                     icm       = 'no'
