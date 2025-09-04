@@ -106,10 +106,10 @@ contains
     end subroutine make_pcavol
 
     ! write tiled jpeg of mrc file
-    subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk)
+    subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles)
         character(len=*),               intent(in)  :: mrcfile, outfile
         real,    optional,              intent(out) :: scale
-        integer, optional,              intent(out) :: ntiles
+        integer, optional,              intent(out) :: ntiles, n_xtiles, n_ytiles
         logical, optional, allocatable, intent(in)  :: msk(:)
         type(image)    :: img, img_pad, img_jpeg
         type(stack_io) :: stkio_r
@@ -155,6 +155,8 @@ contains
         call simple_rename(trim(outfile) // ".tmp", trim(outfile), overwrite=.true.)
         if(present(scale))  scale  = real(JPEG_DIM) / ldim_stk(1)
         if(present(ntiles)) ntiles = l_ntiles
+        if(present(n_xtiles)) n_xtiles = xtiles
+        if(present(n_ytiles)) n_ytiles = ytiles
         call img%kill()
         call img_pad%kill()
         call img_jpeg%kill()

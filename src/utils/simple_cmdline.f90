@@ -167,7 +167,7 @@ contains
         call get_prg_ptr(arg(pos+1:), ptr2prg)
         ! decide wether to print the command line instructions or not
         select case(trim(arg(pos+1:)))
-            case('write_ui_json','print_ui_json','print_ui_latex','print_sym_subgroups')
+            case('write_ui_json','print_ui_json','print_ui_latex','print_sym_subgroups','print_ui_stream')
                 ! no command line arguments
                 return
             case DEFAULT

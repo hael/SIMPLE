@@ -11,7 +11,9 @@ use simple_qsys_funs
 use simple_qsys_env
 use simple_commander_cluster2D_stream
 use simple_moviewatcher
+use simple_stream_communicator
 use simple_progress
+use simple_imgproc
 use simple_nice
 implicit none
 
@@ -50,18 +52,23 @@ contains
         type(parameters)                       :: params
         type(qsys_env)                         :: qenv
         type(simple_nice_communicator)         :: nice_communicator
+        type(stream_http_communicator)         :: http_communicator
         type(projs_list)                       :: chunkslist, setslist
         type(guistats)                         :: gui_stats
         type(oris)                             :: moldiamori, chunksizeori
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
+        type(json_value),          pointer     :: accepted_cls2D, rejected_cls2D
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=STDLEN)                  :: chunk_part_env
+        character(len=:),          allocatable :: selection_jpeg
+        integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:)
         real             :: moldiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
         integer          :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
-        logical          :: l_params_updated
+        integer          :: n_accepted, n_rejected, jpg_ntiles, jpg_nxtiles, jpg_nytiles, xtile, ytile
+        logical          :: l_params_updated, l_wait_for_user, selection_jpeg_created, found
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
@@ -84,14 +91,40 @@ contains
         call cline%writeline(".cline")
         ! restart
         call cleanup4restart
+        ! generate own project file if projfile isnt set
+        if(cline%get_carg('projfile') .eq. '') then 
+            call cline%set('projname', 'sieve_cavgs')
+            call cline%set('projfile', 'sieve_cavgs.simple')
+            call spproj_glob%update_projinfo(cline)
+            call spproj_glob%update_compenv(cline)
+            call spproj_glob%write
+        endif
         ! master parameters
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        selection_jpeg_created = .false.
+        l_wait_for_user        = .false.
+        if(params%interactive == 'yes') l_wait_for_user = .true.
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%init(params%niceprocid, "")
         call nice_communicator%cycle()
+        ! http communicator init
+        call http_communicator%create(params%niceprocid, params%niceserver, "sieve_cavgs")
+        call communicator_init()
+        call http_communicator%send_jobstats()
+        ! wait if dir_target doesn't exist yet
+        if(.not. dir_exists(trim(params%dir_target))) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target))) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
+                    exit
+                endif
+                call sleep(10)
+            end do
+        endif
         ! mskdiam
         if( .not. cline%defined('mskdiam') )then
             ! nice communicator status
@@ -133,7 +166,7 @@ contains
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! project watcher
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
+        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
         ! Infinite loop
         nptcls_glob      = 0       ! global number of particles
@@ -143,17 +176,20 @@ contains
         nprojects        = 0
         iter             = 0       ! global number of infinite loop iterations
         n_failed_jobs    = 0
+        n_accepted       = 0       ! global number of accepted particles
+        n_rejected       = 0       ! global number of rejected particles
         time_last_import = huge(time_last_import)   ! used for flushing unprocessed particles
         ! guistats init
-        call gui_stats%init(.true.)
-        call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
-        call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
+        !call gui_stats%init(.true.)
+        !call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
+        !call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
         ! Joe: nparts is not an input, also see project_buff below
-        call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
+        !all gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! nice
         nice_communicator%stat_root%stage = "importing particles"
         call nice_communicator%update_cls2D(particles_imported=0)
         call nice_communicator%cycle()
+
         do
             ! termination
             if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit ) exit
@@ -168,6 +204,10 @@ contains
                 call EXIT(0)
             endif
             iter = iter + 1
+            ! http stats
+            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and processing new particles", found)    
+            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  n_accepted,                             found)
+            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  n_rejected,                             found)
             ! detection of new projects
             call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
             ! update global records
@@ -180,11 +220,14 @@ contains
                 n_imported = size(projrecords)
                 write(logfhandle,'(A,I6,I8)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ',n_imported, nptcls_glob
                 ! guistats
-                call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
-                call gui_stats%set_now('particles', 'last_particles_imported')
-                call nice_communicator%update_cls2D(particles_imported=nptcls_glob, last_particles_imported=.true.)
+            !    call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
+             !   call gui_stats%set_now('particles', 'last_particles_imported')
+             !   call nice_communicator%update_cls2D(particles_imported=nptcls_glob, last_particles_imported=.true.)
                 ! update progress monitor
-                call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
+              !  call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
+                ! http stats
+                call http_communicator%json%update(http_communicator%job_json, "particles_imported",       nptcls_glob,      found)
+                call http_communicator%json%update(http_communicator%job_json, "last_particles_imported",  stream_datestr(), found)
                 time_last_import = time8()
                 if( n_imported < 1000 )then
                     call update_user_params(cline)
@@ -207,13 +250,49 @@ contains
             endif
             ! Sets analysis section
             if( setslist%n > 0 )then
-                if( setslist%processed(1) .and. (setslist%n > 1) )then
+                if( setslist%processed(1) .and. (setslist%n > 1) .and. .not. l_wait_for_user) then
                     ! all sets but the first employ match_cavgs
                     do i = 2,setslist%n
                         call is_set_processed(i)
                     enddo
                     call submit_match_cavgs
                 else
+                    if(l_wait_for_user .and. setslist%processed(1)) then
+                        call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
+                        if(.not. selection_jpeg_created) then
+                            call generate_selection_jpeg()
+                            xtile = 0
+                            ytile = 0
+                            call http_communicator%json%remove(accepted_cls2D, destroy=.true.)
+                            call http_communicator%json%create_array(accepted_cls2D, "accepted_cls2D")
+                            call http_communicator%json%add(http_communicator%job_json, accepted_cls2D)
+                            call http_communicator%json%remove(rejected_cls2D, destroy=.true.)
+                            call http_communicator%json%create_array(rejected_cls2D, "rejected_cls2D")
+                            call http_communicator%json%add(http_communicator%job_json, rejected_cls2D)
+                            if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
+                                do i=0, jpg_ntiles - 1
+                                    if(any( accepted_cls_ids == i + 1)) then
+                                        call communicator_add_cls2D_accepted(selection_jpeg, i + 1, xtile * (100 / (jpg_nxtiles - 1)), ytile * (100 / (jpg_nytiles - 1)), 100 * jpg_nytiles, 100 * jpg_nxtiles)
+                                    else if(any( rejected_cls_ids == i + 1)) then
+                                        call communicator_add_cls2D_rejected(selection_jpeg, i + 1, xtile * (100 / (jpg_nxtiles - 1)), ytile * (100 / (jpg_nytiles - 1)), 100 * jpg_nytiles, 100 * jpg_nxtiles)                              
+                                    endif
+                                    xtile = xtile + 1
+                                    if(xtile .eq. jpg_nxtiles) then
+                                        xtile = 0
+                                        ytile = ytile + 1
+                                    endif
+                                end do
+                            endif
+                        endif
+                        call http_communicator%json%get(http_communicator%update_arguments, 'accepted_cls2D', accepted_cls2D, found)
+                        if(found) then
+                            call http_communicator%json%get(http_communicator%update_arguments, 'rejected_cls2D', rejected_cls2D, found)
+                            if(found) then
+                                call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
+                                l_wait_for_user = .false.
+                            endif
+                        endif
+                    endif
                     ! first set uses cluster_cavgs
                     call is_set_processed(1)
                     call submit_cluster_cavgs
@@ -224,14 +303,13 @@ contains
             ! 2D analyses
             call analyze2D_new_chunks(projrecords)
             call sleep(WAITTIME)
-            ! guistats
-            call gui_stats%write_json
             ! nice
             if(get_nchunks() > 0) then
                 nice_communicator%stat_root%stage = "classifying chunks"
                 nice_communicator%stat_root%user_input = .false.
             end if
-            call nice_communicator%cycle()
+            ! http stats send
+            call http_communicator%send_jobstats()
         end do
         ! termination
         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
@@ -457,17 +535,37 @@ contains
 
             ! make completed project files visible to the watcher of the next application
             subroutine flag_complete_sets
+                type(sp_project)              :: spproj_imported
                 character(len=:), allocatable :: destination
-                integer :: iset
+                integer :: iset, n_state_nonzero
                 do iset = 1,setslist%n
                     if( setslist%imported(iset) ) cycle
                     if( setslist%processed(iset) )then
                         destination = trim(DIR_STREAM_COMPLETED)//trim(DIR_SET)//int2str(iset)//trim(METADATA_EXT)
                         call simple_copy_file(setslist%projfiles(iset), destination)
                         setslist%imported(iset) = .true.
+                        ! update particle counts
+                        call spproj_imported%read_segment("ptcl2D", destination)
+                        n_state_nonzero = spproj_imported%os_ptcl2D%count_state_gt_zero()
+                        n_accepted = n_accepted + n_state_nonzero
+                        n_rejected = n_rejected + spproj_imported%os_ptcl2D%get_noris() - n_state_nonzero 
+                        call spproj_imported%kill()
                     endif
                 enddo
             end subroutine flag_complete_sets
+            
+            subroutine communicator_init()
+                call http_communicator%json%add(http_communicator%job_json, "stage",                   "initialising")
+                call http_communicator%json%add(http_communicator%job_json, "particles_imported ",     0)
+                call http_communicator%json%add(http_communicator%job_json, "particles_accepted",      0)
+                call http_communicator%json%add(http_communicator%job_json, "particles_rejected",      0)
+                call http_communicator%json%add(http_communicator%job_json, "user_input",              .false.)
+                call http_communicator%json%add(http_communicator%job_json, "last_particles_imported", "")
+                call http_communicator%json%create_array(accepted_cls2D, "accepted_cls2D")
+                call http_communicator%json%add(http_communicator%job_json, accepted_cls2D)
+                call http_communicator%json%create_array(rejected_cls2D, "rejected_cls2D")
+                call http_communicator%json%add(http_communicator%job_json, rejected_cls2D)
+            end subroutine communicator_init
 
             ! Remove previous files from folder to restart
             subroutine cleanup4restart
@@ -495,6 +593,58 @@ contains
                     endif
                 endif
             end subroutine cleanup4restart
+
+            subroutine generate_selection_jpeg()
+                type(sp_project)              :: set1_proj
+                integer                       :: ncls, icls
+                real                          :: smpd
+                call set1_proj%read_segment('cls2D', setslist%projfiles(i))
+                call set1_proj%read_segment('out',   setslist%projfiles(i))
+                call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd)
+                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
+                allocate(accepted_cls_ids(0))
+                allocate(rejected_cls_ids(0))
+                do icls=1, set1_proj%os_cls2D%get_noris()
+                    if(set1_proj%os_cls2D%isthere(icls, 'accept')) then
+                        if(set1_proj%os_cls2D%get(icls, 'accept') .gt. 0.0) then
+                            accepted_cls_ids = [accepted_cls_ids, icls]
+                        else
+                            rejected_cls_ids = [rejected_cls_ids, icls]
+                        endif
+                    endif
+                enddo
+                call set1_proj%kill()
+                selection_jpeg_created = .true.
+                selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
+            end subroutine generate_selection_jpeg
+
+            subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew)
+                character(*),     intent(in)  :: path
+                integer,          intent(in)  :: spritex, spritey, spriteh, spritew, idx
+                type(json_value), pointer     :: template
+                call http_communicator%json%create_object(template, "")
+                call http_communicator%json%add(template, "path",    path)
+                call http_communicator%json%add(template, "spritex", spritex)
+                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spriteh", spriteh)
+                call http_communicator%json%add(template, "spritew", spritew)
+                call http_communicator%json%add(template, "idx",     idx)
+                call http_communicator%json%add(accepted_cls2D,      template)
+            end subroutine communicator_add_cls2D_accepted
+
+            subroutine communicator_add_cls2D_rejected(path, idx, spritex, spritey, spriteh, spritew)
+                character(*),     intent(in)  :: path
+                integer,          intent(in)  :: spritex, spritey, spriteh, spritew, idx
+                type(json_value), pointer     :: template
+                call http_communicator%json%create_object(template, "")
+                call http_communicator%json%add(template, "path",    path)
+                call http_communicator%json%add(template, "spritex", spritex)
+                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spriteh", spriteh)
+                call http_communicator%json%add(template, "spritew", spritew)
+                call http_communicator%json%add(template, "idx",     idx)
+                call http_communicator%json%add(rejected_cls2D,      template)
+            end subroutine communicator_add_cls2D_rejected
 
     end subroutine exec_sieve_cavgs
 
@@ -548,7 +698,7 @@ contains
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! project watcher
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
+        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         ! Infinite loop
         iter             = 0
         nprojects        = 0        ! # of projects per iteration

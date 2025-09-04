@@ -12,7 +12,7 @@ public :: exec_gaupick, exec_segpick
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, BOX_EXP_FAC = 0.667
+real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, BOX_EXP_FAC = 1.0
 integer, parameter :: OFFSET       = 3
 logical, parameter :: L_WRITE      = .false.
 logical, parameter :: L_DEBUG      = .false.

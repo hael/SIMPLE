@@ -2,7 +2,7 @@
 program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_ui_latex
+use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_ui_latex, print_stream_ui_json
 use simple_private_prgs,   only: make_private_user_interface
 use simple_symanalyzer,    only: print_subgroups
 use simple_commander_project
@@ -127,6 +127,8 @@ select case(prg)
         call print_ui_latex
     case( 'print_sym_subgroups' )
         call print_subgroups
+    case( 'print_ui_stream' )
+        call print_stream_ui_json
 
     ! PRE-PROCESSING PROGRAMS
     case( 'preprocess' )

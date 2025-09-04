@@ -7,6 +7,8 @@ use simple_parameters,     only: params_glob
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
+use simple_stack_io,       only: stack_io
+use simple_imgproc,        only: mrc2jpeg_tiled
 use simple_qsys_funs
 use simple_commander_cluster2D
 use simple_progress
@@ -17,7 +19,8 @@ implicit none
 public :: stream_chunk, merge_chunks, update_user_params
 public :: projs_list
 public :: projrecord, projrecords2proj, kill_projrecords, class_rejection
-public :: procrecord, append_procrecord, kill_procrecords
+public :: procrecord, append_procrecord, kill_procrecords, stream_datestr
+public :: write_selected_references
 private
 #include "simple_local_flags.inc"
 
@@ -1251,5 +1254,47 @@ contains
         deallocate(msk)
         if(allocated(vals) ) deallocate(vals, x)
     end subroutine class_rejection
+
+    function stream_datestr() 
+        character(8)  :: date
+        character(10) :: time
+        character(5)  :: zone
+        character(16) :: stream_datestr
+        integer,dimension(8) :: values
+        ! using keyword arguments
+        call date_and_time(date,time,zone,values)
+        call date_and_time(DATE=date,ZONE=zone)
+        call date_and_time(TIME=time)
+        call date_and_time(VALUES=values)
+        write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
+    end function stream_datestr
+
+    subroutine write_selected_references(imgfile, selection, nxtiles, nytiles)
+        integer, allocatable, intent(in)    :: selection(:)
+        character(*),         intent(in)    :: imgfile
+        integer,              intent(inout) :: nxtiles, nytiles
+        type(image)                         :: img
+        type(stack_io)                      :: stkio_r, stkio_w
+        integer                             :: ldim(3) = [0,0,0]
+        integer                             :: icls, stat, ncls
+        real                                :: smpd, tilescale
+            if(size(selection) == 0) return
+            write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', size(selection),' clusters'
+            write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
+            call find_ldim_nptcls(imgfile, ldim, ncls, smpd=smpd)
+            call img%new([ldim(1), ldim(2), 1], smpd)
+            call stkio_r%open(imgfile, smpd, 'read', bufsz=ncls)
+            call stkio_r%read_whole
+            call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=ldim(1), bufsz=size(selection))
+            do icls=1, size(selection)
+                call stkio_r%get_image(selection(icls), img)
+                call stkio_w%write(icls, img)
+            end do
+            call stkio_r%close
+            call stkio_w%close
+            ! write jpeg
+            call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
+            call img%kill
+    end subroutine write_selected_references
 
 end module simple_stream_utils
