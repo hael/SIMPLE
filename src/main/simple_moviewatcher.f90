@@ -58,11 +58,12 @@ integer, parameter :: FAIL_TIME   = 7200 ! 2 hours
 contains
 
     !>  \brief  is a constructor
-    function constructor( report_time, dir, spproj, checkpoint_dir )result( self )
+    function constructor( report_time, dir, spproj, checkpoint_dir, nretries )result( self )
         integer,                    intent(in) :: report_time  ! in seconds
         character(len=*),           intent(in) :: dir
         logical,          optional, intent(in) :: spproj
         character(len=*), optional, intent(in) :: checkpoint_dir
+        integer,          optional, intent(in) :: nretries
         type(moviewatcher)                     :: self
         character(len=LONGSTRLEN), allocatable :: strings(:)
         integer :: i
@@ -111,6 +112,14 @@ contains
 #endif
         else
             ! watching simple projects
+            if(present(nretries)) then
+                do i=1, nretries
+                    if(file_exists(self%watch_dir)) then
+                        exit
+                    endif
+                    call sleep(10)
+                end do
+            endif
             if( .not.file_exists(self%watch_dir) )then
                 THROW_HARD('Directory does not exist: '//trim(self%watch_dir))
             else

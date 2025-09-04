@@ -4,6 +4,7 @@ implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
 public :: print_ui_json, write_ui_json, print_ui_latex, list_single_prgs_in_ui, list_stream_prgs_in_ui
+public :: print_stream_ui_json
 private
 #include "simple_local_flags.inc"
 
@@ -169,6 +170,7 @@ type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
+type(simple_program), target :: print_ui_stream
 type(simple_program), target :: projops
 type(simple_program), target :: prune_project
 type(simple_program), target :: score_ptcls
@@ -6431,6 +6433,13 @@ contains
                 allocate(arr(i)%descr_long,        source=trim(param%descr_long))
                 allocate(arr(i)%descr_placeholder, source=trim(param%descr_placeholder))
                 arr(i)%required = param%required
+                if( .not. arr(i)%required ) then
+                    if(arr(i)%keytype == "num") then
+                        arr(i)%rval_default = param%rval_default
+                    else if(allocated(param%cval_default)) then
+                       allocate(arr(i)%cval_default, source=trim(param%cval_default))
+                    endif
+                endif
                 ! GUI options
                 if( present(gui_submenu) ) then
                     allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
@@ -6632,7 +6641,7 @@ contains
     subroutine print_ui_json
         use json_module
         type(json_core)           :: json
-        type(json_value), pointer :: program_entry, program, all_programs
+        type(json_value), pointer :: program_entry, program, all_programs  
         integer :: iprg
         ! JSON init
         call json%initialize()
@@ -6661,7 +6670,7 @@ contains
                 call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short)
                 call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long)
                 call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable)
-                call json%add(program, 'advanced', prg_ptr_array(iprg)%ptr2prg%advanced)
+                call json%add(program, 'advanced',    prg_ptr_array(iprg)%ptr2prg%advanced)
                 if( allocated(prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)) then
                     call json%add(program, 'gui_submenu_list', prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)
                 endif
@@ -6702,6 +6711,13 @@ contains
                         endif
                         if( allocated(arr(i)%active_flags) ) then
                             call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
+                        endif
+                        if(trim(arr(i)%keytype) == "num") then
+                            call json%add(entry, 'default', dble(arr(i)%rval_default))
+                        else if( allocated(arr(i)%cval_default) ) then
+                            call json%add(entry, 'default', trim(arr(i)%cval_default))
+                        else
+                            call json%add(entry, 'default', "unknown")
                         endif
                         call json%add(entry, 'advanced', arr(i)%advanced)
                         call json%add(entry, 'online', arr(i)%online)
@@ -6832,6 +6848,225 @@ contains
             end subroutine create_section
 
     end subroutine write_ui_json
+
+    subroutine print_stream_ui_json
+        ! this is ugly at the moment but paves the way ....
+        use json_module
+        type(json_core)           :: json
+        type(json_value), pointer :: input, user_inputs, ui, options, option
+        type(json_value), pointer :: processes, process, process_inputs
+        integer :: iprg
+        ! JSON init
+        call json%initialize()
+        ! create object of program entries
+        call json%create_object(ui, 'STREAM_UI')
+        ! master inputs
+        call json%create_array(user_inputs, 'user_inputs')
+        call json%add(ui, user_inputs)
+        !! dir_movies
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'dir_movies')
+        call json%add(input, 'keytype',     'dir')
+        call json%add(input, 'descr_short', 'Input movies directory')
+        call json%add(input, 'descr_long',  'Input movies directory')
+        call json%add(input, 'required',    .TRUE.)
+        !! dir_meta
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'dir_meta')
+        call json%add(input, 'keytype',     'dir')
+        call json%add(input, 'descr_short', 'Input metadata directory')
+        call json%add(input, 'descr_long',  'Input metadata directory')
+        call json%add(input, 'required',    .FALSE.)
+        !! gainref
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'gainref')
+        call json%add(input, 'keytype',     'file')
+        call json%add(input, 'descr_short', 'Gain reference')
+        call json%add(input, 'descr_long',  'Gain reference')
+        call json%add(input, 'required',    .FALSE.)
+        !! cs
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'cs')
+        call json%add(input, 'keytype',     'float')
+        call json%add(input, 'descr_short', 'Spherical aberration (mm)')
+        call json%add(input, 'descr_long',  'Spherical aberration (mm)')
+        call json%add(input, 'required',    .TRUE.)
+        call json%add(input, 'default',     '2.7')
+        !! fraca
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'fraca')
+        call json%add(input, 'keytype',     'float')
+        call json%add(input, 'descr_short', 'Amplitude contrast fraction')
+        call json%add(input, 'descr_long',  'Amplitude contrast fraction')
+        call json%add(input, 'required',    .TRUE.)
+        call json%add(input, 'default',     '0.1')
+        !! kv
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'kv')
+        call json%add(input, 'keytype',     'int')
+        call json%add(input, 'descr_short', 'Acceleration voltage (kV)')
+        call json%add(input, 'descr_long',  'Acceleration voltage (kV)')
+        call json%add(input, 'required',    .TRUE.)
+        call json%add(input, 'default',     '300')
+        !! smpd
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'smpd')
+        call json%add(input, 'keytype',     'float')
+        call json%add(input, 'descr_short', 'pixel size (A)')
+        call json%add(input, 'descr_long',  'pixel size (A)')
+        call json%add(input, 'required',    .TRUE.)
+        !! scale
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'scale')
+        call json%add(input, 'keytype',     'multi')
+        call json%add(input, 'descr_short', 'Down-scaling factor')
+        call json%add(input, 'descr_long',  'Down-scaling factor')
+        call json%add(input, 'required',    .TRUE.)
+        call json%create_array(options, 'options')
+        call json%add(input, options)
+        call json%create_object(option, 'option')
+        call json%add(options, option)
+        call json%add(option, 'key',     '1X')
+        call json%add(option, 'val',     '1.0')
+        call json%add(option, 'default', .TRUE.)
+        call json%create_object(option, 'option')
+        call json%add(options, option)
+        call json%add(option, 'key', '2X')
+        call json%add(option, 'val', '0.5')
+        call json%create_object(option, 'option')
+        call json%add(options, option)
+        call json%add(option, 'key', '4X')
+        call json%add(option, 'val', '0.25')
+        !! total_dose
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'total_dose')
+        call json%add(input, 'keytype',     'float')
+        call json%add(input, 'descr_short', 'Total exposure dose (e/A2)')
+        call json%add(input, 'descr_long',  'Total exposure dose (e/A2)')
+        call json%add(input, 'required',    .TRUE.)
+        !! pickrefs
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'pickrefs')
+        call json%add(input, 'keytype',     'file')
+        call json%add(input, 'descr_short', '2D averages for use as picking references (optional)')
+        call json%add(input, 'descr_long',  '2D averages for use as picking references (optional)')
+        call json%add(input, 'required',    .FALSE.)
+        ! programs
+        call json%create_array(processes, 'processes')
+        call json%add(ui, processes)
+        !! preproc
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'preprocessing') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'preproc')
+        call json%add(process, 'nthr_master', 4)
+        call json%create_array(process_inputs, 'user_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'dir_movies')
+        call json%add(process_inputs, '', 'dir_meta')
+        call json%add(process_inputs, '', 'gainref')
+        call json%add(process_inputs, '', 'cs')
+        call json%add(process_inputs, '', 'fraca')
+        call json%add(process_inputs, '', 'kv')
+        call json%add(process_inputs, '', 'smpd')
+        call json%add(process_inputs, '', 'scale')
+        call json%add(process_inputs, '', 'total_dose')
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'outdir=preprocessing') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nparts=10')
+        call json%add(process_inputs, '', 'nthr=4')
+        !! assign_optics
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'optics_assignment') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'assign_optics')
+        call json%add(process, 'nthr_master', 4)
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'dir_target=preprocessing')
+        call json%add(process_inputs, '', 'outdir=optics_assignment') !important - directory names and name must match between processes
+        !! initial_picking
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'initial_picking') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'pick_extract')
+        call json%add(process, 'nthr_master', 4)
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'moldiam=100')
+        call json%add(process_inputs, '', 'moldiam_max=500')
+        call json%add(process_inputs, '', 'nmoldiams=5')
+        call json%add(process_inputs, '', 'ninit=10')
+        call json%add(process_inputs, '', 'ring=no')
+        call json%add(process_inputs, '', 'interactive=yes')
+        call json%add(process_inputs, '', 'dir_target=preprocessing')
+        call json%add(process_inputs, '', 'outdir=initial_picking') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nparts=10')
+        call json%add(process_inputs, '', 'nthr=4')
+        !! gen_picking_refs
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'generate_picking_refs') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'gen_picking_refs')
+        call json%add(process, 'nthr_master', 4)
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'dir_target=initial_picking')
+        call json%add(process_inputs, '', 'outdir=generate_picking_refs') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nparts=10')
+        call json%add(process_inputs, '', 'nthr=4')
+        call json%add(process_inputs, '', 'nthr2D=8')
+        !! reference_based_picking
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'reference_based_picking') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'pick_extract')
+        call json%add(process, 'nthr_master', 4)
+        call json%create_array(process_inputs, 'user_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'pickrefs')
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'dir_target=preprocessing')
+        call json%add(process_inputs, '', 'outdir=reference_based_picking') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nparts=10')
+        call json%add(process_inputs, '', 'nthr=4')
+        !! particle_sieving
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'particle_sieving') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'sieve_cavgs')
+        call json%add(process, 'nthr_master', 4)
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'dir_target=reference_based_picking')
+        call json%add(process_inputs, '', 'outdir=particle_sieving') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'ncls_start=50')
+        call json%add(process_inputs, '', 'nptcls_per_cls=35')
+        call json%add(process_inputs, '', 'interactive=yes')
+        call json%add(process_inputs, '', 'nchunks=5')
+        call json%add(process_inputs, '', 'nparts=10')
+        call json%add(process_inputs, '', 'nthr=4')
+        ! print & clean
+        call json%print(ui, logfhandle)
+        if( json%failed() )then
+            write(logfhandle,*) 'json input/output error for simple_user_interface'
+            stop
+        endif
+        call json%destroy(ui)
+
+    end subroutine print_stream_ui_json
 
     subroutine write2json( self )
         use json_module

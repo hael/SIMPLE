@@ -30,10 +30,10 @@ public :: import_records_into_pool, analyze2D_pool, iterate_pool, update_pool_st
 public :: reject_from_pool, reject_from_pool_user, write_pool_cls_selected_user
 public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
 public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected, get_pool_ptr
-public :: get_pool_n_classes, get_pool_n_classes_rejected, get_pool_iter_time, get_pool_cavgs_jpeg
+public :: get_pool_n_classes, get_pool_n_classes_rejected, get_pool_iter_time, get_pool_cavgs_jpeg, get_pool_cavgs_mrc
 public :: get_pool_res, get_pool_cavgs_pop, get_pool_cavgs_res, get_pool_cavgs_res_at
-public :: get_pool_cavgs_mask, get_pool_cavgs_jpeg_ntiles
-public :: write_pool_cls_selected_nice, generate_pool_jpeg, get_pool_cavgs_jpeg_scale, get_nchunks, get_boxa
+public :: get_pool_cavgs_mask, get_pool_cavgs_jpeg_ntiles, get_pool_cavgs_jpeg_ntilesx, get_pool_cavgs_jpeg_ntilesy
+public :: generate_pool_jpeg, get_pool_cavgs_jpeg_scale, get_nchunks, get_boxa, get_box
 public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_rejected_jpeg_scale, get_pool_rejected_thumbnail_id
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
 public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_snapshot_json, get_lpthres_type, set_lpthres_type
@@ -121,6 +121,7 @@ integer                          :: snapshot_iteration = 0            ! iteratio
 integer,             allocatable :: snapshot_selection(:)             ! selection for generating snapshots
 integer,             allocatable :: prune_selection(:)                ! selection for pruning classes on the fly
 integer,             allocatable :: repick_selection(:)               ! selection for selecting classes for re-picking
+integer,             public, allocatable :: pool_jpeg_map(:)                  ! map jpeg classes to sp_cls2D indices
 logical                          :: stream2D_active   = .false.       ! initiation flag
 type(json_value),   pointer      :: snapshot_json 
 ! GUI-related
@@ -132,7 +133,8 @@ character(16)                    :: last_iteration_time = "", last_snapshot = ""
 character(6)                     :: lpthres_type = ""
 ! other
 real     :: smpd, scale_factor, lpstart, lpstop, lpcen, current_jpeg_scale, pool_rejected_jpeg_scale=0.0, chunk_rejected_jpeg_scale=0.0
-integer  :: box, boxpd, max_ncls, nptcls_per_chunk, nmics_last, numlen, current_jpeg_ntiles, pool_rejected_thumbnail_id, pool_rejected_jpeg_ntiles=0, chunk_rejected_thumbnail_id, chunk_rejected_jpeg_ntiles=0
+integer  :: box, boxpd, max_ncls, nptcls_per_chunk, nmics_last, numlen, pool_rejected_thumbnail_id, pool_rejected_jpeg_ntiles=0, chunk_rejected_thumbnail_id, chunk_rejected_jpeg_ntiles=0
+integer  :: current_jpeg_ntiles, current_jpeg_ntilesx, current_jpeg_ntilesy
 logical  :: l_wfilt                     ! flags partial wiener restoration
 logical  :: l_scaling                   ! flags downscaling
 logical  :: l_update_sigmas = .false.   ! flags objective function (cc/euclid)
@@ -2316,36 +2318,6 @@ contains
         if(allocated(cls_mask)) deallocate(cls_mask)
     end subroutine write_pool_cls_selected_user
 
-   ! GUI class selection/reporting from nice, only used in gen_picking_refs 
-    subroutine write_pool_cls_selected_nice(final_selection)
-        integer, allocatable, intent(in) :: final_selection(:)
-        type(image)                      :: img
-        type(stack_io)                   :: stkio_r, stkio_w
-        integer :: icls, isel
-        if(allocated(final_selection)) then
-            write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ',size(final_selection),' clusters'
-            if(size(final_selection) == 0) return
-            write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', trim(POOL_DIR) // STREAM_SELECTED_REFS//STK_EXT, trim(refs_glob)
-            call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
-            call stkio_r%open(trim(refs_glob), params_glob%smpd, 'read', bufsz=ncls_glob)
-            call stkio_r%read_whole
-            call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, params_glob%smpd, 'write', box=params_glob%box, bufsz=size(final_selection))
-            call pool_proj%os_cls2D%set_all2single('state', 0.0)
-            isel = 1
-            do icls=1, size(final_selection)
-                call pool_proj%os_cls2D%set(final_selection(icls), 'state', 1.0)
-                call stkio_r%get_image(final_selection(icls), img)
-                call stkio_w%write(isel, img)
-                isel = isel + 1
-            end do
-            call stkio_r%close
-            call stkio_w%close
-            ! write jpeg
-            call generate_pool_jpeg(STREAM_SELECTED_REFS//JPG_EXT)
-            call img%kill
-        end if
-    end subroutine write_pool_cls_selected_nice
-
     ! write jpeg of refs_glob    
     subroutine generate_pool_jpeg(filename)
         character(len=*), optional, intent(in) :: filename
@@ -2363,6 +2335,8 @@ contains
         end if
         if(.not. file_exists(trim(refs_glob))) return
         if(file_exists(trim(jpeg_path)))       return
+        if(allocated(pool_jpeg_map)) deallocate(pool_jpeg_map)
+        allocate(pool_jpeg_map(0))
         call find_ldim_nptcls(trim(refs_glob), ldim_stk, ncls_here)
         if(ncls_here .ne. pool_proj%os_cls2D%get_noris()) THROW_HARD('ncls and n_noris mismatch')
         xtiles = floor(sqrt(real(ncls_glob)))
@@ -2378,6 +2352,7 @@ contains
         do icls=1, ncls_here
             if(pool_proj%os_cls2D%get(icls,'state') < 0.5) cycle
             if(pool_proj%os_cls2D%get(icls,'pop')   < 0.5) cycle
+            pool_jpeg_map = [pool_jpeg_map, icls]
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
             call img%fft
@@ -2398,7 +2373,9 @@ contains
         call stkio_r%close()
         call img_jpeg%write_jpg(trim(jpeg_path))
         current_jpeg = trim(adjustl(cwd)) // '/' // trim(jpeg_path)
-        current_jpeg_ntiles = ntiles
+        current_jpeg_ntiles  = ntiles
+        current_jpeg_ntilesx = xtiles
+        current_jpeg_ntilesy = ytiles
         current_jpeg_scale = real(JPEG_DIM) / real(params_glob%box)
         call img%kill()
         call img_pad%kill()
@@ -2585,6 +2562,10 @@ contains
         get_pool_cavgs_jpeg = current_jpeg
     end function get_pool_cavgs_jpeg
 
+    character(len=LONGSTRLEN) function get_pool_cavgs_mrc()
+        get_pool_cavgs_mrc = refs_glob
+    end function get_pool_cavgs_mrc
+
     character(len=LONGSTRLEN) function get_pool_rejected_jpeg()
         get_pool_rejected_jpeg = pool_rejected_jpeg
     end function get_pool_rejected_jpeg
@@ -2596,6 +2577,14 @@ contains
     integer function get_pool_cavgs_jpeg_ntiles()
         get_pool_cavgs_jpeg_ntiles = current_jpeg_ntiles
     end function get_pool_cavgs_jpeg_ntiles
+
+    integer function get_pool_cavgs_jpeg_ntilesx()
+        get_pool_cavgs_jpeg_ntilesx = current_jpeg_ntilesx
+    end function get_pool_cavgs_jpeg_ntilesx
+
+    integer function get_pool_cavgs_jpeg_ntilesy()
+        get_pool_cavgs_jpeg_ntilesy = current_jpeg_ntilesy
+    end function get_pool_cavgs_jpeg_ntilesy
 
     integer function get_pool_rejected_jpeg_ntiles()
         get_pool_rejected_jpeg_ntiles = pool_rejected_jpeg_ntiles
@@ -2628,6 +2617,10 @@ contains
             get_boxa = 0
         end if
     end function get_boxa
+
+    integer function get_box()
+        get_box = int(pool_proj%get_box())
+    end function get_box
 
     integer function get_last_snapshot_id()
         get_last_snapshot_id = snapshot_complete_jobid
