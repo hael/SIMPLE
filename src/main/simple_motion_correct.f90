@@ -189,21 +189,21 @@ contains
             endif
         endif
         if( L_BENCH )then
-            rt_read = 0.
-            rt_cure = 0.
-            rt_forctf = 0.
-            rt_mic = 0.
-            rt_fft_clip = 0.
-            rt_patched = 0.
-            rt_patched_forctf = 0.
-            rt_patched_mic = 0.
-            rt_aniso_align = 0.
-            rt_correct_iso_init = 0.
+            rt_read                  = 0.
+            rt_cure                  = 0.
+            rt_forctf                = 0.
+            rt_mic                   = 0.
+            rt_fft_clip              = 0.
+            rt_patched               = 0.
+            rt_patched_forctf        = 0.
+            rt_patched_mic           = 0.
+            rt_aniso_align           = 0.
+            rt_correct_iso_init      = 0.
             rt_correct_iso_transfmat = 0.
-            rt_correct_iso_align = 0.
-            rt_dose = 0.
-            rt_new = 0.
-            rt_align_poly = 0.
+            rt_correct_iso_align     = 0.
+            rt_dose                  = 0.
+            rt_new                   = 0.
+            rt_align_poly            = 0.
         endif
         ! allocate & read frames
         if( l_eer )then
