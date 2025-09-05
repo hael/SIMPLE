@@ -37,7 +37,7 @@ type :: opt_spec
     integer                   :: npop=0                               !< population size (4 evolutionary optimizers)
     integer                   :: nnn=0                                !< number of nearest neighbors
     integer                   :: peakcnt=0                            !< peak counter
-    integer                   :: lbfgsb_m                             !< m-parameter for lbfgsb algorithm (default: 15)
+    integer                   :: lbfgsb_m=15                          !< m-parameter for lbfgsb algorithm (default: 15)
     logical, allocatable      :: cyclic(:)                            !< to indicate which variables are cyclic (Euler angles)
     real, allocatable         :: limits(:,:)                          !< variable bounds
     real, allocatable         :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)

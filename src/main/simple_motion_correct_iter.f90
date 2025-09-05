@@ -56,7 +56,7 @@ contains
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
         endif
         ! sanity check
-        if( fname2format(self%moviename) .eq. 'K' )then
+        if( fname2format(moviename) .eq. 'K' )then
             ! eer movie
             if( (.not.params_glob%l_dose_weight) .and. (.not.cline%defined('eer_fraction')) )then
                 THROW_HARD('eer_fraction must be defined!')
@@ -202,9 +202,12 @@ contains
         else
             call self%pspec_half_n_half%scale_pspec4viz
         endif
+        call self%pspec_sum%kill
+        call self%pspec_ctf%kill
         ! write output
         call self%moviesum_corrected%write(self%moviename_intg)
         if( .not. l_tseries ) call self%moviesum_ctf%write(self%moviename_forctf)
+        call self%moviesum_ctf%kill
         ! generate thumbnail
         ldim  = self%moviesum_corrected%get_ldim()
         scale = real(GUI_PSPECSZ)/maxval(ldim(1:2))
@@ -217,9 +220,13 @@ contains
         call self%moviesum_corrected%fft()
         call self%moviesum_corrected%clip(self%thumbnail)
         call self%thumbnail%ifft()
+        call self%moviesum_corrected%kill
         ! jpeg output
         call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
         call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=92)
+        call self%pspec_half_n_half%kill
+        call self%thumbnail%kill
+        call self%img_jpg%kill
         ! report to ori object
         if( .not. l_tseries )then
             call orientation%set('movie',       simple_abspath(self%moviename))

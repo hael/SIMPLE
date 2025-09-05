@@ -84,7 +84,8 @@ contains
         ! generate optimizer object with the factory
         if( associated(self%opt_obj) )then
             call self%opt_obj%kill
-            deallocate(self%opt_obj)
+            deallocate(self%opt_obj) ! because this extended type is allocated by opt_factory
+            nullify(self%opt_obj)
         end if
         call ofac%new(self%ospec, self%opt_obj)
         self%existence = .true.
@@ -131,6 +132,7 @@ contains
             call self%ospec%kill
             if( associated( self%opt_obj ) )then
                 call self%opt_obj%kill
+                deallocate(self%opt_obj)
                 nullify(self%opt_obj)
             end if
             if ( associated( self%reference ) ) self%reference => null()

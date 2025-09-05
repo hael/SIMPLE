@@ -188,6 +188,7 @@ contains
             end do
             !$omp end parallel do
         enddo
+        nullify(rmatin,rmatout)
         contains
 
         pure real function interp_bilin( xval, yval )

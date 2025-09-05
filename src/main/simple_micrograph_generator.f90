@@ -836,7 +836,7 @@ contains
                     return
                 endif
             else
-                pos_outliers_here = pos_outliers
+                allocate(pos_outliers_here, source=pos_outliers)
             endif
             allocate(new_vals(noutliers,self%fromtof(1):self%fromtof(2)),vals(nvals))
             ave  = ave / real(n_eff_frames)

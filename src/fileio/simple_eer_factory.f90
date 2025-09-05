@@ -129,7 +129,7 @@ contains
         enddo
         call TIFFUnMuteWarnings
         self%nmax_el = maxval(self%frames_sz)
-        ! iostat = TIFFfree(stripbuffer_ptr)
+        iostat = TIFFfree(stripbuffer_ptr)
         call TIFFClose(self%fhandle)
         nullify(byte_array8)
         self%l_hasbeenread = .true.
@@ -281,7 +281,7 @@ contains
             end select
         enddo
         ! generates image
-        call img%new([self%onx,self%ony,1], self%osmpd)
+        call img%new([self%onx,self%ony,1], self%osmpd, wthreads=.false.)
         call img%zero_and_unflag_ft
         call img%get_rmat_ptr(prmat)
         prmat(:self%onx,:self%ony,1) = real(imat)
@@ -383,7 +383,7 @@ contains
     subroutine kill( self )
         class(eer_decoder), intent(inout) :: self
         self%fhandle = c_null_ptr
-        self%fname   = ''
+        if( allocated(self%fname) )        deallocate(self%fname)
         if( allocated(self%raw_bytes) )    deallocate(self%raw_bytes)
         if( allocated(self%frames_start) ) deallocate(self%frames_start)
         if( allocated(self%frames_sz) )    deallocate(self%frames_sz)
