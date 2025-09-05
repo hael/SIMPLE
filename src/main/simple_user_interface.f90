@@ -7247,6 +7247,10 @@ contains
                         if( allocated(arr(i)%descr_short)       ) deallocate(arr(i)%descr_short      )
                         if( allocated(arr(i)%descr_long)        ) deallocate(arr(i)%descr_long       )
                         if( allocated(arr(i)%descr_placeholder) ) deallocate(arr(i)%descr_placeholder)
+                        if( allocated(arr(i)%gui_submenu)       ) deallocate(arr(i)%gui_submenu)
+                        if( allocated(arr(i)%active_flags)      ) deallocate(arr(i)%active_flags)
+                        if( allocated(arr(i)%exclusive_group)   ) deallocate(arr(i)%exclusive_group)
+                        if( allocated(arr(i)%cval_default)      ) deallocate(arr(i)%cval_default)
                     end do
                     deallocate(arr)
                 endif

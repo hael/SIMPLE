@@ -3,14 +3,14 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
-use simple_motion_patched,                only: motion_patched
-use simple_motion_align_hybrid,           only: motion_align_hybrid
-use simple_opt_image_weights,             only: opt_image_weights
-use simple_image,                         only: image
-use simple_eer_factory,                   only: eer_decoder
-use simple_parameters,                    only: params_glob
-use simple_motion_correct_utils
+use simple_ft_expanded,          only: ftexp_transfmat_init, ftexp_transfmat_kill
+use simple_motion_patched,       only: motion_patched
+use simple_motion_align_hybrid,  only: motion_align_hybrid
+use simple_opt_image_weights,    only: opt_image_weights
+use simple_image,                only: image
+use simple_eer_factory,          only: eer_decoder
+use simple_parameters,           only: params_glob
+use simple_motion_correct_utils, only: micrograph_interp, correct_gain, apply_dose_weighing, calc_eer_fraction
 implicit none
 
 ! Stage drift
@@ -280,8 +280,6 @@ contains
         real                                :: ave, sdev, var, minw, maxw, corr
         logical                             :: err, err_stat
         type(motion_align_hybrid)           :: hybrid_srch
-        class(*), pointer                   :: callback_ptr
-        callback_ptr => null()
         ! initialise
         if( l_BENCH ) t_correct_iso_init = tic()
         call motion_correct_init(movie_stack_fname, ctfvars, err, movie_sum, gainref_fname)
@@ -403,6 +401,7 @@ contains
         end do
         call movie_sum_corrected%set_cmat(cmat_sum)
         call movie_sum_corrected%ifft
+        nullify(pcmat)
         if( l_BENCH ) rt_mic = toc(t_mic)
         if( L_BENCH )then
             print *,'t_forctf:     ',rt_forctf
@@ -430,6 +429,7 @@ contains
             call motion_patch%get_poly_coeffs(polycoeffs)
             if( do_scale ) polycoeffs = polycoeffs / real(params_glob%scale,dp)
             call arr2file(polycoeffs, fname)
+            deallocate(polycoeffs)
         endif
     end subroutine motion_correct_write_poly
 
@@ -657,12 +657,12 @@ contains
         real,                       intent(out)   :: poly_rmsd
         character(len=*), optional, intent(in)    :: gainref            !< gain reference filename
         real,             optional, intent(in)    :: boxdata(:,:)
-        type(motion_align_poly)    :: align_obj
-        real, allocatable         :: iso_shifts(:,:)
-        real(dp)                  :: star_polyn(36)
-        real                      :: ave, sdev, var
-        integer                   :: t
-        logical                   :: err, err_stat
+        type(motion_align_poly) :: align_obj
+        real, allocatable       :: iso_shifts(:,:)
+        real(dp)                :: star_polyn(36)
+        real                    :: ave, sdev, var
+        integer                 :: t
+        logical                 :: err, err_stat
         ! initialise
         if( l_BENCH ) t_correct_iso_init = tic()
         call motion_correct_init(movie_stack_fname, ctfvars, err, movie_sum, gainref)
@@ -779,6 +779,7 @@ contains
         enddo
         !$omp end parallel do
         call img_out%set_rmat(rmat_sum,.false.)
+        deallocate(rmat_sum)
         ! average
         call img_out%div(real(n))
         ! post-process
@@ -789,6 +790,7 @@ contains
             call tiles(ithr)%kill
             call tmp(ithr)%kill
         enddo
+        nullify(prmat)
         if( L_BENCH ) print *,'rt_mic2spec:        ',toc(t_mic2spec)
     end subroutine motion_correct_mic2spec
 
@@ -896,7 +898,7 @@ contains
                     return
                 endif
             else
-                pos_outliers_here = pos_outliers
+                allocate(pos_outliers_here,source=pos_outliers)
             endif
             allocate(new_vals(noutliers,nframes),vals(nvals))
             ave  = ave / real(nframes)
@@ -942,6 +944,8 @@ contains
                     j = pos_outliers_here(2,k)
                     prmats(iframe)%rmat(i,j,1) = new_vals(k,iframe)
                 enddo
+                ! cleanup
+                nullify(prmats(iframe)%rmat)
             enddo
             !$omp end parallel do
         else

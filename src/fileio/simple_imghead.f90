@@ -411,6 +411,7 @@ contains
                 self%glonum   = spihed(43)
                 deallocate(spihed)
             type is( MrcImgHead )
+                io_message = NIL
                 read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
                 call fileiochk(" simple_imghead::read header bytes to disk , message "&
                     //trim(io_message),io_status)
@@ -826,9 +827,11 @@ contains
 
     subroutine CloseTiff( self )
         class(ImgHead), intent(inout) :: self
+        integer :: iostat
         select type( self )
             type is( TiffImgHead )
 #ifdef USING_TIFF
+                if( c_associated(self%StripBuffer_cptr) ) iostat = TIFFfree(self%StripBuffer_cptr)
                 if( c_associated(self%fhandle) ) call TIFFClose(self%fhandle)
 #endif
         end select
@@ -1321,6 +1324,8 @@ contains
                     write(logfhandle,*) 'file: ', trim(fname)
                     THROW_HARD('the inputted file is not an MRC file')
             end select
+            call hed%kill
+            deallocate(hed)
         else
             THROW_HARD('file: '//trim(fname)//' does not exists')
         endif
@@ -1538,6 +1543,8 @@ contains
                 call hed%setDims(ldim)
                 call hed%write(filnum)
                 call fclose(filnum)
+                call hed%kill
+                deallocate(hed)
             case DEFAULT
                 ! Only MRC is the target file format
             end select

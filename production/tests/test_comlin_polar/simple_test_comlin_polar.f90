@@ -16,7 +16,7 @@ type polar_fmap
     integer :: self_irot
     real    :: self_w
 end type polar_fmap
-
+character(len=*), parameter   :: POLAR_COMLIN = 'polar_comlin.bin'
 integer,          parameter   :: NPLANES = 300, ORI_IND1 = 10, ORI_IND2 = 55
 character(len=:), allocatable :: cmd
 type(image),      allocatable :: pad_fplanes(:)

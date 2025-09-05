@@ -397,7 +397,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        self%shifts_patches_for_fit = self%shifts_patches
+        self%shifts_patches_for_fit(:,:,:,:) = self%shifts_patches(:,:,:,:)
         corr_avg = corr_avg / real(product(self%npatch))
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         deallocate(align_hybrid,res)
@@ -720,6 +720,9 @@ contains
                 ! call CDataSet__delete(obs)
             end do
         end do
+        call CDataset__delete(dataSet)
+        call CDataset__delete(dataSetStart)
+        call CDataPoint__delete(point2)
         title%str = 'X (in pixels; trajectory scaled by '//trim(int2str(nint(SCALE)))//')'//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         title%str(1:1) = 'Y'
@@ -803,7 +806,7 @@ contains
     end function pix2polycoordy
 
     pure subroutine get_local_shift( self, iframe, x, y, shift )
-        class(motion_patched), intent(inout) :: self
+        class(motion_patched), intent(in)  :: self
         integer,               intent(in)  :: iframe
         real,                  intent(in)  :: x, y
         real,                  intent(out) :: shift(2)
@@ -949,10 +952,11 @@ contains
     subroutine kill( self )
         class(motion_patched), intent(inout) :: self
         call self%deallocate_patches()
-        if (allocated(self%frameweights)) deallocate(self%frameweights)
-        if (allocated(self%updateres)) deallocate(self%updateres)
+        if (allocated(self%frameweights))  deallocate(self%frameweights)
+        if (allocated(self%updateres))     deallocate(self%updateres)
         if (allocated(self%patch_centers)) deallocate(self%patch_centers)
-        if (allocated(self%lims_patches)) deallocate(self%lims_patches)
+        if (allocated(self%lims_patches))  deallocate(self%lims_patches)
+        if (allocated(self%global_shifts)) deallocate(self%global_shifts)
         self%has_frameweights = .false.
         self%existence        = .false.
         self%npatch = 0

@@ -54,7 +54,6 @@ character(len=*), parameter :: MSKVOL_FILE          = 'automask3D.mrc'
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'
 character(len=*), parameter :: VOL_FBODY            = 'recvol_state'
-character(len=*), parameter :: POLAR_COMLIN         = 'polar_comlin.bin'
 ! 2D/3D COMMON
 character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
