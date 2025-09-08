@@ -13,6 +13,7 @@ use simple_fsc
 implicit none
 
 public :: fsc_commander
+public :: clin_fsc_commander
 public :: nununiform_filter3D_commander
 public :: uniform_filter2D_commander
 public :: uniform_filter3D_commander
@@ -27,6 +28,11 @@ type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
 end type fsc_commander
+
+type, extends(commander_base) :: clin_fsc_commander
+  contains
+    procedure :: execute      => exec_clin_fsc
+end type clin_fsc_commander
 
 type, extends(commander_base) :: uniform_filter2D_commander
   contains
@@ -69,11 +75,11 @@ contains
     subroutine exec_fsc( self, cline )
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
-        type(parameters)               :: params
-        type(image)                    :: even, odd
-        type(masker)                   :: mskvol
+        type(parameters)          :: params
+        type(image)               :: even, odd
+        type(masker)              :: mskvol
         character(len=LONGSTRLEN) :: fsc_templ
-        real,              allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
+        real,         allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
         integer :: j, k_hp, k_lp, nyq
         real    :: res_fsc05, res_fsc0143
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -118,6 +124,59 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc
+
+    subroutine exec_clin_fsc( self, cline )
+        class(clin_fsc_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(parameters)          :: params
+        type(image)               :: even, odd
+        type(masker)              :: mskvol
+        character(len=LONGSTRLEN) :: fsc_templ
+        real,         allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
+        integer :: j, k_hp, k_lp, nyq
+        real    :: res_fsc05, res_fsc0143
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        ! read even/odd pair
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd%new([params%box,params%box,params%box], params%smpd)
+        call odd%read(params%vols(1))
+        call even%read(params%vols(2))
+        res = even%get_res()
+        nyq = even%get_filtsz()
+        if( params%l_filemsk )then
+            call mskvol%new([params%box,params%box,params%box], params%smpd)
+            call mskvol%read(params%mskfile)
+            call phase_rand_fsc(even, odd, mskvol, params%msk, 1, nyq, fsc, fsc_t, fsc_n)
+        else
+            ! spherical masking
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
+            call even%fft()
+            call odd%fft()
+            allocate(fsc(nyq),source=0.)
+            call even%fsc(odd, fsc)
+        endif
+        do j=1,nyq
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', fsc(j)
+        end do
+        call get_resolution(fsc, res, res_fsc05, res_fsc0143)
+        k_hp = calc_fourier_index(params%hp, params%box, params%smpd)
+        k_lp = calc_fourier_index(params%lp, params%box, params%smpd)
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        call even%kill
+        call odd%kill
+        fsc_templ = trim(FSC_FBODY)//int2str_pad(1,2)
+        call arr2file(fsc, trim(fsc_templ)//trim(BIN_EXT))
+        if( params%l_filemsk )then
+            call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ)
+        else
+            call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ)
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_FSC_CLIN NORMAL STOP ****')
+    end subroutine exec_clin_fsc
 
     subroutine exec_nununiform_filter3D(self, cline)
         use simple_opt_filter, only: nonuni_filt3D

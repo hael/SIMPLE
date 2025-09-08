@@ -102,6 +102,7 @@ type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_states
 type(simple_program), target :: consolidate_chunks
 type(simple_program), target :: conv_atom_denoise
+type(simple_program), target :: clin_fsc
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_subsets
@@ -435,6 +436,7 @@ contains
         call new_check_states
         call new_consolidate_chunks
         call new_conv_atom_denoise
+        call new_clin_fsc
         call new_cluster2D
         call new_cluster2D_nano
         call new_cluster2D_subsets
@@ -587,6 +589,7 @@ contains
         call push2prg_ptr_array(check_states)
         call push2prg_ptr_array(consolidate_chunks)
         call push2prg_ptr_array(conv_atom_denoise)
+        call push2prg_ptr_array(clin_fsc)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_subsets)
@@ -774,6 +777,8 @@ contains
                 ptr2prg => consolidate_chunks
             case('conv_atom_denoise')
                 ptr2prg => conv_atom_denoise
+            case('clin_fsc')
+                ptr2prg => clin_fsc
             case('cluster2D')
                 ptr2prg => cluster2D
             case('cluster2D_nano')
@@ -1037,6 +1042,7 @@ contains
         write(logfhandle,'(A)') check_states%name
         write(logfhandle,'(A)') consolidate_chunks%name
         write(logfhandle,'(A)') cleanup2D%name
+        write(logfhandle,'(A)') clin_fsc%name
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_subsets%name
@@ -2674,6 +2680,36 @@ contains
         ! computer controls
         call fsc%set_input('comp_ctrls', 1, nthr)
     end subroutine new_fsc
+
+    subroutine new_clin_fsc
+        ! PROGRAM SPECIFICATION
+        call clin_fsc%new(&
+        &'fsc', &                                                               ! name
+        &'Calculate FSC between the two input volumes',&                        ! descr_short
+        &'is a program for calculating the FSC between the two input volumes',& ! descr_long
+        &'simple_exec',&                                                        ! executable
+        &2, 1, 0, 0, 2, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call clin_fsc%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call clin_fsc%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        ! parameter input/output
+        call clin_fsc%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        hp%required = .false.
+        lp%required = .false.
+        call clin_fsc%set_input('filt_ctrls', 1, hp)
+        call clin_fsc%set_input('filt_ctrls', 2, lp)
+        ! mask controls
+        call clin_fsc%set_input('mask_ctrls', 1, mskdiam)
+        call clin_fsc%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call clin_fsc%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_clin_fsc
 
     subroutine new_gen_pspecs_and_thumbs
         ! PROGRAM SPECIFICATION
