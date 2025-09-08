@@ -270,7 +270,6 @@ contains
         type(chash)      :: job_descr
         integer          :: nframes
         call cline%set('oritype',    'mic')
-        call cline%set('groupframes', 'no')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     5)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
@@ -324,7 +323,6 @@ contains
         integer :: i, iframe, nframes, frame_counter, ldim(3), fromto(2), nframesgrp
         integer :: numlen_nframes, cnt
         call cline%set('mkdir',       'no') ! shared-memory workflow, dir making in driver
-        call cline%set('groupframes', 'no')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     5)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       10)
@@ -423,7 +421,6 @@ contains
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',           5.)
-        if( .not. cline%defined('groupframes')) call cline%set('groupframes',  'no')
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',   'softmax')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',       'yes')
         call cline%set('mcconvention','relion') ! ensures alignment to first frame

@@ -177,7 +177,7 @@ contains
         endif
         if( l_polar )then
             ! for restoration
-            if( which_iter == 1 ) call polar_cavger_new(pftcc)
+            if( which_iter == 1 ) call polar_cavger_new(pftcc, .false.)
             call polar_cavger_zero_pft_refs
         endif
 
@@ -625,7 +625,7 @@ contains
             endif
         endif
         ! Read polar references
-        call polar_cavger_new(pftcc)
+        call polar_cavger_new(pftcc, .false.)
         call polar_cavger_read_all(params_glob%refs)
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! Centering-related objects

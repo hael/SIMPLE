@@ -239,10 +239,6 @@ contains
         call orientation%set('imgkind', 'mic')
         if( motion_correct_with_patched ) call orientation%set('mceps', simple_abspath(patched_shift_fname))
         call motion_correct_kill_common
-        call self%moviesum%kill
-        call self%moviesum_ctf%kill
-        call self%pspec_sum%kill
-        call self%pspec_ctf%kill
     end subroutine iterate
 
     subroutine calc_npatches( moviename, smpd, cline, o )

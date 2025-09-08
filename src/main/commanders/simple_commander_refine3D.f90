@@ -283,7 +283,7 @@ contains
         ! init
         call build%init_params_and_build_spproj(cline, params)
         l_polar = trim(params%polar).eq.'yes'
-        if( l_polar .and. params%l_comlin )then
+        if( l_polar )then
             call build%build_general_tbox(params, cline, do3d=.true.)
             call pftcc%new(1, [1,1], params%kfromto)
         endif
@@ -533,13 +533,9 @@ contains
             if( L_BENCH_GLOB ) rt_merge_algndocs = toc(t_merge_algndocs)
             if( l_polar )then
                 params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
-                call polar_cavger_new(pftcc, nrefs=params%nspace)
+                call polar_cavger_new(pftcc, .true., nrefs=params%nspace)
                 call polar_cavger_calc_pops(build%spproj)
-                if( params%l_comlin )then
-                    call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
-                else
-                    call polar_cavger_assemble_sums_from_parts
-                endif
+                call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
                 call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
                 call polar_cavger_writeall(get_fbody(params%refs,params%ext,separator=.false.))
@@ -561,7 +557,7 @@ contains
             end select
             if( niters == params%maxits ) converged = .true.
             if( L_BENCH_GLOB ) t_volassemble = tic()
-            if( trim(params%volrec).eq.'yes' .or. converged )then
+            if( (trim(params%volrec).eq.'yes') )then
                 ! ASSEMBLE VOLUMES
                 select case(trim(params%refine))
                     case('eval')
@@ -620,7 +616,7 @@ contains
                         ! per state post-process
                         do state = 1,params%nstates
                             str_state = int2str_pad(state,2)
-                            if( state_pops(state) == 0 .or. params%l_comlin ) cycle
+                            if( state_pops(state) == 0 ) cycle
                             call cline_postprocess%set('state',    state)
                             call cline_postprocess%set('nthr', nthr_here)
                             if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)

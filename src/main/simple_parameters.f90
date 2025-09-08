@@ -57,7 +57,6 @@ type :: parameters
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: gridding='no'        !< to test gridding correction
-    character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)          :: have_clustering='no' !< to flag that clustering solution exists in field os_cls2D (cluster_cavgs)
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
@@ -514,7 +513,6 @@ type :: parameters
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
     logical :: l_bfac         = .false.
-    logical :: l_comlin       = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
     logical :: l_dose_weight  = .false.
@@ -646,7 +644,6 @@ contains
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
-        call check_carg('groupframes',    self%groupframes)
         call check_carg('have_clustering', self%have_clustering)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
@@ -1508,14 +1505,16 @@ contains
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
         ! comlin generation
-        select case(trim(self%ref_type))
-        case('clin', 'vol')
-            self%l_comlin = .true.  ! 3D
-        case('cavg')
-            self%l_comlin = .false. ! 2D
-        case DEFAULT
-            THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))
-        end select
+        if( trim(self%polar).eq.'yes' )then
+            select case(trim(self%ref_type))
+            case('clin', 'vol', 'cavg')
+                ! supported
+            case DEFAULT
+                THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))
+            end select
+            ! deactivates post-alignment cartesian reconstruction
+            self%volrec = 'no'
+        endif
         ! image normalization
         self%l_noise_norm = trim(self%noise_norm).eq.'yes'
         ! set lpset flag
