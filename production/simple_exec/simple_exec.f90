@@ -106,6 +106,7 @@ type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(automask2D_commander)                  :: xautomask2D
 type(fsc_commander)                         :: xfsc
+type(clin_fsc_commander)                    :: xclin_fsc
 type(nununiform_filter3D_commander)         :: xnununiform_filter3D
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
@@ -354,6 +355,8 @@ select case(trim(prg))
         call xautomask2D%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
+    case( 'clin_fsc' )
+        call xclin_fsc%execute(cline)
     case( 'nununiform_filter3D' )
         call xnununiform_filter3D%execute(cline)
     case( 'center' )
