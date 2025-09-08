@@ -4025,7 +4025,7 @@ contains
         call pick%set_input('srch_ctrls', 2, pick_roi, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 3, backgr_subtr, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 4, crowded, gui_submenu="picking")
-        call pick%set_input('srch_ctrls', 5, 'winsz', 'num', 'Window size for sauvol', 'Window size for local sauvol binarisation', 'winsz in pixels ', .false., 32.)
+        call pick%set_input('srch_ctrls', 5, 'winsz', 'num', 'Window size for sauvola', 'Window size for local sauvola binarisation', 'winsz in pixels ', .false., 32.)
         ! filter controls
         call pick%set_input('filt_ctrls', 1, lp, gui_submenu="picking")
         ! mask controls
