@@ -253,7 +253,7 @@ contains
                         numer  = real(sum(         pfts_cavg(:,k,icls) * conjg(pfts_clin(:,k,icls))),dp)
                         denom1 =      sum(csq_fast(pfts_cavg(:,k,icls)))
                         denom2 =      sum(csq_fast(pfts_clin(:,k,icls)))
-                        if( denom1*denom2 > DTINY ) cavg_clin_frcs(k,icls) = max(cavg_clin_frcs(k,icls),real(numer / dsqrt(denom1*denom2)))
+                        if( denom1*denom2 > DTINY ) cavg_clin_frcs(k,icls) = min(cavg_clin_frcs(k,icls),real(numer / dsqrt(denom1*denom2)))
                     enddo
                 enddo
                 !$omp end parallel do
