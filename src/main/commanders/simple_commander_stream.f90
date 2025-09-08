@@ -99,7 +99,6 @@ contains
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
         call cline%set('reject_mics', 'no')
-        call cline%set('groupframes', 'no')
         if( .not. cline%defined('walltime')         ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! motion correction
         if( .not. cline%defined('trs')              ) call cline%set('trs',              20.)

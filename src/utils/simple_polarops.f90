@@ -35,12 +35,13 @@ integer                  :: ncls       = 0                                      
 integer                  :: kfromto(2) = 0                                      ! Resolution range
 integer                  :: pftsz      = 0                                      ! Size of PFT in pftcc along rotation dimension
 integer                  :: nrots      = 0                                      ! # of in-plane rotations; =2*pftsz
-
+logical                  :: l_comlin   = .false.                                ! Whether we operate in 2D/3D(=added common lines)
 contains
 
     !> Module initialization
-    subroutine polar_cavger_new( pftcc, nrefs )
+    subroutine polar_cavger_new( pftcc, comlin, nrefs )
         class(polarft_corrcalc), intent(in) :: pftcc
+        logical,                 intent(in) :: comlin
         integer,       optional, intent(in) :: nrefs
         call polar_cavger_kill
         nrots   = pftcc%get_nrots()
@@ -51,6 +52,7 @@ contains
         else
             ncls = pftcc%get_nrefs()
         endif
+        l_comlin = comlin
         ! dimensions
         smpd    = params_glob%smpd
         allocate(prev_eo_pops(2,ncls), eo_pops(2,ncls), source=0)
@@ -222,7 +224,7 @@ contains
         real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05,&
                       &cavg_clin_frcs(kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
         logical     :: ymirror
-        if( params_glob%l_comlin )then
+        if( l_comlin )then
             ! handling of mirroring
             ymirror = .false.
             if( build_glob%pgrpsyms%is_circular() )then
@@ -675,7 +677,7 @@ contains
         allocate(frc(filtsz),source=0.)
         !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
         do icls = 1,ncls
-            if( params_glob%l_comlin )then
+            if( l_comlin )then
                 ! calculate FRC (pseudo-cavgs are never empty)
                 call calc_frc(pfts_even(:,:,icls), pfts_odd(:,:,icls), filtsz, frc)
                 call build_glob%clsfrcs%set_frc(icls, frc, 1)
@@ -1136,6 +1138,7 @@ contains
         nrots      = 0
         kfromto(2) = 0
         pftsz      = 0
+        l_comlin   = .false.
     end subroutine polar_cavger_kill
 
     ! PRIVATE UTILITIES
@@ -1359,7 +1362,7 @@ contains
             array(:,:,:) = real(tmp(:,:,:),dp)
         else
             if( pftsz /= dims(1) )then
-                THROW_HARD('Incompatible PFT size in '//trim(fname)//': '//int2str(pftsz)//' vs '//int2str(dims(1)))
+                THROW_HARD('Incompatible real array size in '//trim(fname)//': '//int2str(pftsz)//' vs '//int2str(dims(1)))
             endif
             if( ncls /= dims(4) )then
                 THROW_HARD('Incompatible NCLS in '//trim(fname)//': '//int2str(ncls)//' vs '//int2str(dims(4)))
@@ -1465,7 +1468,7 @@ contains
             shifts(:,i) = -shift
             call b%img_crop_polarizer%polarize(pftcc, img, i, isptcl=.true., iseven=eo==0, mask=b%l_resmsk)
         enddo
-        call polar_cavger_new(pftcc)
+        call polar_cavger_new(pftcc,.false.)
         call polar_cavger_update_sums(NIMGS, pinds, b%spproj, pftcc, shifts)
         call polar_cavger_merge_eos_and_norm
         call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
@@ -1481,7 +1484,7 @@ contains
         call write_cavgs(cavgs, 'cavgs_merged.mrc')
         call polar_cavger_kill
         ! read & write again
-        call polar_cavger_new(pftcc)
+        call polar_cavger_new(pftcc,.false.)
         call polar_cavger_read('cavgs_even.bin', 'even')
         call polar_cavger_read('cavgs_odd.bin',  'odd')
         call polar_cavger_read('cavgs.bin',      'merged')

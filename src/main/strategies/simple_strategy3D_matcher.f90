@@ -125,7 +125,7 @@ contains
                                         &do_polar=(l_polar .and. which_iter>1) )
         if( l_polar .and. l_restore )then
             ! for restoration
-            if( which_iter == 1 ) call polar_cavger_new(pftcc)
+            if( which_iter == 1 ) call polar_cavger_new(pftcc, .true.)
             call polar_cavger_zero_pft_refs
             if( file_exists(params_glob%frcs) )then
                 call build_glob%clsfrcs%read(params_glob%frcs)
@@ -138,7 +138,7 @@ contains
             rt_prepare_polar_references = toc(t_prepare_polar_references)
             t_prep_orisrch              = tic()
         endif
-        
+
         ! PREPARE STRATEGY3D
         call prep_strategy3D ! allocate s3D singleton
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
@@ -304,30 +304,37 @@ contains
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         if( l_restore )then
-            ! Volume
             if( L_BENCH_GLOB ) t_rec = tic()
-            if( trim(params_glob%volrec).eq.'yes' )then
-                if( trim(params_glob%projrec).eq.'yes' )then
-                    call calc_projdir3Drec( cline, nptcls2update, pinds )
-                else
-                    call calc_3Drec( cline, nptcls2update, pinds )
-                endif
-            endif
-            call eucl_sigma%kill
-            call killimgbatch
-            ! polar restoration
             if( l_polar )then
+                ! Polar representation
+                call killimgbatch
+                call eucl_sigma%kill
                 if( l_distr_exec_glob )then
                     call polar_cavger_readwrite_partial_sums('write')
                 else
                     call polar_restoration
                 endif
+                call pftcc%kill
+            else
+                ! Cartesian volume
+                call pftcc%kill
+                if( trim(params_glob%volrec).eq.'yes' )then
+                    if( trim(params_glob%projrec).eq.'yes' )then
+                        call calc_projdir3Drec( cline, nptcls2update, pinds )
+                    else
+                        call calc_3Drec( cline, nptcls2update, pinds )
+                    endif
+                endif
+                call eucl_sigma%kill
+                call killimgbatch
             endif
             if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
+        else
+            ! cleanup
+            call killimgbatch
+            call eucl_sigma%kill
+            call pftcc%kill
         endif
-
-        ! MORE CLEANUP
-        call pftcc%kill
 
         ! REPORT CONVERGENCE
         call qsys_job_finished('simple_strategy3D_matcher :: refine3D_exec')
@@ -370,11 +377,7 @@ contains
         subroutine polar_restoration()
             ! polar restoration
             params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
-            if( params_glob%l_comlin )then
-                call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
-            else
-                call polar_cavger_merge_eos_and_norm
-            endif
+            call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
             call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
             call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
             call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')

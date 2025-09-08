@@ -1472,7 +1472,7 @@ contains
         if( trim(params%polar).eq.'yes' )then
             call polar_cavger_dims_from_header('cavgs_even_part1'//BIN_EXT, pftsz, kfromto, ncls)
             call pftcc%new(1, [1,1], kfromto)
-            call polar_cavger_new(pftcc, nrefs=params%ncls)
+            call polar_cavger_new(pftcc, .false., nrefs=params%ncls)
             call polar_cavger_calc_pops(build%spproj)
             call polar_cavger_assemble_sums_from_parts
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
