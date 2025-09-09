@@ -778,9 +778,6 @@ contains
         if( self%n > 1 )then
             call self%rotall_to_asym(os_nomirr)
         endif
-        do i=1,nos_nomirr
-            call os_nomirr%e3set(i,0.)
-        enddo
         ! append
         cnt = 0
         do i=nos_nomirr+1,nos

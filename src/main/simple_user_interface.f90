@@ -6889,7 +6889,6 @@ contains
         type(json_core)           :: json
         type(json_value), pointer :: input, user_inputs, ui, options, option
         type(json_value), pointer :: processes, process, process_inputs
-        integer :: iprg
         ! JSON init
         call json%initialize()
         ! create object of program entries
