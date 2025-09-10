@@ -105,8 +105,7 @@ contains
         call params%new(cline)
         call cline%set('mkdir', 'no')
         selection_jpeg_created = .false.
-        l_wait_for_user        = .false.
-        if(params%interactive == 'yes') l_wait_for_user = .true.
+        l_wait_for_user = trim(params%interactive) == 'yes'
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, "")
         call nice_communicator%cycle()
@@ -189,7 +188,6 @@ contains
         nice_communicator%stat_root%stage = "importing particles"
         call nice_communicator%update_cls2D(particles_imported=0)
         call nice_communicator%cycle()
-
         do
             ! termination
             if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit ) exit
@@ -250,14 +248,18 @@ contains
             endif
             ! Sets analysis section
             if( setslist%n > 0 )then
-                if( setslist%processed(1) .and. (setslist%n > 1) .and. .not. l_wait_for_user) then
+                if( setslist%processed(1) .and. (setslist%n > 1) .and. (.not.l_wait_for_user)) then
                     ! all sets but the first employ match_cavgs
                     do i = 2,setslist%n
                         call is_set_processed(i)
                     enddo
                     call submit_match_cavgs
                 else
-                    if(l_wait_for_user .and. setslist%processed(1)) then
+                    ! first set uses cluster_cavgs
+                    call is_set_processed(1)
+                    call submit_cluster_cavgs
+                    ! interactive selection
+                    if( l_wait_for_user .and. setslist%processed(1) ) then
                         call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
                         if(.not. selection_jpeg_created) then
                             call generate_selection_jpeg()
@@ -289,14 +291,17 @@ contains
                             call http_communicator%json%get(http_communicator%update_arguments, 'rejected_cls2D', rejected_cls2D, found)
                             if(found) then
                                 call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
+                                ! apply interactive selection
+                                call report_interactive_selection( rejected_cls_ids )
                                 l_wait_for_user = .false.
                             endif
                         endif
                     endif
-                    ! first set uses cluster_cavgs
-                    call is_set_processed(1)
-                    call submit_cluster_cavgs
                 endif
+            endif
+            if( l_wait_for_user )then
+                ! nothing for abinitio2D_stream until the first set has been selected
+            else
                 ! make completed sets available to abinitio2D_stream
                 call flag_complete_sets
             endif
@@ -341,7 +346,7 @@ contains
                 n_imported = 0
                 n_ptcls    = 0
                 if( .not.allocated(projectnames) ) return
-                n_spprojs  = size(projectnames)
+                n_spprojs = size(projectnames)
                 if( n_spprojs == 0 )return
                 n_old = 0 ! on first import
                 if( allocated(projrecords) ) n_old = size(projrecords)
@@ -392,7 +397,7 @@ contains
                         avgmicptcls = ceiling(avgmicptcls / 10) * 10.0
                         ! these parameters may need tweaking
                         nptcls_per_cls = 1000 * (20 + (0.15 * avgmicptcls))
-                        nptcls_per_cls = nptcls_per_cls / real(params%ncls_start)
+                        nptcls_per_cls = nptcls_per_cls / real(params%ncls)
                         nptcls_per_cls = ceiling(nptcls_per_cls / 100) * 100.0
                         write(logfhandle,'(A,I6)')   '>>> AVERAGE # PARTICLES PER MICROGRAPH : ', int(avgmicptcls)
                         write(logfhandle,'(A,I6,A)') '>>> USING ', int(nptcls_per_cls), ' PARTICLES PER CLASS'
@@ -533,6 +538,25 @@ contains
                 endif
             end subroutine is_set_processed
 
+            ! apply user-inputted selection on the first set
+            subroutine report_interactive_selection( cls2reject )
+                integer, allocatable, intent(in) :: cls2reject(:)
+                integer, allocatable :: states(:)
+                type(sp_project) :: spproj
+                integer          :: ncls2reject
+                if( .not.allocated(cls2reject) ) return
+                ncls2reject = size(cls2reject)
+                ! read all fields
+                call spproj%read(setslist%projfiles(1))
+                ! selection
+                allocate(states(spproj%os_cls2D%get_noris()),source=1)
+                states(cls2reject(:)) = 0
+                call spproj%map_cavgs_selection(states)
+                call spproj%write(setslist%projfiles(1))
+                call spproj%kill
+                deallocate(states)
+            end subroutine report_interactive_selection
+
             ! make completed project files visible to the watcher of the next application
             subroutine flag_complete_sets
                 type(sp_project)              :: spproj_imported
@@ -544,6 +568,7 @@ contains
                         destination = trim(DIR_STREAM_COMPLETED)//trim(DIR_SET)//int2str(iset)//trim(METADATA_EXT)
                         call simple_copy_file(setslist%projfiles(iset), destination)
                         setslist%imported(iset) = .true.
+                        write(logfhandle,'(A,I3)')'>>> COMPLETED SET ',setslist%ids(iset)
                         ! update particle counts
                         call spproj_imported%read_segment("ptcl2D", destination)
                         n_state_nonzero = spproj_imported%os_ptcl2D%count_state_gt_zero()
