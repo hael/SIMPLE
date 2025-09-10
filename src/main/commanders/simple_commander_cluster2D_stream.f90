@@ -381,15 +381,16 @@ contains
         call seed_rnd
         ! general parameters
         master_cline => cline
-        l_wfilt             = .false.
-        l_scaling           = .true.
-        nptcls_per_chunk    = params_glob%nptcls_per_cls*params_glob%ncls_start
-        ncls_glob           = 0
-        l_update_sigmas     = params_glob%l_needs_sigma
-        nmics_last          = 0
-        numlen              = len(int2str(params_glob%nparts))
-        l_no_chunks         = .false. ! will be using chunk indeed
-        l_abinitio2D        = cline%defined('algorithm')
+        l_wfilt          = .false.
+        l_scaling        = .true.
+        params_glob%ncls_start = params_glob%ncls ! backwards compatibility
+        nptcls_per_chunk = params_glob%nptcls_per_cls*params_glob%ncls_start
+        ncls_glob        = 0
+        l_update_sigmas  = params_glob%l_needs_sigma
+        nmics_last       = 0
+        numlen           = len(int2str(params_glob%nparts))
+        l_no_chunks      = .false. ! will be using chunk indeed
+        l_abinitio2D     = cline%defined('algorithm')
         if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
         params_glob%nparts_chunk = params_glob%nparts ! required by chunk object, to remove
         ! bookkeeping & directory structure

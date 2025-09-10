@@ -5245,7 +5245,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call sieve_cavgs%set_input('srch_ctrls', 1, ncls_start, gui_submenu="cluster 2D", gui_advanced=.false.)
+        call sieve_cavgs%set_input('srch_ctrls', 1, ncls, gui_submenu="cluster 2D", gui_advanced=.false.)
         call sieve_cavgs%set_input('srch_ctrls', 2, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
         sieve_cavgs%srch_ctrls(2)%required = .true.
         call sieve_cavgs%set_input('srch_ctrls', 3, nchunksperset, gui_advanced=.false.)
