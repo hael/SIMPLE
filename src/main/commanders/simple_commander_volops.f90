@@ -741,8 +741,8 @@ contains
             call build%vol%shift(shvec)
             ! store un-scaled shift parameters
             params%xsh = shvec(1) / scale
-            params%ysh = shvec(1) / scale
-            params%zsh = shvec(1) / scale
+            params%ysh = shvec(2) / scale
+            params%zsh = shvec(3) / scale
         else
             params%xsh = 0.
             params%ysh = 0.
