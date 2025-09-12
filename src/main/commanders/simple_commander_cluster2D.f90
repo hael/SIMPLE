@@ -1843,7 +1843,7 @@ contains
         type(oris)                    :: os
         type(sp_project), target      :: spproj
         character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
-        character(len=:), allocatable :: fname_oris, fname_denoised_ori, fname_ori
+        character(len=:), allocatable :: fname_oris, fname_denoised_ori, fname_ori, fname_class_ptcls_den
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
         real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
@@ -1853,7 +1853,7 @@ contains
         logical :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4)
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    10)
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         call spproj%read(params%projfile)
         select case(trim(params%oritype))
@@ -2002,12 +2002,14 @@ contains
                 end do
                 call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori, just_transf=.true.)
             else
+                fname_class_ptcls_den = 'class'//int2str_pad(i,4)//'ptcls.mrcs'
                 do j = 1, nptcls
                     cnt2 = cnt2 + 1
                     call imgs(j)%unserialize(pcavecs(:,j))
                     call cavg%add(imgs(j))
                     call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
-                    call imgs(j)%write(fname_denoised, cnt2)
+                    call imgs(j)%write(fname_class_ptcls_den, j)
+                    ! call imgs(j)%write(fname_denoised, cnt2)
                     if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
                     call imgs(j)%kill
                 end do

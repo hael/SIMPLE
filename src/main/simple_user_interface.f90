@@ -2248,7 +2248,7 @@ contains
         &'Analysis of class averages with k-medoids',&                ! descr_short
         &'is a program for analyzing class averages with k-medoids',& ! descr_long
         &'simple_exec',&                                              ! executable
-        &0, 2, 0, 0, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 2, 0, 2, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2258,7 +2258,10 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call cluster_cavgs%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(fm|pow|hist|hybrid){hybrid}',&
+        &'(fm|pow|hist|hybrid){hybrid}', .false., 'hybrid')
+        call cluster_cavgs%set_input('srch_ctrls', 2, 'have_selection', 'binary', 'Use selection in cls2D field', 'Use selection in cls2D field(yes|no){yes}',&
+        &'(yes|no){no}', .false., 'no')
         ! filter controls
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
@@ -3211,7 +3214,7 @@ contains
         ! <empty>
         ! parameter input/output
         call import_boxes%set_input('parm_ios', 1, 'boxtab', 'file', 'List of box files', &
-            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
+            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4134,7 +4137,7 @@ contains
         ! <empty>
         ! filter controls
         call ppca_denoise%set_input('filt_ctrls', 1, 'neigs', 'num', 'Number of eigencomponents, corresponding to the number of classes in the stack', 'Number of eigencomponents, corresponding to the number of classes in the stack', '# eigenvecs', .true., 100.0)
-        call ppca_denoise%set_input('filt_ctrls', 2, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){ppca}', .false., 'ppca')
+        call ppca_denoise%set_input('filt_ctrls', 2, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){kpca}', .false., 'ppca')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -4148,7 +4151,7 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for ppca-based denoising of image classes',&  ! descr_long
         &'all',&                                      ! executable
-        &0, 1, 0, 0, 2, 0, 1, .true.)                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 3, 0, 1, .true.)                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4161,6 +4164,7 @@ contains
         ! filter controls
         call ppca_denoise_classes%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .false., 0.0)
         call ppca_denoise_classes%set_input('filt_ctrls', 2, 'transp_pca', 'binary', 'transpose for pixel-wise learning', 'transpose for pixel-wise learning(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call ppca_denoise_classes%set_input('filt_ctrls', 3, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){kpca}', .false., 'ppca')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -5131,7 +5135,7 @@ contains
         ! <empty>
         ! alternative inputs
         call select_clusters%set_input('alt_ios', 1, 'clustinds', 'str', 'Comma separated cluster indices', 'Comma separated cluster indices', 'indx1,indx2', .false., '')
-        call select_clusters%set_input('alt_ios', 2, 'clustind',  'num', 'Cluster indicex', 'Cluster indiex', 'e.g. 5', .false., 0.)
+        call select_clusters%set_input('alt_ios', 2, 'clustind',  'num', 'Cluster index', 'Cluster index', 'e.g. 5', .false., 0.)
         ! search controls
         ! <empty>
         ! filter controls

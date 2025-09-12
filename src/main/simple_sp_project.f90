@@ -1467,9 +1467,7 @@ contains
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            THROW_HARD('No stack to extract from! write_substk')
-        else if( n_os_stk > 1 )then ! re-splitting not supported
-            return
+            THROW_HARD('No stack(s) to extract from! write_substk')
         endif
         ! get original simple_parameters
         call self%os_stk%get_ori(1, orig_stk)
