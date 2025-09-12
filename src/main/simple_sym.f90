@@ -728,6 +728,7 @@ contains
         class(sym), intent(in)    :: self
         type(oris), intent(inout) :: os
         type(oris) :: tmp, os_nomirr
+        real       :: euls(3)
         integer    :: cnt, i, n, nprojs, lim, nos, nos_nomirr
         logical, allocatable :: avail(:)
         nos = os%get_noris()
@@ -781,8 +782,11 @@ contains
         ! append
         cnt = 0
         do i=nos_nomirr+1,nos
-            cnt = cnt + 1
-            call os%set_euler(i, os_nomirr%get_euler(cnt))
+            cnt  = cnt + 1
+            euls = os_nomirr%get_euler(cnt)
+            call os%set(i, 'psi', euls(3))
+            euls(3) = 0.
+            call os%set_euler(i, euls)
         enddo
         ! flag mirror pairs
         do i=1,nos_nomirr

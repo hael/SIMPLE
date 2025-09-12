@@ -1476,8 +1476,8 @@ contains
             call polar_cavger_calc_pops(build%spproj)
             call polar_cavger_assemble_sums_from_parts
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
-            call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs)
-            call polar_cavger_writeall(get_fbody(params%refs,params_glob%ext,separator=.false.))
+            call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
+            call polar_cavger_writeall(POLAR_REFS_FBODY)
             call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
             call pftcc%kill
             call polar_cavger_gen2Dclassdoc(build_glob%spproj)

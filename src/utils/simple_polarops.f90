@@ -16,7 +16,7 @@ public :: polar_cavger_calc_and_write_frcs_and_eoavg, polar_cavger_merge_eos_and
 public :: polar_cavger_assemble_sums_from_parts, polar_cavger_set_ref_pftcc
 public :: polar_cavger_zero_pft_refs, polar_cavger_kill
 ! I/O
-public :: polar_cavger_refs2cartesian, polar_cavger_write_cartrefs
+public :: polar_cavger_refs2cartesian, polar_cavger_write_cartrefs, polar_cavger_writeall_pftccrefs
 public :: polar_cavger_write, polar_cavger_writeall, polar_cavger_writeall_cartrefs
 public :: polar_cavger_readwrite_partial_sums, polar_cavger_read_all
 ! Book-keeping
@@ -219,8 +219,9 @@ contains
         real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)),ctf2e(pftsz,kfromto(1):kfromto(2)),ctf2o(pftsz,kfromto(1):kfromto(2)),&
                       &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls), ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
         integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops, m
-        real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05,&
+        real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05, psi,&
                       &cavg_clin_frcs(pftsz,kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
+        logical     :: l_rotm
         if( l_comlin )then
             ! 3D-related tasks
             if( .not. present(reforis) )THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
@@ -279,7 +280,7 @@ contains
                 !$omp end parallel do
             case('clin')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-                !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o)
+                !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,psi,l_rotm)
                 do icls = 1,ncls/2
                     ! already mirrored common-line contribution
                     pfte  = pfts_clin_even(:,:,icls)
@@ -297,11 +298,18 @@ contains
                     call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
                     call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
                     call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    psi    = abs(reforis%get(m, 'psi'))
+                    l_rotm = (psi > 0.1) .and. (psi < 359.9)
+                    if( l_rotm )then
+                        pfts_merg(:,:,m) = conjg(pfts_merg(:,:,m))
+                        pfts_even(:,:,m) = conjg(pfts_even(:,:,m))
+                        pfts_odd(:,:,m)  = conjg(pfts_odd(:,:,m))
+                    endif
                 enddo
                 !$omp end parallel do
             case('vol')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-                !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o)
+                !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,psi,l_rotm)
                 do icls = 1,ncls/2
                     ! calculate sum of already mirrored class + common-line contribution
                     pfte  = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls)
@@ -319,6 +327,13 @@ contains
                     call mirror_pft(pfts_merg(:,:,icls), pfts_merg(:,:,m))
                     call mirror_pft(pfts_even(:,:,icls), pfts_even(:,:,m))
                     call mirror_pft(pfts_odd(:,:,icls),  pfts_odd(:,:,m))
+                    psi    = abs(reforis%get(m, 'psi'))
+                    l_rotm = (psi > 0.1) .and. (psi < 359.9)
+                    if( l_rotm )then
+                        pfts_merg(:,:,m) = conjg(pfts_merg(:,:,m))
+                        pfts_even(:,:,m) = conjg(pfts_even(:,:,m))
+                        pfts_odd(:,:,m)  = conjg(pfts_odd(:,:,m))
+                    endif
                 enddo
                 !$omp end parallel do
             case DEFAULT
@@ -428,27 +443,40 @@ contains
             type(sym),  intent(in) :: symop
             complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
             real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
-            integer     :: iref, mref
+            real        :: psi
+            integer     :: iref, m
+            logical     :: l_rotm
             if( .not.ref_space%isthere('mirr') )then
                 THROW_HARD('Mirror index missing in reference search space')
             endif
-            !$omp parallel do default(shared) proc_bind(close) private(iref,mref,pft,ctf2)
+            !$omp parallel do default(shared) proc_bind(close) private(iref,m,pft,ctf2,psi,l_rotm)
             do iref = 1,ncls/2
-                mref = ref_space%get_int(iref,'mirr')
+                m      = ref_space%get_int(iref,'mirr')
+                psi    = abs(ref_space%get(m, 'psi'))
+                l_rotm = (psi > 0.1) .and. (psi < 359.9)
                 ! Fourier components
-                call mirror_pft(pfts_even(:,:,mref), pft)
-                pfts_even(:,:,iref) = pfts_even(:,:,iref) + pft
-                call mirror_pft(pfts_odd(:,:,mref), pft)
-                pfts_odd(:,:,iref)  = pfts_odd(:,:,iref)  + pft
-                call mirror_pft( pfts_even(:,:,iref), pfts_even(:,:,mref))
-                call mirror_pft( pfts_odd(:,:,iref),  pfts_odd(:,:,mref))
+                if( l_rotm )then
+                    call mirror_pft(pfts_even(:,:,m), pft)
+                    pfts_even(:,:,iref) = pfts_even(:,:,iref) + conjg(pft)
+                    call mirror_pft(pfts_odd(:,:,m), pft)
+                    pfts_odd(:,:,iref)  = pfts_odd(:,:,iref)  + conjg(pft)
+                    call mirror_pft(conjg(pfts_even(:,:,iref)), pfts_even(:,:,m))
+                    call mirror_pft(conjg(pfts_odd(:,:,iref)),  pfts_odd(:,:,m))
+                else
+                    call mirror_pft(pfts_even(:,:,m), pft)
+                    pfts_even(:,:,iref) = pfts_even(:,:,iref) + pft
+                    call mirror_pft(pfts_odd(:,:,m), pft)
+                    pfts_odd(:,:,iref)  = pfts_odd(:,:,iref)  + pft
+                    call mirror_pft(pfts_even(:,:,iref), pfts_even(:,:,m))
+                    call mirror_pft(pfts_odd(:,:,iref),  pfts_odd(:,:,m))
+                endif
                 ! CTF
-                call mirror_ctf2(ctf2_even(:,:,mref), ctf2)
+                call mirror_ctf2(ctf2_even(:,:,m), ctf2)
                 ctf2_even(:,:,iref) = ctf2_even(:,:,iref) + ctf2
-                call mirror_ctf2(ctf2_odd(:,:,mref),  ctf2)
+                call mirror_ctf2(ctf2_odd(:,:,m),  ctf2)
                 ctf2_odd(:,:,iref)  = ctf2_odd(:,:,iref)  + ctf2
-                call mirror_ctf2(ctf2_even(:,:,iref), ctf2_even(:,:,mref))
-                call mirror_ctf2(ctf2_odd(:,:,iref),  ctf2_odd(:,:,mref))
+                call mirror_ctf2(ctf2_even(:,:,iref), ctf2_even(:,:,m))
+                call mirror_ctf2(ctf2_odd(:,:,iref),  ctf2_odd(:,:,m))
             enddo
             !$omp end parallel do
         end subroutine mirror_slices
@@ -521,7 +549,8 @@ contains
             real(dp)    :: rline_e(kfromto(1):kfromto(2)), rline_o(kfromto(1):kfromto(2))
             real(dp)    :: dd, w, wl, wr, sumw
             real        :: eulers(3),R(3,3,ncls),Rj(3,3),tRi(3,3),psi,drot,d,targ_w,self_w
-            integer     :: rotl,rotr, iref, jref, mref, self_irot, targ_irot, isym, nsym
+            integer     :: rotl,rotr, iref, jref, m, self_irot, targ_irot, isym, nsym
+            logical     :: l_rotm
             if( .not.ref_space%isthere('mirr') )then
                 THROW_HARD('Mirror index missing in reference search space')
             endif
@@ -533,8 +562,9 @@ contains
             nsym = symop%get_nsym()
             allocate(Rsym(3,3,nsym),source=0.)
             !$omp parallel default(shared) proc_bind(close)&
-            !$omp private(iref,jref,mref,tRi,Rj,eulers,targ_irot,self_irot,targ_w,self_w,d,dd,w,wl,wr,sumw,psi)&
-            !$omp& private(cline_l,cline_r,cline_e,cline_o,rline_l,rline_r,rline_e,rline_o,pft,ctf2,rotl,rotr,isym)
+            !$omp private(iref,jref,m,tRi,Rj,eulers,targ_irot,self_irot,targ_w,self_w)&
+            !$omp& private(d,dd,w,wl,wr,sumw,psi,l_rotm,cline_l,cline_r,cline_e,cline_o)&
+            !$omp& private(rline_l,rline_r,rline_e,rline_o,pft,ctf2,rotl,rotr,isym)
             ! Caching rotation matrices
             !$omp do schedule(static)
             do iref = 1,ncls
@@ -549,13 +579,13 @@ contains
             ! Common lines contribution
             !$omp do schedule(static)
             do iref = 1,ncls/2
-                tRi  = transpose(R(:,:,iref))
-                mref = ref_space%get_int(iref,'mirr')
+                tRi = transpose(R(:,:,iref))
+                m   = ref_space%get_int(iref,'mirr')
                 do jref = 1,ncls/2
                     do isym = 1,nsym
                         if( isym == 1 )then
                             if( jref == iref ) cycle    ! self   exclusion
-                            if( jref == mref ) cycle    ! mirror exclusion
+                            if( jref == m )    cycle    ! mirror exclusion
                             ! Rotation of both planes by transpose of Ri (tRixRi=I & Rsym=I)
                             Rj = matmul(R(:,:,jref), tRi)
                         else
@@ -659,11 +689,18 @@ contains
             ! Mirroring contributions
             !$omp do schedule(static)
             do iref = 1,ncls/2
-                mref = ref_space%get_int(iref,'mirr')
-                call mirror_pft(pfts_clin_even(:,:,iref), pfts_clin_even(:,:,mref))
-                call mirror_pft(pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,mref))
-                call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,mref))
-                call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,mref))
+                m      = ref_space%get_int(iref,'mirr')
+                psi    = abs(ref_space%get(m, 'psi'))
+                l_rotm = (psi>0.1) .and. (psi<359.9)
+                if( l_rotm )then
+                    call mirror_pft(conjg(pfts_clin_even(:,:,iref)), pfts_clin_even(:,:,m))
+                    call mirror_pft(conjg(pfts_clin_odd(:,:,iref)),  pfts_clin_odd(:,:,m))
+                else
+                    call mirror_pft(pfts_clin_even(:,:,iref), pfts_clin_even(:,:,m))
+                    call mirror_pft(pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,m))
+                endif
+                call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,m))
+                call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,m))
             enddo
             !$omp end do
             !$omp end parallel
@@ -672,10 +709,14 @@ contains
     end subroutine polar_cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
-    subroutine polar_cavger_calc_and_write_frcs_and_eoavg( fname )
+    subroutine polar_cavger_calc_and_write_frcs_and_eoavg( fname, cline )
+        use simple_cmdline, only: cmdline
         character(len=*), intent(in) :: fname
-        real, allocatable :: frc(:)
-        integer           :: icls, find, pop, filtsz
+        type(cmdline),    intent(in) :: cline
+        complex(dp), allocatable :: prev_prefs(:,:,:)
+        real,        allocatable :: frc(:)
+        real     :: ufrac_trec
+        integer  :: icls, find, pop, filtsz
         filtsz = fdim(params_glob%box_crop) - 1
         allocate(frc(filtsz),source=0.)
         !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
@@ -711,6 +752,19 @@ contains
         !$omp end parallel do
         ! write FRCs
         call build_glob%clsfrcs%write(fname)
+        ! e/o Trailing reconstruction
+        if( params_glob%l_trail_rec )then
+            if( cline%defined('ufrac_trec') )then
+                ufrac_trec = params_glob%ufrac_trec
+            else
+                ufrac_trec = build_glob%spproj_field%get_update_frac()
+            endif
+            call read_pft_array(POLAR_REFS_FBODY//'_even'//trim(BIN_EXT), prev_prefs)
+            pfts_even = real(ufrac_trec,dp) * pfts_even + (1.d0-real(ufrac_trec,dp)) * prev_prefs
+            call read_pft_array(POLAR_REFS_FBODY//'_odd'//trim(BIN_EXT), prev_prefs)
+            pfts_odd = real(ufrac_trec,dp) * pfts_odd   + (1.d0-real(ufrac_trec,dp)) * prev_prefs
+            deallocate(prev_prefs)
+        endif
     end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
 
     !>  \brief  Converts the polar references to a cartesian grid
@@ -850,6 +904,19 @@ contains
         call polar_cavger_write(trim(tmpl_fname)//'_odd'//BIN_EXT, 'odd')
         call polar_cavger_write(trim(tmpl_fname)//BIN_EXT,         'merged')
     end subroutine polar_cavger_writeall
+
+    ! Write references contained in PFTCC
+    subroutine polar_cavger_writeall_pftccrefs( tmpl_fname )
+        character(len=*),  intent(in) :: tmpl_fname
+        complex(sp),  pointer :: ptre(:,:,:), ptro(:,:,:)
+        call pftcc_glob%get_refs_ptr( ptre, ptro )
+        pfts_even = cmplx(ptre,kind=dp)
+        pfts_odd  = cmplx(ptro,kind=dp)
+        call polar_cavger_write(trim(tmpl_fname)//'_even'//BIN_EXT,'even')
+        call polar_cavger_write(trim(tmpl_fname)//'_odd'//BIN_EXT, 'odd')
+        call polar_cavger_zero_pft_refs !! removed after writing
+        nullify(ptre, ptro)
+    end subroutine polar_cavger_writeall_pftccrefs
 
     ! Converts cavgs PFTS to cartesian grids and writes them
     subroutine polar_cavger_write_cartrefs( pftcc, tmpl_fname, which )
@@ -1466,7 +1533,7 @@ contains
         call polar_cavger_new(pftcc,.false.)
         call polar_cavger_update_sums(NIMGS, pinds, b%spproj, pftcc, shifts)
         call polar_cavger_merge_eos_and_norm
-        call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
+        call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
         ! write
         call polar_cavger_write('cavgs_even.bin', 'even')
         call polar_cavger_write('cavgs_odd.bin',  'odd')

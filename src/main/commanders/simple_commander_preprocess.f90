@@ -1592,6 +1592,7 @@ contains
                         else
                             call progressfile_update(prog)
                         endif
+                        write(logfhandle,'(f4.0,1x,a)') 100.*prog, 'percent of the micrographs processed'
                     endif
                 endif
             enddo
