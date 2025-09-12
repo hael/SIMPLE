@@ -177,11 +177,11 @@ contains
             mm(i,:) = cavg_imgs(i)%minmax(mskrad)
         end do
         !$omp end parallel do
-        ! if( DEBUG )then
-        !     do i = 1, ncls_sel
-        !         call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
-        !     enddo
-        ! endif
+        if( DEBUG )then
+            do i = 1, ncls_sel
+                call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
+            enddo
+        endif
         call clsfrcs%kill
     end subroutine prep_cavgs4clustering
 
@@ -311,12 +311,13 @@ contains
         call dealloc_imgarr(cavg_threads)
     end subroutine flag_non_junk_cavgs
 
-    function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax  ) result( dmat )
+    function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
         use simple_corrmat,          only: calc_inpl_invariant_fm
         use simple_histogram,        only: histogram
         use simple_pspecs,           only: pspecs
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
+        character(len=*),     intent(in)    :: which
         real,                 intent(in)    :: oa_minmax(2)
         integer,              parameter     :: NHISTBINS = 128
         real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
@@ -363,7 +364,16 @@ contains
         !$omp end parallel do
         call hists(:)%kill
         dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
-        dmat      = W_HIST * dmat_hist + W_POW * dmat_pow + W_FM * dmat_fm
+        select case(trim(which))    
+            case('hist')
+                dmat = dmat_hist
+            case('pow')
+                dmat = dmat_pow
+            case('fm')
+                dmat = dmat_fm
+            case DEFAULT
+                dmat = W_HIST * dmat_hist + W_POW * dmat_pow + W_FM * dmat_fm
+        end select
         ! destruct
         call pows%kill
         do i = 1, ncls_sel

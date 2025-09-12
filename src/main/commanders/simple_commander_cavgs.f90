@@ -145,9 +145,10 @@ contains
         real,             parameter   :: SCORE_THRES_INCL = 75.
         integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
+        type(image)                   :: img_msk
         real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:), dmat_sel(:,:)
         real,             allocatable :: resvals(:), res_bad(:), res_good(:), res_maybe(:), clustscores(:)
-        logical,          allocatable :: l_non_junk(:), good_mask(:)
+        logical,          allocatable :: l_non_junk(:), good_mask(:), l_msk(:,:,:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), cluster_inds(:)
         integer,          allocatable :: clspops(:), clspops_sel(:), states(:), labels4write(:)
         type(clust_info), allocatable :: clust_info_arr(:)
@@ -156,8 +157,8 @@ contains
         type(stats_struct)            :: res_stats
         integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
         integer                       :: i, j, ii, jj, nclust, iclust, pop_good, pop_bad, nclust_sel
-        integer                       :: ngood, minv_labels, ind, ldim(3), cnt_clust, pop
-        real                          :: fsc_res, rfoo, frac_good, best_res, worst_res, res_max
+        integer                       :: ngood, minv_labels, ind, ldim(3), cnt_clust, pop, box
+        real                          :: fsc_res, rfoo, frac_good, best_res, worst_res, res_max, mskrad
         real                          :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -175,7 +176,41 @@ contains
         call spproj%read(params%projfile)
         ncls        = spproj%os_cls2D%get_noris()
         ! prep class average stack
-        call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        if( trim(params%have_selection).eq.'yes' )then
+            states = spproj%os_cls2D%get_all_asint('state')
+            allocate(l_non_junk(size(states)), source=states > 0)
+            ncls_sel  = count(l_non_junk)
+            cavg_imgs = read_cavgs_into_imgarr(spproj, l_non_junk)
+            smpd      = cavg_imgs(1)%get_smpd()
+            ldim      = cavg_imgs(1)%get_ldim()
+            box       = ldim(1)
+            mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
+            clspops   = spproj%os_cls2D%get_all_asint('pop')
+            clspops   = pack(clspops, mask=l_non_junk)
+            clsinds   = pack((/(i,i=1,ncls)/), mask=l_non_junk)
+            ! create the stuff needed in the loop
+            allocate(mm(ncls_sel,2), source=0.)
+            ! prep mask
+            call img_msk%new([box,box,1], smpd)
+            img_msk = 1.
+            call img_msk%mask(mskrad, 'hard')
+            l_msk = img_msk%bin2logical()
+            call img_msk%kill
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            do i = 1, ncls_sel
+                ! normalization
+                call cavg_imgs(i)%norm_within(l_msk)
+                ! mask
+                call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+                ! stash minmax
+                mm(i,:) = cavg_imgs(i)%minmax(mskrad)
+            end do
+            !$omp end parallel do
+            cavg_imgs = read_cavgs_into_imgarr(spproj, l_non_junk)
+            deallocate(states)
+        else
+            call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        endif
         ncls_sel    = size(cavg_imgs)
         smpd        = cavg_imgs(1)%get_smpd()
         ldim        = cavg_imgs(1)%get_ldim()
@@ -199,7 +234,7 @@ contains
                 if( pop > 0 )then
                     cluster_inds = pack(inds, mask=labels == iclust)
                     cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-                    dmat         = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max])
+                    dmat         = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
                     call medoid_from_dmat(dmat, ind)
                     clustscores(iclust) = sum(dmat(ind,:)) / real(pop)
                     i_medoids(iclust) = cluster_inds(ind)
@@ -210,16 +245,13 @@ contains
             clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, clustscores )
         else
             ! calculate distance matrix
-            dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max])
+            dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
             ! cluster
-            call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
             if( cline%defined('ncls') )then
-                if( nclust > params%ncls )then
-                    nclust = params%ncls
-                    deallocate(i_medoids, labels)
-                    call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
-                endif
+                nclust = params%ncls
+                call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
             else
+                call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
                 if( nclust > 5 .and. nclust < 20 )then
                     nclust = 20
                     deallocate(i_medoids, labels)

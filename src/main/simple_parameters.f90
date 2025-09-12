@@ -58,6 +58,7 @@ type :: parameters
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: gridding='no'        !< to test gridding correction
     character(len=3)          :: have_clustering='no' !< to flag that clustering solution exists in field os_cls2D (cluster_cavgs)
+    character(len=3)          :: have_selection='no'  !< to flag that selection exists in field os_cls2D (cluster_cavgs)
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
@@ -211,6 +212,7 @@ type :: parameters
     character(len=STDLEN)     :: boxtype='eman'
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
+    character(len=STDLEN)     :: clust_crit=''        !< clustering criterion (fm|pow|hist|hybrid){hybrid}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
@@ -236,7 +238,7 @@ type :: parameters
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca'      !< PCA mode(ppca|pca_svd|kpca){ppca}
+    character(len=STDLEN)     :: pca_mode='kpca'      !< PCA mode(ppca|pca_svd|kpca){ppca}
     character(len=STDLEN)     :: kpca_ker='cosine'    !< kPCA kernel(rbf|cosine){cosine}
     character(len=STDLEN)     :: kpca_target='ptcl'   !< kPCA kernel target on ptcls or cavgs (ptcl|cls){ptcl}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -645,6 +647,7 @@ contains
         call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
         call check_carg('have_clustering', self%have_clustering)
+        call check_carg('have_selection', self%have_selection)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
