@@ -68,9 +68,11 @@ type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(sample_classes_commander)              :: xsample_classes
 type(cluster_cavgs_commander)               :: xcluster_cavgs
+type(cluster_stack_commander)               :: xcluster_stack
 type(select_clusters_commander)             :: xsel_clusts
 type(match_cavgs_commander)                 :: xmatch_cavgs
-type(match_cavgs2afm_commander)            :: xmatch_cavgs2afm
+type(match_cavgs2afm_commander)             :: xmatch_cavgs2afm
+type(match_stacks_commander)                :: xmatch_stacks
 type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
 type(consolidate_chunks_commander)          :: xconsolidate_chunks
@@ -267,12 +269,16 @@ select case(trim(prg))
         call xsample_classes%execute(cline)
     case( 'cluster_cavgs' )
         call xcluster_cavgs%execute(cline)
+    case( 'cluster_stack' )
+        call xcluster_stack%execute(cline)
     case('select_clusters')
         call xsel_clusts%execute(cline)
     case( 'match_cavgs' )
         call xmatch_cavgs%execute(cline)
-    case ( 'match_cavgs2afm' )
+    case( 'match_cavgs2afm' )
         call xmatch_cavgs2afm%execute(cline)
+    case( 'match_stacks' )
+        call xmatch_stacks%execute(cline)
     case( 'score_ptcls' )
         call xscore_ptcls%execute(cline)
     case( 'write_classes' )
@@ -476,7 +482,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b5b5232d')
+call simple_print_git_version('a45b27ce')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

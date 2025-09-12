@@ -206,7 +206,6 @@ contains
                 mm(i,:) = cavg_imgs(i)%minmax(mskrad)
             end do
             !$omp end parallel do
-            cavg_imgs = read_cavgs_into_imgarr(spproj, l_non_junk)
             deallocate(states)
         else
             call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
@@ -458,7 +457,7 @@ contains
         oa_minmax(1) = minval(mm_ref(:,1))
         oa_minmax(2) = maxval(mm_ref(:,2))
         ! generate matching distance matrix
-        dmat = calc_match_cavgs_dmat(params, cavg_imgs_ref, cavg_imgs_match, oa_minmax)
+        dmat = calc_match_cavgs_dmat(params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, params%clust_crit)
         ! genrate cluster distance matrix
         allocate(dmat_clust(nclust,nmatch), source=0.)
         do iclust = 1, nclust
@@ -596,7 +595,7 @@ contains
         oa_minmax(1) = (minval(mm_ref(:,1)) + minval(mm_afm(:,1))) / 2.
         oa_minmax(2) = (maxval(mm_ref(:,2)) + minval(mm_afm(:,2))) / 2.
         ! generate matching distance matrix
-        dmat = calc_match_cavgs_dmat(params, afm_imgs, cavg_imgs_rescale, oa_minmax)
+        dmat = calc_match_cavgs_dmat(params, afm_imgs, cavg_imgs_rescale, oa_minmax, params%clust_crit)
         allocate(rank_cavgs(nrefs))
         allocate(cavg_labels(nrefs))
         do i = 1, nrefs 

@@ -8,6 +8,7 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_stack_io,       only: stack_io
+use simple_strategy2D_utils
 use simple_nice
 implicit none
 
@@ -22,6 +23,8 @@ public :: normalize_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
+public :: cluster_stack_commander
+public :: match_stacks_commander
 public :: estimate_diam_commander
 private
 #include "simple_local_flags.inc"
@@ -80,6 +83,16 @@ type, extends(commander_base) :: stackops_commander
   contains
     procedure :: execute      => exec_stackops
 end type stackops_commander
+
+type, extends(commander_base) :: cluster_stack_commander
+  contains
+    procedure :: execute      => exec_cluster_stack
+end type cluster_stack_commander
+
+type, extends(commander_base) :: match_stacks_commander
+  contains
+    procedure :: execute      => exec_match_stacks
+end type match_stacks_commander
 
 type, extends(commander_base) :: estimate_diam_commander
   contains
@@ -1175,6 +1188,145 @@ contains
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops
+
+    subroutine exec_cluster_stack( self, cline )
+        use simple_clustering_utils, only: cluster_dmat
+        class(cluster_stack_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(parameters)              :: params
+        type(image),      allocatable :: stk_imgs(:), cluster_imgs(:)
+        integer,          allocatable :: labels(:), i_medoids(:)
+        real,             allocatable :: mm(:,:), dmat(:,:)
+        real    :: smpd, mskrad, oa_min, oa_max
+        integer :: i, ldim(3), box, nimgs, nclust
+        ! defaults
+        call cline%set('oritype',      'cls2D')
+        call cline%set('ctf',             'no')
+        call cline%set('objfun',          'cc')
+        call cline%set('sh_inv',         'yes') ! shift invariant search
+        if( .not. cline%defined('hp')         ) THROW_HARD('Need high-pass limit (hp) on command line!')
+        if( .not. cline%defined('lp')         ) THROW_HARD('Need low-pass limit (lp) on command line!')
+        if( .not. cline%defined('mskdiam')    ) THROW_HARD('Need mask diameter in A (mskdiam) on command line!')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',         10.)
+        if( .not. cline%defined('kweight')    ) call cline%set('kweight',   'all')
+        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'fm')
+        ! master parameters
+        call params%new(cline)
+        ! prep
+        stk_imgs = read_cavgs_into_imgarr(params%stk)
+        nimgs    = size(stk_imgs)
+        smpd     = stk_imgs(1)%get_smpd()
+        ldim     = stk_imgs(1)%get_ldim()
+        box      = ldim(1)
+        mskrad   = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
+        ! create the stuff needed in the loop
+        allocate(mm(nimgs,2), source=0.)
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, nimgs
+            ! normalization
+            call stk_imgs(i)%norm
+            ! mask
+            call stk_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+            ! stash minmax
+            mm(i,:) = stk_imgs(i)%minmax(mskrad)
+        end do
+        !$omp end parallel do
+        ! calculate overall minmax
+        oa_min      = minval(mm(:,1))
+        oa_max      = maxval(mm(:,2))
+        ! ensure correct smpd/box in params class
+        params%smpd = smpd
+        params%box  = ldim(1)
+        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        ! calculate distance matrix
+        dmat = calc_cluster_cavgs_dmat(params, stk_imgs, [oa_min,oa_max], params%clust_crit)
+        ! cluster
+        if( cline%defined('ncls') )then
+            nclust = params%ncls
+            call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+        else
+            call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels)
+            if( nclust > 5 .and. nclust < 20 )then
+                nclust = 20
+                deallocate(i_medoids, labels)
+                call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+            endif
+        endif
+        call dealloc_imgarr(stk_imgs)
+        stk_imgs = read_cavgs_into_imgarr(params%stk)
+        call write_cavgs( nimgs, stk_imgs, labels, 'cluster', '.mrcs' )
+    end subroutine exec_cluster_stack
+
+    subroutine exec_match_stacks( self, cline )
+        class(match_stacks_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(parameters) :: params
+        type(image),       allocatable :: stk_imgs_ref(:), stk_imgs_match(:)
+        integer,           allocatable :: i_medoids_ref(:), labels_match(:)
+        real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat(:,:)
+        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch, box
+        real    :: smpd, oa_minmax(2), mskrad
+        ! defaults
+        call cline%set('oritype', 'cls2D')
+        call cline%set('ctf',        'no')
+        call cline%set('objfun',     'cc')
+        call cline%set('sh_inv',    'yes') ! shift invariant search
+        if( .not. cline%defined('hp')         ) THROW_HARD('Need high-pass limit (hp) on command line!')
+        if( .not. cline%defined('lp')         ) THROW_HARD('Need low-pass limit (lp) on command line!')
+        if( .not. cline%defined('mskdiam')    ) THROW_HARD('Need mask diameter in A (mskdiam) on command line!')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',         10.)
+        if( .not. cline%defined('kweight')    ) call cline%set('kweight',   'all')
+        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'fm')
+        ! master parameters
+        call params%new(cline)
+        ! prep
+        stk_imgs_ref   = read_cavgs_into_imgarr(params%stk)
+        stk_imgs_match = read_cavgs_into_imgarr(params%stk2)
+        nrefs          = size(stk_imgs_ref)
+        nclust         = nrefs
+        nmatch         = size(stk_imgs_match)
+        smpd           = stk_imgs_ref(1)%get_smpd()
+        ldim           = stk_imgs_ref(1)%get_ldim()
+        box            = ldim(1)
+        mskrad         = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
+        ! create the stuff needed in the loop
+        allocate(mm_ref(nrefs,2), source=0.)
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, nrefs
+            ! normalization
+            call stk_imgs_ref(i)%norm
+            ! mask
+            call stk_imgs_ref(i)%mask(mskrad, 'soft', backgr=0.)
+            ! stash minmax
+            mm_ref(i,:) = stk_imgs_ref(i)%minmax(mskrad)
+        end do
+        !$omp end parallel do
+        ! calculate overall minmax
+        oa_minmax(1) = minval(mm_ref(:,1))
+        oa_minmax(2) = maxval(mm_ref(:,2))
+        ! ensure correct smpd/box in params class
+        params%smpd = smpd
+        params%box  = ldim(1)
+        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        ! generate matching distance matrix
+        dmat = calc_match_cavgs_dmat(params, stk_imgs_ref, stk_imgs_match, oa_minmax, params%clust_crit)
+        ! genrate cluster distance matrix
+        allocate(labels_match(nmatch), source=0)
+        labels_match = minloc(dmat, dim=1)
+
+        print *, 'size(lables_match)       : ', size(labels_match)
+        print *, 'nmatch                   : ', nmatch
+        print *, 'size(minloc(dmat, dim=1)): ', size(minloc(dmat, dim=1))
+
+        ! write matching references
+        do imatch = 1, nmatch
+            call stk_imgs_ref(labels_match(imatch))%write('matching_refs.mrcs', imatch)
+        end do
+        call dealloc_imgarr(stk_imgs_ref)
+        call dealloc_imgarr(stk_imgs_match)
+    end subroutine exec_match_stacks
 
     subroutine exec_estimate_diam( self, cline )
         use simple_segmentation

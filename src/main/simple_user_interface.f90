@@ -108,6 +108,7 @@ type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster_cavgs
+type(simple_program), target :: cluster_stack
 type(simple_program), target :: comparemc
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
@@ -143,6 +144,7 @@ type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
 type(simple_program), target :: match_cavgs
 type(simple_program), target :: match_cavgs2afm
+type(simple_program), target :: match_stacks
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mkdir_
 type(simple_program), target :: map_validation
@@ -442,6 +444,7 @@ contains
         call new_cluster2D_subsets
         call new_cluster2D_stream
         call new_cluster_cavgs
+        call new_cluster_stack
         call new_comparemc
         call new_convert
         call new_ctf_estimate
@@ -478,6 +481,7 @@ contains
         call new_mask
         call new_match_cavgs
         call new_match_cavgs2afm
+        call new_match_stacks
         call new_merge_projects
         call new_mkdir_
         call new_motion_correct
@@ -595,6 +599,7 @@ contains
         call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster_cavgs)
+        call push2prg_ptr_array(cluster_stack)
         call push2prg_ptr_array(comparemc)
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(ctf_estimate)
@@ -630,6 +635,7 @@ contains
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(match_cavgs)
         call push2prg_ptr_array(match_cavgs2afm)
+        call push2prg_ptr_array(match_stacks)
         call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
@@ -789,6 +795,8 @@ contains
                 ptr2prg => cluster2D_stream
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
+            case('cluster_stack')
+                ptr2prg => cluster_stack
             case('comparemc')
                 ptr2prg => comparemc
             case('convert')
@@ -863,6 +871,8 @@ contains
                 ptr2prg => match_cavgs
             case('match_cavgs2afm')
                 ptr2prg => match_cavgs2afm
+            case('match_stacks')
+                ptr2prg => match_stacks
             case('merge_projects')
                 ptr2prg => merge_projects
             case('mkdir')
@@ -1044,6 +1054,7 @@ contains
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') clin_fsc%name
         write(logfhandle,'(A)') cluster_cavgs%name
+        write(logfhandle,'(A)') cluster_stack%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_subsets%name
         write(logfhandle,'(A)') comparemc%name
@@ -1079,6 +1090,7 @@ contains
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') match_cavgs%name
         write(logfhandle,'(A)') match_cavgs2afm%name
+        write(logfhandle,'(A)') match_stacks%name
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
@@ -2270,6 +2282,36 @@ contains
         ! computer controls
         call cluster_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cluster_cavgs
+
+    subroutine new_cluster_stack
+        ! PROGRAM SPECIFICATION
+        call cluster_stack%new(&
+        &'cluster_stack',&                                            ! name
+        &'Analysis of class averages with k-medoids',&                ! descr_short
+        &'is a program for analyzing class averages with k-medoids',& ! descr_long
+        &'simple_exec',&                                              ! executable
+        &1, 1, 0, 1, 2, 1, 1, .false.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cluster_stack%set_input('img_ios', 1, stk)
+        cluster_stack%img_ios(1)%required = .true.
+        ! parameter input/output
+        call cluster_stack%set_input('parm_ios', 1, 'ncls', 'num', 'Number of clusters', 'Number of clusters', '# clusters', .false., 0.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster_stack%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(fm|pow|hist|hybrid){hybrid}',&
+        &'(fm|pow|hist|hybrid){fm}', .false., 'fm')
+        ! filter controls
+        call cluster_stack%set_input('filt_ctrls', 1, hp)
+        cluster_stack%filt_ctrls(1)%required = .true.
+        call cluster_stack%set_input('filt_ctrls', 2, lp)
+        cluster_stack%filt_ctrls(2)%required = .true.
+        ! mask controls
+        call cluster_stack%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call cluster_stack%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_cluster_stack
 
     subroutine new_convert
         ! PROGRAM SPECIFICATION
@@ -3635,6 +3677,37 @@ contains
         call match_cavgs2afm%set_input('comp_ctrls', 1, nthr)
     end subroutine new_match_cavgs2afm
 
+    subroutine new_match_stacks
+        ! PROGRAM SPECIFICATION
+        call match_stacks%new(&
+        &'match_stack',&                                              ! name
+        &'Analysis of class averages with k-medoids',&                ! descr_short
+        &'is a program for analyzing class averages with k-medoids',& ! descr_long
+        &'simple_exec',&                                              ! executable
+        &2, 0, 0, 1, 2, 1, 1, .false.)                                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call match_stacks%set_input('img_ios', 1, stk)
+        match_stacks%img_ios(1)%required = .true.
+        call match_stacks%set_input('img_ios', 2, stk2)
+        match_stacks%img_ios(2)%required = .true.
+        ! parameter input/output
+         ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call match_stacks%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(fm|pow|hist|hybrid){hybrid}',&
+        &'(fm|pow|hist|hybrid){fm}', .false., 'fm')
+        ! filter controls
+        call match_stacks%set_input('filt_ctrls', 1, hp)
+        match_stacks%filt_ctrls(1)%required = .true.
+        call match_stacks%set_input('filt_ctrls', 2, lp)
+        match_stacks%filt_ctrls(2)%required = .true.
+        ! mask controls
+        call match_stacks%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call match_stacks%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_match_stacks
 
     subroutine new_merge_projects
         ! PROGRAM SPECIFICATION
