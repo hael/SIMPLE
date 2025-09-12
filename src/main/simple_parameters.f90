@@ -837,7 +837,7 @@ contains
         call check_iarg('eer_fraction',   self%eer_fraction)
         call check_iarg('eer_upsampling', self%eer_upsampling)
         call check_iarg('extr_iter',      self%extr_iter)
-        call check_iarg('extr_lim',      self%extr_lim)
+        call check_iarg('extr_lim',       self%extr_lim)
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromp',          self%fromp)

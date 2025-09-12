@@ -1167,7 +1167,7 @@ contains
             call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
             ! Read polar references
             call polar_cavger_new(pftcc, .true.)
-            call polar_cavger_read_all(trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter-1,3)//params_glob%ext)
+            call polar_cavger_read_all(POLAR_REFS_FBODY//trim(BIN_EXT))
             call build_glob%clsfrcs%read(FRCS_FILE)
             ! PREPARATION OF REFERENCES IN PFTCC
             !$omp parallel do default(shared) private(iproj)&

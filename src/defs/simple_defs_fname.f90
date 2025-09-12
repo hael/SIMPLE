@@ -61,6 +61,7 @@ character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 character(len=*), parameter :: ARRAY_SCRIPT         = 'simple_script_array'
 character(len=*), parameter :: POLARIZED_PTCLS      = 'polar_ptcls'
 character(len=*), parameter :: POLARIZED_CTFS       = 'polar_ctfs'
+character(len=*), parameter :: POLAR_REFS_FBODY     = 'polar_refs'
 ! STATS
 character(len=*), parameter :: STATS_FILE           = 'simple_stats'//trim(TXT_EXT)
 character(len=*), parameter :: ITERSTATS_FILE       = 'simple_iter_stats'//trim(TXT_EXT)

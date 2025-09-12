@@ -122,10 +122,16 @@ contains
             t_prepare_polar_references = tic()
         endif
         call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter,&
-                                        &do_polar=(l_polar .and. which_iter>1) )
+                                        &do_polar=(l_polar .and. .not.cline%defined('vol1')) )
         if( l_polar .and. l_restore )then
             ! for restoration
-            if( which_iter == 1 ) call polar_cavger_new(pftcc, .true.)
+            if( cline%defined('vol1') )then
+                call polar_cavger_new(pftcc, .true.)
+                if( params_glob%l_trail_rec )then
+                    ! In the first iteration the polarized cartesian references are written down
+                    call polar_cavger_writeall_pftccrefs(POLAR_REFS_FBODY)
+                endif
+            endif
             call polar_cavger_zero_pft_refs
             if( file_exists(params_glob%frcs) )then
                 call build_glob%clsfrcs%read(params_glob%frcs)
@@ -375,11 +381,10 @@ contains
       contains
 
         subroutine polar_restoration()
-            ! polar restoration
             params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
             call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
-            call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
-            call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
+            call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
+            call polar_cavger_writeall(POLAR_REFS_FBODY)
             call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
             call polar_cavger_kill
         end subroutine polar_restoration

@@ -428,6 +428,15 @@ contains
                 have_oris = .true.
                 call build%spproj%write_segment_inside(params%oritype)
             endif
+            if( l_polar )then
+                ! performs reconstruction only if polar references
+                ! are absent and a volume is not provided
+                if( .not.vol_defined )then
+                    if( file_exists(POLAR_REFS_FBODY//trim(BIN_EXT)) )then
+                        vol_defined = .true.
+                    endif
+                endif
+            endif
             if( .not. vol_defined )then
                 ! reconstructions needed
                 cline_tmp = cline_reconstruct3D_distr
@@ -531,17 +540,6 @@ contains
             endif
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
             if( L_BENCH_GLOB ) rt_merge_algndocs = toc(t_merge_algndocs)
-            if( l_polar )then
-                params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
-                call polar_cavger_new(pftcc, .true., nrefs=params%nspace)
-                call polar_cavger_calc_pops(build%spproj)
-                call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
-                call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
-                call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
-                call polar_cavger_writeall(get_fbody(params%refs,params%ext,separator=.false.))
-                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
-                call polar_cavger_kill
-            endif
             ! CONVERGENCE
             converged = .false.
             select case(trim(params%refine))
@@ -665,6 +663,24 @@ contains
                             endif
                         enddo
                 end select
+            endif
+            if( l_polar )then
+                ! Assemble polar references
+                params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
+                call polar_cavger_new(pftcc, .true., nrefs=params%nspace)
+                call polar_cavger_calc_pops(build%spproj)
+                call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
+                call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
+                call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
+                call polar_cavger_writeall(POLAR_REFS_FBODY)
+                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
+                call polar_cavger_kill
+                call job_descr%delete('vol1')
+                call cline%delete('vol1')
+                if( iter > 1 .and. params%keepvol.eq.'no' )then
+                    vol_iter = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                    call del_file(vol_iter)
+                endif
             endif
             if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
             if ( l_combine_eo .and. converged )then
@@ -809,6 +825,8 @@ contains
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
+                ! making sure the input volume is only used once
+                if( trim(params%polar).eq.'yes' ) call cline%delete('vol1')
                 ! convergence
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
@@ -875,12 +893,24 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         logical          :: l_shmem, converged
-        if( .not. cline%defined('vol1')     ) THROW_HARD('starting volume is needed for first sigma estimation')
         if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
         if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
         if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
         if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
         if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
+        if( .not.cline%defined('vol1') )then
+            if( cline%defined('polar') )then
+                if( trim(cline%get_carg('polar')).eq.'yes' )then
+                    if( .not.file_exists(POLAR_REFS_FBODY//trim(BIN_EXT)) )then
+                        THROW_HARD('starting polar references are needed for first sigma estimation')
+                    endif
+                else
+                    THROW_HARD('starting volume is needed for first sigma estimation')
+                endif
+            else
+                THROW_HARD('starting volume is needed for first sigma estimation')
+            endif
+        endif
         l_shmem = .not.cline%defined('nparts')
         cline_first_sigmas = cline
         call cline_first_sigmas%set('prg', 'refine3D')

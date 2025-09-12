@@ -380,8 +380,8 @@ contains
                     if( which_iter == 1) call cavger_kill
                     ! polar restoration
                     call polar_cavger_merge_eos_and_norm
-                    call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE)
-                    call polar_cavger_writeall(get_fbody(params_glob%refs,params_glob%ext,separator=.false.))
+                    call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
+                    call polar_cavger_writeall(POLAR_REFS_FBODY)
                     call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
                     call polar_cavger_gen2Dclassdoc(build_glob%spproj)
                     call polar_cavger_kill
@@ -626,7 +626,7 @@ contains
         endif
         ! Read polar references
         call polar_cavger_new(pftcc, .false.)
-        call polar_cavger_read_all(params_glob%refs)
+        call polar_cavger_read_all(trim(POLAR_REFS_FBODY)//trim(BIN_EXT))
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! Centering-related objects
         do_center = (params_glob%center .eq. 'yes') .and. has_been_searched&

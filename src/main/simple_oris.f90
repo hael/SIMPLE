@@ -1280,8 +1280,8 @@ contains
     end function get_nevenodd
 
     subroutine print( self, i )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: i
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
         call self%o(i)%print_ori()
     end subroutine print
 
