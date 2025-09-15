@@ -739,7 +739,7 @@ contains
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
-            ! store un-scaled shift parameters
+            ! offset at scale of inputted volume
             params%xsh = shvec(1) / scale
             params%ysh = shvec(2) / scale
             params%zsh = shvec(3) / scale
@@ -767,11 +767,10 @@ contains
             if( .not. build%spproj%is_virgin_field(params%oritype) )then
                 ! transfer shift and symmetry to orientations
                 call syme%new(params%pgrp)
-                ! rotate the orientations & transfer the 3d shifts to 2d
-                shvec = -1. * shvec ! the sign is right
                 ! accounting for different volume/particle size
                 box   = build%spproj%get_box()
-                shvec = shvec * real(box) / real(params%box_crop)
+                shvec = -[params%xsh,params%ysh,params%zsh] * real(box) / real(params%box_crop)
+                ! rotate the orientations & transfer the 3d shifts to 2d
                 call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
                 if( cline%defined('nspace') )then
                     ! making sure the projection directions assignment
