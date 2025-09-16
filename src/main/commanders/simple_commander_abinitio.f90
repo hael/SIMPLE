@@ -69,6 +69,7 @@ integer,          parameter :: PHASES(3)             = [2,6,8]
 integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
 integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))  ! the last 30 iterations are not included in this estimate since the sampling method changes
 integer,          parameter :: NSPACE(3)             = [500,1000,2500]
+integer,          parameter :: NSPACE_POLAR          = 1000
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: PROBREFINE_STAGE      = 5
 integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
@@ -83,7 +84,7 @@ integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                 ! when 
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                 ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false.
+logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false., l_polar=.false.
 logical          :: l_ini3D=.false., l_lpauto=.false., l_nsample_given=.false., l_nsample_stop_given=.false., l_automsk=.false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
@@ -540,6 +541,7 @@ contains
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
+        if( .not. cline%defined('ref_type')    ) call cline%set('ref_type',     'clin')
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -568,6 +570,19 @@ contains
         if( trim(params%multivol_mode).eq.'docked' )then
             params%nstates = 1
             call cline%delete('nstates')
+        endif
+        if( trim(params%polar).eq.'yes' )then
+            if( trim(params%multivol_mode).ne.'single' )then
+                THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
+            endif
+            if( trim(params%lp_auto).eq.'yes' )then
+                THROW_WARN('POLAR=YES not compatible LP_AUTO=YES; reverting to LP_AUTO=NO')
+            endif
+            params%lp_auto = 'no'; params%l_lpauto = .false.; l_lpauto=.false.
+            call cline%set('lp_auto', 'no')
+            l_polar = .true. ! global parameter
+        else
+            call cline%delete('ref_type')
         endif
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -813,7 +828,7 @@ contains
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 call randomize_states(spproj, params%projfile, xreconstruct3D_distr, istage=split_stage)
             else if( istage >= RECALC_STARTREC_STAGE )then
-                call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=istage)
+                if( .not.l_polar ) call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=istage)
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
@@ -832,11 +847,10 @@ contains
             call nice_communicator%update_ini3D(last_stage_completed=.true.) 
             call nice_communicator%cycle()
         enddo
-        call spproj%read_segment('out', params%projfile)
-        ! for visualization
-        call gen_ortho_reprojs4viz(spproj)
         ! calculate 3D reconstruction at original sampling
         call calc_final_rec(spproj, params%projfile, xreconstruct3D_distr)
+        ! for visualization
+        call gen_ortho_reprojs4viz(spproj)
         ! postprocess final 3D reconstruction
         call postprocess_final_rec(spproj)
         ! termination
@@ -999,6 +1013,7 @@ contains
         call cline_symmap%set('prg',                     'symmetrize_map')
         call cline_symmap%set('pgrp',              trim(params_glob%pgrp))
         call cline_symmap%set('projfile',                  trim(projfile))
+        call cline_symmap%set('center',                             'yes')
         if( .not. cline_symmap%defined('cenlp') )then
         call cline_symmap%set('cenlp',                      CENLP_DEFAULT)
         endif
@@ -1012,6 +1027,7 @@ contains
         call cline_reconstruct3D%set('ml_reg',                       'no')
         call cline_reconstruct3D%set('needs_sigma',                  'no')
         call cline_reconstruct3D%set('objfun',                       'cc')
+        call cline_reconstruct3D%delete('polar')
         ! no fractional update
         call cline_reconstruct3D%delete('update_frac')
         ! individual particles reconstruction
@@ -1082,13 +1098,12 @@ contains
         if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
         if( present(lpstart) )then
             call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
-            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs )
+            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, constant_scale=l_polar)
         else
             call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
-            &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs )
+            &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs, constant_scale=l_polar)
         endif
         call clsfrcs%kill
-
         contains
 
             function calc_lplim_final_stage( nbest ) result( lplim )
@@ -1160,7 +1175,7 @@ contains
         character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin, cavgw
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn
-        real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg
+        real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg, gaufreq
         ! iteration number bookkeeping
         iter = 0
         if( cline_refine3D%defined('endit') )then
@@ -1209,6 +1224,9 @@ contains
         if( istage >= ICM_STAGE ) icm = 'yes'
         ! balance
         balance = 'yes'
+        ! Gaussian filtering of polar references
+        gaufreq = -1.
+        if( lpinfo(istage)%l_lpset .and. l_polar ) gaufreq = lpinfo(istage)%lp
         ! trailing reconstruction
         trail_rec = 'no'
         select case(trim(params_glob%multivol_mode))
@@ -1242,7 +1260,7 @@ contains
         endif
         ! automasking
         automsk = 'no'
-        if( .not. l_cavgs )then
+        if( (.not.l_cavgs) .and. (.not.l_polar) )then
             if( istage >= AUTOMSK_STAGE .and. l_automsk )then
                 automsk = 'yes'
             endif
@@ -1313,6 +1331,12 @@ contains
         end select
         ! turn off ML-regularization when icm is on
         if( trim(icm).eq.'yes' ) ml_reg = 'no'
+        ! Specific options for polar representation
+        if( l_polar )then
+            inspace = NSPACE_POLAR
+            ml_reg  = 'no'
+            icm     = 'no'
+        endif
         ! projection directions
         if( cline_refine3D%defined('nspace_max') )then
             inspace = min(inspace, params_glob%nspace_max)
@@ -1322,7 +1346,7 @@ contains
         ! class global control parameters
         if( l_update_frac_dyn .or. istage == NSTAGES )then
         call cline_refine3D%set('update_frac',        update_frac_dyn)
-        call cline_refine3D%set('fillin',             fillin)
+        call cline_refine3D%set('fillin',                      fillin)
         else
         call cline_refine3D%set('update_frac',            update_frac)
         call cline_refine3D%delete('fillin')
@@ -1362,10 +1386,17 @@ contains
         call cline_refine3D%set('overlap',                    overlap)
         call cline_refine3D%set('fracsrch',                  fracsrch)
         if( l_cavgs )then
-        call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
+        call cline_refine3D%set('snr_noise_reg',    snr_noise_reg)
         call cline_refine3D%delete('update_frac') ! never on cavgs
         else
         call cline_refine3D%delete('snr_noise_reg')
+        endif
+        if( gaufreq > 0.)then
+        call cline_refine3D%set('gauref',  'yes')
+        call cline_refine3D%set('gaufreq', gaufreq)
+        else
+        call cline_refine3D%delete('gauref')
+        call cline_refine3D%delete('gaufreq')
         endif
     end subroutine set_cline_refine3D
 
@@ -1381,13 +1412,18 @@ contains
         call del_file(DIST_FBODY      //'.dat')
         call del_file(ASSIGNMENT_FBODY//'.dat')
         stage = '_stage_'//int2str(istage)
-        do state = 1, params_glob%nstates
-            str_state = int2str_pad(state,2)
-            vol_name  = VOL_FBODY//str_state//params_glob%ext
-            vol_pproc = add2fbody(vol_name, params_glob%ext, PPROC_SUFFIX)
-            if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, params_glob%ext,stage))
-            if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params_glob%ext,stage))
-        enddo
+        if( l_polar )then
+            vol_name = trim(CAVGS_ITER_FBODY)//int2str_pad(cline_refine3D%get_iarg('endit'),3)//params_glob%ext
+            call simple_copy_file(vol_name, 'cavgs'//stage//params_glob%ext)
+        else
+            do state = 1, params_glob%nstates
+                str_state = int2str_pad(state,2)
+                vol_name  = VOL_FBODY//str_state//params_glob%ext
+                vol_pproc = add2fbody(vol_name, params_glob%ext, PPROC_SUFFIX)
+                if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, params_glob%ext,stage))
+                if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params_glob%ext,stage))
+            enddo
+        endif
     end subroutine exec_refine3D
 
     subroutine symmetrize( istage, spproj, projfile, xreconstruct3D )
@@ -1396,7 +1432,7 @@ contains
         character(len=*),                intent(in)    :: projfile
         class(commander_base), optional, intent(inout) :: xreconstruct3D
         type(symmetrize_map_commander) :: xsymmap
-        type(cmdline)                  :: cline_symrec
+        type(cmdline)                  :: cline_asymrec, cline_symrec
         character(len=:),  allocatable :: vol_iter, vol_sym
         real :: lpsym
         if( l_symran )then
@@ -1404,8 +1440,30 @@ contains
             call spproj%write_segment_inside('ptcl3D', projfile)
         endif
         if( l_srch4symaxis )then
+            ! asymmetric/low symmetry reconstruction
+            if( l_polar )then
+                if( .not.present(xreconstruct3D) )then
+                    THROW_HARD('Reconstructor required with polar=yes')
+                endif
+                cline_asymrec = cline_refine3D
+                call cline_asymrec%set('prg',        'reconstruct3D')
+                call cline_asymrec%set('mkdir',      'no')
+                call cline_asymrec%set('projfile',   projfile)
+                call cline_asymrec%set('pgrp',       params_glob%pgrp_start)
+                call cline_asymrec%set('ml_reg',     'no') ! no ml reg for now
+                call cline_asymrec%set('objfun',     'cc')
+                call cline_asymrec%set('needs_sigma','no')
+                call cline_asymrec%delete('which_iter')
+                call cline_asymrec%delete('endit')
+                call xreconstruct3D%execute_safe(cline_asymrec)
+                vol_iter = 'asymmetric_map'//params_glob%ext
+                call simple_copy_file(VOL_FBODY//int2str_pad(1,2)//params_glob%ext, vol_iter)
+                call cline_asymrec%kill
+            else
+                ! Volume from previous stage
+                vol_iter = VOL_FBODY//STR_STATE_GLOB//params_glob%ext
+            endif
             ! symmetry determination & map symmetrization
-            vol_iter = VOL_FBODY//STR_STATE_GLOB//params_glob%ext
             if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to map symmetrization does not exist')
             call cline_symmap%set('vol1', vol_iter)
             call cline_symmap%set('smpd', lpinfo(istage)%smpd_crop)
@@ -1517,12 +1575,13 @@ contains
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz( spproj )
-        type(sp_project), intent(in) :: spproj
+        type(sp_project), intent(inout) :: spproj
         character(len=:), allocatable :: str_state
         character(len=:), allocatable :: fname
         type(image) :: final_vol, reprojs
         integer     :: state, ifoo, ldim(3)
         real        :: smpd
+        call spproj%read_segment('out', params_glob%projfile)
         do state = 1, params_glob%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle   ! empty-state case
             str_state = int2str_pad(state,2)
