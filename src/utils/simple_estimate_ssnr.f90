@@ -232,12 +232,13 @@ contains
         endif 
     end subroutine get_resolution_at_fsc
 
-    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs )
+    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs, constant_scale )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical,           intent(in)  :: l_cavgs
+        logical, optional, intent(in)  :: constant_scale
         real,    parameter :: FRCLIMS_PTCLS(2) = [0.65,0.03]
         real,    parameter :: FRCLIMS_CAVGS(2) = [0.80,0.05]
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
@@ -245,6 +246,9 @@ contains
         logical, parameter :: L_VERBOSE        = .true. 
         integer :: findlims(2), istage, box_trial
         real    :: frclims(2), frc_stepsz, rbox_stepsz
+        logical :: l_constant_scale
+        l_constant_scale = .false.
+        if( present(constant_scale) ) l_constant_scale = constant_scale
         ! (1) calculate FRC values at the inputted boundaries
         findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
         findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
@@ -297,6 +301,13 @@ contains
             lpinfo(istage)%smpd_crop = smpd / lpinfo(istage)%scale
             lpinfo(istage)%trslim    = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
         end do
+        if( l_constant_scale )then
+            ! downscaling is constant throughout, resolution & translation limits are untouched
+            lpinfo(:)%scale       = lpinfo(nstages)%scale
+            lpinfo(:)%box_crop    = lpinfo(nstages)%box_crop
+            lpinfo(:)%smpd_crop   = lpinfo(nstages)%smpd_crop
+            lpinfo(:)%l_autoscale = lpinfo(nstages)%l_autoscale
+        endif
         if( L_VERBOSE )then
             print *, '########## scale info'
             call print_scaleinfo
