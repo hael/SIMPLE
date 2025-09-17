@@ -51,14 +51,12 @@ contains
         type(projrecord),          allocatable :: projrecords(:)
         type(parameters)                       :: params
         type(qsys_env)                         :: qenv
-        type(simple_nice_communicator)         :: nice_communicator
         type(stream_http_communicator)         :: http_communicator
         type(projs_list)                       :: chunkslist, setslist
-        type(guistats)                         :: gui_stats
         type(oris)                             :: moldiamori, chunksizeori
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
-        type(json_value),          pointer     :: accepted_cls2D, rejected_cls2D
+        type(json_value),          pointer     :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=STDLEN)                  :: chunk_part_env
         character(len=:),          allocatable :: selection_jpeg
@@ -68,6 +66,7 @@ contains
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
         integer          :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
         integer          :: n_accepted, n_rejected, jpg_ntiles, jpg_nxtiles, jpg_nytiles, xtile, ytile
+        integer          :: latest_processed_set, latest_displayed_set
         logical          :: l_params_updated, l_wait_for_user, selection_jpeg_created, found
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -105,10 +104,8 @@ contains
         call params%new(cline)
         call cline%set('mkdir', 'no')
         selection_jpeg_created = .false.
-        l_wait_for_user = trim(params%interactive) == 'yes'
-        ! nice communicator init
-        call nice_communicator%init(params%niceprocid, "")
-        call nice_communicator%cycle()
+        l_wait_for_user        = .false.
+        if(params%interactive == 'yes') l_wait_for_user = .true.
         ! http communicator init
         call http_communicator%create(params%niceprocid, params%niceserver, "sieve_cavgs")
         call communicator_init()
@@ -126,9 +123,7 @@ contains
         endif
         ! mskdiam
         if( .not. cline%defined('mskdiam') )then
-            ! nice communicator status
-            nice_communicator%stat_root%stage = "waiting for mask diameter"
-            call nice_communicator%cycle()
+            ! can this go now using 90% box size as msk?????
             write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '//trim(STREAM_MOLDIAM)
             do i=1, 30
                 if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
@@ -140,7 +135,6 @@ contains
             call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             moldiam = moldiamori%get(1, "moldiam")
-           
             ! write acopy for stream 3d
             call moldiamori%write(1, trim(STREAM_MOLDIAM))
             call moldiamori%kill
@@ -177,35 +171,26 @@ contains
         n_failed_jobs    = 0
         n_accepted       = 0       ! global number of accepted particles
         n_rejected       = 0       ! global number of rejected particles
+        latest_displayed_set = 0   !
         time_last_import = huge(time_last_import)   ! used for flushing unprocessed particles
-        ! guistats init
-        !call gui_stats%init(.true.)
-        !call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
-        !call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
-        ! Joe: nparts is not an input, also see project_buff below
-        !all gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
-        ! nice
-        nice_communicator%stat_root%stage = "importing particles"
-        call nice_communicator%update_cls2D(particles_imported=0)
-        call nice_communicator%cycle()
         do
             ! termination
-            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit ) exit
-            if( nice_communicator%stop .or. test_repick() ) then
+            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit ) exit
+            if( http_communicator%stop .or. test_repick() ) then
                 if(test_repick()) call write_repick_refs("../repick_refs.mrc")
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
                 call qsys_cleanup
-                call nice_communicator%terminate(stop=.true.)
+            !    call nice_communicator%terminate(stop=.true.)
                 call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
                 call EXIT(0)
             endif
             iter = iter + 1
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and processing new particles", found)    
-            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  n_accepted,                             found)
-            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  n_rejected,                             found)
+            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and sieving particles", found)    
+            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  n_accepted,                      found)
+            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  n_rejected,                      found)
             ! detection of new projects
             call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
             ! update global records
@@ -216,13 +201,7 @@ contains
             ! project update
             if( nprojects > 0 )then
                 n_imported = size(projrecords)
-                write(logfhandle,'(A,I6,I8)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ',n_imported, nptcls_glob
-                ! guistats
-            !    call gui_stats%set('particles', 'particles_imported', int2commastr(nptcls_glob), primary=.true.)
-             !   call gui_stats%set_now('particles', 'last_particles_imported')
-             !   call nice_communicator%update_cls2D(particles_imported=nptcls_glob, last_particles_imported=.true.)
-                ! update progress monitor
-              !  call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
+                write(logfhandle,'(A,I6,I8)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ', n_imported, nptcls_glob
                 ! http stats
                 call http_communicator%json%update(http_communicator%job_json, "particles_imported",       nptcls_glob,      found)
                 call http_communicator%json%update(http_communicator%job_json, "last_particles_imported",  stream_datestr(), found)
@@ -235,12 +214,12 @@ contains
                 endif
             endif
             ! Chunk book-keeping section
-            nice_communicator%view_cls2D%mskdiam  = params%mskdiam
-            nice_communicator%view_cls2D%boxsizea = get_boxa()
-            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            !call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            call update_user_params2D(cline, l_params_updated)
             call update_chunks
             call memoize_chunks(chunkslist, nchunks_imported)
-            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            !call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            call update_user_params2D(cline, l_params_updated)
             if( nchunks_imported > 0 )then
                 nchunks_glob = nchunks_glob + nchunks_imported
                 ! build sets
@@ -250,10 +229,41 @@ contains
             if( setslist%n > 0 )then
                 if( setslist%processed(1) .and. (setslist%n > 1) .and. (.not.l_wait_for_user)) then
                     ! all sets but the first employ match_cavgs
+                    latest_processed_set = 0
                     do i = 2,setslist%n
                         call is_set_processed(i)
+                        if( setslist%processed(i) ) latest_processed_set = i
                     enddo
                     call submit_match_cavgs
+                    ! http stats
+                    call http_communicator%json%remove(accepted_cls2D, destroy=.true.)
+                    call http_communicator%json%remove(rejected_cls2D, destroy=.true.)
+                    if(latest_processed_set > 0 .and. latest_displayed_set .ne. latest_processed_set) then
+                        latest_displayed_set = latest_processed_set
+                        call generate_set_jpeg()
+                        xtile = 0
+                        ytile = 0
+                        call http_communicator%json%remove(latest_accepted_cls2D, destroy=.true.)
+                        call http_communicator%json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
+                        call http_communicator%json%add(http_communicator%job_json, latest_accepted_cls2D)
+                        call http_communicator%json%remove(latest_rejected_cls2D, destroy=.true.)
+                        call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
+                        call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
+                        if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
+                            do i=0, jpg_ntiles - 1
+                                if(any( accepted_cls_ids == i + 1)) then
+                                    call communicator_add_cls2D_accepted(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)
+                                else if(any( rejected_cls_ids == i + 1)) then
+                                    call communicator_add_cls2D_rejected(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)                              
+                                endif
+                                xtile = xtile + 1
+                                if(xtile .eq. jpg_nxtiles) then
+                                    xtile = 0
+                                    ytile = ytile + 1
+                                endif
+                            end do
+                        endif
+                    endif
                 else
                     ! first set uses cluster_cavgs
                     call is_set_processed(1)
@@ -261,6 +271,7 @@ contains
                     ! interactive selection
                     if( l_wait_for_user .and. setslist%processed(1) ) then
                         call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
+                        call http_communicator%json%update(http_communicator%job_json, "stage", "waiting for user selection", found)
                         if(.not. selection_jpeg_created) then
                             call generate_selection_jpeg()
                             xtile = 0
@@ -274,9 +285,9 @@ contains
                             if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                                 do i=0, jpg_ntiles - 1
                                     if(any( accepted_cls_ids == i + 1)) then
-                                        call communicator_add_cls2D_accepted(selection_jpeg, i + 1, xtile * (100 / (jpg_nxtiles - 1)), ytile * (100 / (jpg_nytiles - 1)), 100 * jpg_nytiles, 100 * jpg_nxtiles)
+                                        call communicator_add_cls2D_accepted(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles)
                                     else if(any( rejected_cls_ids == i + 1)) then
-                                        call communicator_add_cls2D_rejected(selection_jpeg, i + 1, xtile * (100 / (jpg_nxtiles - 1)), ytile * (100 / (jpg_nytiles - 1)), 100 * jpg_nytiles, 100 * jpg_nxtiles)                              
+                                        call communicator_add_cls2D_rejected(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles)                              
                                     endif
                                     xtile = xtile + 1
                                     if(xtile .eq. jpg_nxtiles) then
@@ -286,13 +297,39 @@ contains
                                 end do
                             endif
                         endif
-                        call http_communicator%json%get(http_communicator%update_arguments, 'accepted_cls2D', accepted_cls2D, found)
+                        call http_communicator%json%get(http_communicator%update_arguments, 'accepted_cls2D', accepted_cls_ids, found) ! accepted_cls2D now contains user selection
                         if(found) then
-                            call http_communicator%json%get(http_communicator%update_arguments, 'rejected_cls2D', rejected_cls2D, found)
+                            call http_communicator%json%get(http_communicator%update_arguments, 'rejected_cls2D', rejected_cls_ids, found) ! rejected_cls2D now contains user selection
                             if(found) then
                                 call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
                                 ! apply interactive selection
                                 call report_interactive_selection( rejected_cls_ids )
+                                write(logfhandle,'(A)') '>>> RECEIVED USER SELECTIONS'
+                                ! http stats
+                                call http_communicator%json%remove(accepted_cls2D, destroy=.true.)
+                                call http_communicator%json%remove(rejected_cls2D, destroy=.true.)
+                                xtile = 0
+                                ytile = 0
+                                call http_communicator%json%remove(latest_accepted_cls2D, destroy=.true.)
+                                call http_communicator%json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
+                                call http_communicator%json%add(http_communicator%job_json, latest_accepted_cls2D)
+                                call http_communicator%json%remove(latest_rejected_cls2D, destroy=.true.)
+                                call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
+                                call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
+                                if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
+                                    do i=0, jpg_ntiles - 1
+                                        if(any( accepted_cls_ids == i + 1)) then
+                                            call communicator_add_cls2D_accepted(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)
+                                        else if(any( rejected_cls_ids == i + 1)) then
+                                            call communicator_add_cls2D_rejected(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)                              
+                                        endif
+                                        xtile = xtile + 1
+                                        if(xtile .eq. jpg_nxtiles) then
+                                            xtile = 0
+                                            ytile = ytile + 1
+                                        endif
+                                    end do
+                                endif
                                 l_wait_for_user = .false.
                             endif
                         endif
@@ -308,29 +345,17 @@ contains
             ! 2D analyses
             call analyze2D_new_chunks(projrecords)
             call sleep(WAITTIME)
-            ! nice
-            if(get_nchunks() > 0) then
-                nice_communicator%stat_root%stage = "classifying chunks"
-                nice_communicator%stat_root%user_input = .false.
-            end if
             ! http stats send
             call http_communicator%send_jobstats()
         end do
         ! termination
         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
-        nice_communicator%stat_root%stage = "terminating"
-        call nice_communicator%cycle()
         call terminate_chunks
-        ! final stats
-        call gui_stats%hide('compute', 'compute_in_use')
-        call gui_stats%deactivate_section('compute')
-        call gui_stats%write_json
-        call gui_stats%kill
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
-        call nice_communicator%terminate()
+        call http_communicator%term()
         call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS NORMAL STOP ****')
         contains
 
@@ -406,6 +431,11 @@ contains
                         params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                         call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
+                        if(params%mskdiam .eq. 0.0) then
+                            params%mskdiam = 0.9 * ceiling(params%box * spprojs(first)%os_stk%get(1,'smpd'))
+                            call cline%set('mskdiam', params%mskdiam)
+                            write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+                        endif
                         call init_chunk_clustering(cline, spproj_glob)
                         call cline%delete('ncls')
                         ! write out for stream3d to pick up
@@ -418,6 +448,11 @@ contains
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                     call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
+                    if(params%mskdiam .eq. 0.0) then
+                        params%mskdiam = 0.9 * ceiling(params%box * spprojs(first)%os_stk%get(1,'smpd'))
+                        call cline%set('mskdiam', params%mskdiam)
+                        write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+                    endif
                     call init_chunk_clustering(cline, spproj_glob)
                     call cline%delete('ncls')
                 endif
@@ -541,16 +576,23 @@ contains
             ! apply user-inputted selection on the first set
             subroutine report_interactive_selection( cls2reject )
                 integer, allocatable, intent(in) :: cls2reject(:)
-                integer, allocatable :: states(:)
-                type(sp_project) :: spproj
-                integer          :: ncls2reject
+                integer, allocatable             :: states(:)
+                type(sp_project)                 :: spproj
+                integer                          :: ncls2reject, i
                 if( .not.allocated(cls2reject) ) return
                 ncls2reject = size(cls2reject)
                 ! read all fields
                 call spproj%read(setslist%projfiles(1))
                 ! selection
                 allocate(states(spproj%os_cls2D%get_noris()),source=1)
-                states(cls2reject(:)) = 0
+                ! state=0 for all rejected
+                do i=1, ncls2reject
+                    states(cls2reject(i)) = 0
+                enddo
+                ! maintain state=0 for junk 
+                do i=1, spproj%os_cls2D%get_noris()
+                    if(.not. spproj%os_cls2D%isthere(i, 'cluster'))  states(i) = 0
+                enddo
                 call spproj%map_cavgs_selection(states)
                 call spproj%write(setslist%projfiles(1))
                 call spproj%kill
@@ -590,6 +632,10 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, accepted_cls2D)
                 call http_communicator%json%create_array(rejected_cls2D, "rejected_cls2D")
                 call http_communicator%json%add(http_communicator%job_json, rejected_cls2D)
+                call http_communicator%json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
+                call http_communicator%json%add(http_communicator%job_json, latest_accepted_cls2D)
+                call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
+                call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
             end subroutine communicator_init
 
             ! Remove previous files from folder to restart
@@ -623,8 +669,8 @@ contains
                 type(sp_project)              :: set1_proj
                 integer                       :: ncls, icls
                 real                          :: smpd
-                call set1_proj%read_segment('cls2D', setslist%projfiles(i))
-                call set1_proj%read_segment('out',   setslist%projfiles(i))
+                call set1_proj%read_segment('cls2D', setslist%projfiles(1))
+                call set1_proj%read_segment('out',   setslist%projfiles(1))
                 call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd)
                 call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
                 allocate(accepted_cls_ids(0))
@@ -643,10 +689,38 @@ contains
                 selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
             end subroutine generate_selection_jpeg
 
-            subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew)
-                character(*),     intent(in)  :: path
-                integer,          intent(in)  :: spritex, spritey, spriteh, spritew, idx
-                type(json_value), pointer     :: template
+            subroutine generate_set_jpeg()
+                type(sp_project)              :: set_proj
+                integer                       :: ncls, icls
+                real                          :: smpd
+                call set_proj%read_segment('cls2D', setslist%projfiles(latest_processed_set))
+                call set_proj%read_segment('out',   setslist%projfiles(latest_processed_set))
+                call set_proj%get_cavgs_stk(selection_jpeg, ncls, smpd)
+                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
+                if(allocated(accepted_cls_ids)) deallocate(accepted_cls_ids)
+                if(allocated(rejected_cls_ids)) deallocate(rejected_cls_ids)
+                allocate(accepted_cls_ids(0))
+                allocate(rejected_cls_ids(0))
+                do icls=1, set_proj%os_cls2D%get_noris()
+                    if(set_proj%os_cls2D%isthere(icls, 'accept')) then
+                        if(set_proj%os_cls2D%get(icls, 'accept') .gt. 0.0) then
+                            accepted_cls_ids = [accepted_cls_ids, icls]
+                        else
+                            rejected_cls_ids = [rejected_cls_ids, icls]
+                        endif
+                    endif
+                enddo
+                call set_proj%kill()
+                selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
+            end subroutine generate_set_jpeg
+
+            subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew, latest)
+                character(*),      intent(in) :: path
+                integer,           intent(in) :: spritex, spritey, spriteh, spritew, idx
+                logical, optional, intent(in) :: latest
+                type(json_value),  pointer    :: template
+                logical                       :: l_latest = .false.
+                if(present(latest)) l_latest = latest
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "spritex", spritex)
@@ -654,13 +728,20 @@ contains
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "idx",     idx)
-                call http_communicator%json%add(accepted_cls2D,      template)
+                if(l_latest) then
+                    call http_communicator%json%add(latest_accepted_cls2D, template)
+                else
+                    call http_communicator%json%add(accepted_cls2D, template)
+                endif
             end subroutine communicator_add_cls2D_accepted
 
-            subroutine communicator_add_cls2D_rejected(path, idx, spritex, spritey, spriteh, spritew)
-                character(*),     intent(in)  :: path
-                integer,          intent(in)  :: spritex, spritey, spriteh, spritew, idx
-                type(json_value), pointer     :: template
+            subroutine communicator_add_cls2D_rejected(path, idx, spritex, spritey, spriteh, spritew, latest)
+                character(*),      intent(in) :: path
+                integer,           intent(in) :: spritex, spritey, spriteh, spritew, idx
+                logical, optional, intent(in) :: latest
+                type(json_value),  pointer    :: template
+                logical                       :: l_latest = .false.
+                if(present(latest)) l_latest = latest
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "spritex", spritex)
@@ -668,7 +749,11 @@ contains
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "idx",     idx)
-                call http_communicator%json%add(rejected_cls2D,      template)
+                if(l_latest) then
+                    call http_communicator%json%add(latest_rejected_cls2D, template)
+                else
+                    call http_communicator%json%add(rejected_cls2D, template)
+                endif
             end subroutine communicator_add_cls2D_rejected
 
     end subroutine exec_sieve_cavgs
@@ -681,13 +766,17 @@ contains
         character(len=STDLEN),     parameter   :: micsspproj_fname = './streamdata.simple'
         type(parameters)                       :: params
         type(simple_nice_communicator)         :: nice_communicator
+        type(stream_http_communicator)         :: http_communicator
+        type(json_value),          pointer     :: latest_cls2D
         type(projs_list)                       :: setslist
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
+        character(kind=CK,len=:),  allocatable :: snapshot_filename
         character(len=LONGSTRLEN), allocatable :: projects(:)
         integer(kind=dp) :: time_last_import, time_last_iter
         integer :: i, iter, nprojects, nimported, nptcls_glob, nsets_imported, pool_iter, iter_last_import
-        logical :: l_pause, l_params_updated
+        integer :: xtile, ytile, mskdiam_update, extra_pause_iters
+        logical :: l_pause, l_params_updated, found
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
@@ -709,14 +798,37 @@ contains
         call cline%writeline(".cline")
         ! restart
         call cleanup4restart
+        ! generate own project file if projfile isnt set
+        if(cline%get_carg('projfile') .eq. '') then 
+            call cline%set('projname', 'stream_abinitio2D')
+            call cline%set('projfile', 'stream_abinitio2D.simple')
+            call spproj_glob%update_projinfo(cline)
+            call spproj_glob%update_compenv(cline)
+            call spproj_glob%write
+        endif
         ! master parameters
         call cline%set('numlen', 5)
         call cline%set('stream','yes')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
+        call nice_communicator%init(params%niceprocid,'')
         call nice_communicator%cycle()
+        ! http communicator init
+        call http_communicator%create(params%niceprocid, params%niceserver, "classification_2D")
+        call communicator_init()
+        call http_communicator%send_jobstats()
+        ! wait if dir_target doesn't exist yet
+        if(.not. dir_exists(trim(params%dir_target))) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target))) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
+                    exit
+                endif
+                call sleep(10)
+            end do
+        endif
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -725,18 +837,19 @@ contains
         ! project watcher
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         ! Infinite loop
-        iter             = 0
-        nprojects        = 0        ! # of projects per iteration
-        nimported        = 0        ! # of sets per iteration
-        nptcls_glob      = 0        ! global # of particles present in the pool
-        l_pause          = .false.  ! pause clustering
-        nsets_imported   = 0        ! Global # of sets imported
-        pool_iter        = 0
-        time_last_import = huge(time_last_import)
-        iter_last_import = -1       ! Pool iteration # when set(s) last imported
+        iter              = 0
+        nprojects         = 0        ! # of projects per iteration
+        nimported         = 0        ! # of sets per iteration
+        nptcls_glob       = 0        ! global # of particles present in the pool
+        l_pause           = .false.  ! pause clustering
+        nsets_imported    = 0        ! Global # of sets imported
+        pool_iter         = 0
+        time_last_import  = huge(time_last_import)
+        iter_last_import  = -1       ! Pool iteration # when set(s) last imported
+        extra_pause_iters = 0        ! extra iters before pause
         do
             ! termination
-            if( file_exists(trim(TERM_STREAM)) .or. nice_communicator%exit ) exit
+            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit ) exit
             iter = iter + 1
             ! detection of new projects
             call project_buff%watch(nprojects, projects)
@@ -761,6 +874,9 @@ contains
             ! Import new particles & clustering init
             call import_sets_into_pool( nimported )
             if( nimported > 0 )then
+                ! http stats
+                call http_communicator%json%update(http_communicator%job_json, "particles_imported",       nptcls_glob,      found)
+                call http_communicator%json%update(http_communicator%job_json, "last_particles_imported",  stream_datestr(), found)
                 time_last_import = time8()
                 iter_last_import = get_pool_iter()
                 call unpause_pool
@@ -769,10 +885,11 @@ contains
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) call unpause_pool
             ! pause?
-            if( (pool_iter >= iter_last_import+PAUSE_NITERS) .or.&
+            if( (pool_iter >= iter_last_import+PAUSE_NITERS+extra_pause_iters) .or.&
                 & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
                 if( .not.l_pause )then
                     l_pause = is_pool_available()
+                    extra_pause_iters = 0
                     if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
                 endif
             endif
@@ -790,6 +907,59 @@ contains
                     time_last_iter = time8()
                 endif
             endif
+            ! http stats
+            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and classifying particles", found)    
+            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  0,                                   found)
+            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  0,                                   found)
+            call http_communicator%json%update(http_communicator%job_json, "iteration",           last_complete_iter,                  found) ! -1 as get_pool_iter returns currently running iteration
+            if(get_pool_iter() > 1) then
+                call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
+                xtile = 0
+                ytile = 0
+                call http_communicator%json%remove(latest_cls2D, destroy=.true.)
+                call http_communicator%json%create_array(latest_cls2D, "latest_cls2D")
+                call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
+                if(allocated(pool_jpeg_map)) then
+                    do i=0, size(pool_jpeg_map) - 1
+                        call communicator_add_cls2D(trim(get_pool_cavgs_jpeg()), trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()), pool_jpeg_map(i + 1), nint(xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1))), nint(ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1))), 100 * get_pool_cavgs_jpeg_ntilesy(), 100 * get_pool_cavgs_jpeg_ntilesx())
+                        xtile = xtile + 1
+                        if(xtile .eq. get_pool_cavgs_jpeg_ntilesx()) then
+                            xtile = 0
+                            ytile = ytile + 1
+                        endif
+                    end do
+                endif
+            endif
+            if(associated(http_communicator%update_arguments) .and. last_complete_iter .gt. 0) then
+                ! project snapshot if requested
+                call http_communicator%json%get(http_communicator%update_arguments, "snapshot_iteration", snapshot_iteration, found) 
+                if(found) then
+                    call http_communicator%json%get(http_communicator%update_arguments, "snapshot_selection", snapshot_selection, found)
+                    if(found) then
+                        call http_communicator%json%get(http_communicator%update_arguments, "snapshot_filename", snapshot_filename, found)
+                        if(found) then
+                            call write_project_stream2D(snapshot_projfile=trim(cwd_glob) // "/" //snapshot_filename)
+                            call http_communicator%json%add(http_communicator%job_json, "snapshot_filename",  snapshot_filename)
+                            call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    last_snapshot_nptcls)
+                            call http_communicator%json%add(http_communicator%job_json, "snapshot_time",      stream_datestr())
+                        endif
+                    endif
+                endif
+                ! update mskdiam if requested
+                call http_communicator%json%get(http_communicator%update_arguments, "mskdiam", mskdiam_update, found) 
+                if(found) then
+                    call update_mskdiam(mskdiam_update)
+                    if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
+                    call unpause_pool()
+                endif
+                call http_communicator%json%destroy(http_communicator%update_arguments)
+                nullify(http_communicator%update_arguments)
+            endif
+            call http_communicator%send_jobstats()
+            ! ensure snapshot info is only returned once
+            call http_communicator%json%remove_if_present(http_communicator%job_json, "snapshot_filename")
+            call http_communicator%json%remove_if_present(http_communicator%job_json, "snapshot_nptcls")
+            call http_communicator%json%remove_if_present(http_communicator%job_json, "snapshot_time")
             ! Wait
             call sleep(WAITTIME)
         enddo
@@ -798,8 +968,8 @@ contains
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
-        ! end gracefully
-        call nice_communicator%terminate()
+        ! end gracefully 
+        call http_communicator%term()
         call simple_end('**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
         contains
 
@@ -915,6 +1085,11 @@ contains
                 if( nptcls_glob == 0 )then
                     params%smpd = pool%get_smpd()
                     params%box  = pool%get_box()
+                    if(params%mskdiam <= 0.0) then
+                        params%mskdiam = 0.9 * ceiling(params%box * params%smpd)
+                        call cline%set('mskdiam', params%mskdiam)
+                        write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+                    endif
                     call init_pool_clustering(cline, spproj_glob, micsspproj_fname, reference_generation=.false.)
                 endif
                 ! global count
@@ -941,6 +1116,34 @@ contains
                 endif
             end subroutine cleanup4restart
 
+            subroutine communicator_init()
+                call http_communicator%json%add(http_communicator%job_json, "stage",                   "initialising")
+                call http_communicator%json%add(http_communicator%job_json, "particles_imported ",     0)
+                call http_communicator%json%add(http_communicator%job_json, "particles_accepted",      0)
+                call http_communicator%json%add(http_communicator%job_json, "particles_rejected",      0)
+                call http_communicator%json%add(http_communicator%job_json, "iteration",               0)
+                call http_communicator%json%add(http_communicator%job_json, "user_input",              .false.)
+                call http_communicator%json%add(http_communicator%job_json, "last_particles_imported", "")
+                call http_communicator%json%create_array(latest_cls2D, "latest_cls2D")
+                call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
+            end subroutine communicator_init
+
+            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew)
+                character(*),     intent(in)  :: path, mrcpath
+                integer,          intent(in)  :: spritex, spritey, spriteh, spritew, mrc_idx
+                type(json_value), pointer     :: template
+                call http_communicator%json%create_object(template, "")
+                call http_communicator%json%add(template, "path",    path)
+                call http_communicator%json%add(template, "mrcpath", mrcpath)
+                call http_communicator%json%add(template, "mrcidx",  mrc_idx)
+                call http_communicator%json%add(template, "spritex", spritex)
+                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spriteh", spriteh)
+                call http_communicator%json%add(template, "spritew", spritew)
+                call http_communicator%json%add(template, "mskdiam",    nint(params%mskdiam))
+                call http_communicator%json%add(template, "mskscale",   dble(params%box * params%smpd))
+                call http_communicator%json%add(latest_cls2D,        template)
+            end subroutine communicator_add_cls2D
 
     end subroutine exec_stream_abinitio2D
 

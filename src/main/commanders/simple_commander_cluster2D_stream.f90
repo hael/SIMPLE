@@ -37,7 +37,7 @@ public :: generate_pool_jpeg, get_pool_cavgs_jpeg_scale, get_nchunks, get_boxa, 
 public :: get_pool_rejected_jpeg, get_pool_rejected_jpeg_ntiles, get_pool_rejected_jpeg_scale, get_pool_rejected_thumbnail_id
 public :: get_chunk_rejected_jpeg, get_chunk_rejected_jpeg_ntiles, get_chunk_rejected_jpeg_scale, get_chunk_rejected_thumbnail_id
 public :: get_last_snapshot, get_last_snapshot_id, get_rejection_params, get_snapshot_json, get_lpthres_type, set_lpthres_type
-public :: init_pool_clustering, update_pool_aln_params
+public :: init_pool_clustering, update_pool_aln_params, update_mskdiam
 ! Chunks
 public :: init_chunk_clustering, terminate_chunks
 public :: update_chunks, analyze2D_new_chunks, import_chunks_into_pool
@@ -117,11 +117,13 @@ integer                          :: lim_ufrac_nptcls    = MAX_STREAM_NPTCLS ! # 
 integer                          :: snapshot_jobid = 0                ! nice job id for snapshot
 integer                          :: snapshot_complete_jobid = 0       ! nice job id for completed snapshot
 integer                          :: repick_iteration = 0              ! iteration to select classes from for re-picking
-integer                          :: snapshot_iteration = 0            ! iteration to select particles from during snapshot
-integer,             allocatable :: snapshot_selection(:)             ! selection for generating snapshots
+integer,             public      :: snapshot_iteration = 0            ! iteration to select particles from during snapshot
+integer,             public, allocatable :: snapshot_selection(:)             ! selection for generating snapshots
 integer,             allocatable :: prune_selection(:)                ! selection for pruning classes on the fly
 integer,             allocatable :: repick_selection(:)               ! selection for selecting classes for re-picking
 integer,             public, allocatable :: pool_jpeg_map(:)                  ! map jpeg classes to sp_cls2D indices
+integer,             public      :: last_complete_iter = 0
+integer,             public      :: last_snapshot_nptcls = 0
 logical                          :: stream2D_active   = .false.       ! initiation flag
 type(json_value),   pointer      :: snapshot_json 
 ! GUI-related
@@ -129,7 +131,7 @@ type(starproject)                :: starproj
 type(starproject_stream)         :: starproj_stream
 character(len=:),    allocatable :: projfile4gui                      ! Joe: is this output still used?
 character(len=:),    allocatable :: current_jpeg, pool_rejected_jpeg, chunk_rejected_jpeg
-character(16)                    :: last_iteration_time = "", last_snapshot = ""
+character(16),       public      :: last_iteration_time = "", last_snapshot = ""
 character(6)                     :: lpthres_type = ""
 ! other
 real     :: smpd, scale_factor, lpstart, lpstop, lpcen, current_jpeg_scale, pool_rejected_jpeg_scale=0.0, chunk_rejected_jpeg_scale=0.0
@@ -1103,13 +1105,13 @@ contains
 
     !> produces consolidated project
     subroutine write_project_stream2D( write_star, clspath, snapshot_projfile)
-        logical,           optional, intent(in) :: write_star
-        logical,           optional, intent(in) :: clspath
-        character(len=*),  optional, intent(in) :: snapshot_projfile
+        logical,           optional, intent(in)    :: write_star
+        logical,           optional, intent(in)    :: clspath
+        character(len=*),  optional, intent(in)    :: snapshot_projfile
         type(class_frcs)               :: frcs
         type(oris)                     :: os_backup
         type(sp_project)               :: snapshot_proj
-        type(simple_nice_communicator) :: snapshot_comm
+      !  type(simple_nice_communicator) :: snapshot_comm
         type(json_core)                :: json
         character(len=:),  allocatable :: projfile, projfname, cavgsfname, frcsfname, src, dest
         character(len=:),  allocatable :: pool_refs, l_stkname, l_frcsname
@@ -1141,7 +1143,7 @@ contains
             write(logfhandle, '(A,I4,A,A,A,I0,A)') ">>> WRITING SNAPSHOT FROM ITERATION ", snapshot_iteration, trim(snapshot_projfile), ' AT: ',cast_time_char(simple_gettime()), snapshot_jobid, params_glob%niceserver
             call json%destroy(snapshot_json)
             nullify(snapshot_json)
-            call snapshot_comm%init(snapshot_jobid, "")
+           ! call snapshot_comm%init(snapshot_jobid, "")
             if(snapshot_iteration .eq. pool_iter) then
                 call snapshot_proj%copy(pool_proj)
                 snapshot_proj_found = .true.
@@ -1164,12 +1166,13 @@ contains
                 snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
                 call snapshot_proj%write(snapshot_projfile)
                 call set_snapshot_time()
-                call snapshot_comm%terminate(export_project=snapshot_proj)
+                last_snapshot_nptcls = snapshot_proj%os_ptcl2D%count_state_gt_zero()
+              !  call snapshot_comm%terminate(export_project=snapshot_proj)
             else
                 write(logfhandle, '(A)') ">>> FAILED TO WRITE SNAPSHOT"
-                call snapshot_comm%terminate(failed=.true.)
+              !  call snapshot_comm%terminate(failed=.true.)
             end if
-            call snapshot_comm%get_stat_json(snapshot_json)
+          !  call snapshot_comm%get_stat_json(snapshot_json)
             snapshot_complete_jobid = snapshot_jobid
             snapshot_jobid = 0
             snapshot_iteration = 0
@@ -2387,7 +2390,7 @@ contains
     subroutine generate_pool_stats
         type(guistats)            :: pool_stats
         character(len=LONGSTRLEN) :: cwd
-        integer                   :: iter_loc
+        integer                   :: iter_loc = 0
         real                      :: lpthres_sugg
         call simple_getcwd(cwd)
         if(file_exists(trim(adjustl(cwd))//'/'//trim(CLS2D_STARFBODY)//'_iter'//int2str_pad(pool_iter,3)//trim(STAR_EXT))) then
@@ -2412,6 +2415,7 @@ contains
             if(iter_loc > 0) call pool_stats%set_now('2D', 'iteration_time')
             call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, iter_loc)
             call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, pool_dims%smpd)
+            last_complete_iter = iter_loc
             !call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, smpd)
             ! nice
             call set_iteration_time() ! called in wrong place
@@ -3981,5 +3985,12 @@ contains
         call update_stack_nimgs(trim(refsout), size(repick_selection))
         call img%kill
     end subroutine write_repick_refs
+
+    subroutine update_mskdiam(new_mskdiam)
+        integer, intent(in) :: new_mskdiam
+        write(*,'(A,I4,A)')'>>> UPDATED MASK DIAMETER TO',new_mskdiam ,'Å'
+        params_glob%mskdiam = real(new_mskdiam)
+        call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
+    end subroutine update_mskdiam
 
 end module simple_commander_cluster2D_stream

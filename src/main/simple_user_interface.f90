@@ -7162,10 +7162,24 @@ contains
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=reference_based_picking')
         call json%add(process_inputs, '', 'outdir=particle_sieving') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'ncls_start=50')
-        call json%add(process_inputs, '', 'nptcls_per_cls=35')
+        call json%add(process_inputs, '', 'ncls=100')
+        call json%add(process_inputs, '', 'nptcls_per_cls=0')
         call json%add(process_inputs, '', 'interactive=yes')
-        call json%add(process_inputs, '', 'nchunks=5')
+        call json%add(process_inputs, '', 'mskdiam=0')
+        call json%add(process_inputs, '', 'nchunks=2')
+        call json%add(process_inputs, '', 'nparts=4')
+        call json%add(process_inputs, '', 'nthr=8')
+        !! particle_sieving
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'classification_2D') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'abinitio2D_stream')
+        call json%add(process, 'nthr_master', 4)
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'dir_target=particle_sieving')
+        call json%add(process_inputs, '', 'outdir=classification_2D') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'ncls=50')
         call json%add(process_inputs, '', 'nparts=10')
         call json%add(process_inputs, '', 'nthr=4')
         ! print & clean

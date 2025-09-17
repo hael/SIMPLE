@@ -475,6 +475,8 @@ contains
                 if( labels_match(icls) == iclust )then
                     call spproj_match%os_cls2D%set(clsinds_match(icls),'cluster',iclust)                          ! 2D class field
                     call spproj_match%os_cls3D%set(clsinds_match(icls),'cluster',iclust)                          ! 3D class field
+                    call spproj_match%os_cls2D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 2D class accepted field
+                    call spproj_match%os_cls3D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 3D class accepted field
                     call spproj_match%os_ptcl2D%set_field2single('class', clsinds_match(icls), 'cluster', iclust) ! 2D particle field
                     call spproj_match%os_ptcl3D%set_field2single('class', clsinds_match(icls), 'cluster', iclust) ! 3D particle field
                 endif
