@@ -22,10 +22,13 @@ type moviewatcher
     character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: regexp         = ''    !< movies extensions
     integer, public                    :: n_history      = 0     !< history of movies detected
+    integer, public                    :: rate           = 0     !< current rate of movie detection
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
     integer                            :: starttime      = 0     !< time of first watch
     integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
+    integer                            :: ratetime       = 0     !< time of last rate checkpoint
+    integer                            :: raten          = 0     !< number imported at last rate checkpoint
     integer                            :: n_watch        = 0     !< number of times the folder has been watched
     integer                            :: len_ext        = 0
     logical                            :: exists         = .false.
@@ -52,8 +55,9 @@ interface moviewatcher
     module procedure constructor
 end interface moviewatcher
 
-integer, parameter :: FAIL_THRESH = 50
-integer, parameter :: FAIL_TIME   = 7200 ! 2 hours
+integer, parameter :: FAIL_THRESH   = 50
+integer, parameter :: FAIL_TIME     = 7200 ! 2 hours
+integer, parameter :: RATE_INTERVAL = 3600 ! 1 hour
 
 contains
 
@@ -174,7 +178,8 @@ contains
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()
         if( self%n_watch .eq. 1 )then
-            self%starttime  = tnow ! first call
+            self%starttime = tnow ! first call
+            self%ratetime  = tnow ! first call
         endif
         self%ellapsedtime = tnow - self%starttime
         fail_cnt = 0
@@ -224,6 +229,13 @@ contains
                     movies(cnt) = trim(adjustl(farray(i)))
                 endif
             enddo
+        endif
+        ! update rates
+        if(tnow > self%ratetime + RATE_INTERVAL) then
+            self%ratetime = self%ratetime + RATE_INTERVAL
+            self%raten    = self%n_history
+        else
+            self%rate = nint(3600.0 * (self%n_history - self%raten) / (tnow - self%ratetime))
         endif
     end subroutine watch
 
@@ -390,10 +402,13 @@ contains
         self%ext        = ''
         if( allocated(self%history)    ) deallocate(self%history)
         if( allocated(self%watch_dirs) ) deallocate(self%watch_dirs)
+        self%rate           = 0
         self%report_time    = 0
         self%starttime      = 0
         self%ellapsedtime   = 0
         self%lastreporttime = 0
+        self%ratetime       = 0
+        self%raten          = 0
         self%n_watch        = 0
         self%n_history      = 0
         self%len_ext        = 0

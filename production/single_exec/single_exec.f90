@@ -211,7 +211,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('a45b27ce')
+call simple_print_git_version('58310dbd')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
