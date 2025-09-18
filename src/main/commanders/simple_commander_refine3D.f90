@@ -756,10 +756,24 @@ contains
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call refine3D_exec(cline, startit, converged)
         else
-            if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
-            if( .not. file_exists(params%vols(1)) ) then
-                THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
+            if( trim(params%continue) == 'yes' ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
+            ! Input reference
+            if( trim(params%polar).eq.'yes' )then
+                if( cline%defined('vol1') )then
+                    if( .not.file_exists(params%vols(1)) ) then
+                        THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
+                    endif
+                else
+                    if( .not.file_exists(POLAR_REFS_FBODY//trim(BIN_EXT)) ) then
+                        THROW_HARD('polar references are required when VOL1 not provided')
+                    endif
+                endif
+            else
+                if( .not.file_exists(params%vols(1)) ) then
+                    THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
+                endif
             endif
+            ! Initial orientation parameters
             if( build%spproj%is_virgin_field(params%oritype) )then  ! we don't have orientations, so randomize
                 call build%spproj_field%rnd_oris
             endif
@@ -818,9 +832,11 @@ contains
                     cline_prob_align = cline
                     call cline_prob_align%set('prg',       'prob_align')
                     call cline_prob_align%set('which_iter', params%which_iter)
-                    do state = 1, params%nstates
-                        call cline%set('vol'//int2str(state), params%vols(state))
-                    enddo
+                    if( trim(params%polar).ne.'yes' )then
+                        do state = 1, params%nstates
+                            call cline%set('vol'//int2str(state), params%vols(state))
+                        enddo
+                    endif
                     call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
