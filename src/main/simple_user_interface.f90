@@ -5199,13 +5199,14 @@ contains
         &'Select clusters',&                                    ! descr_short
         &'is a program for selecting clusters from a project',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &0, 0, 2, 0, 0, 0, 0, .true.)                           ! # entries in each group, requires sp_project
+        &0, 2, 2, 0, 0, 0, 0, .true.)                           ! # entries in each group, requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call select_clusters%set_input('parm_ios', 1, 'select_flag', 'multi', 'flag to use for selection', 'flag to use for selection (cluster|class){cluster}', '(cluster|class){cluster}', .false., 'cluster')
+        call select_clusters%set_input('parm_ios', 2, prune)
         ! alternative inputs
         call select_clusters%set_input('alt_ios', 1, 'clustinds', 'str', 'Comma separated cluster indices', 'Comma separated cluster indices', 'indx1,indx2', .false., '')
         call select_clusters%set_input('alt_ios', 2, 'clustind',  'num', 'Cluster index', 'Cluster index', 'e.g. 5', .false., 0.)

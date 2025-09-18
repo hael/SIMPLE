@@ -360,12 +360,14 @@ contains
     subroutine exec_select_clusters( self, cline )
         class(select_clusters_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        integer, allocatable :: clustinds(:)
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        integer,          allocatable :: clustinds(:)
+        character(len=:), allocatable :: selflag
         integer :: iclust, nclust_sel, nclust_max
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('prune') ) call cline%set('prune', 'yes')
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',           'yes')
+        if( .not. cline%defined('prune')       ) call cline%set('prune',           'yes')
+        if( .not. cline%defined('select_flag') ) call cline%set('select_flag', 'cluster')
         ! master parameters
         call params%new(cline)
         if( cline%defined('clustind') )then
@@ -378,23 +380,31 @@ contains
         do iclust = 1, nclust_sel
             print *, 'selected cluster: ', clustinds(iclust)
         end do
+        ! check flag
+        selflag = trim(params%select_flag)
+        select case(selflag)
+            case('cluster','class')
+                ! all good
+            case DEFAULT
+                THROW_HARD('Unsupported flag for cluster selection (SELECT_FLAG)')
+        end select
         ! read project file
         call spproj%read(params%projfile)
-        nclust_max = spproj%os_ptcl2D%get_n('cluster')
+        nclust_max = spproj%os_ptcl2D%get_n(selflag)
         if( any(clustinds > nclust_max) ) THROW_HARD('Maximum cluster index value: '//int2str(nclust_max)//' exceeded!')
         do iclust = 1, nclust_max
             if( any(clustinds == iclust) )then
                 ! set state=1 to flag inclusion
-                call spproj%os_cls2D%set_field2single('cluster',  iclust, 'state', 1) ! 2D class field
-                call spproj%os_cls3D%set_field2single('cluster',  iclust, 'state', 1) ! 3D class field
-                call spproj%os_ptcl2D%set_field2single('cluster', iclust, 'state', 1) ! 2D particle field
-                call spproj%os_ptcl3D%set_field2single('cluster', iclust, 'state', 1) ! 3D particle field
+                call spproj%os_cls2D%set_field2single(selflag,  iclust, 'state', 1) ! 2D class field
+                call spproj%os_cls3D%set_field2single(selflag,  iclust, 'state', 1) ! 3D class field
+                call spproj%os_ptcl2D%set_field2single(selflag, iclust, 'state', 1) ! 2D particle field
+                call spproj%os_ptcl3D%set_field2single(selflag, iclust, 'state', 1) ! 3D particle field
             else
                 ! set state=0 to flag exclusion
-                call spproj%os_cls2D%set_field2single('cluster',  iclust, 'state', 0) ! 2D class field
-                call spproj%os_cls3D%set_field2single('cluster',  iclust, 'state', 0) ! 3D class field
-                call spproj%os_ptcl2D%set_field2single('cluster', iclust, 'state', 0) ! 2D particle field
-                call spproj%os_ptcl3D%set_field2single('cluster', iclust, 'state', 0) ! 3D particle field
+                call spproj%os_cls2D%set_field2single(selflag,  iclust, 'state', 0) ! 2D class field
+                call spproj%os_cls3D%set_field2single(selflag,  iclust, 'state', 0) ! 3D class field
+                call spproj%os_ptcl2D%set_field2single(selflag, iclust, 'state', 0) ! 2D particle field
+                call spproj%os_ptcl3D%set_field2single(selflag, iclust, 'state', 0) ! 3D particle field
             endif
         end do
         ! prune
