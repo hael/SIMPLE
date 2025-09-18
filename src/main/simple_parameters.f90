@@ -258,6 +258,7 @@ type :: parameters
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: ref_type='cavg'      !< polar reference type(cavg|clin|vol){cavg}
+    character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -742,6 +743,7 @@ contains
         call check_carg('ring',           self%ring)
         call check_carg('roavg',          self%roavg)
         call check_carg('script',         self%script)
+        call check_carg('select_flag',    self%select_flag)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('sh_first',       self%sh_first)
         call check_carg('sh_inv',         self%sh_inv)
