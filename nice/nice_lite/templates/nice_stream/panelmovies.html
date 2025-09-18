@@ -1,0 +1,55 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_stream/panelmovies.js' %}></script>
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+    <div class="h-full flex-col flex justify-between">
+        <div class="flex flex-row justify-end items-center">
+            <div class="flex-1 font-bold text-[14px]">movies</div>
+        </div>
+        <div class="flex flex-1">
+            <div class="grid grid-cols-2 gap-1 text-[12px] ml-[10px] content-baseline">
+                {% if "movies_imported" in jobstats %}
+                    <div class="font-bold">movie detected</div>
+                    <div>{{ jobstats.movies_imported }}</div>
+                {% endif %} 
+                {% if "movies_rate" in jobstats %}
+                    <div class="font-bold">movie detection rate</div>
+                    <div>{{ jobstats.movies_rate }} movies/hour</div>
+                {% endif %} 
+                {% if "dir_movies" in args %}
+                    <div class="font-bold">movies directory</div>
+                    <div class="overflow-x-scroll" style="scrollbar-width: none">
+                        <div class="w-max">
+                            {{ args.dir_movies }}
+                        </div>
+                    </div>
+                {% endif %}
+                {% if "dir_meta" in args %}
+                    <div class="font-bold">metadata directory</div>
+                    <div class="overflow-x-scroll" style="scrollbar-width: none">
+                        <div class="w-max">
+                            {{ args.dir_meta }}
+                        </div>
+                    </div>
+                {% endif %}
+                {% if "gainref" in args %}
+                    <div class="font-bold">gain reference</div>
+                    <div class="overflow-x-scroll" style="scrollbar-width: none">
+                        <div class="w-max">
+                            {{ args.gainref }}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>    
+    </div>
+</body>
+</html>

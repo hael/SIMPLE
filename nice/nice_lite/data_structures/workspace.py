@@ -1,0 +1,212 @@
+# global imports
+import os
+import re
+from django.utils import timezone
+from django.template.loader import render_to_string
+
+# local imports
+from ..models import ProjectModel, WorkspaceModel, JobClassicModel
+from .jobclassic import JobClassic
+
+class Workspace:
+
+    id       = 0
+    name     = ""
+    desc     = ""
+    dirc     = ""
+    link     = ""
+    cdat     = ""
+    mdat     = ""
+    nstr     = {}
+    request  = None
+
+    def __init__(self, workspace_id=None, request=None):
+        if workspace_id is not None:
+            self.id = workspace_id
+        elif request is not None:
+            self.setIDFromRequest(request)
+            self.request = request
+        if self.id > 0:
+            self.load()
+
+    def setIDFromRequest(self, request):
+        if "selected_workspace_id" in request.POST:
+            test_id_str = request.POST["selected_workspace_id"]
+        else:
+            test_id_str = request.COOKIES.get('selected_workspace_id', 'none')
+        if test_id_str.isnumeric():
+            self.id = int(test_id_str)
+
+    def load(self):
+        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
+        if workspacemodel is not None:
+            self.name = workspacemodel.name
+            self.dirc = workspacemodel.dirc
+            self.link = workspacemodel.link
+            self.cdat = workspacemodel.cdat
+            self.mdat = workspacemodel.mdat
+            self.nstr = workspacemodel.nstr
+            self.desc = workspacemodel.desc
+            self.addNodesHTML()
+
+    def new(self, project):
+        projectmodel = ProjectModel.objects.filter(id=project.id).first()
+        if projectmodel is None:
+            return False
+      
+        if not os.path.exists(project.dirc):
+            return False
+        
+        if not os.path.isdir(project.dirc):
+            return False
+            
+        new_workspace_dirc = ".workspace_" + str(self.id)
+        new_workspace_name = "new workspace"
+        workspacemodel = WorkspaceModel(proj=projectmodel, name=new_workspace_name, cdat=timezone.now(), mdat=timezone.now())
+        workspacemodel.save()
+        self.id = workspacemodel.id
+        if self.id == 0:
+            return False
+        
+        new_workspace_dirc = ".workspace_" + str(self.id)
+        new_workspace_link = new_workspace_name.replace(" ", "_")
+        new_workspace_path = os.path.join(project.dirc, new_workspace_dirc)
+
+        try:
+            os.makedirs(new_workspace_path)
+        except OSError as error:
+            print("Directory '%s' can not be created")
+            return False
+        
+        try:
+            os.symlink(new_workspace_path, os.path.join(project.dirc, new_workspace_link))
+        except FileExistsError:
+            print("Symlink already exists.")
+        except PermissionError:
+            print("Permission denied: You might need admin rights.")
+        except OSError as e:
+            print("OS error occurred:", e)
+                
+        workspacemodel.dirc = new_workspace_dirc
+        workspacemodel.link = new_workspace_link
+        workspacemodel.nstr = {
+            "children":[
+                {
+                    "type"      : "new",
+                    "jobid"     : 0,
+                    "innerHTML" : ""
+                }
+            ]
+        }
+        workspacemodel.save()
+        self.load()
+        project.load()
+        return True
+    
+    def addNodesHTML(self):
+
+        def addNodeHTML(obj):
+            if "children" in obj:
+                for child in obj["children"]:
+                    item = addNodeHTML(child)
+            if "innerHTML" in obj and "type" in obj and "jobid" in obj:
+                if "job" in obj["type"]:
+                    jobclassic = JobClassic(id=obj["jobid"])
+                    context = { 
+                        'id'     : obj["jobid"],
+                        'status' : jobclassic.status,
+                        'disp'   : jobclassic.disp,
+                        'name'   : jobclassic.name,
+                        'desc'   : jobclassic.desc,
+                        'pckg'   : jobclassic.pckg,
+                    }
+                    obj["innerHTML"] = render_to_string('nice_classic/jobnode.html', context, request=self.request).replace("\n", "").replace('"','\\"')
+                elif "new" in obj["type"]:
+                    context = { 
+                        'id': obj["jobid"], 
+                    }
+                    obj["innerHTML"] = render_to_string('nice_classic/newjobnode.html', context, request=self.request).replace("\n", "").replace('"','\\"')
+
+        if self.request != None:
+            addNodeHTML(self.nstr)
+        
+    def addChild(self, parentid, jobid):
+
+        def findParent(obj):
+            if "jobid" in obj:
+                if parentid == obj["jobid"]:
+                    return obj
+            if "children" in obj:
+                for child in obj["children"]:
+                    item = findParent(child)
+                    if item is not None:
+                        return item
+            return None
+
+        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
+        if workspacemodel is not None:
+            updated = workspacemodel.nstr
+            newchild = {
+                    "jobid"     : jobid,
+                    "type"      : "job",
+                    "innerHTML" : "",
+                    "children"  : [
+                        {
+                            "type"      : "new",
+                            "jobid"     : jobid,
+                            "innerHTML" : ""
+                        }
+                    ]
+            }
+            if parentid == 0:
+                updated["children"].insert(0,newchild)
+            else:
+                parent = findParent(updated)
+                if parent is not None:
+                    parent["children"].insert(0,newchild)
+            workspacemodel.nstr = updated
+            workspacemodel.save()
+            self.nstr = updated
+
+    def rename(self, request, project):
+        if "new_workspace_name" in request.POST:
+            new_workspace_name = request.POST["new_workspace_name"]
+            workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
+            workspacemodel.name = new_workspace_name
+            # strip any non-alphanumeric characters(except _)
+            new_workspace_name = new_workspace_name.replace(" ", "_")
+            new_workspace_name = re.sub(r'\W+', '', new_workspace_name)
+            current_workspace_link = os.path.join(project.dirc, self.link)
+            new_workspace_link     = os.path.join(project.dirc, new_workspace_name)
+            try :
+                os.rename(current_workspace_link, new_workspace_link)
+                print("Source path renamed to destination path successfully.")
+            except IsADirectoryError:
+                print("Source is a file but destination is a directory.")
+                return False
+            except NotADirectoryError:
+                print("Source is a directory but destination is a file.")
+
+            except PermissionError:
+                print("Operation not permitted")
+                return False
+            except OSError as error:
+                print(error)
+                return False
+            self.link = new_workspace_name
+            workspacemodel.link = new_workspace_name
+            workspacemodel.save()
+            return True
+        return False
+
+    def updateDescription(self, request):
+        if "new_workspace_description" in request.POST:
+            new_workspace_description = request.POST["new_workspace_description"]
+            workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
+            workspacemodel.desc = new_workspace_description
+            workspacemodel.save()
+            return True
+        return False
+        
+    
+    

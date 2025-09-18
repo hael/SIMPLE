@@ -1,0 +1,24 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/icons.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.js"></script>
+    <script src={% static 'nice_lite/streamviewparticlesets.js' %}></script>
+</head>
+<body class="w-full h-screen bg-white pt-[15px]">
+    <div class="rounded-full border-[2px] bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">particle sets</div>
+    <div class="rounded h-full bg-white flex-col flex p-[5px] border-nicecontrast border-[2px]">
+        {% for particle_set in jobstats.particle_sets %}
+            <div>
+                {{ particle_set.name }}
+            </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

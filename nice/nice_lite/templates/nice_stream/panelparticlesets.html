@@ -1,0 +1,68 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src={% static 'nice_stream/panelparticlesets.js' %}></script>
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out z-1">loading ...</div>
+    {% if "particle_sets" not in jobstats or jobstats.particle_sets|length == 0 %}
+        <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">no particle sets generated</div>
+    {% endif %}
+    <div class="h-full flex-col flex justify-between">
+        <div class="flex flex-row justify-end items-center">
+            <div class="flex-1 font-bold text-[14px]">particle sets</div>
+        </div>
+        <div class="flex flex-col flex-1 overflow-y-scroll text-[12px]">
+            {% for particle_set in jobstats.particle_sets %}
+                <div class="flex flex-col m-[5px] border-nice4header border-[2px] rounded p-[2px]">
+                    <div class="flex flex-row">
+                        <div class="flex-1 font-bold">
+                            {{ particle_set.name }}
+                        </div>
+                        {% if "ctime" in particle_set %}
+                            <div>{{ particle_set.ctime }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="flex flex-row">
+                        <div class="flex flex-1">                        
+                            {% if "nptcls" in particle_set %}
+                                <div class="mx-[5px]">particles : {{ particle_set.nptcls|intcomma }}</div>
+                            {% endif %}
+                            {% if "type" in particle_set %}
+                                <div class="mx-[5px]">type : {{ particle_set.type }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="flex flex-row">
+                            <div title="link to workspace" class="h-[16px] w-[16px] scale-75 text-nice4header cursor-pointer">
+                                {% if "filename" in particle_set and "id" in particle_set %}
+                                    <form method="POST" action={% url 'nice_lite:link_stream_particle_set' jobid particle_set.id particle_set.filename %}>
+                                        {% csrf_token %}
+                                        <select class="linkbutton" name="link_workspace_id" oninput="linkParticleSet(this)">
+                                            <option selected></option>
+                                            {% for workspace in workspaces %}
+                                                <option value={{ workspace.id }}>
+                                                    {{ workspace.name }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </form>
+                                {% endif %}
+                            </div>
+                            <div title="copy path to starfile to clipboard" class="h-[16px] w-[16px] scale-75 text-nice4header cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                                    <path fill-rule="evenodd" d="M10.986 3H12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h1.014A2.25 2.25 0 0 1 7.25 1h1.5a2.25 2.25 0 0 1 2.236 2ZM9.5 4v-.75a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75V4h3Z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,44 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src={% static 'nice_lite/nice_lite.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nicecontrast">
+    <div class="w-fit mx-auto">
+        <div class="relative bg-niceheader rounded-full h-[150px] w-[150px] top-[75px] m-auto">
+            <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[100px] m-auto relative top-[25px]"/> 
+        </div>
+        <div class="bg-white rounded p-[20px] pt-[80px]">
+            <div class="text-[25px] font-bold flex justify-center pb-[15px]">
+                new project
+            </div>
+            <form method="POST" action="createproject" target="_parent">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-4">
+                    <div>project name</div>
+                    <div class="bg-niceheader rounded">
+                        <input name="new_project_name" required></input>
+                    </div>
+                    <div>project folder</div>
+                    <div class="bg-niceheader rounded">
+                        <input name="new_project_dirc" required></input>
+                    </div>
+                    <div>project description</div>
+                    <div class="bg-niceheader rounded">
+                        <textarea name="new_project_desc" rows="4" cols="50"></textarea>
+                    </div>
+                </div>
+                <div class="flex mt-[20px]">
+                    <input type="submit" value="Start" class="m-auto bg-niceheader p-[5px] font-bold rounded hover:bg-nicecontrast hover:text-white"></input>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+
+
