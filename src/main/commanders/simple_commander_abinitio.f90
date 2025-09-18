@@ -82,6 +82,7 @@ integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE      ! swith
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                 ! when streaming on some analysis will be performed
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                 ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
+integer,          parameter :: GAUREF_END_STAGE      = 5                 ! When to stop using a gaussian filtering of the references with polar=yes
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false., l_polar=.false.
@@ -1226,7 +1227,17 @@ contains
         balance = 'yes'
         ! Gaussian filtering of polar references
         gaufreq = -1.
-        if( lpinfo(istage)%l_lpset .and. l_polar ) gaufreq = lpinfo(istage)%lp
+        if( l_polar .and. (istage <= GAUREF_END_STAGE) )then
+            if( cline_refine3D%defined('gauref') )then
+                if( params_glob%gauref.eq.'yes' )then
+                        gaufreq = lpinfo(istage)%lp
+                        if( cline_refine3D%defined('gaufreq') ) gaufreq = params_glob%gaufreq
+                endif
+            else
+                gaufreq = lpinfo(istage)%lp
+                if( cline_refine3D%defined('gaufreq') ) gaufreq = params_glob%gaufreq
+            endif
+        endif
         ! trailing reconstruction
         trail_rec = 'no'
         select case(trim(params_glob%multivol_mode))
