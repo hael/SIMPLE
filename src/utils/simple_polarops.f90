@@ -140,7 +140,7 @@ contains
         integer,                         intent(in)    :: pinds(nptcls)
         class(sp_project),               intent(inout) :: spproj
         class(polarft_corrcalc), target, intent(inout) :: pftcc
-        real,                            intent(in)    :: incr_shifts(2,nptcls)
+        real,                  optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,               optional, intent(in)    :: is3d
         class(oris), pointer :: spproj_field
         complex(sp), pointer :: pptcls(:,:,:), rptcl(:,:)
@@ -148,9 +148,11 @@ contains
         real(dp) :: w
         real     :: incr_shift(2)
         integer  :: i, icls, iptcl, irot
-        logical  :: l_ctf, l_even, l_3D
+        logical  :: l_ctf, l_even, l_3D, l_shift
         l_3D = .false.
         if( present(is3D) ) l_3D = is3D
+        l_shift = .false.
+        if( present(incr_shifts) ) l_shift = .true.
         ! retrieve particle info & pointers
         call spproj%ptr2oritype(params_glob%oritype, spproj_field)
         call pftcc%get_ptcls_ptr(pptcls)
@@ -173,10 +175,12 @@ contains
             else
                 icls = spproj_field%get_class(iptcl)
             endif
-            irot       = pftcc%get_roind_fast(spproj_field%e3get(iptcl))
-            incr_shift = incr_shifts(:,i)
-            ! weighted restoration
-            if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
+            irot = pftcc%get_roind_fast(spproj_field%e3get(iptcl))
+            if( l_shift )then
+                incr_shift = incr_shifts(:,i)
+                ! weighted restoration
+                if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
+            endif
             call pftcc%rotate_pft(pptcls(:,:,i), irot, rptcl)
             if( l_ctf )then
                 call pftcc%rotate_pft(pctfmats(:,:,i), irot, rctf)

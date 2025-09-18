@@ -126,56 +126,57 @@ contains
     end subroutine exec_fsc
 
     subroutine exec_clin_fsc( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_strategy2D3D_common
+        use simple_polarops
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_strategy2D_utils, only: write_cavgs
         class(clin_fsc_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters)          :: params
-        type(image)               :: even, odd
-        type(masker)              :: mskvol
-        character(len=LONGSTRLEN) :: fsc_templ
-        real,         allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
-        integer :: j, k_hp, k_lp, nyq
-        real    :: res_fsc05, res_fsc0143
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        ! read even/odd pair
-        call even%new([params%box,params%box,params%box], params%smpd)
-        call odd%new([params%box,params%box,params%box], params%smpd)
-        call odd%read(params%vols(1))
-        call even%read(params%vols(2))
-        res = even%get_res()
-        nyq = even%get_filtsz()
-        if( params%l_filemsk )then
-            call mskvol%new([params%box,params%box,params%box], params%smpd)
-            call mskvol%read(params%mskfile)
-            call phase_rand_fsc(even, odd, mskvol, params%msk, 1, nyq, fsc, fsc_t, fsc_n)
-        else
-            ! spherical masking
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk, 'soft')
-            call even%fft()
-            call odd%fft()
-            allocate(fsc(nyq),source=0.)
-            call even%fsc(odd, fsc)
-        endif
-        do j=1,nyq
-            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', fsc(j)
-        end do
-        call get_resolution(fsc, res, res_fsc05, res_fsc0143)
-        k_hp = calc_fourier_index(params%hp, params%box, params%smpd)
-        k_lp = calc_fourier_index(params%lp, params%box, params%smpd)
-        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
-        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-        call even%kill
-        call odd%kill
-        fsc_templ = trim(FSC_FBODY)//int2str_pad(1,2)
-        call arr2file(fsc, trim(fsc_templ)//trim(BIN_EXT))
-        if( params%l_filemsk )then
-            call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ)
-        else
-            call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ)
-        endif
+        integer,          allocatable :: pinds(:)
+        type(image),      allocatable :: tmp_imgs(:), cavgs(:)
+        type(polarft_corrcalc)        :: pftcc
+        type(builder)                 :: build
+        type(parameters)              :: params
+        integer :: nptcls, ithr
+        call cline%set('mkdir', 'no')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        call set_bp_range( cline )
+        call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
+        ! PREPARATION OF PARTICLES
+        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        call prepimgbatch(nptcls)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
+        enddo
+        ! Build polar particle images
+        call pftcc%allocate_refs_memoization
+        call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+        ! Dealing with polar cavgs
+        call polar_cavger_new(pftcc,.true.)
+        call polar_cavger_update_sums(nptcls, pinds, build%spproj, pftcc, is3D=.true.)
+        call polar_cavger_merge_eos_and_norm(reforis=build%eulspace)
+        ! write
+        allocate(cavgs(params%nspace))
+        call polar_cavger_write('cavgs_even.bin', 'even')
+        call polar_cavger_write('cavgs_odd.bin',  'odd')
+        call polar_cavger_write('cavgs.bin',      'merged')
+        call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
+        call write_cavgs(cavgs, 'cavgs_even.mrc')
+        call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
+        call write_cavgs(cavgs, 'cavgs_odd.mrc')
+        call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
+        call write_cavgs(cavgs, 'cavgs_merged.mrc')
+        call polar_cavger_kill
+        call killimgbatch
+        call pftcc%kill
+        call build%kill_general_tbox
         ! end gracefully
-        call simple_end('**** SIMPLE_FSC_CLIN NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CLIN_FSC NORMAL STOP ****')
     end subroutine exec_clin_fsc
 
     subroutine exec_nununiform_filter3D(self, cline)
