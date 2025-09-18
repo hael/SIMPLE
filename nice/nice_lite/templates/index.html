@@ -1,0 +1,19 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src={% static 'nice_lite/nice_lite.js' %}></script>
+    <title>SIMPLE Stream</title>
+</head>
+<body class="w-full h-screen bg-white flex flex-col">
+    <a href={% url 'nice_lite:stream'%}>
+        <img src={% static 'nice_lite/simple_stream.png' %} class="h-[40px] mr-[20px]"/>
+    </a>
+    <a href={% url 'nice_lite:classic'%}>
+        <img src={% static 'nice_lite/simple_stream.png' %} class="h-[40px] mr-[20px]"/>
+    </a>
+</body>
+</html>

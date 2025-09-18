@@ -1,0 +1,120 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/icons.css' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/streamviewinitialpick.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.js"></script>
+    <script src={% static 'nice_lite/streamviewinitialpick.js' %}></script>
+</head>
+<body class="w-full h-screen bg-white pt-[15px]" data-wide={{ jobstats.user_input }}>
+    {% if status == "running" %}
+        <div class="rounded-full border-[2px] border-nicegreen bg-niceheader fixed top-0 left-[5px] font-bold px-[5px] {% if jobstats.user_input %}animate-pulse{%endif%}">initial picking</div>
+    {% elif status == "finished" %}
+        <div class="rounded-full border-[2px] border-niceheader bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">initial picking</div>
+    {% else %}
+        <div class="rounded-full border-[2px] border-nicered bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">initial picking</div>
+    {% endif %}
+    <div class="rounded h-full bg-white flex-col flex w-full p-[5px] overflow-hidden border-nicecontrast border-[2px]">
+        <div class="flex flex-row justify-end">
+            {% if status == "running" %}    
+                <form class="flex" method="POST" action={% url 'nice_lite:term_stream_initial_pick' jobid %}>
+                    {% csrf_token %}
+                    <button class="stopbutton h-[20px] w-[20px] cursor-pointer" onclick="this.form.submit()"></button>
+                </form> 
+            {% endif %}
+            <form class="flex" method="POST" action={% url 'nice_lite:view_logs' jobid logfile errfile %} target="_parent">
+                {% csrf_token %}
+                <button class="logbutton h-[20px] w-[20px] cursor-pointer" onclick="this.form.submit()"></button>
+            </form>
+        </div>
+        <div class="flex flex-row flex-1">
+            <div class="flex flex-col flex-1">
+                <div class="grid grid-cols-2 gap-1 text-[12px]">
+                    {% if status == "running" and "stage" in jobstats %}
+                        <div class="font-bold">status</div>
+                        <div>{{ jobstats.stage }}</div>
+                     {% elif status == "failed" %} 
+                        <div class="font-bold">status</div>
+                        <div>failed</div>
+                    {% elif status == "finished" %} 
+                        <div class="font-bold">status</div>
+                        <div>finished</div>
+                    {% endif %}
+                    {% if "last_micrograph_imported" in jobstats and jobstats.last_micrograph_imported != "" %}
+                        <div class="font-bold">last micrograph imported</div>
+                        <div>{{ jobstats.last_micrograph_imported }}</div>
+                    {% endif %}
+                </div>
+                <div class="flex flex-row w-full overflow-hidden">
+                    {% if "micrographs_imported" in jobstats and "micrographs_processed" in jobstats and "micrographs_rejected" in jobstats and jobstats.micrographs_imported > 0 %}
+                        <div class="flex flex-col">
+                            <div class="font-bold text-[12px]">micrographs</div>
+                            <div class="h-[50px] w-[150px]">
+                                <canvas class="micrographs_pie_chart" data-imported={{ jobstats.micrographs_imported }} data-processed={{ jobstats.micrographs_processed }} data-rejected={{ jobstats.micrographs_rejected }}></canvas>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if jobstats.user_input is False and "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %}
+                    <div class="flex flex-1 flex-col max-w-[400px]">
+                        <div class="font-bold text-[12px]">pick locations</div>
+                        <div id="latest_picked_micrographs_slider" class="keen-slider">
+                            {% for micrograph in jobstats.latest_picked_micrographs %}
+                                <div class="keen-slider__slide">
+                                    <div class="w-[280px] h-[280px] m-auto">
+                                        <canvas class="boxes_overlay fixed" height="280" width="280" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'></canvas>
+                                        <img style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[280px] w-[280px] rounded m-auto"></img>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>  
+                    </div>         
+                {% endif %}
+                {% if jobstats.user_input is True and "picking_diameters" in jobstats %}
+                <div class="flex flex-row w-full overflow-hidden">
+                        <div class="flex flex-col">
+                            <form class="flex flex-col" method="POST" action={% url 'nice_lite:select_moldiam_stream_initial_pick' jobid %}>
+                                {% csrf_token %}
+                                <div class="font-bold text-[12px]">picking diameter</div>
+                                <input type="hidden" name="diameter"></input>
+                                <input type="range" id="picking_diameters" data-diameters='{{ jobstats.picking_diameters }}' min="1" max={{ jobstats.picking_diameters|length }} oninput="draw_overlay_multipick_coordinates()"></input>
+                                <button class="" onclick="this.form.submit()">use diameter</button>
+                            </form> 
+                            <form class="flex flex-col" method="POST" action={% url 'nice_lite:increase_moldiam_stream_initial_pick' jobid %}>
+                                {% csrf_token %}
+                                <button class="" onclick="this.form.submit()">increase range</button>
+                            </form> 
+                            <form class="flex flex-col" method="POST" action={% url 'nice_lite:decrease_moldiam_stream_initial_pick' jobid %}>
+                                {% csrf_token %}
+                                <button class="" onclick="this.form.submit()">decrease range</button>
+                            </form> 
+                        </div>
+                    </div> 
+                {% endif %}
+            </div>
+            {% if jobstats.user_input is True %} 
+                <div class="flex flex-1 flex-col max-w-[400px]">
+                        <div class="font-bold text-[12px]">pick locations</div>
+                        <div id="latest_picked_micrographs_slider" class="keen-slider">
+                            {% for micrograph in jobstats.latest_picked_micrographs %}
+                                <div class="keen-slider__slide">
+                                    <div class="w-[400px] h-[400px] m-auto">
+                                        <canvas class="boxes_overlay_multipick fixed" height="400" width="400" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'></canvas>
+                                        <img style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[400px] w-[400px] rounded m-auto"></img>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>  
+                    </div>    
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

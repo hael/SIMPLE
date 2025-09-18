@@ -1,0 +1,216 @@
+# global imports
+import os
+import json
+import shutil
+import subprocess
+from ..models import DispatchModel, JobModel
+
+class SIMPLEStream:
+
+    ui_cmd      = ["simple_private_exec", "prg=print_ui_stream"]
+    ui          = {}
+    base_dir    = ""
+    args        = {}
+    jobid       = 0
+    executable  = "simple_stream"
+    tplt_simple_motif = "XXXSIMPLEXXX"
+    tplt_nthr_motif   = "XXXNCPUXXX"
+    skip_refgen       = False
+
+    def __init__(self):
+        self.loadUIJSON()
+
+    def loadUIJSON(self):
+        """populates self.ui with simple_stream UI in JSON format by running 
+        command defined in ui_cmd
+        Args:
+            none
+        Returns:
+            none
+        """
+        try:
+            ui_str = subprocess.run(
+                self.ui_cmd,
+                capture_output = True,
+                check          = True,
+                text           = True
+            )
+            # remove last line from stdout else not valid json
+            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-1])
+            ui_json = json.loads(ui_str)
+        except subprocess.CalledProcessError as cpe:
+            print(cpe.stderr, end="")
+            ui_json = {}
+        self.ui = ui_json
+    
+    def start(self, args, base_dir, jobid):
+        self.base_dir    = base_dir
+        self.args        = args
+        self.jobid       = jobid
+        if self.base_dir is "":               return False
+        if not os.path.exists(self.base_dir): return False
+        if not os.path.isdir(self.base_dir):  return False
+        if "processes" not in self.ui:        return False
+        if "pickrefs" in self.args:
+            self.skip_refgen = True
+        for process in self.ui["processes"]:
+            if not self.dispatch(process): return False
+
+    def dispatch(self, process):
+        dispatchmodel = DispatchModel.objects.filter(active=True).last()
+        if dispatchmodel is None:                            return False
+        if self.tplt_simple_motif not in dispatchmodel.tplt: return False
+        if "name" not in process:                            return False
+        if "prg"  not in process:                            return False
+        if self.skip_refgen and (process["name"] == "generate_picking_refs" or process["name"] == "initial_picking"): 
+            jobmodel = JobModel.objects.filter(id=self.jobid).first()
+            jobmodel.initial_picking_stats    = {"state":"skipped"}
+            jobmodel.generate_pickrefs_stats  = {"state":"skipped"}
+            jobmodel.initial_picking_status   = "skipped"
+            jobmodel.generate_pickrefs_status = "skipped"
+            jobmodel.save()
+            return True
+        if "nthr_master" in process:
+            nthr_master = process["nthr_master"]
+        else:
+            nthr_master = 1
+        command_string = self.executable
+        command_string += " prg=" + process["prg"]
+        if "user_inputs" in process:
+            for user_input in process["user_inputs"]:
+                if user_input in self.args:
+                    command_string += " " + user_input + "=" + self.args[user_input]
+        if "static_inputs" in process:
+            for static_input in process["static_inputs"]:
+                command_string += " " + static_input
+        # append http communication arguments
+        command_string += " niceprocid=" + str(self.jobid)  + " niceserver=" + dispatchmodel.url + "/api"
+        # add output redirection to command_string
+        command_string += " >> " + process["name"] + ".log 2>> " + process["name"] + ".error\n" 
+        # replace motifs in dispatch script template
+        dispatch_script = dispatchmodel.tplt
+        dispatch_script = dispatch_script.replace(self.tplt_nthr_motif,   str(nthr_master))
+        dispatch_script = dispatch_script.replace(self.tplt_simple_motif, command_string)
+        # replace dos line breaks
+        dispatch_script = dispatch_script.replace("\r\n", "\n")
+        # write dispatch script
+        dispatch_script_path = os.path.join(self.base_dir, process["name"] + ".script")
+        try:
+            with open(dispatch_script_path, "a") as scriptfile:
+                scriptfile.write(dispatch_script)
+        except IOError as error:
+            print("File '%s' can not be written")
+            return False
+        if shutil.which(dispatchmodel.scmd) is None: return False
+        submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
+        try:
+            subprocess.run(submit_cmd,
+                cwd=self.base_dir
+                )
+        except subprocess.CalledProcessError as cpe:
+            print(cpe.stderr, end="")
+            return False
+        return True
+
+class SIMPLE:
+    
+    ui_cmd      = ["simple_private_exec", "prg=print_ui_json"]
+    ui          = {}
+    base_dir    = ""
+    args        = {}
+    jobtype     = ""
+    executable  = ""
+    tplt_simple_motif = "XXXSIMPLEXXX"
+    tplt_nthr_motif   = "XXXNCPUXXX"
+
+    def __init__(self, pckg=None):
+        if pckg is not None:
+            if pckg == "simple":
+                self.executable = "simple_exec"
+            elif pckg == "single":
+                self.executable = "single_exec"
+        self.loadUIJSON()
+
+    def loadUIJSON(self):
+        """populates self.ui with simple UI in JSON format by running 
+        command defined in ui_cmd
+        Args:
+            none
+        Returns:
+            none
+        """
+        try:
+            ui_str = subprocess.run(
+                self.ui_cmd,
+                capture_output = True,
+                check          = True,
+                text           = True
+            )
+            # remove last line from stdout else not valid json
+            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-1])
+            ui_json = json.loads(ui_str)
+        except subprocess.CalledProcessError as cpe:
+            print(cpe.stderr, end="")
+            ui_json = {}
+        self.ui = ui_json
+    
+    def start(self, args, base_dir, parent_dir, jobtype, jobid):
+        self.base_dir    = base_dir
+        self.parent_proj = os.path.join(parent_dir, "workspace.simple")
+        self.args        = args
+        self.jobtype     = jobtype
+        self.jobid       = jobid
+        if self.base_dir is "":                  return False
+        if not os.path.exists(self.base_dir):    return False
+        if not os.path.isdir(self.base_dir):     return False
+        if not os.path.exists(parent_dir):       return False
+        if not os.path.isdir(parent_dir):        return False
+        if not os.path.exists(self.parent_proj): return False
+        return self.dispatch()
+
+    def dispatch(self):
+        dispatchmodel = DispatchModel.objects.filter(active=True).last()
+        if dispatchmodel is None:                            return False
+        if self.tplt_simple_motif not in dispatchmodel.tplt: return False
+        nthr_master = 1
+        # copy project file to job dir
+        command_string = "cp -v " + self.parent_proj + " .\n"
+        # update project file
+        command_string += "simple_exec prg=update_project projfile=workspace.simple\n"
+        command_string += self.executable
+        command_string += " prg=" + self.jobtype
+        for key in self.args.keys():
+            command_string += " " + key + "=" + str(self.args[key])
+        # append projfile and mkdir arguments
+        command_string += " mkdir=no projfile=workspace.simple"
+        # append http communication arguments
+        command_string += " niceprocid=" + str(self.jobid)  + " niceserver=" + dispatchmodel.url + "/api"
+        # add output redirection to command_string
+        command_string += " >> stdout.log 2>> stderr.log\n" 
+        # replace motifs in dispatch script template
+        dispatch_script = dispatchmodel.tplt
+        dispatch_script = dispatch_script.replace(self.tplt_nthr_motif,   str(nthr_master))
+        dispatch_script = dispatch_script.replace(self.tplt_simple_motif, command_string)
+        # replace dos line breaks
+        dispatch_script = dispatch_script.replace("\r\n", "\n")
+        # write dispatch script
+        dispatch_script_path = os.path.join(self.base_dir, "job.script")
+        try:
+            with open(dispatch_script_path, "a") as scriptfile:
+                scriptfile.write(dispatch_script)
+        except IOError as error:
+            print("File '%s' can not be written")
+            return False
+        if shutil.which(dispatchmodel.scmd) is None: return False
+        submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
+        try:
+            subprocess.run(submit_cmd,
+                cwd=self.base_dir
+                )
+        except subprocess.CalledProcessError as cpe:
+            print(cpe.stderr, end="")
+            return False
+        return True  
+        
+        
+

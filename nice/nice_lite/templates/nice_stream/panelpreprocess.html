@@ -1,0 +1,137 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src={% static 'nice_stream/panelpreprocess.js' %}></script>
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+    {% if "movies_imported" not in jobstats or jobstats.movies_imported == 0 %}
+        <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
+    {% endif %}
+    <div class="h-full flex-col flex justify-between">
+        <div class="flex flex-row justify-end items-center">
+            {% if status == "running" %}
+                <div class="rounded-full bg-nice4success h-[10px] w-[10px] mr-[5px]" title="{{ jobstats.stage }}&#013;last import: {{ jobstats.last_movie_imported }}"></div>
+            {% elif status == "finished" %}
+                <div class="rounded-full mr-[5px] text-nice4success" title="finished">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            {% else %}
+                <div class="rounded-full text-nice4alert mr-[5px]" title="failed">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            {% endif %}
+            <div class="flex-1 font-bold text-[14px]">preprocessing</div>
+            <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
+                {% csrf_token %}
+                <button class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path d="M6.25 8.75v-1h-1a.75.75 0 0 1 0-1.5h1v-1a.75.75 0 0 1 1.5 0v1h1a.75.75 0 0 1 0 1.5h-1v1a.75.75 0 0 1-1.5 0Z" />
+                        <path fill-rule="evenodd" d="M7 12c1.11 0 2.136-.362 2.965-.974l2.755 2.754a.75.75 0 1 0 1.06-1.06l-2.754-2.755A5 5 0 1 0 7 12Zm0-1.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </form>
+            {% if status == "running" %}    
+               <form class="flex" method="POST" action={% url 'nice_lite:term_stream_preprocess' jobid %}>
+                    {% csrf_token %}
+                    <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="stop">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM6.5 5.5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </form> 
+            {% endif %}
+            <form class="flex" method="POST" action={% url 'nice_lite:view_logs' jobid logfile errfile %} target="_parent">
+                {% csrf_token %}
+                <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="view logs">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </form>
+        </div>
+        <div class="flex flex-row flex-wrap">
+            {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">movies</div>
+                    <div class="h-[50px] w-[150px]">
+                        <canvas class="movies_pie_chart" data-imported={{ jobstats.movies_imported }} data-processed={{ jobstats.movies_processed }} data-rejected={{ jobstats.movies_rejected }}></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "histograms" in jobstats and "ctfres" in jobstats.histograms %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">ctf resolution</div>
+                    <div class="h-[50px] w-[150px]">
+                        <form id="update_preprocess_ctfres" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_ctfres' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="ctfres" value=0></input>
+                        </form>
+                        <canvas class="ctfres_histogram" data-savedval={{ jobstats.cutoff_ctf_res }} data-labels='{{ jobstats.histograms.ctfres.labels }}' data-values='{{ jobstats.histograms.ctfres.data }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        <div class="flex flex-row flex-wrap">
+            {% if "histograms" in jobstats and "astig" in jobstats.histograms %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">astigmatism</div>
+                    <div class="h-[50px] w-[150px]">
+                        <form id="update_preprocess_astig" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_astig' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="astigmatism" value=0></input>
+                        </form>
+                        <canvas class="astig_histogram" data-savedval={{ jobstats.cutoff_astigmatism }} data-labels='{{ jobstats.histograms.astig.labels }}' data-values='{{ jobstats.histograms.astig.data }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "histograms" in jobstats and "icefrac" in jobstats.histograms %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">ice score</div>
+                    <div class="h-[50px] w-[150px]">
+                        <form id="update_preprocess_icescore" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_icescore' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="icescore" value=0></input>
+                        </form>
+                        <canvas class="icescore_histogram" data-savedval={{ jobstats.cutoff_ice_score }} data-labels='{{ jobstats.histograms.icefrac.labels }}' data-values='{{ jobstats.histograms.icefrac.data }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
+            <div class="flex flex-col">
+                <div class="font-bold text-[12px]">latest micrographs</div>
+                <div class="flex flex-row items-center m-auto">
+                    <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                            <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div id="micrograph_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                        {% for micrograph in jobstats.latest_micrographs %}
+                            <div class="snap-center">
+                                <div style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:200% 100%; background-position:100% 0%" class="h-[200px] w-[200px] rounded"></div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>  
+        {% endif %}
+    </div>
+</body>
+</html>

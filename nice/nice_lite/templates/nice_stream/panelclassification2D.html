@@ -1,0 +1,136 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_stream/panelclassification2D.js' %}></script>
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+    {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+        <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
+    {% endif %}
+    <div class="h-full flex-col flex justify-between">
+        <div class="flex flex-row justify-end items-center">
+            {% if status == "running" %}
+                {% if jobstats.user_input %}
+                    <div class="rounded-full mr-[5px] text-nice4success animate-bounce" title="{{ jobstats.stage }}&#013;last import: {{ jobstats.last_particles_imported }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0Zm-5-2a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM8 9c-1.825 0-3.422.977-4.295 2.437A5.49 5.49 0 0 0 8 13.5a5.49 5.49 0 0 0 4.294-2.063A4.997 4.997 0 0 0 8 9Z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                {% else %}
+                    <div class="rounded-full bg-nice4success h-[10px] w-[10px] mr-[5px]" title="{{ jobstats.stage }}&#013;last import: {{ jobstats.last_particles_imported }}"></div>
+                {% endif %}
+            {% elif status == "finished" %}
+                <div class="rounded-full mr-[5px] text-nice4success" title="finished">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            {% else %}
+                <div class="rounded-full text-nice4alert mr-[5px]" title="failed">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            {% endif %}
+            <div class="flex-1 font-bold text-[14px]">2D classification</div>
+            <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
+                {% csrf_token %}
+                <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="view full screen">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path d="M6.25 8.75v-1h-1a.75.75 0 0 1 0-1.5h1v-1a.75.75 0 0 1 1.5 0v1h1a.75.75 0 0 1 0 1.5h-1v1a.75.75 0 0 1-1.5 0Z" />
+                        <path fill-rule="evenodd" d="M7 12c1.11 0 2.136-.362 2.965-.974l2.755 2.754a.75.75 0 1 0 1.06-1.06l-2.754-2.755A5 5 0 1 0 7 12Zm0-1.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </form>
+            {% if status == "running" %}    
+               <form class="flex" method="POST" action={% url 'nice_lite:term_stream_classification_2D' jobid %}>
+                    {% csrf_token %}
+                    <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="stop">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM6.5 5.5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </form>
+            {% endif %}
+            <form class="flex" method="POST" action={% url 'nice_lite:view_logs' jobid logfile errfile %} target="_parent">
+                {% csrf_token %}
+                <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="view logs">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </form>
+        </div>
+        {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
+            <div class="flex flex-col flex-1">
+                <div class="font-bold text-[12px]">particles</div>
+                <div class="h-[50px] w-[150px]">
+                    <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-accepted={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
+                </div>
+            </div>
+        {% endif %}
+        {% if jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0%}
+            <div class="flex flex-col flex-2 max-w-[465px]">
+                <div>
+                    <div class="font-bold text-[12px]">latest classes (iteration {{ jobstats.iteration }})</div>
+                    <div class="flex flex-row items-center m-auto">
+                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div id="accepted_cls2D_slider" class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                            <div class="flex flex-col snap-center">
+                            {% for cls2D in jobstats.latest_cls2D %}
+                                {% if forloop.counter != 0 and forloop.counter0|divisibleby:3 %}
+                                    </div>
+                                    <div class="flex flex-col snap-center">
+                                {% endif %}
+                                <div class="w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded">
+                                    <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}" " style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2D h-[70px] w-[70px] rounded m-auto">
+                                        <canvas class="mskcanvas" height=70 width=70 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            </div>
+                        </div>
+                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>    
+            </div>
+        {% endif %}
+         {% if jobstats.user_input is True and status == "running" %}
+            <div>
+                <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' jobid %}>
+                    {% csrf_token %}
+                    <div class="font-bold text-[12px]">mask diameter</div>
+                    <div class="flex flex-row items-center justify-center">
+                        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onblur="this.form.submit()"></input>
+                        <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
+                        <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[12px]"></div>
+                    </div>
+                </form> 
+            </div>
+            <div>
+                <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:snapshot_stream_classification_2D' jobid %}>
+                    {% csrf_token %}
+                    <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
+                    <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
+                    <button class="userbutton" onclick="selectCls(this.form)">snapshot</button>
+                </form> 
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

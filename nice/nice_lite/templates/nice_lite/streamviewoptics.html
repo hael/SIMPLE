@@ -1,0 +1,69 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/icons.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.js"></script>
+    <script src={% static 'nice_lite/streamviewoptics.js' %}></script>
+</head>
+<body class="w-full h-screen bg-white pt-[15px]">
+    {% if status == "running" %}
+        <div class="rounded-full border-[2px] border-nicegreen bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">optics assignment</div>
+    {% elif status == "finished" %}
+        <div class="rounded-full border-[2px] border-niceheader bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">optics assignment</div>
+    {% else %}
+        <div class="rounded-full border-[2px] border-nicered bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">optics assignment</div>
+    {% endif %}
+    <div class="rounded h-full bg-white flex-col flex p-[5px] border-nicecontrast border-[2px]">
+        <div class="flex flex-row justify-end">
+            {% if status == "running" %}    
+               <form class="flex" method="POST" action={% url 'nice_lite:term_stream_optics' jobid %}>
+                    {% csrf_token %}
+                    <button class="stopbutton h-[20px] w-[20px] cursor-pointer" onclick="this.form.submit()"></button>
+                </form> 
+            {% endif %}
+            <form class="flex" method="POST" action={% url 'nice_lite:view_logs' jobid logfile errfile %} target="_parent">
+                {% csrf_token %}
+                <button class="logbutton h-[20px] w-[20px] cursor-pointer" onclick="this.form.submit()"></button>
+            </form>
+        </div>
+        <div class="grid grid-cols-2 gap-1 text-[12px]">
+            {% if status == "running" and "stage" in jobstats %}
+                <div class="font-bold">status</div>
+                <div>{{ jobstats.stage }}</div>
+            {% elif status == "failed" %} 
+                <div class="font-bold">status</div>
+                <div>failed</div>
+            {% elif status == "finished" %} 
+                <div class="font-bold">status</div>
+                <div>finished</div>
+            {% endif %}
+            {% if "last_micrograph_imported" in jobstats %}
+                <div class="font-bold">last micrograph imported</div>
+                <div>{{ jobstats.last_micrograph_imported }}</div>
+            {% endif %}
+            {% if "micrographs_assigned" in jobstats %}
+                <div class="font-bold">micrographs assigned</div>
+                <div>{{ jobstats.micrographs_assigned }}</div>
+            {% endif %}
+            {% if "optics_groups_assigned" in jobstats %}
+                <div class="font-bold">optics groups assigned</div>
+                <div>{{ jobstats.optics_groups_assigned }}</div>
+            {% endif %}
+        </div>
+        {% if "optics_assignments" in jobstats %}
+            <div class="flex flex-col flex-1">
+                <div class="font-bold text-[12px]">beam shift groupings</div>
+                <div class="flex-1 p-[20px]">
+                    <canvas class="optics_scatter_chart" data-assignments='{{ jobstats.optics_assignments }}''></canvas>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

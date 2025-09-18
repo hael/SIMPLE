@@ -1,0 +1,113 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/icons.css' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/streamviewpreprocess.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/keen-slider@6.8.5/keen-slider.min.js"></script>
+    <script src={% static 'nice_lite/streamviewpreprocess.js' %}></script>
+</head>
+<body class="w-full h-screen bg-white pt-[15px]">
+    {% if status == "running" %}
+        <div class="rounded-full border-[2px] border-nicegreen bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">preprocessing</div>
+    {% elif status == "finished" %}
+        <div class="rounded-full border-[2px] border-niceheader bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">preprocessing</div>
+    {% else %}
+        <div class="rounded-full border-[2px] border-nicered bg-niceheader fixed top-0 left-[5px] font-bold px-[5px]">preprocessing</div>
+    {% endif %}
+    <div class="rounded h-full bg-white flex-col p-[5px] border-nicecontrast border-[2px]">
+        <div class="flex flex-row justify-end">
+            {% if status == "running" %}    
+               <form class="flex" method="POST" action={% url 'nice_lite:term_stream_preprocess' jobid %}>
+                    {% csrf_token %}
+                    <button class="stopbutton h-[20px] w-[20px] cursor-pointer" onclick="this.form.submit()"></button>
+                </form> 
+            {% endif %}
+            <form class="flex" method="POST" action={% url 'nice_lite:view_logs' jobid logfile errfile %} target="_parent">
+                {% csrf_token %}
+                <button class="logbutton h-[20px] w-[20px] cursor-pointer" onclick="this.form.submit()"></button>
+            </form>
+        </div>
+        <div class="grid grid-cols-2 gap-1 text-[12px]">
+            {% if status == "running" and "stage" in jobstats %}
+                <div class="font-bold">status</div>
+                <div>{{ jobstats.stage }}</div>
+            {% elif status == "failed" %} 
+                <div class="font-bold">status</div>
+                <div>failed</div>
+            {% elif status == "finished" %} 
+                <div class="font-bold">status</div>
+                <div>finished</div>
+            {% endif %}
+            {% if "last_movie_imported" in jobstats %}
+                <div class="font-bold">last movie imported</div>
+                <div>{{ jobstats.last_movie_imported }}</div>
+            {% endif %}
+        </div>
+        <div class="flex flex-row flex-wrap">
+            {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">movies</div>
+                    <div class="h-[50px] w-[150px]">
+                        <canvas class="movies_pie_chart" data-imported={{ jobstats.movies_imported }} data-processed={{ jobstats.movies_processed }} data-rejected={{ jobstats.movies_rejected }}></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "histograms" in jobstats and "ctfres" in jobstats.histograms %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">ctf resolution</div>
+                    <div class="h-[50px] w-[150px]">
+                        <form id="update_preprocess_ctfres" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_ctfres' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="ctfres" value=0></input>
+                        </form>
+                        <canvas class="ctfres_histogram" data-savedval={{ jobstats.cutoff_ctf_res }} data-labels='{{ jobstats.histograms.ctfres.labels }}' data-values='{{ jobstats.histograms.ctfres.data }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "histograms" in jobstats and "astig" in jobstats.histograms %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">astigmatism</div>
+                    <div class="h-[50px] w-[150px]">
+                        <form id="update_preprocess_astig" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_astig' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="astigmatism" value=0></input>
+                        </form>
+                        <canvas class="astig_histogram" data-savedval={{ jobstats.cutoff_astigmatism }} data-labels='{{ jobstats.histograms.astig.labels }}' data-values='{{ jobstats.histograms.astig.data }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "histograms" in jobstats and "icefrac" in jobstats.histograms %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[12px]">ice score</div>
+                    <div class="h-[50px] w-[150px]">
+                        <form id="update_preprocess_icescore" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_icescore' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="icescore" value=0></input>
+                        </form>
+                        <canvas class="icescore_histogram" data-savedval={{ jobstats.cutoff_ice_score }} data-labels='{{ jobstats.histograms.icefrac.labels }}' data-values='{{ jobstats.histograms.icefrac.data }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
+            <div class="flex flex-col">
+                <div class="font-bold text-[12px]">latest micrographs</div>
+                <div id="latest_micrographs_slider" class="keen-slider">
+                    {% for micrograph in jobstats.latest_micrographs %}
+                        <div class="keen-slider__slide">
+                            <img class="h-[190px] rounded m-auto" src={% url 'nice_lite:image' micrograph.path %}></img>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>  
+        {% endif %}
+    </div>
+</body>
+</html>

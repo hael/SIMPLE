@@ -1,0 +1,150 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_lite/nice_lite.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg">
+    <div class="flex flex-row font-bold m-[10px]">
+        <div class="flex-1 flex justify-center">
+            <form class="nicebutton" method="POST" action="newstream">
+                {% csrf_token %}
+                <button onclick="this.form.submit()">new stream</button>
+            </form>
+        </div>
+    </div>
+    <div class="flex-1 overflow-hidden flex flex-col">
+        
+        <div class="overflow-auto">
+            {% for job in jobs %}
+                <div mt-[-20px]>
+                <div class="rounded-full border-[2px] border-niceheader bg-niceheader relative top-[25px] left-[20px] font-bold px-[5px] w-max">stream {{ job.id }}</div>    
+                <div class="bg-white flex flex-row m-[10px] p-[5px] border-nicecontrast border-[2px] rounded">
+                    <div class="flex flex-col">
+                        <div class="mt-[10px]">
+                            <div class="font-bold text-[12px]">description</div>
+                            <form class="flex" method="POST" action={% url 'nice_lite:update_stream_description' job.id %} target="_parent">
+                                {% csrf_token %}
+                                <textarea class="bg-niceheader" onblur="this.form.submit()" name="description">{{ job.desc }}</textarea>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <div class="grid grid-cols-2 gap-1 text-[12px]">
+                            {% if "last_movie_imported" in job.preprocessing_stats %}
+                                <div class="font-bold">last_movie_imported</div>
+                                <div>{{ job.preprocessing_stats.last_movie_imported }}</div>
+                            {% endif %}
+                            {% if "movies_imported" in job.preprocessing_stats and job.preprocessing_stats.movies_imported > 0 %}
+                                <div class="font-bold">movies imported</div>
+                                <div>{{ job.preprocessing_stats.movies_imported }}</div>
+                            {% endif %}
+                        </div>
+                        {% if "movies_imported" in job.preprocessing_stats and "movies_processed" in job.preprocessing_stats and "movies_rejected" in job.preprocessing_stats and job.preprocessing_stats.movies_imported > 0%}
+                             <div class="flex flex-col">
+                                <div class="font-bold text-[12px]">movies</div>
+                                <div class="h-[50px] w-[150px]">
+                                    <canvas class="movies_pie_chart" data-imported={{ job.preprocessing_stats.movies_imported }} data-processed={{ job.preprocessing_stats.movies_processed }} data-rejected={{ job.preprocessing_stats.movies_rejected }}></canvas>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="flex flex-col">
+                        <div class="font-bold text-[12px]">latest micrograph</div>
+                        <div class="bg-niceheader m-[5px] rounded">
+                            {% if "latest_micrographs" in job.preprocessing_stats and job.preprocessing_stats.latest_micrographs|length > 0 %}
+                                <img class="h-[150px] w-[300px] rounded" src={% url 'nice_lite:image' job.preprocessing_stats.latest_micrographs.0.path %}></img>
+                            {% else %}
+                                <div class="h-[150px] w-[300px] rounded bg-niceheader flex justify-center items-center text-[10px]">waiting ...</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <div class="grid grid-cols-2 gap-1 text-[12px]">
+                            {% if "last_micrograph_imported" in job.reference_picking_stats %}
+                                <div class="font-bold">last micrograph picked</div>
+                                <div>{{ job.reference_picking_stats.last_micrograph_imported }}</div>
+                            {% endif %}
+                            {% if "particles_extracted" in job.reference_picking_stats %}
+                                <div class="font-bold">particles extracted</div>
+                                <div>{{ job.reference_picking_stats.particles_extracted }}</div>
+                            {% endif %}
+                        </div>
+                        {% if "micrographs_imported" in job.reference_picking_stats and "micrographs_processed" in job.reference_picking_stats and "micrographs_rejected" in job.reference_picking_stats and job.reference_picking_stats.micrographs_imported > 0 %}
+                             <div class="flex flex-col">
+                                <div class="font-bold text-[12px]">micrographs</div>
+                                <div class="h-[50px] w-[150px]">
+                                    <canvas class="micrographs_pie_chart" data-imported={{ job.reference_picking_stats.micrographs_imported }} data-processed={{ job.reference_picking_stats.micrographs_processed }} data-rejected={{ job.reference_picking_stats.micrographs_rejected }}></canvas>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="flex flex-col">
+                        <div class="font-bold text-[12px]">latest 2D classes</div>
+                        <div class="bg-niceheader m-[5px] rounded">
+                            {% if "latest_cls2D" in job.preprocessing_stats and job.preprocessing_stats.latest_cls2D|length > 0 %}
+                                <img class="h-[150px] w-[300px] rounded" src={% url 'nice_lite:image' job.preprocessing_stats.latest_cls2D.0.path %}></img>
+                            {% else %}
+                                <div class="h-[150px] w-[300px] rounded bg-niceheader flex justify-center items-center text-[10px]">waiting ...</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <div class="grid grid-cols-2 gap-1 text-[12px]">
+                            {% if "last_micrograph_imported" in job.reference_picking_stats %}
+                                <div class="font-bold">last particles imported</div>
+                                <div>{{ job.reference_picking_stats.last_micrograph_imported }}</div>
+                            {% endif %}
+                        </div>
+                        {% if "micrographs_imported" in job.reference_picking_stats and "micrographs_processed" in job.reference_picking_stats and "micrographs_rejected" in job.reference_picking_stats and job.reference_picking_stats.micrographs_imported > 0 %}
+                             <div class="flex flex-col">
+                                <div class="font-bold text-[12px]">particles</div>
+                                <div class="h-[50px] w-[150px]">
+                                    <canvas class="micrographs_pie_chart" data-imported={{ job.reference_picking_stats.micrographs_imported }} data-processed={{ job.reference_picking_stats.micrographs_processed }} data-rejected={{ job.reference_picking_stats.micrographs_rejected }}></canvas>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 flex">
+                        <div class="flex-1"></div>
+                        <div class="flex flex-col pr-[20px]">
+                            <form method="POST" action={% url 'nice_lite:view_stream' job.id  %}>
+                                {% csrf_token %}
+                                <input name="jobid" value={{ job.id }} type="hidden"></input>
+                                <button class="nicebutton w-full m-[10px]" onclick="this.form.submit()">view</button>
+                            </form>
+                            <form method="POST" action="termstream">
+                                {% csrf_token %}
+                                <input name="jobid" value={{ job.id }} type="hidden"></input>
+                                <button class="nicebutton w-full m-[10px]" onclick="this.form.submit()">terminate</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="bg-niceheader">
+        <div class="font-bold">dataset details</div>
+        <div class="grid grid-cols-4 gap-1">
+            <div>name</div>
+            <div>{{ current_dataset_name }}</div>
+            <div>created</div>
+            <div>{{ created }}</div>
+            <div>modified</div>
+            <div>{{ modified }}</div>
+            <div>created by</div>
+            <div>user</div>
+            <div>location</div>
+            <div>{{ folder }}</div>
+            <div>description</div>
+            <div>{{ description }}</div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_lite/nice_lite.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-white" onclick="history.back()">
+    <div class="h-[50%] flex flex-col pt-[15px]">
+        <div class="rounded-full border-[2px] border-niceheader bg-niceheader relative top-[15px] left-[15px] w-min font-bold px-[5px]">stdout</div>
+        <div class="rounded bg-white flex-col p-[5px] mx-[10px] border-nicecontrast border-[2px] overflow-hidden">
+            <div class="flex flex-1 overflow-scroll h-full">
+                <pre>{{log}}</pre>
+            </div>
+        </div>
+    </div>
+    <div class="h-[50%] flex flex-col pt-[15px]">
+        <div class="rounded-full border-[2px] border-niceheader bg-niceheader relative top-[15px] left-[15px] w-min font-bold px-[5px]">stderr</div>
+        <div class="rounded bg-white flex-col p-[5px] mx-[10px] border-nicecontrast border-[2px] overflow-hidden">
+            <div class="flex flex-1 overflow-scroll h-full">
+                <pre>{{error}}</pre>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

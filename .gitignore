@@ -42,3 +42,7 @@ doc/html/
 /node_modules
 /dist
 .eman2log.txt
+# Nice derived
+venv
+db.sqlite3
+__pycache__
