@@ -2733,22 +2733,21 @@ contains
         &'Calculate FSC between the two input volumes',&                        ! descr_short
         &'is a program for calculating the FSC between the two input volumes',& ! descr_long
         &'simple_exec',&                                                        ! executable
-        &2, 1, 0, 0, 2, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
+        &0, 2, 0, 2, 1, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call clin_fsc%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call clin_fsc%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        ! <empty>
         ! parameter input/output
-        call clin_fsc%set_input('parm_ios', 1, smpd)
+        call clin_fsc%set_input('parm_ios', 1, projfile)
+        call clin_fsc%set_input('parm_ios', 2, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call clin_fsc%set_input('srch_ctrls', 1, nspace)
+        call clin_fsc%set_input('srch_ctrls', 2, pgrp)
         ! filter controls
-        hp%required = .false.
-        lp%required = .false.
-        call clin_fsc%set_input('filt_ctrls', 1, hp)
-        call clin_fsc%set_input('filt_ctrls', 2, lp)
+        lp%required = .true.
+        call clin_fsc%set_input('filt_ctrls', 1, lp)
         ! mask controls
         call clin_fsc%set_input('mask_ctrls', 1, mskdiam)
         call clin_fsc%set_input('mask_ctrls', 2, mskfile)
