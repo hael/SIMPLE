@@ -81,6 +81,7 @@ contains
             case DEFAULT
                 l_restore = .true.
         end select
+        if( l_polar .and. trim(params_glob%refine).eq.'sigma') l_restore = .true.
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
