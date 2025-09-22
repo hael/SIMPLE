@@ -1,11 +1,15 @@
+let lastinteraction = Date.now();
+
 scrlRight = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
   micrograph_slider.scrollLeft += 200;
+  lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
   micrograph_slider.scrollLeft -= 200;
+  lastinteraction = Date.now();
 }
 
 var multipick_observer = new IntersectionObserver(
@@ -61,6 +65,7 @@ draw_overlay_coordinates = () => {
         ctx.stroke();
       }
     }
+    lastinteraction = Date.now();
 }
 
 /* draw boxes on load */
@@ -87,7 +92,7 @@ window.addEventListener("load", () =>{
                       boxWidth: 10,
                       padding:  2,
                       font :{
-                        size: 10
+                        size: 9
                       }
                     }
                 }
@@ -120,10 +125,12 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setTimeout(function () {
-  document.getElementById("loadinggauze").style.display = "flex";
-  document.getElementById("loadinggauze").style.opacity = "1";
-  setTimeout(function () {
-   location.reload();
-  }, 600);
-}, 31000);
+setInterval(() => {
+  if((Date.now() - lastinteraction) > 30000){
+    document.getElementById("loadinggauze").style.display = "flex";
+    document.getElementById("loadinggauze").style.opacity = "1";
+    setTimeout(() => {
+      location.reload();
+    }, 600);
+  }
+}, 1000);

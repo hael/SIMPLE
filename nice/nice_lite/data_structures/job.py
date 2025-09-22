@@ -251,7 +251,6 @@ class Job:
     def updateStats(self, stats_json):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         response = {}
-        print(stats_json)
         if "preprocessing" in stats_json:
             jobmodel.preprocessing_stats     = stats_json["preprocessing"]
             jobmodel.preprocessing_heartbeat = timezone.now()
@@ -397,6 +396,7 @@ class Job:
             self.generate_pickrefs_stats["stage"]      = "saving selection"
             jobmodel.generate_pickrefs_stats = self.generate_pickrefs_stats
             jobmodel.save()
+            self.terminate_intial_pick()
 
     def snapshot_classification_2D(self, snapshot_selection, snapshot_iteration):
         jobmodel = JobModel.objects.filter(id=self.id).first()

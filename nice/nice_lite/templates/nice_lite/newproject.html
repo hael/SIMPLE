@@ -7,16 +7,27 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <script src={% static 'nice_lite/nice_lite.js' %}></script>
 </head>
-<body class="w-full h-screen flex flex-col bg-nicecontrast">
+<body class="w-full h-screen flex flex-col bg-nice4bg">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        {% if caller == "stream" %}
+            <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:dataset' %} title="back">
+        {% else %}
+            <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:workspace' %} title="back">
+        {% endif %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a> 
+    </div>
     <div class="w-fit mx-auto">
-        <div class="relative bg-niceheader rounded-full h-[150px] w-[150px] top-[75px] m-auto">
-            <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[100px] m-auto relative top-[25px]"/> 
+         <div class="relative bg-nice4bubble rounded-full h-[150px] w-[150px] top-[75px] m-auto border-[2px] border-nice4header">
+            <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[90px] m-auto relative top-[25px]"/> 
         </div>
-        <div class="bg-white rounded p-[20px] pt-[80px]">
-            <div class="text-[25px] font-bold flex justify-center pb-[15px]">
+        <div class="bg-nice4bubble rounded-xl flex flex-col w-max h-max p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="text-[25px] font-bold flex justify-center pb-[15px] pt-[75px]">
                 new project
             </div>
-            <form method="POST" action="createproject" target="_parent">
+            <form method="POST" action={% url 'nice_lite:create_project' %} target="_parent">
                 {% csrf_token %}
                 <div class="grid grid-cols-2 gap-4">
                     <div>project name</div>
@@ -33,8 +44,7 @@
                     </div>
                 </div>
                 <div class="flex mt-[20px]">
-                    <input type="submit" value="Start" class="m-auto bg-niceheader p-[5px] font-bold rounded hover:bg-nicecontrast hover:text-white"></input>
-                </div>
+                    <input type="submit" value="start" class="m-auto bg-nice4bg p-[5px] font-bold rounded hover:bg-nice4header hover:text-nice4bubble"></input>
             </form>
         </div>
     </div>

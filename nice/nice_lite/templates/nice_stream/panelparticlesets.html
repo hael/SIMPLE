@@ -15,11 +15,11 @@
     {% endif %}
     <div class="h-full flex-col flex justify-between">
         <div class="flex flex-row justify-end items-center">
-            <div class="flex-1 font-bold text-[14px]">particle sets</div>
+            <div class="flex-1 font-bold text-[12px]">particle sets</div>
         </div>
-        <div class="flex flex-col flex-1 overflow-y-scroll text-[12px]">
+        <div class="flex flex-col flex-1 overflow-y-scroll text-[10px]">
             {% for particle_set in jobstats.particle_sets %}
-                <div class="flex flex-col m-[5px] border-nice4header border-[2px] rounded p-[2px]">
+                <div class="flex flex-col m-[5px] border-nice4header border-[1px] rounded p-[2px]">
                     <div class="flex flex-row">
                         <div class="flex-1 font-bold">
                             {{ particle_set.name }}

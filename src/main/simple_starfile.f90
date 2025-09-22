@@ -201,7 +201,7 @@ contains
                 do ipart=1, size(part_boundaries, 1)
                     call starfile_table__new(part_table)
                     call starfile_table__setIsList(part_table, .false.)
-                    call starfile_table__setname(part_table, 'micrographs')
+                    call starfile_table__setname(part_table, 'particles')
                     if(part_boundaries(ipart,1) .gt. part_boundaries(ipart,2)) cycle
                     pathtrim = 0
                     do iptcl=part_boundaries(ipart,1), part_boundaries(ipart,2)

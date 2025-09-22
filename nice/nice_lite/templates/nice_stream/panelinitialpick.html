@@ -1,4 +1,5 @@
 {% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -13,7 +14,7 @@
     {% if "micrographs_imported" not in jobstats or jobstats.micrographs_imported == 0 %}
         <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
     {% endif %}
-    <div class="h-full flex-col flex justify-between">
+    <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row justify-end items-center">
             {% if status == "running" %}
                 {% if jobstats.user_input %}
@@ -38,7 +39,7 @@
                     </svg>
                 </div>
             {% endif %}
-            <div class="flex-1 font-bold text-[14px]">initial picking</div>
+            <div class="flex-1 font-bold text-[12px]">initial picking</div>
             <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
                 {% csrf_token %}
                 <button class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
@@ -71,8 +72,8 @@
             <div class="flex flex-row w-full overflow-hidden">
                 {% if "micrographs_imported" in jobstats and "micrographs_processed" in jobstats and "micrographs_rejected" in jobstats and jobstats.micrographs_imported > 0 %}
                     <div class="flex flex-col">
-                        <div class="font-bold text-[12px]">micrographs</div>
-                        <div class="h-[50px] w-[150px]">
+                        <div class="font-bold text-[10px] pl-[10px]">micrographs</div>
+                        <div class="h-[40px] w-[150px]">
                             <canvas class="micrographs_pie_chart" data-imported={{ jobstats.micrographs_imported }} data-processed={{ jobstats.micrographs_processed }} data-rejected={{ jobstats.micrographs_rejected }}></canvas>
                         </div>
                     </div>
@@ -80,15 +81,15 @@
             </div>
             {% if jobstats.user_input is False and "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[12px]">pick locations</div>
+                    <div class="font-bold text-[10px] pl-[10px]">pick locations</div>
                     <div class="flex flex-row items-center m-auto">
                         <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div id="micrographs_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                            <canvas id="boxes_overlay" class="fixed" height="200" width="200"></canvas>
+                        <div id="micrographs_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <canvas id="boxes_overlay hover:animate-pulse" class="fixed" height="200" width="200"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <div class="w-[200px] h-[200px] m-auto">
@@ -106,7 +107,7 @@
                 </div>    
             {% elif jobstats.user_input is True and "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %} 
                 <div class="flex flex-col">
-                    <div class="font-bold text-[12px]">pick locations</div>
+                    <div class="font-bold text-[10px] pl-[10px]">pick locations</div>
                     <div class="flex flex-row items-center m-auto">
                         <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -114,7 +115,7 @@
                             </svg>
                         </div>
                         <div id="micrographs_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                            <canvas id="boxes_overlay" class="fixed" height="200" width="200"></canvas>
+                            <canvas id="boxes_overlay hover:animate-pulse" class="fixed" height="200" width="200"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <div class="w-[200px] h-[200px] m-auto">
@@ -139,7 +140,7 @@
         {% if jobstats.user_input is True and "picking_diameters" in jobstats %}
             <div class="flex flex-row"></div>
                 <div class="flex flex-col w-full overflow-hidden">
-                    <div class="font-bold text-[12px]">picking diameter</div>
+                    <div class="font-bold text-[10px] pl-[10px]">picking diameter</div>
                     <div class="flex flex-row justify-center items-baseline">
                         <form class="flex flex-col text-nice4header" method="POST" action={% url 'nice_lite:decrease_moldiam_stream_initial_pick' jobid %}>
                             {% csrf_token %}

@@ -29,7 +29,11 @@ class DatasetView:
         # get jobs
         jobs = JobModel.objects.filter(dset=self.dataset.id)
         for jobmodel in jobs:
+            # update status
             job = Job(id=jobmodel.id)
+            # sort cls2D
+            if "latest_cls2D" in jobmodel.classification_2D_stats:
+                jobmodel.classification_2D_stats["latest_cls2D"] = sorted(jobmodel.classification_2D_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
 
         context = {"current_project_id"   : self.project.id,
                    "current_dataset_id"   : self.dataset.id,

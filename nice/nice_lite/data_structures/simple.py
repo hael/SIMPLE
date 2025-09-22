@@ -47,7 +47,7 @@ class SIMPLEStream:
         self.base_dir    = base_dir
         self.args        = args
         self.jobid       = jobid
-        if self.base_dir is "":               return False
+        if self.base_dir == "":               return False
         if not os.path.exists(self.base_dir): return False
         if not os.path.isdir(self.base_dir):  return False
         if "processes" not in self.ui:        return False
@@ -70,6 +70,9 @@ class SIMPLEStream:
             jobmodel.generate_pickrefs_status = "skipped"
             jobmodel.save()
             return True
+        # set path to pickrefs for reference based picking
+        if not self.skip_refgen and process["name"] == "reference_based_picking":
+            self.args["pickrefs"] = "generate_picking_refs/selected_references.mrcs"
         if "nthr_master" in process:
             nthr_master = process["nthr_master"]
         else:
@@ -160,7 +163,7 @@ class SIMPLE:
         self.args        = args
         self.jobtype     = jobtype
         self.jobid       = jobid
-        if self.base_dir is "":                  return False
+        if self.base_dir == "":                  return False
         if not os.path.exists(self.base_dir):    return False
         if not os.path.isdir(self.base_dir):     return False
         if not os.path.exists(parent_dir):       return False

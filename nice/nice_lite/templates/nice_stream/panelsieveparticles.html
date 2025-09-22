@@ -1,4 +1,5 @@
 {% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -13,7 +14,7 @@
     {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
         <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
     {% endif %}
-    <div class="h-full flex-col flex justify-between">
+    <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row justify-end items-center">
             {% if status == "running" %}
                 {% if jobstats.user_input %}
@@ -38,7 +39,7 @@
                     </svg>
                 </div>
             {% endif %}
-            <div class="flex-1 font-bold text-[14px]">particle sieving</div>
+            <div class="flex-1 font-bold text-[12px]">particle sieving</div>
             <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
                 {% csrf_token %}
                 <button class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
@@ -67,14 +68,14 @@
                 </button>
             </form>
         </div>
-        <div class="h-full flex-col flex justify-between">
-            <div class="flex flex-row flex-1">
+        <div class="h-full flex-col flex justify-start">
+            <div class="flex flex-row">
                 <div class="flex flex-col flex-1">
                     <div class="flex flex-row">
                         {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
                             <div class="flex flex-col">
-                                <div class="font-bold text-[12px]">particles</div>
-                                <div class="h-[50px] w-[150px]">
+                                <div class="font-bold text-[10px] pl-[10px]">particles</div>
+                                <div class="h-[40px] w-[150px]">
                                     <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-accepted={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
                                 </div>
                             </div>
@@ -83,21 +84,23 @@
                 </div>
             </div>
             {% if jobstats.user_input is True and "accepted_cls2D" in jobstats and "rejected_cls2D" in jobstats %}
-                <div class="flex flex-col flex-2">
-                    <div class="m-auto">
-                        <div class="font-bold text-[12px]">accepted classes</div>
-                        <div class="flex flex-row items-center m-auto">
+                <div class="flex flex-col flex-1">
+                    <div class="">
+                        <div class="font-bold text-[10px] pl-[10px]">accepted classes</div>
+                        <div class="flex flex-row items-center m-auto w-max">
                             <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                     <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                 </svg>
                             </div>
-                            <div id="accepted_cls2D_slider" class="flex flex-row w-[220px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                {% for cls2D in jobstats.accepted_cls2D %}
-                                    <div class="snap-center"> 
-                                        <div onclick="toggleSievecls(this)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
-                                    </div>
-                                {% endfor %}
+                            <div id="accepted_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                <div class="grid grid-flow-col grid-rows-2">
+                                    {% for cls2D in jobstats.accepted_cls2D %}
+                                        <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                            <div onclick="toggleSievecls(this)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
                             </div>
                             <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -106,20 +109,22 @@
                             </div>
                         </div>
                     </div>
-                    <div class="m-auto">
-                        <div class="font-bold text-[12px]">rejected classes</div>
-                        <div class="flex flex-row items-center m-auto">
+                    <div class="">
+                        <div class="font-bold text-[10px] pl-[10px]">rejected classes</div>
+                        <div class="flex flex-row items-center m-auto w-max">
                             <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRejectedLeft()">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                     <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                 </svg>
                             </div>
-                            <div id="rejected_cls2D_slider" class="flex flex-row w-[220px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                {% for cls2D in jobstats.rejected_cls2D %}
-                                    <div class="snap-center"> 
-                                        <div onclick="toggleSievecls(this)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
-                                    </div>
-                                {% endfor %}
+                            <div id="rejected_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                <div class="grid grid-flow-col grid-rows-1">
+                                    {% for cls2D in jobstats.rejected_cls2D %}
+                                        <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                            <div onclick="toggleSievecls(this)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
                             </div>
                             <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRejectedRight()">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -133,19 +138,21 @@
             {% if "latest_accepted_cls2D" in jobstats and "latest_rejected_cls2D" in jobstats and jobstats.latest_accepted_cls2D|length > 0 or jobstats.latest_rejected_cls2D|length > 0 %}
                 <div class="flex flex-col flex-2">
                         <div class="m-auto">
-                            <div class="font-bold text-[12px]">latest accepted classes</div>
-                            <div class="flex flex-row items-center m-auto">
+                            <div class="font-bold text-[10px] pl-[10px]">latest accepted classes</div>
+                            <div class="flex flex-row items-center m-auto w-max">
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                         <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                     </svg>
                                 </div>
-                                <div id="accepted_cls2D_slider" class="flex flex-row w-[220px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                    {% for cls2D in jobstats.latest_accepted_cls2D %}
-                                        <div class="snap-center"> 
-                                            <div data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
-                                        </div>
-                                    {% endfor %}
+                                <div id="accepted_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                    <div class="grid grid-flow-col grid-rows-2">
+                                        {% for cls2D in jobstats.latest_accepted_cls2D %}
+                                            <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                                <div data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
                                 </div> 
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -155,19 +162,21 @@
                             </div>
                         </div>
                         <div class="m-auto">
-                            <div class="font-bold text-[12px]">latest rejected classes</div>
-                            <div class="flex flex-row items-center m-auto">
+                            <div class="font-bold text-[10px] pl-[10px]">latest rejected classes</div>
+                            <div class="flex flex-row items-center m-auto w-max">
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRejectedLeft()">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                         <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                     </svg>
                                 </div>
-                                <div id="rejected_cls2D_slider" class="flex flex-row w-[220px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                    {% for cls2D in jobstats.latest_rejected_cls2D %}
-                                        <div class="snap-center"> 
-                                            <div data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
-                                        </div>
+                                <div id="rejected_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                    <div class="grid grid-flow-col grid-rows-1"></div>
+                                        {% for cls2D in jobstats.latest_rejected_cls2D %}
+                                            <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                                <div data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                            </div>
                                         {% endfor %}
+                                    </div>
                                 </div>
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRejectedRight()">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -179,7 +188,7 @@
                 </div>
             {% endif %}
         </div>
-        {% if jobstats.user_input is True %}
+        {% if status == "running" and jobstats.user_input is True %}
             <div>
                 <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_stream_sieve_particles' jobid %}>
                     {% csrf_token %}

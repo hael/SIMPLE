@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <link rel="stylesheet" href="{% static 'nice_lite/icons.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src={% static 'nice_lite/nice_lite.js' %}></script>
+    <script src={% static 'nice_stream/streamview.js' %}></script>
 </head>
 <body class="w-full h-screen flex flex-col bg-nice4bg">
     <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
@@ -18,11 +18,11 @@
         </a> 
         <div class="px-[10px] text-[18px] text-nice4dark">stream {{ jobid }}</div>
     </div>
-    <div class="w-full h-full flex flex-row flex-wrap p-[10px] pt-[0px]">
+    <div id="streamview" class="w-full h-full flex flex-row flex-wrap p-[10px] pt-[0px] overflow-y-scroll content-start">
         <div>
             <div class="flex flex-col m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
-                <div class="font-bold text-[14px] text-nice4dark">collection parameters</div>
-                <div class="grid grid-cols-2 gap-1 text-[12px] ml-[10px]">
+                <div class="font-bold text-[12px] text-nice4dark">collection parameters</div>
+                <div class="grid grid-cols-2 gap-1 text-[10px] ml-[10px]">
                     {% if "smpd" in args %}
                         <div class="font-bold">sampling distance</div>
                         <div>{{ args.smpd }} Å/px</div>

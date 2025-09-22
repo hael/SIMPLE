@@ -122,6 +122,8 @@ integer,             public, allocatable :: snapshot_selection(:)             ! 
 integer,             allocatable :: prune_selection(:)                ! selection for pruning classes on the fly
 integer,             allocatable :: repick_selection(:)               ! selection for selecting classes for re-picking
 integer,             public, allocatable :: pool_jpeg_map(:)                  ! map jpeg classes to sp_cls2D indices
+integer,             public, allocatable :: pool_jpeg_pop(:)                  ! map jpeg classes to populations
+real,                public, allocatable :: pool_jpeg_res(:)                  ! map jpeg classes to resolutions
 integer,             public      :: last_complete_iter = 0
 integer,             public      :: last_snapshot_nptcls = 0
 logical                          :: stream2D_active   = .false.       ! initiation flag
@@ -1104,10 +1106,10 @@ contains
     end subroutine terminate_chunks
 
     !> produces consolidated project
-    subroutine write_project_stream2D( write_star, clspath, snapshot_projfile)
+    subroutine write_project_stream2D( write_star, clspath, snapshot_projfile, snapshot_starfile_base)
         logical,           optional, intent(in)    :: write_star
         logical,           optional, intent(in)    :: clspath
-        character(len=*),  optional, intent(in)    :: snapshot_projfile
+        character(len=*),  optional, intent(in)    :: snapshot_projfile, snapshot_starfile_base
         type(class_frcs)               :: frcs
         type(oris)                     :: os_backup
         type(sp_project)               :: snapshot_proj
@@ -1165,6 +1167,14 @@ contains
                 call snapshot_proj%set_cavgs_thumb(snapshot_projfile)
                 snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
                 call snapshot_proj%write(snapshot_projfile)
+                if(present(snapshot_starfile_base)) then
+                  !  call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
+                    if( DEBUG_HERE ) t = tic()
+                    call snapshot_proj%write_mics_star(snapshot_starfile_base // "_micrographs.star")
+                    if( DEBUG_HERE ) print *,'ms_export  : ', toc(t); call flush(6); t = tic()
+                    call snapshot_proj%write_ptcl2D_star(snapshot_starfile_base // "_particles.star")
+                    if( DEBUG_HERE ) print *,'ptcl_export  : ', toc(t); call flush(6)
+                endif
                 call set_snapshot_time()
                 last_snapshot_nptcls = snapshot_proj%os_ptcl2D%count_state_gt_zero()
               !  call snapshot_comm%terminate(export_project=snapshot_proj)
@@ -2340,7 +2350,11 @@ contains
         if(.not. file_exists(trim(refs_glob))) return
         if(file_exists(trim(jpeg_path)))       return
         if(allocated(pool_jpeg_map)) deallocate(pool_jpeg_map)
+        if(allocated(pool_jpeg_pop)) deallocate(pool_jpeg_pop)
+        if(allocated(pool_jpeg_res)) deallocate(pool_jpeg_res)
         allocate(pool_jpeg_map(0))
+        allocate(pool_jpeg_pop(0))
+        allocate(pool_jpeg_res(0))
         call find_ldim_nptcls(trim(refs_glob), ldim_stk, ncls_here)
         if(ncls_here .ne. pool_proj%os_cls2D%get_noris()) THROW_HARD('ncls and n_noris mismatch')
         xtiles = floor(sqrt(real(ncls_glob)))
@@ -2357,6 +2371,8 @@ contains
             if(pool_proj%os_cls2D%get(icls,'state') < 0.5) cycle
             if(pool_proj%os_cls2D%get(icls,'pop')   < 0.5) cycle
             pool_jpeg_map = [pool_jpeg_map, icls]
+            pool_jpeg_pop = [pool_jpeg_pop, nint(pool_proj%os_cls2D%get(icls,'pop'))]
+            pool_jpeg_res = [pool_jpeg_res, pool_proj%os_cls2D%get(icls,'res')]
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
             call img%fft

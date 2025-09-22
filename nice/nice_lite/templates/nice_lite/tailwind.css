@@ -73,3 +73,9 @@
         width: 16px;
     }
 }
+@layer components {
+    .scrollbar-hidden{
+        -ms-overflow-style: none;  /* Internet Explorer 10+ */
+        scrollbar-width: none;
+    }
+}

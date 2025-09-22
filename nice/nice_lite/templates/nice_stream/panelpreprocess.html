@@ -1,4 +1,5 @@
 {% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -14,7 +15,7 @@
     {% if "movies_imported" not in jobstats or jobstats.movies_imported == 0 %}
         <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
     {% endif %}
-    <div class="h-full flex-col flex justify-between">
+    <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row justify-end items-center">
             {% if status == "running" %}
                 <div class="rounded-full bg-nice4success h-[10px] w-[10px] mr-[5px]" title="{{ jobstats.stage }}&#013;last import: {{ jobstats.last_movie_imported }}"></div>
@@ -31,7 +32,7 @@
                     </svg>
                 </div>
             {% endif %}
-            <div class="flex-1 font-bold text-[14px]">preprocessing</div>
+            <div class="flex-1 font-bold text-[12px]">preprocessing</div>
             <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
                 {% csrf_token %}
                 <button class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
@@ -63,16 +64,16 @@
         <div class="flex flex-row flex-wrap">
             {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[12px]">movies</div>
-                    <div class="h-[50px] w-[150px]">
+                    <div class="font-bold text-[10px] pl-[10px]">movies</div>
+                    <div class="h-[40px] w-[150px]">
                         <canvas class="movies_pie_chart" data-imported={{ jobstats.movies_imported }} data-processed={{ jobstats.movies_processed }} data-rejected={{ jobstats.movies_rejected }}></canvas>
                     </div>
                 </div>
             {% endif %}
             {% if "histograms" in jobstats and "ctfres" in jobstats.histograms %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[12px]">ctf resolution</div>
-                    <div class="h-[50px] w-[150px]">
+                    <div class="font-bold text-[10px] pl-[10px]">ctf resolution</div>
+                    <div class="h-[50px] w-[120px] ml-[15px]">
                         <form id="update_preprocess_ctfres" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_ctfres' jobid %}>
                             {% csrf_token %}
                             <input type="hidden" name="ctfres" value=0></input>
@@ -85,8 +86,8 @@
         <div class="flex flex-row flex-wrap">
             {% if "histograms" in jobstats and "astig" in jobstats.histograms %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[12px]">astigmatism</div>
-                    <div class="h-[50px] w-[150px]">
+                    <div class="font-bold text-[10px] pl-[10px]">astigmatism</div>
+                    <div class="h-[50px] w-[120px] ml-[15px]">
                         <form id="update_preprocess_astig" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_astig' jobid %}>
                             {% csrf_token %}
                             <input type="hidden" name="astigmatism" value=0></input>
@@ -96,9 +97,9 @@
                 </div>
             {% endif %}
             {% if "histograms" in jobstats and "icefrac" in jobstats.histograms %}
-                <div class="flex flex-col">
-                    <div class="font-bold text-[12px]">ice score</div>
-                    <div class="h-[50px] w-[150px]">
+                <div class="flex flex-col ml-[15px]">
+                    <div class="font-bold text-[10px] pl-[10px]">ice score</div>
+                    <div class="h-[50px] w-[120px] ml-[15px]">
                         <form id="update_preprocess_icescore" class="hidden" method="POST" action={% url 'nice_lite:update_preprocess_icescore' jobid %}>
                             {% csrf_token %}
                             <input type="hidden" name="icescore" value=0></input>
@@ -110,16 +111,16 @@
         </div>
         {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
             <div class="flex flex-col">
-                <div class="font-bold text-[12px]">latest micrographs</div>
+                <div class="font-bold text-[10px] pl-[10px]">latest micrographs</div>
                 <div class="flex flex-row items-center m-auto">
                     <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                             <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                         </svg>
                     </div>
-                    <div id="micrograph_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                    <div id="micrograph_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
                         {% for micrograph in jobstats.latest_micrographs %}
-                            <div class="snap-center">
+                            <div class="snap-center" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
                                 <div style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:200% 100%; background-position:100% 0%" class="h-[200px] w-[200px] rounded"></div>
                             </div>
                         {% endfor %}

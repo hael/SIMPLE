@@ -2,7 +2,7 @@ changeProject = (form) => {
     selected_project_id = form.elements.selected_project_id.value
     if(selected_project_id == "new"){
         workspace_iframe = document.getElementById("workspace_iframe")
-        workspace_iframe.src = "newproject"
+        workspace_iframe.src = form.dataset.newurl
     }else{
         form.submit()
     }
