@@ -7,11 +7,12 @@ class NewJobView:
 
     template = "nice_classic/newjob.html"
 
-    def __init__(self, request, parentid, package, jobtype):
+    def __init__(self, request, parentid, package, jobtype, args=None):
         self.request  = request
         self.parentid = parentid
         self.jobtype  = jobtype
         self.package  = package
+        self.args     = args
 
     def render(self):
         simple   = SIMPLE()
@@ -20,6 +21,10 @@ class NewJobView:
           if self.jobtype in simple.ui:
               for section in simple.ui[self.jobtype]:
                   if section != "program" and len(simple.ui[self.jobtype][section]) > 0:
+                      if self.args is not None:
+                        for input in simple.ui[self.jobtype][section]:
+                            if input["key"] in self.args:
+                               input["value"] = self.args[input["key"]]
                       sections.append({
                           "name"   : section,
                           "inputs" : simple.ui[self.jobtype][section]

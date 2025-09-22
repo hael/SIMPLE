@@ -23,18 +23,16 @@ def index(request):
 @login_required(login_url="/login/")
 @cache_control(max_age=3600, must_revalidate=True, no_transform=True)
 def image(request, src):
+    response = HttpResponse()
     try:
         with open(src, "rb") as f:
             response = HttpResponse(f.read(), content_type="image/jpeg")
-
             return response
     except IOError:
-        red = Image.new('RGBA', (1, 1), (255,0,0,0))
         response = HttpResponse(content_type="image/jpeg")
-        red.save(response, "JPEG")
+        print("Image IO error :", src)
         return response
     else:
-        red = Image.new('RGBA', (1, 1), (255,0,0,0))
-        response = HttpResponse(content_type="image/jpeg")
-        red.save(response, "JPEG")
-        return response 
+        print("Image error :", src)
+        return response
+

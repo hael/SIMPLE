@@ -1,15 +1,20 @@
+let lastinteraction = Date.now();
+
 scrlRight = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.scrollLeft += 77;
+  lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.scrollLeft -= 77;
+  lastinteraction = Date.now();
 }
 
 toggleCls = (element) => {
     element.classList.toggle("disabledbutton")
+    lastinteraction = Date.now();
 }
 
 selectCls = (form) => {
@@ -36,6 +41,7 @@ drawMask = () => {
     ctx.beginPath();
     ctx.arc(canvas.width / 2, canvas.height / 2, Number(selected_mskdiam.value) * canvas.width / (mskscale * 2), 0, 2 * Math.PI);
     ctx.stroke();
+    lastinteraction = Date.now();
   }
 }
 
@@ -65,7 +71,7 @@ window.addEventListener("load", () =>{
                       boxWidth: 10,
                       padding:  2,
                       font :{
-                        size: 10
+                        size: 9
                       }
                     }
                 }
@@ -95,6 +101,7 @@ window.addEventListener("load", () =>{
   const current_mskdiam  = document.getElementById("current_mskdiam")
   const selected_mskdiam = document.getElementById("selected_mskdiam")
   const mskdiam_selector = document.getElementById("mskdiam_selector")
+  if(current_mskdiam == undefined || selected_mskdiam == undefined || mskdiam_selector == undefined) return
   for(const cls2D of document.getElementsByClassName("cls2D")){
     const canvas   = cls2D.getElementsByClassName("mskcanvas")[0]
     const mskdiam  = Number(canvas.dataset.mskdiam)
@@ -115,10 +122,12 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setTimeout(function () {
-  document.getElementById("loadinggauze").style.display = "flex";
-  document.getElementById("loadinggauze").style.opacity = "1";
-  setTimeout(function () {
-   location.reload();
-  }, 600);
-}, 31000);
+setInterval(() => {
+  if((Date.now() - lastinteraction) > 30000){
+    document.getElementById("loadinggauze").style.display = "flex";
+    document.getElementById("loadinggauze").style.opacity = "1";
+    setTimeout(() => {
+      location.reload();
+    }, 600);
+  }
+}, 1000);

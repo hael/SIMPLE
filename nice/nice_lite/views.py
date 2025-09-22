@@ -35,8 +35,8 @@ def stream(request):
     return coreviewstream.render()
 
 @login_required(login_url="/login/")
-def new_project(request):
-    newprojectview = NewProjectView(request)
+def new_project(request, caller):
+    newprojectview = NewProjectView(request, caller)
     return newprojectview.render()
 
 @login_required(login_url="/login/")
@@ -68,6 +68,12 @@ def dataset(request):
 @login_required(login_url="/login/")
 def new_stream(request):
     newstreamview = NewStreamView(request)
+    return newstreamview.render()
+
+@login_required(login_url="/login/")
+def rerun_stream(request, parentid):
+    job = Job(id=parentid)
+    newstreamview = NewStreamView(request, args=job.args)
     return newstreamview.render()
 
 @login_required(login_url="/login/")

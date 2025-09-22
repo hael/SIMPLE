@@ -60,7 +60,8 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=STDLEN)                  :: chunk_part_env
         character(len=:),          allocatable :: selection_jpeg
-        integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:)
+        integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), accepted_cls_pop(:), rejected_cls_pop(:)
+        real,                      allocatable :: accepted_cls_res(:), rejected_cls_res(:)
         real             :: moldiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
@@ -86,8 +87,6 @@ contains
         if( .not.cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not.cline%defined('center')       ) call cline%set('center',       'yes')
         if( .not.cline%defined('algorithm')    ) call cline%set('algorithm',    'abinitio2D')
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! restart
         call cleanup4restart
         ! generate own project file if projfile isnt set
@@ -114,7 +113,7 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
+                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
@@ -252,9 +251,25 @@ contains
                         if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                             do i=0, jpg_ntiles - 1
                                 if(any( accepted_cls_ids == i + 1)) then
-                                    call communicator_add_cls2D_accepted(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)
+                                    call communicator_add_cls2D_accepted(selection_jpeg,&
+                                        &i + 1,&
+                                        &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
+                                        &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                        &100 * jpg_nytiles,&
+                                        &100 * jpg_nxtiles,&
+                                        &latest=.true.,&
+                                        &res=accepted_cls_res(findloc(accepted_cls_ids, i + 1, 1)),&
+                                        &pop=accepted_cls_pop(findloc(accepted_cls_ids, i + 1, 1)))
                                 else if(any( rejected_cls_ids == i + 1)) then
-                                    call communicator_add_cls2D_rejected(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)                              
+                                    call communicator_add_cls2D_rejected(selection_jpeg,&
+                                        &i + 1,&
+                                        &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
+                                        &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                        &100 * jpg_nytiles,&
+                                        &100 * jpg_nxtiles,&
+                                        &latest=.true.,&
+                                        &res=rejected_cls_res(findloc(rejected_cls_ids, i + 1, 1)),&
+                                        &pop=rejected_cls_pop(findloc(rejected_cls_ids, i + 1, 1)))                             
                                 endif
                                 xtile = xtile + 1
                                 if(xtile .eq. jpg_nxtiles) then
@@ -285,9 +300,23 @@ contains
                             if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                                 do i=0, jpg_ntiles - 1
                                     if(any( accepted_cls_ids == i + 1)) then
-                                        call communicator_add_cls2D_accepted(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles)
+                                        call communicator_add_cls2D_accepted(selection_jpeg,&
+                                            &i + 1,&
+                                            &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
+                                            &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                            &100 * jpg_nytiles,&
+                                            &100 * jpg_nxtiles,&
+                                            &res=accepted_cls_res(findloc(accepted_cls_ids, i + 1, 1)),&
+                                            &pop=accepted_cls_pop(findloc(accepted_cls_ids, i + 1, 1)))
                                     else if(any( rejected_cls_ids == i + 1)) then
-                                        call communicator_add_cls2D_rejected(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles)                              
+                                        call communicator_add_cls2D_rejected(selection_jpeg,&
+                                            &i + 1,&
+                                            &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
+                                            &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                            &100 * jpg_nytiles,&
+                                            &100 * jpg_nxtiles,&
+                                            &res=rejected_cls_res(findloc(rejected_cls_ids, i + 1, 1)),&
+                                            &pop=rejected_cls_pop(findloc(rejected_cls_ids, i + 1, 1)))                              
                                     endif
                                     xtile = xtile + 1
                                     if(xtile .eq. jpg_nxtiles) then
@@ -319,9 +348,25 @@ contains
                                 if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                                     do i=0, jpg_ntiles - 1
                                         if(any( accepted_cls_ids == i + 1)) then
-                                            call communicator_add_cls2D_accepted(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)
+                                            call communicator_add_cls2D_accepted(selection_jpeg,&
+                                                &i + 1,&
+                                                &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
+                                                &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                                &100 * jpg_nytiles,&
+                                                &100 * jpg_nxtiles,&
+                                                &latest=.true.,&
+                                                &res=accepted_cls_res(findloc(accepted_cls_ids, i + 1, 1)),&
+                                                &pop=accepted_cls_pop(findloc(accepted_cls_ids, i + 1, 1)))
                                         else if(any( rejected_cls_ids == i + 1)) then
-                                            call communicator_add_cls2D_rejected(selection_jpeg, i + 1, nint(xtile * (100.0 / (jpg_nxtiles - 1))), nint(ytile * (100.0 / (jpg_nytiles - 1))), 100 * jpg_nytiles, 100 * jpg_nxtiles, latest=.true.)                              
+                                            call communicator_add_cls2D_rejected(selection_jpeg,&
+                                                &i + 1,&
+                                                &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
+                                                &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                                &100 * jpg_nytiles,&
+                                                &100 * jpg_nxtiles,&
+                                                &latest=.true.,&
+                                                &res=rejected_cls_res(findloc(rejected_cls_ids, i + 1, 1)),&
+                                                &pop=rejected_cls_pop(findloc(rejected_cls_ids, i + 1, 1)))                            
                                         endif
                                         xtile = xtile + 1
                                         if(xtile .eq. jpg_nxtiles) then
@@ -674,13 +719,21 @@ contains
                 call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd)
                 call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
                 allocate(accepted_cls_ids(0))
+                allocate(accepted_cls_res(0))
+                allocate(accepted_cls_pop(0))
                 allocate(rejected_cls_ids(0))
+                allocate(rejected_cls_res(0))
+                allocate(rejected_cls_pop(0))
                 do icls=1, set1_proj%os_cls2D%get_noris()
-                    if(set1_proj%os_cls2D%isthere(icls, 'accept')) then
+                    if(set1_proj%os_cls2D%isthere(icls, 'accept') .and. set1_proj%os_cls2D%isthere(icls, 'res') .and. set1_proj%os_cls2D%isthere(icls, 'pop')) then
                         if(set1_proj%os_cls2D%get(icls, 'accept') .gt. 0.0) then
                             accepted_cls_ids = [accepted_cls_ids, icls]
+                            accepted_cls_res = [accepted_cls_res, set1_proj%os_cls2D%get(icls, 'res')]
+                            accepted_cls_pop = [accepted_cls_pop, nint(set1_proj%os_cls2D%get(icls, 'pop'))]
                         else
                             rejected_cls_ids = [rejected_cls_ids, icls]
+                            rejected_cls_res = [rejected_cls_res, set1_proj%os_cls2D%get(icls, 'res')]
+                            rejected_cls_pop = [rejected_cls_pop, nint(set1_proj%os_cls2D%get(icls, 'pop'))]
                         endif
                     endif
                 enddo
@@ -702,11 +755,15 @@ contains
                 allocate(accepted_cls_ids(0))
                 allocate(rejected_cls_ids(0))
                 do icls=1, set_proj%os_cls2D%get_noris()
-                    if(set_proj%os_cls2D%isthere(icls, 'accept')) then
+                    if(set_proj%os_cls2D%isthere(icls, 'accept') .and. set_proj%os_cls2D%isthere(icls, 'res') .and. set_proj%os_cls2D%isthere(icls, 'pop')) then
                         if(set_proj%os_cls2D%get(icls, 'accept') .gt. 0.0) then
                             accepted_cls_ids = [accepted_cls_ids, icls]
+                            accepted_cls_res = [accepted_cls_res, set_proj%os_cls2D%get(icls, 'res')]
+                            accepted_cls_pop = [accepted_cls_pop, nint(set_proj%os_cls2D%get(icls, 'pop'))]
                         else
                             rejected_cls_ids = [rejected_cls_ids, icls]
+                            rejected_cls_res = [rejected_cls_res, set_proj%os_cls2D%get(icls, 'res')]
+                            rejected_cls_pop = [rejected_cls_pop, nint(set_proj%os_cls2D%get(icls, 'pop'))]
                         endif
                     endif
                 enddo
@@ -714,10 +771,12 @@ contains
                 selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
             end subroutine generate_set_jpeg
 
-            subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew, latest)
+            subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
                 character(*),      intent(in) :: path
                 integer,           intent(in) :: spritex, spritey, spriteh, spritew, idx
                 logical, optional, intent(in) :: latest
+                integer, optional, intent(in) :: pop
+                real,    optional, intent(in) :: res
                 type(json_value),  pointer    :: template
                 logical                       :: l_latest = .false.
                 if(present(latest)) l_latest = latest
@@ -728,6 +787,8 @@ contains
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "idx",     idx)
+                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
+                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
                 if(l_latest) then
                     call http_communicator%json%add(latest_accepted_cls2D, template)
                 else
@@ -735,10 +796,12 @@ contains
                 endif
             end subroutine communicator_add_cls2D_accepted
 
-            subroutine communicator_add_cls2D_rejected(path, idx, spritex, spritey, spriteh, spritew, latest)
+            subroutine communicator_add_cls2D_rejected(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
                 character(*),      intent(in) :: path
                 integer,           intent(in) :: spritex, spritey, spriteh, spritew, idx
                 logical, optional, intent(in) :: latest
+                integer, optional, intent(in) :: pop
+                real,    optional, intent(in) :: res
                 type(json_value),  pointer    :: template
                 logical                       :: l_latest = .false.
                 if(present(latest)) l_latest = latest
@@ -749,6 +812,8 @@ contains
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "idx",     idx)
+                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
+                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
                 if(l_latest) then
                     call http_communicator%json%add(latest_rejected_cls2D, template)
                 else
@@ -794,8 +859,6 @@ contains
         if( .not.cline%defined('center')     ) call cline%set('center',    'yes')
         if( .not.cline%defined('algorithm')  ) call cline%set('algorithm', 'abinitio2D')
         if( .not.cline%defined('ncls')       ) call cline%set('ncls',       200)
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! restart
         call cleanup4restart
         ! generate own project file if projfile isnt set
@@ -822,7 +885,7 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
+                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
@@ -921,7 +984,16 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
                 if(allocated(pool_jpeg_map)) then
                     do i=0, size(pool_jpeg_map) - 1
-                        call communicator_add_cls2D(trim(get_pool_cavgs_jpeg()), trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()), pool_jpeg_map(i + 1), nint(xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1))), nint(ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1))), 100 * get_pool_cavgs_jpeg_ntilesy(), 100 * get_pool_cavgs_jpeg_ntilesx())
+                        call communicator_add_cls2D(&
+                            &trim(get_pool_cavgs_jpeg()),&
+                            &trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()),&
+                            &pool_jpeg_map(i + 1),&
+                            &nint(xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1))),&
+                            &nint(ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1))),&
+                            &100 * get_pool_cavgs_jpeg_ntilesy(),&
+                            &100 * get_pool_cavgs_jpeg_ntilesx(),&
+                            &pop=pool_jpeg_pop(i + 1),&
+                            &res=pool_jpeg_res(i + 1))
                         xtile = xtile + 1
                         if(xtile .eq. get_pool_cavgs_jpeg_ntilesx()) then
                             xtile = 0
@@ -938,7 +1010,7 @@ contains
                     if(found) then
                         call http_communicator%json%get(http_communicator%update_arguments, "snapshot_filename", snapshot_filename, found)
                         if(found) then
-                            call write_project_stream2D(snapshot_projfile=trim(cwd_glob) // "/" //snapshot_filename)
+                            call write_project_stream2D(snapshot_projfile=trim(cwd_glob) // "/" //snapshot_filename, snapshot_starfile_base=trim(cwd_glob) // "/" // swap_suffix(snapshot_filename, "", ".simple"))
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_filename",  snapshot_filename)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    last_snapshot_nptcls)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_time",      stream_datestr())
@@ -1128,10 +1200,12 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
             end subroutine communicator_init
 
-            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew)
-                character(*),     intent(in)  :: path, mrcpath
-                integer,          intent(in)  :: spritex, spritey, spriteh, spritew, mrc_idx
-                type(json_value), pointer     :: template
+            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, pop, res)
+                character(*),      intent(in)  :: path, mrcpath
+                integer,           intent(in)  :: spritex, spritey, spriteh, spritew, mrc_idx
+                integer, optional, intent(in)  :: pop
+                real,    optional, intent(in)  :: res
+                type(json_value),  pointer     :: template
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "mrcpath", mrcpath)
@@ -1142,6 +1216,8 @@ contains
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "mskdiam",    nint(params%mskdiam))
                 call http_communicator%json%add(template, "mskscale",   dble(params%box * params%smpd))
+                if(present(pop)) call http_communicator%json%add(template, "pop", pop)
+                if(present(res)) call http_communicator%json%add(template, "res", dble(res))
                 call http_communicator%json%add(latest_cls2D,        template)
             end subroutine communicator_add_cls2D
 

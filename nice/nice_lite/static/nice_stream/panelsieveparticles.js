@@ -1,31 +1,38 @@
+let lastinteraction = Date.now();
+
 scrlRight = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.scrollLeft += 72;
+  lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.scrollLeft -= 72;
+  lastinteraction = Date.now();
 }
 
 scrlRejectedRight = () => {
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
   rejected_cls2D_slider.scrollLeft += 72;
+  lastinteraction = Date.now();
 }
 
 scrlRejectedLeft = () => {
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
   rejected_cls2D_slider.scrollLeft -= 72;
+  lastinteraction = Date.now();
 }
 
 toggleSievecls = (element) => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
-  if(element.parentElement.id == "accepted_cls2D_slider"){
-    rejected_cls2D_slider.appendChild(element)
+  if(element.parentElement.parentElement.parentElement.id == "accepted_cls2D_slider"){
+    rejected_cls2D_slider.appendChild(element.parentElement)
   }else{
-    accepted_cls2D_slider.appendChild(element)
+    accepted_cls2D_slider.appendChild(element.parentElement)
   }
+  lastinteraction = Date.now();
 }
 
 selectSievecls = (form) => {
@@ -62,7 +69,7 @@ window.addEventListener("load", () =>{
                       boxWidth: 10,
                       padding:  2,
                       font :{
-                        size: 10
+                        size: 9
                       }
                     }
                 }
@@ -95,10 +102,12 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setTimeout(function () {
-  document.getElementById("loadinggauze").style.display = "flex";
-  document.getElementById("loadinggauze").style.opacity = "1";
-  setTimeout(function () {
-   location.reload();
-  }, 600);
-}, 31000);
+setInterval(() => {
+  if((Date.now() - lastinteraction) > 30000){
+    document.getElementById("loadinggauze").style.display = "flex";
+    document.getElementById("loadinggauze").style.opacity = "1";
+    setTimeout(() => {
+      location.reload();
+    }, 600);
+  }
+}, 1000);

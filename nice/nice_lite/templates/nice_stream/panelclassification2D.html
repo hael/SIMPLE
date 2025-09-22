@@ -14,7 +14,7 @@
     {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
         <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
     {% endif %}
-    <div class="h-full flex-col flex justify-between">
+    <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row justify-end items-center">
             {% if status == "running" %}
                 {% if jobstats.user_input %}
@@ -39,7 +39,7 @@
                     </svg>
                 </div>
             {% endif %}
-            <div class="flex-1 font-bold text-[14px]">2D classification</div>
+            <div class="flex-1 font-bold text-[12px]">2D classification</div>
             <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
                 {% csrf_token %}
                 <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="view full screen">
@@ -69,36 +69,32 @@
             </form>
         </div>
         {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
-            <div class="flex flex-col flex-1">
-                <div class="font-bold text-[12px]">particles</div>
-                <div class="h-[50px] w-[150px]">
+            <div class="flex flex-col">
+                <div class="font-bold text-[10px] ml-[10px]">particles</div>
+                <div class="h-[40px] w-[150px]">
                     <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-accepted={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
                 </div>
             </div>
         {% endif %}
         {% if jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0%}
-            <div class="flex flex-col flex-2 max-w-[465px]">
+            <div class="flex flex-col flex-1 max-w-[465px]">
                 <div>
-                    <div class="font-bold text-[12px]">latest classes (iteration {{ jobstats.iteration }})</div>
-                    <div class="flex flex-row items-center m-auto">
+                    <div class="font-bold text-[10px] ml-[10px]">latest classes (iteration {{ jobstats.iteration }})</div>
+                    <div class="flex flex-row items-center m-auto w-max">
                         <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div id="accepted_cls2D_slider" class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                            <div class="flex flex-col snap-center">
-                            {% for cls2D in jobstats.latest_cls2D %}
-                                {% if forloop.counter != 0 and forloop.counter0|divisibleby:3 %}
+                        <div id="accepted_cls2D_slider" class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <div class="grid grid-flow-col grid-rows-4">
+                                {% for cls2D in jobstats.latest_cls2D %}
+                                    <div class="snap-center w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded" dataset-res={{ cls2D.res | floatformat:1 }} dataset-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å">
+                                        <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2D h-[70px] w-[70px] rounded m-auto">
+                                            <canvas class="mskcanvas" height=70 width=70 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
+                                        </div>
                                     </div>
-                                    <div class="flex flex-col snap-center">
-                                {% endif %}
-                                <div class="w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded">
-                                    <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}" " style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2D h-[70px] w-[70px] rounded m-auto">
-                                        <canvas class="mskcanvas" height=70 width=70 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
-                                    </div>
-                                </div>
-                            {% endfor %}
+                                {% endfor %}
                             </div>
                         </div>
                         <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
@@ -114,7 +110,7 @@
             <div>
                 <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' jobid %}>
                     {% csrf_token %}
-                    <div class="font-bold text-[12px]">mask diameter</div>
+                    <div class="font-bold text-[10px] ml-[10px]">mask diameter</div>
                     <div class="flex flex-row items-center justify-center">
                         <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onblur="this.form.submit()"></input>
                         <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 

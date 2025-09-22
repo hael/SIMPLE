@@ -53,33 +53,33 @@
                                 <div class="bg-nice4bg rounded {% if input.advanced %}advancedinput hidden{% endif %}">
                                     {% if input.keytype == "int" %}
                                         {% if input.required and "default" in input %}
-                                            <input name={{ input.key }} type="number" min=0 step=1 required placeholder={{ input.default }}></input>
+                                            <input name={{ input.key }} type="number" min=0 step=1 required placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% elif input.required %}
-                                            <input name={{ input.key }} type="number" min=0 step=1 required></input>
+                                            <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% elif "default" in input %}
-                                            <input name={{ input.key }} type="number" min=0 step=1 placeholder={{ input.default }}></input>   
+                                            <input name={{ input.key }} type="number" min=0 step=1 placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>   
                                         {% else %}
-                                            <input name={{ input.key }} type="number" min=0 step=1></input>
+                                            <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% endif %}
                                     {% elif input.keytype == "float" or input.keytype == "num" %}
                                         {% if input.required and "default" in input %}
-                                            <input name={{ input.key }} type="number" min=0 step=0.0001 required placeholder={{ input.default }}></input>
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 required placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% elif input.required %}
-                                            <input name={{ input.key }} type="number" min=0 step=0.0001 required></input>
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% elif "default" in input %}
-                                            <input name={{ input.key }} type="number" min=0 step=0.0001 placeholder={{ input.default }}></input>   
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>   
                                         {% else %}
-                                            <input name={{ input.key }} type="number" min=0 step=0.0001></input>
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% endif %}
                                     {% elif input.keytype == "multi" %}
                                         {% if input.required %}
-                                            <select name={{ input.key }} required>
+                                            <select name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %}>
                                         {% else %}
-                                            <select name={{ input.key }}>
+                                            <select name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}>
                                         {% endif %}
                                         {% for option in input.options %}
                                             {% if "default" in option and option.default %}
-                                                <option value={{ option.val }} selected>{{ option.key }}</option>
+                                                <option value={{ option.val }} selected >{{ option.key }}</option>
                                             {% else %}
                                                 <option value={{ option.val }}>{{ option.key }}</option>
                                             {% endif %}
@@ -87,9 +87,9 @@
                                         </select>
                                     {% else %}
                                         {% if input.required %}
-                                            <input name={{ input.key }} required></input>
+                                            <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% else %}
-                                            <input name={{ input.key }}></input>
+                                            <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                         {% endif %}
                                     {% endif %}
                                 </div>

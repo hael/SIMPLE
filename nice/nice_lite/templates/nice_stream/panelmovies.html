@@ -1,4 +1,5 @@
 {% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -12,17 +13,17 @@
     <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
     <div class="h-full flex-col flex justify-between">
         <div class="flex flex-row justify-end items-center">
-            <div class="flex-1 font-bold text-[14px]">movies</div>
+            <div class="flex-1 font-bold text-[12px]">movies</div>
         </div>
         <div class="flex flex-1">
-            <div class="grid grid-cols-2 gap-1 text-[12px] ml-[10px] content-baseline">
+            <div class="grid grid-cols-2 gap-1 text-[10px] ml-[10px] content-baseline">
                 {% if "movies_imported" in jobstats %}
-                    <div class="font-bold">movie detected</div>
-                    <div>{{ jobstats.movies_imported }}</div>
+                    <div class="font-bold">movies detected</div>
+                    <div>{{ jobstats.movies_imported|intcomma }}</div>
                 {% endif %} 
                 {% if "movies_rate" in jobstats %}
                     <div class="font-bold">movie detection rate</div>
-                    <div>{{ jobstats.movies_rate }} movies/hour</div>
+                    <div>{{ jobstats.movies_rate|intcomma }} movies/hour</div>
                 {% endif %} 
                 {% if "dir_movies" in args %}
                     <div class="font-bold">movies directory</div>

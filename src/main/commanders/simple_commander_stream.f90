@@ -125,8 +125,6 @@ contains
         if( envlen > 0)  call cline%set('nthr', str2int(preproc_nthr_env))
         call get_environment_variable(SIMPLE_STREAM_PREPROC_NPARTS, preproc_nparts_env, envlen)
         if( envlen > 0 ) call cline%set('nparts', str2int(preproc_nparts_env))
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! sanity check for restart
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
@@ -337,7 +335,12 @@ contains
                     call http_communicator%json%create_array(latest_micrographs, "latest_micrographs")
                     call http_communicator%json%add(http_communicator%job_json, latest_micrographs)
                     do i_thumb=0, i_max - 1
-                        call communicator_add_micrograph(trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb"))))
+                        call communicator_add_micrograph(&
+                            &trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb"))),&
+                            &dfx=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "dfx"),&
+                            &dfy=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "dfy"),&
+                            &ctfres=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ctfres")&
+                        )
                     end do
                 end if
                 ! update progress monitor
@@ -682,11 +685,15 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, histograms)
             end subroutine communicator_init
 
-            subroutine communicator_add_micrograph(path)
+            subroutine communicator_add_micrograph(path, dfx, dfy, ctfres)
                 character(*),     intent(in) :: path
+                real, optional,   intent(in) :: dfx, dfy, ctfres
                 type(json_value), pointer    :: micrograph
                 call http_communicator%json%create_object(micrograph, "")
                 call http_communicator%json%add(micrograph, "path", path)
+                if(present(dfx))    call http_communicator%json%add(micrograph, "dfx", dble(dfx))
+                if(present(dfy))    call http_communicator%json%add(micrograph, "dfy", dble(dfy))
+                if(present(ctfres)) call http_communicator%json%add(micrograph, "ctfres", dble(ctfres))
                 call http_communicator%json%add(latest_micrographs, micrograph)
             end subroutine communicator_add_micrograph
 
@@ -818,8 +825,6 @@ contains
         params%ncunits    = params%nparts
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! picking
         l_multipick   = cline%defined('nmoldiams')
         l_interactive = params%interactive == 'yes'
@@ -835,7 +840,7 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
+                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
@@ -900,7 +905,7 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
+                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
@@ -1953,8 +1958,6 @@ contains
         call http_communicator%create(params%niceprocid, params%niceserver, "generate_picking_refs")
         call communicator_init()
         call http_communicator%send_jobstats()
-         ! write cmdline for GUI
-        call cline%writeline(".cline")
         if( params%nptcls_per_cls*params%ncls > params%maxpop )then
             THROW_HARD('Incorrect inputs: MAXPOP < NPTCLS_PER_CLS x NCLS')
         endif
@@ -1962,7 +1965,7 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
+                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
@@ -2570,8 +2573,6 @@ contains
         call cline%set('mkdir', 'yes')
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! sanity check for restart
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
@@ -2600,7 +2601,7 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
+                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
@@ -2755,8 +2756,6 @@ contains
         if( .not. cline%defined('refine')       ) call cline%set('refine',       'snhc_smpl')
         if( .not. cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
         if( .not. cline%defined('cavg_ini')     ) call cline%set('cavg_ini',     'no')
-        ! write cmdline for GUI
-        call cline%writeline(".cline")
         ! sanity check for restart
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
@@ -2846,7 +2845,7 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
+                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif

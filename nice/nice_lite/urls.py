@@ -12,7 +12,7 @@ urlpatterns = [
     path("logout",           views.user_logout,    name="logout"),
     path("image <path:src>", api.image,            name="image"),
     path("api",              api.index,            name="api"),
-    path("newproject",       views.new_project,    name="new_project"),
+    path("newproject/<str:caller>",       views.new_project,    name="new_project"),
     path("createproject",    views.create_project, name="create_project"),
 
     ## Classic specific URLs
@@ -21,6 +21,7 @@ urlpatterns = [
     path("createworkspace/<int:projectid>", views_classic.create_workspace,   name="create_workspace"),
     path("newjobtype/<int:parentid>",          views_classic.new_job_type,       name="new_job_type"),
     path("newjob/<int:parentid>/<str:package>/<str:jobtype>",          views_classic.new_job,       name="new_job"),
+    path("rerunjob/<int:parentid>",          views_classic.rerun_job,       name="rerun_job"),
     path("createjob/<int:parentid>/<str:package>/<str:jobtype>",          views_classic.create_job,       name="create_job"),
     path("updateworkspacename",          views_classic.update_workspace_name,       name="update_workspace_name"),
     path("updateworkspacedescription",   views_classic.update_workspace_description,       name="update_workspace_description"),
@@ -36,6 +37,7 @@ urlpatterns = [
     path("updatedatasetname",          views.update_dataset_name,       name="update_dataset_name"),
     path("updatedatasetdescription",   views.update_dataset_description,       name="update_dataset_description"),
     path("createstream",    views.create_stream,    name="create_stream"),
+    path("rerunstream/<int:parentid>",    views.rerun_stream,    name="rerun_stream"),
     path("updatestreamdescription/<int:jobid>",    views.update_stream_description,    name="update_stream_description"),
 
     path("viewstream/<int:jobid>",      views.view_stream,      name="view_stream"),

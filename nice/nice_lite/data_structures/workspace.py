@@ -186,7 +186,7 @@ class Workspace:
                 return False
             except NotADirectoryError:
                 print("Source is a directory but destination is a file.")
-
+                return False
             except PermissionError:
                 print("Operation not permitted")
                 return False

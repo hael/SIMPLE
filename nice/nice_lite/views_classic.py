@@ -35,6 +35,12 @@ def new_job(request, parentid, package, jobtype):
     return newjobview.render()
 
 @login_required(login_url="/login/")
+def rerun_job(request, parentid):
+    job = JobClassic(id=parentid)
+    newjobview = NewJobView(request, parentid, job.pckg, job.prog, args=job.args)
+    return newjobview.render()
+
+@login_required(login_url="/login/")
 def create_workspace(request, projectid):
     project = Project(project_id=projectid)
     workspace = Workspace()

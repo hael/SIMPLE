@@ -2,14 +2,13 @@ changeProject = (form) => {
     selected_project_id = form.elements.selected_project_id.value
     if(selected_project_id == "new"){
         workspace_iframe = document.getElementById("workspace_iframe")
-        workspace_iframe.src = "newproject"
+        workspace_iframe.src = form.dataset.newurl
     }else{
         form.submit()
     }
 }
 
 changeWorkspace = (form) => {
-    console.log("changeWorkspace")
     selected_workspace_id = form.elements.selected_workspace_id.value
     if(selected_workspace_id == "new"){
         form.submit()

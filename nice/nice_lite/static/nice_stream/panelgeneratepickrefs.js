@@ -1,15 +1,20 @@
+let lastinteraction = Date.now();
+
 scrlRight = () => {
   const micrograph_slider = document.getElementById("picking_references")
   micrograph_slider.scrollLeft += 72;
+  lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const micrograph_slider = document.getElementById("picking_references")
   micrograph_slider.scrollLeft -= 72;
+  lastinteraction = Date.now();
 }
 
 toggleTemplate = (templ) => {
     templ.classList.toggle("disabledbutton")
+    lastinteraction = Date.now();
 }
 
 selectRefs = (form) => {
@@ -43,7 +48,7 @@ window.addEventListener("load", () =>{
                       boxWidth: 10,
                       padding:  2,
                       font :{
-                        size: 10
+                        size: 9
                       }
                     }
                 }
@@ -76,7 +81,7 @@ const box_sizes = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88, 100, 104,
     1008, 1014, 1020, 1024,1296, 1536, 1728, 1944,2048, 2304, 2592, 3072, 3200, 3456, 3888, 4096, 4608, 5000, 5184, 6144,
     6250, 6400, 6912, 7776, 8192, 9216, 10240, 12288, 12500]
 
-function updateBoxSize(){
+updateBoxSize = () => {
     const box_size_selector        = document.getElementById("box_size_selector")
     const current_box_size         = document.getElementById("current_box_size")
     const final_selection_boxsize = document.getElementById("final_selection_boxsize")
@@ -86,6 +91,7 @@ function updateBoxSize(){
     for(const picktemplate of document.getElementsByClassName("picktemplate")){
         picktemplate.style.transform = "scale(" + scale + ")"
     }
+    lastinteraction = Date.now();
 }
 
 window.addEventListener("load", () =>{
@@ -106,10 +112,12 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setTimeout(function () {
-  document.getElementById("loadinggauze").style.display = "flex";
-  document.getElementById("loadinggauze").style.opacity = "1";
-  setTimeout(function () {
-   location.reload();
-  }, 600);
-}, 31000);
+setInterval(() => {
+  if((Date.now() - lastinteraction) > 30000){
+    document.getElementById("loadinggauze").style.display = "flex";
+    document.getElementById("loadinggauze").style.opacity = "1";
+    setTimeout(() => {
+      location.reload();
+    }, 600);
+  }
+}, 1000);

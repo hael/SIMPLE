@@ -1,4 +1,5 @@
 {% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -13,7 +14,7 @@
     {% if "micrographs_assigned" not in jobstats or jobstats.micrographs_assigned == 0 %}
         <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
     {% endif %}
-    <div class="h-full flex-col flex justify-between">
+    <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row justify-end items-center">
             {% if status == "running" %}
                 <div class="rounded-full bg-nice4success h-[10px] w-[10px] mr-[5px]" title="{{ jobstats.stage }}&#013;last import: {{ jobstats.last_micrograph_imported }}"></div>
@@ -30,7 +31,7 @@
                     </svg>
                 </div>
             {% endif %}
-            <div class="flex-1 font-bold text-[14px]">optics assignment</div>
+            <div class="flex-1 font-bold text-[12px]">optics assignment</div>
             <form class="flex" method="POST" action={% url 'nice_lite:view_logs' jobid logfile errfile %} target="_parent">
                 {% csrf_token %}
                 <button class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
@@ -59,16 +60,16 @@
                 </button>
             </form>
         </div>
-        <div class="grid grid-cols-2 gap-1 text-[12px]">
+        <div class="grid grid-cols-2 gap-1 text-[10px]">
             {% if "optics_groups_assigned" in jobstats %}
-                <div class="font-bold">groups assigned</div>
+                <div class="font-bold pl-[10px]">groups assigned</div>
                 <div>{{ jobstats.optics_groups_assigned }}</div>
             {% endif %}
         </div>
         {% if "optics_assignments" in jobstats %}
             <div class="flex flex-col flex-1">
-                <div class="font-bold text-[12px]">beam shift groupings</div>
-                <div class="flex-1 p-[20px]">
+                <div class="font-bold text-[10px] pl-[10px]">beam shift groupings</div>
+                <div class="p-[20px] w-[300px] h-[300px]">
                     <canvas class="optics_scatter_chart" data-assignments='{{ jobstats.optics_assignments }}''></canvas>
                 </div>
             </div>

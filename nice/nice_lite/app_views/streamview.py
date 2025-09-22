@@ -192,6 +192,15 @@ class StreamViewSieveParticles:
         self.job     = Job(id=jobid)
         
     def render(self):
+        # sort cls2D on pop
+        if "accepted_cls2D" in self.job.particle_sieving_stats:
+            self.job.particle_sieving_stats["accepted_cls2D"] = sorted(self.job.particle_sieving_stats["accepted_cls2D"], key=lambda d: d['pop'], reverse=True)
+        if "rejected_cls2D" in self.job.particle_sieving_stats:
+            self.job.particle_sieving_stats["rejected_cls2D"] = sorted(self.job.particle_sieving_stats["rejected_cls2D"], key=lambda d: d['pop'], reverse=True)
+        if "latest_accepted_cls2D" in self.job.particle_sieving_stats:
+            self.job.particle_sieving_stats["latest_accepted_cls2D"] = sorted(self.job.particle_sieving_stats["latest_accepted_cls2D"], key=lambda d: d['pop'], reverse=True)
+        if "latest_rejected_cls2D" in self.job.particle_sieving_stats:
+            self.job.particle_sieving_stats["latest_rejected_cls2D"] = sorted(self.job.particle_sieving_stats["latest_rejected_cls2D"], key=lambda d: d['pop'], reverse=True)   
         context = {
             "jobid"    : self.job.id,
             "jobstats" : self.job.particle_sieving_stats,
@@ -213,6 +222,9 @@ class StreamViewClassification2D:
         self.job     = Job(id=jobid)
         
     def render(self):
+        # sort cls2D on pop
+        if "latest_cls2D" in self.job.classification_2D_stats:
+            self.job.classification_2D_stats["latest_cls2D"] = sorted(self.job.classification_2D_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
         context = {
             "jobid"    : self.job.id,
             "jobstats" : self.job.classification_2D_stats,

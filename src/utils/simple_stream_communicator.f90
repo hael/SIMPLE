@@ -14,6 +14,7 @@ module simple_stream_communicator
         character(len=LONGSTRLEN),           private :: tmp_recv  = "__stream_comm_recv__"
         character(len=LONGSTRLEN),           private :: tmp_send  = "__stream_comm_send__"
         integer,                             private :: id        = 0
+        logical,                             private :: active    = .false.
         logical,                             public  :: exit      = .false.
         logical,                             public  :: stop      = .false.
         type(json_core),                     public  :: json
@@ -44,6 +45,7 @@ module simple_stream_communicator
                 self%url  = url
                 self%tmp_recv  = "__stream_comm_recv_" // name // "__"
                 self%tmp_send  = "__stream_comm_send_" // name // "__"
+                self%active    = .true.
             endif
         end subroutine create
 
@@ -76,34 +78,38 @@ module simple_stream_communicator
             class(stream_http_communicator), intent(inout) :: self
             type(json_value),                pointer       :: heartbeat_json
             character(kind=CK,len=:), allocatable          :: heartbeat_json_str
-            call self%json%create_object(heartbeat_json,'')
-            call self%json%add(heartbeat_json, "jobid",     self%id)
-            call self%json%add(heartbeat_json, self%heartbeat_json)
-            call self%json%print_to_string(heartbeat_json, heartbeat_json_str)
-            call self%curl_request(heartbeat_json_str)
+            if(self%active) then
+                call self%json%create_object(heartbeat_json,'')
+                call self%json%add(heartbeat_json, "jobid",     self%id)
+                call self%json%add(heartbeat_json, self%heartbeat_json)
+                call self%json%print_to_string(heartbeat_json, heartbeat_json_str)
+                call self%curl_request(heartbeat_json_str)
+            endif
         end subroutine send_heartbeat
 
         subroutine send_jobstats(self)
             class(stream_http_communicator), intent(inout) :: self
             type(json_value),                pointer       :: jobstats_json
             integer                                        :: file_unit, stat
-            call self%json%create_object(jobstats_json,'')
-            call self%json%add(jobstats_json, "jobid", self%id)
-            call self%json%add(jobstats_json, self%job_json)
-            ! Open the temporary file.
-            if(file_exists(trim(self%tmp_send))) call del_file(trim(self%tmp_send))
-            call fopen(action='readwrite', file=self%tmp_send, iostat=stat, funit=file_unit, status='new')
-            if (stat /= 0) then
-                print '("Error: opening file ", a, " failed: ", i0)', trim(self%tmp_send), stat
-                return
-            end if
-            call self%json%print(jobstats_json, file_unit)
-            ! Close file.
-            if( is_open(file_unit) ) close (file_unit)
-            if(self%evaluate_checksum()) then
-                call self%send_heartbeat()
-            else
-                call self%curl_request()
+            if(self%active) then
+                call self%json%create_object(jobstats_json,'')
+                call self%json%add(jobstats_json, "jobid", self%id)
+                call self%json%add(jobstats_json, self%job_json)
+                ! Open the temporary file.
+                if(file_exists(trim(self%tmp_send))) call del_file(trim(self%tmp_send))
+                call fopen(action='readwrite', file=self%tmp_send, iostat=stat, funit=file_unit, status='new')
+                if (stat /= 0) then
+                    print '("Error: opening file ", a, " failed: ", i0)', trim(self%tmp_send), stat
+                    return
+                end if
+                call self%json%print(jobstats_json, file_unit)
+                ! Close file.
+                if( is_open(file_unit) ) close (file_unit)
+                if(self%evaluate_checksum()) then
+                    call self%send_heartbeat()
+                else
+                    call self%curl_request()
+                endif
             endif
         end subroutine send_jobstats
 
