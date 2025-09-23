@@ -125,7 +125,9 @@ class Job:
             self.particle_sets_stats      = jobmodel.particle_sets_stats
             # global status
             failed   = False
-            finished = False 
+            finished = False
+            alarm    = False
+            failcount = 0
             if jobmodel.preprocessing_status == "finished":
                 finished = True
             if jobmodel.optics_assignment_status == "finished":
@@ -141,21 +143,24 @@ class Job:
             if jobmodel.classification_2D_status == "finished":
                 finished = True
             if jobmodel.preprocessing_status == "failed":
-                failed = True
+                failcount = failcount + 1
             if jobmodel.optics_assignment_status == "failed":
-                failed = True
+                failcount = failcount + 1
             if jobmodel.initial_picking_status == "failed":
-                failed = True
+                failcount = failcount + 1
             if jobmodel.generate_pickrefs_status == "failed":
-                failed = True
+                failcount = failcount + 1
             if jobmodel.reference_picking_status == "failed":
-                failed = True
+                failcount = failcount + 1
             if jobmodel.particle_sieving_status == "failed":
-                failed = True
+                failcount = failcount + 1
             if jobmodel.classification_2D_status == "failed":
-                failed = True
-            if failed:
-                self.status = "failed"
+                failcount = failcount + 1
+            if failcount > 0:
+                if failcount == 7:
+                    self.status = "failed"
+                else:
+                    self.status = "alarm"
             elif finished:
                 self.status = "finished"
             else:

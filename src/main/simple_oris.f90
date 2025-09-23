@@ -211,8 +211,8 @@ type :: oris
     generic            :: rot_transp => rot_transp_1, rot_transp_2
     procedure, private :: median_1
     generic            :: median => median_1
-    procedure, private :: stats_1, stats_2
-    generic            :: stats => stats_1, stats_2
+    procedure, private :: stats_1, stats_2, stats_3
+    generic            :: stats => stats_1, stats_2, stats_3
     procedure          :: minmax
     procedure, private :: spiral_1, spiral_2
     generic            :: spiral => spiral_1, spiral_2
@@ -3188,6 +3188,22 @@ contains
         statvars%med  = median_nocopy(vals)
         deallocate(vals)
     end subroutine stats_2
+
+    !>  \brief  is for calculating variable statistics
+    subroutine stats_3( self, which, ave, sdev, var, err, fromto)
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real,             intent(out)   :: ave, sdev, var
+        logical,          intent(out)   :: err
+        integer,          intent(in)    :: fromto(2)
+        real,    allocatable            :: vals(:)
+        integer, allocatable            :: states(:)
+        states        = self%get_all_asint('state', fromto=fromto)
+        vals          = self%get_all(which, fromto=fromto)
+        vals          = pack(vals, mask=states > 0)
+        call moment(vals, ave, sdev, var, err)
+        deallocate(vals, states)
+    end subroutine stats_3
 
     !>  \brief  is for calculating the minimum/maximum values of a variable
     subroutine minmax( self, which, minv, maxv )

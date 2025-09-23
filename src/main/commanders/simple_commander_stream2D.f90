@@ -60,8 +60,8 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=STDLEN)                  :: chunk_part_env
         character(len=:),          allocatable :: selection_jpeg
-        integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), accepted_cls_pop(:), rejected_cls_pop(:)
-        real,                      allocatable :: accepted_cls_res(:), rejected_cls_res(:)
+        integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
+        real,                      allocatable :: cls_res(:), cls_pop(:)
         real             :: moldiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
@@ -249,8 +249,8 @@ contains
                         call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
                         call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
                         if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
-                            do i=0, jpg_ntiles - 1
-                                if(any( accepted_cls_ids == i + 1)) then
+                            do i=0, size(jpg_cls_map) - 1
+                                if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                     call communicator_add_cls2D_accepted(selection_jpeg,&
                                         &i + 1,&
                                         &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
@@ -258,9 +258,9 @@ contains
                                         &100 * jpg_nytiles,&
                                         &100 * jpg_nxtiles,&
                                         &latest=.true.,&
-                                        &res=accepted_cls_res(findloc(accepted_cls_ids, i + 1, 1)),&
-                                        &pop=accepted_cls_pop(findloc(accepted_cls_ids, i + 1, 1)))
-                                else if(any( rejected_cls_ids == i + 1)) then
+                                        &res=cls_res(jpg_cls_map(i+1)),&
+                                        &pop=nint(cls_pop(jpg_cls_map(i+1))))
+                                else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                     call communicator_add_cls2D_rejected(selection_jpeg,&
                                         &i + 1,&
                                         &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
@@ -268,8 +268,8 @@ contains
                                         &100 * jpg_nytiles,&
                                         &100 * jpg_nxtiles,&
                                         &latest=.true.,&
-                                        &res=rejected_cls_res(findloc(rejected_cls_ids, i + 1, 1)),&
-                                        &pop=rejected_cls_pop(findloc(rejected_cls_ids, i + 1, 1)))                             
+                                        &res=cls_res(jpg_cls_map(i+1)),&
+                                        &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                 endif
                                 xtile = xtile + 1
                                 if(xtile .eq. jpg_nxtiles) then
@@ -298,25 +298,25 @@ contains
                             call http_communicator%json%create_array(rejected_cls2D, "rejected_cls2D")
                             call http_communicator%json%add(http_communicator%job_json, rejected_cls2D)
                             if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
-                                do i=0, jpg_ntiles - 1
-                                    if(any( accepted_cls_ids == i + 1)) then
+                                do i=0, size(jpg_cls_map) - 1
+                                    if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                         call communicator_add_cls2D_accepted(selection_jpeg,&
-                                            &i + 1,&
+                                            &jpg_cls_map(i + 1),&
                                             &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
                                             &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
                                             &100 * jpg_nytiles,&
                                             &100 * jpg_nxtiles,&
-                                            &res=accepted_cls_res(findloc(accepted_cls_ids, i + 1, 1)),&
-                                            &pop=accepted_cls_pop(findloc(accepted_cls_ids, i + 1, 1)))
-                                    else if(any( rejected_cls_ids == i + 1)) then
+                                            &res=cls_res(jpg_cls_map(i+1)),&
+                                            &pop=nint(cls_pop(jpg_cls_map(i+1))))
+                                    else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                         call communicator_add_cls2D_rejected(selection_jpeg,&
-                                            &i + 1,&
+                                            &jpg_cls_map(i + 1),&
                                             &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
                                             &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
                                             &100 * jpg_nytiles,&
                                             &100 * jpg_nxtiles,&
-                                            &res=rejected_cls_res(findloc(rejected_cls_ids, i + 1, 1)),&
-                                            &pop=rejected_cls_pop(findloc(rejected_cls_ids, i + 1, 1)))                              
+                                            &res=cls_res(jpg_cls_map(i+1)),&
+                                            &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                     endif
                                     xtile = xtile + 1
                                     if(xtile .eq. jpg_nxtiles) then
@@ -346,29 +346,29 @@ contains
                                 call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
                                 call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
                                 if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
-                                    do i=0, jpg_ntiles - 1
-                                        if(any( accepted_cls_ids == i + 1)) then
+                                    do i=0, size(jpg_cls_map) - 1
+                                        if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                             call communicator_add_cls2D_accepted(selection_jpeg,&
-                                                &i + 1,&
+                                                &jpg_cls_map(i + 1),&
                                                 &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
                                                 &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
                                                 &100 * jpg_nytiles,&
                                                 &100 * jpg_nxtiles,&
                                                 &latest=.true.,&
-                                                &res=accepted_cls_res(findloc(accepted_cls_ids, i + 1, 1)),&
-                                                &pop=accepted_cls_pop(findloc(accepted_cls_ids, i + 1, 1)))
-                                        else if(any( rejected_cls_ids == i + 1)) then
+                                                &res=cls_res(i+1),&
+                                                &pop=nint(cls_pop(i+1)))
+                                        else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                             call communicator_add_cls2D_rejected(selection_jpeg,&
-                                                &i + 1,&
+                                                &jpg_cls_map(i + 1),&
                                                 &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
                                                 &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
                                                 &100 * jpg_nytiles,&
                                                 &100 * jpg_nxtiles,&
                                                 &latest=.true.,&
-                                                &res=rejected_cls_res(findloc(rejected_cls_ids, i + 1, 1)),&
-                                                &pop=rejected_cls_pop(findloc(rejected_cls_ids, i + 1, 1)))                            
+                                                &res=cls_res(i+1),&
+                                                &pop=nint(cls_pop(i+1)))                      
                                         endif
-                                        xtile = xtile + 1
+                                        xtile = xtile + 1  
                                         if(xtile .eq. jpg_nxtiles) then
                                             xtile = 0
                                             ytile = ytile + 1
@@ -558,6 +558,7 @@ contains
                 call cline_cluster_cavgs%set('nthr',         params%nthr)
                 call cline_cluster_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_cluster_cavgs%set('verbose_exit', 'yes')
+                call cline_cluster_cavgs%set('lp', 20) ! added as lp has becomre required - needed?
                 call chdir(stemname(setslist%projfiles(1)))
                 call simple_getcwd(cwd)
                 cwd_glob = trim(cwd)
@@ -718,25 +719,24 @@ contains
                 call set1_proj%read_segment('out',   setslist%projfiles(1))
                 call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd)
                 call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
+                if(allocated(cls_res))     deallocate(cls_res)
+                if(allocated(cls_pop))     deallocate(cls_pop)
+                if(allocated(jpg_cls_map)) deallocate(jpg_cls_map)
+                allocate(jpg_cls_map(0))
                 allocate(accepted_cls_ids(0))
-                allocate(accepted_cls_res(0))
-                allocate(accepted_cls_pop(0))
                 allocate(rejected_cls_ids(0))
-                allocate(rejected_cls_res(0))
-                allocate(rejected_cls_pop(0))
                 do icls=1, set1_proj%os_cls2D%get_noris()
                     if(set1_proj%os_cls2D%isthere(icls, 'accept') .and. set1_proj%os_cls2D%isthere(icls, 'res') .and. set1_proj%os_cls2D%isthere(icls, 'pop')) then
                         if(set1_proj%os_cls2D%get(icls, 'accept') .gt. 0.0) then
                             accepted_cls_ids = [accepted_cls_ids, icls]
-                            accepted_cls_res = [accepted_cls_res, set1_proj%os_cls2D%get(icls, 'res')]
-                            accepted_cls_pop = [accepted_cls_pop, nint(set1_proj%os_cls2D%get(icls, 'pop'))]
                         else
                             rejected_cls_ids = [rejected_cls_ids, icls]
-                            rejected_cls_res = [rejected_cls_res, set1_proj%os_cls2D%get(icls, 'res')]
-                            rejected_cls_pop = [rejected_cls_pop, nint(set1_proj%os_cls2D%get(icls, 'pop'))]
                         endif
                     endif
+                    jpg_cls_map = [jpg_cls_map, icls]
                 enddo
+                cls_res = set1_proj%os_cls2D%get_all("res")
+                cls_pop = set1_proj%os_cls2D%get_all("pop")
                 call set1_proj%kill()
                 selection_jpeg_created = .true.
                 selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
@@ -752,21 +752,24 @@ contains
                 call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
                 if(allocated(accepted_cls_ids)) deallocate(accepted_cls_ids)
                 if(allocated(rejected_cls_ids)) deallocate(rejected_cls_ids)
+                if(allocated(cls_res))          deallocate(cls_res)
+                if(allocated(cls_pop))          deallocate(cls_pop)
+                if(allocated(jpg_cls_map))      deallocate(jpg_cls_map)
+                allocate(jpg_cls_map(0))
                 allocate(accepted_cls_ids(0))
                 allocate(rejected_cls_ids(0))
                 do icls=1, set_proj%os_cls2D%get_noris()
                     if(set_proj%os_cls2D%isthere(icls, 'accept') .and. set_proj%os_cls2D%isthere(icls, 'res') .and. set_proj%os_cls2D%isthere(icls, 'pop')) then
                         if(set_proj%os_cls2D%get(icls, 'accept') .gt. 0.0) then
                             accepted_cls_ids = [accepted_cls_ids, icls]
-                            accepted_cls_res = [accepted_cls_res, set_proj%os_cls2D%get(icls, 'res')]
-                            accepted_cls_pop = [accepted_cls_pop, nint(set_proj%os_cls2D%get(icls, 'pop'))]
                         else
                             rejected_cls_ids = [rejected_cls_ids, icls]
-                            rejected_cls_res = [rejected_cls_res, set_proj%os_cls2D%get(icls, 'res')]
-                            rejected_cls_pop = [rejected_cls_pop, nint(set_proj%os_cls2D%get(icls, 'pop'))]
                         endif
                     endif
+                    jpg_cls_map = [jpg_cls_map, icls]
                 enddo
+                cls_res = set_proj%os_cls2D%get_all("res")
+                cls_pop = set_proj%os_cls2D%get_all("pop")
                 call set_proj%kill()
                 selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
             end subroutine generate_set_jpeg

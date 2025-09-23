@@ -49,7 +49,7 @@
                 <div class="font-bold">last micrograph imported</div>
                 <div>{{ jobstats.last_micrograph_imported }}</div>
             {% endif %}
-            {% if "particles_extracted" in jobstats %}
+            {% if "particles_extracted" in jobstats and jobstats.particles_extracted > 0 %}
                 <div class="font-bold">particles extracted</div>
                 <div>{{ jobstats.particles_extracted|intcomma }}</div>
             {% endif %}

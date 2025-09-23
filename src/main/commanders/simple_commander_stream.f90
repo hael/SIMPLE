@@ -77,7 +77,7 @@ contains
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                                  :: params
         type(stream_http_communicator)                    :: http_communicator
-        type(json_value),                   pointer       :: latest_micrographs, histograms
+        type(json_value),                   pointer       :: latest_micrographs, histograms, timeplots
         integer,                            parameter     :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                            parameter     :: DEBUG_HERE      = .false.
         class(cmdline),                     allocatable   :: completed_jobs_clines(:), failed_jobs_clines(:)
@@ -327,6 +327,11 @@ contains
                     call http_communicator%json%update(http_communicator%job_json, "average_astigmatism", dble(avg_tmp), found)
                     call communicator_add_histogram("astig")
                 end if
+                call communicator_clear_timeplots()
+                call communicator_add_timeplot("ctfres")
+                call communicator_add_timeplot("astig")
+                call communicator_add_timeplot("df")
+                call communicator_add_timeplot("rate")
                 if(spproj_glob%os_mic%isthere('thumb')) then
                     i_max = 10
                     if(spproj_glob%os_mic%get_noris() < 10) i_max = spproj_glob%os_mic%get_noris()
@@ -683,6 +688,8 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, latest_micrographs)
                 call http_communicator%json%create_object(histograms,        "histograms")
                 call http_communicator%json%add(http_communicator%job_json, histograms)
+                call http_communicator%json%create_object(timeplots,        "timeplots")
+                call http_communicator%json%add(http_communicator%job_json, timeplots)
             end subroutine communicator_init
 
             subroutine communicator_add_micrograph(path, dfx, dfy, ctfres)
@@ -698,7 +705,6 @@ contains
             end subroutine communicator_add_micrograph
 
             subroutine communicator_clear_histograms()
-                type(json_value), pointer    :: micrograph
                 call http_communicator%json%remove(histograms, destroy=.true.)
                 call http_communicator%json%create_object(histograms, "histograms")
                 call http_communicator%json%add(http_communicator%job_json, histograms)
@@ -740,6 +746,59 @@ contains
                 call key_histogram%kill()
                 deallocate(histogram_rvec)
             end subroutine communicator_add_histogram
+
+            subroutine communicator_clear_timeplots()
+                call http_communicator%json%remove(timeplots, destroy=.true.)
+                call http_communicator%json%create_object(timeplots, "timeplots")
+                call http_communicator%json%add(http_communicator%job_json, timeplots)
+            end subroutine communicator_clear_timeplots
+
+            subroutine communicator_add_timeplot(key)
+                character(*),     intent(in) :: key
+                type(json_value), pointer    :: new_timeplot, timeplot_labels, timeplot_data, timeplot_data2
+                integer                      :: fromto(2)
+                integer                      :: ibin, nbins, binsize
+                real                         :: ave, sdev, var
+                logical                      :: err
+                binsize = 10
+                if(key == "ctfres") then
+                    if(.not.spproj_glob%os_mic%isthere('ctfres')) return
+                else if(key == "astig") then
+                    if(.not.spproj_glob%os_mic%isthere('astig')) return
+                else if(key == "df") then
+                    if(.not.spproj_glob%os_mic%isthere('df')) return
+                else if(key == "rate") then
+                    if(size(movie_buff%ratehistory) .eq. 0) return
+                else
+                    return
+                endif
+                call http_communicator%json%create_object(new_timeplot, key)
+                call http_communicator%json%create_array(timeplot_labels, "labels")
+                call http_communicator%json%add(new_timeplot, timeplot_labels)
+                call http_communicator%json%create_array(timeplot_data,   "data")
+                call http_communicator%json%add(new_timeplot, timeplot_data)
+                if(key == "rate") then
+                    nbins = size(movie_buff%ratehistory)
+                    do ibin=1, nbins
+                        call http_communicator%json%add(timeplot_labels, "", ibin)
+                        call http_communicator%json%add(timeplot_data,   "", movie_buff%ratehistory(ibin))
+                    enddo
+                else
+                    call http_communicator%json%create_array(timeplot_data2,   "data2") ! contains sdev for each bin
+                    call http_communicator%json%add(new_timeplot, timeplot_data2)
+                    nbins = ceiling(spproj_glob%os_mic%get_noris() / real(binsize))
+                    do ibin=1, nbins
+                        fromto(1) = 1 + ((ibin - 1)  * binsize)
+                        fromto(2) = ibin * binsize
+                        if(fromto(2) .gt. spproj_glob%os_mic%get_noris()) fromto(2) = spproj_glob%os_mic%get_noris()
+                        call spproj_glob%os_mic%stats(key, ave, sdev, var, err, fromto)
+                        call http_communicator%json%add(timeplot_labels, "", ibin)
+                        call http_communicator%json%add(timeplot_data,   "", dble(ave))
+                        call http_communicator%json%add(timeplot_data2,  "", dble(sdev))
+                    enddo
+                endif
+                call http_communicator%json%add(timeplots, new_timeplot)
+            end subroutine communicator_add_timeplot
 
     end subroutine exec_stream_preprocess
 

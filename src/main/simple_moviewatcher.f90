@@ -21,6 +21,7 @@ type moviewatcher
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: regexp         = ''    !< movies extensions
+    integer, public,       allocatable :: ratehistory(:)
     integer, public                    :: n_history      = 0     !< history of movies detected
     integer, public                    :: rate           = 0     !< current rate of movie detection
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
@@ -132,6 +133,8 @@ contains
             self%ext         = trim(adjustl(METADATA_EXT))
             self%regexp = '\.simple$'
         endif
+        allocate(self%ratehistory(1))
+        self%ratehistory(1) = 0
         self%len_ext = len_trim(self%ext)
         self%exists  = .true.
     end function constructor
@@ -232,10 +235,12 @@ contains
         endif
         ! update rates
         if(tnow > self%ratetime + RATE_INTERVAL) then
+            self%ratehistory = [self%ratehistory, self%rate]
             self%ratetime = self%ratetime + RATE_INTERVAL
             self%raten    = self%n_history
         else
             self%rate = nint(3600.0 * (self%n_history - self%raten) / (tnow - self%ratetime))
+            self%ratehistory(size(self%ratehistory)) = self%rate
         endif
     end subroutine watch
 
@@ -401,6 +406,7 @@ contains
         self%watch_dir  = ''
         self%ext        = ''
         if( allocated(self%history)    ) deallocate(self%history)
+        if( allocated(self%ratehistory)) deallocate(self%ratehistory)
         if( allocated(self%watch_dirs) ) deallocate(self%watch_dirs)
         self%rate           = 0
         self%report_time    = 0

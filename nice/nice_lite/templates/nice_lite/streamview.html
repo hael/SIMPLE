@@ -20,9 +20,9 @@
     </div>
     <div id="streamview" class="w-full h-full flex flex-row flex-wrap p-[10px] pt-[0px] overflow-y-scroll content-start">
         <div>
-            <div class="flex flex-col m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="flex flex-col m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
                 <div class="font-bold text-[12px] text-nice4dark">collection parameters</div>
-                <div class="grid grid-cols-2 gap-1 text-[10px] ml-[10px]">
+                <div class="grid grid-cols-2 gap-[2px] text-[10px] ml-[10px]">
                     {% if "smpd" in args %}
                         <div class="font-bold">sampling distance</div>
                         <div>{{ args.smpd }} Å/px</div>
@@ -49,32 +49,32 @@
                     {% endif %} 
                 </div>
             </div>
-            <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
-                <iframe id="preprocess_iframe" height="169px" width="300px" src={% url 'nice_lite:view_stream_movies' jobid %}></iframe>
+            <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header mt-[10px]">
+                <iframe id="movies_iframe" height="258px" width="300px" src={% url 'nice_lite:view_stream_movies' jobid %}></iframe>
             </div>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="preprocess_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_preprocess' jobid %}></iframe>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="optics_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_optics' jobid %}></iframe>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="inipick_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_initial_pick' jobid %}></iframe>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="genpickrefs_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_generate_pickrefs' jobid %}></iframe>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="refpick_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_reference_picking' jobid %}></iframe>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="sieve_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_sieve_particles' jobid %}></iframe>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="cls2D_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_classification_2D' jobid %}></iframe>
         </div>
-        <div class="m-[10px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <iframe id="psets_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_particle_sets' jobid %}></iframe>
         </div>
     </div>

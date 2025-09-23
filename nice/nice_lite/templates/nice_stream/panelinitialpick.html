@@ -89,7 +89,7 @@
                             </svg>
                         </div>
                         <div id="micrographs_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <canvas id="boxes_overlay hover:animate-pulse" class="fixed" height="200" width="200"></canvas>
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse" height="200" width="200"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <div class="w-[200px] h-[200px] m-auto">
@@ -115,7 +115,7 @@
                             </svg>
                         </div>
                         <div id="micrographs_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                            <canvas id="boxes_overlay hover:animate-pulse" class="fixed" height="200" width="200"></canvas>
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse" height="200" width="200"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <div class="w-[200px] h-[200px] m-auto">

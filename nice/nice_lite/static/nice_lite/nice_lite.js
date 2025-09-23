@@ -61,7 +61,7 @@ window.addEventListener("load", () =>{
                       boxWidth: 10,
                       padding:  2,
                       font :{
-                        size: 10
+                        size: 9
                       }
                     }
                 }
@@ -102,7 +102,7 @@ window.addEventListener("load", () =>{
                       boxWidth: 10,
                       padding:  2,
                       font :{
-                        size: 10
+                        size: 9
                       }
                     }
                 }
