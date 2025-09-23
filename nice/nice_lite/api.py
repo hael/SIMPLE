@@ -21,7 +21,7 @@ def index(request):
     return JsonResponse(response)
 
 @login_required(login_url="/login/")
-@cache_control(max_age=3600, must_revalidate=True, no_transform=True)
+@cache_control(max_age=300, must_revalidate=True, no_transform=True)
 def image(request, src):
     response = HttpResponse()
     try:

@@ -137,7 +137,7 @@
             {% endif %}
             {% if "latest_accepted_cls2D" in jobstats and "latest_rejected_cls2D" in jobstats and jobstats.latest_accepted_cls2D|length > 0 or jobstats.latest_rejected_cls2D|length > 0 %}
                 <div class="flex flex-col flex-2">
-                        <div class="m-auto">
+                        <div class="">
                             <div class="font-bold text-[10px] pl-[10px]">latest accepted classes</div>
                             <div class="flex flex-row items-center m-auto w-max">
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
@@ -161,7 +161,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="m-auto">
+                        <div class="">
                             <div class="font-bold text-[10px] pl-[10px]">latest rejected classes</div>
                             <div class="flex flex-row items-center m-auto w-max">
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRejectedLeft()">
@@ -170,7 +170,7 @@
                                     </svg>
                                 </div>
                                 <div id="rejected_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                    <div class="grid grid-flow-col grid-rows-1"></div>
+                                    <div class="grid grid-flow-col grid-rows-1">
                                         {% for cls2D in jobstats.latest_rejected_cls2D %}
                                             <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
                                                 <div data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>

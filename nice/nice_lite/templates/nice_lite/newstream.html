@@ -23,7 +23,7 @@
             <div class="text-[25px] font-bold flex justify-center pb-[15px] pt-[75px]">
                 new stream
             </div>
-            <form method="POST" action={% url 'nice_lite:create_stream' %} target="_parent">
+            <form method="POST" action={% url 'nice_lite:create_stream' %}>
                 {% csrf_token %}
                 <div class="grid grid-cols-2 gap-4">
                     {% for input in user_inputs %}

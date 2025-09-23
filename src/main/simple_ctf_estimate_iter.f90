@@ -72,6 +72,7 @@ contains
         ! reporting
         call orientation%set_dfx(              ctfvars%dfx)
         call orientation%set_dfy(              ctfvars%dfy)
+        call orientation%set('df',             abs((ctfvars%dfx + ctfvars%dfy) / 2))
         call orientation%set('angast',         ctfvars%angast)
         call orientation%set('phshift',        ctfvars%phshift)
         call orientation%set('ctf_estimatecc', ctffit%get_ccfit())

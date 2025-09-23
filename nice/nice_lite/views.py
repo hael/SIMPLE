@@ -89,7 +89,7 @@ def create_stream(request):
     dataset = Dataset(request=request)
     job = Job()
     job.new(request, project, dataset)
-    response = redirect('nice_lite:stream') # needs to go to job viewer!
+    response = redirect('nice_lite:view_stream', jobid=job.id)
     return response
 
 @login_required(login_url="/login/")

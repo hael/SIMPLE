@@ -1,5 +1,6 @@
 import os
 from django.shortcuts import render
+from django.template.loader import render_to_string
 
 from ..models import JobModel
 from ..data_structures.project import Project
@@ -47,6 +48,7 @@ class DatasetView:
                   }
         
         response = render(self.request, self.template, context)
+        #response = render_to_string(self.template, context, request=self.request)
         response.set_cookie(key='selected_project_id', value=self.project.id)
         response.set_cookie(key='selected_dataset_id', value=self.dataset.id)
         return response
