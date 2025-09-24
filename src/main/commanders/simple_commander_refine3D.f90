@@ -225,6 +225,7 @@ contains
         use simple_fsc,              only: plot_fsc
         use simple_commander_euclid, only: calc_group_sigmas_commander
         use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_euclid_sigma2,    only: sigma2_star_from_iter
         use simple_polarops
         class(refine3D_distr_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -414,9 +415,11 @@ contains
             endif
         else
             ! generate initial noise power estimates
-            call build%spproj_field%set_all2single('w', 1.0)
-            call build%spproj%write_segment_inside(params%oritype)
-            call xcalc_pspec_distr%execute_safe(cline_calc_pspec_distr)
+            if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
+                call build%spproj_field%set_all2single('w', 1.0)
+                call build%spproj%write_segment_inside(params%oritype)
+                call xcalc_pspec_distr%execute_safe(cline_calc_pspec_distr)
+            endif
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .false.
             do state = 1,params%nstates
@@ -471,14 +474,14 @@ contains
             endif
             ! at this stage, we have both volume and 3D orientations (either random or previously estimated)
             if( trim(params%objfun).eq.'euclid' )then
-                ! first, estimate group sigmas
-                call cline_calc_group_sigmas%set('which_iter', params%startit)
                 call cline_calc_group_sigmas%set('nthr', nthr_here)
-                call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
-                ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
-                if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
-                if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
-                call xfirst_sigmas_distr%execute_safe(cline)
+                if( (params%startit==1) .or. .not.file_exists(sigma2_star_from_iter(params%startit)) )then
+                    ! initial estimates have been calculated above with calc_pspec (that also generated a .star)
+                    ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
+                    if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
+                    if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
+                    call xfirst_sigmas_distr%execute_safe(cline)
+                endif
                 ! update command lines
                 call cline%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
@@ -701,6 +704,11 @@ contains
                 write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES'
             endif
             if( converged )then
+                ! assemble sigma2 for next run
+                if( trim(params%objfun).eq.'euclid' )then
+                    call cline_calc_group_sigmas%set('which_iter', iter+1)
+                    call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
+                endif
                 if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls
                 ! safest to write the whole thing here as multiple fields updated
                 call build%spproj%write
@@ -901,8 +909,9 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         class(estimate_first_sigmas_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
+        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         ! command lines
-        type(cmdline)    :: cline_first_sigmas
+        type(cmdline)    :: cline_first_sigmas, cline_calc_group_sigmas
         ! other variables
         type(parameters) :: params
         type(builder)    :: build
@@ -939,6 +948,12 @@ contains
         call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
         call cline_first_sigmas%delete('hp')
         call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
+        cline_calc_group_sigmas = cline_first_sigmas
+        if( cline%defined('startit') )then
+            call cline_calc_group_sigmas%set('which_iter', params%startit)
+        else
+            call cline_calc_group_sigmas%set('which_iter', params%which_iter)
+        endif
         ! init
         if( l_shmem )then
             call build%init_params_and_build_strategy3D_tbox(cline_first_sigmas, params )
@@ -952,12 +967,16 @@ contains
             call cline_first_sigmas%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            ! assemble
+            call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
             ! end gracefully
             call qsys_cleanup
         endif
         call qenv%kill
         call job_descr%kill
         call build%kill_general_tbox
+        call cline_first_sigmas%kill
+        call cline_calc_group_sigmas%kill
         call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
     end subroutine exec_estimate_first_sigmas
 
