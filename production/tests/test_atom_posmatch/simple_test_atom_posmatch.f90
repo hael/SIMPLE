@@ -23,6 +23,7 @@ call cline%checkvar('pdbfile2', 3)
 call cline%check
 call p%new(cline)
 call seed_rnd
+if( .not. cline%defined('maxits') ) p%maxits = 1
 do i = 1, N1
     do j = 1, 3
         atom1_pos(j,i) = floor(ran3() * real(MAX_POS))
@@ -81,14 +82,17 @@ print *, '------ ATOMS 1 POSITIONS ------'
 do i = 1, N1
     print *, 'atom 1 pos : ', atom1_pos(:,i)
 enddo
+print *, '-------------------------------'
+print *, 'ATOMS REGISTRATION IN PROGRESS'
 ! reading pdb file
 call read_pdb2matrix( p%pdbfile,  matrix1 )
 call read_pdb2matrix( p%pdbfile2, matrix2 )
 allocate(matrix_rot(3,size(matrix1,2)))
-call atoms_register(matrix1, matrix2, matrix_rot)
+call atoms_register(matrix1, matrix2, matrix_rot, maxits=p%maxits)
 if( cline%defined('pdbout') )then
     call write_matrix2pdb( 'Pt', matrix_rot, p%pdbout )
 else
     call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec.pdb' )
 endif
+print *, 'ATOMS REGISTRATION IS DONE!'
 end program simple_test_atom_posmatch

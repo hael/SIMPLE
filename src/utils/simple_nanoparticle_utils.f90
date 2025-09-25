@@ -21,18 +21,18 @@ integer, parameter :: NSTRAIN_COMPS = 7
 contains
 
     ! registering two sets of atom positions and rotate the first set to align the second set
-    subroutine atoms_register( atoms1, atoms2, reg_atom, out_mat, out_trans, out_scale)
+    subroutine atoms_register( atoms1, atoms2, reg_atom, maxits, out_mat, out_trans, out_scale)
         use simple_parameters, only: params_glob
         real,              intent(in)    :: atoms1(:,:)
         real,              intent(in)    :: atoms2(:,:)
         real,              intent(inout) :: reg_atom(:,:)
+        integer, optional, intent(in)    :: maxits
         real,    optional, intent(out)   :: out_mat(3,3), out_trans(3), out_scale
-        integer, parameter   :: STOCH_ITERS = 1
         integer, allocatable :: perm(:,:), inds(:)
         real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
         logical, allocatable :: taken(:,:)
-        real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost, glob_cost, min_dist1, min_dist2
-        integer :: N1, N2, tmp, i, j, k, a1, a2, min_a2, counter, errflg, ref_inds(3), ithr, min_ref(3), min_perm(3), iter, cnt
+        real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost, glob_cost
+        integer :: N1, N2, tmp, i, j, k, a1, a2, min_a2, counter, errflg, ref_inds(3), ithr, min_ref(3), min_perm(3), iter, cnt, stoch_iters
         logical :: l_flip, l_exist
         N1     = size(atoms1, 2)
         N2     = size(atoms2, 2)
@@ -52,21 +52,10 @@ contains
         allocate(costs(N2**3),perm(3,N2**3),taken(N2,params_glob%nthr))
         glob_cost = huge(glob_cost)
         call seed_rnd
-        min_dist1 = huge(min_dist1)
-        do i = 1, N1
-            do j = 1, N1
-                if( j == i )cycle
-                min_dist1 = min(min_dist1, sqrt(sum((atom1_pos(:,i) - atom1_pos(:,j))**2)))
-            enddo
-        enddo
-        min_dist2 = huge(min_dist2)
-        do i = 1, N2
-            do j = 1, N2
-                if( j == i )cycle
-                min_dist2 = min(min_dist2, sqrt(sum((atom2_pos(:,i) - atom2_pos(:,j))**2)))
-            enddo
-        enddo
-        do iter = 1,STOCH_ITERS
+        stoch_iters = 1
+        if( present(maxits) ) stoch_iters = maxits
+        do iter = 1,stoch_iters
+            print *, 'Stochastic iter ', iter
             ! atom 1 reference position indeces
             inds     = rnd_inds(N1)
             ref_inds = inds(1:3)
