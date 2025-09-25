@@ -113,11 +113,34 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                if(dir_exists(trim(params%dir_target))) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
                 call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
             end do
         endif
         ! mskdiam
@@ -127,6 +150,7 @@ contains
             do i=1, 30
                 if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
                 call sleep(10)
+                call http_communicator%send_jobstats()
             end do
             if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
             ! read mskdiam from file
@@ -558,7 +582,6 @@ contains
                 call cline_cluster_cavgs%set('nthr',         params%nthr)
                 call cline_cluster_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_cluster_cavgs%set('verbose_exit', 'yes')
-                call cline_cluster_cavgs%set('lp', 20) ! added as lp has becomre required - needed?
                 call chdir(stemname(setslist%projfiles(1)))
                 call simple_getcwd(cwd)
                 cwd_glob = trim(cwd)
@@ -888,11 +911,34 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                if(dir_exists(trim(params%dir_target))) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
                 call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
             end do
         endif
         ! initialise progress monitor

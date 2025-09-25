@@ -102,7 +102,7 @@
                                     <div class="flex flex-col snap-center">
                                 {% endif %}
                                 <div class="w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded">
-                                    <div onclick="toggleTemplate(this)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate h-[70px] w-[70px] rounded m-auto"></div>
+                                    <div data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate h-[70px] w-[70px] rounded m-auto"></div>
                                 </div>
                             {% endfor %}
                             </div>
@@ -125,17 +125,19 @@
                             <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                         </svg>
                     </div>
-                    <div id="picking_references" class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                        <div class="flex flex-col snap-center">
-                        {% for template in jobstats.latest_cls2D %}
-                            {% if forloop.counter != 0 and forloop.counter0|divisibleby:3 %}
+                    <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                        <div id="picking_references" class="grid grid-flow-col grid-rows-3 gap-[2px]">
+                            {% for template in jobstats.latest_cls2D %}
+                                <div class="snap-center picktemplatecontainer" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
+                                    <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate h-[70px] w-[70px] rounded m-auto"></div>
                                 </div>
-                                <div class="flex flex-col snap-center">
-                            {% endif %}
-                            <div class="w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded">
-                                <div onclick="toggleTemplate(this)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate h-[70px] w-[70px] rounded m-auto"></div>
-                            </div>
-                        {% endfor %}
+                            {% endfor %}
+                        </div>
+                        <div id="selectmenu" class="hidden absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                            <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                            <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                            <div id="selectabove" class="userbutton w-auto text-center">select above</div>
+                            <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
                         </div>
                     </div>
                     <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">

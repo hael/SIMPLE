@@ -16,4 +16,7 @@ class NewProjectView:
             "caller" : self.caller
         }
         response = render(self.request, self.template, context)
+        for cookie in  self.request.COOKIES:
+            if "checksum" in cookie:
+                response.delete_cookie(key=cookie)
         return response

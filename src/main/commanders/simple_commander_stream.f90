@@ -760,7 +760,7 @@ contains
                 integer                      :: ibin, nbins, binsize
                 real                         :: ave, sdev, var
                 logical                      :: err
-                binsize = 10
+                binsize = 500
                 if(key == "ctfres") then
                     if(.not.spproj_glob%os_mic%isthere('ctfres')) return
                 else if(key == "astig") then
@@ -896,11 +896,34 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                if(dir_exists(trim(params%dir_target))) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
                 call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
             end do
         endif
         if( l_multipick )then
@@ -926,15 +949,16 @@ contains
             l_templates_provided = cline%defined('pickrefs')
             if( l_templates_provided )then
                 if( .not.file_exists(params%pickrefs) ) then
-                    if(params%clear .eq. "yes") then
+                   ! if(params%clear .eq. "yes") then
                         write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 120 MINUTES FOR '//trim(params%pickrefs)
                         do i=1, 720
                             if(file_exists(trim(params%pickrefs))) exit
                             call sleep(10)
+                            call http_communicator%send_jobstats()
                         end do
-                    else
-                        THROW_HARD('Could not find: '//trim(params%pickrefs))
-                    end if
+                  !  else
+                  !      THROW_HARD('Could not find: '//trim(params%pickrefs))
+                  !  end if
                 endif
                 if(file_exists(swap_suffix(trim(params%pickrefs), TXT_EXT, STK_EXT))) then
                     call boxsize_file%new(swap_suffix(trim(params%pickrefs), TXT_EXT, STK_EXT), 1, 1)
@@ -957,17 +981,6 @@ contains
         ! master project file
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
-        ! wait if dir_target doesn't exist yet
-        if(.not. dir_exists(trim(params%dir_target))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
-                    exit
-                endif
-                call sleep(10)
-            end do
-        endif
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         ! directories structure & restart
@@ -1425,47 +1438,53 @@ contains
                 endif
             endif
            ! if(l_multipick .and. l_interactive .and. pause_import .and. n_imported + n_failed_jobs >= params%ninit) then
-           if(l_multipick .and. l_interactive .and. pause_import .and. spproj_glob%os_mic%get_noris() >= params%ninit) then
-                if(.not. interactive_waiting) write(logfhandle,'(A)')'>>> WAITING FOR USER INPUT'
-                ! search diameters
-                if(allocated(active_search_diameters)) then
-                    if(.not. allocated(complete_search_diameters)) allocate(complete_search_diameters(0))
-                    if(allocated(refined_search_diameters))        deallocate(refined_search_diameters)
-                    complete_search_diameters = [complete_search_diameters, active_search_diameters]
-                    allocate(refined_search_diameters(size(active_search_diameters)))
-                    refined_search_diameters(:) = active_search_diameters(:)
-                    deallocate(active_search_diameters)
-                end if
-                ! http stats 
-                call http_communicator%json%update(http_communicator%job_json, "stage", "waiting for user input", found)
-                call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
-                call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                  found)
-                call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,         found)
-                ! create an empty picking_diameters json array
-                call http_communicator%json%remove(picking_diameters, destroy=.true.)
-                call http_communicator%json%create_array(picking_diameters, "picking_diameters")
-                call http_communicator%json%add(http_communicator%job_json, picking_diameters)
-                call hpsort(complete_search_diameters)
-                do i=1, size(complete_search_diameters)
-                    call http_communicator%json%add(picking_diameters, "", int(complete_search_diameters(i)))
-                enddo
-                if(spproj_glob%os_mic%isthere('thumb') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
-                    .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
-                    i_max = 10
-                    if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
-                    ! create an empty latest_picked_micrographs json array
-                    call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
-                    call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                    call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
-                    do i_thumb=0, i_max - 1
-                        call communicator_add_micrograph(trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb"))),\
-                        100, 0, 100, 200,\
-                        nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "xdim")),\
-                        nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ydim")),\
-                        trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "boxfile"))))
-                    end do
+            if(l_multipick .and. l_interactive .and. pause_import .and. spproj_glob%os_mic%get_noris() >= params%ninit) then
+                call qenv%qscripts%clear_stack()
+                call qenv%qscripts%get_jobs_status(jobs_done, jobs_submitted)
+                if(count(jobs_done) < params%nparts) then
+                    if(.not. interactive_waiting) write(logfhandle, *) ">>>  WAITING FOR ALL PARTS TO COMPLETE"
+                else
+                    if(.not. interactive_waiting) write(logfhandle,'(A)')'>>> WAITING FOR USER INPUT'
+                    ! search diameters
+                    if(allocated(active_search_diameters)) then
+                        if(.not. allocated(complete_search_diameters)) allocate(complete_search_diameters(0))
+                        if(allocated(refined_search_diameters))        deallocate(refined_search_diameters)
+                        complete_search_diameters = [complete_search_diameters, active_search_diameters]
+                        allocate(refined_search_diameters(size(active_search_diameters)))
+                        refined_search_diameters(:) = active_search_diameters(:)
+                        deallocate(active_search_diameters)
+                    end if
+                    ! http stats 
+                    call http_communicator%json%update(http_communicator%job_json, "stage", "waiting for user input", found)
+                    call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
+                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                  found)
+                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,         found)
+                    ! create an empty picking_diameters json array
+                    call http_communicator%json%remove(picking_diameters, destroy=.true.)
+                    call http_communicator%json%create_array(picking_diameters, "picking_diameters")
+                    call http_communicator%json%add(http_communicator%job_json, picking_diameters)
+                    call hpsort(complete_search_diameters)
+                    do i=1, size(complete_search_diameters)
+                        call http_communicator%json%add(picking_diameters, "", int(complete_search_diameters(i)))
+                    enddo
+                    if(spproj_glob%os_mic%isthere('thumb') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
+                        .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                        i_max = 10
+                        if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
+                        ! create an empty latest_picked_micrographs json array
+                        call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
+                        call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+                        call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
+                        do i_thumb=0, i_max - 1
+                            call communicator_add_micrograph(trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb"))),\
+                            100, 0, 100, 200,\
+                            nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "xdim")),\
+                            nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ydim")),\
+                            trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "boxfile"))))
+                        end do
+                    endif
+                    interactive_waiting = .true.
                 endif
-                interactive_waiting = .true.
             endif
             if(interactive_waiting) then
                 call sleep(1)
@@ -2021,11 +2040,34 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                if(dir_exists(trim(params%dir_target))) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
                 call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
             end do
         endif
         ! determine whether we are picking/extracting or extracting only
@@ -2251,7 +2293,15 @@ contains
                     call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
                     if(allocated(pool_jpeg_map)) then
                         do i=0, size(pool_jpeg_map) - 1
-                            call communicator_add_cls2D(trim(get_pool_cavgs_jpeg()), trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()), pool_jpeg_map(i + 1), xtile * (100 / (get_pool_cavgs_jpeg_ntilesx() - 1)), ytile * (100 / (get_pool_cavgs_jpeg_ntilesy() - 1)), 100 * get_pool_cavgs_jpeg_ntilesy(), 100 * get_pool_cavgs_jpeg_ntilesx())
+                            call communicator_add_cls2D(trim(get_pool_cavgs_jpeg()),&
+                                &trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()),&
+                                &pool_jpeg_map(i + 1),&
+                                &xtile * (100 / (get_pool_cavgs_jpeg_ntilesx() - 1)),&
+                                &ytile * (100 / (get_pool_cavgs_jpeg_ntilesy() - 1)),&
+                                &100 * get_pool_cavgs_jpeg_ntilesy(),&
+                                &100 * get_pool_cavgs_jpeg_ntilesx(),&
+                                &pop=pool_jpeg_pop(i + 1),&
+                                &res=pool_jpeg_res(i + 1))
                             xtile = xtile + 1
                             if(xtile .eq. get_pool_cavgs_jpeg_ntilesx()) then
                                 xtile = 0
@@ -2287,7 +2337,13 @@ contains
                 xtile = 0
                 ytile = 0
                 do i=0, size(final_selection) - 1
-                    call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT, xtile * (100 / (nxtiles - 1)), ytile * (100 / (nytiles - 1)), 100 * nytiles, 100 * nxtiles)
+                    call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
+                        &xtile * (100 / (nxtiles - 1)),&
+                        &ytile * (100 / (nytiles - 1)),&
+                        &100 * nytiles,&
+                        &100 * nxtiles,&
+                        &pop=pool_jpeg_pop(i + 1),&
+                        &res=pool_jpeg_res(i + 1))
                     xtile = xtile + 1
                     if(xtile .eq. nxtiles) then
                         xtile = 0
@@ -2583,10 +2639,12 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, selected_references)
             end subroutine communicator_init
 
-            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew)
-                character(*),     intent(in)  :: path, mrcpath
-                integer,          intent(in)  :: spritex, spritey, spriteh, spritew, mrc_idx
-                type(json_value), pointer     :: template
+            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop)
+                character(*),      intent(in) :: path, mrcpath
+                integer,           intent(in) :: spritex, spritey, spriteh, spritew, mrc_idx
+                integer, optional, intent(in) :: pop
+                real,    optional, intent(in) :: res
+                type(json_value),  pointer    :: template
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "mrcpath", mrcpath)
@@ -2595,19 +2653,25 @@ contains
                 call http_communicator%json%add(template, "spritey", spritey)
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
-                call http_communicator%json%add(latest_cls2D,        template)
+                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
+                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
+                call http_communicator%json%add(latest_cls2D, template)
             end subroutine communicator_add_cls2D
 
-            subroutine communicator_add_selected_reference(path, spritex, spritey, spriteh, spritew)
-                character(*),     intent(in)  :: path
-                integer,          intent(in)  :: spritex, spritey, spriteh, spritew
-                type(json_value), pointer     :: template
+            subroutine communicator_add_selected_reference(path, spritex, spritey, spriteh, spritew, res, pop)
+                character(*),      intent(in) :: path
+                integer,           intent(in) :: spritex, spritey, spriteh, spritew
+                integer, optional, intent(in) :: pop
+                real,    optional, intent(in) :: res
+                type(json_value),  pointer    :: template
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "spritex", spritex)
                 call http_communicator%json%add(template, "spritey", spritey)
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
+                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
+                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
                 call http_communicator%json%add(selected_references, template)
             end subroutine communicator_add_selected_reference
 
@@ -2657,11 +2721,34 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                if(dir_exists(trim(params%dir_target))) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
                     exit
                 endif
                 call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call http_communicator%send_jobstats()
             end do
         endif
         ! movie watcher init
@@ -2900,8 +2987,28 @@ contains
         if(.not. dir_exists(trim(params%dir_target))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
             do i=1, 360
-                if(dir_exists(trim(params%dir_target)) .and. dir_exists(trim(params%dir_target)//'/spprojs') .and. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                if(dir_exists(trim(params%dir_target))) then
                     write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
+                    exit
+                endif
+                call sleep(10)
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
+                    exit
+                endif
+                call sleep(10)
+            end do
+        endif
+        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
+            do i=1, 360
+                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
+                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
                     exit
                 endif
                 call sleep(10)

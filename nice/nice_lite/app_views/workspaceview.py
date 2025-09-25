@@ -1,6 +1,8 @@
 import json
 import os
+import hashlib
 
+from django.http import HttpResponse
 from django.shortcuts import render
 
 from ..models import JobModel
@@ -10,6 +12,7 @@ from ..data_structures.workspace import Workspace
 class WorkspaceView:
 
     template = "nice_classic/workspace.html"
+    checksum_cookie = "workspace_checksum"
 
     def __init__(self, request, project=None, workspace=None):
         if project is not None:
@@ -40,7 +43,14 @@ class WorkspaceView:
                    "nodes"                  : json.dumps(self.workspace.nstr)
                   }
         
-        response = render(self.request, self.template, context)
+        hash = hashlib.md5(json.dumps(context, sort_keys=True, default=str).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        response = HttpResponse(status=204)
+        if(old_checksum == "none" or old_checksum != checksum):
+            context["nodes"] =  json.dumps(self.workspace.nstrhtml)
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
         response.set_cookie(key='selected_project_id', value=self.project.id)
         response.set_cookie(key='selected_workspace_id', value=self.workspace.id)
         return response

@@ -7,6 +7,7 @@ class ProjectModel(models.Model):
     dirc = models.CharField(max_length=200, default='')
     
 class DatasetModel(models.Model):
+    disp = models.IntegerField(default=0)
     proj = models.ForeignKey(ProjectModel, on_delete=models.CASCADE)
     name = models.CharField(max_length=200, default='')
     desc = models.CharField(max_length=200, default='')
@@ -16,6 +17,7 @@ class DatasetModel(models.Model):
     mdat = models.DateTimeField(auto_now_add=True, blank=True)
 
 class WorkspaceModel(models.Model):
+    disp = models.IntegerField(default=0)
     proj = models.ForeignKey(ProjectModel, on_delete=models.CASCADE)
     name = models.CharField(max_length=200, default='')
     desc = models.CharField(max_length=200, default='')
@@ -26,6 +28,7 @@ class WorkspaceModel(models.Model):
     nstr = models.JSONField(default=dict)
 
 class JobModel(models.Model):
+    disp = models.IntegerField(default=0)
     dset = models.ForeignKey(DatasetModel, on_delete=models.CASCADE)
     name = models.CharField(max_length=200, default='')
     desc = models.CharField(max_length=200, default='')

@@ -19,6 +19,7 @@ urlpatterns = [
     path("classic",         views_classic.classic,  name="classic"),
     path("workspace",       views_classic.workspace,          name="workspace"),
     path("createworkspace/<int:projectid>", views_classic.create_workspace,   name="create_workspace"),
+    path("deleteworkspace/<int:workspaceid>",   views_classic.delete_workspace,   name="delete_workspace"),
     path("newjobtype/<int:parentid>",          views_classic.new_job_type,       name="new_job_type"),
     path("newjob/<int:parentid>/<str:package>/<str:jobtype>",          views_classic.new_job,       name="new_job"),
     path("rerunjob/<int:parentid>",          views_classic.rerun_job,       name="rerun_job"),
@@ -31,9 +32,11 @@ urlpatterns = [
     ## Stream specific URLs
     path("stream",          views.stream,           name="stream"),
     path("createdataset",   views.create_dataset,   name="create_dataset"),
+    path("deletedataset/<int:datasetid>",   views.delete_dataset,   name="delete_dataset"),
     path("dataset",         views.dataset,          name="dataset"),
     path("newstream",       views.new_stream,       name="new_stream"),
     path("termstream/<int:jobid>",      views.terminate_stream, name="terminate_stream"),
+    path("deletestream/<int:jobid>",      views.delete_stream, name="delete_stream"),
     path("updatedatasetname",          views.update_dataset_name,       name="update_dataset_name"),
     path("updatedatasetdescription",   views.update_dataset_description,       name="update_dataset_description"),
     path("createstream",    views.create_stream,    name="create_stream"),
@@ -67,6 +70,7 @@ urlpatterns = [
     path("updatestreamclassification2Dmskdiam/<int:jobid>",    views.update_classification_2D_mskdiam,        name="update_classification_2D_mskdiam"),
 
     path("selectmoldiamstreaminitialpick/<int:jobid>",      views.select_moldiam_stream_initial_pick,        name="select_moldiam_stream_initial_pick"),
+    path("refinemoldiamstreaminitialpick/<int:jobid>",      views.refine_moldiam_stream_initial_pick,        name="refine_moldiam_stream_initial_pick"),
     path("increasemoldiamstreaminitialpick/<int:jobid>",      views.increase_moldiam_stream_initial_pick,        name="increase_moldiam_stream_initial_pick"),
     path("decreasemoldiamstreaminitialpick/<int:jobid>",      views.decrease_moldiam_stream_initial_pick,        name="decrease_moldiam_stream_initial_pick"),
     path("selectrefsstreamgeneratepickrefs/<int:jobid>",      views.select_refs_stream_generate_pickrefs,        name="select_refs_stream_generate_pickrefs"),

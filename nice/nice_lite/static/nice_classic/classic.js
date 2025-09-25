@@ -15,7 +15,7 @@ changeWorkspace = (form) => {
     }else{
         document.cookie = "selected_workspace_id=" + selected_workspace_id
         workspace_iframe = document.getElementById("workspace_iframe")
-        workspace_iframe.src = "dataset"
+        workspace_iframe.src = "workspace"
     }
 }
 

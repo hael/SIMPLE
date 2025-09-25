@@ -102,12 +102,15 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setInterval(() => {
-  if((Date.now() - lastinteraction) > 30000){
-    document.getElementById("loadinggauze").style.display = "flex";
-    document.getElementById("loadinggauze").style.opacity = "1";
-    setTimeout(() => {
-      location.reload();
-    }, 600);
+window.addEventListener("visibilitychange", (event) => {
+  if(document.visibilityState !== "hidden"){
+    location.reload();
+  }
+})
+
+setInterval(function () {
+  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+    lastinteraction = Date.now();
+    location.reload();
   }
 }, 1000);

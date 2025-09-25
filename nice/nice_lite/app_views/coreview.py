@@ -37,6 +37,9 @@ class CoreViewStream:
         response.set_cookie(key='selected_project_id', value=self.project.id)
         response.set_cookie(key='selected_dataset_id', value=self.dataset.id)
         response.set_cookie(key='mode',                value="stream")
+        for cookie in  self.request.COOKIES:
+            if "checksum" in cookie:
+                response.delete_cookie(key=cookie)
         return response
 
 class CoreViewClassic:
@@ -69,6 +72,9 @@ class CoreViewClassic:
         response.set_cookie(key='selected_project_id', value=self.project.id)
         response.set_cookie(key='selected_workspace_id', value=self.workspace.id)
         response.set_cookie(key='mode',                value="classic")
+        for cookie in  self.request.COOKIES:
+            if "checksum" in cookie:
+                response.delete_cookie(key=cookie)
         return response
 
 class LoginView:

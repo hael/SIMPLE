@@ -1,12 +1,15 @@
+let lastinteraction = Date.now();
 
 scrlRight = () => {
   const micrograph_slider = document.getElementById("micrograph_slider")
   micrograph_slider.scrollLeft += 200;
+  lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const micrograph_slider = document.getElementById("micrograph_slider")
   micrograph_slider.scrollLeft -= 200;
+  lastinteraction = Date.now();
 }
 
 window.addEventListener("load", () =>{
@@ -89,6 +92,7 @@ window.addEventListener("load", () =>{
                 const ctfres = document.getElementsByName("ctfres")
                 ctfres[0].value = savedval
                 update_preprocess_ctfres.submit()
+                lastinteraction = Date.now();
                 break
               case 'mousedown':
                 dragactive = true
@@ -202,6 +206,7 @@ window.addEventListener("load", () =>{
                 const astigmatism = document.getElementsByName("astigmatism")
                 astigmatism[0].value = savedval
                 update_preprocess_astig.submit()
+                lastinteraction = Date.now();
                 break
               case 'mousedown':
                 dragactive = true
@@ -315,6 +320,7 @@ window.addEventListener("load", () =>{
                 const icescore = document.getElementsByName("icescore")
                 icescore[0].value = savedval
                 update_preprocess_icescore.submit()
+                lastinteraction = Date.now();
                 break
               case 'mousedown':
                 dragactive = true
@@ -398,10 +404,15 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setTimeout(function () {
-  document.getElementById("loadinggauze").style.display = "flex";
-  document.getElementById("loadinggauze").style.opacity = "1";
-  setTimeout(function () {
-   location.reload();
-  }, 600);
-}, 30000);
+window.addEventListener("visibilitychange", (event) => {
+  if(document.visibilityState !== "hidden"){
+    location.reload();
+  }
+})
+
+setInterval(function () {
+  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+    lastinteraction = Date.now();
+    location.reload();
+  }
+}, 1000);

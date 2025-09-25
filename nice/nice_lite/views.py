@@ -61,6 +61,14 @@ def create_dataset(request):
     return response
 
 @login_required(login_url="/login/")
+def delete_dataset(request, datasetid):
+    project = Project(request=request)
+    dataset = Dataset(dataset_id=datasetid)
+    dataset.delete(project)
+    response = redirect('nice_lite:stream')
+    return response
+
+@login_required(login_url="/login/")
 def dataset(request):
     datasetview = DatasetView(request)
     return datasetview.render()
@@ -80,6 +88,13 @@ def rerun_stream(request, parentid):
 def terminate_stream(request, jobid):
     job = Job(id=jobid)
     job.terminate()
+    response = redirect('nice_lite:dataset')
+    return response
+
+@login_required(login_url="/login/")
+def delete_stream(request, jobid):
+    job = Job(id=jobid)
+    job.delete()
     response = redirect('nice_lite:dataset')
     return response
 
@@ -143,6 +158,14 @@ def select_moldiam_stream_initial_pick(request, jobid):
     job = Job(id=jobid)
     diameter = request.POST["diameter"]
     job.select_moldiam_initial_pick(diameter)
+    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def refine_moldiam_stream_initial_pick(request, jobid):
+    job = Job(id=jobid)
+    refine_diameter = request.POST["refine_diameter"]
+    job.update_moldiam_refine_initial_pick(refine_diameter)
     response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
     return response
 

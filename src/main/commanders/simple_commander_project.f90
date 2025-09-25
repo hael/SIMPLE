@@ -151,7 +151,18 @@ contains
             call spproj%read(trim(params%projfile))
         endif
         if( cline%defined('projname') .and. cline%defined('dir') )then
-            THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
+            if( index(params%projname, '.') > 0 ) THROW_HARD('No punctuation allowed in projname')
+            if( .not. file_exists(trim(params%dir)) )then
+                write(logfhandle,*) 'input project directory (dir): ', trim(params%dir), ' does not exist'
+                THROW_HARD('ABORTING... exec_new_project')
+            endif
+            if( file_exists(trim(params%dir) // '/' // trim(params%projname // ".simple")) )then
+                write(logfhandle,*) 'input project file : ', trim(params%dir) // '/' // trim(params%projname) //".simple", ' already exists'
+                THROW_HARD('ABORTING... exec_new_project')
+            endif
+            ! change to project directory
+            call simple_chdir(trim(params%dir), errmsg="commander_project :: new_project;")
+            call cline%set('projname', trim(params%projname))
         else if( cline%defined('projname') )then
             if( index(params%projname, '.') > 0 ) THROW_HARD('No punctuation allowed in projname')
             if( file_exists(PATH_HERE//trim(params%projname)) )then

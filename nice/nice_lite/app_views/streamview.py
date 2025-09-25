@@ -1,5 +1,8 @@
 import os
+import json
+import hashlib
 from django.shortcuts import render
+from django.http import HttpResponse
 
 from ..data_structures.job import Job
 from ..data_structures.project import Project
@@ -22,6 +25,9 @@ class StreamView:
             "args"  : self.job.args
         }
         response = render(self.request, self.template, context)
+        for cookie in  self.request.COOKIES:
+            if "checksum" in cookie:
+                response.delete_cookie(key=cookie)
         return response
     
 class StreamViewLogs:
@@ -53,7 +59,8 @@ class StreamViewLogs:
     
 class StreamViewMovies:
 
-    template     = "nice_stream/panelmovies.html"
+    template        = "nice_stream/panelmovies.html"
+    checksum_cookie = "panel_movies_checksum"
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
@@ -68,15 +75,23 @@ class StreamViewMovies:
             "jobstats" : self.job.preprocessing_stats,
             "args"     : self.job.args,
         }
-        response = render(self.request, self.template, context)
-        return response   
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
     
 class StreamViewPreprocess:
 
-    template     = "nice_stream/panelpreprocess.html"
-    templatezoom = "nice_stream/zoompreprocess.html"
-    logfile  = "preprocessing.log"
-    errfile  = "preprocessing.error"
+    template        = "nice_stream/panelpreprocess.html"
+    templatezoom    = "nice_stream/zoompreprocess.html"
+    checksum_cookie = "panel_preprocessing_checksum"
+    logfile         = "preprocessing.log"
+    errfile         = "preprocessing.error"
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
@@ -94,14 +109,22 @@ class StreamViewPreprocess:
             "logfile"  : self.logfile,
             "errfile"  : self.errfile    
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
     
 class StreamViewOptics:
 
-    template = "nice_stream/paneloptics.html"
-    logfile  = "optics_assignment.log"
-    errfile  = "optics_assignment.error"
+    template        = "nice_stream/paneloptics.html"
+    checksum_cookie = "panel_optics_checksum"
+    logfile         = "optics_assignment.log"
+    errfile         = "optics_assignment.error"
 
     def __init__(self, request, jobid):
         self.request = request
@@ -115,14 +138,22 @@ class StreamViewOptics:
             "logfile"  : self.logfile,
             "errfile"  : self.errfile      
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
 
 class StreamViewInitialPick:
 
-    template = "nice_stream/panelinitialpick.html"
-    logfile  = "initial_picking.log"
-    errfile  = "initial_picking.error"
+    template        = "nice_stream/panelinitialpick.html"
+    checksum_cookie = "panel_initialpick_checksum"
+    logfile         = "initial_picking.log"
+    errfile         = "initial_picking.error"
 
     def __init__(self, request, jobid):
         self.request = request
@@ -136,20 +167,31 @@ class StreamViewInitialPick:
             "logfile"  : self.logfile,
             "errfile"  : self.errfile      
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
 
 class StreamViewGeneratePickrefs:
 
-    template = "nice_stream/panelgeneratepickrefs.html"
-    logfile  = "generate_picking_refs.log"
-    errfile  = "generate_picking_refs.error"
+    template        = "nice_stream/panelgeneratepickrefs.html"
+    checksum_cookie = "panel_pickrefs_checksum"
+    logfile         = "generate_picking_refs.log"
+    errfile         = "generate_picking_refs.error"
 
     def __init__(self, request, jobid):
         self.request = request
         self.job     = Job(id=jobid)
         
     def render(self):
+        # sort cls2D on pop
+        if "latest_cls2D" in self.job.generate_pickrefs_stats:
+            self.job.generate_pickrefs_stats["latest_cls2D"] = sorted(self.job.generate_pickrefs_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
         context = {
             "jobid"    : self.job.id,
             "jobstats" : self.job.generate_pickrefs_stats,
@@ -157,14 +199,22 @@ class StreamViewGeneratePickrefs:
             "logfile"  : self.logfile,
             "errfile"  : self.errfile       
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
 
 class StreamViewReferencePicking:
 
-    template = "nice_stream/panelreferencepicking.html"
-    logfile  = "reference_based_picking.log"
-    errfile  = "reference_based_picking.error"
+    template        = "nice_stream/panelreferencepicking.html"
+    checksum_cookie = "panel_refpick_checksum"
+    logfile         = "reference_based_picking.log"
+    errfile         = "reference_based_picking.error"
 
     def __init__(self, request, jobid):
         self.request = request
@@ -178,14 +228,22 @@ class StreamViewReferencePicking:
             "logfile"  : self.logfile,
             "errfile"  : self.errfile            
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
 
 class StreamViewSieveParticles:
 
-    template = "nice_stream/panelsieveparticles.html"    
-    logfile  = "particle_sieving.log"
-    errfile  = "particle_sieving.error"
+    template        = "nice_stream/panelsieveparticles.html"
+    checksum_cookie = "panel_sieve_checksum"
+    logfile         = "particle_sieving.log"
+    errfile         = "particle_sieving.error"
 
     def __init__(self, request, jobid):
         self.request = request
@@ -208,14 +266,22 @@ class StreamViewSieveParticles:
             "logfile"  : self.logfile,
             "errfile"  : self.errfile   
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
     
 class StreamViewClassification2D:
 
-    template = "nice_stream/panelclassification2D.html"    
-    logfile  = "classification_2D.log"
-    errfile  = "classification_2D.error"
+    template        = "nice_stream/panelclassification2D.html"
+    checksum_cookie = "panel_cls2D_checksum"  
+    logfile         = "classification_2D.log"
+    errfile         = "classification_2D.error"
 
     def __init__(self, request, jobid):
         self.request = request
@@ -232,12 +298,20 @@ class StreamViewClassification2D:
             "logfile"  : self.logfile,
             "errfile"  : self.errfile   
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)
     
 class StreamViewParticleSets:
 
-    template = "nice_stream/panelparticlesets.html"    
+    template        = "nice_stream/panelparticlesets.html"
+    checksum_cookie = "panel_particlesets_checksum" 
 
     def __init__(self, request, jobid):
         self.request = request
@@ -250,5 +324,12 @@ class StreamViewParticleSets:
             "jobstats" : self.job.particle_sets_stats,
             "workspaces" : project.workspaces_list
         }
-        response = render(self.request, self.template, context)
-        return response
+        hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
+            return response 
+        else:
+            return HttpResponse(status=204)

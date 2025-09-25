@@ -9,6 +9,7 @@ from ..models import ProjectModel, DatasetModel
 class Dataset:
 
     id       = 0
+    disp     = 0
     name     = ""
     desc     = ""
     dirc     = ""
@@ -43,7 +44,8 @@ class Dataset:
             self.mdat = datasetmodel.mdat
             self.proj = datasetmodel.proj
             self.desc = datasetmodel.desc
-            
+            self.disp = datasetmodel.disp
+
     def new(self, project):
         projectmodel = ProjectModel.objects.filter(id=project.id).first()
         if projectmodel is None:
@@ -54,10 +56,11 @@ class Dataset:
         
         if not os.path.isdir(project.dirc):
             return False
-            
-        new_dataset_dirc = ".dataset_" + str(self.id)
-        new_dataset_name = "new dataset"
-        datasetmodel = DatasetModel(proj=projectmodel, name=new_dataset_name, cdat=timezone.now(), mdat=timezone.now())
+        
+        datasetmodels = DatasetModel.objects.filter(proj=projectmodel)
+        self.disp = datasetmodels.count() + 1
+        new_dataset_name = "new dataset " + str(self.disp)
+        datasetmodel = DatasetModel(proj=projectmodel, name=new_dataset_name, disp=self.disp, cdat=timezone.now(), mdat=timezone.now())
         datasetmodel.save()
         self.id = datasetmodel.id
         if self.id == 0:
@@ -88,6 +91,42 @@ class Dataset:
         self.load()
         project.load()
         return True#
+
+    def delete(self, project):
+        datasetmodel = DatasetModel.objects.filter(id=self.id).first()
+        if project.ensureTrashfolder() and datasetmodel is not None:
+            dataset_path = os.path.join(project.dirc, self.dirc)
+            dataset_link = os.path.join(project.dirc, self.link)
+            trash_path   = os.path.join(project.trashfolder, self.dirc)
+            trash_link   = os.path.join(project.trashfolder, self.link)
+            if not os.path.exists(dataset_path):
+                return 
+            if not os.path.isdir(dataset_path):
+                return 
+            if not os.path.exists(dataset_link):
+                return 
+            if not os.path.islink(dataset_link):
+                return 
+            if os.path.exists(trash_path):
+                return 
+            if os.path.isdir(trash_path):
+                return
+            if os.path.exists(trash_link):
+                return 
+            if os.path.islink(trash_link):
+                return
+            try:
+                os.rename(dataset_path, trash_path)
+            except OSError as error:
+                print("Directory '%s' can not be renamed")
+                return
+            try:
+                os.remove(dataset_link)
+                os.symlink(trash_path, trash_link)
+            except OSError as error:
+                print("Link '%s' can not be renamed")
+                return
+            datasetmodel.delete()
 
     def rename(self, request, project):
         if "new_dataset_name" in request.POST:
