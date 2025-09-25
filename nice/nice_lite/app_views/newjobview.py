@@ -37,6 +37,9 @@ class NewJobView:
             "sections" : sections
         }           
         response = render(self.request, self.template, context)
+        for cookie in  self.request.COOKIES:
+            if "checksum" in cookie:
+                response.delete_cookie(key=cookie)
         return response
   
 class NewJobTypeView:
@@ -75,4 +78,7 @@ class NewJobTypeView:
             "parentid"        : self.parentid,   
         }
         response = render(self.request, self.template, context)
+        for cookie in  self.request.COOKIES:
+            if "checksum" in cookie:
+                response.delete_cookie(key=cookie)
         return response

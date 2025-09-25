@@ -38,10 +38,10 @@
                                     <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>   
                                 {% else %}
                                     <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
-                                {% endif %}s
+                                {% endif %}
                             {% elif input.keytype == "float" %}
                                 {% if input.required and "default" in input %}
-                                    <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}}></input>
+                                    <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>
                                 {% elif input.required %}
                                     <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                                 {% elif "default" in input %}

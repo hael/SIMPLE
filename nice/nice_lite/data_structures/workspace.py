@@ -1,16 +1,19 @@
 # global imports
 import os
 import re
+import copy
 from django.utils import timezone
 from django.template.loader import render_to_string
 
 # local imports
 from ..models import ProjectModel, WorkspaceModel, JobClassicModel
 from .jobclassic import JobClassic
+from .simple import SIMPLEProject
 
 class Workspace:
 
     id       = 0
+    disp     = 0
     name     = ""
     desc     = ""
     dirc     = ""
@@ -18,6 +21,7 @@ class Workspace:
     cdat     = ""
     mdat     = ""
     nstr     = {}
+    nstrhtml = {}
     request  = None
 
     def __init__(self, workspace_id=None, request=None):
@@ -40,13 +44,15 @@ class Workspace:
     def load(self):
         workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
         if workspacemodel is not None:
-            self.name = workspacemodel.name
-            self.dirc = workspacemodel.dirc
-            self.link = workspacemodel.link
-            self.cdat = workspacemodel.cdat
-            self.mdat = workspacemodel.mdat
-            self.nstr = workspacemodel.nstr
-            self.desc = workspacemodel.desc
+            self.name     = workspacemodel.name
+            self.dirc     = workspacemodel.dirc
+            self.link     = workspacemodel.link
+            self.cdat     = workspacemodel.cdat
+            self.mdat     = workspacemodel.mdat
+            self.nstr     = workspacemodel.nstr
+            self.desc     = workspacemodel.desc
+            self.disp     = workspacemodel.disp
+            self.nstrhtml = copy.deepcopy(self.nstr)
             self.addNodesHTML()
 
     def new(self, project):
@@ -59,10 +65,11 @@ class Workspace:
         
         if not os.path.isdir(project.dirc):
             return False
-            
-        new_workspace_dirc = ".workspace_" + str(self.id)
-        new_workspace_name = "new workspace"
-        workspacemodel = WorkspaceModel(proj=projectmodel, name=new_workspace_name, cdat=timezone.now(), mdat=timezone.now())
+        
+        workspacemodels = WorkspaceModel.objects.filter(proj=projectmodel)
+        self.disp = workspacemodels.count() + 1
+        new_workspace_name = "new workspace " + str(self.disp)
+        workspacemodel = WorkspaceModel(proj=projectmodel, disp=self.disp, name=new_workspace_name, cdat=timezone.now(), mdat=timezone.now())
         workspacemodel.save()
         self.id = workspacemodel.id
         if self.id == 0:
@@ -86,7 +93,7 @@ class Workspace:
             print("Permission denied: You might need admin rights.")
         except OSError as e:
             print("OS error occurred:", e)
-                
+
         workspacemodel.dirc = new_workspace_dirc
         workspacemodel.link = new_workspace_link
         workspacemodel.nstr = {
@@ -101,6 +108,8 @@ class Workspace:
         workspacemodel.save()
         self.load()
         project.load()
+        simpleproject = SIMPLEProject(new_workspace_path)
+        simpleproject.create()
         return True
     
     def addNodesHTML(self):
@@ -128,7 +137,7 @@ class Workspace:
                     obj["innerHTML"] = render_to_string('nice_classic/newjobnode.html', context, request=self.request).replace("\n", "").replace('"','\\"')
 
         if self.request != None:
-            addNodeHTML(self.nstr)
+            addNodeHTML(self.nstrhtml)
         
     def addChild(self, parentid, jobid):
 
@@ -167,6 +176,42 @@ class Workspace:
             workspacemodel.nstr = updated
             workspacemodel.save()
             self.nstr = updated
+
+    def delete(self, project):
+        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
+        if project.ensureTrashfolder() and workspacemodel is not None:
+            workspace_path = os.path.join(project.dirc, self.dirc)
+            workspace_link = os.path.join(project.dirc, self.link)
+            trash_path   = os.path.join(project.trashfolder, self.dirc)
+            trash_link   = os.path.join(project.trashfolder, self.link)
+            if not os.path.exists(workspace_path):
+                return 
+            if not os.path.isdir(workspace_path):
+                return 
+            if not os.path.exists(workspace_link):
+                return 
+            if not os.path.islink(workspace_link):
+                return 
+            if os.path.exists(trash_path):
+                return 
+            if os.path.isdir(trash_path):
+                return
+            if os.path.exists(trash_link):
+                return 
+            if os.path.islink(trash_link):
+                return
+            try:
+                os.rename(workspace_path, trash_path)
+            except OSError as error:
+                print("Directory '%s' can not be renamed")
+                return
+            try:
+                os.remove(workspace_link)
+                os.symlink(trash_path, trash_link)
+            except OSError as error:
+                print("Link '%s' can not be renamed")
+                return
+            workspacemodel.delete()
 
     def rename(self, request, project):
         if "new_workspace_name" in request.POST:

@@ -1,3 +1,5 @@
+let lastinteraction = Date.now();
+
 enableWorkspaceRename = () => {
     const workspacerename = document.querySelector("#workspacerename")
     workspacerename.disabled = false
@@ -14,6 +16,13 @@ enableJobDescription = (element) => {
     const new_job_description = element.parentElement.querySelector('input[name="new_job_description"]')
     new_job_description.disabled = false
     new_job_description.focus()
+}
+
+deleteWorkspace = (element, workspaceid) => {
+  const confirmed = confirm("Please confirm that you wish to delete workspace " + workspaceid + " and all jobs within");
+  if(confirmed){
+    element.form.submit()
+  }
 }
 
 window.addEventListener("load", () =>{
@@ -38,3 +47,15 @@ window.addEventListener("load", () =>{
     var my_chart = new Treant(chart_config);
 },false);
 
+window.addEventListener("visibilitychange", (event) => {
+  if(document.visibilityState !== "hidden"){
+    location.reload();
+  }
+})
+
+setInterval(function () {
+  if((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden"){
+    lastinteraction = Date.now();
+    location.reload();
+  }
+}, 1000);

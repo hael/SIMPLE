@@ -54,6 +54,12 @@
                 </div>
             </div>
         </div>
+        <form method="POST" action={% url 'nice_lite:delete_workspace' current_workspace_id %} target="_parent">
+            {% csrf_token %}
+            <button onclick="deleteWorkspace(this, {{ current_workspace_id }})" type="button">
+               <div class="userbutton">delete workspace</div>
+            </button>
+        </form>
     </div>
     <script type="text/javascript">
         const nodestructure = JSON.parse('{{ nodes|safe }}')

@@ -53,8 +53,10 @@ class SIMPLEStream:
         if "processes" not in self.ui:        return False
         if "pickrefs" in self.args:
             self.skip_refgen = True
+        self.sleepcounter = 0
         for process in self.ui["processes"]:
             if not self.dispatch(process): return False
+        return True
 
     def dispatch(self, process):
         dispatchmodel = DispatchModel.objects.filter(active=True).last()
@@ -72,12 +74,15 @@ class SIMPLEStream:
             return True
         # set path to pickrefs for reference based picking
         if not self.skip_refgen and process["name"] == "reference_based_picking":
-            self.args["pickrefs"] = "generate_picking_refs/selected_references.mrcs"
+            self.args["pickrefs"] = "../generate_picking_refs/selected_references.mrcs"
         if "nthr_master" in process:
             nthr_master = process["nthr_master"]
         else:
             nthr_master = 1
-        command_string = self.executable
+        # sleep on script start to prevent all starting together
+        command_string = "sleep " + str(self.sleepcounter) + "\n"
+        self.sleepcounter = self.sleepcounter + 5
+        command_string += self.executable
         command_string += " prg=" + process["prg"]
         if "user_inputs" in process:
             for user_input in process["user_inputs"]:
@@ -213,7 +218,33 @@ class SIMPLE:
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             return False
-        return True  
+        return True
+    
+class SIMPLEProject:
+    
+    cmd = ["simple_exec", "prg=new_project", "projname=workspace"]
+    dir = None
+
+    def __init__(self, dir):
+        self.dir = dir
+        
+    def create(self):
+        """
+        Args:
+            none
+        Returns:
+            none
+        """
+        if self.dir is None:
+            return
+        self.cmd.append("dir=" + self.dir)
+        try:
+            ui_str = subprocess.run(
+                self.cmd
+            )
+
+        except subprocess.CalledProcessError as cpe:
+            print(cpe.stderr, end="")
         
         
 

@@ -10,6 +10,7 @@ from .simple  import SIMPLEStream
 class Job:
 
     id       = 0
+    disp     = 0
     name     = ""
     desc     = ""
     dirc     = ""
@@ -55,13 +56,15 @@ class Job:
     def new(self, request, project, dataset):
         self.args = {} # ensure empty
         for key, value in request.POST.items():
-            if "csrfmiddlewaretoken" not in key and value is not "":
+            if "csrfmiddlewaretoken" not in key and value != "":
                 self.args[key] = value
         datasetmodel = DatasetModel.objects.filter(id=dataset.id).first()
-        jobmodel = JobModel(dset=datasetmodel, cdat=timezone.now(), args=self.args)
+        jobmodels = JobModel.objects.filter(dset=datasetmodel)
+        self.disp = jobmodels.count() + 1
+        jobmodel = JobModel(dset=datasetmodel, disp=self.disp, cdat=timezone.now(), args=self.args)
         jobmodel.save()
         self.id = jobmodel.id
-        self.dirc = "simple_stream_" + str(self.id)
+        self.dirc = str(self.disp) + "_simple_stream"
         if not self.createDir(os.path.join(project.dirc, dataset.dirc)):
             return False
         jobmodel.dirc = self.dirc
@@ -69,6 +72,28 @@ class Job:
         simplestream = SIMPLEStream()
         if not simplestream.start(self.args, os.path.join(project.dirc, dataset.dirc, self.dirc), self.id):
             return False
+        self.preprocessing_status     = "running"
+        self.optics_assignment_status = "running"
+        self.initial_picking_status   = "running"
+        self.generate_pickrefs_status = "running"
+        self.reference_picking_status = "running"
+        self.particle_sieving_status  = "running"
+        self.classification_2D_status = "running"
+        jobmodel.preprocessing_status     = "running"
+        jobmodel.optics_assignment_status = "running"
+        jobmodel.initial_picking_status   = "running"
+        jobmodel.generate_pickrefs_status = "running"
+        jobmodel.reference_picking_status = "running"
+        jobmodel.particle_sieving_status  = "running"
+        jobmodel.classification_2D_status = "running"
+        jobmodel.preprocessing_heartbeat     = timezone.now()
+        jobmodel.optics_assignment_heartbeat = timezone.now()
+        jobmodel.initial_picking_heartbeat   = timezone.now()
+        jobmodel.generate_pickrefs_heartbeat = timezone.now()
+        jobmodel.reference_picking_heartbeat = timezone.now()
+        jobmodel.particle_sieving_heartbeat  = timezone.now()
+        jobmodel.classification_2D_heartbeat = timezone.now()
+        jobmodel.save()
         return True
     
     def load(self):
@@ -80,6 +105,7 @@ class Job:
             self.cdat = jobmodel.cdat
             self.args = jobmodel.args
             self.dset = jobmodel.dset
+            self.disp = jobmodel.disp
             if jobmodel.preprocessing_status != "finished" and jobmodel.preprocessing_status != "failed":
                 if jobmodel.preprocessing_heartbeat + datetime.timedelta(minutes=1) < timezone.now():
                     jobmodel.preprocessing_status = "failed"
@@ -170,7 +196,7 @@ class Job:
                 jobmodel.save()
 
     def createDir(self, parent_dir):
-        if self.dirc is "":
+        if self.dirc == "":
             return False
         
         if not os.path.exists(parent_dir):
@@ -188,6 +214,10 @@ class Job:
             return False
         return True
     
+    def delete(self):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        jobmodel.delete()
+        
     def update_description(self, description):
         self.desc = description
         jobmodel = JobModel.objects.filter(id=self.id).first()

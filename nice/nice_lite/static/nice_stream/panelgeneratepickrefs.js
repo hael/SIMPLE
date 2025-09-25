@@ -1,14 +1,14 @@
 let lastinteraction = Date.now();
 
 scrlRight = () => {
-  const micrograph_slider = document.getElementById("picking_references")
-  micrograph_slider.scrollLeft += 72;
+  const picking_references = document.getElementById("picking_references")
+  picking_references.parentElement.scrollLeft += 72;
   lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
-  const micrograph_slider = document.getElementById("picking_references")
-  micrograph_slider.scrollLeft -= 72;
+  const picking_references = document.getElementById("picking_references")
+  picking_references.parentElement.scrollLeft -= 72;
   lastinteraction = Date.now();
 }
 
@@ -29,6 +29,93 @@ selectRefs = (form) => {
     }
     document.getElementById("final_selection_source").value = path
     document.getElementById("final_selection").value = selected
+}
+
+showMenu = (element, event) => {
+  event.preventDefault()
+  const selectmenu  = document.querySelector("#selectmenu")
+  const sortpop     = document.querySelector("#sortpop")
+  const sortres     = document.querySelector("#sortres")
+  const selectabove = document.querySelector("#selectabove")
+  const selectbelow = document.querySelector("#selectbelow")
+  selectmenu.style.top  = event.pageY + "px"
+  selectmenu.style.left = event.pageX + "px"
+  selectmenu.style.display = "flex"
+  sortpop.onclick = () => {sortPop()}
+  sortres.onclick = () => {sortRes()}
+  selectabove.onclick = () => {selectAbove(element)}
+  selectbelow.onclick = () => {selectBelow(element)}
+  lastinteraction = Date.now();
+}
+
+hideMenu = () => {
+  const selectmenu  = document.querySelector("#selectmenu")
+  const sortpop     = document.querySelector("#sortpop")
+  const sortres     = document.querySelector("#sortres")
+  const selectabove = document.querySelector("#selectabove")
+  const selectbelow = document.querySelector("#selectbelow")
+  selectmenu.style.display = "none"
+  sortpop.onclick = null
+  sortres.onclick = null
+  selectabove.onclick = null
+  selectbelow.onclick = null
+  lastinteraction = Date.now();
+}
+
+sortPop = () => {
+  const picking_references = document.querySelector("#picking_references")
+  const picktemplates      = Array.from(picking_references.querySelectorAll(".picktemplatecontainer"))
+  picktemplates.sort((a, b) => {
+        return Number(b.dataset.pop) - Number(a.dataset.pop);
+  });
+  picktemplates.forEach((item) => {
+        picking_references.appendChild(item);
+  });
+  hideMenu()
+}
+
+sortRes = () => {
+  const picking_references = document.querySelector("#picking_references")
+  const picktemplates      = Array.from(picking_references.querySelectorAll(".picktemplatecontainer"))
+  picktemplates.sort((a, b) => {
+        return Number(a.dataset.res) - Number(b.dataset.res);
+  });
+  picktemplates.forEach((item) => {
+        picking_references.appendChild(item);
+  });
+  hideMenu()
+}
+
+selectAbove = (element) => {
+  let threshold = true
+  const picking_references = document.querySelector("#picking_references")
+  for(const picktemplate of picking_references.querySelectorAll(".picktemplate")){
+    if(threshold){
+      picktemplate.classList.remove("disabledbutton")
+    }else{
+      picktemplate.classList.add("disabledbutton")
+    }
+    if(picktemplate == element){
+      threshold = false
+    }
+  }
+  hideMenu()
+}
+
+selectBelow = (element) => {
+  let threshold = false
+  const picking_references = document.querySelector("#picking_references")
+  for(const picktemplate of picking_references.querySelectorAll(".picktemplate")){
+    if(picktemplate == element){
+      threshold = true
+    }
+    if(threshold){
+      picktemplate.classList.remove("disabledbutton")
+    }else{
+      picktemplate.classList.add("disabledbutton")
+    }
+  }
+  hideMenu()
 }
 
 window.addEventListener("load", () =>{
@@ -112,12 +199,15 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setInterval(() => {
-  if((Date.now() - lastinteraction) > 30000){
-    document.getElementById("loadinggauze").style.display = "flex";
-    document.getElementById("loadinggauze").style.opacity = "1";
-    setTimeout(() => {
-      location.reload();
-    }, 600);
+window.addEventListener("visibilitychange", (event) => {
+  if(document.visibilityState !== "hidden"){
+    location.reload();
+  }
+})
+
+setInterval(function () {
+  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+    lastinteraction = Date.now();
+    location.reload();
   }
 }, 1000);

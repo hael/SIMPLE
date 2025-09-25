@@ -1,6 +1,8 @@
 import os
+import json
+import hashlib
+from django.http import HttpResponse
 from django.shortcuts import render
-from django.template.loader import render_to_string
 
 from ..models import JobModel
 from ..data_structures.project import Project
@@ -9,7 +11,8 @@ from ..data_structures.job     import Job
 
 class DatasetView:
 
-    template = "nice_lite/dataset.html"
+    template        = "nice_lite/dataset.html"
+    checksum_cookie = "dataset_checksum"
 
     def __init__(self, request, project=None, dataset=None):
         if project is not None:
@@ -46,9 +49,13 @@ class DatasetView:
                    "description"          : self.dataset.desc,
                    "jobs"                 : jobs,
                   }
-        
-        response = render(self.request, self.template, context)
-        #response = render_to_string(self.template, context, request=self.request)
+        hash = hashlib.md5(json.dumps(context, sort_keys=True, default=str).encode())
+        checksum = hash.hexdigest()
+        old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
+        response = HttpResponse(status=204)
+        if(old_checksum == "none" or old_checksum != checksum):
+            response = render(self.request, self.template, context)
+            response.set_cookie(key=self.checksum_cookie, value=checksum)
         response.set_cookie(key='selected_project_id', value=self.project.id)
         response.set_cookie(key='selected_dataset_id', value=self.dataset.id)
         return response

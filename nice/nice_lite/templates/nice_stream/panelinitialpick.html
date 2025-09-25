@@ -114,7 +114,7 @@
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div id="micrographs_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                        <div id="micrographs_slider" class="flex flex-row w-[200px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
                             <canvas id="boxes_overlay" class="fixed hover:animate-pulse" height="200" width="200"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
@@ -154,8 +154,15 @@
                             {% csrf_token %}
                             <input type="hidden" name="diameter"></input>
                             <input type="range" id="picking_diameters" data-diameters='{{ jobstats.picking_diameters }}' min="1" max={{ jobstats.picking_diameters|length }} oninput="draw_overlay_coordinates()"></input>
-                            <button class="userbutton" onclick="this.form.submit()">use diameter</button>
-                        </form> 
+                            <div class="flex flex-row">
+                                <button class="userbutton" type="submit">use diameter</button>
+                                <button class="userbutton" type="button" onclick="refineDiameter()">refine diameter</button>
+                            </div>   
+                        </form>
+                        <form id="refinediameter" class="text-nice4header items-center" method="POST" action={% url 'nice_lite:refine_moldiam_stream_initial_pick' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="refine_diameter"></input>
+                        </form>
                         <form class="flex flex-col text-nice4header" method="POST" action={% url 'nice_lite:increase_moldiam_stream_initial_pick' jobid %}>
                             {% csrf_token %}
                             <button onclick="this.form.submit()" title="increase range">
@@ -167,7 +174,7 @@
                     </div>
                 </div>
             </div>
-        {% endif %}
+        {% endif %} 
     </div>
 </body>
 </html>

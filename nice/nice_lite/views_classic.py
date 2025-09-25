@@ -51,6 +51,14 @@ def create_workspace(request, projectid):
     return response
     
 @login_required(login_url="/login/")
+def delete_workspace(request, workspaceid):
+    project = Project(request=request)
+    workspace = Workspace(workspace_id=workspaceid)
+    workspace.delete(project)
+    response = redirect('nice_lite:classic')
+    return response
+
+@login_required(login_url="/login/")
 def create_job(request, parentid, package, jobtype):
     project   = Project(request=request)
     workspace = Workspace(request=request)

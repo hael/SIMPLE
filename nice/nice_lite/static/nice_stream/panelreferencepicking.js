@@ -1,21 +1,27 @@
+let lastinteraction = Date.now();
+
 scrlRight = () => {
   const micrograph_slider = document.getElementById("picking_references")
   micrograph_slider.scrollLeft += 82;
+  lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const micrograph_slider = document.getElementById("picking_references")
   micrograph_slider.scrollLeft -= 82;
+  lastinteraction = Date.now();
 }
 
 scrlMicRight = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
   micrograph_slider.scrollLeft += 200;
+  lastinteraction = Date.now();
 }
 
 scrlMicLeft = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
   micrograph_slider.scrollLeft -= 200;
+  lastinteraction = Date.now();
 }
 
 var pick_observer = new IntersectionObserver(
@@ -128,10 +134,15 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setTimeout(function () {
-  document.getElementById("loadinggauze").style.display = "flex";
-  document.getElementById("loadinggauze").style.opacity = "1";
-  setTimeout(function () {
-   location.reload();
-  }, 600);
-}, 31000);
+window.addEventListener("visibilitychange", (event) => {
+  if(document.visibilityState !== "hidden"){
+    location.reload();
+  }
+})
+
+setInterval(function () {
+  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+    lastinteraction = Date.now();
+    location.reload();
+  }
+}, 1000);

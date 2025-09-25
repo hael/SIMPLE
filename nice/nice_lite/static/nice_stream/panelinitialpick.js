@@ -12,6 +12,15 @@ scrlLeft = () => {
   lastinteraction = Date.now();
 }
 
+refineDiameter = () => {
+  const refinediameter  = document.querySelector('#refinediameter')
+  const refine_diameter = refinediameter.querySelector("[name='refine_diameter']")
+  const diameter_input  = document.getElementsByName("diameter")[0]
+  refine_diameter.value = diameter_input.value
+  refinediameter.submit()
+  return false
+}
+
 var multipick_observer = new IntersectionObserver(
   (entries, opts) => {
     entries.forEach(entry => { 
@@ -125,12 +134,15 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
-setInterval(() => {
-  if((Date.now() - lastinteraction) > 30000){
-    document.getElementById("loadinggauze").style.display = "flex";
-    document.getElementById("loadinggauze").style.opacity = "1";
-    setTimeout(() => {
-      location.reload();
-    }, 600);
+window.addEventListener("visibilitychange", (event) => {
+  if(document.visibilityState !== "hidden"){
+    location.reload();
+  }
+})
+
+setInterval(function () {
+  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+    lastinteraction = Date.now();
+    location.reload();
   }
 }, 1000);

@@ -89,7 +89,7 @@
                         <div id="accepted_cls2D_slider" class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
                             <div class="grid grid-flow-col grid-rows-4">
                                 {% for cls2D in jobstats.latest_cls2D %}
-                                    <div class="snap-center w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded" dataset-res={{ cls2D.res | floatformat:1 }} dataset-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å">
+                                    <div class="snap-center w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å">
                                         <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2D h-[70px] w-[70px] rounded m-auto">
                                             <canvas class="mskcanvas" height=70 width=70 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
                                         </div>

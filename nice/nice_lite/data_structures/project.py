@@ -13,6 +13,7 @@ class Project:
     dirc     = ""
     datasets_list   = []
     workspaces_list = []
+    trashfolder = ""
 
     def __init__(self, project_id=None, request=None):
         if project_id is not None:
@@ -90,3 +91,21 @@ class Project:
             if workspace["id"] == workspace_id:
                 return True
         return False
+    
+    def ensureTrashfolder(self):
+        if not os.path.exists(self.dirc):
+            return False
+        if not os.path.isdir(self.dirc):
+            return False
+        trashfolder = os.path.join(self.dirc, "TRASH")
+        if os.path.isdir(trashfolder):
+            self.trashfolder = trashfolder
+            return True
+        try:
+            os.makedirs(trashfolder, exist_ok=True)
+        except OSError as error:
+            print("Directory '%s' can not be created")
+            return False
+        self.trashfolder = trashfolder
+        return True
+        
