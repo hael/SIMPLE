@@ -2746,8 +2746,8 @@ contains
         call clin_fsc%set_input('srch_ctrls', 1, nspace)
         call clin_fsc%set_input('srch_ctrls', 2, pgrp)
         ! filter controls
-        lp%required = .true.
         call clin_fsc%set_input('filt_ctrls', 1, lp)
+        clin_fsc%filt_ctrls(1)%required = .true.
         ! mask controls
         call clin_fsc%set_input('mask_ctrls', 1, mskdiam)
         call clin_fsc%set_input('mask_ctrls', 2, mskfile)
