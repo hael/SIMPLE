@@ -27,7 +27,7 @@ contains
         real,              intent(in)    :: atoms2(:,:)
         real,              intent(inout) :: reg_atom(:,:)
         real,    optional, intent(out)   :: out_mat(3,3), out_trans(3), out_scale
-        integer, parameter   :: STOCH_ITERS = 10
+        integer, parameter   :: STOCH_ITERS = 1
         integer, allocatable :: perm(:,:), inds(:)
         real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
         logical, allocatable :: taken(:,:)
@@ -56,14 +56,14 @@ contains
         do i = 1, N1
             do j = 1, N1
                 if( j == i )cycle
-                min_dist1 = min(min_dist1, sqrt(sum((atoms1(:,i) - atoms1(:,j))**2)))
+                min_dist1 = min(min_dist1, sqrt(sum((atom1_pos(:,i) - atom1_pos(:,j))**2)))
             enddo
         enddo
         min_dist2 = huge(min_dist2)
         do i = 1, N2
             do j = 1, N2
                 if( j == i )cycle
-                min_dist2 = min(min_dist2, sqrt(sum((atoms2(:,i) - atoms2(:,j))**2)))
+                min_dist2 = min(min_dist2, sqrt(sum((atom2_pos(:,i) - atom2_pos(:,j))**2)))
             enddo
         enddo
         do iter = 1,STOCH_ITERS
@@ -87,13 +87,14 @@ contains
                         taken(:,ithr) = .false.
                         cnt           = 0
                         do a1 = 1, N1
+                            if( cnt >= N2 )cycle
                             tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
                             min_cost  = huge(rec_scale)
                             l_exist   = .false.
                             do a2 = 1, N2
                                 if( taken(a2,ithr) )cycle
                                 cur_cost = sqrt(sum((tmp_atom2 - atom2_pos(:,a2))**2))
-                                if( cur_cost < min_cost .and. cur_cost < min_dist2 / 2. )then
+                                if( cur_cost < min_cost )then
                                     min_cost = cur_cost
                                     min_a2   = a2
                                     l_exist  = .true.
