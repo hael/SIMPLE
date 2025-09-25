@@ -22,6 +22,7 @@ call cline%checkvar('pdbfile' , 2)
 call cline%checkvar('pdbfiles', 3)
 call cline%check
 call p%new(cline)
+if( .not. cline%defined('maxits') ) p%maxits = 1
 ! reading the reference file and finding its core
 call read_pdb2matrix(p%pdbfile, mat)
 call find_core(mat, core_mat)
@@ -31,7 +32,7 @@ npdbs = size(pdbfnames)
 do ipdb = 1, npdbs
     call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
     call find_core(cur_mat, cur_core)
-    call atoms_register(cur_core, core_mat, core_rot, rot_mat, trans_vec, scale)
+    call atoms_register(cur_core, core_mat, core_rot, p%maxits, rot_mat, trans_vec, scale)
     if(allocated(matrix_rot)) deallocate(matrix_rot)
     allocate(matrix_rot(3,size(cur_mat,2)))
     do j = 1, size(cur_mat,2)
