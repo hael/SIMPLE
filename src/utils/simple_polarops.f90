@@ -147,7 +147,7 @@ contains
         real(sp),    pointer :: pctfmats(:,:,:), rctf(:,:)
         real(dp) :: w
         real     :: incr_shift(2)
-        integer  :: i, icls, iptcl, irot
+        integer  :: eopops(2,ncls), i, icls, iptcl, irot
         logical  :: l_ctf, l_even, l_3D, l_shift
         l_3D = .false.
         if( present(is3D) ) l_3D = is3D
@@ -157,12 +157,11 @@ contains
         call spproj%ptr2oritype(params_glob%oritype, spproj_field)
         call pftcc%get_ptcls_ptr(pptcls)
         l_ctf = pftcc%is_with_ctf()
-        if( l_ctf )then
-            call pftcc%get_ctfmats_ptr(pctfmats)
-            call pftcc%get_work_rpft_ptr(rctf)
-        endif
-        call pftcc%get_work_pft_ptr(rptcl)
+        if( l_ctf ) call pftcc%get_ctfmats_ptr(pctfmats)
         ! update classes
+        eopops = 0
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) reduction(+:eopops)&
+        !$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf)
         do i = 1,nptcls
             ! particles parameters
             iptcl = pinds(i)
@@ -181,32 +180,44 @@ contains
                 ! weighted restoration
                 if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
             endif
+            call pftcc%get_work_pft_ptr(rptcl)
             call pftcc%rotate_pft(pptcls(:,:,i), irot, rptcl)
             if( l_ctf )then
+                call pftcc%get_work_rpft_ptr(rctf)
                 call pftcc%rotate_pft(pctfmats(:,:,i), irot, rctf)
                 if( l_even )then
+                    !$omp critical
                     pfts_even(:,:,icls) = pfts_even(:,:,icls) + w * cmplx(rptcl,kind=dp) * real(rctf,kind=dp)
                     ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + w * real(rctf,kind=dp)**2
+                    !$omp end critical
                 else
+                    !$omp critical
                     pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  + w * cmplx(rptcl,kind=dp) * real(rctf,kind=dp)
                     ctf2_odd(:,:,icls)  = ctf2_odd(:,:,icls)  + w * real(rctf,kind=dp)**2
+                    !$omp end critical
                 endif
             else
                 if( l_even )then
+                    !$omp critical
                     pfts_even(:,:,icls) = pfts_even(:,:,icls) + w * cmplx(rptcl,kind=dp)
                     ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + w
+                    !$omp end critical
                 else
+                    !$omp critical
                     pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  + w * cmplx(rptcl,kind=dp)
                     ctf2_odd(:,:,icls)  = ctf2_odd(:,:,icls)  + w
+                    !$omp end critical
                 endif
             endif
             ! total population
             if( l_even )then
-                eo_pops(1,icls) = eo_pops(1,icls) + 1
+                eopops(1,icls) = eopops(1,icls) + 1
             else
-                eo_pops(2,icls) = eo_pops(2,icls) + 1
+                eopops(2,icls) = eopops(2,icls) + 1
             endif
         enddo
+        !$omp end parallel do
+        eo_pops = eo_pops + eopops
         ! cleanup
         nullify(spproj_field,rptcl,rctf,pptcls,pctfmats)
     end subroutine polar_cavger_update_sums
@@ -217,14 +228,14 @@ contains
         real,          parameter :: EPSILON = 0.1
         logical,       parameter :: l_kb = .true.
         complex(dp), allocatable :: pfts_cavg(:,:,:), pfts_clin(:,:,:), clin_odd(:,:,:), clin_even(:,:,:)
-        real,        allocatable :: res(:)
+        ! real,        allocatable :: res(:)
         complex(dp) :: pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                       &pft(pftsz,kfromto(1):kfromto(2)),pfte(pftsz,kfromto(1):kfromto(2)),pfto(pftsz,kfromto(1):kfromto(2))
         real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)),ctf2e(pftsz,kfromto(1):kfromto(2)),ctf2o(pftsz,kfromto(1):kfromto(2)),&
                       &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls), ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
         integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops, m
-        real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05, psi,&
-                      &cavg_clin_frcs(pftsz,kfromto(1):kfromto(2),ncls), dfrcs(kfromto(1):kfromto(2),ncls)
+        ! real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05
+        real        :: cavg_clin_frcs(pftsz,kfromto(1):kfromto(2),ncls), psi!, dfrcs(kfromto(1):kfromto(2),ncls)
         logical     :: l_rotm
         if( l_comlin )then
             ! 3D-related tasks
@@ -719,7 +730,7 @@ contains
         type(cmdline),    intent(in) :: cline
         complex(dp), allocatable :: prev_prefs(:,:,:)
         real,        allocatable :: frc(:)
-        real     :: ufrac_trec
+        real(dp) :: ufrac_trec
         integer  :: icls, find, pop, filtsz
         filtsz = fdim(params_glob%box_crop) - 1
         allocate(frc(filtsz),source=0.)
@@ -759,24 +770,30 @@ contains
         ! e/o Trailing reconstruction
         if( params_glob%l_trail_rec )then
             if( cline%defined('ufrac_trec') )then
-                ufrac_trec = params_glob%ufrac_trec
+                ufrac_trec = real(params_glob%ufrac_trec,dp)
             else
-                ufrac_trec = build_glob%spproj_field%get_update_frac()
+                ufrac_trec = real(build_glob%spproj_field%get_update_frac(),dp)
             endif
             call read_pft_array(POLAR_REFS_FBODY//'_even'//trim(BIN_EXT), prev_prefs)
-            pfts_even = real(ufrac_trec,dp) * pfts_even + (1.d0-real(ufrac_trec,dp)) * prev_prefs
+            !$omp parallel workshare proc_bind(close)
+            pfts_even = ufrac_trec * pfts_even + (1.d0-ufrac_trec) * prev_prefs
+            !$omp end parallel workshare
             call read_pft_array(POLAR_REFS_FBODY//'_odd'//trim(BIN_EXT), prev_prefs)
-            pfts_odd = real(ufrac_trec,dp) * pfts_odd   + (1.d0-real(ufrac_trec,dp)) * prev_prefs
+            !$omp parallel workshare proc_bind(close)
+            pfts_odd  = ufrac_trec * pfts_odd   + (1.d0-ufrac_trec) * prev_prefs
+            pfts_merg = 0.5d0 * (pfts_even + pfts_odd)
+            !$omp end parallel workshare
             deallocate(prev_prefs)
         endif
     end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
 
     !>  \brief  Converts the polar references to a cartesian grid
-    subroutine polar_cavger_refs2cartesian( pftcc, cavgs, which )
+    subroutine polar_cavger_refs2cartesian( pftcc, cavgs, which, pfts_in )
         use simple_image
         class(polarft_corrcalc), intent(in)    :: pftcc
         type(image),             intent(inout) :: cavgs(ncls)
         character(len=*),        intent(in)    :: which
+        complex(dp),   optional, intent(in)    :: pfts_in(1:pftsz,kfromto(1):kfromto(2),1:ncls)
         complex, allocatable :: cmat(:,:)
         real,    allocatable :: norm(:,:)
         complex :: pft(1:pftsz,kfromto(1):kfromto(2)), fc
@@ -788,14 +805,18 @@ contains
         !$omp parallel do schedule(guided) proc_bind(close) default(shared)&
         !$omp private(icls,pft,cmat,norm,irot,k,phys,fc,physh,physk,dh,dk,mdh,mdk)
         do icls = 1, ncls
-            select case(trim(which))
-            case('even')
-                pft = cmplx(pfts_even(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
-            case('odd')
-                pft = cmplx(pfts_odd(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
-            case('merged')
-                pft = cmplx(pfts_merg(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
-            end select
+            if( present(pfts_in) )then
+                pft = cmplx(pfts_in(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
+            else
+                select case(trim(which))
+                case('even')
+                    pft = cmplx(pfts_even(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
+                case('odd')
+                    pft = cmplx(pfts_odd(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
+                case('merged')
+                    pft = cmplx(pfts_merg(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
+                end select
+            endif
             ! Bi-linear interpolation
             cmat = CMPLX_ZERO
             norm = 0.0
