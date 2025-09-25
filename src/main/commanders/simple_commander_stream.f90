@@ -804,7 +804,6 @@ contains
 
     subroutine exec_stream_pick_extract( self, cline )
         use simple_histogram,    only: histogram
-        use simple_image
         class(commander_stream_pick_extract), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(make_pickrefs_commander)          :: xmake_pickrefs
@@ -822,22 +821,20 @@ contains
         type(starproject_stream)               :: starproj_stream
         type(stream_http_communicator)         :: http_communicator
         type(histogram)                        :: histogram_moldiams
-        type(image)                            :: mic_thumb
         type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates, picking_diameters
         type(nrtxtfile)                        :: boxsize_file
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: odir, odir_extract, odir_picker, odir_completed
         character(len=:),          allocatable :: odir_interactive, odir_interactive_picker, odir_interactive_completed
-        character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
+        character(len=LONGSTRLEN)              :: cwd_job
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real,                      allocatable :: moldiams(:), saved_boxsize(:)
-        real                                   :: jpg_scale, pickrefs_thumbnail_scale, rnd
+        real                                   :: pickrefs_thumbnail_scale
         integer,                   allocatable :: complete_search_diameters(:), active_search_diameters(:), refined_search_diameters(:)
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen, imic
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
         integer                                :: n_pickrefs, thumbcount, xtile, ytile, xtiles, ytiles
-        integer                                :: ldim_mic(3)
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
         logical                                :: pause_import, l_interactive, interactive_waiting, found
         integer(timer_int_kind) :: t0
@@ -2792,7 +2789,6 @@ contains
         integer                                :: nmics_rejected_glob, nchunks_imported_glob, nchunks_imported, nprojects, iter
         integer                                :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs, ncls_in, pool_iter
         integer                                :: pool_iter_last_chunk, pool_iter_max_chunk_imported, i
-        integer,                   allocatable :: snapshot_selection(:)
         logical                                :: l_nchunks_maxed, l_pause, l_params_updated
         real                                   :: nptcls_pool, moldiam
         nullify(snapshot_json)

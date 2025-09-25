@@ -1670,23 +1670,18 @@ contains
     ! Performs one iteration:
     ! updates to command-line, particles sampling, temporary project & execution
     subroutine iterate_pool
-        use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
-        use simple_ran_tabu
         real,    parameter :: LAMBDA_REFGEN    = 1.8
         integer, parameter :: ITERLIM_REFGEN   = 10
         integer, parameter :: ITERSHIFT_REFGEN = 5
         logical, parameter :: L_BENCH          = .false.
-        type(ran_tabu)                         :: random_generator
-        type(sp_project)                       :: spproj, spproj_history
-        type(cmdline),             allocatable :: clines(:)
-        integer,                   allocatable :: nptcls_per_stk(:), stk_order(:)
-        integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:), clspops(:)
-        character(len=:),          allocatable :: stack_fname, ext, fbody, stkname
-        character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
-        real                    :: frac_update, smpd, gamma, lambda, lp_refgen
-        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
-        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
-        integer(timer_int_kind) :: t_tot
+        type(cmdline),    allocatable :: clines(:)
+        type(sp_project)              :: spproj, spproj_history
+        integer(timer_int_kind)       :: t_tot
+        integer,          allocatable :: nptcls_per_stk(:), prev_eo_pops(:,:), prev_eo_pops_thread(:,:), clspops(:)
+        character(len=:), allocatable :: stkname
+        real    :: frac_update, smpd, gamma, lambda, lp_refgen
+        integer :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+        integer :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
         if( .not. stream2D_active ) return
         if( .not. pool_available )  return
         if( L_BENCH ) t_tot  = tic()
@@ -1814,22 +1809,9 @@ contains
         ! Update info for gui
         call spproj%projinfo%set(1,'nptcls_tot',     nptcls_glob)
         call spproj%projinfo%set(1,'nptcls_rejected',nptcls_rejected_glob)
-        ! Uniformly sample stacks (to try q-powered distribution)
-        if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
-        allocate(pool_stacks_mask(nstks_tot), source=.false.)
-        allocate(stk_order(nstks_tot), source=(/(istk,istk=1,nstks_tot)/))
-        random_generator = ran_tabu(nstks_tot)
-        call random_generator%shuffle(stk_order)
-        nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
-        nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
-        do i = 1,nstks_tot
-            istk = stk_order(i)
-            if( nptcls_sel > lim_ufrac_nptcls ) cycle
-            nptcls_sel    = nptcls_sel + nptcls_per_stk(istk)
-            nptcls2update = nptcls2update + pool_proj%os_stk%get_int(istk, 'nptcls')
-            pool_stacks_mask(istk) = .true.
-        enddo
-        call random_generator%kill
+        ! Uniformly sample stacks
+        call uniform_stack_sampling
+        ! call biased_stack_sampling
         nstks2update = count(pool_stacks_mask)
         ! Transfer stacks and particles
         call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
@@ -1889,33 +1871,7 @@ contains
             !$omp end parallel do
         endif
         ! Consolidate sigmas doc
-        if( l_update_sigmas )then
-            if( trim(params_glob%sigma_est).eq.'group' )then
-                allocate(sigma_fnames(nstks2update))
-                do istk = 1,nstks2update
-                    call spproj%os_stk%getter(istk,'stk',stack_fname)
-                    stack_fname = basename(stack_fname)
-                    ext         = fname2ext(stack_fname)
-                    fbody       = get_fbody(stack_fname, ext)
-                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
-                enddo
-                call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                deallocate(sigma_fnames)
-            else
-                ! sigma_est=global & first iteration
-                if( pool_iter==1 )then
-                    allocate(sigma_fnames(glob_chunk_id))
-                    do i = 1,glob_chunk_id
-                        sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//trim(STAR_EXT)
-                    enddo
-                    call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                    deallocate(sigma_fnames)
-                endif
-            endif
-            do i = 1,params_glob%nparts_pool
-                call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
-            enddo
-        endif
+        call consolidate_sigmas
         ! update command line with fractional update parameters
         call cline_cluster2D_pool%delete('update_frac')
         frac_update = 1.0
@@ -1952,6 +1908,113 @@ contains
         &' / ', sum(nptcls_per_stk),' PARTICLES'
         if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
         call tidy_2Dstream_iter
+      contains
+
+        subroutine uniform_stack_sampling
+            use simple_ran_tabu
+            type(ran_tabu) :: random_generator
+            integer        :: stk_order(nstks_tot)
+            integer        :: i, j
+            if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
+            allocate(pool_stacks_mask(nstks_tot), source=.false.)
+            stk_order        = (/(i,i=1,nstks_tot)/)
+            random_generator = ran_tabu(nstks_tot)
+            call random_generator%shuffle(stk_order)
+            nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
+            nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
+            do i = 1,nstks_tot
+                j = stk_order(i)
+                if( nptcls_sel > lim_ufrac_nptcls ) cycle
+                nptcls_sel    = nptcls_sel    + nptcls_per_stk(j)
+                nptcls2update = nptcls2update + pool_proj%os_stk%get_int(j, 'nptcls')
+                pool_stacks_mask(j) = .true.
+            enddo
+            call random_generator%kill
+        end subroutine uniform_stack_sampling
+
+        ! sampling biased towards older stacks
+        subroutine biased_stack_sampling
+            real, parameter :: B = 0.1
+            real    :: vals(nstks_tot), diff
+            integer :: counts(nstks_tot), inds(nstks_tot)
+            integer :: fromp,top,iptcl,i,j,minc,maxc
+            !$omp parallel do private(i,iptcl,fromp,top) proc_bind(close) default(shared)
+            do i = 1,nstks_tot
+                counts(i) = huge(i)
+                fromp = pool_proj%os_stk%get_fromp(i)
+                top   = pool_proj%os_stk%get_top(i)
+                do iptcl = fromp,top
+                    if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+                    counts(i) = min(counts(i), pool_proj%os_ptcl2D%get_updatecnt(iptcl))
+                enddo
+
+                call pool_proj%os_stk%set(i, 'cnt', counts(i))
+
+            enddo
+            !$omp end parallel do
+            minc = minval(counts)
+            maxc = maxval(counts)
+            if( maxc == minc )then
+                ! all stacks have been sampled uniformly, use uniform sampling
+                call uniform_stack_sampling
+            else
+                if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
+                allocate(pool_stacks_mask(nstks_tot), source=.false.)
+                ! generate biased order
+                diff = real(1+maxc-minc)
+                do i = 1,nstks_tot
+                    inds(i) = i
+                    vals(i) = real(1+counts(i)-minc) / diff
+                    vals(i) = vals(i)**B - ran3()
+                enddo
+                ! draw
+                call hpsort(vals, inds)
+                nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
+                nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
+                do i = 1,nstks_tot
+                    j = inds(i)
+                    if( nptcls_sel > lim_ufrac_nptcls ) cycle
+                    nptcls_sel    = nptcls_sel    + nptcls_per_stk(j)
+                    nptcls2update = nptcls2update + pool_proj%os_stk%get_int(j, 'nptcls')
+                    pool_stacks_mask(j) = .true.
+                enddo
+            endif
+        end subroutine biased_stack_sampling
+
+        subroutine consolidate_sigmas
+            use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
+            character(len=:),          allocatable :: stack_fname, ext, fbody
+            character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
+            integer :: i, istk
+            if( l_update_sigmas )then
+                if( trim(params_glob%sigma_est).eq.'group' )then
+                    allocate(sigma_fnames(nstks2update))
+                    do istk = 1,nstks2update
+                        call spproj%os_stk%getter(istk,'stk',stack_fname)
+                        stack_fname = basename(stack_fname)
+                        ext         = fname2ext(stack_fname)
+                        fbody       = get_fbody(stack_fname, ext)
+                        sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
+                    enddo
+                    call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                    deallocate(sigma_fnames)
+                else
+                    ! sigma_est=global & first iteration
+                    if( pool_iter==1 )then
+                        allocate(sigma_fnames(glob_chunk_id))
+                        do i = 1,glob_chunk_id
+                            sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//trim(STAR_EXT)
+                        enddo
+                        call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                        deallocate(sigma_fnames)
+                    endif
+                endif
+                do i = 1,params_glob%nparts_pool
+                    call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
+                enddo
+            endif
+        end subroutine consolidate_sigmas
+
     end subroutine iterate_pool
 
     ! Flags pool availibility & updates the global name of references
