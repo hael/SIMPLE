@@ -65,7 +65,7 @@ contains
         real             :: moldiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
-        integer          :: n_imported, n_imported_prev, n_added, nptcls_glob, n_failed_jobs
+        integer          :: n_imported, n_imported_prev, nptcls_glob, n_failed_jobs
         integer          :: n_accepted, n_rejected, jpg_ntiles, jpg_nxtiles, jpg_nytiles, xtile, ytile
         integer          :: latest_processed_set, latest_displayed_set
         logical          :: l_params_updated, l_wait_for_user, selection_jpeg_created, found
@@ -919,17 +919,17 @@ contains
                 call http_communicator%send_jobstats()
             end do
         endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-            end do
-        endif
+        ! if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
+        !     write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
+        !     do i=1, 360
+        !         if(dir_exists(trim(params%dir_target)//'/spprojs')) then
+        !             write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
+        !             exit
+        !         endif
+        !         call sleep(10)
+        !         call http_communicator%send_jobstats()
+        !     end do
+        ! endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
             do i=1, 360
