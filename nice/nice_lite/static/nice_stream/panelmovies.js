@@ -4,12 +4,16 @@ window.addEventListener("load", () =>{
     for(const astig_histogram of document.getElementsByClassName("astig_histogram")){
         const ctx = astig_histogram.getContext("2d");
         const labels = JSON.parse(astig_histogram.dataset.labels.replaceAll("'", '"'))
+        while(labels.length < 24){
+          labels.push("")
+        }
         const data   = JSON.parse(astig_histogram.dataset.values.replaceAll("'", '"'))
         const data2  = JSON.parse(astig_histogram.dataset.values2.replaceAll("'", '"'))
         new Chart(ctx, {
             type: 'bar',
             options:{
                 maintainAspectRatio : false,
+                maxBarThickness : 4,
                 scales: {
                   x: {
                       display: false,
@@ -47,12 +51,16 @@ window.addEventListener("load", () =>{
     for(const ctfres_histogram of document.getElementsByClassName("ctfres_histogram")){
         const ctx = ctfres_histogram.getContext("2d");
         const labels = JSON.parse(ctfres_histogram.dataset.labels.replaceAll("'", '"'))
+        while(labels.length < 24){
+          labels.push("")
+        }
         const data   = JSON.parse(ctfres_histogram.dataset.values.replaceAll("'", '"'))
         const data2  = JSON.parse(ctfres_histogram.dataset.values2.replaceAll("'", '"'))
         new Chart(ctx, {
             type: 'bar',
             options:{
                 maintainAspectRatio : false,
+                maxBarThickness : 4,
                 scales: {
                   x: {
                       display: false,
@@ -90,12 +98,16 @@ window.addEventListener("load", () =>{
     for(const df_histogram of document.getElementsByClassName("df_histogram")){
         const ctx = df_histogram.getContext("2d");
         const labels = JSON.parse(df_histogram.dataset.labels.replaceAll("'", '"'))
+        while(labels.length < 24){
+          labels.push("")
+        }
         const data   = JSON.parse(df_histogram.dataset.values.replaceAll("'", '"'))
         const data2  = JSON.parse(df_histogram.dataset.values2.replaceAll("'", '"'))
         new Chart(ctx, {
             type: 'bar',
             options:{
                 maintainAspectRatio : false,
+                maxBarThickness : 4,
                 scales: {
                   x: {
                       display: false,
@@ -133,12 +145,16 @@ window.addEventListener("load", () =>{
     for(const rate_histogram of document.getElementsByClassName("rate_histogram")){
         const ctx = rate_histogram.getContext("2d");
         const labels = JSON.parse(rate_histogram.dataset.labels.replaceAll("'", '"'))
+        while(labels.length < 24){
+          labels.push("")
+        }
         const data   = JSON.parse(rate_histogram.dataset.values.replaceAll("'", '"'))
   
         new Chart(ctx, {
             type: 'bar',
             options:{
                 maintainAspectRatio : false,
+                maxBarThickness : 4,
                 scales: {
                   x: {
                       display: false,

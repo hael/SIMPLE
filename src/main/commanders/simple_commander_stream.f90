@@ -1166,6 +1166,10 @@ contains
                     end if
                      ! http
                     call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
+                    ! empty latest_picked_micrographs json array
+                    call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
+                    call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+                    call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
                     ! update params
                     if(params%moldiam_refine .eq. -2.0) then
                         !decrease search range

@@ -48,7 +48,7 @@
                                 </svg>
                             </div>
                         {% endif %}
-                        {{ job.id }} stream
+                        {{ job.disp }} stream
                     </div>
                     <div class="text-[12px] min-h-[18px] flex">
                         <form method="POST" action={% url 'nice_lite:update_stream_description' job.id %} class="flex-1">
@@ -175,10 +175,20 @@
             {% endfor %}
         </div>
     </div>
-    <div class="bg-nice4bubble m-[10px] border-[2px] border-nice4header rounded-xl p-[5px] text-[12px] text-nice4dark">
-        <div class="font-bold text-[14px]">dataset details</div>
-        <div class="grid grid-cols-4 gap-1">
-            <div>name</div>
+    <div class="flex flex-col bg-nice4bubble m-[10px] border-[2px] border-nice4header rounded-xl p-[5px] text-[12px] text-nice4dark">
+        <div class="flex flex-row">
+            <div class="font-bold text-[14px] flex-1">dataset details</div>
+            <form method="POST" action={% url 'nice_lite:delete_dataset' current_dataset_id %} target="_parent">
+                {% csrf_token %}
+                <button onclick="deleteDataset(this, {{ current_dataset_id }})" type="button" title="delete dataset">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                    <path fill-rule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clip-rule="evenodd" />
+                </svg>
+                </button>
+            </form>
+        </div>
+        <div class="grid grid-cols-4 gap-[2px] grid-cols-[15%_auto_15%_auto] pl-[10px]">
+            <div class="font-bold">name</div>
             <div class="flex">
                 <form method="POST" action={% url 'nice_lite:update_dataset_name' %} target="_parent">
                     {% csrf_token %}
@@ -191,15 +201,15 @@
                     </svg>
                 </div>
             </div>
-            <div>created</div>
+            <div class="font-bold">created</div>
             <div>{{ created }}</div>
-            <div>modified</div>
+            <div class="font-bold">modified</div>
             <div>{{ modified }}</div>
-            <div>created by</div>
+            <div class="font-bold">created by</div>
             <div>user</div>
-            <div>location</div>
+            <div class="font-bold">location</div>
             <div>{{ folder }}</div>
-            <div>description</div>
+            <div class="font-bold">description</div>
             <div class="flex">
                 <form method="POST" action={% url 'nice_lite:update_dataset_description' %} target="_parent">
                     {% csrf_token %}
@@ -213,13 +223,6 @@
                 </div>
             </div>
         </div>
-        <form method="POST" action={% url 'nice_lite:delete_dataset' current_dataset_id %} target="_parent">
-            {% csrf_token %}
-            <button onclick="deleteDataset(this, {{ current_dataset_id }})" type="button">
-               <div class="userbutton">delete dataset</div>
-            </button>
-        </form>
-        
     </div>
 </body>
 </html>

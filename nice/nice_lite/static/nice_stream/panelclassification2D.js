@@ -2,18 +2,27 @@ let lastinteraction = Date.now();
 
 scrlRight = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
-  accepted_cls2D_slider.scrollLeft += 77;
+  accepted_cls2D_slider.parentElement.scrollLeft += 77;
   lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
-  accepted_cls2D_slider.scrollLeft -= 77;
+  accepted_cls2D_slider.parentElement.scrollLeft -= 77;
   lastinteraction = Date.now();
 }
 
 toggleCls = (element) => {
     element.classList.toggle("disabledbutton")
+    const mskcanvas = element.querySelector('.mskcanvas')
+    const xmark     = element.querySelector('.xmark')
+    if(element.classList.contains("disabledbutton")){
+      mskcanvas.classList.add("hidden")
+      xmark.classList.remove("hidden")
+    }else{
+      xmark.classList.add("hidden")
+      mskcanvas.classList.remove("hidden")
+    }
     lastinteraction = Date.now();
 }
 
@@ -52,6 +61,111 @@ updateMskdiam = (element) => {
   current_mskdiam.innerHTML = mskdiam + "Å" 
   selected_mskdiam.value    = mskdiam
   drawMask()
+}
+
+showMenu = (element, event) => {
+  event.preventDefault()
+  const selectmenu    = element.parentElement.parentElement.parentElement.querySelector("[name='selectmenu']")
+  const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
+  const sortpop       = selectmenu.querySelector("#sortpop")
+  const sortres       = selectmenu.querySelector("#sortres")
+  const selectabove   = selectmenu.querySelector("#selectabove")
+  const selectbelow   = selectmenu.querySelector("#selectbelow")
+  selectmenubox.style.top  = event.pageY + "px"
+  selectmenubox.style.left = event.pageX + "px"
+  selectmenu.style.display = "flex"
+  sortpop.onclick = () => {sortPop()}
+  sortres.onclick = () => {sortRes()}
+  if(selectabove != undefined) selectabove.onclick = () => {selectAbove(element)}
+  if(selectbelow != undefined) selectbelow.onclick = () => {selectBelow(element)}
+  lastinteraction = Date.now();
+}
+
+hideMenu = () => {
+  for(const selectmenu of document.querySelectorAll("[name='selectmenu']")){
+    const sortpop     = selectmenu.querySelector("#sortpop")
+    const sortres     = selectmenu.querySelector("#sortres")
+    const selectabove = selectmenu.querySelector("#selectabove")
+    const selectbelow = selectmenu.querySelector("#selectbelow")
+    selectmenu.style.display = "none"
+    sortpop.onclick = null
+    sortres.onclick = null
+    if(selectabove != undefined) selectabove.onclick = null
+    if(selectbelow != undefined) selectbelow.onclick = null
+  }
+  lastinteraction = Date.now();
+}
+
+sortPop = () => {
+  const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
+  const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".cls2dcontainer"))
+  acceptedtemplates.sort((a, b) => {
+        return Number(b.dataset.pop) - Number(a.dataset.pop);
+  });
+  acceptedtemplates.forEach((item) => {
+        accepted_cls2D_slider.appendChild(item);
+  });
+  hideMenu()
+}
+
+sortRes = () => {
+  const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
+  const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".cls2dcontainer"))
+  acceptedtemplates.sort((a, b) => {
+        return Number(a.dataset.res) - Number(b.dataset.res);
+  });
+  acceptedtemplates.forEach((item) => {
+        accepted_cls2D_slider.appendChild(item);
+  });
+  hideMenu()
+}
+
+selectAbove = (element) => {
+  let threshold = true
+  for(const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")){
+    const mskcanvas = clscontainer.querySelector('.mskcanvas')
+    const xmark     = clscontainer.querySelector('.xmark') 
+    if(threshold){
+      clscontainer.classList.remove("disabledbutton")
+    }else{
+      clscontainer.classList.add("disabledbutton")
+    }
+    if(clscontainer.classList.contains("disabledbutton")){
+      mskcanvas.classList.add("hidden")
+      xmark.classList.remove("hidden")
+    }else{
+      xmark.classList.add("hidden")
+      mskcanvas.classList.remove("hidden")
+    }
+    if(clscontainer == element){
+      threshold = false
+    }
+  }
+  hideMenu()
+}
+
+selectBelow = (element) => {
+  let threshold = false
+  for(const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")){
+    const mskcanvas = clscontainer.querySelector('.mskcanvas')
+    const xmark     = clscontainer.querySelector('.xmark') 
+    if(clscontainer == element){
+      threshold = true
+    }
+    if(threshold){
+      clscontainer.classList.remove("disabledbutton")
+    }else{
+      clscontainer.classList.add("disabledbutton")
+    }
+    if(clscontainer.classList.contains("disabledbutton")){
+      mskcanvas.classList.add("hidden")
+      xmark.classList.remove("hidden")
+    }else{
+      xmark.classList.add("hidden")
+      mskcanvas.classList.remove("hidden")
+    }
+  }
+  hideMenu()
 }
 
 window.addEventListener("load", () =>{
@@ -113,7 +227,6 @@ window.addEventListener("load", () =>{
   }
   drawMask()
 },false);
-
 
 window.addEventListener("load", () =>{
   document.getElementById("loadinggauze").style.opacity = "0";

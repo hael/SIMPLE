@@ -14,6 +14,19 @@
     {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
         <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
     {% endif %}
+    <div id="help" class="hidden absolute text-[10px] flex flex-col h-full w-full bg-nice4bubble top-[20px] transition-opacity duration-300 delay-300 ease-in-out">
+        <div class="flex flex-row text-nice4header ">
+            <div class="cursor-pointer" onclick="document.querySelector('#help').classList.toggle('hidden')">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                    <path fill-rule="evenodd" d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8Zm10.25.75a.75.75 0 0 0 0-1.5H6.56l1.22-1.22a.75.75 0 0 0-1.06-1.06l-2.5 2.5a.75.75 0 0 0 0 1.06l2.5 2.5a.75.75 0 1 0 1.06-1.06L6.56 8.75h4.69Z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="font-bold pl-[5px]">tips</div>
+        </div>
+        <div class="p-[10px]">
+            some help text
+        </div>
+    </div>
     <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row justify-end items-center">
             {% if status == "running" %}
@@ -59,14 +72,11 @@
                     </button>
                 </form>
             {% endif %}
-            <form class="flex" method="POST" action={% url 'nice_lite:view_logs' jobid logfile errfile %} target="_parent">
-                {% csrf_token %}
-                <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="view logs">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                        <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </form>
+            <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="document.querySelector('#help').classList.toggle('hidden')" title="view tip">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                    <path fill-rule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0Zm-6 3.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM7.293 5.293a1 1 0 1 1 .99 1.667c-.459.134-1.033.566-1.033 1.29v.25a.75.75 0 1 0 1.5 0v-.115a2.5 2.5 0 1 0-2.518-4.153.75.75 0 1 0 1.061 1.06Z" clip-rule="evenodd" />
+                </svg>
+            </button>
         </div>
         <div class="h-full flex-col flex justify-start">
             <div class="flex flex-row">
@@ -93,13 +103,21 @@
                                     <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                 </svg>
                             </div>
-                            <div id="accepted_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                <div class="grid grid-flow-col grid-rows-2">
+                            <div class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-2">
                                     {% for cls2D in jobstats.accepted_cls2D %}
-                                        <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
-                                            <div onclick="toggleSievecls(this)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                        <div class="snap-center sieveclscontainer" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                            <div onclick="toggleSievecls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
                                         </div>
                                     {% endfor %}
+                                </div>
+                                <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                                    <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                        <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                        <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                        <div id="selectabove" class="userbutton w-auto text-center">select above</div>
+                                        <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
@@ -117,13 +135,21 @@
                                     <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                 </svg>
                             </div>
-                            <div id="rejected_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                <div class="grid grid-flow-col grid-rows-1">
+                            <div class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                <div id="rejected_cls2D_slider" class="grid grid-flow-col grid-rows-1">
                                     {% for cls2D in jobstats.rejected_cls2D %}
-                                        <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
-                                            <div onclick="toggleSievecls(this)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                        <div class="snap-center sieveclscontainer" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                            <div onclick="toggleSievecls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
                                         </div>
                                     {% endfor %}
+                                </div>
+                                <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                                    <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                        <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                        <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                        <div id="selectabove" class="userbutton w-auto text-center">select above</div>
+                                        <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRejectedRight()">
@@ -145,13 +171,19 @@
                                         <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                     </svg>
                                 </div>
-                                <div id="accepted_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                    <div class="grid grid-flow-col grid-rows-2">
+                                <div class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                    <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-2">
                                         {% for cls2D in jobstats.latest_accepted_cls2D %}
-                                            <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
-                                                <div data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                            <div class="snap-center sieveclscontainer" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                                <div oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
                                             </div>
                                         {% endfor %}
+                                    </div>
+                                    <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                                        <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                            <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                            <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                        </div>
                                     </div>
                                 </div> 
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
@@ -169,13 +201,19 @@
                                         <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                                     </svg>
                                 </div>
-                                <div id="rejected_cls2D_slider" class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
-                                    <div class="grid grid-flow-col grid-rows-1">
+                                <div class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                    <div id="rejected_cls2D_slider" class="grid grid-flow-col grid-rows-1">
                                         {% for cls2D in jobstats.latest_rejected_cls2D %}
-                                            <div class="snap-center" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
-                                                <div data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                            <div class="snap-center sieveclscontainer" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                                <div oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
                                             </div>
                                         {% endfor %}
+                                    </div>
+                                    <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                                        <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                            <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                            <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRejectedRight()">

@@ -350,6 +350,13 @@ contains
                                 end do
                             endif
                         endif
+                    endif
+                endif
+            endif
+            if( l_wait_for_user )then
+                ! nothing for abinitio2D_stream until the first set has been selected
+                if(allocated(setslist%processed)) then
+                    if(size(setslist%processed) .gt. 0 .and. setslist%processed(1)) then
                         call http_communicator%json%get(http_communicator%update_arguments, 'accepted_cls2D', accepted_cls_ids, found) ! accepted_cls2D now contains user selection
                         if(found) then
                             call http_communicator%json%get(http_communicator%update_arguments, 'rejected_cls2D', rejected_cls_ids, found) ! rejected_cls2D now contains user selection
@@ -404,9 +411,6 @@ contains
                         endif
                     endif
                 endif
-            endif
-            if( l_wait_for_user )then
-                ! nothing for abinitio2D_stream until the first set has been selected
             else
                 ! make completed sets available to abinitio2D_stream
                 call flag_complete_sets
@@ -919,17 +923,6 @@ contains
                 call http_communicator%send_jobstats()
             end do
         endif
-        ! if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
-        !     write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
-        !     do i=1, 360
-        !         if(dir_exists(trim(params%dir_target)//'/spprojs')) then
-        !             write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
-        !             exit
-        !         endif
-        !         call sleep(10)
-        !         call http_communicator%send_jobstats()
-        !     end do
-        ! endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
             do i=1, 360
