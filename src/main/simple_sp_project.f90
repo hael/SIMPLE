@@ -1493,6 +1493,7 @@ contains
         call stkio_w%close
         call dstkio_r%kill
         call img%kill
+        call orig_stk%kill
     end subroutine write_substk
 
     function get_micname( self, iptcl ) result( micname )
@@ -4797,6 +4798,7 @@ contains
 
     subroutine kill( self )
         class(sp_project), intent(inout) :: self
+        call self%os_mic%kill
         call self%os_stk%kill
         call self%os_ptcl2D%kill
         call self%os_cls2D%kill
