@@ -20,14 +20,14 @@
             <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[90px] m-auto relative top-[25px]"/> 
         </div>
         <div class="bg-nice4bubble rounded-xl flex flex-col w-max h-max p-[5px] text-nice4dark border-[2px] border-nice4header">
-            <div class="text-[25px] font-bold flex justify-center pb-[15px] pt-[75px]">
+            <div class="text-[18px] font-bold flex justify-center pb-[15px] pt-[75px]">
                 new stream
             </div>
             <form method="POST" action={% url 'nice_lite:create_stream' %}>
                 {% csrf_token %}
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-2 gap-4 text-[12px] grid-cols-[max-content_auto]">
                     {% for input in user_inputs %}
-                        <div>{{ input.descr_short }}</div>
+                        <div class="font-bold">{{ input.descr_short }}</div>
                         <div class="bg-nice4bg rounded">
                             {% if input.keytype == "int" %}
                                 {% if input.required and "default" in input %}
@@ -75,8 +75,8 @@
                         </div>
                     {% endfor %}
                 </div>
-                <div class="flex mt-[20px]">
-                    <input type="submit" value="start" class="m-auto bg-nice4bg p-[5px] font-bold rounded hover:bg-nice4header hover:text-nice4bubble"></input>
+                <div class="flex mt-[20px] justify-center">
+                    <input type="submit" value="start" class="userbutton"></input>
                 </div>
             </form>
         </div>

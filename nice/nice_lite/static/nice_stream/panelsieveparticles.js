@@ -2,32 +2,32 @@ let lastinteraction = Date.now();
 
 scrlRight = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
-  accepted_cls2D_slider.scrollLeft += 72;
+  accepted_cls2D_slider.parentElement.scrollLeft += 72;
   lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
-  accepted_cls2D_slider.scrollLeft -= 72;
+  accepted_cls2D_slider.parentElement.scrollLeft -= 72;
   lastinteraction = Date.now();
 }
 
 scrlRejectedRight = () => {
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
-  rejected_cls2D_slider.scrollLeft += 72;
+  rejected_cls2D_slider.parentElement.scrollLeft += 72;
   lastinteraction = Date.now();
 }
 
 scrlRejectedLeft = () => {
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
-  rejected_cls2D_slider.scrollLeft -= 72;
+  rejected_cls2D_slider.parentElement.scrollLeft -= 72;
   lastinteraction = Date.now();
 }
 
 toggleSievecls = (element) => {
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
-  if(element.parentElement.parentElement.parentElement.id == "accepted_cls2D_slider"){
+  if(element.parentElement.parentElement.id == "accepted_cls2D_slider"){
     rejected_cls2D_slider.appendChild(element.parentElement)
   }else{
     accepted_cls2D_slider.appendChild(element.parentElement)
@@ -50,6 +50,113 @@ selectSievecls = (form) => {
     }
     document.getElementById("accepted_cls2D").value = accepted
     document.getElementById("rejected_cls2D").value = rejected
+}
+
+showMenu = (element, event) => {
+  event.preventDefault()
+  const selectmenu    = element.parentElement.parentElement.parentElement.querySelector("[name='selectmenu']")
+  const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
+  const sortpop       = selectmenu.querySelector("#sortpop")
+  const sortres       = selectmenu.querySelector("#sortres")
+  const selectabove   = selectmenu.querySelector("#selectabove")
+  const selectbelow   = selectmenu.querySelector("#selectbelow")
+  selectmenubox.style.top  = event.pageY + "px"
+  selectmenubox.style.left = event.pageX + "px"
+  selectmenu.style.display = "flex"
+  sortpop.onclick = () => {sortPop()}
+  sortres.onclick = () => {sortRes()}
+  if(selectabove != undefined) selectabove.onclick = () => {selectAbove(element)}
+  if(selectbelow != undefined) selectbelow.onclick = () => {selectBelow(element)}
+  lastinteraction = Date.now();
+}
+
+hideMenu = () => {
+  for(const selectmenu of document.querySelectorAll("[name='selectmenu']")){
+    const sortpop     = selectmenu.querySelector("#sortpop")
+    const sortres     = selectmenu.querySelector("#sortres")
+    const selectabove = selectmenu.querySelector("#selectabove")
+    const selectbelow = selectmenu.querySelector("#selectbelow")
+    selectmenu.style.display = "none"
+    sortpop.onclick = null
+    sortres.onclick = null
+    if(selectabove != undefined) selectabove.onclick = null
+    if(selectbelow != undefined) selectbelow.onclick = null
+  }
+  lastinteraction = Date.now();
+}
+
+sortPop = () => {
+  const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
+  const rejected_cls2D_slider = document.querySelector("#rejected_cls2D_slider")
+  const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".sieveclscontainer"))
+  const rejectedtemplates     = Array.from(rejected_cls2D_slider.querySelectorAll(".sieveclscontainer"))
+  acceptedtemplates.sort((a, b) => {
+        return Number(b.dataset.pop) - Number(a.dataset.pop);
+  });
+  acceptedtemplates.forEach((item) => {
+        accepted_cls2D_slider.appendChild(item);
+  });
+  rejectedtemplates.sort((a, b) => {
+        return Number(b.dataset.pop) - Number(a.dataset.pop);
+  });
+  rejectedtemplates.forEach((item) => {
+        rejected_cls2D_slider.appendChild(item);
+  });
+  hideMenu()
+}
+
+sortRes = () => {
+  const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
+  const rejected_cls2D_slider = document.querySelector("#rejected_cls2D_slider")
+  const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".sieveclscontainer"))
+  const rejectedtemplates     = Array.from(rejected_cls2D_slider.querySelectorAll(".sieveclscontainer"))
+  acceptedtemplates.sort((a, b) => {
+        return Number(a.dataset.res) - Number(b.dataset.res);
+  });
+  acceptedtemplates.forEach((item) => {
+        accepted_cls2D_slider.appendChild(item);
+  });
+  rejectedtemplates.sort((a, b) => {
+        return Number(a.dataset.res) - Number(b.dataset.res);
+  });
+  rejectedtemplates.forEach((item) => {
+        rejected_cls2D_slider.appendChild(item);
+  });
+  hideMenu()
+}
+
+selectAbove = (element) => {
+  let threshold = true
+  const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
+  const rejected_cls2D_slider = document.querySelector("#rejected_cls2D_slider")
+  for(const clscontainer of element.parentElement.parentElement.querySelectorAll(".sieveclscontainer")){
+    if(threshold){
+      accepted_cls2D_slider.appendChild(clscontainer)
+    }else{
+      rejected_cls2D_slider.appendChild(clscontainer)
+    }
+    if(clscontainer == element.parentElement){
+      threshold = false
+    }
+  }
+  hideMenu()
+}
+
+selectBelow = (element) => {
+  let threshold = false
+  const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
+  const rejected_cls2D_slider = document.querySelector("#rejected_cls2D_slider")
+  for(const clscontainer of element.parentElement.parentElement.querySelectorAll(".sieveclscontainer")){
+    if(clscontainer == element.parentElement){
+      threshold = true
+    }
+    if(threshold){
+      accepted_cls2D_slider.appendChild(clscontainer)
+    }else{
+      rejected_cls2D_slider.appendChild(clscontainer)
+    }
+  }
+  hideMenu()
 }
 
 window.addEventListener("load", () =>{

@@ -14,6 +14,12 @@ scrlLeft = () => {
 
 toggleTemplate = (templ) => {
     templ.classList.toggle("disabledbutton")
+    const xmark = templ.querySelector('.xmark')
+    if(templ.classList.contains("disabledbutton")){
+      xmark.classList.remove("hidden")
+    }else{
+      xmark.classList.add("hidden")
+    }
     lastinteraction = Date.now();
 }
 
@@ -33,32 +39,34 @@ selectRefs = (form) => {
 
 showMenu = (element, event) => {
   event.preventDefault()
-  const selectmenu  = document.querySelector("#selectmenu")
+  const selectmenu    = element.parentElement.parentElement.parentElement.querySelector("[name='selectmenu']")
+  const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
   const sortpop     = document.querySelector("#sortpop")
   const sortres     = document.querySelector("#sortres")
   const selectabove = document.querySelector("#selectabove")
   const selectbelow = document.querySelector("#selectbelow")
-  selectmenu.style.top  = event.pageY + "px"
-  selectmenu.style.left = event.pageX + "px"
+  selectmenubox.style.top  = event.pageY + "px"
+  selectmenubox.style.left = event.pageX + "px"
   selectmenu.style.display = "flex"
   sortpop.onclick = () => {sortPop()}
   sortres.onclick = () => {sortRes()}
-  selectabove.onclick = () => {selectAbove(element)}
-  selectbelow.onclick = () => {selectBelow(element)}
+  if(selectabove != undefined) selectabove.onclick = () => {selectAbove(element)}
+  if(selectbelow != undefined) selectbelow.onclick = () => {selectBelow(element)}
   lastinteraction = Date.now();
 }
 
 hideMenu = () => {
-  const selectmenu  = document.querySelector("#selectmenu")
-  const sortpop     = document.querySelector("#sortpop")
-  const sortres     = document.querySelector("#sortres")
-  const selectabove = document.querySelector("#selectabove")
-  const selectbelow = document.querySelector("#selectbelow")
-  selectmenu.style.display = "none"
-  sortpop.onclick = null
-  sortres.onclick = null
-  selectabove.onclick = null
-  selectbelow.onclick = null
+  for(const selectmenu of document.querySelectorAll("[name='selectmenu']")){
+    const sortpop     = document.querySelector("#sortpop")
+    const sortres     = document.querySelector("#sortres")
+    const selectabove = document.querySelector("#selectabove")
+    const selectbelow = document.querySelector("#selectbelow")
+    selectmenu.style.display = "none"
+    sortpop.onclick = null
+    sortres.onclick = null
+    if(selectabove != undefined) selectabove.onclick = null
+    if(selectbelow != undefined) selectbelow.onclick = null
+  }
   lastinteraction = Date.now();
 }
 
@@ -90,10 +98,16 @@ selectAbove = (element) => {
   let threshold = true
   const picking_references = document.querySelector("#picking_references")
   for(const picktemplate of picking_references.querySelectorAll(".picktemplate")){
+    const xmark = picktemplate.querySelector('.xmark') 
     if(threshold){
       picktemplate.classList.remove("disabledbutton")
     }else{
       picktemplate.classList.add("disabledbutton")
+    }
+    if(picktemplate.classList.contains("disabledbutton")){
+      xmark.classList.remove("hidden")
+    }else{
+      xmark.classList.add("hidden")
     }
     if(picktemplate == element){
       threshold = false
@@ -106,6 +120,7 @@ selectBelow = (element) => {
   let threshold = false
   const picking_references = document.querySelector("#picking_references")
   for(const picktemplate of picking_references.querySelectorAll(".picktemplate")){
+    const xmark = picktemplate.querySelector('.xmark') 
     if(picktemplate == element){
       threshold = true
     }
@@ -113,6 +128,11 @@ selectBelow = (element) => {
       picktemplate.classList.remove("disabledbutton")
     }else{
       picktemplate.classList.add("disabledbutton")
+    }
+    if(picktemplate.classList.contains("disabledbutton")){
+      xmark.classList.remove("hidden")
+    }else{
+      xmark.classList.add("hidden")
     }
   }
   hideMenu()

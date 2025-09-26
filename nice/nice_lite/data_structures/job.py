@@ -404,6 +404,7 @@ class Job:
             jobmodel.initial_picking_update = updated
             self.initial_picking_stats["user_input"] = False
             self.initial_picking_stats["stage"]      = "updating picking parameters"
+            self.initial_picking_stats["latest_picked_micrographs"] = []
             jobmodel.initial_picking_stats = self.initial_picking_stats
             jobmodel.save()
 
@@ -413,8 +414,9 @@ class Job:
             updated = jobmodel.initial_picking_update
             updated["moldiam_refine"] = int(diameter)
             jobmodel.initial_picking_update = updated
-            self.initial_picking_stats["user_input"] = False
-            self.initial_picking_stats["stage"]      = "updating picking parameters"
+            self.initial_picking_stats["user_input"]                = False
+            self.initial_picking_stats["stage"]                     = "updating picking parameters"
+            self.initial_picking_stats["latest_picked_micrographs"] = []
             jobmodel.initial_picking_stats = self.initial_picking_stats
             jobmodel.save()
 
