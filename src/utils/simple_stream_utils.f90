@@ -1160,6 +1160,9 @@ contains
         call merged_proj%os_ptcl3D%delete_2Dclustering
         ! write
         call merged_proj%write(projfile_out)
+        ! cleanup
+        call frcs%kill
+        call frcs_chunk%kill
     end subroutine merge_chunks
 
     ! Class rejection routine based on image moments & Total Variation Distance
@@ -1278,23 +1281,23 @@ contains
         integer                             :: ldim(3) = [0,0,0]
         integer                             :: icls, stat, ncls
         real                                :: smpd, tilescale
-            if(size(selection) == 0) return
-            write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', size(selection),' clusters'
-            write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
-            call find_ldim_nptcls(imgfile, ldim, ncls, smpd=smpd)
-            call img%new([ldim(1), ldim(2), 1], smpd)
-            call stkio_r%open(imgfile, smpd, 'read', bufsz=ncls)
-            call stkio_r%read_whole
-            call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=ldim(1), bufsz=size(selection))
-            do icls=1, size(selection)
-                call stkio_r%get_image(selection(icls), img)
-                call stkio_w%write(icls, img)
-            end do
-            call stkio_r%close
-            call stkio_w%close
-            ! write jpeg
-            call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
-            call img%kill
+        if(size(selection) == 0) return
+        write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', size(selection),' clusters'
+        write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
+        call find_ldim_nptcls(imgfile, ldim, ncls, smpd=smpd)
+        call img%new([ldim(1), ldim(2), 1], smpd)
+        call stkio_r%open(imgfile, smpd, 'read', bufsz=ncls)
+        call stkio_r%read_whole
+        call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=ldim(1), bufsz=size(selection))
+        do icls=1, size(selection)
+            call stkio_r%get_image(selection(icls), img)
+            call stkio_w%write(icls, img)
+        end do
+        call stkio_r%close
+        call stkio_w%close
+        ! write jpeg
+        call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
+        call img%kill
     end subroutine write_selected_references
 
 end module simple_stream_utils

@@ -379,9 +379,9 @@ contains
 
     subroutine init_chunk_clustering( cline, spproj )
         class(cmdline),    target, intent(inout) :: cline
-        class(sp_project), intent(inout) :: spproj
-        character(len=STDLEN)            :: chunk_nthr_env
-        integer :: ichunk, envlen
+        class(sp_project),         intent(inout) :: spproj
+        character(len=STDLEN) :: chunk_nthr_env
+        integer               :: ichunk, envlen
         call seed_rnd
         ! general parameters
         master_cline => cline
@@ -1178,6 +1178,7 @@ contains
                 call set_snapshot_time()
                 last_snapshot_nptcls = snapshot_proj%os_ptcl2D%count_state_gt_zero()
               !  call snapshot_comm%terminate(export_project=snapshot_proj)
+                call snapshot_proj%kill
             else
                 write(logfhandle, '(A)') ">>> FAILED TO WRITE SNAPSHOT"
               !  call snapshot_comm%terminate(failed=.true.)
@@ -1404,6 +1405,7 @@ contains
             if(.not. allocated(pool_proj_history)) allocate(pool_proj_history(0))
             pool_proj_history = [pool_proj_history(:), spproj_history]
             if(pool_iter .gt. 5) call pool_proj_history(pool_iter - 5)%kill()
+            call spproj_history%kill
         end if
         pool_iter = pool_iter + 1 ! Global iteration counter update
         call cline_cluster2D_pool%set('ncls',    ncls_glob)
@@ -1700,6 +1702,7 @@ contains
             if(.not. allocated(pool_proj_history)) allocate(pool_proj_history(0))
             pool_proj_history = [pool_proj_history(:), spproj_history]
             if(pool_iter .gt. 5) call pool_proj_history(pool_iter - 5)%kill()
+            call spproj_history%kill
         end if
         pool_iter = pool_iter + 1 ! Global iteration counter update
         call cline_cluster2D_pool%set('ncls',    ncls_glob)
@@ -1778,8 +1781,6 @@ contains
             ! ICM filter
             call cline_cluster2D_pool%set('icm',    'yes')
             call cline_cluster2D_pool%set('lambda', lambda)
-            ! for first iteration
-            ! if( pool_iter == 1 ) clines(2) = cline_cluster2D_pool
         endif
         ! Project metadata update
         spproj%projinfo = pool_proj%projinfo
@@ -1907,6 +1908,11 @@ contains
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
         if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
+        ! cleanup
+        if( allocated(nptcls_per_stk) )      deallocate(nptcls_per_stk)
+        if( allocated(prev_eo_pops) )        deallocate(prev_eo_pops)
+        if( allocated(prev_eo_pops_thread) ) deallocate(prev_eo_pops_thread)
+        if( allocated(clspops) )             deallocate(clspops)
         call tidy_2Dstream_iter
       contains
 
@@ -3769,6 +3775,7 @@ contains
                         call xrank_cavgs%execute_safe( cline_rank_cavgs )
                         call chdir('..')
                         call simple_getcwd(cwd_glob)
+                        call cline_rank_cavgs%kill
                     endif
                     ! book-keeping
                     if( allocated(converged_chunks) )then
