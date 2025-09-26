@@ -662,6 +662,7 @@ contains
                 ! circular masking
                 call build_glob%vol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
             endif
+            ! odd <- even
             call build_glob%vol_odd%copy(build_glob%vol)
         endif
         call build_glob%vol%fft
@@ -673,11 +674,14 @@ contains
         else if( params_glob%l_lpset )then
             ! Cosine low-pass filter, works best for nanoparticles
             call build_glob%vol%bp(0., params_glob%lp)
+            call build_glob%vol_odd%bp(0., params_glob%lp)
         else
+            ! Optimal filter
             filtsz = build_glob%vol%get_filtsz()
             if( any(build_glob%fsc(s,:) > 0.143) )then
                 call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),cur_fil)
                 call build_glob%vol%apply_filter(cur_fil)
+                call build_glob%vol_odd%apply_filter(cur_fil)
             endif
         endif
     end subroutine read_mask_and_filter_refvols
