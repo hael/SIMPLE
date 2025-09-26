@@ -1708,6 +1708,7 @@ module simple_nice
             call vol_oris%get_ori(1, this%view_vols%plot_ori)
             call this%update_vols(number_vols=size(state_mask))
         end if
+        call vol_oris%kill
         if(allocated(state_mask)) deallocate(state_mask)
         if(allocated(pinds))      deallocate(pinds)
     end subroutine update_from_project
