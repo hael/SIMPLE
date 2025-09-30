@@ -178,6 +178,7 @@ type(simple_program), target :: projops
 type(simple_program), target :: prune_project
 type(simple_program), target :: score_ptcls
 type(simple_program), target :: atoms_stats
+type(simple_program), target :: atoms_register
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
@@ -421,6 +422,7 @@ contains
         call new_assign_optics
         call new_assign_optics_groups
         call new_atoms_stats
+        call new_atoms_register
         call new_automask
         call new_automask2D
         call new_auto_spher_mask
@@ -576,6 +578,7 @@ contains
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(atoms_stats)
+        call push2prg_ptr_array(atoms_register)
         call push2prg_ptr_array(automask)
         call push2prg_ptr_array(automask2D)
         call push2prg_ptr_array(auto_spher_mask)
@@ -933,6 +936,8 @@ contains
                 ptr2prg => score_ptcls
             case('atoms_stats')
                 ptr2prg => atoms_stats
+            case('atoms_register')
+                ptr2prg => atoms_register
             case('reproject')
                 ptr2prg => reproject
             case('reconstruct3D')
@@ -1209,6 +1214,7 @@ contains
         write(logfhandle,'(A)') conv_atom_denoise%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
+        write(logfhandle,'(A)') atoms_register%name
         write(logfhandle,'(A)') tseries_atoms_rmsd%name
         write(logfhandle,'(A)') tseries_core_atoms_analysis%name
         write(logfhandle,'(A)') tseries_core_finder%name
@@ -5766,6 +5772,31 @@ contains
         ! computer controls
         call atoms_stats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_atoms_stats
+
+    subroutine new_atoms_register
+        ! PROGRAM SPECIFICATION
+        call atoms_register%new(&
+        &'atoms_register',&                                                                           ! name
+        &'Registration of two nanoparticles',&                                                        ! descr_short
+        &'is a program that registers two nanoparticles given the maps and the atom position maps.',& ! descr long
+        &'single_exec',&                                                                              ! executable
+        &1, 2, 0, 0, 0, 0, 1, .false., gui_advanced=.false.)                                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call atoms_register%set_input('img_ios', 1, 'vol1', 'file', 'Reference nanoparticle volume', 'Reference nanoparticle volume', 'reference volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call atoms_register%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Input coords file in PDB format of the reference nano', 'Input coords file in PDB format', .true., '')
+        call atoms_register%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Input coords file in PDB format of the second nano',    'Input coords file in PDB format', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call atoms_register%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_atoms_register
 
     subroutine new_tseries_atoms_rmsd
         ! PROGRAM SPECIFICATION

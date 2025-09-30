@@ -63,6 +63,7 @@ type(pdb2mrc_commander)                       :: xpdb2mrc
 type(detect_atoms_commander)                  :: xdetect_atoms
 type(conv_atom_denoise_commander)             :: xconv_atom_denoise
 type(atoms_stats_commander)                   :: xatoms_stats
+type(atoms_register_commander)                :: xatoms_register
 type(tseries_atoms_rmsd_commander)            :: xtseries_atoms_rmsd
 type(tseries_core_atoms_analysis_commander)   :: xtseries_core_atoms_analysis
 type(tseries_make_projavgs_commander)         :: xtseries_make_projavgs
@@ -195,6 +196,9 @@ select case(prg)
     case( 'atoms_stats' )
         call cline%set('mkdir', 'yes')
         call xatoms_stats%execute(cline)
+    case( 'atoms_register' )
+        call cline%set('mkdir', 'yes')
+        call xatoms_register%execute(cline)
     case( 'tseries_atoms_rmsd' )
         call xtseries_atoms_rmsd%execute(cline)
     case( 'tseries_core_atoms_analysis' )
