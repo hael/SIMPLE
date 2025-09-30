@@ -8,18 +8,20 @@ type(parameters)     :: p
 type(cmdline)        :: cline
 integer, parameter   :: N1 = 20, N2 = 5, MAX_POS = 10
 integer, allocatable :: inds(:), select_inds(:)
-real,    allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
+real,    allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:), mat_mirr(:,:)
 real    :: atom1_pos(3,N1), atom2_pos(3,N2), rot_mat(3,3), scale, translation(3), atom2_rnd(3,N2)
-real    :: rec_mat(3,3), rec_trans(3), rec_scale, rec_atom2(3,N2), atom1_rot(3,N1), atom2_rot(3,N2)
-integer :: i, j, mapping(N2)
-if( command_argument_count() < 3 )then
+real    :: rec_mat(3,3), rec_trans(3), rec_scale, rec_atom2(3,N2), atom1_rot(3,N1), atom2_rot(3,N2), smpd, mid_r
+integer :: i, j, mapping(N2), ifoo, ldim(3)
+if( command_argument_count() < 5 )then
     write(logfhandle,'(a)') 'Usage: simple_test_atom_posmatch nthr=yy pdbfile=zz pdbfile2=tt'
     stop
 endif
 call cline%parse_oldschool
 call cline%checkvar('nthr',     1)
-call cline%checkvar('pdbfile' , 2)
-call cline%checkvar('pdbfile2', 3)
+call cline%checkvar('stk',      2)
+call cline%checkvar('pdbfile' , 3)
+call cline%checkvar('stk2',     4)
+call cline%checkvar('pdbfile2', 5)
 call cline%check
 call p%new(cline)
 call seed_rnd
@@ -88,11 +90,26 @@ print *, 'ATOMS REGISTRATION IN PROGRESS'
 call read_pdb2matrix( p%pdbfile,  matrix1 )
 call read_pdb2matrix( p%pdbfile2, matrix2 )
 allocate(matrix_rot(3,size(matrix1,2)))
+allocate(mat_mirr(3,size(matrix2,2)),source=matrix2)
+! mirroring
+call find_ldim_nptcls(p%stk2, ldim, ifoo, smpd = smpd)
+mid_r = real(ldim(1)-1)*smpd/2.
+do i = 1, size(mat_mirr,2)
+    mat_mirr(3,i) = 2. * mid_r - mat_mirr(3,i)
+enddo
+call write_matrix2pdb( 'Pt', mat_mirr, 'pdb2_mirror.pdb' )
+! registration
 call atoms_register(matrix1, matrix2, matrix_rot, maxits=p%maxits)
 if( cline%defined('pdbout') )then
     call write_matrix2pdb( 'Pt', matrix_rot, p%pdbout )
 else
     call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec.pdb' )
+endif
+call atoms_register(matrix1, mat_mirr, matrix_rot, maxits=p%maxits)
+if( cline%defined('pdbout') )then
+    call write_matrix2pdb( 'Pt', matrix_rot, p%pdbout )
+else
+    call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec_mirror.pdb' )
 endif
 print *, 'ATOMS REGISTRATION IS DONE!'
 end program simple_test_atom_posmatch
