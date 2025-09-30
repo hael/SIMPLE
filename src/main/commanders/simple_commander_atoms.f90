@@ -11,6 +11,7 @@ use simple_atoms,          only: atoms
 implicit none
 
 public :: atoms_stats_commander
+public :: atoms_register_commander
 public :: conv_atom_denoise_commander
 public :: detect_atoms_commander
 public :: map2model_fsc_commander
@@ -27,6 +28,11 @@ type, extends(commander_base) :: atoms_stats_commander
   contains
     procedure :: execute      => exec_atoms_stats
 end type atoms_stats_commander
+
+type, extends(commander_base) :: atoms_register_commander
+  contains
+    procedure :: execute      => exec_atoms_register
+end type atoms_register_commander
 
 type, extends(commander_base) :: conv_atom_denoise_commander
   contains
@@ -121,6 +127,43 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
     end subroutine exec_atoms_stats
+
+    subroutine exec_atoms_register( self, cline )
+        class(atoms_register_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline !< command line input
+        type(parameters)  :: params
+        real, allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:), mat_mirr(:,:)
+        real    :: smpd, mid_r
+        integer :: ldim(3), ifoo, i
+        call params%new(cline)
+        ! reading pdb file
+        call read_pdb2matrix( params%pdbfile,  matrix1 )
+        call read_pdb2matrix( params%pdbfile2, matrix2 )
+        allocate(matrix_rot(3,size(matrix1,2)))
+        allocate(mat_mirr(3,size(matrix2,2)),source=matrix2)
+        ! mirroring
+        call find_ldim_nptcls(params%vols(1), ldim, ifoo, smpd=smpd)
+        mid_r = real(ldim(1)-1)*smpd/2.
+        do i = 1, size(mat_mirr,2)
+            mat_mirr(3,i) = 2. * mid_r - mat_mirr(3,i)
+        enddo
+        call write_matrix2pdb( 'Pt', mat_mirr, 'pdb2_mirror.pdb' )
+        ! registration
+        call atoms_register(matrix1, matrix2, matrix_rot, maxits=params%maxits)
+        if( cline%defined('pdbout') )then
+            call write_matrix2pdb( 'Pt', matrix_rot, params%pdbout )
+        else
+            call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec.pdb' )
+        endif
+        call atoms_register(matrix1, mat_mirr, matrix_rot, maxits=params%maxits)
+        if( cline%defined('pdbout') )then
+            call write_matrix2pdb( 'Pt', matrix_rot, params%pdbout )
+        else
+            call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec_mirror.pdb' )
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_ATOMS_REGISTER NORMAL STOP ****')
+    end subroutine exec_atoms_register
 
     subroutine exec_conv_atom_denoise( self, cline )
         class(conv_atom_denoise_commander), intent(inout) :: self
