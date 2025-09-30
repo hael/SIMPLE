@@ -136,6 +136,7 @@ contains
         real    :: smpd, mid_r
         integer :: ldim(3), ifoo, i
         call params%new(cline)
+        if( .not. cline%defined('maxits') )params%maxits = 1
         ! reading pdb file
         call read_pdb2matrix( params%pdbfile,  matrix1 )
         call read_pdb2matrix( params%pdbfile2, matrix2 )

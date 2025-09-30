@@ -5780,13 +5780,14 @@ contains
         &'Registration of two nanoparticles',&                                                        ! descr_short
         &'is a program that registers two nanoparticles given the maps and the atom position maps.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &1, 2, 0, 0, 0, 0, 1, .false., gui_advanced=.false.)                                          ! # entries in each group, requires sp_project
+        &2, 2, 0, 0, 0, 0, 1, .false., gui_advanced=.false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_register%set_input('img_ios', 1, 'vol1', 'file', 'Reference nanoparticle volume', 'Reference nanoparticle volume', 'reference volume e.g. vol.mrc', .true., '')
+        call atoms_register%set_input('img_ios', 2, 'vol2', 'file', 'Need-to-be-registered  volume', 'Need-to-be-registered  volume', 'input volume e.g. vol.mrc',     .true., '')
         ! parameter input/output
-        call atoms_register%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Input coords file in PDB format of the reference nano', 'Input coords file in PDB format', .true., '')
-        call atoms_register%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Input coords file in PDB format of the second nano',    'Input coords file in PDB format', .true., '')
+        call atoms_register%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Coords file in PDB format of the reference nano',             'Input coords file in PDB format', .true., '')
+        call atoms_register%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Coords file in PDB format of the need-to-be-registered nano', 'Input coords file in PDB format', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
