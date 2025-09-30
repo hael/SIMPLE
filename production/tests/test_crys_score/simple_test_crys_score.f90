@@ -13,7 +13,7 @@ character(len=LONGSTRLEN) :: t_name
 type(parameters)          :: p
 type(cmdline)             :: cline
 integer                   :: npdbs, ipdb, icore, ncores, Natoms, cnt, i, j, nclus
-real                      :: min_dist, dist, prob, d
+real                      :: min_dist, dist, prob, d, max_dist, moldiam
 ! reading pdb file
 if( command_argument_count() < 2 )then
     write(logfhandle,'(a)') 'Usage: simple_test_crys_score nthr=yy pdbfiles=tt'
@@ -27,13 +27,29 @@ call p%new(cline)
 call read_filetable(p%pdbfiles, pdbfnames)
 npdbs = size(pdbfnames)
 do ipdb = 1, npdbs
-    ! generating stats for the reference lattice
+    ! finding max_dist for moldiam
     call read_pdb2matrix( trim(pdbfnames(ipdb)) // 'startvol_ATMS.pdb', mat )
+    Natoms   = size(mat,2)
+    max_dist = 0.
+    do i = 1, Natoms-1
+        do j = i+1, Natoms
+            dist = sqrt(sum((mat(:,i) - mat(:,j))**2))
+            if( dist > max_dist ) max_dist = dist
+        enddo
+    enddo
+    moldiam = max_dist
+    cmd     = 'nohup single_exec prg=simulate_atoms outvol=tmp.mrc box=160 smpd='//real2str(p%smpd)//' moldiam='//real2str(moldiam)//' nthr='//int2str(p%nthr)//' element=Pt'
+    call execute_command_line(cmd)
+    cmd     = 'nohup single_exec prg=detect_atoms vol1=./tmp.mrc smpd='//real2str(p%smpd)//' element=Pt nthr='//int2str(p%nthr)//' mskdiam=40'
+    call execute_command_line(cmd)
+    ! generating stats for the reference lattice
+    call read_pdb2matrix( 'tmp_ATMS.pdb', mat )
     Natoms = size(mat,2)
     if( allocated(dists)   )deallocate(dists)
     if( allocated(l_dists) )deallocate(l_dists)
     allocate(  dists(Natoms**2), source=0.)
     allocate(l_dists(Natoms**2), source=.false.)
+    ! finding all dists and min_dist
     cnt      = 0
     min_dist = huge(min_dist)
     do i = 1, Natoms-1
@@ -64,7 +80,7 @@ do ipdb = 1, npdbs
         call kstwo( ref_stats, nclus, cur_stats, nclus, d, prob )
         print *, trim(corenames(icore)), prob
     enddo
-    call execute_command_line('rm output_'//int2str(ipdb)//'.log')
+    call execute_command_line('rm nohup.out largest_cc.mrc split_ccs.mrc binarized.mrc tmp* output_'//int2str(ipdb)//'.log')
 enddo
 
 contains
