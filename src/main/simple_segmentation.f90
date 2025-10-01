@@ -372,19 +372,21 @@ contains
 
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
-    subroutine otsu_img( img, thresh, mskrad, positive, tight )
+    subroutine otsu_img( img, thresh, mskrad, frac_large_outliers, positive, tight, tighter )
         class(image),      intent(inout) :: img
         real,    optional, intent(inout) :: thresh
         real,    optional, intent(in)    :: mskrad
+        real,    optional, intent(in)    :: frac_large_outliers
         logical, optional, intent(in)    :: positive ! consider just the positive range (specific for nanoparticles)
-        logical, optional, intent(in)    :: tight    ! for generating a tighter mask in automasking
+        logical, optional, intent(in)    :: tight    ! for generating a tight mask in automasking
+        logical, optional, intent(in)    :: tighter  ! for generating a tighter mask
         real,    pointer     :: rmat(:,:,:)
         real,    allocatable :: x(:)
         logical, allocatable :: lmsk(:,:,:)
         type(image) :: tmpimg
         integer     :: ldim(3)
-        logical     :: ppositive, ttight
-        real        :: selected_t
+        logical     :: ppositive, ttight, ttighter
+        real        :: selected_t, outlier_t, t1
         ldim = img%get_ldim()
         if( present(mskrad) )then
             call tmpimg%disc(ldim, img%get_smpd(), mskrad, lmsk)
@@ -394,6 +396,8 @@ contains
         if( present(positive) ) ppositive = positive
         ttight = .false.
         if( present(tight) ) ttight = tight
+        ttighter = .false.
+        if( present(tighter) ) ttighter = tighter
         call img%get_rmat_ptr(rmat)
         if( ppositive ) then
             if( allocated(lmsk) )then
@@ -408,12 +412,35 @@ contains
                 x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
             endif
         endif
+        if( present(frac_large_outliers) )then
+            call hpsort(x)
+            outlier_t = x(size(x) - nint(frac_large_outliers * real(size(x))))
+            deallocate(x)
+            if( allocated(lmsk) )then
+                x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), rmat(1:ldim(1),1:ldim(2),1:ldim(3)) < outlier_t .and. lmsk)
+            else
+                x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), rmat(1:ldim(1),1:ldim(2),1:ldim(3)) < outlier_t )
+            endif
+        endif
         call otsu(size(x), x, selected_t)
         if(present(thresh)) thresh= selected_t
         if( ttight )then
             x = pack(x, x > selected_t)
             call otsu(size(x), x, selected_t)
-            if(present(thresh)) thresh= selected_t
+            if(present(thresh)) thresh = selected_t
+        endif
+        if( ttighter )then
+            x = pack(x, x > selected_t)
+            call otsu(size(x), x, selected_t)
+            if(present(thresh)) thresh = selected_t
+            t1 = selected_t
+            x = pack(x, x > selected_t)
+            call otsu(size(x), x, selected_t)
+            if(present(thresh)) thresh = selected_t
+            if( count(rmat(1:ldim(1),1:ldim(2),1:ldim(3)) >= selected_t) < ldim(1) )then
+                selected_t = t1
+                if(present(thresh)) thresh = selected_t
+            endif
         endif
         deallocate(x)
         where(rmat(1:ldim(1),1:ldim(2),1:ldim(3))>=selected_t)
