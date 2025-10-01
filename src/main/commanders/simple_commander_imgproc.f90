@@ -18,6 +18,7 @@ public :: convert_commander
 public :: ctfops_commander
 public :: ctf_phaseflip_commander
 public :: filter_commander
+public :: denoise_mics_commander
 public :: ppca_denoise_commander
 public :: normalize_commander
 public :: scale_commander
@@ -63,6 +64,11 @@ type, extends(commander_base) :: ppca_denoise_commander
   contains
     procedure :: execute      => exec_ppca_denoise
 end type ppca_denoise_commander
+
+type, extends(commander_base) :: denoise_mics_commander
+  contains
+    procedure :: execute      => exec_denoise_mics
+end type denoise_mics_commander
 
 type, extends(commander_base) :: normalize_commander
   contains
@@ -550,13 +556,107 @@ contains
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
 
+    subroutine exec_denoise_mics( self, cline )
+        use simple_segmentation
+        class(denoise_mics_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM = 100., FRAC_LARGE=0.1
+        integer, parameter :: WINSZ_SAUVOLA = 6, WINSZ_MED = 3, NQ = 8
+        character(len=LONGSTRLEN), allocatable :: micnames(:)
+        character(len=:),          allocatable :: fname 
+        type(parameters) :: params
+        type(image)      :: mic_raw, mic_shrink, mic_sauv
+        integer          :: nmics, ldim_raw(3), ldim(3), imic
+        real             :: scale, otsu_t
+        call params%new(cline)
+        call read_filetable(params%filetab, micnames)
+        nmics = size(micnames)
+        ! read the first micrograph
+        call read_mic_and_subtr_backgr(micnames(1), params%smpd)
+        ! set shrunken logical dimensions
+        scale   = params%smpd / SMPD_SHRINK1
+        ldim(1) = round2even(real(ldim_raw(1)) * scale)
+        ldim(2) = round2even(real(ldim_raw(2)) * scale)
+        ldim(3) = 1
+        ! make shrunken micrograph
+        call mic_shrink%new(ldim, SMPD_SHRINK1)
+        do imic = 1, nmics
+            ! read the micrograph
+            call read_mic_and_subtr_backgr(micnames(imic), params%smpd)
+            ! shrink micrograph
+            call mic_shrink%set_ft(.true.)
+            call mic_raw%mul(real(product(ldim_raw))) ! to prevent numerical underflow when performing FFT
+            call mic_raw%fft
+            call mic_raw%clip(mic_shrink)
+            select case(trim(params%pcontrast))
+                case('black')
+                    ! flip contrast (assuming black particle contrast on input)
+                    call mic_shrink%mul(-1.)
+                case('white')
+                    ! nothing to do
+                case DEFAULT
+                    THROW_HARD('uknown pcontrast parameter, use (black|white)')
+            end select
+            ! low-pass filter & back to real-space
+            call mic_raw%ifft
+            call mic_raw%div(real(product(ldim_raw)))
+            call mic_shrink%ifft
+            call mic_shrink%zero_edgeavg
+            ! dampens below zero
+            call mic_shrink%div_below(0.,10.)
+            ! low-pass filter
+            call mic_shrink%bp(0.,LP_UB)
+            fname = 'mic_shrink_lp'//int2str_pad(imic,3)//'.mrc'
+            ! call mic_shrink%write(fname)
+            call mic_shrink%NLmean2D
+            fname = 'mic_shrink_lp_nlmean'//int2str_pad(imic,3)//'.mrc'
+            ! call mic_shrink%write(fname)
+            call mic_shrink%ICM2D( LAM )
+            fname = 'mic_shrink_lp_nlmean_icm'//int2str_pad(imic,3)//'.mrc'
+            ! call mic_shrink%write(fname)
+            call mic_shrink%real_space_filter(WINSZ_MED, 'median')
+
+            fname = 'mic_shrink_lp_nlmean_icm_med'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(fname)
+            
+
+            ! call sauvola(mic_shrink, WINSZ_SAUVOLA, mic_sauv)
+            ! fname = 'mic_shrink_lp_nlmean_icm_med_sauvola'//int2str_pad(imic,3)//'.mrc'
+            ! call mic_sauv%write(fname)
+
+            call otsu_img(mic_shrink, thresh=otsu_t, frac_large_outliers=FRAC_LARGE, positive=.true., tighter=.true.) 
+            fname = 'mic_shrink_lp_nlmean_icm_med_bin'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(fname)
+            ! call mic_shrink%transfer2bimg(img_sdevs)
+        end do
+
+        contains
+
+            subroutine read_mic_and_subtr_backgr( micname, smpd )
+                character(len=*), intent(in) :: micname !< micrograph file name
+                real,             intent(in) :: smpd    !< sampling distance in A
+                character(len=:), allocatable :: ext
+                integer :: nframes
+                ! set micrograph info
+                call find_ldim_nptcls(micname, ldim_raw, nframes)
+                if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
+                ! read micrograph
+                call mic_raw%new(ldim_raw, smpd)
+                call mic_raw%read(micname)
+                call mic_raw%subtract_background(HP_BACKGR_SUBTR)
+                ! set fbody
+                ! ext   = fname2ext(trim(micname))
+                ! fbody = trim(get_fbody(basename(trim(micname)), ext))
+            end subroutine read_mic_and_subtr_backgr
+        
+    end subroutine exec_denoise_mics
+
     subroutine exec_ppca_denoise( self, cline )
         use simple_imgproc,    only: make_pcavecs
         use simple_pca,        only: pca
         use simple_ppca_inmem, only: ppca_inmem
         use simple_pca_svd,    only: pca_svd
         use simple_kpca_svd,   only: kpca_svd
-        use simple_image,      only: image
         class(ppca_denoise_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer,           parameter   :: MAXPCAITS = 15

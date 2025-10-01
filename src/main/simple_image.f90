@@ -4311,7 +4311,7 @@ contains
         else
             sigma = self%noisesdev(mmsk) ! estimation of noise
         endif
-        pad = CFR_BOX + 2
+        pad   = CFR_BOX + 2
         h     = 4.*sigma
         h_sq  = h**2.
         avg   = sum(self%rmat(:self%ldim(1),:self%ldim(2),1)) / real(product(self%ldim))
