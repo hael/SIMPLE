@@ -5105,7 +5105,7 @@ contains
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 8, 4, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 8, 5, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5121,9 +5121,11 @@ contains
         ! alternative inputs
         call selection%set_input('alt_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .false., '')
-        call selection%set_input('alt_ios', 2, nran)
-        call selection%set_input('alt_ios', 3, ctfresthreshold)
-        call selection%set_input('alt_ios', 4, icefracthreshold)
+        call selection%set_input('alt_ios', 2, 'deselfile', 'file', 'File with deselection indices', 'Plain text file (.txt) with deselection indices',&
+        &'give .txt deselection file', .false., '')
+        call selection%set_input('alt_ios', 3, nran)
+        call selection%set_input('alt_ios', 4, ctfresthreshold)
+        call selection%set_input('alt_ios', 5, icefracthreshold)
         ! <empty>
         ! search controls
         ! <empty>

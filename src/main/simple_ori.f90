@@ -1041,10 +1041,10 @@ contains
 
     pure function pparms2str( self ) result( str )
         class(ori), intent(in)     :: self
-        character(len=LONGSTRLEN)  :: str
+        character(len=XLONGSTRLEN)  :: str
         character(len=XLONGSTRLEN) :: tmpstr
         integer :: i, cnt
-        str = repeat(' ',LONGSTRLEN)
+        str = repeat(' ',XLONGSTRLEN)
         write(tmpstr,*)(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=1,N_PTCL_ORIPARAMS)
         cnt = 0
         do i=1,len_trim(tmpstr)
@@ -1076,7 +1076,7 @@ contains
     pure function ori2str( self ) result( str )
         class(ori), intent(in)        :: self
         character(len=:), allocatable :: str
-        character(len=XLONGSTRLEN)     :: str_pparms, str_htab
+        character(len=XLONGSTRLEN)    :: str_pparms, str_htab
         character(len=XLONGSTRLEN)    :: str_chtab
         integer :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of()

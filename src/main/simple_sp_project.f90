@@ -3594,6 +3594,7 @@ contains
             THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info_json')
         endif
         call json%print(json_root, logfhandle)
+        write(logfhandle,*) !need a newline else the footer is on same line as json
     end subroutine print_info_json
 
     ! readers
@@ -4113,12 +4114,12 @@ contains
         character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist
         integer,           optional, intent(in)    :: fromto(2), nran
         type(json_core)                            :: json
-        type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori
+        type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori, json_pre, json_post
         type(oris)                                 :: vol_oris, fsc_oris
         type(ori)                                  :: tmp_ori
         character(len=:),  allocatable             :: stkname
         character(len=STDLEN)                      :: stkjpeg
-        integer,           allocatable             :: indices(:), pinds(:)
+        integer,           allocatable             :: indices(:), pinds(:), indices_pre(:), indices_post(:)
         integer                                    :: ffromto(2), iori, noris, ncls, isprite, boxsize
         logical,           allocatable             :: l_mask(:)
         logical                                    :: fromto_present, sort, sort_ascending, copy_oris
@@ -4147,6 +4148,22 @@ contains
                         call json%add(json_data, json_ori)
                     end do
                     call json%add(json_root, json_data)
+                    if(allocated(indices_pre)) then
+                        call json%create_array(json_pre, 'indices_pre')
+                        do iori=1, size(indices_pre)
+                            call json%add(json_pre, '', indices_pre(iori))
+                        enddo
+                        call json%add(json_root, json_pre)
+                        deallocate(indices_pre)
+                    end if
+                    if(allocated(indices_post)) then
+                        call json%create_array(json_post, 'indices_post')
+                        do iori=1, size(indices_post)
+                            call json%add(json_post, '', indices_post(iori))
+                        enddo
+                        call json%add(json_root, json_post)
+                        deallocate(indices_post)
+                    end if
                     if(present(hist)) call calculate_histogram(self%os_mic)
                     deallocate(indices)
                 else
@@ -4367,28 +4384,30 @@ contains
                 use simple_histogram
                 type(oris),        intent(in)  :: seg_oris
                 type(histogram)                :: histgrm
-                type(json_value),  pointer     :: datasets, dataset, data, labels
+                type(json_value),  pointer     :: data, labels!, datasets, dataset,
                 real,              allocatable :: rvec(:)
                 integer                        :: n_bins, i
                 n_bins = 20
                 if(hist .eq. 'yes') then
                     if((.not. sort_key .eq. '') .and. (.not. sort_key .eq. 'n')) then
                         call json%create_object(json_hist,'histogram')
-                        call json%add(json_hist, 'type', "plot_bar")
-                        call json%create_array(datasets, "datasets")
+                    !    call json%add(json_hist, 'type', "plot_bar")
+                     !   call json%create_array(datasets, "datasets")
                         call json%create_array(data,     "data")
                         call json%create_array(labels,   "labels")
-                        call json%create_object(dataset, "dataset")
+                     !   call json%create_object(dataset, "dataset")
                         rvec = seg_oris%get_all(sort_key)
                         call histgrm%new(n_bins, rvec)
                         do i=1, n_bins
                             call json%add(data,   '', dble(histgrm%get(i)))
                             call json%add(labels, '', dble(histgrm%get_x(i)))
                         end do
-                        call json%add(dataset, 'backgroundColor', "rgba(30, 144, 255, 0.5)")
-                        call json%add(dataset, data)
-                        call json%add(datasets, dataset)
-                        call json%add(json_hist, datasets)
+                       ! call json%add(dataset, 'backgroundColor', "rgba(30, 144, 255, 0.5)")
+                       ! call json%add(dataset, data)
+                      !  call json%add(datasets, dataset)
+                      !  call json%add(json_hist, datasets)
+                      !  call json%add(json_hist, labels)
+                        call json%add(json_hist, data)
                         call json%add(json_hist, labels)
                         call json%add(json_root, json_hist)
                         call histgrm%kill()
@@ -4433,14 +4452,28 @@ contains
                 if( .not. fromto_present ) ffromto = [1,noris]
                 if( .not. sort_ascending)  ffromto = [noris - ffromto(2) + 1, noris - ffromto(1) + 1]
                 allocate(indices(ffromto(2) - ffromto(1) + 1))
+                if(ffromto(1) .gt. 1)     allocate(indices_pre(ffromto(1) - 1))
+                if(ffromto(2) .lt. noris) allocate(indices_post(noris - fromto(2)))
                 if(sort) then
                     order = sort_oris(seg_oris)
                     indices(:) = order(ffromto(1):ffromto(2))
+                    if(allocated(indices_pre))  indices_pre(:)  = order(:ffromto(1) - 1)
+                    if(allocated(indices_post)) indices_post(:) = order(ffromto(2) + 1:)
                     deallocate(order)
                 else
                     do i=1, size(indices)
                         indices(i) = ffromto(1) + i - 1
                     end do
+                    if(allocated(indices_pre)) then
+                        do i=1, size(indices_pre)
+                            indices_pre(i) = i
+                        end do
+                    end if
+                    if(allocated(indices_post)) then
+                        do i=1, size(indices_post)
+                            indices_post(i) = ffromto(2) + i
+                        end do
+                    end if
                 end if
                 if(.not. sort_ascending) call reverse(indices)
             end subroutine calculate_indices

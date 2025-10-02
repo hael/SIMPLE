@@ -23,6 +23,7 @@ class Workspace:
     nstr     = {}
     nstrhtml = {}
     request  = None
+    trashfolder = ""
 
     def __init__(self, workspace_id=None, request=None):
         if workspace_id is not None:
@@ -177,6 +178,48 @@ class Workspace:
             workspacemodel.save()
             self.nstr = updated
 
+    def removeChild(self, jobid):
+
+        def findChild(obj):
+            if "jobid" in obj:
+                if jobid == obj["jobid"]:
+                    return obj
+            if "children" in obj:
+                for child in obj["children"]:
+                    item = findChild(child)
+                    if item is not None:
+                        return item
+            return None
+        
+        def pruneDeleted(obj):
+            if "children" in obj:
+                for i, child in enumerate(obj["children"]):
+                    if "type" in child and "children" in child and child["type"] == "deleted" and len(child["children"]) == 0:
+                        del obj["children"][i]
+                        return True
+                    else:
+                        rtn = pruneDeleted(child)
+                        if rtn is not None:
+                            return rtn
+            return None
+
+        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
+        if workspacemodel is not None:
+            updated = workspacemodel.nstr
+            jobobj  = findChild(updated)
+            if jobobj is not None:
+                jobobj["type"] = "deleted"
+                if "children" in jobobj:
+                    for i, child in enumerate(jobobj["children"]):
+                        if child["type"] == "new":
+                            del jobobj["children"][i]
+            pruned = None
+            while pruned is not True:
+                pruned = pruneDeleted(updated) 
+            workspacemodel.nstr = updated
+            workspacemodel.save()
+            self.nstr = updated
+
     def delete(self, project):
         workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
         if project.ensureTrashfolder() and workspacemodel is not None:
@@ -253,5 +296,21 @@ class Workspace:
             return True
         return False
         
+    def ensureTrashfolder(self, project):
+        if not os.path.exists(os.path.join(project.dirc, self.dirc)):
+            return False
+        if not os.path.isdir(os.path.join(project.dirc, self.dirc)):
+            return False
+        trashfolder = os.path.join(project.dirc, self.dirc, "TRASH")
+        if os.path.isdir(trashfolder):
+            self.trashfolder = trashfolder
+            return True
+        try:
+            os.makedirs(trashfolder, exist_ok=True)
+        except OSError as error:
+            print("Directory '%s' can not be created")
+            return False
+        self.trashfolder = trashfolder
+        return True
     
     

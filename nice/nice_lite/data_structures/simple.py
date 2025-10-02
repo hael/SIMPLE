@@ -1,6 +1,7 @@
 # global imports
 import os
 import json
+import copy
 import shutil
 import subprocess
 from ..models import DispatchModel, JobModel
@@ -192,7 +193,7 @@ class SIMPLE:
         # append projfile and mkdir arguments
         command_string += " mkdir=no projfile=workspace.simple"
         # append http communication arguments
-        command_string += " niceprocid=" + str(self.jobid)  + " niceserver=" + dispatchmodel.url + "/api"
+        command_string += " niceprocid=" + str(self.jobid)  + " niceserver=" + dispatchmodel.url + "/api_classic"
         # add output redirection to command_string
         command_string += " >> stdout.log 2>> stderr.log\n" 
         # replace motifs in dispatch script template
@@ -237,14 +238,93 @@ class SIMPLEProject:
         """
         if self.dir is None:
             return
-        self.cmd.append("dir=" + self.dir)
+        cmd = copy.deepcopy(self.cmd)
+        cmd.append("dir=" + self.dir)
         try:
             ui_str = subprocess.run(
-                self.cmd
+                cmd
             )
 
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
         
-        
+class SIMPLEProjFile:
+    
+    cmd_header = ["simple_exec", "prg=print_project_info",  "json=yes"]
+    cmd_field  = ["simple_exec", "prg=print_project_field", "json=yes"]
+    projfile   = None
+    ui         = {}
 
+    def __init__(self, projfile):
+        self.projfile = projfile
+        
+    def getGlobalStats(self):
+        """
+        Args:
+            none
+        Returns:
+            none
+        """
+        if self.projfile is None:
+            return {}
+        if not os.path.exists(self.projfile): return False
+        if not os.path.isfile(self.projfile) and not os.path.islink(self.projfile): return False
+        cmd = copy.deepcopy(self.cmd_header)
+        cmd.append("projfile=" + self.projfile)
+        print(cmd)
+        try:
+            ui_str = subprocess.run(
+                cmd, 
+                capture_output = True,
+                check          = True,
+                text           = True
+            )
+            # remove last 2 lines from stdout else not valid json
+            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-2])
+            ui_json = json.loads(ui_str)
+        except subprocess.CalledProcessError as cpe:
+            print(cpe.stderr, end="")
+            ui_json = {}
+        self.ui = ui_json
+        return self.ui
+
+    def getFieldStats(self, oritype, fromp=None, top=None, sortkey=None, sortasc=True, hist=False):
+        """
+        Args:
+            none
+        Returns:
+            none
+        """
+        if oritype is None:
+            return {}
+        if self.projfile is None:
+            return {}
+        if not os.path.exists(self.projfile): return False
+        if not os.path.isfile(self.projfile) and not os.path.islink(self.projfile): return False
+        cmd = copy.deepcopy(self.cmd_field)
+        cmd.append("oritype=" + oritype)
+        cmd.append("projfile=" + self.projfile)
+        if fromp is not None and top is not None:
+            cmd.append("fromp=" + str(fromp))
+            cmd.append("top="   + str(top))
+        if sortkey is not None:   
+            cmd.append("sort=" + sortkey)
+        if sortasc is False:   
+            cmd.append("sort_asc=no")
+        if hist:   
+            cmd.append("hist=yes")   
+        try:
+            ui_str = subprocess.run(
+                cmd, 
+                capture_output = True,
+                check          = True,
+                text           = True
+            )
+            # remove last 2 lines from stdout else not valid json
+            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-2])
+            ui_json = json.loads(ui_str)
+        except subprocess.CalledProcessError as cpe:
+            print(cpe.stderr, end="")
+            ui_json = {}
+        self.ui = ui_json
+        return self.ui

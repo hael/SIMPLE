@@ -5,9 +5,10 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import cache_control
 
 # local imports
-from .data_structures.project  import Project
-from .data_structures.dataset  import Dataset
-from .data_structures.job      import Job
+from .data_structures.workspace  import Workspace
+from .data_structures.project    import Project
+from .data_structures.job        import Job
+from .data_structures.jobclassic import JobClassic
 
 def index(request):
     response = {}
@@ -18,6 +19,19 @@ def index(request):
     if "jobid" in request_json:
         job = Job(id=request_json["jobid"])
         response = job.updateStats(request_json)
+    return JsonResponse(response)
+
+def index_classic(request):
+    response = {}
+    try:
+        request_json = json.loads(request.body.decode('utf-8'))
+    except:
+        return JsonResponse(response)
+    if "jobid" in request_json:
+        job = JobClassic(id=request_json["jobid"])
+        workspace = Workspace(workspace_id=job.wspc.id)
+        project   = Project(project_id=job.wspc.proj.id)
+        response = job.updateStats(request_json, project, workspace)
     return JsonResponse(response)
 
 @login_required(login_url="/login/")

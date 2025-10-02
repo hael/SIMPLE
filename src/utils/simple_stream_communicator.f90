@@ -34,17 +34,21 @@ module simple_stream_communicator
 
         subroutine create(self, jobid, url, name)
             class(stream_http_communicator), intent(inout) :: self
-            character(*),                    intent(in)    :: url, name
+            character(*),                    intent(in)    :: url
+            character(*), optional,          intent(in)    :: name
             integer,                         intent(in)    :: jobid
+            character(len=STDLEN)                          :: l_name
+            l_name = 'job'
             call self%json%initialize(no_whitespace=.true.)
-            call self%json%create_object(self%job_json,         name)
-            call self%json%create_object(self%heartbeat_json,   name // "_heartbeat")
+            if(present(name)) l_name = name
+            call self%json%create_object(self%job_json,         trim(l_name))
+            call self%json%create_object(self%heartbeat_json,   trim(l_name) // "_heartbeat")
             call self%json%create_object(self%update_arguments, "")
-            if(jobid > 0 .and. url .ne. "" .and. name .ne. "") then
+            if(jobid > 0 .and. url .ne. "" .and. trim(l_name) .ne. "") then
                 self%id   = jobid
                 self%url  = url
-                self%tmp_recv  = "__stream_comm_recv_" // name // "__"
-                self%tmp_send  = "__stream_comm_send_" // name // "__"
+                self%tmp_recv  = "__stream_comm_recv_" // trim(l_name) // "__"
+                self%tmp_send  = "__stream_comm_send_" // trim(l_name) // "__"
                 self%active    = .true.
             endif
         end subroutine create

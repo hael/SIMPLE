@@ -33,7 +33,7 @@
                 {% for section in sections %}
                     <div class="flex flex-col">
                         <div class="flex flex-row font-bold text-[14px] bg-nice4header text-nice4bubble rounded-xl mx-[10px] px-[10px] my-[10px] items-center">
-                            <div class="flex-1">{{ section.name }}</div>
+                            <div class="flex-1 min-w-[590px]">{{ section.name }}</div>
                             <div onclick="toggleAdvanced(this)">
                                 <div id="advancedhidden" class="flex">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -97,7 +97,7 @@
                         </div>
                     </div>
                 {% endfor %}
-                <div class="flex mt-[20px]">
+                <div class="flex mt-[20px] justify-center items-center">
                     <input type="submit" value="start" class="userbutton"></input>
                 </div>
             </form>

@@ -10,6 +10,7 @@ use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
 use simple_qsys_env,       only: qsys_env
+use simple_stream_communicator
 use simple_nice
 use simple_qsys_funs
 
@@ -1000,7 +1001,7 @@ contains
         class(selection_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
-        type(simple_nice_communicator)  :: nice_communicator
+        type(stream_http_communicator)  :: http_communicator
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
         integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
@@ -1015,9 +1016,9 @@ contains
         if( .not. cline%defined('prune')  ) call cline%set('prune',  'no')
         if( .not. cline%defined('append') ) call cline%set('append', 'no')
         call params%new(cline, silent=.true.)
-        ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        ! http communicator init
+        call http_communicator%create(params%niceprocid, params%niceserver)
+        call http_communicator%send_heartbeat()
         if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
         ! read project (almost all or largest segments are updated)
@@ -1116,6 +1117,17 @@ contains
                 end do
             endif
             call fclose(fnr)
+        else if( cline%defined('deselfile') )then
+            ! selection based on text file containing indices to be deselected
+            states=pos%get_all_asint("state")
+            n_lines = nlines(trim(params%deselfile))
+            call fopen(fnr, FILE=trim(params%deselfile), STATUS='OLD', action='READ')
+            do i=1, n_lines
+                read(fnr,*) state
+                write(logfhandle, *) "DESELECTING INDEX", state
+                states(state) = 0
+            end do
+            call fclose(fnr)   
         endif
         ! updates relevant segments
         select case(iseg)
@@ -1162,7 +1174,7 @@ contains
         end select        
         ! final full write
         call spproj%write(params%projfile)
-        call nice_communicator%terminate(export_project=spproj)
+        call http_communicator%term()
         call simple_end('**** SELECTION NORMAL STOP ****')
     end subroutine exec_selection
 
