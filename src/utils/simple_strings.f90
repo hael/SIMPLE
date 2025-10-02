@@ -475,7 +475,7 @@ contains
     end function int2commastr
 
     !>  \brief  turn integer variable into zero padded character variable
-    function int2str_pad( intg, numlen ) result(string)
+    function int2str_pad( intg, numlen ) result( string )
         integer, intent(in)           :: intg, numlen
         character(len=:), allocatable :: string, str_tmp, str_tmp2
         integer :: slen

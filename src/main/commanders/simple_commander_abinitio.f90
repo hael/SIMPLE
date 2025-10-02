@@ -278,8 +278,6 @@ contains
             ! check even odd convergence
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
-            ! for visualization
-            call gen_ortho_reprojs4viz(work_proj)
             ! calculate 3D reconstruction at original sampling
             call calc_final_rec(work_proj, work_projfile, xreconstruct3D)
             ! postprocess final 3D reconstruction
