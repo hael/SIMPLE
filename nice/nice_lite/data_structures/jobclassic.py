@@ -251,3 +251,9 @@ class JobClassic:
                 print("Directory '%s' can not be renamed")
                 return
             jobmodel.delete()
+    
+    def update_description(self, description):
+        self.desc = description
+        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        jobmodel.desc = self.desc
+        jobmodel.save()

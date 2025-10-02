@@ -1,5 +1,6 @@
 # global imports
 import os
+import pathlib
 from django.shortcuts               import redirect, render
 from django.http                    import HttpResponse
 from django.contrib.auth.decorators import login_required
@@ -330,7 +331,7 @@ def link_stream_particle_set(request, jobid, setid, filename):
     project    = Project(request=request)
     workspace  = Workspace(workspace_id=link_workspace_id)
     dataset    = Dataset(request=request)
-    set_proj   = os.path.join(project.dirc, dataset.dirc, streamjob.dirc, "classification_2D", filename)
+    set_proj   = os.path.join(project.dirc, dataset.dirc, streamjob.dirc, "classification_2D", "snapshots", pathlib.Path(filename).stem, filename)
     classicjob.linkParticleSet(project, workspace, set_proj)
     classicjob.update_description("from " + dataset.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))
     response = redirect('nice_lite:view_stream_particle_sets', jobid=jobid)

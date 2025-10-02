@@ -1148,15 +1148,18 @@ contains
            ! call snapshot_comm%init(snapshot_jobid, "")
             if(snapshot_iteration .eq. pool_iter) then
                 call snapshot_proj%copy(pool_proj)
+                call snapshot_proj%add_frcs2os_out(trim(POOL_DIR)//trim(FRCS_FILE), 'frc2D')
                 snapshot_proj_found = .true.
             else
                 call snapshot_proj%copy(pool_proj_history(snapshot_iteration))
                 snapshot_proj_found = .true.
             end if
             if(snapshot_proj_found) then
+                if(.not. file_exists(stemname(stemname(snapshot_projfile)))) call simple_mkdir(stemname(stemname(snapshot_projfile)))
+                if(.not. file_exists(stemname(snapshot_projfile)))           call simple_mkdir(stemname(snapshot_projfile))
                 call apply_snapshot_selection(snapshot_proj)
                 call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd) 
-                call snapshot_proj%get_frcs(l_frcsname,'frc2D')
+                call snapshot_proj%get_frcs(l_frcsname, 'frc2D')
                 call simple_copy_file(trim(l_stkname), stemname(snapshot_projfile) // "/cavgs" // STK_EXT)
                 call simple_copy_file(trim(add2fbody(l_stkname, params_glob%ext,'_even')), stemname(snapshot_projfile) // "/cavgs_even" // STK_EXT)
                 call simple_copy_file(trim(add2fbody(l_stkname, params_glob%ext,'_odd')),  stemname(snapshot_projfile) // "/cavgs_odd"  // STK_EXT)
@@ -1699,6 +1702,7 @@ contains
             call spproj_history%os_out%kill
             call spproj_history%add_cavgs2os_out(stkname, smpd, 'cavg')
             call spproj_history%add_frcs2os_out(trim(POOL_DIR)//swap_suffix(FRCS_FILE, "_iter"//int2str_pad(pool_iter, 3)//".bin", ".bin"), 'frc2D')
+            write(logfhandle, *) "ADDING HISTORY", pool_iter, trim(POOL_DIR)//swap_suffix(FRCS_FILE, "_iter"//int2str_pad(pool_iter, 3)//".bin", ".bin") 
             if(.not. allocated(pool_proj_history)) allocate(pool_proj_history(0))
             pool_proj_history = [pool_proj_history(:), spproj_history]
             if(pool_iter .gt. 5) call pool_proj_history(pool_iter - 5)%kill()

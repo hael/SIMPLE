@@ -1052,7 +1052,9 @@ contains
                     if(found) then
                         call http_communicator%json%get(http_communicator%update_arguments, "snapshot_filename", snapshot_filename, found)
                         if(found) then
-                            call write_project_stream2D(snapshot_projfile=trim(cwd_glob) // "/" //snapshot_filename, snapshot_starfile_base=trim(cwd_glob) // "/" // swap_suffix(snapshot_filename, "", ".simple"))
+                            call write_project_stream2D(&
+                                &snapshot_projfile=trim(cwd_glob) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' //snapshot_filename,&
+                                &snapshot_starfile_base=trim(cwd_glob) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"))
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_filename",  snapshot_filename)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    last_snapshot_nptcls)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_time",      stream_datestr())
