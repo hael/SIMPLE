@@ -339,7 +339,7 @@ contains
                 integer, intent(in) :: istage
                 real :: smpd_target
                 smpd_target                = max(SMPD_TARGET_MIN, (lpinfo(istage)%lp * LP2SMPD_TARGET))
-                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=64)
+                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=88)
                 lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
                 lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
             end subroutine calc_scaleinfo
@@ -372,7 +372,7 @@ contains
                 integer, intent(in) :: istage
                 real :: smpd_target
                 smpd_target                = max(SMPD_TARGET_MIN, (lpinfo(istage)%lp * LP2SMPD_TARGET))
-                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=64)
+                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=88)
                 lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
                 lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
             end subroutine calc_scaleinfo
