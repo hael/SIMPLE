@@ -1,5 +1,6 @@
 # global imports
 import os
+import copy
 import datetime
 from django.utils import timezone
 
@@ -70,7 +71,7 @@ class Job:
         jobmodel.dirc = self.dirc
         jobmodel.save()
         simplestream = SIMPLEStream()
-        if not simplestream.start(self.args, os.path.join(project.dirc, dataset.dirc, self.dirc), self.id):
+        if not simplestream.start(copy.deepcopy(self.args), os.path.join(project.dirc, dataset.dirc, self.dirc), self.id):
             return False
         self.preprocessing_status     = "running"
         self.optics_assignment_status = "running"

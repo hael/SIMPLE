@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.template.loader import render_to_string
 
 # local imports
-from ..models import ProjectModel, WorkspaceModel, JobClassicModel
+from ..models import ProjectModel, WorkspaceModel, JobClassicModel, DatasetModel
 from .jobclassic import JobClassic
 from .simple import SIMPLEProject
 
@@ -255,6 +255,10 @@ class Workspace:
                 print("Link '%s' can not be renamed")
                 return
             workspacemodel.delete()
+        workspacemodels = WorkspaceModel.objects.filter(proj=project.id)
+        datasetmodels   = DatasetModel.objects.filter(proj=project.id)
+        if workspacemodels.count() + datasetmodels.count() > 0:
+            print("COUNT", workspacemodels.count() + datasetmodels.count())
 
     def rename(self, request, project):
         if "new_workspace_name" in request.POST:

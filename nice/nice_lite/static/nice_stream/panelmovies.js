@@ -20,8 +20,14 @@ window.addEventListener("load", () =>{
                       stacked: true
                   },
                   y: {
-                      display: false,
-                      stacked: true
+                      display: true,
+                      stacked: true,
+                      ticks: {
+                        font: {
+                            size: 8,
+                        },
+                        maxTicksLimit: 3
+                      }
                   }
                 },
                 plugins:{
@@ -67,8 +73,14 @@ window.addEventListener("load", () =>{
                       stacked: true
                   },
                   y: {
-                      display: false,
-                      stacked: true
+                      display: true,
+                      stacked: true,
+                      ticks: {
+                        font: {
+                            size: 8,
+                        },
+                        maxTicksLimit: 3
+                      }
                   }
                 },
                 plugins:{
@@ -114,8 +126,14 @@ window.addEventListener("load", () =>{
                       stacked: true
                   },
                   y: {
-                      display: false,
-                      stacked: true
+                      display: true,
+                      stacked: true,
+                      ticks: {
+                        font: {
+                            size: 8,
+                        },
+                        maxTicksLimit: 3
+                      }
                   }
                 },
                 plugins:{
@@ -160,8 +178,14 @@ window.addEventListener("load", () =>{
                       display: false,
                   },
                   y: {
-                      display: false,
-                  }
+                      display: true,
+                      ticks: {
+                        font: {
+                            size: 8,
+                        },
+                        maxTicksLimit: 3
+                      }
+                  },
                 },
                 plugins:{
                     legend:{

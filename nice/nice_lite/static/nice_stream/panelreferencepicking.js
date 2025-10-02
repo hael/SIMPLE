@@ -61,6 +61,39 @@ draw_overlay_coordinates = () => {
     }
 }
 
+showMenu = (element, event) => {
+  event.preventDefault()
+  const selectmenu    = element.parentElement.parentElement.querySelector("[name='selectmenu']")
+  const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
+  selectmenubox.style.top  = event.pageY + "px"
+  selectmenubox.style.left = event.pageX + "px"
+  selectmenu.style.display = "flex"
+  lastinteraction = Date.now();
+}
+
+hideMenu = () => {
+  for(const selectmenu of document.querySelectorAll("[name='selectmenu']")){
+    selectmenu.style.display = "none"
+  }
+  lastinteraction = Date.now();
+}
+
+updateBrightness = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--preprocess-brightness', element.value / 100);
+}
+
+updateContrast = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--preprocess-contrast', element.value / 100);
+}
+
+window.addEventListener("load", () => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--preprocess-contrast',   1.0);
+  cssroot.style.setProperty('--preprocess-brightness', 1.0);
+})
+
 /* draw boxes on load */
 window.addEventListener("load", () =>{
     for(const box_overlay of document.getElementsByClassName("boxes_overlay")){

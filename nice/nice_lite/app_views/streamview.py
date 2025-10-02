@@ -160,12 +160,24 @@ class StreamViewInitialPick:
         self.job     = Job(id=jobid)
         
     def render(self):
+        start_pc = 0
+        end_pc   = 0
+        if "picking_diameters" in self.job.initial_picking_stats:
+            self.job.initial_picking_stats["picking_diameters"] = sorted(list(set(self.job.initial_picking_stats["picking_diameters"])))
+        if "refinement_diameters" in self.job.initial_picking_stats:
+            self.job.initial_picking_stats["refinement_diameters"] = sorted(list(set(self.job.initial_picking_stats["refinement_diameters"])))   
+        if "picking_diameters" in self.job.initial_picking_stats and "refinement_diameters" in self.job.initial_picking_stats:
+            if len(self.job.initial_picking_stats["picking_diameters"]) > 1 and len(self.job.initial_picking_stats["refinement_diameters"]) > 1:
+                start_pc = self.job.initial_picking_stats["picking_diameters"].index(self.job.initial_picking_stats["refinement_diameters"][0])  * (100 / (len(self.job.initial_picking_stats["picking_diameters"]) - 1))
+                end_pc   = self.job.initial_picking_stats["picking_diameters"].index(self.job.initial_picking_stats["refinement_diameters"][-1]) * (100 / (len(self.job.initial_picking_stats["picking_diameters"]) - 1))
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.initial_picking_stats,
-            "status"   : self.job.initial_picking_status,
-            "logfile"  : self.logfile,
-            "errfile"  : self.errfile      
+            "jobid"        : self.job.id,
+            "jobstats"     : self.job.initial_picking_stats,
+            "status"       : self.job.initial_picking_status,
+            "refine_start" : start_pc,
+            "refine_width" : end_pc - start_pc,
+            "logfile"      : self.logfile,
+            "errfile"      : self.errfile,    
         }
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()

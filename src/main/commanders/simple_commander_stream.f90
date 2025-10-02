@@ -821,7 +821,7 @@ contains
         type(starproject_stream)               :: starproj_stream
         type(stream_http_communicator)         :: http_communicator
         type(histogram)                        :: histogram_moldiams
-        type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates, picking_diameters
+        type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates, picking_diameters, refinement_diameters
         type(nrtxtfile)                        :: boxsize_file
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: odir, odir_extract, odir_picker, odir_completed
@@ -1471,6 +1471,13 @@ contains
                     do i=1, size(complete_search_diameters)
                         call http_communicator%json%add(picking_diameters, "", int(complete_search_diameters(i)))
                     enddo
+                    call http_communicator%json%remove(refinement_diameters, destroy=.true.)
+                    call http_communicator%json%create_array(refinement_diameters, "refinement_diameters")
+                    call http_communicator%json%add(http_communicator%job_json, refinement_diameters)
+                    call hpsort(refined_search_diameters)
+                    do i=1, size(refined_search_diameters)
+                        call http_communicator%json%add(refinement_diameters, "", int(refined_search_diameters(i)))
+                    enddo
                     if(spproj_glob%os_mic%isthere('thumb') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
                         .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                         i_max = 10
@@ -1880,6 +1887,8 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, picking_templates)
                 call http_communicator%json%create_array(picking_diameters, "picking_diameters")
                 call http_communicator%json%add(http_communicator%job_json, picking_diameters)
+                call http_communicator%json%create_array(refinement_diameters, "refinement_diameters")
+                call http_communicator%json%add(http_communicator%job_json, refinement_diameters)
             end subroutine communicator_init
 
             subroutine communicator_add_micrograph(path, spritex, spritey, spriteh, spritew, xdim, ydim, boxfile_path)

@@ -8,12 +8,12 @@ from ..models import DispatchModel, JobModel
 
 class SIMPLEStream:
 
-    ui_cmd      = ["simple_private_exec", "prg=print_ui_stream"]
-    ui          = {}
-    base_dir    = ""
-    args        = {}
-    jobid       = 0
-    executable  = "simple_stream"
+    ui_cmd            = ["simple_private_exec", "prg=print_ui_stream"]
+    ui                = {}
+    base_dir          = ""
+    args              = {}
+    jobid             = 0
+    executable        = "simple_stream"
     tplt_simple_motif = "XXXSIMPLEXXX"
     tplt_nthr_motif   = "XXXNCPUXXX"
     skip_refgen       = False
@@ -54,7 +54,7 @@ class SIMPLEStream:
         if "processes" not in self.ui:        return False
         if "pickrefs" in self.args:
             self.skip_refgen = True
-        self.sleepcounter = 0
+     #   self.sleepcounter = 0
         for process in self.ui["processes"]:
             if not self.dispatch(process): return False
         return True
@@ -81,9 +81,9 @@ class SIMPLEStream:
         else:
             nthr_master = 1
         # sleep on script start to prevent all starting together
-        command_string = "sleep " + str(self.sleepcounter) + "\n"
-        self.sleepcounter = self.sleepcounter + 5
-        command_string += self.executable
+     #   command_string = "sleep " + str(self.sleepcounter) + "\n"
+      #  self.sleepcounter = self.sleepcounter + 5
+        command_string = self.executable
         command_string += " prg=" + process["prg"]
         if "user_inputs" in process:
             for user_input in process["user_inputs"]:

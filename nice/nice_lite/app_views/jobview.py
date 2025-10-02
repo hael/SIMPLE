@@ -20,6 +20,7 @@ class JobView:
             "jobid"     : self.job.id,
             "prog"      : self.job.prog,
             "disp"      : self.job.disp,
+            "status"    : self.job.status,
             "projstats" : projstats,
         }
         response = render(self.request, self.template, context)

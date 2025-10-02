@@ -4,7 +4,7 @@ import re
 from django.utils import timezone
 
 # local imports
-from ..models import ProjectModel, DatasetModel
+from ..models import ProjectModel, DatasetModel, WorkspaceModel
 
 class Dataset:
 
@@ -127,6 +127,12 @@ class Dataset:
                 print("Link '%s' can not be renamed")
                 return
             datasetmodel.delete()
+        workspacemodels = WorkspaceModel.objects.filter(proj=project.id)
+        datasetmodels   = DatasetModel.objects.filter(proj=project.id)
+        if workspacemodels.count() + datasetmodels.count() == 0:
+            projectmodel = ProjectModel.objects.filter(id=project.id).first()
+            print("DELETE", project.id)
+            projectmodel.delete()
 
     def rename(self, request, project):
         if "new_dataset_name" in request.POST:
