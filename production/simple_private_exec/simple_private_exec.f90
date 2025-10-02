@@ -76,7 +76,6 @@ type(binarize_commander)                :: xbinarize
 type(edge_detect_commander)             :: xdetector
 
 ! MISCELLANOUS PROGRAMS
-type(masscen_commander)                 :: xmasscen
 type(kstest_commander)                  :: xkstst
 type(pearsn_commander)                  :: xpearsn
 
@@ -217,8 +216,6 @@ select case(prg)
         call xdetector%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
-    case( 'masscen' )
-        call xmasscen%execute(cline)
     case( 'kstest' )
         call xkstst%execute(cline)
     case( 'pearsn' )

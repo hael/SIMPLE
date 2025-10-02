@@ -346,32 +346,6 @@ contains
         call img%kill
     end subroutine neg_imgfile
 
-    subroutine masscen_imgfile( fname2masscen, fname, smpd, lp, msk )
-        character(len=*), intent(in) :: fname2masscen, fname
-        real,             intent(in) :: smpd, lp, msk
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: i, n, ldim(3)
-        real                         :: xyz(3)
-        call find_ldim_nptcls(fname2masscen, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'masscen_imgfile' )
-        call stkio_r%open(fname2masscen, smpd, 'read')
-        call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
-        call img%new(ldim,smpd)
-        write(logfhandle,'(a)') '>>> CENTERING IMAGES'
-        do i=1,n
-            call progress(i,n)
-            call stkio_r%read(i, img)
-            xyz = img%calc_shiftcen(lp, msk)
-            call img%shift(xyz)
-            call stkio_w%write(i, img)
-        end do
-        call stkio_r%close
-        call stkio_w%close
-        call img%kill
-    end subroutine masscen_imgfile
-
     subroutine add_noise_imgfile( fname2process, fname, snr, smpd )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: snr, smpd

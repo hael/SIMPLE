@@ -242,6 +242,7 @@ contains
         call cmd_dict%push('cc_iters',      '# of iterations with objfun=cc prior to switching to another objective function')
         call cmd_dict%push('cenlp',         'low-pass limit for binarisation in centering(in A){30 A}')
         call cmd_dict%push('center',        'center image(s)/class average(s)/volume(s)(yes|no){no}')
+        call cmd_dict%push('center_type',   'Centering scheme used(mass|seg|params)')
         call cmd_dict%push('chunksz',       '# images/orientations in chunk')
         call cmd_dict%push('class',         'cluster identity')
         call cmd_dict%push('classdoc',      'doc with per-class stats(.txt)')
@@ -347,7 +348,6 @@ contains
         call cmd_dict%push('lpstop2D',      'stop low-pass limit(in A){8}')
         call cmd_dict%push('lpthres',      'resolution rejection limit(in A){30}')
         call cmd_dict%push('makemovie',     'produces files to generate a movie with ffmpeg(yes|no){no}')
-        call cmd_dict%push('masscen',       'center using binarisation and mass centering(yes|no){no}')
         call cmd_dict%push('maxits',        'maximum # iterations')
         call cmd_dict%push('max_dose',      'maximum dose threshold (in e-/A2)')
         call cmd_dict%push('max_rad',       'particle longest  dim (in pixels)')
@@ -617,80 +617,89 @@ contains
         call private_prgs(12)%push_req_key('projfile')
         call private_prgs(12)%push_req_key('prune')
 
-        ! MASSCEN, for centering images acccording to their centre of mass
-        call private_prgs(13)%set_name('masscen')
-        ! required keys
-        call private_prgs(13)%push_req_key('stk')
-        call private_prgs(13)%push_req_key('smpd')
-        call private_prgs(13)%push_req_key('lp')
-        ! optional keys
-        call private_prgs(13)%push_opt_key('mskdiam')
-        call private_prgs(13)%push_opt_key('neg')
-        call private_prgs(13)%push_opt_key('outstk')
-
         ! PICK_EXTRACT, for template-based particle picking & extraction
-        call private_prgs(14)%set_name('pick_extract')
+        call private_prgs(13)%set_name('pick_extract')
         ! required keys
-        call private_prgs(14)%push_req_key('projfile')
+        call private_prgs(13)%push_req_key('projfile')
         ! optional keys
-        call private_prgs(14)%push_opt_key('nthr')
-        call private_prgs(14)%push_opt_key('lp')
-        call private_prgs(14)%push_opt_key('thres')
-        call private_prgs(14)%push_opt_key('ndev')
-        call private_prgs(14)%push_opt_key('pcontrast')
-        call private_prgs(14)%push_opt_key('outside')
+        call private_prgs(13)%push_opt_key('nthr')
+        call private_prgs(13)%push_opt_key('lp')
+        call private_prgs(13)%push_opt_key('thres')
+        call private_prgs(13)%push_opt_key('ndev')
+        call private_prgs(13)%push_opt_key('pcontrast')
+        call private_prgs(13)%push_opt_key('outside')
 
         ! PRINT_PROJECT_VALS, for printing specific values in a project file field
-        call private_prgs(15)%set_name('print_project_vals')
+        call private_prgs(14)%set_name('print_project_vals')
         ! required keys
-        call private_prgs(15)%push_req_key('projfile')
-        call private_prgs(15)%push_req_key('keys')
-        call private_prgs(15)%push_req_key('oritype')
+        call private_prgs(14)%push_req_key('projfile')
+        call private_prgs(14)%push_req_key('keys')
+        call private_prgs(14)%push_req_key('oritype')
 
         ! RANK_CAVGS, for ranking class averages
-        call private_prgs(16)%set_name('rank_cavgs')
+        call private_prgs(15)%set_name('rank_cavgs')
         ! required keys
-        call private_prgs(16)%push_req_key('projfile')
-        call private_prgs(16)%push_req_key('stk')
+        call private_prgs(15)%push_req_key('projfile')
+        call private_prgs(15)%push_req_key('stk')
         ! set optional keys
-        call private_prgs(16)%push_opt_key('outstk')
+        call private_prgs(15)%push_opt_key('outstk')
 
         ! ROTMATS2ORIS, for converting a text file (9 records per line) describing rotation matrices into a SIMPLE oritab
-        call private_prgs(17)%set_name('rotmats2oris')
+        call private_prgs(16)%set_name('rotmats2oris')
         ! required keys
-        call private_prgs(17)%push_req_key('infile')
+        call private_prgs(16)%push_req_key('infile')
         ! optional keys
-        call private_prgs(17)%push_opt_key('outfile')
-        call private_prgs(17)%push_opt_key('oritype')
+        call private_prgs(16)%push_opt_key('outfile')
+        call private_prgs(16)%push_opt_key('oritype')
 
         ! SPLIT, for splitting of image stacks into partitions for parallel execution
-        call private_prgs(18)%set_name('split')
+        call private_prgs(17)%set_name('split')
         ! required keys
-        call private_prgs(18)%push_req_key('stk')
-        call private_prgs(18)%push_req_key('smpd')
-        call private_prgs(18)%push_req_key('nparts')
+        call private_prgs(17)%push_req_key('stk')
+        call private_prgs(17)%push_req_key('smpd')
+        call private_prgs(17)%push_req_key('nparts')
 
         ! VOLASSEMBLE, for asssembling subvolumes generated in distributed execution
-        call private_prgs(19)%set_name('volassemble')
+        call private_prgs(18)%set_name('volassemble')
+        ! required keys
+        call private_prgs(18)%push_req_key('nparts')
+        call private_prgs(18)%push_req_key('projfile')
+        call private_prgs(18)%push_req_key('mskdiam')
+        ! optional keys
+        call private_prgs(18)%push_opt_key('nthr')
+        call private_prgs(18)%push_opt_key('nstates')
+        call private_prgs(18)%push_opt_key('mskfile')
+        call private_prgs(18)%push_opt_key('which_iter')
+
+        ! CALC_PSPEC, for asssembling power spectra for refine3D
+        call private_prgs(19)%set_name('calc_pspec')
         ! required keys
         call private_prgs(19)%push_req_key('nparts')
         call private_prgs(19)%push_req_key('projfile')
-        call private_prgs(19)%push_req_key('mskdiam')
-        ! optional keys
-        call private_prgs(19)%push_opt_key('nthr')
-        call private_prgs(19)%push_opt_key('nstates')
-        call private_prgs(19)%push_opt_key('mskfile')
-        call private_prgs(19)%push_opt_key('which_iter')
-
-        ! CALC_PSPEC, for asssembling power spectra for refine3D
-        call private_prgs(20)%set_name('calc_pspec')
-        ! required keys
-        call private_prgs(20)%push_req_key('nparts')
-        call private_prgs(20)%push_req_key('projfile')
-        call private_prgs(20)%push_req_key('nthr')
+        call private_prgs(19)%push_req_key('nthr')
 
         ! TSERIES_MOTION_CORRECT
-        call private_prgs(21)%set_name('tseries_motion_correct')
+        call private_prgs(20)%set_name('tseries_motion_correct')
+        ! required keys
+        call private_prgs(20)%push_req_key('nthr')
+        call private_prgs(20)%push_req_key('projfile')
+        call private_prgs(20)%push_req_key('fromp')
+        call private_prgs(20)%push_req_key('top')
+        call private_prgs(20)%push_req_key('part')
+        call private_prgs(20)%push_req_key('nparts')
+        ! optional keys
+        call private_prgs(20)%push_opt_key('nframesgrp')
+        call private_prgs(20)%push_opt_key('mcpatch')
+        call private_prgs(20)%push_opt_key('nxpatch')
+        call private_prgs(20)%push_opt_key('nypatch')
+        call private_prgs(20)%push_opt_key('trs')
+        call private_prgs(20)%push_opt_key('lpstart')
+        call private_prgs(20)%push_opt_key('lpstop')
+        call private_prgs(20)%push_opt_key('bfac')
+        call private_prgs(20)%push_opt_key('wcrit')
+
+        ! tseries_track_particles
+        call private_prgs(21)%set_name('tseries_track_particles')
         ! required keys
         call private_prgs(21)%push_req_key('nthr')
         call private_prgs(21)%push_req_key('projfile')
@@ -698,66 +707,46 @@ contains
         call private_prgs(21)%push_req_key('top')
         call private_prgs(21)%push_req_key('part')
         call private_prgs(21)%push_req_key('nparts')
+        call private_prgs(21)%push_req_key('box')
+        call private_prgs(21)%push_req_key('xcoord')
+        call private_prgs(21)%push_req_key('ycoord')
+        call private_prgs(21)%push_req_key('ind')
+        call private_prgs(21)%push_req_key('numlen')
+        call private_prgs(21)%push_req_key('nframesgrp')
         ! optional keys
-        call private_prgs(21)%push_opt_key('nframesgrp')
-        call private_prgs(21)%push_opt_key('mcpatch')
-        call private_prgs(21)%push_opt_key('nxpatch')
-        call private_prgs(21)%push_opt_key('nypatch')
-        call private_prgs(21)%push_opt_key('trs')
-        call private_prgs(21)%push_opt_key('lpstart')
-        call private_prgs(21)%push_opt_key('lpstop')
-        call private_prgs(21)%push_opt_key('bfac')
-        call private_prgs(21)%push_opt_key('wcrit')
-
-        ! tseries_track_particles
-        call private_prgs(22)%set_name('tseries_track_particles')
-        ! required keys
-        call private_prgs(22)%push_req_key('nthr')
-        call private_prgs(22)%push_req_key('projfile')
-        call private_prgs(22)%push_req_key('fromp')
-        call private_prgs(22)%push_req_key('top')
-        call private_prgs(22)%push_req_key('part')
-        call private_prgs(22)%push_req_key('nparts')
-        call private_prgs(22)%push_req_key('box')
-        call private_prgs(22)%push_req_key('xcoord')
-        call private_prgs(22)%push_req_key('ycoord')
-        call private_prgs(22)%push_req_key('ind')
-        call private_prgs(22)%push_req_key('numlen')
-        call private_prgs(22)%push_req_key('nframesgrp')
-        ! optional keys
-        call private_prgs(22)%push_opt_key('offset')
-        call private_prgs(22)%push_opt_key('hp')
-        call private_prgs(22)%push_opt_key('lp')
-        call private_prgs(22)%push_opt_key('cenlp')
-        call private_prgs(22)%push_opt_key('neg')
-        call private_prgs(22)%push_opt_key('filter')
+        call private_prgs(21)%push_opt_key('offset')
+        call private_prgs(21)%push_opt_key('hp')
+        call private_prgs(21)%push_opt_key('lp')
+        call private_prgs(21)%push_opt_key('cenlp')
+        call private_prgs(21)%push_opt_key('neg')
+        call private_prgs(21)%push_opt_key('filter')
 
         ! CALC_GROUP_SIGMAS, for asssembling sigmas for refine3D
-        call private_prgs(23)%set_name('calc_group_sigmas')
+        call private_prgs(22)%set_name('calc_group_sigmas')
         ! required keys
-        call private_prgs(23)%push_req_key('nparts')
-        call private_prgs(23)%push_req_key('projfile')
-        call private_prgs(23)%push_req_key('nthr')
-        call private_prgs(23)%push_req_key('which_iter')
+        call private_prgs(22)%push_req_key('nparts')
+        call private_prgs(22)%push_req_key('projfile')
+        call private_prgs(22)%push_req_key('nthr')
+        call private_prgs(22)%push_req_key('which_iter')
 
         ! Pearson's correlation coefficient
-        call private_prgs(24)%set_name('pearsn')
+        call private_prgs(23)%set_name('pearsn')
         ! required keys
-        call private_prgs(24)%push_req_key('infile')
-        call private_prgs(24)%push_req_key('infile2')
+        call private_prgs(23)%push_req_key('infile')
+        call private_prgs(23)%push_req_key('infile2')
 
         ! check stochastic update scheme
-        call private_prgs(25)%set_name('check_stoch_update')
+        call private_prgs(24)%set_name('check_stoch_update')
         ! required keys
-        call private_prgs(25)%push_req_key('maxits')
-        call private_prgs(25)%push_req_key('nptcls')
+        call private_prgs(24)%push_req_key('maxits')
+        call private_prgs(24)%push_req_key('nptcls')
 
         ! check fractional update scheme
-        call private_prgs(26)%set_name('check_update_frac')
+        call private_prgs(25)%set_name('check_update_frac')
         ! required keys
-        call private_prgs(26)%push_req_key('nptcls')
+        call private_prgs(25)%push_req_key('nptcls')
 
-        n_private_prgs = 26
+        n_private_prgs = 25
     end subroutine new_private_prgs
 
 end module simple_private_prgs

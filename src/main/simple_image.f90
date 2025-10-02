@@ -1879,7 +1879,7 @@ contains
         complex, allocatable :: cvec(:)
         if( self%is_ft() )then
             cvec = pack(self%cmat(:self%array_shape(1),:self%array_shape(2),:self%array_shape(3)), mask=.true.)
-            vec  = sqrt(cvec * conjg(cvec))
+            vec  = sqrt(real(cvec * conjg(cvec)))
         else
             vec = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
         endif
@@ -3070,7 +3070,7 @@ contains
         class(image), intent(in)  :: self
         real,         intent(in)  :: msk
         integer,      intent(out) :: nin, nout, nmsk
-        integer :: i, j
+        integer :: i
         real    :: centre(3), cendists(self%ldim(1),self%ldim(2)), msksq
         ! calculate distances from the center
         centre = real(self%ldim)/2.+1.
@@ -6141,7 +6141,7 @@ contains
             endif
         end do
         ! return single-precision corrs
-        corrs = corrs_8
+        corrs = real(corrs_8)
     end subroutine fsc
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation in double precision
@@ -6398,18 +6398,20 @@ contains
         if( minv < 0. )self%rmat = self%rmat + abs(minv)
     end subroutine remove_neg
 
-    !>  \brief  is for making a random image (0,1)
-    subroutine ran( self )
-        class(image), intent(inout) :: self
+    !>  \brief  is for making a random image (0,b)
+    subroutine ran( self, b )
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: b      ! support upper bound, defaults to 1
         integer :: i, j, k
-        do i=1,self%ldim(1)
+        do k=1,self%ldim(3)
             do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
+                do i=1,self%ldim(1)
                     self%rmat(i,j,k) = ran3()
                 end do
             end do
         end do
         self%ft = .false.
+        if( present(b) ) self%rmat = self%rmat * b
     end subroutine ran
 
     !> \brief gauran  is for making a Gaussian random image (0,1)
@@ -6420,9 +6422,9 @@ contains
         class(image), intent(inout) :: self
         real, intent(in) :: mean, sdev
         integer :: i, j, k
-        do i=1,self%ldim(1)
+        do k=1,self%ldim(3)
             do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
+                do i=1,self%ldim(1)
                     self%rmat(i,j,k) = gasdev( mean, sdev )
                 end do
             end do

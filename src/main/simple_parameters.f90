@@ -50,6 +50,7 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
+    character(len=3)          :: first_sigmas='yes'   !< Whether to estimate sigma2 from provided volume
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: frcref='no'          !< Whether to apply a FRC filter to the 3D polar reference(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
@@ -71,7 +72,6 @@ type :: parameters
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
     character(len=3)          :: makemovie='no'
-    character(len=3)          :: masscen='yes'        !< center to center of gravity(yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
@@ -210,7 +210,7 @@ type :: parameters
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
-    character(len=STDLEN)     :: boxtype='eman'
+    character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: clust_crit=''        !< clustering criterion (fm|pow|hist|hybrid){hybrid}
@@ -226,6 +226,7 @@ type :: parameters
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
+    character(len=STDLEN)     :: inivol='rand'        !< Different schemes for random volume generation(rand|rand_scaled|sphere)
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -605,12 +606,12 @@ contains
         call check_carg('backgr_subtr',   self%backgr_subtr)
         call check_carg('balance',        self%balance)
         call check_carg('bin',            self%bin)
-        call check_carg('boxtype',        self%boxtype)
         call check_carg('cavg_ini',       self%cavg_ini)
         call check_carg('cavg_ini_ext',   self%cavg_ini_ext)
         call check_carg('cavgw',          self%cavgw)
         call check_carg('center',         self%center)
         call check_carg('center_pdb',     self%center_pdb)
+        call check_carg('center_type',    self%center_type)
         call check_carg('chunk',          self%chunk)
         call check_carg('classtats',      self%classtats)
         call check_carg('clear',          self%clear)
@@ -639,6 +640,7 @@ contains
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('fillin',         self%fillin)
         call check_carg('filter',         self%filter)
+        call check_carg('first_sigmas',   self%first_sigmas)
         call check_carg('flag',           self%flag)
         call check_carg('flipgain',       self%flipgain)
         call check_carg('ft2img',         self%ft2img)
@@ -654,6 +656,7 @@ contains
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
+        call check_carg('inivol',         self%inivol)
         call check_carg('interactive',    self%interactive)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)
@@ -667,7 +670,6 @@ contains
         call check_carg('loc_sdev',       self%loc_sdev)
         call check_carg('lp_auto',        self%lp_auto)
         call check_carg('makemovie',      self%makemovie)
-        call check_carg('masscen',        self%masscen)
         call check_carg('mcpatch',        self%mcpatch)
         call check_carg('mcpatch_thres',  self%mcpatch_thres)
         call check_carg('mirr',           self%mirr)
@@ -1658,6 +1660,13 @@ contains
                 ! supported
             case DEFAULT
                 THROW_HARD('eer_upsampling not supported: '//int2str(self%eer_upsampling))
+        end select
+        ! Centering scheme
+        select case(trim(self%center_type))
+            case('mass','seg','params')
+                !supported
+            case DEFAULT
+                THROW_HARD('Unsupported centering scheme: '//trim(self%center_type))
         end select
         ! FILTERS
         ! sigma needs flags etc.
