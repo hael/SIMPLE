@@ -104,11 +104,12 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
         call build%init_params_and_build_general_tbox(cline,params)
-        if( params%masscen.eq.'no' )then
+        select case(trim(params%center_type))
+        case('params')
             if(.not.cline%defined('oritab') .and. .not.cline%defined('projfile') )then
                 THROW_HARD('Alignments parameters are required')
             endif
-        endif
+        end select
         if( cline%defined('stk') )then
             call find_ldim_nptcls(params%stk, ldim, nimgs)
             allocate(shvec(nimgs,3))
@@ -116,8 +117,8 @@ contains
             do i = 1,nimgs
                 call build%img%zero_and_unflag_ft
                 call build%img%read(params%stk,i)
-                select case(trim(params_glob%masscen))
-                case('no')
+                select case(trim(params_glob%center_type))
+                case('params')
                     xyz = 0.
                     call build%spproj_field%calc_avg_offset2D(i, xyz(1:2))
                     if( arg(xyz) < CENTHRESH )then
@@ -129,13 +130,13 @@ contains
                         if( arg(shvec(i,1:2) - xyz(1:2)) > MAXCENTHRESH2D ) shvec(i,:) = 0.
                     endif
                     call build%spproj_field%add_shift2class(i, -shvec(i,:))
-                case('new')
+                case('seg')
                     call calc_cavg_offset(build%img, params%cenlp, params%msk, shift2d, i)
                     shvec(i,1:2) = shift2d
                     if( cline%defined('oritab') .or. cline%defined('projfile') )then
                         call build%spproj_field%add_shift2class(i, -shift2d)
                     endif
-                case DEFAULT
+                case('mass')
                     shvec(i,:) = build%img%calc_shiftcen_serial(params%cenlp, params%msk)
                     if( cline%defined('oritab') .or. cline%defined('projfile') )then
                         call build%spproj_field%add_shift2class(i, -shvec(i,:))
@@ -154,15 +155,16 @@ contains
             allocate(shvec(params%nstates,3))
             do istate=1,params%nstates
                 call build%vol%read(params%vols(istate))
-                if( trim(params_glob%masscen).ne.'yes' )then
-                    call build%spproj_field%calc_avg_offset3D(shvec(istate,:), state=istate)
-                    call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
-                else
+                select case(trim(params_glob%center_type))
+                case('mass')
                     shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk)
                     if( cline%defined('oritab') .or. cline%defined('projfile') )then
                         call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
                     endif
-                endif
+                case('params')
+                    call build%spproj_field%calc_avg_offset3D(shvec(istate,:), state=istate)
+                    call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
+                end select
                 write(logfhandle,'(A,3F6.1)')'>>> OFFSET: ',shvec(istate,:)
                 call build%vol%shift(shvec(istate,1:3))
                 call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)

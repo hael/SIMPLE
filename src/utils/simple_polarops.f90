@@ -1141,8 +1141,8 @@ contains
             endif
             if( do_center )then
                 crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-                select case(trim(params_glob%masscen))
-                case('no')
+                select case(trim(params_glob%center_type))
+                case('params')
                     ! offset from document in original pixel unit
                     call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
                     if( arg(xy_cavg) < CENTHRESH )then
@@ -1154,10 +1154,10 @@ contains
                         xyz = xyz / crop_factor         ! scaled pixel unit
                         if( arg(xyz(1:2) - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                     endif
-                case('new')
+                case('seg')
                     call calc_cavg_offset(cavg, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
                     xyz(1:2) = xy_cavg / crop_factor    ! scaled pixel unit
-                case DEFAULT
+                case('mass')
                     xyz = cavg%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                     xyz = xyz / crop_factor             ! scaled pixel unit
                 end select

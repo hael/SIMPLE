@@ -131,7 +131,7 @@ contains
         integer                    :: kfromto(2), ngroups
         logical                    :: l
         if (.not. file_exists(fname)) then
-            THROW_HARD('euclid_sigma2_starfile: read_groups_pspecs; file does not exists: ' // trim(fname))
+            THROW_HARD('euclid_sigma2_starfile: init_from_group_header; file does not exists: ' // trim(fname))
         end if
         call starfile_table__new(table)
         call starfile_table__getnames(table, trim(fname), names)

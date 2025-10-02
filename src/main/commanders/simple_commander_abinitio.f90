@@ -524,7 +524,6 @@ contains
         type(class_sample), allocatable :: clssmp(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
-        type(image)                     :: noisevol
         type(simple_nice_communicator)  :: nice_communicator
         integer :: istage, s, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         logical :: l_stream
@@ -544,6 +543,7 @@ contains
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
         if( .not. cline%defined('ref_type')    ) call cline%set('ref_type',     'clin')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',        'yes')
+        if( .not. cline%defined('first_sigmas')) call cline%set('first_sigmas',  'yes')
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -756,25 +756,7 @@ contains
             endif
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! create noise starting volume(s)
-            call noisevol%new([lpinfo(1)%box_crop,lpinfo(1)%box_crop,lpinfo(1)%box_crop], lpinfo(1)%smpd_crop)
-            do s = 1, params%nstates
-                call noisevol%ran()
-                vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                call cline_refine3D%set('vol'//int2str(s), vol_name)
-                params%vols(s) = vol_name
-                call noisevol%write(vol_name)
-                call noisevol%ran()
-                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-                call noisevol%write(vol_name)
-                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-                call noisevol%write(vol_name)
-                call noisevol%ran()
-                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-                call noisevol%write(vol_name)
-                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-                call noisevol%write(vol_name)
-            end do
-            call noisevol%kill
+            call generate_random_volumes( lpinfo(1)%box_crop, lpinfo(1)%smpd_crop, cline_refine3D )
         else
             ! check that ptcl3D field is not virgin
             if( spproj%is_virgin_field('ptcl3D') )then
@@ -840,10 +822,6 @@ contains
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
-            endif
-            ! Streaming specifics
-            if( l_stream )then
-                if( istage == STREAM_ANALYSIS_STAGE ) call stream_analysis
             endif
             ! nice
             call nice_communicator%update_ini3D(last_stage_completed=.true.) 
@@ -1660,31 +1638,81 @@ contains
         real,           intent(in)    :: smpd
         type(cmdline),  intent(inout) :: cline
         character(len=:), allocatable :: vol_name
-        type(image) :: noisevol
+        type(image) :: noisevol, signal
+        real        :: b
         integer     :: s
         call noisevol%new([box,box,box], smpd)
-        do s = 1, params_glob%nstates
-            call noisevol%ran()
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-            call cline%set('vol'//int2str(s), vol_name)
-            params_glob%vols(s) = vol_name
-            call noisevol%write(vol_name)
-            call noisevol%ran()
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-            call noisevol%write(vol_name)
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-            call noisevol%write(vol_name)
-            call noisevol%ran()
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-            call noisevol%write(vol_name)
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-            call noisevol%write(vol_name)
-        end do
+        select case(trim(params_glob%inivol))
+        case('rand')
+            ! random uniform distribution [0,1]
+            ! resulting std dev in projections is ~box/10
+            do s = 1, params_glob%nstates
+                call noisevol%ran
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+                call cline%set('vol'//int2str(s), vol_name)
+                params_glob%vols(s) = vol_name
+                call noisevol%write(vol_name)
+                call noisevol%ran
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+                call noisevol%write(vol_name)
+                call noisevol%ran
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+                call noisevol%write(vol_name)
+            end do
+        case('rand_scaled')
+            ! random uniform distribution [0,5/box]
+            ! resulting std dev in projections is ~0.2
+            b = 5.0/real(box)
+            do s = 1, params_glob%nstates
+                call noisevol%ran(b=b)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+                call cline%set('vol'//int2str(s), vol_name)
+                params_glob%vols(s) = vol_name
+                call noisevol%write(vol_name)
+                call noisevol%ran(b=b)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+                call noisevol%write(vol_name)
+                call noisevol%ran(b=b)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+                call noisevol%write(vol_name)
+            end do
+        case('sphere')
+            ! random normal sphere N(0,5/box) + normal background N(0,5/box)
+            b = 5.0/real(box)
+            call signal%new([box,box,box], smpd)
+            call signal%gauran(0.0, b)
+            call signal%mask(0.25*real(box), 'soft', backgr=0.)
+            do s = 1, params_glob%nstates
+                call noisevol%gauran(0., b)
+                call noisevol%add(signal)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+                call cline%set('vol'//int2str(s), vol_name)
+                params_glob%vols(s) = vol_name
+                call noisevol%write(vol_name)
+                call noisevol%gauran(0., b)
+                call noisevol%add(signal)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+                call noisevol%write(vol_name)
+                call noisevol%gauran(0., b)
+                call noisevol%add(signal)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+                call noisevol%write(vol_name)
+                vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+                call noisevol%write(vol_name)
+            end do
+            call signal%kill
+        end select
         call noisevol%kill
     end subroutine generate_random_volumes
-
-    subroutine stream_analysis
-        ! TODO
-    end subroutine stream_analysis
 
 end module simple_commander_abinitio

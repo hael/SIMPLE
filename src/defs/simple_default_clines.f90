@@ -28,7 +28,7 @@ contains
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
         if( .not. cline%defined('wiener')       ) call cline%set('wiener',      'full')
         if( .not. cline%defined('cls_init')     ) call cline%set('cls_init',    'ptcl')
-        if( .not. cline%defined('masscen')      ) call cline%set('masscen',      'yes')
+        if( .not. cline%defined('center_type')  ) call cline%set('center_type', 'mass')
         if( .not. cline%defined('sh_first')     ) call cline%set('sh_first',      'no')
         if( .not. cline%defined('refine')       ) call cline%set('refine',   'snhc_smpl')
         if( .not. cline%defined('extr_lim')     ) call cline%set('extr_lim', MAX_EXTRLIM2D)

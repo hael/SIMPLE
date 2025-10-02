@@ -406,8 +406,8 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                select case(trim(params_glob%masscen))
-                case('no')
+                select case(trim(params_glob%center_type))
+                case('params')
                     call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
                     if( arg(xy_cavg) < CENTHRESH )then
                         xyz = 0.
@@ -418,10 +418,10 @@ contains
                         xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                         if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                     endif
-                case('new')
+                case('seg')
                     call calc_cavg_offset(img_in, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
                     xyz = [xy_cavg(1), xy_cavg(2), 0.]
-                case DEFAULT
+                case('mass')
                     xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                 end select
                 sharg = arg(xyz)

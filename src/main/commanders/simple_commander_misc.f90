@@ -13,7 +13,6 @@ use simple_parameters,     only: parameters
 implicit none
 
 public :: afm_commander
-public :: masscen_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
 public :: print_dose_weights_commander
@@ -25,11 +24,6 @@ public :: fractionate_movies_commander
 public :: comparemc_commander
 private
 #include "simple_local_flags.inc"
-
-type, extends(commander_base) :: masscen_commander
-  contains
-    procedure :: execute      => exec_masscen
-end type masscen_commander
 
 type, extends(commander_base) :: print_fsc_commander
   contains
@@ -270,20 +264,6 @@ contains
         ! end do
         ! call exp_img%write('var_mat.mrc')
     end subroutine exec_afm
-
-    !> centers base on centre of mass
-     subroutine exec_masscen( self, cline )
-        use simple_procimgstk, only: masscen_imgfile
-        class(masscen_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(parameters) :: params
-        call params%new(cline)
-        params%cenlp = params%lp
-        ! center of mass centering
-        call masscen_imgfile(params%stk, params%outstk, params%smpd, params%lp, params%msk)
-        ! end gracefully
-        call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
-    end subroutine exec_masscen
 
     !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )

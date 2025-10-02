@@ -475,7 +475,7 @@ contains
             ! at this stage, we have both volume and 3D orientations (either random or previously estimated)
             if( trim(params%objfun).eq.'euclid' )then
                 call cline_calc_group_sigmas%set('nthr', nthr_here)
-                if( (params%startit==1) .or. .not.file_exists(sigma2_star_from_iter(params%startit)) )then
+                if( (trim(params%first_sigmas).eq.'yes') )then
                     ! initial estimates have been calculated above with calc_pspec (that also generated a .star)
                     ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
                     if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
@@ -811,9 +811,11 @@ contains
                     call xcalc_pspec%execute_safe( cline_calc_pspec )
                     call cline_calc_group_sigmas%set('which_iter', startit)
                     call xcalc_pspec_assemble%execute_safe(cline_calc_group_sigmas)
-                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', params%nspace)
-                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', params%athres)
-                    call xfirst_sigmas%execute_safe(cline)
+                    if( (trim(params%first_sigmas).eq.'yes') )then
+                        if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', params%nspace)
+                        if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', params%athres)
+                        call xfirst_sigmas%execute_safe(cline)
+                    endif
                 endif
             endif
             params%startit    = startit
