@@ -130,10 +130,22 @@
                     </div>
                     <div id="micrograph_slider" class="flex flex-row w-[235px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
                         {% for micrograph in jobstats.latest_micrographs %}
-                            <div class="snap-center" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
-                                <div style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:200% 100%; background-position:100% 0%" class="h-[235px] w-[235px] rounded"></div>
+                            <div class="snap-center" oncontextmenu="showMenu(this, event)" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
+                                <div style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:200% 100%; background-position:100% 0%" class="h-[235px] w-[235px] rounded"></div>
                             </div>
                         {% endfor %}
+                    </div>
+                    <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                        <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] p-[2px] rounded">
+                            <div class="flex flex-col">
+                                <div class="font-bold">contrast</div>
+                                <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="font-bold">brightness</div>
+                                <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                            </div>
+                        </div>
                     </div>
                     <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">

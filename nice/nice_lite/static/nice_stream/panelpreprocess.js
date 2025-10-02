@@ -12,6 +12,39 @@ scrlLeft = () => {
   lastinteraction = Date.now();
 }
 
+showMenu = (element, event) => {
+  event.preventDefault()
+  const selectmenu    = element.parentElement.parentElement.querySelector("[name='selectmenu']")
+  const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
+  selectmenubox.style.top  = event.pageY + "px"
+  selectmenubox.style.left = event.pageX + "px"
+  selectmenu.style.display = "flex"
+  lastinteraction = Date.now();
+}
+
+hideMenu = () => {
+  for(const selectmenu of document.querySelectorAll("[name='selectmenu']")){
+    selectmenu.style.display = "none"
+  }
+  lastinteraction = Date.now();
+}
+
+updateBrightness = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--preprocess-brightness', element.value / 100);
+}
+
+updateContrast = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--preprocess-contrast', element.value / 100);
+}
+
+window.addEventListener("load", () => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--preprocess-contrast',   1.0);
+  cssroot.style.setProperty('--preprocess-brightness', 1.0);
+})
+
 window.addEventListener("load", () =>{
     for(const movies_pie_chart of document.getElementsByClassName("movies_pie_chart")){
         const ctx = movies_pie_chart.getContext("2d");
@@ -114,7 +147,13 @@ window.addEventListener("load", () =>{
                       display: false,
                   },
                   y: {
-                      display: false,
+                      display: true,
+                      ticks: {
+                        font: {
+                            size: 8,
+                        },
+                        maxTicksLimit: 3
+                      }
                   }
                 },
                 plugins:{
@@ -133,9 +172,9 @@ window.addEventListener("load", () =>{
                                     backgroundColor : '#d3d3d3',
                                     color : "#585858",
                                     font :{
-                                        size: 9
+                                        size: 8
                                     },
-                                    padding: 3
+                                    padding: 2
                                 },
                                 scaleID: 'x',
                                 value: savedidx,
@@ -228,7 +267,13 @@ window.addEventListener("load", () =>{
                       display: false,
                   },
                   y: {
-                      display: false,
+                      display: true,
+                      ticks: {
+                        font: {
+                            size: 8,
+                        },
+                        maxTicksLimit: 3
+                      }
                   }
                 },
                 plugins:{
@@ -247,9 +292,9 @@ window.addEventListener("load", () =>{
                                     backgroundColor : '#d3d3d3',
                                     color : "#585858",
                                     font :{
-                                        size: 9
+                                        size: 8
                                     },
-                                    padding: 3
+                                    padding: 2
                                 },
                                 scaleID: 'x',
                                 value: savedidx,
@@ -342,7 +387,13 @@ window.addEventListener("load", () =>{
                       display: false,
                   },
                   y: {
-                      display: false,
+                      display: true,
+                      ticks: {
+                        font: {
+                            size: 8,
+                        },
+                        maxTicksLimit: 3
+                      }
                   }
                 },
                 plugins:{
@@ -361,9 +412,9 @@ window.addEventListener("load", () =>{
                                     backgroundColor : '#d3d3d3',
                                     color : "#585858",
                                     font :{
-                                        size: 9
+                                        size: 8
                                     },
-                                    padding: 3
+                                    padding: 2
                                 },
                                 scaleID: 'x',
                                 value: savedidx,

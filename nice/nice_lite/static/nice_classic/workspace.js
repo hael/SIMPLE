@@ -19,7 +19,7 @@ enableJobDescription = (element) => {
 }
 
 deleteWorkspace = (element, workspaceid) => {
-  const confirmed = confirm("Please confirm that you wish to delete workspace " + workspaceid + " and all jobs within");
+  const confirmed = confirm("Please confirm that you wish to delete workspace " + workspaceid + " and all jobs within. If this is the last workspace or dataset in a project, the project will also be deleted");
   if(confirmed){
     element.form.submit()
   }

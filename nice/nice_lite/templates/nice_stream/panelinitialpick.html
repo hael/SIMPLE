@@ -99,14 +99,26 @@
                             </svg>
                         </div>
                         <div id="micrographs_slider" class="flex flex-row w-[235px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse" height="235" width="235"></canvas>
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="235" width="235"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
-                                <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                <div class="snap-center slider_micrograph" oncontextmenu="showMenu(this, event)" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <div class="w-[235px] h-[235px] m-auto">
                                         <img style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[235px] w-[235px] rounded m-auto"></img>
                                     </div>
                                 </div>
                             {% endfor %}
+                        </div>
+                        <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] p-[2px] rounded">
+                                <div class="flex flex-col">
+                                    <div class="font-bold">contrast</div>
+                                    <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                                </div>
+                                <div class="flex flex-col">
+                                    <div class="font-bold">brightness</div>
+                                    <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                </div>
+                            </div>
                         </div>
                         <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -124,15 +136,27 @@
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div id="micrographs_slider" class="flex flex-row w-[235px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse" height="235" width="235"></canvas>
+                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[235px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="235" width="235"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
-                                <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                <div class="snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <div class="w-[235px] h-[235px] m-auto">
-                                        <img style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[235px] w-[235px] rounded m-auto"></img>
+                                        <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[235px] w-[235px] rounded"></img>
                                     </div>
                                 </div>
                             {% endfor %}
+                        </div>
+                        <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] p-[2px] rounded">
+                                <div class="flex flex-col">
+                                    <div class="font-bold">contrast</div>
+                                    <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                                </div>
+                                <div class="flex flex-col">
+                                    <div class="font-bold">brightness</div>
+                                    <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                </div>
+                            </div>
                         </div>
                         <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -163,7 +187,10 @@
                         <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_moldiam_stream_initial_pick' jobid %}>
                             {% csrf_token %}
                             <input type="hidden" name="diameter"></input>
-                            <input type="range" id="picking_diameters" data-diameters='{{ jobstats.picking_diameters }}' min="1" max={{ jobstats.picking_diameters|length }} oninput="draw_overlay_coordinates()"></input>
+                            <div class="relative">
+                                <div title="refined" style="width:{{ refine_width }}%; margin-left:{{ refine_start }}%" class="bg-nice4success absolute h-[18px] rounded z-[-1]"></div>
+                                <input type="range" id="picking_diameters" data-diameters='{{ jobstats.picking_diameters }}' min="1" max={{ jobstats.picking_diameters|length }} oninput="draw_overlay_coordinates()"></input>
+                            </div>
                             <div class="flex flex-row">
                                 <button class="userbutton" type="submit">use diameter</button>
                                 <button class="userbutton" type="button" onclick="refineDiameter()">refine diameter</button>
