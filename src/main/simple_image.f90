@@ -319,6 +319,7 @@ contains
     procedure          :: norm_ext
     procedure          :: norm_noise
     procedure          :: norm_within
+    procedure          :: calc_bin_thres
     procedure          :: quantize_fwd
     procedure          :: quantize_bwd
     procedure          :: zero_edgeavg
@@ -8359,6 +8360,43 @@ contains
         sxx  = sxx/real(npix)
         if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
     end subroutine norm_within
+
+    subroutine calc_bin_thres( self, frac_fg_target, thres )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: frac_fg_target
+        real,         intent(out)   :: thres 
+        integer, parameter   :: NQUANTA = 10
+        real,    allocatable :: pixvals(:), means(:), pix_ts(:), frac_fgs(:)
+        integer, allocatable :: labels(:)
+        integer :: iq, n_fg, npix, loc(1), cnt
+        allocate( means(NQUANTA), labels(NQUANTA), frac_fgs(NQUANTA), pix_ts(NQUANTA) )
+        means   = 0.
+        labels  = 0
+        pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        call sortmeans(pixvals, NQUANTA, means, labels)
+        npix    = product(self%ldim)
+        cnt     = 0
+        do iq = 1, NQUANTA
+            if( count(labels == iq) == 0 )cycle
+            cnt         = cnt + 1
+            pix_ts(cnt) = minval(pixvals, mask=labels == iq )
+            n_fg        = count(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= pix_ts(cnt))
+            if( n_fg == npix )then
+                frac_fgs(cnt) = 1.
+            else if( n_fg == 0 )then
+                frac_fgs(cnt) = 0.
+            else
+                frac_fgs(cnt) = real(n_fg) / real(npix)
+            endif
+            print *, iq, ' thres ',  pix_ts(cnt), ' frac_fg ', frac_fgs(cnt)
+        end do
+        loc      = minloc(abs(frac_fgs(:cnt) - frac_fg_target))
+        thres    = pix_ts(loc(1))
+
+        print *, 'thres:   ', thres
+        print *, 'frac_fg: ', real(count(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= thres)) / real(npix)
+
+    end subroutine calc_bin_thres
 
     subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
         class(image),      intent(inout) :: self
