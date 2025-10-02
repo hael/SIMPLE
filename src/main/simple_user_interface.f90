@@ -4083,7 +4083,7 @@ contains
         call pdb2mrc%new(&
         &'pdb2mrc', &                                      ! name
         &'PDB to MRC simulator',&                          ! descr_short
-        &'is a program to simulate a 3D density map in MRC format using a PDB format coordinadinates file',& ! descr long
+        &'is a program to simulate a 3D density map in MRC format using a PDB format coordinates file',& ! descr long
         &'all',&                                             ! executable
         &1, 5, 0, 0, 0, 0, 0, .false., gui_advanced=.false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
