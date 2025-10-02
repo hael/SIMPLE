@@ -53,7 +53,7 @@ type(preprocess_commander_distr)            :: xpreprocess
 type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
 type(motion_correct_commander_distr)        :: xmotion_correct_distr
-type(denoise_mics_commander)                :: xdenoise_mics
+type(binarize_mics_commander)                :: xbinarize_mics
 type(gen_pspecs_and_thumbs_commander_distr) :: xgen_pspecs_and_thumbs
 type(analyze_pspecs_commander)              :: xpow_anal
 type(ctf_estimate_commander_distr)          :: xctf_estimate_distr
@@ -240,8 +240,8 @@ select case(trim(prg))
         call xextract_distr%execute(cline)
     case( 'reextract' )
         call xreextract_distr%execute(cline)
-    case( 'denoise_mics' )
-        call xdenoise_mics%execute(cline)
+    case( 'binarize_mics' )
+        call xbinarize_mics%execute(cline)
     case( 'motion_correct' )
         call xmotion_correct_distr%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
@@ -485,7 +485,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('71879c64')
+call simple_print_git_version('f3f8c055')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

@@ -18,7 +18,7 @@ public :: convert_commander
 public :: ctfops_commander
 public :: ctf_phaseflip_commander
 public :: filter_commander
-public :: denoise_mics_commander
+public :: binarize_mics_commander
 public :: ppca_denoise_commander
 public :: normalize_commander
 public :: scale_commander
@@ -65,10 +65,10 @@ type, extends(commander_base) :: ppca_denoise_commander
     procedure :: execute      => exec_ppca_denoise
 end type ppca_denoise_commander
 
-type, extends(commander_base) :: denoise_mics_commander
+type, extends(commander_base) :: binarize_mics_commander
   contains
-    procedure :: execute      => exec_denoise_mics
-end type denoise_mics_commander
+    procedure :: execute      => exec_binarize_mics
+end type binarize_mics_commander
 
 type, extends(commander_base) :: normalize_commander
   contains
@@ -556,18 +556,20 @@ contains
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
 
-    subroutine exec_denoise_mics( self, cline )
+    subroutine exec_binarize_mics( self, cline )
         use simple_segmentation
-        class(denoise_mics_commander), intent(inout) :: self
+        use simple_binimage, only: binimage
+        class(binarize_mics_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM = 100., FRAC_LARGE=0.1
+        real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM = 100., DAMP = 10., FRAC_FG = 0.2
         integer, parameter :: WINSZ_SAUVOLA = 6, WINSZ_MED = 3, NQ = 8
         character(len=LONGSTRLEN), allocatable :: micnames(:)
         character(len=:),          allocatable :: fname 
         type(parameters) :: params
         type(image)      :: mic_raw, mic_shrink, mic_sauv
+        type(binimage)   :: mic_bin
         integer          :: nmics, ldim_raw(3), ldim(3), imic
-        real             :: scale, otsu_t
+        real             :: scale, bin_t
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
@@ -580,6 +582,8 @@ contains
         ldim(3) = 1
         ! make shrunken micrograph
         call mic_shrink%new(ldim, SMPD_SHRINK1)
+        ! make binary micrograph
+        call mic_bin%new(ldim, SMPD_SHRINK1)
         do imic = 1, nmics
             ! read the micrograph
             call read_mic_and_subtr_backgr(micnames(imic), params%smpd)
@@ -603,7 +607,7 @@ contains
             call mic_shrink%ifft
             call mic_shrink%zero_edgeavg
             ! dampens below zero
-            call mic_shrink%div_below(0.,10.)
+            call mic_shrink%div_below(0.,DAMP)
             ! low-pass filter
             call mic_shrink%bp(0.,LP_UB)
             fname = 'mic_shrink_lp'//int2str_pad(imic,3)//'.mrc'
@@ -615,20 +619,18 @@ contains
             fname = 'mic_shrink_lp_nlmean_icm'//int2str_pad(imic,3)//'.mrc'
             ! call mic_shrink%write(fname)
             call mic_shrink%real_space_filter(WINSZ_MED, 'median')
-
+            call mic_shrink%calc_bin_thres(FRAC_FG, bin_t)
             fname = 'mic_shrink_lp_nlmean_icm_med'//int2str_pad(imic,3)//'.mrc'
             call mic_shrink%write(fname)
-            
-
-            ! call sauvola(mic_shrink, WINSZ_SAUVOLA, mic_sauv)
-            ! fname = 'mic_shrink_lp_nlmean_icm_med_sauvola'//int2str_pad(imic,3)//'.mrc'
-            ! call mic_sauv%write(fname)
-
-            call otsu_img(mic_shrink, thresh=otsu_t, frac_large_outliers=FRAC_LARGE, positive=.true., tighter=.true.) 
+            call mic_shrink%binarize(bin_t)
+            call mic_bin%transfer2bimg(mic_shrink)
+            call mic_bin%erode()
+            call mic_bin%erode()
             fname = 'mic_shrink_lp_nlmean_icm_med_bin'//int2str_pad(imic,3)//'.mrc'
-            call mic_shrink%write(fname)
-            ! call mic_shrink%transfer2bimg(img_sdevs)
+            call mic_bin%write(fname)
         end do
+        call mic_shrink%kill
+        call mic_bin%kill_bimg
 
         contains
 
@@ -644,12 +646,9 @@ contains
                 call mic_raw%new(ldim_raw, smpd)
                 call mic_raw%read(micname)
                 call mic_raw%subtract_background(HP_BACKGR_SUBTR)
-                ! set fbody
-                ! ext   = fname2ext(trim(micname))
-                ! fbody = trim(get_fbody(basename(trim(micname)), ext))
             end subroutine read_mic_and_subtr_backgr
         
-    end subroutine exec_denoise_mics
+    end subroutine exec_binarize_mics
 
     subroutine exec_ppca_denoise( self, cline )
         use simple_imgproc,    only: make_pcavecs

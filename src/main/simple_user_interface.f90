@@ -114,7 +114,7 @@ type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: ctf_phaseflip
-type(simple_program), target :: denoise_mics
+type(simple_program), target :: binarize_mics
 type(simple_program), target :: denoise_trajectory
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
@@ -454,7 +454,7 @@ contains
         call new_ctfops
         call new_ctf_phaseflip
         call new_pdb2mrc
-        call new_denoise_mics
+        call new_binarize_mics
         call new_denoise_trajectory
         call new_detect_atoms
         call new_dock_volpair
@@ -611,7 +611,7 @@ contains
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(pdb2mrc)
-        call push2prg_ptr_array(denoise_mics)
+        call push2prg_ptr_array(binarize_mics)
         call push2prg_ptr_array(denoise_trajectory)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
@@ -815,8 +815,8 @@ contains
                 ptr2prg => ctf_phaseflip
             case('pdb2mrc')
                 ptr2prg => pdb2mrc
-            case('denoise_mics')
-                ptr2prg => denoise_mics
+            case('binarize_mics')
+                ptr2prg => binarize_mics
             case('denoise_trajectory')
                 ptr2prg => denoise_trajectory
             case('detect_atoms')
@@ -1072,7 +1072,7 @@ contains
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') ctf_phaseflip%name
-        write(logfhandle,'(A)') denoise_mics%name
+        write(logfhandle,'(A)') binarize_mics%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') estimate_lpstages%name
         write(logfhandle,'(A)') extract%name
@@ -2468,20 +2468,20 @@ contains
         ! <empty>
     end subroutine new_ctf_phaseflip
 
-    subroutine new_denoise_mics
+    subroutine new_binarize_mics
         ! PROGRAM SPECIFICATION
-        call denoise_mics%new(&
-        &'denoise_mics',&                               ! name
+        call binarize_mics%new(&
+        &'binarize_mics',&                               ! name
         &'denoising of micrographs',&                   ! descr_short
         &'is a program for denoising of micrographs',&  ! descr_long
         &'simple_exec',&                                ! executable
         &1, 2, 0, 0, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call denoise_mics%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
+        call binarize_mics%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
         ! parameter input/output
-        call denoise_mics%set_input('parm_ios', 1, smpd)
-        call denoise_mics%set_input('parm_ios', 2, pcontrast)
+        call binarize_mics%set_input('parm_ios', 1, smpd)
+        call binarize_mics%set_input('parm_ios', 2, pcontrast)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2491,8 +2491,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call denoise_mics%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_denoise_mics
+        call binarize_mics%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_binarize_mics
 
     subroutine new_denoise_trajectory
         ! PROGRAM SPECIFICATION
