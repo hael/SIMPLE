@@ -77,7 +77,9 @@ class JobClassicModel(models.Model):
     pckg = models.CharField(max_length=20, default='')
     cdat = models.DateTimeField()
     status = models.CharField(max_length=20, default='unknown')
+    heartbeat = models.DateTimeField(auto_now_add=True, blank=True)
     args = models.JSONField(default=dict)
+    update  = models.JSONField(default=dict)
 
 class DispatchModel(models.Model):
     scmd = models.CharField(max_length=200, default='')

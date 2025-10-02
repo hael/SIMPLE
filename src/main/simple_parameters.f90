@@ -145,6 +145,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: classdoc=''          !< doc with per-class stats(.txt)
     character(len=LONGSTRLEN) :: cwd=''
     character(len=LONGSTRLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
+    character(len=LONGSTRLEN) :: deselfile=''         !< file with indices to be deselected(.txt)
     character(len=LONGSTRLEN) :: dir=''               !< directory
     character(len=LONGSTRLEN) :: dir_meta=''          !< grab xml files from here
     character(len=LONGSTRLEN) :: dir_movies=''        !< grab mrc mrcs files from here
@@ -779,6 +780,7 @@ contains
         call check_file('boxtab',         self%boxtab,       'T')
         call check_file('classdoc',       self%classdoc,     'T')
         call check_file('deftab',         self%deftab,       'T', 'O')
+        call check_file('deselfile',      self%deselfile,    'T')
         call check_file('ext',            self%ext,          notAllowed='T')
         call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)

@@ -4,8 +4,8 @@ import datetime
 from django.utils import timezone
 
 # local imports
-from ..models import JobClassicModel, WorkspaceModel, ProjectModel
-from .simple  import SIMPLE
+from ..models   import JobClassicModel, WorkspaceModel, ProjectModel
+from .simple    import SIMPLE, SIMPLEProjFile
 
 class JobClassic:
 
@@ -55,7 +55,7 @@ class JobClassic:
         self.pckg = package
         self.prog = jobtype
         self.name = jobtype.replace("_", " ")
-        jobmodel = JobClassicModel(wspc=workspacemodel, cdat=timezone.now(), disp=self.disp, args=self.args, pckg=self.pckg, prog=self.prog, name=self.name)
+        jobmodel = JobClassicModel(wspc=workspacemodel, cdat=timezone.now(), disp=self.disp, args=self.args, pckg=self.pckg, prog=self.prog, name=self.name, prnt=self.prnt)
         jobmodel.save()
         self.id = jobmodel.id
         self.dirc = str(self.disp) + "_" + self.prog
@@ -66,6 +66,48 @@ class JobClassic:
         jobmodel.save()
         workspace.addChild(self.prnt, self.id)
         parentjob = JobClassicModel.objects.filter(id=parentid).first()
+        if parentjob.status != "finished":
+            return False
+        simple = SIMPLE(pckg=self.pckg)
+        if not simple.start(self.args, os.path.join(project.dirc, workspace.dirc, self.dirc), os.path.join(project.dirc, workspace.dirc, parentjob.dirc), self.prog, self.id):
+            return False
+        return True
+    
+    def newSelection(self, request, project, workspace, parentid):
+        self.args = {} # ensure empty
+        self.prnt = parentid
+        workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
+        jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
+        self.disp = jobmodels.count() + 1
+        self.pckg = 'simple'
+        self.prog = 'selection'
+        self.name = 'user selection'
+        jobmodel = JobClassicModel(wspc=workspacemodel, cdat=timezone.now(), disp=self.disp, pckg=self.pckg, prog=self.prog, name=self.name, prnt=self.prnt)
+        jobmodel.save()
+        self.id = jobmodel.id
+        self.dirc = str(self.disp) + "_" + self.prog
+        if not self.createDir(os.path.join(project.dirc, workspace.dirc)):
+            return False
+        if "deselected_cls2D" in request.POST:
+            self.args["deselfile"] = "deselected.txt"
+            self.args["oritype"]   = "cls2D"
+            with open(os.path.join(project.dirc, workspace.dirc, self.dirc, self.args["deselfile"]), "w") as f:
+                for deselected in request.POST["deselected_cls2D"].split(','):
+                    f.write(deselected + '\n')
+        elif "deselected_mic" in request.POST:
+            self.args["deselfile"] = "deselected.txt"
+            self.args["oritype"]   = "mic"
+            with open(os.path.join(project.dirc, workspace.dirc, self.dirc, self.args["deselfile"]), "w") as f:
+                for deselected in request.POST["deselected_mic"].split(','):
+                    f.write(deselected + '\n')
+        jobmodel.args = self.args
+        jobmodel.dirc = self.dirc
+        jobmodel.status = "queued"
+        jobmodel.save()
+        workspace.addChild(self.prnt, self.id)
+        parentjob = JobClassicModel.objects.filter(id=parentid).first()
+        if parentjob.status != "finished":
+            return False
         simple = SIMPLE(pckg=self.pckg)
         if not simple.start(self.args, os.path.join(project.dirc, workspace.dirc, self.dirc), os.path.join(project.dirc, workspace.dirc, parentjob.dirc), self.prog, self.id):
             return False
@@ -103,6 +145,7 @@ class JobClassic:
             self.disp = jobmodel.disp
             self.prog = jobmodel.prog
             self.pckg = jobmodel.pckg
+            self.args = jobmodel.args
             self.status = jobmodel.status
             
     def createDir(self, parent_dir):
@@ -145,10 +188,66 @@ class JobClassic:
             jobmodel.desc = self.desc
             jobmodel.save()
 
-    def markComplete(self):
+    def markComplete(self, project, workspace):
         self.status = "finished"
         jobmodel = JobClassicModel.objects.filter(id=self.id).first()
         jobmodel.status = self.status
         jobmodel.save()
+        workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
+        workspacemodel.mdat = timezone.now()
+        workspacemodel.save()
+        for childjob in JobClassicModel.objects.filter(prnt=self.id):
+            if childjob.status == "queued":
+                simple = SIMPLE(pckg=childjob.pckg)
+                simple.start(childjob.args, os.path.join(project.dirc, workspace.dirc, childjob.dirc), os.path.join(project.dirc, workspace.dirc, self.dirc), childjob.prog, childjob.id)
 
-    
+    def getProjectStats(self):
+        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        projfile = os.path.join(jobmodel.wspc.proj.dirc, jobmodel.wspc.dirc, self.dirc, "workspace.simple")
+        simpleprojfile = SIMPLEProjFile(projfile)
+        return simpleprojfile.getGlobalStats()
+
+    def getProjectFieldStats(self, oritype, fromp=None, top=None, sortkey=None, sortasc=None, hist=False):
+        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        projfile = os.path.join(jobmodel.wspc.proj.dirc, jobmodel.wspc.dirc, self.dirc, "workspace.simple")
+        simpleprojfile = SIMPLEProjFile(projfile)
+        return simpleprojfile.getFieldStats(oritype, fromp, top, sortkey, sortasc, hist)
+
+    def updateStats(self, stats_json, project, workspace):
+        jobmodel  = JobClassicModel.objects.filter(id=self.id).first()
+        response  = {}
+        if "job_heartbeat" in stats_json:
+            jobmodel.heartbeat = timezone.now()
+        if "job" in stats_json and "terminate" in stats_json["job"]:
+            jobmodel.status = "finished"
+            for childjob in JobClassicModel.objects.filter(prnt=self.id):
+                if childjob.status == "queued":
+                    simple = SIMPLE(pckg=childjob.pckg)
+                    simple.start(childjob.args, os.path.join(project.dirc, workspace.dirc, childjob.dirc), os.path.join(project.dirc, workspace.dirc, self.dirc), childjob.prog, childjob.id)
+        else:
+            jobmodel.status = "running"
+            response = jobmodel.update
+            jobmodel.update = {}
+        jobmodel.save()
+        return response
+
+    def delete(self, project, workspace):
+        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        if workspace.ensureTrashfolder(project) and jobmodel is not None:
+            workspace.removeChild(self.id)
+            job_path   = os.path.join(project.dirc, workspace.dirc, self.dirc)
+            trash_path = os.path.join(workspace.trashfolder, self.dirc)
+            if not os.path.exists(job_path):
+                return 
+            if not os.path.isdir(job_path):
+                return 
+            if os.path.exists(trash_path):
+                return 
+            if os.path.isdir(trash_path):
+                return
+            try:
+                os.rename(job_path, trash_path)
+            except OSError as error:
+                print("Directory '%s' can not be renamed")
+                return
+            jobmodel.delete()

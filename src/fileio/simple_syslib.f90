@@ -4,6 +4,7 @@ module simple_syslib
 #endif
 use simple_defs
 use simple_error
+use simple_rnd
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 implicit none
@@ -575,9 +576,11 @@ contains
         character(len=STDLEN),        allocatable :: list(:)
         character(kind=c_char,len=:), allocatable :: pathhere
         character(len=STDLEN) :: list_fname
-        integer               :: stat, i,num_dirs, luntmp
+        integer               :: stat, i,num_dirs, luntmp, ran_id
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
-        list_fname =  '__simple_dirlist_'//int2str(part_glob)//'__'
+        call seed_rnd()
+        ran_id = nint(ran3() * 10000.0)
+        list_fname =  '__simple_dirlist_'//int2str(part_glob)//'_'//int2str(ran_id)//'__'
         stat = list_dirs(trim(pathhere),len_trim(pathhere), trim(list_fname), len_trim(list_fname), num_dirs)
         if(stat/=0)THROW_ERROR("failed to process list_dirs "//trim(pathhere))
         open(newunit=luntmp, file=trim(list_fname))

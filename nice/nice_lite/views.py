@@ -198,8 +198,8 @@ def term_stream_generate_pickrefs(request, jobid):
 @login_required(login_url="/login/")
 def select_refs_stream_generate_pickrefs(request, jobid):
     job = Job(id=jobid)
-    final_selection        = [int(numeric_string) for numeric_string in request.POST["final_selection"].split(',')]
-    final_selection_source = request.POST["final_selection_source"]
+    final_selection         = [int(numeric_string) for numeric_string in request.POST["final_selection"].split(',')]
+    final_selection_source  = request.POST["final_selection_source"]
     final_selection_boxsize = request.POST["final_selection_boxsize"]
     job.select_refs_generate_pickrefs(final_selection, final_selection_source, final_selection_boxsize)
     response = redirect('nice_lite:view_stream_generate_pickrefs', jobid=jobid)
