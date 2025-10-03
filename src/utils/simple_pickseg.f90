@@ -282,6 +282,4 @@ contains
         call fclose(funit)
     end subroutine report_boxfile
 
-    ! pickseg_multi diams or area. 
-
 end module simple_pickseg

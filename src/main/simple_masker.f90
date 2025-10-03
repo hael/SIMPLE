@@ -93,6 +93,7 @@ contains
         call self%automask3D_binarize(l_tight=.false.)
         ! mask diameter estimation
         call self%diameter_cc(1, diam)
+        diam = diam / self%get_smpd() ! in pixels now
         msk_in_pix = diam / 2. + COSMSKHALFWIDTH
         ! destruct
         call vol_filt%kill
