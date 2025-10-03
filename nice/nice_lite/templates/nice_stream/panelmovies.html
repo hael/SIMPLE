@@ -54,7 +54,7 @@
         <div class="flex flex-row flex-wrap flex-1 mt-[2px]">
             {% if "timeplots" in jobstats and "astig" in jobstats.timeplots %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[10px] pl-[10px]">collection astigmatism</div>
+                    <div class="font-bold text-[10px] pl-[10px]">astigmatism</div>
                     <div class="h-[50px] w-[120px] ml-[15px]">
                         <canvas class="astig_histogram" data-labels='{{ jobstats.timeplots.astig.labels }}' data-values='{{ jobstats.timeplots.astig.data }}' data-values2='{{ jobstats.timeplots.astig.data2 }}'></canvas>
                     </div>
@@ -62,7 +62,7 @@
             {% endif %}
             {% if "timeplots" in jobstats and "ctfres" in jobstats.timeplots %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[10px] pl-[10px]">collection CTF resolution</div>
+                    <div class="font-bold text-[10px] pl-[10px]">CTF resolution</div>
                     <div class="h-[50px] w-[120px] ml-[15px]">
                         <canvas class="astig_histogram" data-labels='{{ jobstats.timeplots.ctfres.labels }}' data-values='{{ jobstats.timeplots.ctfres.data }}' data-values2='{{ jobstats.timeplots.astig.data2 }}'></canvas>
                     </div>
@@ -70,7 +70,7 @@
             {% endif %}
             {% if "timeplots" in jobstats and "df" in jobstats.timeplots %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[10px] pl-[10px]">collection average defocus</div>
+                    <div class="font-bold text-[10px] pl-[10px]">average defocus</div>
                     <div class="h-[50px] w-[120px] ml-[15px]">
                         <canvas class="df_histogram" data-labels='{{ jobstats.timeplots.df.labels }}' data-values='{{ jobstats.timeplots.df.data }}' data-values2='{{ jobstats.timeplots.astig.data2 }}'></canvas>
                     </div>
@@ -78,7 +78,7 @@
             {% endif %}
             {% if "timeplots" in jobstats and "rate" in jobstats.timeplots %}
                 <div class="flex flex-col">
-                    <div class="font-bold text-[10px] pl-[10px]">collection exposure rate</div>
+                    <div class="font-bold text-[10px] pl-[10px]">exposure rate</div>
                     <div class="h-[50px] w-[120px] ml-[15px]">
                         <canvas class="rate_histogram" data-labels='{{ jobstats.timeplots.rate.labels }}' data-values='{{ jobstats.timeplots.rate.data }}'></canvas>
                     </div>

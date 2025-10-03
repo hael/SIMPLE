@@ -9,12 +9,12 @@ toggleMicrograph = (element, id) => {
     }else{
         micrographsdeselection.push(id)
     }
-    console.log(micrographsdeselection)
     sessionStorage.setItem("micrographsdeselection", JSON.stringify(micrographsdeselection));
+    updateCounts()
 }
 
 selectAbove = (element, id) => {
-  let micrographsdeselection = indices_post
+  let micrographsdeselection = [...indices_post]
   let threshold = true
   for(const miccontainer of element.parentElement.querySelectorAll(".micrographcontainer")){
     const deselected = miccontainer.querySelector(".deselected")
@@ -30,10 +30,11 @@ selectAbove = (element, id) => {
   }
   hideMenu()
   sessionStorage.setItem("micrographsdeselection", JSON.stringify(micrographsdeselection));
+  updateCounts()
 }
 
 selectBelow = (element, id) => {
-  let micrographsdeselection = indices_pre
+  let micrographsdeselection = [...indices_pre]
   let threshold = false
   for(const miccontainer of element.parentElement.querySelectorAll(".micrographcontainer")){
     if(miccontainer == element){
@@ -50,6 +51,7 @@ selectBelow = (element, id) => {
   }
   hideMenu()
   sessionStorage.setItem("micrographsdeselection", JSON.stringify(micrographsdeselection));
+  updateCounts()
 }
 
 showMenu = (element, event) => {
@@ -118,6 +120,16 @@ saveSelectionMic = (element) => {
   element.form.submit()
 }
 
+updateCounts = () => {
+  const micscount            = document.querySelector("#micscount")
+  const micrographcontainers = document.querySelectorAll(".micrographcontainer")
+  let micrographsdeselection = []
+  let micrographsdeselectiontext = sessionStorage.getItem("micrographsdeselection")
+  if(micrographsdeselectiontext != null) micrographsdeselection = JSON.parse(micrographsdeselectiontext)
+  console.log(indices_pre.length, indices_post.length ,micrographcontainers.length , micrographsdeselection.length)
+  micscount.innerHTML = (indices_pre.length + indices_post.length + micrographcontainers.length - micrographsdeselection.length) + "/" + (indices_pre.length + indices_post.length + micrographcontainers.length)
+}
+
 window.addEventListener("load", () =>{
   let micrographsdeselectiontext = sessionStorage.getItem("micrographsdeselection")
   let micrographsdeselection = []
@@ -129,6 +141,7 @@ window.addEventListener("load", () =>{
       deselected.classList.remove("hidden")
     }   
   }
+  updateCounts()
 })
 
 window.addEventListener("load", () =>{

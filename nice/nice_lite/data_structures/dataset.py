@@ -131,7 +131,6 @@ class Dataset:
         datasetmodels   = DatasetModel.objects.filter(proj=project.id)
         if workspacemodels.count() + datasetmodels.count() == 0:
             projectmodel = ProjectModel.objects.filter(id=project.id).first()
-            print("DELETE", project.id)
             projectmodel.delete()
 
     def rename(self, request, project):

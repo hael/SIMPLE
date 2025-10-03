@@ -20,6 +20,7 @@ class JobView:
             "jobid"     : self.job.id,
             "prog"      : self.job.prog,
             "disp"      : self.job.disp,
+            "name"      : self.job.name,
             "status"    : self.job.status,
             "projstats" : projstats,
         }
@@ -120,8 +121,14 @@ class JobViewCls2D:
         if self.sortkey is not None and "data" in cls2dstats:
             for cls2dstat in cls2dstats["data"]:
                 cls2dstat["sortval"] = round(cls2dstat[self.sortkey], -int(math.floor(math.log10(abs(cls2dstat[self.sortkey])))) + (2)) # 3 sig fig
-                spritew = math.floor(math.sqrt(cls2dstat["thumbn"]))
-                spriteh = math.ceil(cls2dstat["thumbn"] / spritew) 
+                if "thumbnx" in cls2dstat:
+                    spritew = cls2dstat["thumbnx"]
+                else:
+                    spritew = math.floor(math.sqrt(cls2dstat["thumbn"]))
+                if "thumbny" in cls2dstat:
+                    spriteh = cls2dstat["thumbny"]
+                else:
+                    spriteh = math.ceil(cls2dstat["thumbn"] / spritew) 
                 cls2dstat["spritew"] = spritew * 100
                 cls2dstat["spriteh"] = spriteh * 100
                 x = (cls2dstat["thumbidx"] - 1) % spritew

@@ -1,5 +1,6 @@
 # global imports
 import os
+import time
 import pathlib
 from django.shortcuts               import redirect, render
 from django.http                    import HttpResponse
@@ -213,6 +214,7 @@ def snapshot_stream_classification_2D(request, jobid):
     snapshot_iteration = request.POST["snapshot_iteration"]
     job.snapshot_classification_2D(snapshot_selection, snapshot_iteration)
     response = redirect('nice_lite:view_stream_classification_2D', jobid=jobid)
+    time.sleep(2) #sleep for user to see message
     return response
 
 @login_required(login_url="/login/")
@@ -316,11 +318,12 @@ def update_preprocess_icescore(request, jobid):
     
 @login_required(login_url="/login/")
 def update_classification_2D_mskdiam(request, jobid):
+    time.sleep(1) #sleep for user to see message
     job = Job(id=jobid)
     mskdiam = request.POST["mskdiam"]
     job.update_mskdiam(mskdiam)
     response = redirect('nice_lite:view_stream_classification_2D', jobid=jobid)
-    return response@login_required(login_url="/login/")
+    return response
 
 @login_required(login_url="/login/")
 def link_stream_particle_set(request, jobid, setid, filename):

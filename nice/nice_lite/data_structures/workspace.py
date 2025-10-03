@@ -258,7 +258,7 @@ class Workspace:
         workspacemodels = WorkspaceModel.objects.filter(proj=project.id)
         datasetmodels   = DatasetModel.objects.filter(proj=project.id)
         if workspacemodels.count() + datasetmodels.count() > 0:
-            print("COUNT", workspacemodels.count() + datasetmodels.count())
+            project.delete()
 
     def rename(self, request, project):
         if "new_workspace_name" in request.POST:

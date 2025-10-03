@@ -9,8 +9,8 @@ toggleCls2d = (element, id) => {
     }else{
         cls2ddeselection.push(id)
     }
-    console.log(cls2ddeselection)
     sessionStorage.setItem("cls2ddeselection", JSON.stringify(cls2ddeselection));
+    updateCounts()
 }
 
 selectAbove = (element, id) => {
@@ -30,10 +30,11 @@ selectAbove = (element, id) => {
   }
   hideMenu()
   sessionStorage.setItem("cls2ddeselection", JSON.stringify(cls2ddeselection));
+  updateCounts()
 }
 
 selectBelow = (element, id) => {
-  let cls2ddeselection = indices_pre
+  let cls2ddeselection = []
   let threshold = false
   for(const cls2dcontainer of element.parentElement.querySelectorAll(".cls2dcontainer")){
     if(cls2dcontainer == element){
@@ -49,6 +50,7 @@ selectBelow = (element, id) => {
   }
   hideMenu()
   sessionStorage.setItem("cls2ddeselection", JSON.stringify(cls2ddeselection));
+  updateCounts()
 }
 
 showMenu = (element, event) => {
@@ -97,6 +99,28 @@ saveSelectionCls2D = (element) => {
   element.form.submit()
 }
 
+updateCounts = () => {
+  const clustercount    = document.querySelector("#clustercount")
+  const particlecount   = document.querySelector("#particlecount")
+  const cls2dcontainers = document.querySelectorAll(".cls2dcontainer")
+  let cls2ddeselectiontext = sessionStorage.getItem("cls2ddeselection")
+  let cls2ddeselection = []
+  if(cls2ddeselectiontext != null) cls2ddeselection = JSON.parse(cls2ddeselectiontext)
+  clustercount.innerHTML = (cls2dcontainers.length - cls2ddeselection.length) + "/" + cls2dcontainers.length 
+  nptcls     = 0
+  nptcls_tot = 0
+  for(const cls2dcontainer of cls2dcontainers){
+    const deselected = cls2dcontainer.querySelector(".deselected")
+    const pop = Number(cls2dcontainer.dataset.pop)
+    const idx = Number(cls2dcontainer.dataset.idx)
+    nptcls_tot = nptcls_tot + pop
+    if(!cls2ddeselection.includes(idx)){
+      nptcls = nptcls + pop
+    }
+  }
+  particlecount.innerHTML = nptcls + "/" + nptcls_tot
+}
+
 window.addEventListener("load", () =>{
   let cls2ddeselectiontext = sessionStorage.getItem("cls2ddeselection")
   let cls2ddeselection = []
@@ -108,6 +132,7 @@ window.addEventListener("load", () =>{
       deselected.classList.remove("hidden")
     }   
   }
+  updateCounts()
 })
 
 window.addEventListener("load", () =>{
