@@ -3519,6 +3519,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_pickrefs%set_input('img_ios', 1,  pickrefs)
+        make_pickrefs%img_ios(1)%required     = .true.
         ! parameter input/output
         call make_pickrefs%set_input('parm_ios', 1, smpd)
         make_pickrefs%parm_ios(1)%descr_short = 'Target sampling distance'
@@ -4574,7 +4575,9 @@ contains
         ! <empty>
         ! search controls
         call reproject%set_input('srch_ctrls', 1, nspace)
+        reproject%srch_ctrls(1)%required = .true.
         call reproject%set_input('srch_ctrls', 2, pgrp)
+        reproject%srch_ctrls(2)%required = .true.
         ! filter controls
         ! <empty>
         ! mask controls
