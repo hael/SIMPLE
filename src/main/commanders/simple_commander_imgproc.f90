@@ -559,16 +559,19 @@ contains
     subroutine exec_binarize_mics( self, cline )
         use simple_segmentation
         use simple_binimage, only: binimage
+        use simple_tvfilter, only: tvfilter
         class(binarize_mics_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM = 100., DAMP = 10., FRAC_FG = 0.2
-        integer, parameter :: WINSZ_SAUVOLA = 6, WINSZ_MED = 3, NQ = 8
+        real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM_ICM = 100., DAMP = 10., FRAC_FG = 0.17, LAM_TV = 7.
+        integer, parameter :: WINSZ_MED = 3
         character(len=LONGSTRLEN), allocatable :: micnames(:)
         character(len=:),          allocatable :: fname 
+        integer,                   allocatable :: sz_arr(:)
         type(parameters) :: params
         type(image)      :: mic_raw, mic_shrink, mic_sauv
-        type(binimage)   :: mic_bin
-        integer          :: nmics, ldim_raw(3), ldim(3), imic
+        type(binimage)   :: mic_bin, img_cc
+        type(tvfilter)   :: tvf
+        integer          :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc
         real             :: scale, bin_t
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
@@ -611,23 +614,45 @@ contains
             ! low-pass filter
             call mic_shrink%bp(0.,LP_UB)
             fname = 'mic_shrink_lp'//int2str_pad(imic,3)//'.mrc'
-            ! call mic_shrink%write(fname)
+            call mic_shrink%write(fname)
+            ! TV denoising
+            call tvf%new()
+            call tvf%apply_filter(mic_shrink, LAM_TV)
+            call tvf%kill
+            fname = 'mic_shrink_lp_tv'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(fname)
+            ! Non-local-means denoising
             call mic_shrink%NLmean2D
-            fname = 'mic_shrink_lp_nlmean'//int2str_pad(imic,3)//'.mrc'
-            ! call mic_shrink%write(fname)
-            call mic_shrink%ICM2D( LAM )
-            fname = 'mic_shrink_lp_nlmean_icm'//int2str_pad(imic,3)//'.mrc'
-            ! call mic_shrink%write(fname)
+            fname = 'mic_shrink_lp_tv_nlmean'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(fname)
+            ! Iterated conditional modes denoising
+            call mic_shrink%ICM2D(LAM_ICM)
+            fname = 'mic_shrink_lp_tv_nlmean_icm'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(fname)
+            ! Median filter
             call mic_shrink%real_space_filter(WINSZ_MED, 'median')
             call mic_shrink%calc_bin_thres(FRAC_FG, bin_t)
-            fname = 'mic_shrink_lp_nlmean_icm_med'//int2str_pad(imic,3)//'.mrc'
+            fname = 'mic_shrink_lp_tv_nlmean_icm_med'//int2str_pad(imic,3)//'.mrc'
             call mic_shrink%write(fname)
             call mic_shrink%binarize(bin_t)
             call mic_bin%transfer2bimg(mic_shrink)
-            call mic_bin%erode()
-            call mic_bin%erode()
-            fname = 'mic_shrink_lp_nlmean_icm_med_bin'//int2str_pad(imic,3)//'.mrc'
+            call mic_bin%erode() ! -4 A
+            call mic_bin%erode() ! -4 A
+            call mic_bin%set_largestcc2background
+            call mic_bin%inv_bimg()
+            fname = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
             call mic_bin%write(fname)
+            ! identify connected components
+            call mic_bin%find_ccs(img_cc)
+            call img_cc%get_nccs(nccs)
+            ! gather size info
+            do icc = 1, nccs
+
+
+            end do
+            
+
+
         end do
         call mic_shrink%kill
         call mic_bin%kill_bimg
