@@ -13,39 +13,49 @@
     <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row text-[12px]">
             <div class="font-bold text-[14px]">2D clusters</div>
-            {% if "cls2D" in projstats and "numeric_keys" in projstats.cls2D %}
-                <form class="flex flex-1 items-center justify-center" method="POST" action={% url 'nice_lite:view_job_cls2D' jobid %}>
-                    {% csrf_token %}
-                    <div class="flex flex-1 justify-center">
-                        <div class="font-bold">sort</div>
-                        <select name="sort_cls2d_key" class="bg-nice4bg rounded" oninput="this.form.submit()">
-                            <option>n</option>
-                            {% for key in projstats.cls2D.numeric_keys %}
-                                <option {% if key == sortkey %} selected {% endif %}>{{ key }}</option>
-                            {% endfor %}
-                        </select>
-                        {% if sortasc %}
-                            <div onclick="setSortDesc(this)">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                                    <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 9.5a.75.75 0 0 1-.75-.75V8.06l-.72.72a.75.75 0 0 1-1.06-1.06l2-2a.75.75 0 0 1 1.06 0l2 2a.75.75 0 1 1-1.06 1.06l-.72-.72v2.69a.75.75 0 0 1-.75.75Z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
-                        {% else %}
-                            <div onclick="setSortAsc(this)">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                                    <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 3.5a.75.75 0 0 1 .75.75v2.69l.72-.72a.75.75 0 1 1 1.06 1.06l-2 2a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 0 1 1.06-1.06l.72.72V6.25A.75.75 0 0 1 8 5.5Z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
-                        {% endif %}
-                    </div>
-                    <input type="hidden" name="sort_cls2d_asc" value="{% if sortasc %}true{% else %}false{% endif %}"></input>  
-                </form>
-            {% endif %}
+            <div class="flex flex-1 justify-around items-center">
+                <div class="flex flex-row">
+                    <div class="font-bold mr-[5px]">clusters</div>
+                    <div id="clustercount"></div>
+                </div>
+                <div class="flex flex-row">
+                    <div class="font-bold mr-[5px]">particles</div>
+                    <div id="particlecount"></div>
+                </div>
+                {% if "cls2D" in projstats and "numeric_keys" in projstats.cls2D %}
+                    <form class="flex items-center justify-center" method="POST" action={% url 'nice_lite:view_job_cls2D' jobid %}>
+                        {% csrf_token %}
+                        <div class="flex flex-1 justify-center">
+                            <div class="font-bold">sort</div>
+                            <select name="sort_cls2d_key" class="bg-nice4bg rounded" oninput="this.form.submit()">
+                                <option>n</option>
+                                {% for key in projstats.cls2D.numeric_keys %}
+                                    <option {% if key == sortkey %} selected {% endif %}>{{ key }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if sortasc %}
+                                <div onclick="setSortDesc(this)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                                        <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 9.5a.75.75 0 0 1-.75-.75V8.06l-.72.72a.75.75 0 0 1-1.06-1.06l2-2a.75.75 0 0 1 1.06 0l2 2a.75.75 0 1 1-1.06 1.06l-.72-.72v2.69a.75.75 0 0 1-.75.75Z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                            {% else %}
+                                <div onclick="setSortAsc(this)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                                        <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 3.5a.75.75 0 0 1 .75.75v2.69l.72-.72a.75.75 0 1 1 1.06 1.06l-2 2a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 0 1 1.06-1.06l.72.72V6.25A.75.75 0 0 1 8 5.5Z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <input type="hidden" name="sort_cls2d_asc" value="{% if sortasc %}true{% else %}false{% endif %}"></input>  
+                    </form>
+                {% endif %}
+            </div>
         </div>
         <div class="flex flex-row flex-wrap flex-1 overflow-y-auto snap-y snap-mandatory content-start">
             {% if "data" in cls2ds %}
                 {% for cls in cls2ds.data %}
-                    <div class="cls2dcontainer snap-center" data-idx={{ cls.n }} onclick="toggleCls2d(this, {{ cls.n }})" oncontextmenu="showMenu(this, event)" title="particles: {{ cls.pop }}&#013;resolution: {{ cls.res | floatformat:1 }}Å">
+                    <div class="cls2dcontainer snap-center" data-pop={{ cls.pop }} data-idx={{ cls.n }} onclick="toggleCls2d(this, {{ cls.n }})" oncontextmenu="showMenu(this, event)" title="particles: {{ cls.pop }}&#013;resolution: {{ cls.res | floatformat:1 }}Å">
                         <div class="m-[5px] px-[5px] pb-[5px] rounded bg-nice4bg border-nice4header border-[1px]">
                             {% if sortkey is not None and "sortval" in cls %}
                                 <div class="flex text-[10px]">
@@ -83,17 +93,5 @@
             </form>
         </div>
     </div>
-    <script type="text/javascript">
-        {% if "indices_pre" in mics %}
-            const indices_pre = {{ mics.indices_pre|safe }}
-        {% else %}
-            const indices_pre = []
-        {% endif %}
-        {% if "indices_post" in mics %}
-            const indices_post = {{ mics.indices_post|safe }}
-        {% else %}
-            const indices_post = []
-        {% endif %}
-    </script>
 </body>
 </html>

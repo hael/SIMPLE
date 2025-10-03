@@ -4648,16 +4648,18 @@ contains
         character(len=:),   allocatable   :: stkname
         integer,            allocatable   :: clsinds(:)
         logical,            allocatable   :: clsmsk(:)
-        integer                           :: ncls, n_thumbnails, out_ind, iori, ithumb
+        integer                           :: ncls, n_thumbnails, out_ind, iori, ithumb, nxtiles, nytiles
         real                              :: smpd, thumbnail_scale
         call self%get_cavgs_stk(stkname, ncls, smpd, out_ind=out_ind)
         call self%os_cls2D%mask_from_state( 1, clsmsk, clsinds )
-        call mrc2jpeg_tiled(trim(stkname), stemname(projfile) //"/thumb2D.jpeg", scale=thumbnail_scale, ntiles=n_thumbnails, msk=clsmsk)
+        call mrc2jpeg_tiled(trim(stkname), stemname(projfile) //"/thumb2D.jpeg", scale=thumbnail_scale, ntiles=n_thumbnails, msk=clsmsk, n_xtiles=nxtiles, n_ytiles=nytiles)
         ithumb = 1
         do iori=1, self%os_cls2D%get_noris()
             call self%os_cls2D%set(iori, "thumb",    stemname(projfile) //"/thumb2D.jpeg")
             call self%os_cls2D%set(iori, "thumbn",   count(clsmsk))
             call self%os_cls2D%set(iori, "thumbdim", JPEG_DIM)
+            call self%os_cls2D%set(iori, "thumbnx",  nxtiles)
+            call self%os_cls2D%set(iori, "thumbny",  nytiles)
             if(clsmsk(iori)) then
                 call self%os_cls2D%set(iori, "thumbidx", ithumb)
                 ithumb = ithumb + 1

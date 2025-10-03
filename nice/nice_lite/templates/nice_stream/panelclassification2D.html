@@ -135,7 +135,7 @@
                     {% csrf_token %}
                     <div class="font-bold text-[10px] ml-[10px]">mask diameter</div>
                     <div class="flex flex-row items-center justify-center">
-                        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onblur="this.form.submit()"></input>
+                        <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)"></input>
                         <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
                         <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[10px]"></div>
                     </div>
@@ -146,7 +146,7 @@
                     {% csrf_token %}
                     <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
                     <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
-                    <button class="userbutton" onclick="selectCls(this.form)">snapshot</button>
+                    <button class="userbutton" type="button" onclick="selectCls(this)">snapshot</button>
                 </form> 
             </div>
         {% endif %}

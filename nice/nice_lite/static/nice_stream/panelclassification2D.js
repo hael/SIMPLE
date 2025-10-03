@@ -26,9 +26,8 @@ toggleCls = (element) => {
     lastinteraction = Date.now();
 }
 
-selectCls = (form) => {
+selectCls = (element) => {
     const selected = []
-    var path       = ""
     for(const cls2D of document.getElementsByClassName("cls2D")){
         const idx  = Number(cls2D.dataset.idx)
         if(!cls2D.classList.contains("disabledbutton")){
@@ -36,6 +35,16 @@ selectCls = (form) => {
         }
     }
     document.getElementById("snapshot_selection").value = selected
+    const loadinggauze = document.getElementById("loadinggauze")
+    loadinggauze.innerHTML = "generating snapshot ..."
+    loadinggauze.classList.remove("hidden")
+    loadinggauze.style.opacity = "1";
+    element.form.submit()
+    timeout = setTimeout(() => { 
+      // we know submit doesnt return for at least 2 seconds
+      const psets_iframe = window.parent.document.querySelector("#psets_iframe")
+      psets_iframe.src = psets_iframe.src
+    }, 1500);
 }
 
 drawMask = () => {
@@ -61,6 +70,14 @@ updateMskdiam = (element) => {
   current_mskdiam.innerHTML = mskdiam + "Å" 
   selected_mskdiam.value    = mskdiam
   drawMask()
+}
+
+updateMskdiamSubmit = (element) => {
+  const loadinggauze = document.getElementById("loadinggauze")
+  loadinggauze.innerHTML = "updating mask diameter ..."
+  loadinggauze.classList.remove("hidden")
+  loadinggauze.style.opacity = "1";
+  element.form.submit()
 }
 
 showMenu = (element, event) => {
@@ -231,7 +248,7 @@ window.addEventListener("load", () =>{
 window.addEventListener("load", () =>{
   document.getElementById("loadinggauze").style.opacity = "0";
   setTimeout(function () {
-   document.getElementById("loadinggauze").style.display = "none";
+   document.getElementById("loadinggauze").classList.add("hidden");
   }, 600);
 })
 

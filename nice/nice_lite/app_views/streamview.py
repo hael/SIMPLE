@@ -332,8 +332,8 @@ class StreamViewParticleSets:
     def render(self):
         project = Project(project_id=self.job.dset.proj.id)
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.particle_sets_stats,
+            "jobid"      : self.job.id,
+            "jobstats"   : self.job.particle_sets_stats,
             "workspaces" : project.workspaces_list
         }
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())

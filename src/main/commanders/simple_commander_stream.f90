@@ -2309,8 +2309,8 @@ contains
                             call communicator_add_cls2D(trim(get_pool_cavgs_jpeg()),&
                                 &trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()),&
                                 &pool_jpeg_map(i + 1),&
-                                &xtile * (100 / (get_pool_cavgs_jpeg_ntilesx() - 1)),&
-                                &ytile * (100 / (get_pool_cavgs_jpeg_ntilesy() - 1)),&
+                                &xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1)),&
+                                &ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1)),&
                                 &100 * get_pool_cavgs_jpeg_ntilesy(),&
                                 &100 * get_pool_cavgs_jpeg_ntilesx(),&
                                 &pop=pool_jpeg_pop(i + 1),&
@@ -2351,8 +2351,8 @@ contains
                 ytile = 0
                 do i=0, size(final_selection) - 1
                     call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
-                        &xtile * (100 / (nxtiles - 1)),&
-                        &ytile * (100 / (nytiles - 1)),&
+                        &xtile * (100.0 / (nxtiles - 1)),&
+                        &ytile * (100.0 / (nytiles - 1)),&
                         &100 * nytiles,&
                         &100 * nxtiles,&
                         &pop=pool_jpeg_pop(i + 1),&
@@ -2654,7 +2654,8 @@ contains
 
             subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop)
                 character(*),      intent(in) :: path, mrcpath
-                integer,           intent(in) :: spritex, spritey, spriteh, spritew, mrc_idx
+                real,              intent(in) :: spritex, spritey
+                integer,           intent(in) :: spriteh, spritew, mrc_idx
                 integer, optional, intent(in) :: pop
                 real,    optional, intent(in) :: res
                 type(json_value),  pointer    :: template
@@ -2662,8 +2663,8 @@ contains
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "mrcpath", mrcpath)
                 call http_communicator%json%add(template, "mrcidx",  mrc_idx)
-                call http_communicator%json%add(template, "spritex", spritex)
-                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spritex", dble(spritex))
+                call http_communicator%json%add(template, "spritey", dble(spritey))
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
@@ -2673,14 +2674,15 @@ contains
 
             subroutine communicator_add_selected_reference(path, spritex, spritey, spriteh, spritew, res, pop)
                 character(*),      intent(in) :: path
-                integer,           intent(in) :: spritex, spritey, spriteh, spritew
+                real,              intent(in) :: spritex, spritey
+                integer,           intent(in) :: spriteh, spritew
                 integer, optional, intent(in) :: pop
                 real,    optional, intent(in) :: res
                 type(json_value),  pointer    :: template
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "spritex", spritex)
-                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spritex", dble(spritex))
+                call http_communicator%json%add(template, "spritey", dble(spritey))
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 if(present(res)) call http_communicator%json%add(template, "res",     dble(res))

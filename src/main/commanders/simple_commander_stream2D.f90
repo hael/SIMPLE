@@ -277,8 +277,8 @@ contains
                                 if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                     call communicator_add_cls2D_accepted(selection_jpeg,&
                                         &i + 1,&
-                                        &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
-                                        &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                        &xtile * (100.0 / (jpg_nxtiles - 1)),&
+                                        &ytile * (100.0 / (jpg_nytiles - 1)),&
                                         &100 * jpg_nytiles,&
                                         &100 * jpg_nxtiles,&
                                         &latest=.true.,&
@@ -287,8 +287,8 @@ contains
                                 else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                     call communicator_add_cls2D_rejected(selection_jpeg,&
                                         &i + 1,&
-                                        &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
-                                        &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                        &xtile * (100.0 / (jpg_nxtiles - 1)),&
+                                        &ytile * (100.0 / (jpg_nytiles - 1)),&
                                         &100 * jpg_nytiles,&
                                         &100 * jpg_nxtiles,&
                                         &latest=.true.,&
@@ -326,8 +326,8 @@ contains
                                     if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                         call communicator_add_cls2D_accepted(selection_jpeg,&
                                             &jpg_cls_map(i + 1),&
-                                            &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
-                                            &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                            &xtile * (100.0 / (jpg_nxtiles - 1)),&
+                                            &ytile * (100.0 / (jpg_nytiles - 1)),&
                                             &100 * jpg_nytiles,&
                                             &100 * jpg_nxtiles,&
                                             &res=cls_res(jpg_cls_map(i+1)),&
@@ -335,8 +335,8 @@ contains
                                     else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                         call communicator_add_cls2D_rejected(selection_jpeg,&
                                             &jpg_cls_map(i + 1),&
-                                            &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
-                                            &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                            &xtile * (100.0 / (jpg_nxtiles - 1)),&
+                                            &ytile * (100.0 / (jpg_nytiles - 1)),&
                                             &100 * jpg_nytiles,&
                                             &100 * jpg_nxtiles,&
                                             &res=cls_res(jpg_cls_map(i+1)),&
@@ -381,8 +381,8 @@ contains
                                         if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                             call communicator_add_cls2D_accepted(selection_jpeg,&
                                                 &jpg_cls_map(i + 1),&
-                                                &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
-                                                &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                                &xtile * (100.0 / (jpg_nxtiles - 1)),&
+                                                &ytile * (100.0 / (jpg_nytiles - 1)),&
                                                 &100 * jpg_nytiles,&
                                                 &100 * jpg_nxtiles,&
                                                 &latest=.true.,&
@@ -391,8 +391,8 @@ contains
                                         else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                             call communicator_add_cls2D_rejected(selection_jpeg,&
                                                 &jpg_cls_map(i + 1),&
-                                                &nint(xtile * (100.0 / (jpg_nxtiles - 1))),&
-                                                &nint(ytile * (100.0 / (jpg_nytiles - 1))),&
+                                                &xtile * (100.0 / (jpg_nxtiles - 1)),&
+                                                &ytile * (100.0 / (jpg_nytiles - 1)),&
                                                 &100 * jpg_nytiles,&
                                                 &100 * jpg_nxtiles,&
                                                 &latest=.true.,&
@@ -803,7 +803,8 @@ contains
 
             subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
                 character(*),      intent(in) :: path
-                integer,           intent(in) :: spritex, spritey, spriteh, spritew, idx
+                real,              intent(in) :: spritex, spritey
+                integer,           intent(in) :: spriteh, spritew, idx
                 logical, optional, intent(in) :: latest
                 integer, optional, intent(in) :: pop
                 real,    optional, intent(in) :: res
@@ -812,8 +813,8 @@ contains
                 if(present(latest)) l_latest = latest
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "spritex", spritex)
-                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spritex", dble(spritex))
+                call http_communicator%json%add(template, "spritey", dble(spritey))
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "idx",     idx)
@@ -828,7 +829,8 @@ contains
 
             subroutine communicator_add_cls2D_rejected(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
                 character(*),      intent(in) :: path
-                integer,           intent(in) :: spritex, spritey, spriteh, spritew, idx
+                real,              intent(in) :: spritex, spritey
+                integer,           intent(in) :: spriteh, spritew, idx
                 logical, optional, intent(in) :: latest
                 integer, optional, intent(in) :: pop
                 real,    optional, intent(in) :: res
@@ -837,8 +839,8 @@ contains
                 if(present(latest)) l_latest = latest
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "spritex", spritex)
-                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spritex", dble(spritex))
+                call http_communicator%json%add(template, "spritey", dble(spritey))
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "idx",     idx)
@@ -1030,8 +1032,8 @@ contains
                             &trim(get_pool_cavgs_jpeg()),&
                             &trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()),&
                             &pool_jpeg_map(i + 1),&
-                            &nint(xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1))),&
-                            &nint(ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1))),&
+                            &xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1)),&
+                            &ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1)),&
                             &100 * get_pool_cavgs_jpeg_ntilesy(),&
                             &100 * get_pool_cavgs_jpeg_ntilesx(),&
                             &pop=pool_jpeg_pop(i + 1),&
@@ -1066,6 +1068,7 @@ contains
                 if(found) then
                     call update_mskdiam(mskdiam_update)
                     if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
+                    time_last_import = time8()
                     call unpause_pool()
                 endif
                 call http_communicator%json%destroy(http_communicator%update_arguments)
@@ -1246,7 +1249,8 @@ contains
 
             subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, pop, res)
                 character(*),      intent(in)  :: path, mrcpath
-                integer,           intent(in)  :: spritex, spritey, spriteh, spritew, mrc_idx
+                real,              intent(in)  :: spritex, spritey
+                integer,           intent(in)  :: spriteh, spritew, mrc_idx
                 integer, optional, intent(in)  :: pop
                 real,    optional, intent(in)  :: res
                 type(json_value),  pointer     :: template
@@ -1254,8 +1258,8 @@ contains
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "mrcpath", mrcpath)
                 call http_communicator%json%add(template, "mrcidx",  mrc_idx)
-                call http_communicator%json%add(template, "spritex", spritex)
-                call http_communicator%json%add(template, "spritey", spritey)
+                call http_communicator%json%add(template, "spritex", dble(spritex))
+                call http_communicator%json%add(template, "spritey", dble(spritey))
                 call http_communicator%json%add(template, "spriteh", spriteh)
                 call http_communicator%json%add(template, "spritew", spritew)
                 call http_communicator%json%add(template, "mskdiam",    nint(params%mskdiam))
