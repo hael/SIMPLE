@@ -12,10 +12,10 @@ import os
 from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nice_project.settings')
-os.environ["PATH"] = '/home/jcaesar/Code/SIMPLE/build/bin' + os.pathsep + os.environ["PATH"]
-# add any desired environment variables here
-#os.environ["LD_LIBRARY_PATH"] = '/path/to/lib' + os.pathsep + os.environ["LD_LIBRARY_PATH"]
-#
-
+os.environ["SIMPLE_PATH"]     = '@SIMPLE_PATH@'
+os.environ["SIMPLE_QSYS"]     = 'local'
+os.environ["SIMPLE_EMAIL"]    = 'my.name@uni.edu'
+os.environ["PATH"]            = '@SIMPLE_PATH@/bin' + os.pathsep + '@PATH@' + os.pathsep + os.environ["PATH"]
+os.environ["LD_LIBRARY_PATH"] = '@SIMPLE_PATH@/lib' + os.pathsep + '@LD_LIBRARY_PATH@' + os.pathsep + os.environ["LD_LIBRARY_PATH"]
 
 application = get_wsgi_application()

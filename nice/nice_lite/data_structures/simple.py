@@ -1,5 +1,6 @@
 # global imports
 import os
+import stat
 import json
 import copy
 import shutil
@@ -110,11 +111,13 @@ class SIMPLEStream:
         except IOError as error:
             print("File '%s' can not be written")
             return False
+        os.chmod(dispatch_script_path, stat.S_IRWXU)
         if shutil.which(dispatchmodel.scmd) is None: return False
         submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
         try:
             subprocess.run(submit_cmd,
-                cwd=self.base_dir
+                cwd=self.base_dir,
+                start_new_session=True
                 )
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
@@ -210,11 +213,13 @@ class SIMPLE:
         except IOError as error:
             print("File '%s' can not be written")
             return False
+        os.chmod(dispatch_script_path, stat.S_IRWXU)
         if shutil.which(dispatchmodel.scmd) is None: return False
         submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
         try:
-            subprocess.run(submit_cmd,
-                cwd=self.base_dir
+            subprocess.Popen(submit_cmd,
+                cwd=self.base_dir,
+                start_new_session=True
                 )
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
