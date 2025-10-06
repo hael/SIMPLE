@@ -1,16 +1,30 @@
-include(ExternalProject)
-
 if(${NICE})
 
-	ExternalProject_Add(
-        nice
-        URL ${CMAKE_CURRENT_SOURCE_DIR}/nice_pkg_7619eed.tar.gz
-        CMAKE_ARGS -DINSTALL_PREFIX=${CMAKE_BINARY_DIR}/nice
-        INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/lib ${CMAKE_BINARY_DIR}/nice/lib && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/var ${CMAKE_BINARY_DIR}/nice/var && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/etc ${CMAKE_BINARY_DIR}/nice/etc && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/bin ${CMAKE_BINARY_DIR}/nice/bin && ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/nice/nice-prefix/src/nice-build/share ${CMAKE_BINARY_DIR}/nice/share && make install 
+    find_package(Python3 3.10)
+
+    add_custom_target(nice_src ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_CURRENT_SOURCE_DIR}/example_templates ${CMAKE_CURRENT_BINARY_DIR}/example_templates
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_CURRENT_SOURCE_DIR}/nice_project      ${CMAKE_CURRENT_BINARY_DIR}/nice_project
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_CURRENT_SOURCE_DIR}/nice_lite         ${CMAKE_CURRENT_BINARY_DIR}/nice_lite
+        COMMAND ${CMAKE_COMMAND} -E copy                        ${CMAKE_CURRENT_SOURCE_DIR}/manage.py         ${CMAKE_CURRENT_BINARY_DIR}/manage.py
+        COMMAND ${CMAKE_COMMAND} -E copy                        ${CMAKE_CURRENT_SOURCE_DIR}/manage.py         ${CMAKE_CURRENT_BINARY_DIR}/manage.py
+        COMMAND ${CMAKE_COMMAND} -D SIMPLE_PATH=${CMAKE_BINARY_DIR} -D SRC_PATH=${CMAKE_CURRENT_SOURCE_DIR} -P "${CMAKE_CURRENT_LIST_DIR}/substitute_nice_src.cmake"
+        COMMAND ${CMAKE_COMMAND} -E rm                          ${CMAKE_CURRENT_BINARY_DIR}/nice_project/wsgi.py.in
     )
 
-    write_file(${CMAKE_BINARY_DIR}/bin/nice "#!/usr/bin/env bash\nroot=`dirname -- \"$0\"`\n$root/../nice/bin/nice local")
-    file(CHMOD ${CMAKE_BINARY_DIR}/bin/nice PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
-    
-endif()
+    add_custom_target(nice_venv ALL
+        COMMAND ${Python3_EXECUTABLE} -m venv ${CMAKE_CURRENT_BINARY_DIR}/venv
+        COMMAND ./venv/bin/python3 -m pip install --upgrade pip
+        COMMAND ./venv/bin/pip3 install --isolated --require-virtualenv --no-cache-dir --no-input django==5.2.5 pytailwindcss==0.2.0 dirsync==2.2.6
+    )
 
+    add_custom_target(nice_build ALL
+        DEPENDS nice_src
+        DEPENDS nice_venv
+        COMMAND ./venv/bin/tailwindcss -i nice_lite/templates/nice_lite/tailwind.css -o nice_lite/static/nice_lite/nice_lite.css --minify
+        COMMAND ./venv/bin/python3 ${CMAKE_CURRENT_BINARY_DIR}/manage.py makemigrations
+        COMMAND ./venv/bin/python3 ${CMAKE_CURRENT_BINARY_DIR}/manage.py migrate
+        COMMAND ./venv/bin/python3 ${CMAKE_CURRENT_BINARY_DIR}/manage.py collectstatic --no-input
+    )
+
+endif()
