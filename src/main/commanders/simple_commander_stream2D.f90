@@ -34,7 +34,8 @@ end type commander_stream_abinitio2D
 
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for processed projects
-character(len=STDLEN), parameter :: micspproj_fname = './streamdata.simple'
+character(len=STDLEN), parameter :: micspproj_fname      = './streamdata.simple'
+character(len=STDLEN), parameter :: REJECTED_CLS_STACK   = './rejected_cls.mrc'
 integer,               parameter :: LONGTIME        = 60    ! time lag after which a movie/project is processed
 integer,               parameter :: WAITTIME        = 10    ! movie folder watched every WAITTIME seconds
 integer(kind=dp),      parameter :: FLUSH_TIMELIMIT = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
@@ -110,39 +111,9 @@ contains
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
-        if(.not. dir_exists(trim(params%dir_target))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-            end do
-        endif
+        call waiting_for_folder(http_communicator, params%dir_target)
+        call waiting_for_folder(http_communicator, trim(params%dir_target)//'/spprojs')
+        call waiting_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed')
         ! mskdiam
         if( .not. cline%defined('mskdiam') )then
             ! can this go now using 90% box size as msk?????
@@ -674,9 +645,12 @@ contains
 
             ! make completed project files visible to the watcher of the next application
             subroutine flag_complete_sets
-                type(sp_project)              :: spproj_imported
-                character(len=:), allocatable :: destination
-                integer :: iset, n_state_nonzero
+                use simple_image, only:image
+                type(sp_project)              :: spproj
+                type(image)                   :: img
+                character(len=:), allocatable :: destination, stk
+                real    :: smpd
+                integer :: ldim(3), icls, iset, n_state_nonzero, nimgs, ncls
                 do iset = 1,setslist%n
                     if( setslist%imported(iset) ) cycle
                     if( setslist%processed(iset) )then
@@ -685,14 +659,37 @@ contains
                         setslist%imported(iset) = .true.
                         write(logfhandle,'(A,I3)')'>>> COMPLETED SET ',setslist%ids(iset)
                         ! update particle counts
-                        call spproj_imported%read_segment("ptcl2D", destination)
-                        n_state_nonzero = spproj_imported%os_ptcl2D%count_state_gt_zero()
-                        n_accepted = n_accepted + n_state_nonzero
-                        n_rejected = n_rejected + spproj_imported%os_ptcl2D%get_noris() - n_state_nonzero 
-                        call spproj_imported%kill()
+                        call spproj%read_segment('ptcl2D', destination)
+                        n_state_nonzero = spproj%os_ptcl2D%count_state_gt_zero()
+                        n_accepted      = n_accepted + n_state_nonzero
+                        n_rejected      = n_rejected + spproj%os_ptcl2D%get_noris() - n_state_nonzero
+                        ! updates stack of rejected classes
+                        call spproj%read_segment('cls2D', destination)
+                        call spproj%read_segment('out', destination)
+                        call spproj%get_cavgs_stk(stk, ncls, smpd)
+                        nimgs = 0
+                        if( file_exists(REJECTED_CLS_STACK) )then
+                            call find_ldim_nptcls(REJECTED_CLS_STACK, ldim, nimgs)
+                        else
+                            call find_ldim_nptcls(stk, ldim, ncls)
+                        endif
+                        if( .not.img%exists() )then
+                            ldim(3) = 1
+                            call img%new(ldim,smpd)
+                        endif
+                        do icls = 1,ncls
+                            if( spproj%os_cls2D%get_state(icls) == 0 )then
+                                nimgs = nimgs+1
+                                call img%read(stk,icls)
+                                call img%write(REJECTED_CLS_STACK, nimgs)
+                            endif
+                        enddo
+                        call spproj%kill()
                     endif
                 enddo
+                call img%kill
             end subroutine flag_complete_sets
+
             
             subroutine communicator_init()
                 call http_communicator%json%add(http_communicator%job_json, "stage",                   "initialising")
@@ -914,28 +911,8 @@ contains
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
-        if(.not. dir_exists(trim(params%dir_target))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-            end do
-        endif
+        call waiting_for_folder(http_communicator, params%dir_target)
+        call waiting_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed')
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -1270,5 +1247,24 @@ contains
             end subroutine communicator_add_cls2D
 
     end subroutine exec_stream_abinitio2D
+
+    ! PRIVATE UTILITIES
+
+    subroutine waiting_for_folder( httpcom, folder )
+        class(stream_http_communicator), intent(inout) :: httpcom
+        character(len=*),                intent(in)    :: folder
+        integer :: i
+        if(.not. dir_exists(trim(folder))) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(folder), " TO BE GENERATED"
+            do i = 1,360
+                if(dir_exists(trim(folder))) then
+                    write(logfhandle, *) ">>> ", trim(folder), " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call httpcom%send_jobstats()
+            end do
+        endif
+    end subroutine waiting_for_folder
 
 end module simple_commander_stream2D
