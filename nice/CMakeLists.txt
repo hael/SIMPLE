@@ -15,7 +15,7 @@ if(${NICE})
     add_custom_target(nice_venv ALL
         COMMAND ${Python3_EXECUTABLE} -m venv ${CMAKE_CURRENT_BINARY_DIR}/venv
         COMMAND ./venv/bin/python3 -m pip install --upgrade pip
-        COMMAND ./venv/bin/pip3 install --isolated --require-virtualenv --no-cache-dir --no-input django==5.2.5 pytailwindcss==0.2.0 dirsync==2.2.6
+        COMMAND ./venv/bin/pip3 install --isolated --require-virtualenv --no-cache-dir --no-input django==5.2.5 pytailwindcss==0.2.0 dirsync==2.2.6 pysqlite3-binary==0.5.4
     )
 
     add_custom_target(nice_build ALL
