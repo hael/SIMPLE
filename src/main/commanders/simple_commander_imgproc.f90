@@ -566,13 +566,13 @@ contains
         integer, parameter :: WINSZ_MED = 3
         character(len=LONGSTRLEN), allocatable :: micnames(:)
         character(len=:),          allocatable :: fname 
-        integer,                   allocatable :: sz_arr(:)
+        integer,                   allocatable :: sz_arr(:), cc_imat(:,:,:), cc_imat_copy(:,:,:)
         type(parameters) :: params
         type(image)      :: mic_raw, mic_shrink, mic_sauv
         type(binimage)   :: mic_bin, img_cc
         type(tvfilter)   :: tvf
         integer          :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc
-        real             :: scale, bin_t
+        real             :: scale, bin_t, diam
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
@@ -646,8 +646,17 @@ contains
             call mic_bin%find_ccs(img_cc)
             call img_cc%get_nccs(nccs)
             ! gather size info
+            call img_cc%get_imat(cc_imat)
+            call img_cc%get_imat(cc_imat_copy)
             do icc = 1, nccs
-
+                call img_cc%diameter_cc(icc, diam)
+                if( diam > params%moldiam_max .or. diam < SMPD_SHRINK1 * 3. ) then
+                    ! remove connected component
+                    where ( cc_imat == icc ) cc_imat_copy = 0
+                else
+                    ! stash diameter
+                    
+                endif
 
             end do
             
