@@ -1638,10 +1638,10 @@ contains
                 ptcl_cnt  = ptcl_cnt+1
                 ! copy image
                 if(spproj%os_ptcl2D%isthere(iptcl, 'indstk') .and. spproj%os_ptcl2D%get(iptcl, 'indstk') > 0.0) then
-                    write(logfhandle, *) "STK ", spproj%os_ptcl2D%get(iptcl,'indstk')
+                    ! write(logfhandle, *) "STK ", spproj%os_ptcl2D%get(iptcl,'indstk')
                     call img%read(stkname, spproj%os_ptcl2D%get_int(iptcl,'indstk'))
                 else
-                    write(logfhandle, *) "STK2 " // int2str(spproj%os_ptcl2D%get_int(iptcl,'indstk'))
+                    ! write(logfhandle, *) "STK2 " // int2str(spproj%os_ptcl2D%get_int(iptcl,'indstk'))
                     call img%read(stkname, iptcl-fromp+1)
                 endif
                 call img%write(newstkname, ptcl_cnt)

@@ -464,11 +464,11 @@ contains
         tmpdir = trim(adjustl(dir))
         lenstr = len_trim(tmpdir)
         if( lenstr==0 ) then
-            if( verbose )write(logfhandle,*)"syslib:: simple_mkdir arg empty "//trim(tmpdir)
+            if( l_verbose )write(logfhandle,*)"syslib:: simple_mkdir arg empty "//trim(tmpdir)
             return
         else if( (lenstr<=2) .and. (tmpdir(1:1)=='/' .or. tmpdir(1:1)=='.') )then
             ! ignore '/' '.' './' '..'
-            if( verbose )write(logfhandle,*)"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
+            if( l_verbose )write(logfhandle,*)"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
         endif
         io_status = 0
         if(.not. dir_exists(trim(adjustl(tmpdir)))) then
@@ -477,7 +477,7 @@ contains
             io_status = makedir(trim(adjustl(path)), len_trim(tmpdir))
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
-                if( verbose )write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
+                if( l_verbose )write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
                 if(.not. ignore_here)then
                     if(io_status /= 0) call simple_error_check(io_status, &
                         "syslib:: simple_mkdir failed to create "//trim(path))
