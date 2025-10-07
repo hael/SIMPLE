@@ -557,91 +557,42 @@ contains
     end subroutine exec_filter
 
     subroutine exec_binarize_mics( self, cline )
+        use simple_micproc
         use simple_segmentation
+        use simple_linked_list
         use simple_binimage, only: binimage
-        use simple_tvfilter, only: tvfilter
         class(binarize_mics_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
-        real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM_ICM = 100., DAMP = 10., FRAC_FG = 0.17, LAM_TV = 7.
-        integer, parameter :: WINSZ_MED = 3
-        character(len=LONGSTRLEN), allocatable :: micnames(:)
+        class(cmdline),                 intent(inout) :: cline
+        real,    parameter :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17
+        character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:)
         character(len=:),          allocatable :: fname 
-        integer,                   allocatable :: sz_arr(:), cc_imat(:,:,:), cc_imat_copy(:,:,:)
-        type(parameters) :: params
-        type(image)      :: mic_raw, mic_shrink, mic_sauv
-        type(binimage)   :: mic_bin, img_cc
-        type(tvfilter)   :: tvf
-        integer          :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc
-        real             :: scale, bin_t, diam
+        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
+        class(*),                  allocatable :: any
+        real,                      allocatable :: diams_arr(:)
+        type(parameters)    :: params
+        type(image)         :: mic_raw, mic_shrink
+        type(binimage)      :: mic_bin, img_cc
+        type(linked_list)   :: list_of_diams
+        type(list_iterator) :: list_iter
+        type(stats_struct)  :: diam_stats
+        integer             :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, nptcls, cnt, box_raw
+        real                :: scale, bin_t, diam
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
         ! read the first micrograph
-        call read_mic_and_subtr_backgr(micnames(1), params%smpd)
-        ! set shrunken logical dimensions
-        scale   = params%smpd / SMPD_SHRINK1
-        ldim(1) = round2even(real(ldim_raw(1)) * scale)
-        ldim(2) = round2even(real(ldim_raw(2)) * scale)
-        ldim(3) = 1
-        ! make shrunken micrograph
-        call mic_shrink%new(ldim, SMPD_SHRINK1)
-        ! make binary micrograph
-        call mic_bin%new(ldim, SMPD_SHRINK1)
+        scale = params%smpd / SMPD_SHRINK1
+        call read_mic_subtr_backgr_shrink(micnames(1), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
+        ! set logical dimensions
+        ldim_raw = mic_raw%get_ldim()
+        ldim     = mic_shrink%get_ldim()
+        allocate(mic_den_names(nmics), mic_bin_names(nmics))
         do imic = 1, nmics
-            ! read the micrograph
-            call read_mic_and_subtr_backgr(micnames(imic), params%smpd)
-            ! shrink micrograph
-            call mic_shrink%set_ft(.true.)
-            call mic_raw%mul(real(product(ldim_raw))) ! to prevent numerical underflow when performing FFT
-            call mic_raw%fft
-            call mic_raw%clip(mic_shrink)
-            select case(trim(params%pcontrast))
-                case('black')
-                    ! flip contrast (assuming black particle contrast on input)
-                    call mic_shrink%mul(-1.)
-                case('white')
-                    ! nothing to do
-                case DEFAULT
-                    THROW_HARD('uknown pcontrast parameter, use (black|white)')
-            end select
-            ! low-pass filter & back to real-space
-            call mic_raw%ifft
-            call mic_raw%div(real(product(ldim_raw)))
-            call mic_shrink%ifft
-            call mic_shrink%zero_edgeavg
-            ! dampens below zero
-            call mic_shrink%div_below(0.,DAMP)
-            ! low-pass filter
-            call mic_shrink%bp(0.,LP_UB)
-            fname = 'mic_shrink_lp'//int2str_pad(imic,3)//'.mrc'
-            call mic_shrink%write(fname)
-            ! TV denoising
-            call tvf%new()
-            call tvf%apply_filter(mic_shrink, LAM_TV)
-            call tvf%kill
-            fname = 'mic_shrink_lp_tv'//int2str_pad(imic,3)//'.mrc'
-            call mic_shrink%write(fname)
-            ! Non-local-means denoising
-            call mic_shrink%NLmean2D
-            fname = 'mic_shrink_lp_tv_nlmean'//int2str_pad(imic,3)//'.mrc'
-            call mic_shrink%write(fname)
-            ! Iterated conditional modes denoising
-            call mic_shrink%ICM2D(LAM_ICM)
-            fname = 'mic_shrink_lp_tv_nlmean_icm'//int2str_pad(imic,3)//'.mrc'
-            call mic_shrink%write(fname)
-            ! Median filter
-            call mic_shrink%real_space_filter(WINSZ_MED, 'median')
-            call mic_shrink%calc_bin_thres(FRAC_FG, bin_t)
-            fname = 'mic_shrink_lp_tv_nlmean_icm_med'//int2str_pad(imic,3)//'.mrc'
-            call mic_shrink%write(fname)
-            call mic_shrink%binarize(bin_t)
-            call mic_bin%transfer2bimg(mic_shrink)
-            call mic_bin%erode() ! -4 A
-            call mic_bin%erode() ! -4 A
-            call mic_bin%set_largestcc2background
-            call mic_bin%inv_bimg()
-            fname = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
-            call mic_bin%write(fname)
+            call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
+            call cascade_filter_biomol( mic_shrink )
+            mic_den_names(nmics) = 'mic_shrink_den'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(mic_den_names(nmics))
+            call binarize_mic_den( mic_shrink, FRAC_FG, mic_bin )
             ! identify connected components
             call mic_bin%find_ccs(img_cc)
             call img_cc%get_nccs(nccs)
@@ -650,38 +601,55 @@ contains
             call img_cc%get_imat(cc_imat_copy)
             do icc = 1, nccs
                 call img_cc%diameter_cc(icc, diam)
-                if( diam > params%moldiam_max .or. diam < SMPD_SHRINK1 * 3. ) then
+                if( diam + 2. * SMPD_SHRINK1 > params%moldiam_max .or. diam < SMPD_SHRINK1 * 3. ) then
                     ! remove connected component
                     where ( cc_imat == icc ) cc_imat_copy = 0
                 else
                     ! stash diameter
-                    
+                    call list_of_diams%push_back(diam) 
                 endif
-
             end do
-            
-
-
+            ! binarize back
+            cc_imat = cc_imat_copy
+            where( cc_imat_copy > 0 )
+                cc_imat = 1
+            elsewhere
+                cc_imat = 0
+            endwhere
+            call mic_bin%set_imat(cc_imat)
+            mic_bin_names(nmics) = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
+            call mic_bin%write(mic_bin_names(nmics))
+            ! destruct
+            call mic_raw%kill
+            call mic_shrink%kill
+            call mic_bin%kill_bimg
+            call img_cc%kill_bimg
+            deallocate(cc_imat, cc_imat_copy)
         end do
-        call mic_shrink%kill
-        call mic_bin%kill_bimg
-
-        contains
-
-            subroutine read_mic_and_subtr_backgr( micname, smpd )
-                character(len=*), intent(in) :: micname !< micrograph file name
-                real,             intent(in) :: smpd    !< sampling distance in A
-                character(len=:), allocatable :: ext
-                integer :: nframes
-                ! set micrograph info
-                call find_ldim_nptcls(micname, ldim_raw, nframes)
-                if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
-                ! read micrograph
-                call mic_raw%new(ldim_raw, smpd)
-                call mic_raw%read(micname)
-                call mic_raw%subtract_background(HP_BACKGR_SUBTR)
-            end subroutine read_mic_and_subtr_backgr
-        
+        ! extract diameters into array
+        nptcls = list_of_diams%size()
+        allocate(diams_arr(nptcls), source=0.)
+        list_iter = list_of_diams%begin()
+        cnt = 0
+        do while (list_iter%has_next())
+            call list_iter%next(any)
+            select type(any)
+                type is (real(kind(diam)))
+                    cnt = cnt + 1
+                    diams_arr(cnt) = any
+            end select
+        end do
+        ! diameter stats & box size estimation
+        diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! bacause of erosion in binarization
+        call calc_stats(diams_arr, diam_stats)
+        print *, 'CC diameter (in Angs) stadistics'
+        print *, 'avg diam: ', diam_stats%avg
+        print *, 'med diam: ', diam_stats%med
+        print *, 'sde diam: ', diam_stats%sdev
+        print *, 'min diam: ', diam_stats%minv
+        print *, 'max diam: ', diam_stats%maxv
+        box_raw = find_magic_box(2 * nint(diam_stats%med/params%smpd))
+        print *, 'box diam: ', box_raw * params%smpd
     end subroutine exec_binarize_mics
 
     subroutine exec_ppca_denoise( self, cline )

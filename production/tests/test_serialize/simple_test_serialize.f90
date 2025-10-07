@@ -1,6 +1,5 @@
 program simple_test_serialize
 include 'simple_lib.f08'
-use simple_micops
 use simple_image
 use simple_stackops
 use simple_ppca
