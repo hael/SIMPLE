@@ -1,0 +1,28 @@
+
+<VirtualHost *:80>
+    ServerName @FQDN@
+    Redirect permanent / https://@FQDN@/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerAdmin admin@example.com
+    ServerName example.com
+    ServerAlias www.example.com
+    DocumentRoot /var/www/example.com
+
+    SSLEngine on
+    SSLCertificateFile      /etc/ssl/example.crt
+    SSLCertificateKeyFile   /etc/ssl/example.key
+    SSLCertificateChainFile /etc/ssl/chain.crt
+
+    Alias /static/ @SIMPLE_PATH@/nice/static_root/
+
+    <Directory @SIMPLE_PATH@/nice/static_root>
+        Require all granted
+    </Directory>
+    
+    ProxyPass        /static/ !
+    ProxyPass        / http://localhost:8095/
+    ProxyPassReverse / http://localhost:8095/
+
+</VirtualHost>

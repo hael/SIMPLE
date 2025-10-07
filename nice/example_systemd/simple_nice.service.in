@@ -1,0 +1,29 @@
+[Unit]
+Description=SIMPLE Nice Server Daemon
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+# gunicorn can let systemd know when it is ready
+Type=notify
+NotifyAccess=main
+# the specific user that our service will run as
+User=@USER@
+Group=@USER@
+UMask=0007
+# this user can be transiently created by systemd
+# DynamicUser=true
+RuntimeDirectory=gunicorn
+WorkingDirectory=@SIMPLE_PATH@/nice
+ExecStart=@SIMPLE_PATH@/nice/venv/bin/gunicorn -w 8 -b localhost:8095 nice_project.wsgi
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+# if your app does not need administrative capabilities, let systemd know
+ProtectSystem=strict
+# limits
+LimitMEMLOCK=128000
+LimitNOFILE=128000
+
+[Install]
+WantedBy=multi-user.target

@@ -7,18 +7,28 @@ For more information on this file, see
 https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
 """
 
+# replace sqlite with pysqlite
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 import os
 
 from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nice_project.settings')
+
+# SIMPLE environment variables
 os.environ["SIMPLE_PATH"]     = '@SIMPLE_PATH@'
 os.environ["SIMPLE_QSYS"]     = 'local'
 os.environ["SIMPLE_EMAIL"]    = 'my.name@uni.edu'
+
+# Update paths so SIMPLE is in them and any other required libraries
 if 'PATH' in os.environ.keys():
     os.environ["PATH"] = '@SIMPLE_PATH@/bin' + os.pathsep + '@PATH@' + os.pathsep + os.environ["PATH"]
 else:
     os.environ["PATH"] = '@SIMPLE_PATH@/bin' + os.pathsep + '@PATH@'
+
 if 'LD_LIBRARY_PATH' in os.environ.keys():
     os.environ["LD_LIBRARY_PATH"] = '@SIMPLE_PATH@/lib' + os.pathsep + '@LD_LIBRARY_PATH@' + os.pathsep + os.environ["LD_LIBRARY_PATH"]
 else:

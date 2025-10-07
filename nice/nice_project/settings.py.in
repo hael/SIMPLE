@@ -15,7 +15,6 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -26,7 +25,6 @@ SECRET_KEY = 'django-insecure-3n6ozt9r7_$#d3s^1))5=5fw8q6&vhod@s5h6l*steexz)*k7h
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -70,14 +68,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'nice_project.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
+# replace sqlite with pysqlite
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            "transaction_mode": "IMMEDIATE",
+            "timeout": 5,  # seconds
+            "init_command": """
+                PRAGMA synchronous=NORMAL;
+                PRAGMA mmap_size = 134217728;
+                PRAGMA journal_size_limit = 27103364;
+                PRAGMA cache_size=2000;
+            """,
+        },
     }
 }
 
@@ -127,3 +139,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Modified for nice
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 #increased to 10MB for large json uploads from simple
 X_FRAME_OPTIONS = "SAMEORIGIN"
+
+# uncomment and confirm the following line to use behind a proxy
+CSRF_TRUSTED_ORIGINS = ['http://localhost']
