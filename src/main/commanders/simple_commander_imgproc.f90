@@ -560,23 +560,45 @@ contains
         use simple_micproc
         use simple_segmentation
         use simple_linked_list
-        use simple_binimage, only: binimage
+        use simple_binimage,           only: binimage
+        use simple_ctf_estimate_iter,  only: ctf_estimate_iter
+        use simple_ctf,                only: ctf
+        use simple_particle_extractor, only: ptcl_extractor
         class(binarize_mics_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        real,    parameter :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17
+        real, parameter :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:)
-        character(len=:),          allocatable :: fname 
-        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
+        character(len=:),          allocatable :: fname, output_dir
+        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata(:,:)
         class(*),                  allocatable :: any
-        real,                      allocatable :: diams_arr(:)
-        type(parameters)    :: params
-        type(image)         :: mic_raw, mic_shrink
-        type(binimage)      :: mic_bin, img_cc
-        type(linked_list)   :: list_of_diams
-        type(list_iterator) :: list_iter
-        type(stats_struct)  :: diam_stats
-        integer             :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, nptcls, cnt, box_raw
-        real                :: scale, bin_t, diam
+        real,                      allocatable :: diams_arr(:), masscens(:,:)
+        type(ctfparams),           allocatable :: ctfvars(:)
+        type(ori),                 allocatable :: os_ctf(:)
+        type(image),               allocatable :: imgs(:)
+        type(ptcl_extractor)      :: extractor
+        type(parameters)          :: params
+        type(image)               :: mic_raw, mic_shrink
+        type(binimage)            :: mic_bin, img_cc
+        type(linked_list)         :: list_of_diams
+        type(list_iterator)       :: list_iter
+        type(stats_struct)        :: diam_stats
+        type(ctf_estimate_iter)   :: ctfiter
+        type(ctf)                 :: tfun
+        type(stack_io)            :: stkio_w
+        character(len=LONGSTRLEN) :: stack
+        character(len=STDLEN)     :: ext
+        integer                   :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, nptcls, cnt, box_raw, i, nboxes
+        real                      :: scale, bin_t, diam
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
+        if( .not. cline%defined('kv')      ) call cline%set('kv',      300.)
+        if( .not. cline%defined('cs')      ) call cline%set('cs',       2.7)
+        if( .not. cline%defined('fraca')   ) call cline%set('fraca',    0.1)
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',  512)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
+        if( .not. cline%defined('dfmin')   ) call cline%set('dfmin',    DFMIN_DEFAULT)
+        if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',    DFMAX_DEFAULT)
+        if( .not. cline%defined('ctfpatch')) call cline%set('ctfpatch','no')
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
@@ -586,12 +608,21 @@ contains
         ! set logical dimensions
         ldim_raw = mic_raw%get_ldim()
         ldim     = mic_shrink%get_ldim()
-        allocate(mic_den_names(nmics), mic_bin_names(nmics))
+        ! output directory
+        output_dir = PATH_HERE
+        allocate(mic_den_names(nmics), mic_bin_names(nmics), ctfvars(nmics), os_ctf(nmics))
+        ctfvars(:)%smpd    = params%smpd
+        ctfvars(:)%kv      = params%kv
+        ctfvars(:)%cs      = params%cs
+        ctfvars(:)%fraca   = params%fraca
+        ctfvars(:)%ctfflag = CTFFLAG_FLIP
         do imic = 1, nmics
+            call os_ctf(imic)%new(is_ptcl=.false.)
+            call ctfiter%iterate(ctfvars(imic), micnames(imic), os_ctf(imic), trim(output_dir), l_gen_thumb=.true.)
             call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
             call cascade_filter_biomol( mic_shrink )
-            mic_den_names(nmics) = 'mic_shrink_den'//int2str_pad(imic,3)//'.mrc'
-            call mic_shrink%write(mic_den_names(nmics))
+            mic_den_names(imic) = 'mic_shrink_den'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(mic_den_names(imic))
             call binarize_mic_den( mic_shrink, FRAC_FG, mic_bin )
             ! identify connected components
             call mic_bin%find_ccs(img_cc)
@@ -617,8 +648,8 @@ contains
                 cc_imat = 0
             endwhere
             call mic_bin%set_imat(cc_imat)
-            mic_bin_names(nmics) = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
-            call mic_bin%write(mic_bin_names(nmics))
+            mic_bin_names(imic) = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
+            call mic_bin%write(mic_bin_names(imic))
             ! destruct
             call mic_raw%kill
             call mic_shrink%kill
@@ -640,7 +671,7 @@ contains
             end select
         end do
         ! diameter stats & box size estimation
-        diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! bacause of erosion in binarization
+        diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! bacause of the 2X erosion in binarization
         call calc_stats(diams_arr, diam_stats)
         print *, 'CC diameter (in Angs) stadistics'
         print *, 'avg diam: ', diam_stats%avg
@@ -650,6 +681,101 @@ contains
         print *, 'max diam: ', diam_stats%maxv
         box_raw = find_magic_box(2 * nint(diam_stats%med/params%smpd))
         print *, 'box diam: ', box_raw * params%smpd
+        ! extraction from micrographs
+        do imic = 1, nmics
+            ! set output stack name
+            ext   = fname2ext(trim(basename(micnames(imic))))
+            stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(micnames(imic))), trim(ext)))//trim(STK_EXT)
+            ! read raw
+            call read_mic_subtr_backgr(micnames(imic), params%smpd, params%pcontrast, mic_raw)
+            ! phase-flip micrograph
+            tfun = ctf(ctfvars(imic)%smpd, ctfvars(imic)%kv, ctfvars(imic)%cs, ctfvars(imic)%fraca)
+            call mic_raw%zero_edgeavg
+            call mic_raw%fft
+            call tfun%apply_serial(mic_raw, 'flip', ctfvars(imic))
+            call mic_raw%ifft
+            ! read binary
+            call read_mic( trim(mic_bin_names(imic)), mic_bin)
+            call mic_bin%set_imat
+            ! find centers of mass of connected components
+            call identify_masscens(mic_bin, masscens)
+            nboxes  = size(masscens, dim=1)
+            boxdata = calc_boxdata(nboxes, box_raw, masscens, scale)
+            ! extraction
+            call prepimgbatch( nboxes, box_raw )
+            call extract_particles_from_mic(mic_raw, nboxes, box_raw, boxdata, imgs(:nboxes))
+            ! write stack
+            call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=box_raw)
+            do i = 1,nboxes
+                call stkio_w%write(i, imgs(i))
+            enddo
+            call stkio_w%close
+        end do
+        call killimgbatch
+
+        contains
+
+            function calc_boxdata( nboxes, box, masscens, scale ) result( boxdata )
+                integer, intent(in)  :: nboxes, box
+                real,    intent(in)  :: masscens(nboxes,2)
+                real,    intent(in)  :: scale
+                integer, allocatable :: boxdata(:,:)
+                integer :: ibox
+                allocate(boxdata(3,nboxes), source=0)
+                do ibox = 1, nboxes
+                    boxdata(1:2,ibox) = nint(((1./scale) * masscens(ibox,:2))-real(box)/2.)
+                enddo
+                boxdata(3,:) = box
+            end function calc_boxdata
+
+            subroutine prepimgbatch( nboxes, box )
+                integer, intent(in) :: nboxes, box
+                integer, parameter  :: BATCHSZ_DEFAULT = 1024
+                integer :: i, batchsz
+                logical :: doprep
+                batchsz = max(BATCHSZ_DEFAULT, nboxes)
+                doprep  = .false.
+                if( .not. allocated(imgs) )then
+                    doprep = .true.
+                else
+                    if( nboxes > size(imgs) ) doprep = .true.
+                    if( doprep ) call killimgbatch
+                endif
+                if( doprep )then
+                    allocate(imgs(batchsz))
+                    !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+                    do i = 1,batchsz
+                        call imgs(i)%new([box, box, 1], params%smpd, wthreads=.false.)
+                    end do
+                    !$omp end parallel do
+                endif
+            end subroutine prepimgbatch
+
+            subroutine killimgbatch
+                integer :: i
+                if( allocated(imgs) )then
+                    do i = 1,size(imgs)
+                        call imgs(i)%kill
+                    end do
+                    deallocate(imgs)
+                endif
+            end subroutine killimgbatch
+
+            subroutine extract_particles_from_mic( mic, nboxes, box, coords, particles )
+                class(image), intent(in)    :: mic
+                integer,      intent(in)    :: nboxes, box, coords(3,nboxes)
+                type(image),  intent(inout) :: particles(nboxes)
+                integer :: i, noutside
+                !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+                !$omp private(i,noutside)
+                do i = 1,nboxes
+                    noutside = 0
+                    call mic%window(coords(1:2,i), box, particles(i), noutside)
+                    call particles(i)%norm
+                end do
+                !$omp end parallel do
+            end subroutine extract_particles_from_mic
+
     end subroutine exec_binarize_mics
 
     subroutine exec_ppca_denoise( self, cline )
