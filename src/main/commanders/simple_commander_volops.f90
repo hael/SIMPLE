@@ -2,6 +2,7 @@
 module simple_commander_volops
 include 'simple_lib.f08'
 use simple_binoris_io
+use simple_strategy2D_utils
 use simple_parameters,     only: parameters, params_glob
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
@@ -93,7 +94,6 @@ contains
 
     !> centers a 3D volume and associated particle document
     subroutine exec_centervol( self, cline )
-        use simple_strategy2D_utils, only: calc_cavg_offset
         class(centervol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)  :: params
@@ -504,6 +504,10 @@ contains
             if( states(i) == 0 ) call imgs(1)%write(params%outstk,i)
         enddo
         call update_stack_nimgs(params%outstk, params%nspace)
+        ! cleanup
+        call build%kill_general_tbox
+        call dealloc_imgarr(imgs)
+        deallocate(tmp,states)
         call simple_end('**** SIMPLE_REPROJECT NORMAL STOP ****')
     end subroutine exec_reproject
 
@@ -590,22 +594,46 @@ contains
     end subroutine exec_volops
 
     subroutine exec_noisevol( self, cline )
+        use simple_procimgstk, only: copy_imgfile
         class(noisevol_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
-        type(parameters) :: params
-        type(image)      :: noisevol
-        integer          :: s
+        class(cmdline),            intent(inout) :: cline
+        type(reproject_commander) :: xreproject
+        type(cmdline)             :: cline_reproject
+        type(parameters)          :: params
+        type(image)               :: noisevol
+        integer :: s
         call params%new(cline)
         call noisevol%new([params%box,params%box,params%box], params%smpd)
-        do s = 1, params%nstates
+        if( cline%defined('nspace') )then
             call noisevol%ran()
-            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'.mrc')
-            call noisevol%ran()
-            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_even.mrc')
-            call noisevol%ran()
-            call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_odd.mrc')
-        end do
+            call noisevol%div(real(params%box))
+            call noisevol%write('noisevol.mrc')
+            params%refs      = 'start2Drefs.mrc'
+            params%refs_even = 'start2Drefs_even.mrc'
+            params%refs_odd  = 'start2Drefs_odd.mrc'
+            call cline_reproject%set('prg',    'reproject')
+            call cline_reproject%set('smpd',   params%smpd)
+            call cline_reproject%set('pgrp',   'c1')
+            call cline_reproject%set('nthr',   params%nthr)
+            call cline_reproject%set('nspace', params%nspace)
+            call cline_reproject%set('vol1',   'noisevol.mrc')
+            call cline_reproject%set('outstk', params%refs)
+            call cline_reproject%set('mskdiam',params%smpd*(real(params%box)-COSMSKHALFWIDTH))
+            call xreproject%execute_safe(cline_reproject)
+            call copy_imgfile(params%refs, params%refs_even, params%smpd, [1,params%nspace])
+            call copy_imgfile(params%refs, params%refs_odd,  params%smpd, [1,params%nspace])
+        else
+            do s = 1, params%nstates
+                call noisevol%ran()
+                call noisevol%write('noisevol_state'//int2str_pad(s,2)//'.mrc')
+                call noisevol%ran()
+                call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_even.mrc')
+                call noisevol%ran()
+                call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_odd.mrc')
+            end do
+        endif
         call noisevol%kill
+        call cline_reproject%kill
         ! end gracefully
         call simple_end('**** SIMPLE_NOISEVOL NORMAL STOP ****')
     end subroutine exec_noisevol

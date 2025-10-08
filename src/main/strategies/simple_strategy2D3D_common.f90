@@ -1190,6 +1190,13 @@ contains
                 endif
             end do
             !$omp end parallel do
+            ! Center prior to memoization
+            if( (trim(params_glob%center)=='yes') .and. (trim(params_glob%center_type)=='params') .and.&
+                &(params_glob%pgrp(:1)=='c1') .and. (.not.params_glob%l_update_frac) .and.&
+                &(params_glob%nstates==1) .and. params_glob%l_doshift )then
+                call center_3Dpolar_refs(pftcc, build_glob%spproj_field, build_glob%eulspace)
+            endif
+            ! Memoize
             call pftcc%memoize_refs
         else
             ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
