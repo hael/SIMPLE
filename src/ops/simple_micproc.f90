@@ -47,6 +47,34 @@ contains
         call mic_shrink%ifft
     end subroutine read_mic_subtr_backgr_shrink
 
+    subroutine read_mic_subtr_backgr( micname, smpd, pcontrast, mic_raw )
+        character(len=*), intent(in)    :: micname !< micrograph file name
+        real,             intent(in)    :: smpd    !< sampling distance in A
+        character(len=*), intent(in)    :: pcontrast
+        class(image),     intent(inout) :: mic_raw
+        integer :: nframes, ldim(3)
+        ! set micrograph info
+        call find_ldim_nptcls(micname, ldim, nframes)
+        if( ldim(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
+        ! read micrograph
+        call mic_raw%new(ldim, smpd)
+        call mic_raw%read(micname)
+        call mic_raw%subtract_background(HP_BACKGR_SUBTR)
+        call mic_raw%fft
+        select case(trim(pcontrast))
+            case('black')
+                ! flip contrast (assuming black particle contrast on input)
+                call mic_raw%mul(-1.)
+            case('white')
+                ! nothing to do
+            case DEFAULT
+                THROW_HARD('uknown pcontrast parameter, use (black|white)')
+        end select
+        call mic_raw%mul(real(product(ldim))) ! to prevent numerical underflow when performing FFT
+        call mic_raw%ifft
+        call mic_raw%div(real(product(ldim)))
+    end subroutine read_mic_subtr_backgr
+
     subroutine read_mic( micname, mic_out )
         character(len=*), intent(in)    :: micname !< micrograph file name
         class(image),     intent(inout) :: mic_out
@@ -108,8 +136,8 @@ contains
         class(binimage),   intent(inout) :: mic_bin
         real, allocatable, intent(inout) :: masscens(:,:)
         type(binimage) :: img_cc
-        integer :: i, nccs
-        real    :: px(3)
+        integer        :: i, nccs
+        real           :: px(3)
         ! identify connected components
         call mic_bin%find_ccs(img_cc)
         call img_cc%get_nccs(nccs)
@@ -120,22 +148,21 @@ contains
             masscens(i,:2) = px(:2)
         enddo
 
+    contains
 
-        contains
-
-            function center_mass_cc( i_cc ) result( px )
-                integer, intent(in) :: i_cc
-                real :: px(3)
-                integer, allocatable :: pos(:,:)
-                integer, allocatable :: imat_cc(:,:,:)
-                call img_cc%get_imat(imat_cc)
-                where( imat_cc .ne. i_cc ) imat_cc = 0
-                call get_pixel_pos(imat_cc,pos)
-                px(1) = sum(pos(1,:))/real(size(pos,dim = 2))
-                px(2) = sum(pos(2,:))/real(size(pos,dim = 2))
-                px(3) = 1.
-                if( allocated(imat_cc) ) deallocate(imat_cc)
-            end function center_mass_cc
+        function center_mass_cc( i_cc ) result( px )
+            integer, intent(in) :: i_cc
+            real :: px(3)
+            integer, allocatable :: pos(:,:)
+            integer, allocatable :: imat_cc(:,:,:)
+            call img_cc%get_imat(imat_cc)
+            where( imat_cc .ne. i_cc ) imat_cc = 0
+            call get_pixel_pos(imat_cc,pos)
+            px(1) = sum(pos(1,:))/real(size(pos,dim = 2))
+            px(2) = sum(pos(2,:))/real(size(pos,dim = 2))
+            px(3) = 1.
+            if( allocated(imat_cc) ) deallocate(imat_cc)
+        end function center_mass_cc
 
     end subroutine identify_masscens
 
