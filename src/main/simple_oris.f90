@@ -4011,6 +4011,7 @@ contains
         !$omp end parallel do
         avg        = avg / real(npop,dp)
         offset_avg = real(avg)
+        ! cleanup
         call spiral%kill
         call o%kill
         call oxy%kill

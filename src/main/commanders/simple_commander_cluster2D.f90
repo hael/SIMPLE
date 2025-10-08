@@ -1144,12 +1144,14 @@ contains
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
+        ! References dimensions
         if( cline%defined('refs') )then
             call find_ldim_nptcls(params%refs, ldim_refs, ncls_from_refs, smpd=smpd_refs)
             ldim_refs(3) = 1
             ! consistency check
             if( params%ncls /=  ncls_from_refs ) THROW_HARD('nrefs /= inputted ncls')
         endif
+        ! Streaming flag
         l_stream = .false.
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'
@@ -1170,6 +1172,15 @@ contains
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
             call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
         else
+            ! Polar specifics
+            if( (trim(params%polar)=='yes') .and. (trim(params%ref_type)=='vol') )then
+                call build%pgrpsyms%new('c1')
+                params%nsym    = build%pgrpsyms%get_nsym()
+                params%eullims = build%pgrpsyms%get_eullims()
+                call build%eulspace%new(params%ncls, is_ptcl=.false.)
+                call build%pgrpsyms%build_refspiral(build%eulspace)
+            endif
+            ! Initial references
             if( .not. cline%defined('refs') )then
                 cline_make_cavgs = cline ! ncls is transferred here
                 params%refs      = 'start2Drefs'//params%ext
@@ -1449,9 +1460,10 @@ contains
         type(starproject)      :: starproj
         type(polarft_corrcalc) :: pftcc
         real, allocatable :: states(:)
-        logical           :: l_stream
+        real              :: clw
         integer           :: iterstr_start, iterstr_end, iter, io_stat, icls
         integer           :: pftsz, kfromto(2), ncls
+        logical           :: l_stream
         if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         l_stream = .false.
         if( cline%defined('stream') )then
@@ -1472,9 +1484,21 @@ contains
         if( trim(params%polar).eq.'yes' )then
             call polar_cavger_dims_from_header('cavgs_even_part1'//BIN_EXT, pftsz, kfromto, ncls)
             call pftcc%new(1, [1,1], kfromto)
-            call polar_cavger_new(pftcc, .false., nrefs=params%ncls)
-            call polar_cavger_calc_pops(build%spproj)
-            call polar_cavger_assemble_sums_from_parts
+            if( trim(params%ref_type)=='vol' )then
+                call polar_cavger_new(pftcc, .true., nrefs=params%ncls)
+                call polar_cavger_calc_pops(build%spproj)
+                call build%pgrpsyms%new('c1')
+                params%nsym    = build%pgrpsyms%get_nsym()
+                params%eullims = build%pgrpsyms%get_eullims()
+                call build%eulspace%new(params%ncls, is_ptcl=.false.)
+                call build%pgrpsyms%build_refspiral(build%eulspace)
+                clw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-5)/real(params_glob%extr_lim-4))))
+                call polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, clin_anneal=clw)
+            else
+                call polar_cavger_new(pftcc, .false., nrefs=params%ncls)
+                call polar_cavger_calc_pops(build%spproj)
+                call polar_cavger_assemble_sums_from_parts
+            endif
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
             call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
             call polar_cavger_writeall(POLAR_REFS_FBODY)

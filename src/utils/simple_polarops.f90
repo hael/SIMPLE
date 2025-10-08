@@ -23,6 +23,8 @@ public :: polar_cavger_readwrite_partial_sums, polar_cavger_read_all
 public :: polar_cavger_gen2Dclassdoc, polar_cavger_calc_pops
 ! Alignment
 public :: polar_prep2Dref, polar_prep3Dref
+! Public Utils
+public :: center_3Dpolar_refs
 private
 #include "simple_local_flags.inc"
 
@@ -223,21 +225,22 @@ contains
     end subroutine polar_cavger_update_sums
 
     !>  \brief  Restores class-averages
-    subroutine polar_cavger_merge_eos_and_norm( reforis )
+    subroutine polar_cavger_merge_eos_and_norm( reforis, cl_weight )
         type(oris), optional, intent(in) :: reforis
+        real,       optional, intent(in) :: cl_weight
         real,          parameter :: EPSILON = 0.1
         logical,       parameter :: l_kb = .true.
         complex(dp), allocatable :: pfts_cavg(:,:,:), pfts_clin(:,:,:), clin_odd(:,:,:), clin_even(:,:,:)
-        ! real,        allocatable :: res(:)
         complex(dp) :: pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                       &pft(pftsz,kfromto(1):kfromto(2)),pfte(pftsz,kfromto(1):kfromto(2)),pfto(pftsz,kfromto(1):kfromto(2))
         real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)),ctf2e(pftsz,kfromto(1):kfromto(2)),ctf2o(pftsz,kfromto(1):kfromto(2)),&
-                      &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls), ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
+                      &ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls), ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls), clw
         integer     :: icls, eo_pop(2), pop, k, pops(ncls), npops, m
-        ! real        :: res_fsc05, res_fsc0143, min_res_fsc0143, max_res_fsc0143, avg_res_fsc0143, avg_res_fsc05
         real        :: cavg_clin_frcs(pftsz,kfromto(1):kfromto(2),ncls), psi!, dfrcs(kfromto(1):kfromto(2),ncls)
         logical     :: l_rotm
+        clw = 1.d0
         if( l_comlin )then
+            if( present(cl_weight) ) clw = real(cl_weight,dp)
             ! 3D-related tasks
             if( .not. present(reforis) )THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
             ! Mirroring etc.
@@ -327,10 +330,10 @@ contains
                 !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,psi,l_rotm)
                 do icls = 1,ncls/2
                     ! calculate sum of already mirrored class + common-line contribution
-                    pfte  = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls)
-                    pfto  = pfts_odd(:,:,icls)  + pfts_clin_odd(:,:,icls)
-                    ctf2e = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls)
-                    ctf2o = ctf2_odd(:,:,icls)  + ctf2_clin_odd(:,:,icls)
+                    pfte  = pfts_even(:,:,icls) + clw * pfts_clin_even(:,:,icls)
+                    pfto  = pfts_odd(:,:,icls)  + clw * pfts_clin_odd(:,:,icls)
+                    ctf2e = ctf2_even(:,:,icls) + clw * ctf2_clin_even(:,:,icls)
+                    ctf2o = ctf2_odd(:,:,icls)  + clw * ctf2_clin_odd(:,:,icls)
                     ! merged then e/o
                     pft   = pfte  + pfto
                     ctf2  = ctf2e + ctf2o
@@ -874,8 +877,9 @@ contains
     end subroutine polar_cavger_refs2cartesian
 
     !>  \brief  Reads in and reduces partial matrices prior to restoration
-    subroutine polar_cavger_assemble_sums_from_parts( reforis )
+    subroutine polar_cavger_assemble_sums_from_parts( reforis, clin_anneal )
         type(oris), optional, intent(in) :: reforis
+        real,       optional, intent(in) :: clin_anneal
         character(len=:), allocatable :: cae, cao, cte, cto
         complex(dp),      allocatable :: pfte(:,:,:), pfto(:,:,:)
         real(dp),         allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
@@ -900,7 +904,7 @@ contains
             !$omp end parallel workshare
         enddo
         ! merge eo-pairs and normalize
-        call polar_cavger_merge_eos_and_norm(reforis=reforis)
+        call polar_cavger_merge_eos_and_norm(reforis=reforis, cl_weight=clin_anneal)
     end subroutine polar_cavger_assemble_sums_from_parts
 
     ! I/O
@@ -1235,6 +1239,34 @@ contains
         pftsz      = 0
         l_comlin   = .false.
     end subroutine polar_cavger_kill
+
+    ! PUBLIC UTILITIES
+
+    ! Determines the center of the volume based on the distribution of
+    ! the individual particles in-plane offsets and map the shifts to both
+    ! the particles and the references stored in the pftcc
+    subroutine center_3Dpolar_refs( pftcc, algndoc, algnrefs )
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(oris),             intent(inout) :: algndoc
+        class(oris),             intent(in)    :: algnrefs
+        real    :: R(3,3),offset3D(3), offset2D(3)
+        integer :: iref
+        ! estimate 3D offset from particle alignement parameters
+        call algndoc%calc_avg_offset3D(offset3D, state=1)
+        ! report 3D offset to particles 2D offsets
+        call algndoc%map3dshift22d(-offset3D, state=1)
+        ! report 3D offset to alignment references
+        !$omp parallel do proc_bind(close) default(shared) private(iref,R,offset2D)
+        do iref = 1,ncls
+            ! Projection direction rotation matrix
+            R = euler2m([algnrefs%e1get(iref), algnrefs%e2get(iref), 0.0])
+            ! 3D Shift rotated with respect to projection direction
+            offset2D = matmul(R, offset3D)
+            ! Apply offset to e/o references
+            call pftcc%shift_ref(iref, offset2D(1:2))
+        enddo
+        !$omp end parallel do
+    end subroutine center_3Dpolar_refs
 
     ! PRIVATE UTILITIES
 

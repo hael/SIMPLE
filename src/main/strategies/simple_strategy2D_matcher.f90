@@ -59,11 +59,11 @@ contains
         type(ori)             :: orientation
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
-        real    :: frac_srch_space, neigh_frac
+        real    :: frac_srch_space, neigh_frac, clinw
         integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
         logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc, l_polar
-        logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs
+        logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs, l_clin
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -107,6 +107,14 @@ contains
             l_partial_sums = l_update_frac .and. (params_glob%extr_iter>1)
         endif
         l_polar = trim(params_glob%polar).eq.'yes'
+        l_clin  = .false.
+        if( l_polar .and. trim(params_glob%ref_type)=='vol' )then
+            if( l_snhc .or. (params_glob%extr_iter==1 .and.l_greedy))then
+                l_clin =.true.
+            else
+                THROW_HARD('REF_TYPE=VOL only supported with refine=snhc|snhc_smpl')
+            endif
+        endif
 
         ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
@@ -148,7 +156,9 @@ contains
             endif
             call cavger_new(pinds, alloccavgs=l_alloc_read_cavgs)
             if( l_alloc_read_cavgs )then
-                if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for cluster2D execution')
+                if( .not. cline%defined('refs') )then
+                    THROW_HARD('need refs to be part of command line for cluster2D execution')
+                endif
                 call cavger_read_all
             endif
         endif
@@ -163,7 +173,7 @@ contains
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
         allocate(incr_shifts(2,batchsz_max),source=0.)
 
-        ! GENERATE REFERENCES
+        ! GENERATE POLAR REFERENCES
         if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
@@ -177,7 +187,7 @@ contains
         endif
         if( l_polar )then
             ! for restoration
-            if( which_iter == 1 ) call polar_cavger_new(pftcc, .false.)
+            if( which_iter == 1 ) call polar_cavger_new(pftcc, l_clin)
             call polar_cavger_zero_pft_refs
         endif
 
@@ -379,7 +389,12 @@ contains
                 if( l_polar )then
                     if( which_iter == 1) call cavger_kill
                     ! polar restoration
-                    call polar_cavger_merge_eos_and_norm
+                    if( l_clin )then
+                        clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-5)/real(params_glob%extr_lim-4))))
+                        call polar_cavger_merge_eos_and_norm(build_glob%eulspace, clinw)
+                    else
+                        call polar_cavger_merge_eos_and_norm
+                    endif
                     call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
                     call polar_cavger_writeall(POLAR_REFS_FBODY)
                     call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
@@ -625,7 +640,7 @@ contains
             endif
         endif
         ! Read polar references
-        call polar_cavger_new(pftcc, .false.)
+        call polar_cavger_new(pftcc, trim(params_glob%ref_type)=='vol')
         call polar_cavger_read_all(trim(POLAR_REFS_FBODY)//trim(BIN_EXT))
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! Centering-related objects

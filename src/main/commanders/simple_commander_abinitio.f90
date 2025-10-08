@@ -1378,6 +1378,7 @@ contains
         call cline_refine3D%delete('gauref')
         call cline_refine3D%delete('gaufreq')
         endif
+        if( l_polar ) call cline_refine3D%set('center_type', 'params')
     end subroutine set_cline_refine3D
 
     subroutine exec_refine3D( istage, xrefine3D )
