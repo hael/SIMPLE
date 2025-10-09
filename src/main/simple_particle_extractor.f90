@@ -379,7 +379,7 @@ contains
         class(image),             intent(in)    :: mic
         integer,     allocatable, intent(in)    :: pinds(:)
         integer,                  intent(in)    :: coords(:,:)
-        type(image), allocatable, intent(inout) :: particles(:)
+        type(image),              intent(inout) :: particles(:)
         real,                     intent(out)   :: vmin, vmax, vmean, vsdev
         real    :: rmin, rmax, rmean, rsdev, sdev_noise
         integer :: i,j,n,cnt,noutside
