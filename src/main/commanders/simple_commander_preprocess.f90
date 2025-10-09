@@ -159,7 +159,7 @@ contains
         if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',          DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! picking
-        if( .not. cline%defined('picker')          ) call cline%set('picker',         'new')
+        ! if( .not. cline%defined('picker')          ) call cline%set('picker',         'new')
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         PICK_LP_DEFAULT )
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
@@ -265,20 +265,20 @@ contains
             THROW_HARD('scale cannot be > 1; exec_preprocess')
         endif
         l_pick = .false.
-        if( cline%defined('picker') )then
-            select case(trim(params%picker))
-                case('old')
-                    if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
-                case('new')
-                    if(cline%defined('pickrefs'))then
-                    else
-                        if( .not.cline%defined('moldiam') )then
-                            THROW_HARD('MOLDIAM required for picker=new')
-                        endif
-                    endif
-            end select
-            l_pick = .true.
-        endif
+        ! if( cline%defined('picker') )then
+        !     select case(trim(params%picker))
+        !         case('old')
+        !             if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+        !         case('new')
+        !             if(cline%defined('pickrefs'))then
+        !             else
+        !                 if( .not.cline%defined('moldiam') )then
+        !                     THROW_HARD('MOLDIAM required for picker=new')
+        !                 endif
+        !             endif
+        !     end select
+        !     l_pick = .true.
+        ! endif
         l_del_forctf = .false.
         ! read in movies
         call spproj%read( params%projfile )
@@ -376,7 +376,7 @@ contains
                 call del_file(moviename_forctf)
             endif
             ! optional rejection
-            l_skip_pick = .false.
+            l_skip_pick = .true.
             if( trim(params%stream).eq.'yes' .and. trim(params%reject_mics).eq.'yes' )then
                 ! based on CTFRES
                 if( l_pick .and. o_mov%isthere('ctfres') )then
