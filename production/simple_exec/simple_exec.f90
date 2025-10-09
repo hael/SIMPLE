@@ -53,7 +53,6 @@ type(preprocess_commander_distr)            :: xpreprocess
 type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
 type(motion_correct_commander_distr)        :: xmotion_correct_distr
-type(mini_stream_commander)                :: xmini_stream
 type(gen_pspecs_and_thumbs_commander_distr) :: xgen_pspecs_and_thumbs
 type(analyze_pspecs_commander)              :: xpow_anal
 type(ctf_estimate_commander_distr)          :: xctf_estimate_distr
@@ -240,8 +239,6 @@ select case(trim(prg))
         call xextract_distr%execute(cline)
     case( 'reextract' )
         call xreextract_distr%execute(cline)
-    case( 'mini_stream' )
-        call xmini_stream%execute(cline)
     case( 'motion_correct' )
         call xmotion_correct_distr%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
@@ -485,7 +482,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('7e46e531')
+call simple_print_git_version('8d0ce6b3')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
