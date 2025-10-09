@@ -20,7 +20,12 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D
+public :: commander_mini_stream, commander_stream_sieve_cavgs, commander_stream_abinitio2D
+
+type, extends(commander_base) :: commander_mini_stream
+  contains
+    procedure :: execute      => exec_mini_stream
+end type commander_mini_stream
 
 type, extends(commander_base) :: commander_stream_sieve_cavgs
   contains
@@ -43,6 +48,295 @@ integer,               parameter :: PAUSE_NITERS    = 5     ! # of iterations af
 integer,               parameter :: PAUSE_TIMELIMIT = 600   ! time (secs) after which 2D analysis is paused
 
 contains
+
+     subroutine exec_mini_stream( self, cline )
+        use simple_micproc
+        use simple_segmentation
+        use simple_linked_list
+        use simple_binimage,           only: binimage
+        use simple_ctf_estimate_iter,  only: ctf_estimate_iter
+        use simple_ctf,                only: ctf
+        use simple_particle_extractor, only: ptcl_extractor
+        use simple_commander_project
+        use simple_commander_cluster2D
+        use simple_stack_io
+        class(commander_mini_stream), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        real,                      parameter   :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17, LPSTART = 30., LPSTOP = 10.
+        integer,                   parameter   :: BOXFAC = 3, MIN_NCLS= 10
+        character(len=*),          parameter   :: PROJ2D_SEGPICK = 'proj2D_segpick', PROJFILE2D_SEGPICK = 'proj2D_segpick.simple'
+        character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
+        character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:)
+        character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk_den_names(:)
+        character(len=:),          allocatable :: fname, output_dir
+        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata_raw(:,:), boxdata_den(:,:), pinds(:)
+        class(*),                  allocatable :: any
+        real,                      allocatable :: diams_arr(:), masscens(:,:)
+        type(ctfparams),           allocatable :: ctfvars(:)
+        type(ori),                 allocatable :: os_ctf(:)
+        type(image),               allocatable :: imgs(:)
+        type(ptcl_extractor)                :: extractor_raw, extractor_den
+        type(parameters)                    :: params
+        type(image)                         :: mic_raw, mic_shrink, mic_den
+        type(binimage)                      :: mic_bin, img_cc
+        type(linked_list)                   :: list_of_diams
+        type(list_iterator)                 :: list_iter
+        type(stats_struct)                  :: diam_stats
+        type(ctf_estimate_iter)             :: ctfiter
+        type(ctf)                           :: tfun
+        type(stack_io)                      :: stkio_w
+        type(oris)                          :: os_deftab
+        type(cmdline)                       :: cline_new_proj, cline_new_project, cline_import_particles, cline_2Dsegpick
+        type(new_project_commander)         :: xnew_project
+        type(import_particles_commander)    :: ximport_particles
+        type(cluster2D_autoscale_commander) :: xcluster2D
+        character(len=STDLEN) :: ext
+        integer               :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, ncls
+        integer               :: nptcls, cnt, box_raw, box_den, i, nboxes
+        real                  :: scale, bin_t, diam, rmin, rmax, rmean, rsdev
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
+        if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
+        if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
+        if( .not. cline%defined('fraca')            ) call cline%set('fraca',            0.1)
+        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512)
+        if( .not. cline%defined('hp')               ) call cline%set('hp',               30.)
+        if( .not. cline%defined('lp')               ) call cline%set('lp',                5.)
+        if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',  DFMIN_DEFAULT)
+        if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',  DFMAX_DEFAULT)
+        if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'no')
+        if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',   100)
+        call params%new(cline)
+        call read_filetable(params%filetab, micnames)
+        nmics    = size(micnames)
+        ! read the first micrograph
+        scale    = params%smpd / SMPD_SHRINK1
+        call read_mic_subtr_backgr_shrink(micnames(1), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
+        ! set logical dimensions
+        ldim_raw = mic_raw%get_ldim()
+        ldim     = mic_shrink%get_ldim()
+        ! output directory
+        output_dir = PATH_HERE
+        allocate(mic_den_names(nmics), mic_bin_names(nmics),&
+        &ctfvars(nmics), os_ctf(nmics), ptcl_stk_names(nmics), ptcl_stk_den_names(nmics))
+        ctfvars(:)%smpd    = params%smpd
+        ctfvars(:)%kv      = params%kv
+        ctfvars(:)%cs      = params%cs
+        ctfvars(:)%fraca   = params%fraca
+        ctfvars(:)%ctfflag = CTFFLAG_FLIP
+        do imic = 1, nmics
+            call os_ctf(imic)%new(is_ptcl=.false.)
+            call ctfiter%iterate(ctfvars(imic), micnames(imic), os_ctf(imic), trim(output_dir), l_gen_thumb=.true.)
+            call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
+            call cascade_filter_biomol( mic_shrink )
+            mic_den_names(imic) = 'mic_shrink_den'//int2str_pad(imic,3)//'.mrc'
+            call mic_shrink%write(mic_den_names(imic))
+            call binarize_mic_den( mic_shrink, FRAC_FG, mic_bin )
+            ! identify connected components
+            call mic_bin%find_ccs(img_cc)
+            call img_cc%get_nccs(nccs)
+            ! gather size info
+            call img_cc%get_imat(cc_imat)
+            call img_cc%get_imat(cc_imat_copy)
+            do icc = 1, nccs
+                call img_cc%diameter_cc(icc, diam)
+                if( diam + 2. * SMPD_SHRINK1 > params%moldiam_max .or. diam < SMPD_SHRINK1 * 3. ) then
+                    ! remove connected component
+                    where ( cc_imat == icc ) cc_imat_copy = 0
+                else
+                    ! stash diameter
+                    call list_of_diams%push_back(diam) 
+                endif
+            end do
+            ! binarize back
+            cc_imat = cc_imat_copy
+            where( cc_imat_copy > 0 )
+                cc_imat = 1
+            elsewhere
+                cc_imat = 0
+            endwhere
+            call mic_bin%set_imat(cc_imat)
+            mic_bin_names(imic) = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
+            call mic_bin%write(mic_bin_names(imic))
+            ! destruct
+            call mic_raw%kill
+            call mic_shrink%kill
+            call mic_bin%kill_bimg
+            call img_cc%kill_bimg
+            deallocate(cc_imat, cc_imat_copy)
+        end do
+        ! extract diameters into array
+        nptcls = list_of_diams%size()
+        allocate(diams_arr(nptcls), source=0.)
+        list_iter = list_of_diams%begin()
+        cnt = 0
+        do while (list_iter%has_next())
+            call list_iter%next(any)
+            select type(any)
+                type is (real(kind(diam)))
+                    cnt = cnt + 1
+                    diams_arr(cnt) = any
+            end select
+        end do
+        ! diameter stats & box size estimation
+        diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! bacause of the 2X erosion in binarization
+        call calc_stats(diams_arr, diam_stats)
+        print *, 'CC diameter (in Angs) statistics'
+        print *, 'avg diam: ', diam_stats%avg
+        print *, 'med diam: ', diam_stats%med
+        print *, 'sde diam: ', diam_stats%sdev
+        print *, 'min diam: ', diam_stats%minv
+        print *, 'max diam: ', diam_stats%maxv
+        box_raw = find_magic_box(BOXFAC * nint(diam_stats%med/params%smpd))
+        box_den = find_magic_box(BOXFAC * nint(diam_stats%med/SMPD_SHRINK1))
+        print *, 'box diam: ', box_raw * params%smpd
+        ! extraction from micrographs
+        call extractor_raw%init_mic(box_raw, .false.)
+        call extractor_den%init_mic(box_den, .false.)
+        nptcls = 0
+        do imic = 1, nmics
+            ! set output stack name
+            ext                      = fname2ext(trim(basename(micnames(imic))))
+            ptcl_stk_names(imic)     = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(micnames(imic))),      trim(ext)))//trim(STK_EXT)
+            ptcl_stk_den_names(imic) = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_den_names(imic))), trim(ext)))//trim(STK_EXT)
+            ! read raw
+            call read_mic_subtr_backgr(micnames(imic), params%smpd, params%pcontrast, mic_raw)
+            ! read denoised
+            call read_mic(trim(mic_den_names(imic)), mic_den)
+            ! read binary
+            call read_mic(trim(mic_bin_names(imic)), mic_bin)
+            call mic_bin%set_imat
+            ! phase-flip raw micrograph
+            tfun = ctf(ctfvars(imic)%smpd, ctfvars(imic)%kv, ctfvars(imic)%cs, ctfvars(imic)%fraca)
+            call mic_raw%zero_edgeavg
+            call mic_raw%fft
+            call tfun%apply_serial(mic_raw, 'flip', ctfvars(imic))
+            call mic_raw%ifft
+            ! find centers of mass of connected components
+            call identify_masscens(mic_bin, masscens)
+            nboxes      = size(masscens, dim=1)
+            nptcls      = nptcls + nboxes
+            boxdata_raw = calc_boxdata(nboxes, box_raw, masscens, scale)
+            boxdata_den = calc_boxdata(nboxes, box_den, masscens, 1.0)
+            ! extraction from raw
+            call killimgbatch
+            call prepimgbatch(nboxes, box_raw, params%smpd)
+            pinds = (/(i,i=1,nboxes)/)
+            call extractor_raw%extract_particles_from_mic(mic_raw, pinds, boxdata_raw(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
+            ! write stack
+            call stkio_w%open(ptcl_stk_names(imic), params%smpd, 'write', box=box_raw)
+            do i = 1,nboxes
+                call stkio_w%write(i, imgs(i))
+            enddo
+            call stkio_w%close
+            call imgs(1)%update_header_stats(ptcl_stk_names(imic), [rmin,rmax,rmean,rsdev])
+            ! extraction from den
+            ! call killimgbatch
+            ! call prepimgbatch(nboxes, box_den, SMPD_SHRINK1)
+            ! pinds = (/(i,i=1,nboxes)/)
+            ! call extractor_den%extract_particles_from_mic(mic_den, pinds, boxdata_den(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
+            ! ! write stack
+            ! call stkio_w%open(ptcl_stk_den_names(imic), SMPD_SHRINK1, 'write', box=box_den)
+            ! do i = 1,nboxes
+            !     call stkio_w%write(i, imgs(i))
+            ! enddo
+            ! call stkio_w%close
+            ! call imgs(1)%update_header_stats(ptcl_stk_den_names(imic), [rmin,rmax,rmean,rsdev])
+        end do
+        ! output
+        call os_deftab%new(os_ctf)
+        call os_deftab%write(DEFTAB)
+        call write_filetable(STKTAB, ptcl_stk_names)
+        ! make first 2D
+        ! 1. project creation
+        call cline_new_proj%set('dir',              PATH_HERE)
+        call cline_new_proj%set('projname',    PROJ2D_SEGPICK)
+        call xnew_project%execute(cline_new_proj)
+        ! 2. particle import
+        call cline_import_particles%set('mkdir',                  'no')
+        call cline_import_particles%set('cs',                params%cs)
+        call cline_import_particles%set('fraca',          params%fraca)
+        call cline_import_particles%set('kv',                params%kv)
+        call cline_import_particles%set('smpd',            params%smpd)
+        call cline_import_particles%set('stktab',               STKTAB)
+        call cline_import_particles%set('deftab',               DEFTAB)
+        call cline_import_particles%set('ctf',                  'flip')
+        call cline_import_particles%set('projfile', PROJFILE2D_SEGPICK)
+        call cline_import_particles%printline
+        call ximport_particles%execute(cline_import_particles)
+        ! 3. 2D analysis
+        ncls = max(MIN_NCLS,nptcls/params%nptcls_per_cls)
+        call cline_2Dsegpick%set('mkdir',                 'no')
+        call cline_2Dsegpick%set('ncls',                   ncls)
+        call cline_2Dsegpick%set('autoscale',             'yes')
+        call cline_2Dsegpick%set('lpstart',             LPSTART)
+        call cline_2Dsegpick%set('lpstop',               LPSTOP)
+        call cline_2Dsegpick%set('mskdiam',                  0.)
+        call cline_2Dsegpick%set('nthr',            params%nthr)
+        call cline_2Dsegpick%set('projfile', PROJFILE2D_SEGPICK)
+
+        call cline_2Dsegpick%printline 
+
+        call xcluster2D%execute(cline_2Dsegpick)
+        ! cleanup
+        call os_deftab%kill
+        do imic = 1, nmics
+            call os_ctf(imic)%kill
+        end do
+        deallocate(os_ctf)
+        call extractor_raw%kill
+        call extractor_den%kill
+        call killimgbatch
+
+        contains
+
+            function calc_boxdata( nboxes, box, masscens, scale ) result( boxdata )
+                integer, intent(in)  :: nboxes, box
+                real,    intent(in)  :: masscens(nboxes,2)
+                real,    intent(in)  :: scale
+                integer, allocatable :: boxdata(:,:)
+                integer :: ibox
+                allocate(boxdata(3,nboxes), source=0)
+                do ibox = 1, nboxes
+                    boxdata(1:2,ibox) = nint(((1./scale) * masscens(ibox,:2))-real(box)/2.)
+                enddo
+                boxdata(3,:) = box
+            end function calc_boxdata
+
+            subroutine prepimgbatch( nboxes, box, smpd )
+                integer, intent(in) :: nboxes, box
+                real,    intent(in) :: smpd
+                integer, parameter  :: BATCHSZ_DEFAULT = 1024
+                integer :: i, batchsz
+                logical :: doprep
+                batchsz = max(BATCHSZ_DEFAULT, nboxes)
+                doprep  = .false.
+                if( .not. allocated(imgs) )then
+                    doprep = .true.
+                else
+                    if( nboxes > size(imgs) ) doprep = .true.
+                    if( doprep ) call killimgbatch
+                endif
+                if( doprep )then
+                    allocate(imgs(batchsz))
+                    !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+                    do i = 1,batchsz
+                        call imgs(i)%new([box, box, 1], smpd, wthreads=.false.)
+                    end do
+                    !$omp end parallel do
+                endif
+            end subroutine prepimgbatch
+
+            subroutine killimgbatch
+                integer :: i
+                if( allocated(imgs) )then
+                    do i = 1,size(imgs)
+                        call imgs(i)%kill
+                    end do
+                    deallocate(imgs)
+                endif
+            end subroutine killimgbatch
+
+    end subroutine exec_mini_stream
 
     ! Manages individual chunks/sets classification, matching & rejection
     ! TODO: handling of un-classified particles

@@ -2474,7 +2474,7 @@ contains
         &'mini_stream',&                               ! name
         &'denoising of micrographs',&                   ! descr_short
         &'is a program for denoising of micrographs',&  ! descr_long
-        &'simple_exec',&                                ! executable
+        &'simple_stream',&                                ! executable
         &1, 2, 0, 0, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output

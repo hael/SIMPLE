@@ -11,20 +11,21 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PROGRAMS
-type(commander_stream_preprocess)           :: xpreprocess
-type(commander_stream_pick_extract)         :: xpick_extract
-type(commander_stream_gen_picking_refs)     :: xgen_picking_refs
-type(commander_stream_assign_optics)        :: xassign_optics
-type(commander_stream_sieve_cavgs)          :: xsieve_cavgs
-type(commander_stream_cluster2D)            :: xcluster2D_stream
-type(commander_stream_abinitio2D)           :: xabinitio2D_stream
+type(commander_mini_stream)             :: xmini_stream
+type(commander_stream_preprocess)       :: xpreprocess
+type(commander_stream_pick_extract)     :: xpick_extract
+type(commander_stream_gen_picking_refs) :: xgen_picking_refs
+type(commander_stream_assign_optics)    :: xassign_optics
+type(commander_stream_sieve_cavgs)      :: xsieve_cavgs
+type(commander_stream_cluster2D)        :: xcluster2D_stream
+type(commander_stream_abinitio2D)       :: xabinitio2D_stream
 
 ! OTHER DECLARATIONS
-character(len=STDLEN)                       :: xarg, prg, entire_line
-type(cmdline)                               :: cline
-integer                                     :: cmdstat, cmdlen, pos
-integer(timer_int_kind)                     :: t0
-real(timer_int_kind)                        :: rt_exec
+character(len=STDLEN)                   :: xarg, prg, entire_line
+type(cmdline)                           :: cline
+integer                                 :: cmdstat, cmdlen, pos
+integer(timer_int_kind)                 :: t0
+real(timer_int_kind)                    :: rt_exec
 
 ! start timer
 t0 = tic()
@@ -44,8 +45,9 @@ endif
 call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, trim(prg), 'simple_stream')
-
 select case(trim(prg))
+    case( 'mini_stream' )
+        call xmini_stream%execute(cline)
     case( 'preproc' )
         call xpreprocess%execute(cline)
     case( 'pick_extract' )
@@ -68,7 +70,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('7e46e531')
+call simple_print_git_version('8d0ce6b3')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
