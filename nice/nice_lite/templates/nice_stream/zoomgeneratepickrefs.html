@@ -1,0 +1,173 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src={% static 'nice_stream/panelgeneratepickrefs.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg text-nice4dark">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a>
+        <div class="px-[10px] text-[18px]">{{ displayid }} stream - generate picking references</div>
+    </div>
+    <div class="w-full flex flex-row p-[10px]">
+        <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="flex flex-row">
+                {% if "particles_imported" in jobstats and "particles_processed" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
+                    <div class="flex flex-col">
+                        <div class="font-bold text-[12px] pl-[10px]">particles</div>
+                        <div class="h-[100px] w-[240px]">
+                            <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-processed={{ jobstats.particles_processed }} data-rejected={{ jobstats.particles_rejected }}></canvas>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="flex flex-row">
+                 <div class="grid grid-cols-2 gap-1 text-[12px] pl-[10px] mt-[10px]">
+                    {% if "selected_boxsize" in jobstats and jobstats.selected_boxsize > 0 %}
+                        <div class="font-bold">selected boxsize</div>
+                        <div>{{ jobstats.selected_boxsize }}px</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+            <div class="font-bold text-[12px]">log</div>
+            <div class="h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+                <pre class="text-[10px]">{{log}}</pre>
+            </div>
+            <div class="font-bold text-[12px]">errors</div>
+            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+                <pre class="text-[10px]">{{error}}</pre>
+            </div>
+        </div>
+    </div>
+    <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            {% if status == "running" %}
+                {%if jobstats.user_input is True and "box_size" in jobstats %}
+                    <div class="flex flex-col">
+                        <div class="font-bold text-[12px] pl-[10px]">box size</div>
+                        <div class="flex flex-row justify-center items-center">
+                            <input type="range" id="box_size_selector" oninput="updateBoxSize()" data-boxsize={{ jobstats.box_size }}></input> 
+                            <div id="current_box_size" class="w-[20px] pr-[5px] text-[10px]"></div>
+                        </div>
+                    </div>
+                {% endif %}
+                {% if status == "running" and jobstats.user_input is True %}
+                    <div>
+                        <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_refs_stream_generate_pickrefs' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" id="final_selection" name="final_selection" value=""/>
+                            <input type="hidden" id="final_selection_source" name="final_selection_source" value=""/>
+                            <input type="hidden" id="final_selection_boxsize" name="final_selection_boxsize" value=""/>
+                            <button class="userbutton" onclick="selectRefs(this.form)">use selected references</button>
+                        </form> 
+                    </div>
+                {% endif %}
+                {% if status == "running" and jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 and "iteration" in jobstats and jobstats.iteration > 0 %}
+                    <div class="font-bold text-[12px]">picking templates (iteration {{ jobstats.iteration }})</div>
+                    <div class="flex flex-1 flex-row items-baseline m-auto overflow-auto">
+                        <div class="flex flex-row w-full overflow-x-hidden overflow-y-scroll snap-y snap-mandatory">
+                            <div id="picking_references" class="flex flex-wrap">
+                                {% for template in jobstats.latest_cls2D %}
+                                    <div class="flex flex-col snap-center picktemplatecontainer rounded bg-nice4bg m-[5px] p-[5px] border-[1px] border-nice4header" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
+                                        <div class="flex text-[10px]">
+                                            <div class="font-bold">
+                                                population : 
+                                            </div>
+                                            <div class="pl-[5px]">
+                                                {{ template.pop|intcomma }}
+                                            </div>
+                                        </div>
+                                        <div class="flex text-[10px]">
+                                            <div class="font-bold">
+                                                resolution : 
+                                            </div>
+                                            <div class="pl-[5px]">
+                                                {{ template.res|floatformat:1 }}Å
+                                            </div>
+                                        </div>
+                                        <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                            <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplateimg bg-black h-[100px] w-[100px]">
+                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                                        <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                                <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                    <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                    <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                    <div id="selectabove" class="userbutton w-auto text-center">select above</div>
+                                    <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endif %}
+            {% if "selected_references" in jobstats and jobstats.selected_references|length > 0 %}
+                <div class="font-bold text-[12px]">selected picking templates</div>
+                    <div class="flex flex-1 flex-row items-baseline m-auto overflow-auto">
+                    <div class="flex flex-row w-full overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                        <div id="picking_references" class="flex flex-wrap">
+                            {% for template in jobstats.selected_references %}
+                                <div class="flex flex-col snap-center picktemplatecontainer rounded bg-nice4bg m-[5px] p-[5px] border-[1px] border-nice4header" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
+                                    <div class="flex text-[10px]">
+                                        <div class="font-bold">
+                                            population : 
+                                        </div>
+                                        <div class="pl-[5px]">
+                                            {{ template.pop|intcomma }}
+                                        </div>
+                                    </div>
+                                    <div class="flex text-[10px]">
+                                        <div class="font-bold">
+                                            resolution : 
+                                        </div>
+                                        <div class="pl-[5px]">
+                                            {{ template.res|floatformat:1 }}Å
+                                        </div>
+                                    </div>
+                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplateimg bg-black h-[100px] w-[100px]">
+                                            <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                                    <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                            <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                <div id="selectabove" class="hidden userbutton w-auto text-center">select above</div>
+                                <div id="selectbelow" class="hidden userbutton w-auto text-center">select below</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -2,13 +2,15 @@ let lastinteraction = Date.now();
 
 scrlRight = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
-  micrograph_slider.scrollLeft += 200;
+  const rect = micrograph_slider.getBoundingClientRect();
+  micrograph_slider.scrollLeft += rect.width;
   lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
-  micrograph_slider.scrollLeft -= 200;
+  const rect = micrograph_slider.getBoundingClientRect();
+  micrograph_slider.scrollLeft -= rect.width;
   lastinteraction = Date.now();
 }
 

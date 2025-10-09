@@ -1,19 +1,20 @@
 let lastinteraction = Date.now();
 
-changeProject = (form) => {
-    selected_project_id = form.elements.selected_project_id.value
+changeProject = (element) => {
+    selected_project_id = element.form.elements.selected_project_id.value
     if(selected_project_id == "new"){
         workspace_iframe = document.getElementById("workspace_iframe")
-        workspace_iframe.src = form.dataset.newurl
+        workspace_iframe.src = element.form.dataset.newurl
+        element.options[0].selected = true
     }else{
-        form.submit()
+        element.form.submit()
     }
 }
 
-changeDataset = (form) => {
-    selected_dataset_id = form.elements.selected_dataset_id.value
+changeDataset = (element) => {
+    selected_dataset_id = element.form.elements.selected_dataset_id.value
     if(selected_dataset_id == "new"){
-        form.submit()
+        element.form.submit()
     }else{
         document.cookie = "selected_dataset_id=" + selected_dataset_id
         workspace_iframe = document.getElementById("workspace_iframe")

@@ -132,8 +132,17 @@ def term_stream_preprocess(request, jobid):
     return response
 
 @login_required(login_url="/login/")
-def view_stream_optics(request, jobid):
-    streamviewoptics = StreamViewOptics(request, jobid)
+def restart_stream_preprocess(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    job.restart_preprocess(project, dataset)
+    response = redirect('nice_lite:view_stream_preprocess', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def view_stream_optics(request, jobid=None, jobidzoom=None):
+    streamviewoptics = StreamViewOptics(request, jobid, jobidzoom)
     return streamviewoptics.render()
 
 @login_required(login_url="/login/")
@@ -144,14 +153,32 @@ def term_stream_optics(request, jobid):
     return response
 
 @login_required(login_url="/login/")
-def view_stream_initial_pick(request, jobid):
-    streamviewinitialpick = StreamViewInitialPick(request, jobid)
+def restart_stream_optics(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    job.restart_optics(project, dataset)
+    response = redirect('nice_lite:view_stream_optics', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def view_stream_initial_pick(request, jobid=None, jobidzoom=None):
+    streamviewinitialpick = StreamViewInitialPick(request, jobid, jobidzoom)
     return streamviewinitialpick.render()
 
 @login_required(login_url="/login/")
 def term_stream_initial_pick(request, jobid):
     job = Job(id=jobid)
     job.terminate_intial_pick()
+    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def restart_stream_initial_pick(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    job.restart_initial_pick(project, dataset)
     response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
     return response
 
@@ -186,8 +213,8 @@ def decrease_moldiam_stream_initial_pick(request, jobid):
     return response
 
 @login_required(login_url="/login/")
-def view_stream_generate_pickrefs(request, jobid):
-    streamviewgeneratepickrefs = StreamViewGeneratePickrefs(request, jobid)
+def view_stream_generate_pickrefs(request, jobid=None, jobidzoom=None):
+    streamviewgeneratepickrefs = StreamViewGeneratePickrefs(request, jobid, jobidzoom)
     return streamviewgeneratepickrefs.render()
 
 @login_required(login_url="/login/")
@@ -195,6 +222,15 @@ def term_stream_generate_pickrefs(request, jobid):
     job = Job(id=jobid)
     job.terminate_generate_pickrefs()
     response = redirect('nice_lite:view_stream_generate_pickrefs', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def restart_stream_generate_pickrefs(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    job.restart_generate_pickrefs(project, dataset)
+    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
     return response
 
 @login_required(login_url="/login/")
@@ -218,8 +254,8 @@ def snapshot_stream_classification_2D(request, jobid):
     return response
 
 @login_required(login_url="/login/")
-def view_stream_reference_picking(request, jobid):
-    streamviewreferencepicking = StreamViewReferencePicking(request, jobid)
+def view_stream_reference_picking(request, jobid=None, jobidzoom=None):
+    streamviewreferencepicking = StreamViewReferencePicking(request, jobid, jobidzoom)
     return streamviewreferencepicking.render()
 
 @login_required(login_url="/login/")
@@ -230,14 +266,32 @@ def term_stream_reference_picking(request, jobid):
     return response
 
 @login_required(login_url="/login/")
-def view_stream_sieve_particles(request, jobid):
-    streamviewsieveparticles = StreamViewSieveParticles(request, jobid)
+def restart_stream_reference_picking(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    job.restart_reference_picking(project, dataset)
+    response = redirect('nice_lite:view_stream_reference_picking', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def view_stream_sieve_particles(request, jobid=None, jobidzoom=None):
+    streamviewsieveparticles = StreamViewSieveParticles(request, jobid, jobidzoom)
     return streamviewsieveparticles.render()
 
 @login_required(login_url="/login/")
 def term_stream_sieve_particles(request, jobid):
     job = Job(id=jobid)
     job.terminate_sieve_particles()
+    response = redirect('nice_lite:view_stream_sieve_particles', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def restart_stream_sieve_particles(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    job.restart_sieve_particles(project, dataset)
     response = redirect('nice_lite:view_stream_sieve_particles', jobid=jobid)
     return response
 
@@ -251,14 +305,23 @@ def select_stream_sieve_particles(request, jobid):
     return response
 
 @login_required(login_url="/login/")
-def view_stream_classification_2D(request, jobid):
-    streamviewclassification2D = StreamViewClassification2D(request, jobid)
+def view_stream_classification_2D(request, jobid=None, jobidzoom=None):
+    streamviewclassification2D = StreamViewClassification2D(request, jobid, jobidzoom)
     return streamviewclassification2D.render()
 
 @login_required(login_url="/login/")
 def term_stream_classification_2D(request, jobid):
     job = Job(id=jobid)
     job.terminate_classification_2D()
+    response = redirect('nice_lite:view_stream_classification_2D', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
+def restart_stream_classification_2D(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    job.restart_classification_2D(project, dataset)
     response = redirect('nice_lite:view_stream_classification_2D', jobid=jobid)
     return response
 

@@ -535,3 +535,87 @@ class Job:
             self.classification_2D_stats["stage"] = "terminating"
             jobmodel.classification_2D_stats = self.classification_2D_stats
             jobmodel.save()  
+
+    def restart_optics(self, project, dataset):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            jobmodel.optics_assignment_status    = "running"
+            jobmodel.optics_assignment_heartbeat = timezone.now()
+            jobmodel.optics_assignment_stats     = {}
+            jobmodel.optics_assignment_update    = {}
+            simplestream = SIMPLEStream()
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "optics_assignment"):
+                return
+            jobmodel.save()    
+    
+    def restart_preprocess(self, project, dataset):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            jobmodel.preprocessing_status    = "running"
+            jobmodel.preprocessing_heartbeat = timezone.now()
+            jobmodel.preprocessing_stats     = {}
+            jobmodel.preprocessing_update    = {}
+            simplestream = SIMPLEStream()
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "preprocessing"):
+                return
+            jobmodel.save()    
+            
+    def restart_initial_pick(self, project, dataset):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            jobmodel.initial_picking_status    = "running"
+            jobmodel.initial_picking_heartbeat = timezone.now()
+            jobmodel.initial_picking_stats     = {}
+            jobmodel.initial_picking_update    = {}
+            simplestream = SIMPLEStream()
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "initial_picking"):
+                return
+            jobmodel.save()
+    
+    def restart_generate_pickrefs(self, project, dataset):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            jobmodel.generate_pickrefs_status    = "running"
+            jobmodel.generate_pickrefs_heartbeat = timezone.now()
+            jobmodel.generate_pickrefs_stats     = {}
+            jobmodel.generate_pickrefs_update    = {}
+            simplestream = SIMPLEStream()
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "generate_picking_refs"):
+                return
+            jobmodel.save()    
+            
+    def restart_reference_picking(self, project, dataset):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            jobmodel.reference_picking_status    = "running"
+            jobmodel.reference_picking_heartbeat = timezone.now()
+            jobmodel.reference_picking_stats     = {}
+            jobmodel.reference_picking_update    = {}
+            simplestream = SIMPLEStream()
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "reference_based_picking"):
+                return
+            jobmodel.save()
+    
+    def restart_sieve_particles(self, project, dataset):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            jobmodel.particle_sieving_status    = "running"
+            jobmodel.particle_sieving_heartbeat = timezone.now()
+            jobmodel.particle_sieving_stats     = {}
+            jobmodel.particle_sieving_update    = {}
+            simplestream = SIMPLEStream()
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "particle_sieving"):
+                return
+            jobmodel.save()    
+            
+    def restart_classification_2D(self, project, dataset):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            jobmodel.classification_2D_status    = "running"
+            jobmodel.classification_2D_heartbeat = timezone.now()
+            jobmodel.classification_2D_stats     = {}
+            jobmodel.classification_2D_update    = {}
+            simplestream = SIMPLEStream()
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "classification_2D"):
+                return
+            jobmodel.save()

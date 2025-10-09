@@ -189,14 +189,14 @@ const box_sizes = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88, 100, 104,
     6250, 6400, 6912, 7776, 8192, 9216, 10240, 12288, 12500]
 
 updateBoxSize = () => {
-    const box_size_selector        = document.getElementById("box_size_selector")
-    const current_box_size         = document.getElementById("current_box_size")
+    const box_size_selector       = document.getElementById("box_size_selector")
+    const current_box_size        = document.getElementById("current_box_size")
     const final_selection_boxsize = document.getElementById("final_selection_boxsize")
     current_box_size.innerHTML = box_sizes[box_size_selector.value] + "px"
     final_selection_boxsize.value = box_sizes[box_size_selector.value]
     const scale = Number(box_size_selector.dataset.boxsize) / Number(box_sizes[box_size_selector.value])
-    for(const picktemplate of document.getElementsByClassName("picktemplate")){
-        picktemplate.style.transform = "scale(" + scale + ")"
+    for(const picktemplateimg of document.getElementsByClassName("picktemplateimg")){
+        picktemplateimg.style.transform = "scale(" + scale + ")"
     }
     lastinteraction = Date.now();
 }

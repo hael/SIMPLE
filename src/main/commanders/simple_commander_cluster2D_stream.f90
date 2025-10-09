@@ -3442,9 +3442,9 @@ contains
         character(len=LONGSTRLEN), allocatable :: files(:)
         character(len=STDLEN),     allocatable :: folders(:)
         integer :: i
-        call qsys_cleanup(nparts=params_glob%nparts_pool)
+ !       call qsys_cleanup(nparts=params_glob%nparts_pool) ! cyril - fails on stream 2d classification restart
         call simple_rmdir(SIGMAS_DIR)
-        call simple_rmdir(DIR_SNAPSHOT)
+ !       call simple_rmdir(DIR_SNAPSHOT) ! need snapshots keeping 
         call del_file(USER_PARAMS2D)
         call del_file(PROJFILE_POOL)
         call del_file(DISTR_EXEC_FNAME)

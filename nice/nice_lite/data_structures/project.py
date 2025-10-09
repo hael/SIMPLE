@@ -44,7 +44,9 @@ class Project:
             workspacemodels = WorkspaceModel.objects.filter(proj=self.id)
             self.workspaces_list = []
             for workspacemodel in workspacemodels:
-                self.workspaces_list.append({"id":workspacemodel.id, "name":workspacemodel.name})   
+                self.workspaces_list.append({"id":workspacemodel.id, "name":workspacemodel.name})
+        else:
+            self.id = 0
 
     def new(self, request):
 

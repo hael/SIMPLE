@@ -22,7 +22,6 @@ class CoreViewStream:
         self.request = request
     
     def render(self):
-        
         # check dataset is in project, zero if not
         if not self.project.containsDataset(self.dataset.id):
             self.dataset.id = 0
