@@ -31,7 +31,8 @@ type :: oris
     integer :: n = 0
   contains
     ! CONSTRUCTORS
-    procedure          :: new
+    generic            :: new => new_1, new_2
+    procedure, private :: new_1, new_2
     procedure          :: reallocate
     procedure          :: extract_subset
     ! GETTERS
@@ -265,7 +266,7 @@ contains
         call self%new(n, is_ptcl)
     end function constructor
 
-    subroutine new( self, n, is_ptcl )
+    subroutine new_1( self, n, is_ptcl )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: n
         logical,     intent(in)    :: is_ptcl
@@ -276,7 +277,19 @@ contains
         do i=1,n
             call self%o(i)%new_ori(is_ptcl)
         end do
-    end subroutine new
+    end subroutine new_1
+
+    subroutine new_2( self, o_arr )
+        class(oris), intent(inout) :: self
+        class(ori),  intent(in)    :: o_arr(:)
+        integer :: i
+        call self%kill
+        self%n = size(o_arr)
+        allocate( self%o(self%n) )
+        do i=1,self%n
+            call self%o(i)%copy(o_arr(i))
+        end do
+    end subroutine new_2
 
     subroutine reallocate( self, new_n )
         class(oris), intent(inout) :: self
