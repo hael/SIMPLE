@@ -3,7 +3,7 @@
 #SBATCH --mem=10000
 
 export SIMPLE_DEFAULT_PARTITION_TIME=true
-export SIMPLE_PATH=/home/jcaesar/Code/SIMPLE/build
+export SIMPLE_PATH=@SIMPLE_PATH@
 export SIMPLE_EMAIL=''
 export SIMPLE_QSYS=slurm
 

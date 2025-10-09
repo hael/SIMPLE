@@ -92,7 +92,7 @@ contains
         integer                                           :: movies_set_counter, import_counter
         integer                                           :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer                                           :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
-        logical                                           :: l_movies_left, l_haschanged
+        logical                                           :: l_movies_left, l_haschanged, l_restart
         logical(LK)                                       :: found 
         real                                              :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real                                              :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
@@ -126,10 +126,16 @@ contains
         call get_environment_variable(SIMPLE_STREAM_PREPROC_NPARTS, preproc_nparts_env, envlen)
         if( envlen > 0 ) call cline%set('nparts', str2int(preproc_nparts_env))
         ! sanity check for restart
+        l_restart = .false.
+        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+            l_restart = .true.
+        endif
+        ! below may be redundant
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
                 THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
             endif
+            l_restart = .true.
         endif
         ! generate own project file if projfile isnt set
         if(cline%get_carg('projfile') .eq. '') then 
@@ -162,9 +168,10 @@ contains
         movies_set_counter = 0  ! global number of movies set
         import_counter     = 0  ! global import id
         nmic_star          = 0
-        if( cline%defined('dir_exec') )then
+        if( l_restart )then
+            write(logfhandle, *) ">>> RESTARTING EXISTING JOB"
             call del_file(TERM_STREAM)
-            call cline%delete('dir_exec')
+            if( cline%defined('dir_exec') ) call cline%delete('dir_exec')
             ! http stats
             call http_communicator%json%update(http_communicator%job_json, "stage", "importing previously processed data", found)
             call http_communicator%send_jobstats()
@@ -836,7 +843,7 @@ contains
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
         integer                                :: n_pickrefs, thumbcount, xtile, ytile, xtiles, ytiles
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
-        logical                                :: pause_import, l_interactive, interactive_waiting, found
+        logical                                :: pause_import, l_interactive, interactive_waiting, found, l_restart
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype', 'mic')
@@ -860,10 +867,15 @@ contains
         call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, pick_nthr_env, envlen)
         if(envlen > 0)  call cline%set('nthr', str2int(pick_nthr_env))
         ! sanity check for restart
+        l_restart = .false.
+        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+            l_restart = .true.
+        endif
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
                 THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
             endif
+            l_restart = .true.
         endif
          ! generate own project file if projfile isnt set
         if(cline%get_carg('projfile') .eq. '') then 
@@ -997,9 +1009,9 @@ contains
         nmic_star                = 0
         thumbid_offset           = 0
         thumbcount               = 0
-        if( cline%defined('dir_exec') )then
+        if( l_restart )then
             call del_file(TERM_STREAM)
-            call cline%delete('dir_exec')
+            if(cline%defined('dir_exec')) call cline%delete('dir_exec')
             call simple_rmdir(odir)
             if( l_multipick .or. params%clear .eq. "yes")then
                 ! removes directory structure
@@ -1985,7 +1997,7 @@ contains
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
         integer                                :: xtile, ytile, nxtiles, nytiles
         integer,                   allocatable :: final_selection(:), final_boxsize(:)
-        logical                                :: l_haschanged, l_once, l_pick_extract, l_user, json_found
+        logical                                :: l_haschanged, l_once, l_pick_extract, l_user, json_found, l_restart
         logical(LK)                            :: found 
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -2020,6 +2032,10 @@ contains
             call cline%set('nthr2D', str2int(refgen_nthr_env))
         end if
         ! sanity check for restart
+        l_restart = .false.
+        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+            l_restart = .true.
+        endif
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
                 THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
@@ -2118,9 +2134,9 @@ contains
         nptcls_glob         = 0     ! global number of particles
         nmics_rejected_glob = 0     ! global number of micrographs rejected
         nmic_star           = 0
-        if( cline%defined('dir_exec') )then
+        if( l_restart )then
             ! no restart here, the folder is wiped
-            call cline%delete('dir_exec')
+            if( cline%defined('dir_exec') ) call cline%delete('dir_exec')
             call cleanup_root_folder(all=.true.)
             call del_file(micspproj_fname)
             call simple_rmdir(output_dir)
@@ -2709,6 +2725,11 @@ contains
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
         ! sanity check for restart
+        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+            write(logfhandle, *) ">>> RESTARTING EXISTING JOB"
+            call del_file(TERM_STREAM)
+        endif
+        ! below may be redundant
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
                 THROW_HARD('Previous directory does not exist: '//trim(cline%get_carg('dir_exec')))

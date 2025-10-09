@@ -47,7 +47,7 @@ class JobClassic:
         self.args = {} # ensure empty
         self.prnt = parentid
         for key, value in request.POST.items():
-            if "csrfmiddlewaretoken" not in key and value is not "":
+            if "csrfmiddlewaretoken" not in key and value != "":
                 self.args[key] = value
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
@@ -146,10 +146,11 @@ class JobClassic:
             self.prog = jobmodel.prog
             self.pckg = jobmodel.pckg
             self.args = jobmodel.args
+            self.prnt = jobmodel.prnt
             self.status = jobmodel.status
             
     def createDir(self, parent_dir):
-        if self.dirc is "":
+        if self.dirc == "":
             return False
         
         if not os.path.exists(parent_dir):

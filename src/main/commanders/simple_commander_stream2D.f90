@@ -711,14 +711,24 @@ contains
             ! Remove previous files from folder to restart
             subroutine cleanup4restart
                 character(len=STDLEN), allocatable :: folders(:)
+                character(len=XLONGSTRLEN)         :: cwd_restart
+                logical :: l_restart
                 integer :: i
-                if( .not.cline%defined('dir_exec') )then
-                    ! nothing to do
-                else
+                call simple_getcwd(cwd_restart)
+                l_restart = .false.
+                if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+                    l_restart = .true.
+                    call chdir(trim(cline%get_carg('outdir')))
+                endif
+                if(cline%defined('dir_exec')) then
                     if( .not.file_exists(cline%get_carg('dir_exec')) )then
                         THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
                     endif
-                    call cline%delete('dir_exec')
+                    l_restart = .true.
+                endif
+                if( l_restart ) then
+                    write(logfhandle, *) ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
+                    if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(TERM_STREAM)
                     call del_file(USER_PARAMS2D)
                     call simple_rmdir(SIGMAS_DIR)
@@ -733,6 +743,7 @@ contains
                         enddo
                     endif
                 endif
+                call chdir(trim(cwd_restart))
             end subroutine cleanup4restart
 
             subroutine generate_selection_jpeg()
@@ -1200,16 +1211,27 @@ contains
 
             ! Remove previous files from folder to restart
             subroutine cleanup4restart
-                if( .not.cline%defined('dir_exec') )then
-                    ! nothing to do
-                else
+                character(len=XLONGSTRLEN) :: cwd_restart
+                logical :: l_restart
+                call simple_getcwd(cwd_restart)
+                l_restart = .false.
+                if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+                    l_restart = .true.
+                    call chdir(trim(cline%get_carg('outdir')))
+                endif
+                if(cline%defined('dir_exec')) then
                     if( .not.file_exists(cline%get_carg('dir_exec')) )then
                         THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
                     endif
-                    call cline%delete('dir_exec')
+                    l_restart = .true.
+                endif
+                if( l_restart ) then
+                    write(logfhandle, *) ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
+                    if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(micspproj_fname)
                     call cleanup_root_folder
                 endif
+                call chdir(trim(cwd_restart))
             end subroutine cleanup4restart
 
             subroutine communicator_init()

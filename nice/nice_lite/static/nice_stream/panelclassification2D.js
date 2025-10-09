@@ -17,11 +17,11 @@ toggleCls = (element) => {
     const mskcanvas = element.querySelector('.mskcanvas')
     const xmark     = element.querySelector('.xmark')
     if(element.classList.contains("disabledbutton")){
-      mskcanvas.classList.add("hidden")
+      if(mskcanvas != undefined) mskcanvas.classList.add("hidden")
       xmark.classList.remove("hidden")
     }else{
       xmark.classList.add("hidden")
-      mskcanvas.classList.remove("hidden")
+      if(mskcanvas != undefined) mskcanvas.classList.remove("hidden")
     }
     lastinteraction = Date.now();
 }
@@ -148,11 +148,11 @@ selectAbove = (element) => {
       clscontainer.classList.add("disabledbutton")
     }
     if(clscontainer.classList.contains("disabledbutton")){
-      mskcanvas.classList.add("hidden")
+      if(mskcanvas != undefined) mskcanvas.classList.add("hidden")
       xmark.classList.remove("hidden")
     }else{
       xmark.classList.add("hidden")
-      mskcanvas.classList.remove("hidden")
+      if(mskcanvas != undefined) mskcanvas.classList.remove("hidden")
     }
     if(clscontainer == element){
       threshold = false
@@ -175,11 +175,11 @@ selectBelow = (element) => {
       clscontainer.classList.add("disabledbutton")
     }
     if(clscontainer.classList.contains("disabledbutton")){
-      mskcanvas.classList.add("hidden")
+      if(mskcanvas != undefined) mskcanvas.classList.add("hidden")
       xmark.classList.remove("hidden")
     }else{
       xmark.classList.add("hidden")
-      mskcanvas.classList.remove("hidden")
+      if(mskcanvas != undefined) mskcanvas.classList.remove("hidden")
     }
   }
   hideMenu()

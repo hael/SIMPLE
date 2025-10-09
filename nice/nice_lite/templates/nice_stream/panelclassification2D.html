@@ -53,7 +53,7 @@
                 </div>
             {% endif %}
             <div class="flex-1 font-bold text-[12px]">2D classification</div>
-            <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
+            <form class="flex" method="POST" action={% url 'nice_lite:view_stream_classification_2D_zoom' jobid %} target="_parent">
                 {% csrf_token %}
                 <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="view full screen">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -68,6 +68,15 @@
                     <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="stop">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
                             <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM6.5 5.5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </form>
+            {% elif status == "finished" or status == "failed" %} 
+                <form class="flex" method="POST" action={% url 'nice_lite:restart_stream_classification_2D' jobid %}>
+                    {% csrf_token %}
+                    <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="restart">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm-.847-9.766A.75.75 0 0 0 6 5.866v4.268a.75.75 0 0 0 1.153.633l3.353-2.134a.75.75 0 0 0 0-1.266L7.153 5.234Z" clip-rule="evenodd" />
                         </svg>
                     </button>
                 </form>
@@ -100,7 +109,7 @@
                             <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
                                 {% for cls2D in jobstats.latest_cls2D %}
                                     <div class="cls2dcontainer snap-center w-[70px] h-[70px] m-[1px] overflow-hidden bg-black rounded" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å">
-                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2D h-[70px] w-[70px] rounded m-auto">
+                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2D cls2Dimg h-[70px] w-[70px] rounded m-auto">
                                             <canvas class="mskcanvas z-1" height=70 width=70 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
                                             <div class="xmark hidden h-[70px] w-[70px] text-nice4alert flex items-center justify-center">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -129,7 +138,7 @@
                 </div>    
             </div>
         {% endif %}
-         {% if jobstats.user_input is True and status == "running" %}
+        {% if jobstats.user_input is True and status == "running" %}
             <div>
                 <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' jobid %}>
                     {% csrf_token %}

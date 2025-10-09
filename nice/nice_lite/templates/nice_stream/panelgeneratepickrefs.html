@@ -53,7 +53,7 @@
                 </div>
             {% endif %}
             <div class="flex-1 font-bold text-[12px]">reference generation</div>
-            <form class="flex" method="POST" action={% url 'nice_lite:view_stream_preprocess_zoom' jobid %} target="_parent">
+            <form class="flex" method="POST" action={% url 'nice_lite:view_stream_generate_pickrefs_zoom' jobid %} target="_parent">
                 {% csrf_token %}
                 <button class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -70,7 +70,16 @@
                             <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM6.5 5.5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3Z" clip-rule="evenodd" />
                         </svg>
                     </button>
-                </form> 
+                </form>
+            {% elif status == "finished" or status == "failed" %} 
+                <form class="flex" method="POST" action={% url 'nice_lite:restart_stream_generate_pickrefs' jobid %}>
+                    {% csrf_token %}
+                    <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="this.form.submit()" title="restart">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm-.847-9.766A.75.75 0 0 0 6 5.866v4.268a.75.75 0 0 0 1.153.633l3.353-2.134a.75.75 0 0 0 0-1.266L7.153 5.234Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </form>
             {% endif %}
             <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="document.querySelector('#help').classList.toggle('hidden')" title="view tip">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -141,7 +150,7 @@
                         <div id="picking_references" class="grid grid-flow-col grid-rows-3 gap-[2px]">
                             {% for template in jobstats.latest_cls2D %}
                                 <div class="snap-center picktemplatecontainer rounded bg-black" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
-                                    <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate h-[70px] w-[70px] rounded m-auto">
+                                    <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate picktemplateimg h-[70px] w-[70px] rounded m-auto">
                                         <div class="xmark hidden h-[70px] w-[70px] text-nice4alert flex items-center justify-center">
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                                 <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />

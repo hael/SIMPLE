@@ -14,13 +14,15 @@ scrlLeft = () => {
 
 scrlMicRight = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
-  micrograph_slider.scrollLeft += 200;
+  const rect = micrograph_slider.getBoundingClientRect();
+  micrograph_slider.scrollLeft += rect.width;
   lastinteraction = Date.now();
 }
 
 scrlMicLeft = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
-  micrograph_slider.scrollLeft -= 200;
+  const rect = micrograph_slider.getBoundingClientRect();
+  micrograph_slider.scrollLeft -= rect.width;
   lastinteraction = Date.now();
 }
 

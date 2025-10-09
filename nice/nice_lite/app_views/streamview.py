@@ -92,23 +92,40 @@ class StreamViewPreprocess:
     checksum_cookie = "panel_preprocessing_checksum"
     logfile         = "preprocessing.log"
     errfile         = "preprocessing.error"
+    zoom            = False
+    jobdir          = ""
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
             self.job = Job(id=jobid)
+            
         elif jobidzoom is not None:
-            self.job = Job(id=jobidzoom)
-            self.template = self.templatezoom
-        
+            self.job             = Job(id=jobidzoom)
+            self.template        = self.templatezoom
+            self.jobdir          = self.job.getAbsDir()
+            self.zoom            = True
+
     def render(self):
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.preprocessing_stats,
-            "status"   : self.job.preprocessing_status,
-            "logfile"  : self.logfile,
-            "errfile"  : self.errfile    
+            "jobid"     : self.job.id,
+            "displayid" : self.job.disp,
+            "jobstats"  : self.job.preprocessing_stats,
+            "status"    : self.job.preprocessing_status,
         }
+        if self.zoom:
+            context["log"]   = ""
+            context["error"] = ""
+            logfile = os.path.join(self.jobdir, self.logfile)
+            errfile = os.path.join(self.jobdir, self.errfile)
+            if os.path.exists(logfile) and os.path.isfile(logfile):
+                with open(logfile, 'rb') as f:
+                    logtext = f.read()
+                    context["log"] = str(logtext, errors='replace')
+            if os.path.exists(errfile) and os.path.isfile(errfile):
+                with open(errfile, 'rb') as f:
+                    errortext = f.read()
+                    context["error"] = str(errortext, errors='replace')
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
         old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
@@ -122,22 +139,44 @@ class StreamViewPreprocess:
 class StreamViewOptics:
 
     template        = "nice_stream/paneloptics.html"
+    templatezoom    = "nice_stream/zoomoptics.html"
     checksum_cookie = "panel_optics_checksum"
     logfile         = "optics_assignment.log"
     errfile         = "optics_assignment.error"
+    zoom            = False
+    jobdir          = ""
 
-    def __init__(self, request, jobid):
+    def __init__(self, request, jobid, jobidzoom):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            self.job = Job(id=jobid)
+            
+        elif jobidzoom is not None:
+            self.job             = Job(id=jobidzoom)
+            self.template        = self.templatezoom
+            self.jobdir          = self.job.getAbsDir()
+            self.zoom            = True
         
     def render(self):
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.optics_assignment_stats,
-            "status"   : self.job.optics_assignment_status,
-            "logfile"  : self.logfile,
-            "errfile"  : self.errfile      
+            "jobid"     : self.job.id,
+            "displayid" : self.job.disp,
+            "jobstats"  : self.job.optics_assignment_stats,
+            "status"    : self.job.optics_assignment_status,     
         }
+        if self.zoom:
+            context["log"]   = ""
+            context["error"] = ""
+            logfile = os.path.join(self.jobdir, self.logfile)
+            errfile = os.path.join(self.jobdir, self.errfile)
+            if os.path.exists(logfile) and os.path.isfile(logfile):
+                with open(logfile, 'rb') as f:
+                    logtext = f.read()
+                    context["log"] = str(logtext, errors='replace')
+            if os.path.exists(errfile) and os.path.isfile(errfile):
+                with open(errfile, 'rb') as f:
+                    errortext = f.read()
+                    context["error"] = str(errortext, errors='replace')
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
         old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
@@ -151,13 +190,23 @@ class StreamViewOptics:
 class StreamViewInitialPick:
 
     template        = "nice_stream/panelinitialpick.html"
+    templatezoom    = "nice_stream/zoominitialpick.html"
     checksum_cookie = "panel_initialpick_checksum"
     logfile         = "initial_picking.log"
     errfile         = "initial_picking.error"
+    zoom            = False
+    jobdir          = ""
 
-    def __init__(self, request, jobid):
+    def __init__(self, request, jobid, jobidzoom):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            self.job = Job(id=jobid)
+            
+        elif jobidzoom is not None:
+            self.job             = Job(id=jobidzoom)
+            self.template        = self.templatezoom
+            self.jobdir          = self.job.getAbsDir()
+            self.zoom            = True
         
     def render(self):
         start_pc = 0
@@ -172,13 +221,25 @@ class StreamViewInitialPick:
                 end_pc   = self.job.initial_picking_stats["picking_diameters"].index(self.job.initial_picking_stats["refinement_diameters"][-1]) * (100 / (len(self.job.initial_picking_stats["picking_diameters"]) - 1))
         context = {
             "jobid"        : self.job.id,
+            "displayid"    : self.job.disp,
             "jobstats"     : self.job.initial_picking_stats,
             "status"       : self.job.initial_picking_status,
             "refine_start" : start_pc,
-            "refine_width" : end_pc - start_pc,
-            "logfile"      : self.logfile,
-            "errfile"      : self.errfile,    
+            "refine_width" : end_pc - start_pc,  
         }
+        if self.zoom:
+            context["log"]   = ""
+            context["error"] = ""
+            logfile = os.path.join(self.jobdir, self.logfile)
+            errfile = os.path.join(self.jobdir, self.errfile)
+            if os.path.exists(logfile) and os.path.isfile(logfile):
+                with open(logfile, 'rb') as f:
+                    logtext = f.read()
+                    context["log"] = str(logtext, errors='replace')
+            if os.path.exists(errfile) and os.path.isfile(errfile):
+                with open(errfile, 'rb') as f:
+                    errortext = f.read()
+                    context["error"] = str(errortext, errors='replace')
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
         old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
@@ -192,25 +253,47 @@ class StreamViewInitialPick:
 class StreamViewGeneratePickrefs:
 
     template        = "nice_stream/panelgeneratepickrefs.html"
+    templatezoom    = "nice_stream/zoomgeneratepickrefs.html"
     checksum_cookie = "panel_pickrefs_checksum"
     logfile         = "generate_picking_refs.log"
     errfile         = "generate_picking_refs.error"
+    zoom            = False
+    jobdir          = ""
 
-    def __init__(self, request, jobid):
+    def __init__(self, request, jobid, jobidzoom):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            self.job = Job(id=jobid)
+            
+        elif jobidzoom is not None:
+            self.job             = Job(id=jobidzoom)
+            self.template        = self.templatezoom
+            self.jobdir          = self.job.getAbsDir()
+            self.zoom            = True
         
     def render(self):
         # sort cls2D on pop
         if "latest_cls2D" in self.job.generate_pickrefs_stats:
             self.job.generate_pickrefs_stats["latest_cls2D"] = sorted(self.job.generate_pickrefs_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.generate_pickrefs_stats,
-            "status"   : self.job.generate_pickrefs_status,
-            "logfile"  : self.logfile,
-            "errfile"  : self.errfile       
+            "jobid"     : self.job.id,
+            "displayid" : self.job.disp,
+            "jobstats"  : self.job.generate_pickrefs_stats,
+            "status"    : self.job.generate_pickrefs_status,    
         }
+        if self.zoom:
+            context["log"]   = ""
+            context["error"] = ""
+            logfile = os.path.join(self.jobdir, self.logfile)
+            errfile = os.path.join(self.jobdir, self.errfile)
+            if os.path.exists(logfile) and os.path.isfile(logfile):
+                with open(logfile, 'rb') as f:
+                    logtext = f.read()
+                    context["log"] = str(logtext, errors='replace')
+            if os.path.exists(errfile) and os.path.isfile(errfile):
+                with open(errfile, 'rb') as f:
+                    errortext = f.read()
+                    context["error"] = str(errortext, errors='replace')
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
         old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
@@ -224,22 +307,43 @@ class StreamViewGeneratePickrefs:
 class StreamViewReferencePicking:
 
     template        = "nice_stream/panelreferencepicking.html"
+    templatezoom    = "nice_stream/zoomreferencepicking.html"
     checksum_cookie = "panel_refpick_checksum"
     logfile         = "reference_based_picking.log"
     errfile         = "reference_based_picking.error"
+    zoom            = False
+    jobdir          = ""
 
-    def __init__(self, request, jobid):
+    def __init__(self, request, jobid, jobidzoom):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            self.job = Job(id=jobid)
+            
+        elif jobidzoom is not None:
+            self.job             = Job(id=jobidzoom)
+            self.template        = self.templatezoom
+            self.jobdir          = self.job.getAbsDir()
+            self.zoom            = True
         
     def render(self):
         context = {
             "jobid"    : self.job.id,
             "jobstats" : self.job.reference_picking_stats,
-            "status"   : self.job.reference_picking_status,
-            "logfile"  : self.logfile,
-            "errfile"  : self.errfile            
+            "status"   : self.job.reference_picking_status,         
         }
+        if self.zoom:
+            context["log"]   = ""
+            context["error"] = ""
+            logfile = os.path.join(self.jobdir, self.logfile)
+            errfile = os.path.join(self.jobdir, self.errfile)
+            if os.path.exists(logfile) and os.path.isfile(logfile):
+                with open(logfile, 'rb') as f:
+                    logtext = f.read()
+                    context["log"] = str(logtext, errors='replace')
+            if os.path.exists(errfile) and os.path.isfile(errfile):
+                with open(errfile, 'rb') as f:
+                    errortext = f.read()
+                    context["error"] = str(errortext, errors='replace')
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
         old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
@@ -253,13 +357,23 @@ class StreamViewReferencePicking:
 class StreamViewSieveParticles:
 
     template        = "nice_stream/panelsieveparticles.html"
+    templatezoom    = "nice_stream/zoomsieveparticles.html"
     checksum_cookie = "panel_sieve_checksum"
     logfile         = "particle_sieving.log"
     errfile         = "particle_sieving.error"
+    zoom            = False
+    jobdir          = ""
 
-    def __init__(self, request, jobid):
+    def __init__(self, request, jobid, jobidzoom):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            self.job = Job(id=jobid)
+            
+        elif jobidzoom is not None:
+            self.job             = Job(id=jobidzoom)
+            self.template        = self.templatezoom
+            self.jobdir          = self.job.getAbsDir()
+            self.zoom            = True
         
     def render(self):
         # sort cls2D on pop
@@ -274,10 +388,21 @@ class StreamViewSieveParticles:
         context = {
             "jobid"    : self.job.id,
             "jobstats" : self.job.particle_sieving_stats,
-            "status"   : self.job.particle_sieving_status,
-            "logfile"  : self.logfile,
-            "errfile"  : self.errfile   
+            "status"   : self.job.particle_sieving_status, 
         }
+        if self.zoom:
+            context["log"]   = ""
+            context["error"] = ""
+            logfile = os.path.join(self.jobdir, self.logfile)
+            errfile = os.path.join(self.jobdir, self.errfile)
+            if os.path.exists(logfile) and os.path.isfile(logfile):
+                with open(logfile, 'rb') as f:
+                    logtext = f.read()
+                    context["log"] = str(logtext, errors='replace')
+            if os.path.exists(errfile) and os.path.isfile(errfile):
+                with open(errfile, 'rb') as f:
+                    errortext = f.read()
+                    context["error"] = str(errortext, errors='replace')
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
         old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')
@@ -291,13 +416,23 @@ class StreamViewSieveParticles:
 class StreamViewClassification2D:
 
     template        = "nice_stream/panelclassification2D.html"
+    templatezoom    = "nice_stream/zoomclassification2D.html"
     checksum_cookie = "panel_cls2D_checksum"  
     logfile         = "classification_2D.log"
     errfile         = "classification_2D.error"
+    zoom            = False
+    jobdir          = ""
 
-    def __init__(self, request, jobid):
+    def __init__(self, request, jobid, jobidzoom):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            self.job = Job(id=jobid)
+            
+        elif jobidzoom is not None:
+            self.job             = Job(id=jobidzoom)
+            self.template        = self.templatezoom
+            self.jobdir          = self.job.getAbsDir()
+            self.zoom            = True
         
     def render(self):
         # sort cls2D on pop
@@ -306,10 +441,21 @@ class StreamViewClassification2D:
         context = {
             "jobid"    : self.job.id,
             "jobstats" : self.job.classification_2D_stats,
-            "status"   : self.job.classification_2D_status,
-            "logfile"  : self.logfile,
-            "errfile"  : self.errfile   
+            "status"   : self.job.classification_2D_status,  
         }
+        if self.zoom:
+            context["log"]   = ""
+            context["error"] = ""
+            logfile = os.path.join(self.jobdir, self.logfile)
+            errfile = os.path.join(self.jobdir, self.errfile)
+            if os.path.exists(logfile) and os.path.isfile(logfile):
+                with open(logfile, 'rb') as f:
+                    logtext = f.read()
+                    context["log"] = str(logtext, errors='replace')
+            if os.path.exists(errfile) and os.path.isfile(errfile):
+                with open(errfile, 'rb') as f:
+                    errortext = f.read()
+                    context["error"] = str(errortext, errors='replace')
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
         old_checksum = self.request.COOKIES.get(self.checksum_cookie, 'none')

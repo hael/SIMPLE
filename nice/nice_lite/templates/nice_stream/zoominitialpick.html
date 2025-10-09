@@ -1,0 +1,171 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src={% static 'nice_stream/panelinitialpick.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg text-nice4dark">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a>
+        <div class="px-[10px] text-[18px]">{{ displayid }} stream - initial picking</div>
+    </div>
+    <div class="w-full flex flex-row p-[10px]">
+        <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="flex flex-row">
+                {% if "micrographs_imported" in jobstats and "micrographs_processed" in jobstats and "micrographs_rejected" in jobstats and jobstats.micrographs_imported > 0 %}
+                    <div class="flex flex-col">
+                        <div class="font-bold text-[12px] pl-[10px]">micrographs</div>
+                        <div class="h-[100px] w-[240px] ml-[15px]">
+                            <canvas class="micrographs_pie_chart" data-imported={{ jobstats.micrographs_imported }} data-processed={{ jobstats.micrographs_processed }} data-rejected={{ jobstats.micrographs_rejected }}></canvas>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+            <div class="font-bold text-[12px]">log</div>
+            <div class="h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+                <pre class="text-[10px]">{{log}}</pre>
+            </div>
+            <div class="font-bold text-[12px]">errors</div>
+            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+                <pre class="text-[10px]">{{error}}</pre>
+            </div>
+        </div>
+    </div>
+    <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="font-bold text-[12px] pl-[10px]">latest micrographs</div>
+            {% if jobstats.user_input is True and "picking_diameters" in jobstats %}
+                <div class="flex flex-row">
+                    <div class="flex flex-col w-full overflow-hidden">
+                        <div class="font-bold text-[12px] pl-[10px]">picking diameter</div>
+                        <div class="flex flex-row justify-center items-baseline">
+                            <form class="flex flex-col text-nice4success hover:text-nice4header cursor-pointer" method="POST" action={% url 'nice_lite:decrease_moldiam_stream_initial_pick' jobid %}>
+                                {% csrf_token %}
+                                <button onclick="this.form.submit()" title="decrease range">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                                        <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm4-7a.75.75 0 0 0-.75-.75h-6.5a.75.75 0 0 0 0 1.5h6.5A.75.75 0 0 0 12 8Z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </form>
+                            <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_moldiam_stream_initial_pick' jobid %}>
+                                {% csrf_token %}
+                                <input type="hidden" name="diameter"></input>
+                                <div class="sticky">
+                                    <div title="refined" style="width:{{ refine_width }}%; margin-left:{{ refine_start }}%" class="bg-nice4success absolute h-[18px] rounded z-[-1]"></div>
+                                    <input type="range" id="picking_diameters" data-diameters='{{ jobstats.picking_diameters }}' min="1" max={{ jobstats.picking_diameters|length }} oninput="draw_overlay_coordinates()"></input>
+                                </div>
+                                <div class="flex flex-row">
+                                    <button class="userbutton" type="submit">use diameter</button>
+                                    <button class="userbutton" type="button" onclick="refineDiameter()">refine diameter</button>
+                                </div>   
+                            </form>
+                            <form id="refinediameter" class="text-nice4header items-center" method="POST" action={% url 'nice_lite:refine_moldiam_stream_initial_pick' jobid %}>
+                                {% csrf_token %}
+                                <input type="hidden" name="refine_diameter"></input>
+                            </form>
+                            <form class="flex flex-col text-nice4success hover:text-nice4header cursor-pointer" method="POST" action={% url 'nice_lite:increase_moldiam_stream_initial_pick' jobid %}>
+                                {% csrf_token %}
+                                <button onclick="this.form.submit()" title="increase range">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                                        <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm.75-10.25v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5a.75.75 0 0 1 1.5 0Z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </form> 
+                        </div>
+                    </div>
+                </div>
+            {% endif %} 
+            {% if jobstats.user_input is False and "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %}
+                <div class="flex flex-col flex-1">
+                    <div class="flex flex-row items-center m-auto">
+                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div id="micrographs_slider" class="flex flex-row w-[500px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="500" width="500"></canvas>
+                            {% for micrograph in jobstats.latest_picked_micrographs %}
+                                <div class="snap-center slider_micrograph" oncontextmenu="showMenu(this, event)" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                    <div class="w-[500px] h-[500px] m-auto">
+                                        <img style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[500px] w-[500px] rounded m-auto"></img>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent z-2" onclick="hideMenu()">
+                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] p-[2px] rounded">
+                                <div class="flex flex-col">
+                                    <div class="font-bold">contrast</div>
+                                    <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                                </div>
+                                <div class="flex flex-col">
+                                    <div class="font-bold">brightness</div>
+                                    <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                </div>
+                            </div>
+                        </div>
+                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </div>    
+                </div>    
+            {% elif jobstats.user_input is True and "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %} 
+                <div class="flex flex-col flex-1">
+                    <div class="flex flex-row items-center m-auto">
+                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft()">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[500] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="500" width="500"></canvas>
+                            {% for micrograph in jobstats.latest_picked_micrographs %}
+                                <div class="snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                    <div class="w-[500px] h-[500px] m-auto">
+                                        <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[500px] w-[500px] rounded"></img>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent z-2" onclick="hideMenu()">
+                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] p-[2px] rounded">
+                                <div class="flex flex-col">
+                                    <div class="font-bold">contrast</div>
+                                    <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                                </div>
+                                <div class="flex flex-col">
+                                    <div class="font-bold">brightness</div>
+                                    <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                </div>
+                            </div>
+                        </div>
+                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight()">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </div>    
+                </div>
+            {% else %}
+                <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
+                    picking particles ...
+                </div>            
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

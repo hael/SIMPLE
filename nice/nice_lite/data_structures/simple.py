@@ -55,11 +55,32 @@ class SIMPLEStream:
         if "processes" not in self.ui:        return False
         if "pickrefs" in self.args:
             self.skip_refgen = True
-     #   self.sleepcounter = 0
         for process in self.ui["processes"]:
             if not self.dispatch(process): return False
         return True
-
+    
+    def restart(self, base_dir, processname):
+        self.base_dir = base_dir
+        dispatchmodel = DispatchModel.objects.filter(active=True).last()
+        if dispatchmodel is None:             return False
+        if self.base_dir == "":               return False
+        if not os.path.exists(self.base_dir): return False
+        if not os.path.isdir(self.base_dir):  return False
+        for process in self.ui["processes"]:
+            if process["name"] == processname:
+                dispatch_script_path = os.path.join(self.base_dir, process["name"] + ".script")
+                if shutil.which(dispatchmodel.scmd) is None: return False
+                submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
+                try:
+                    subprocess.run(submit_cmd,
+                        cwd=self.base_dir,
+                        start_new_session=True
+                        )
+                except subprocess.CalledProcessError as cpe:
+                    print(cpe.stderr, end="")
+                    return False
+        return True
+    
     def dispatch(self, process):
         dispatchmodel = DispatchModel.objects.filter(active=True).last()
         if dispatchmodel is None:                            return False
@@ -81,9 +102,6 @@ class SIMPLEStream:
             nthr_master = process["nthr_master"]
         else:
             nthr_master = 1
-        # sleep on script start to prevent all starting together
-     #   command_string = "sleep " + str(self.sleepcounter) + "\n"
-      #  self.sleepcounter = self.sleepcounter + 5
         command_string = self.executable
         command_string += " prg=" + process["prg"]
         if "user_inputs" in process:
@@ -115,10 +133,10 @@ class SIMPLEStream:
         if shutil.which(dispatchmodel.scmd) is None: return False
         submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
         try:
-            subprocess.run(submit_cmd,
+            subprocess.Popen(submit_cmd,
                 cwd=self.base_dir,
                 start_new_session=True
-                )
+            )
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             return False
@@ -220,7 +238,7 @@ class SIMPLE:
             subprocess.Popen(submit_cmd,
                 cwd=self.base_dir,
                 start_new_session=True
-                )
+            )
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             return False

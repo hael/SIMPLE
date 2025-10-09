@@ -113,9 +113,9 @@ def new_job(request, parentid, package, jobtype):
     return newjobview.render()
 
 @login_required(login_url="/login/")
-def rerun_job(request, parentid):
-    job = JobClassic(id=parentid)
-    newjobview = NewJobView(request, parentid, job.pckg, job.prog, args=job.args)
+def rerun_job(request, jobid):
+    job = JobClassic(id=jobid)
+    newjobview = NewJobView(request, job.prnt, job.pckg, job.prog, args=job.args)
     return newjobview.render()
 
 @login_required(login_url="/login/")

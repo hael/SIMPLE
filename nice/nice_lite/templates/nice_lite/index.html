@@ -16,9 +16,9 @@
             <div class="font-bold text-white">project</div>
             <form method="POST" data-newurl="{% url 'nice_lite:new_project' 'stream' %}">
                 {% csrf_token %}
-                <select name="selected_project_id" onchange="changeProject(this.form)" class="bg-white rounded ml-[5px] pl-[5px]">
+                <select name="selected_project_id" onchange="changeProject(this)" class="bg-white rounded ml-[5px] pl-[5px]">
                     {% if current_project_id == 0 %}
-                        <option disabled selected value="" >select</option>
+                        <option disabled selected value="">select</option>
                     {% endif %}
                     <option>new</option>
                     {% for project in projects %}
@@ -35,7 +35,7 @@
             <div class="font-bold text-white">dataset</div>
             <form method="POST" action="createdataset">
                 {% csrf_token %}
-                <select name="selected_dataset_id" onchange="changeDataset(this.form)" class="bg-white rounded ml-[5px] pl-[5px]">
+                <select name="selected_dataset_id" onchange="changeDataset(this)" class="bg-white rounded ml-[5px] pl-[5px]">
                     {% if current_dataset_id == 0 %}
                         <option disabled selected value="">select</option>
                     {% endif %}
