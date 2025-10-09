@@ -682,7 +682,7 @@ contains
         box_raw = find_magic_box(2 * nint(diam_stats%med/params%smpd))
         print *, 'box diam: ', box_raw * params%smpd
         ! extraction from micrographs
-        call extractor%init_mic(box_raw, trim(params%pcontrast)=='white')
+        call extractor%init_mic(box_raw, .false.)
         do imic = 1, nmics
             ! set output stack name
             ext   = fname2ext(trim(basename(micnames(imic))))
