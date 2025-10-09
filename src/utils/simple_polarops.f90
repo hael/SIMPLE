@@ -1242,7 +1242,7 @@ contains
 
     ! PUBLIC UTILITIES
 
-    ! Determines the center of the volume based on the distribution of
+    ! Estimates the center of the volume based on the distribution of
     ! the individual particles in-plane offsets and map the shifts to both
     ! the particles and the references stored in the pftcc
     subroutine center_3Dpolar_refs( pftcc, algndoc, algnrefs )

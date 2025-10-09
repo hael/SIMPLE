@@ -569,7 +569,7 @@ contains
         real, parameter :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:)
         character(len=:),          allocatable :: fname, output_dir
-        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata(:,:)
+        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata(:,:), pinds(:)
         class(*),                  allocatable :: any
         real,                      allocatable :: diams_arr(:), masscens(:,:)
         type(ctfparams),           allocatable :: ctfvars(:)
@@ -588,7 +588,7 @@ contains
         character(len=LONGSTRLEN) :: stack
         character(len=STDLEN)     :: ext
         integer                   :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, nptcls, cnt, box_raw, i, nboxes
-        real                      :: scale, bin_t, diam
+        real                      :: scale, bin_t, diam, rmin,rmax,rmean,rsdev
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('kv')      ) call cline%set('kv',      300.)
         if( .not. cline%defined('cs')      ) call cline%set('cs',       2.7)
@@ -682,6 +682,7 @@ contains
         box_raw = find_magic_box(2 * nint(diam_stats%med/params%smpd))
         print *, 'box diam: ', box_raw * params%smpd
         ! extraction from micrographs
+        call extractor%init_mic(box_raw, trim(params%pcontrast)=='white')
         do imic = 1, nmics
             ! set output stack name
             ext   = fname2ext(trim(basename(micnames(imic))))
@@ -702,15 +703,19 @@ contains
             nboxes  = size(masscens, dim=1)
             boxdata = calc_boxdata(nboxes, box_raw, masscens, scale)
             ! extraction
-            call prepimgbatch( nboxes, box_raw )
-            call extract_particles_from_mic(mic_raw, nboxes, box_raw, boxdata, imgs(:nboxes))
+            call prepimgbatch(nboxes, box_raw)
+            pinds = (/(i,i=1,nboxes)/)
+            call extractor%extract_particles_from_mic(mic_raw, pinds, boxdata(1:2,:), imgs(:nboxes), rmin,rmax,rmean,rsdev)
             ! write stack
-            call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=box_raw)
+            call stkio_w%open(stack, params%smpd, 'write', box=box_raw)
             do i = 1,nboxes
                 call stkio_w%write(i, imgs(i))
             enddo
             call stkio_w%close
+            call imgs(1)%update_header_stats(stack, [rmin,rmax,rmean,rsdev])
         end do
+        ! cleanup
+        call extractor%kill
         call killimgbatch
 
         contains
@@ -760,21 +765,6 @@ contains
                     deallocate(imgs)
                 endif
             end subroutine killimgbatch
-
-            subroutine extract_particles_from_mic( mic, nboxes, box, coords, particles )
-                class(image), intent(in)    :: mic
-                integer,      intent(in)    :: nboxes, box, coords(3,nboxes)
-                type(image),  intent(inout) :: particles(nboxes)
-                integer :: i, noutside
-                !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-                !$omp private(i,noutside)
-                do i = 1,nboxes
-                    noutside = 0
-                    call mic%window(coords(1:2,i), box, particles(i), noutside)
-                    call particles(i)%norm
-                end do
-                !$omp end parallel do
-            end subroutine extract_particles_from_mic
 
     end subroutine exec_binarize_mics
 
