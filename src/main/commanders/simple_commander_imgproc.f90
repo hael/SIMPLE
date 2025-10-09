@@ -584,6 +584,7 @@ contains
         type(linked_list)       :: list_of_diams
         type(list_iterator)     :: list_iter
         type(stats_struct)      :: diam_stats
+        
         type(ctf_estimate_iter) :: ctfiter
         type(ctf)               :: tfun
         type(stack_io)          :: stkio_w
@@ -591,7 +592,7 @@ contains
         character(len=STDLEN)   :: ext
         integer                 :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, nptcls, cnt, box_raw, box_den, i, nboxes
         real                    :: scale, bin_t, diam, rmin, rmax, rmean, rsdev, smpd_shrink
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'no')
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
         if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
         if( .not. cline%defined('fraca')            ) call cline%set('fraca',            0.1)
@@ -604,9 +605,9 @@ contains
         if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_class', 100)
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
-        nmics = size(micnames)
+        nmics    = size(micnames)
         ! read the first micrograph
-        scale = params%smpd / SMPD_SHRINK1
+        scale    = params%smpd / SMPD_SHRINK1
         call read_mic_subtr_backgr_shrink(micnames(1), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
         ! set logical dimensions
         ldim_raw = mic_raw%get_ldim()
@@ -726,17 +727,17 @@ contains
             call stkio_w%close
             call imgs(1)%update_header_stats(ptcl_stk_names(imic), [rmin,rmax,rmean,rsdev])
             ! extraction from den
-            call killimgbatch
-            call prepimgbatch(nboxes, box_den, SMPD_SHRINK1)
-            pinds = (/(i,i=1,nboxes)/)
-            call extractor_den%extract_particles_from_mic(mic_den, pinds, boxdata_den(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
-            ! write stack
-            call stkio_w%open(ptcl_stk_den_names(imic), SMPD_SHRINK1, 'write', box=box_den)
-            do i = 1,nboxes
-                call stkio_w%write(i, imgs(i))
-            enddo
-            call stkio_w%close
-            call imgs(1)%update_header_stats(ptcl_stk_den_names(imic), [rmin,rmax,rmean,rsdev])
+            ! call killimgbatch
+            ! call prepimgbatch(nboxes, box_den, SMPD_SHRINK1)
+            ! pinds = (/(i,i=1,nboxes)/)
+            ! call extractor_den%extract_particles_from_mic(mic_den, pinds, boxdata_den(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
+            ! ! write stack
+            ! call stkio_w%open(ptcl_stk_den_names(imic), SMPD_SHRINK1, 'write', box=box_den)
+            ! do i = 1,nboxes
+            !     call stkio_w%write(i, imgs(i))
+            ! enddo
+            ! call stkio_w%close
+            ! call imgs(1)%update_header_stats(ptcl_stk_den_names(imic), [rmin,rmax,rmean,rsdev])
         end do
         ! output
         call os_deftab%new(os_ctf)
