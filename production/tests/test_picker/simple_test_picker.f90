@@ -113,7 +113,7 @@ do i = 1, nfiles
         call img_cc%diameter_cc(j, diams(j))
     enddo
     call calc_stats(diams, diam_stats)
-    print *, 'CC diameter (in Angs) stadistics'
+    print *, 'CC diameter (in Angs) statistics'
     print *, 'avg diam: ', diam_stats%avg
     print *, 'med diam: ', diam_stats%med
     print *, 'sde diam: ', diam_stats%sdev
@@ -211,7 +211,7 @@ do i = 1, nfiles
         call img_cc%diameter_cc(j, diams(j))
     enddo
     call calc_stats(diams, diam_stats)
-    print *, 'CC diameter (in Angs) stadistics'
+    print *, 'CC diameter (in Angs) statistics'
     print *, 'avg diam: ', diam_stats%avg
     print *, 'med diam: ', diam_stats%med
     print *, 'sde diam: ', diam_stats%sdev
@@ -294,7 +294,7 @@ do i = 1, nfiles
         call img_cc%diameter_cc(j, diams(j))
     enddo
     call calc_stats(diams, diam_stats)
-    print *, 'CC diameter (in Angs) stadistics'
+    print *, 'CC diameter (in Angs) statistics'
     print *, 'avg diam: ', diam_stats%avg
     print *, 'med diam: ', diam_stats%med
     print *, 'sde diam: ', diam_stats%sdev

@@ -18,7 +18,7 @@ public :: convert_commander
 public :: ctfops_commander
 public :: ctf_phaseflip_commander
 public :: filter_commander
-public :: binarize_mics_commander
+public :: mini_stream_commander
 public :: ppca_denoise_commander
 public :: normalize_commander
 public :: scale_commander
@@ -65,10 +65,10 @@ type, extends(commander_base) :: ppca_denoise_commander
     procedure :: execute      => exec_ppca_denoise
 end type ppca_denoise_commander
 
-type, extends(commander_base) :: binarize_mics_commander
+type, extends(commander_base) :: mini_stream_commander
   contains
-    procedure :: execute      => exec_binarize_mics
-end type binarize_mics_commander
+    procedure :: execute      => exec_mini_stream
+end type mini_stream_commander
 
 type, extends(commander_base) :: normalize_commander
   contains
@@ -556,7 +556,7 @@ contains
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
 
-    subroutine exec_binarize_mics( self, cline )
+    subroutine exec_mini_stream( self, cline )
         use simple_micproc
         use simple_segmentation
         use simple_linked_list
@@ -564,41 +564,44 @@ contains
         use simple_ctf_estimate_iter,  only: ctf_estimate_iter
         use simple_ctf,                only: ctf
         use simple_particle_extractor, only: ptcl_extractor
-        class(binarize_mics_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        real, parameter :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17
+        class(mini_stream_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        real,    parameter :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17
+        integer, parameter :: BOXFAC = 3
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:)
+        character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk_den_names(:)
         character(len=:),          allocatable :: fname, output_dir
-        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata(:,:), pinds(:)
+        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata_raw(:,:), boxdata_den(:,:), pinds(:)
         class(*),                  allocatable :: any
         real,                      allocatable :: diams_arr(:), masscens(:,:)
         type(ctfparams),           allocatable :: ctfvars(:)
         type(ori),                 allocatable :: os_ctf(:)
         type(image),               allocatable :: imgs(:)
-        type(ptcl_extractor)      :: extractor
-        type(parameters)          :: params
-        type(image)               :: mic_raw, mic_shrink
-        type(binimage)            :: mic_bin, img_cc
-        type(linked_list)         :: list_of_diams
-        type(list_iterator)       :: list_iter
-        type(stats_struct)        :: diam_stats
-        type(ctf_estimate_iter)   :: ctfiter
-        type(ctf)                 :: tfun
-        type(stack_io)            :: stkio_w
-        character(len=LONGSTRLEN) :: stack
-        character(len=STDLEN)     :: ext
-        integer                   :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, nptcls, cnt, box_raw, i, nboxes
-        real                      :: scale, bin_t, diam, rmin,rmax,rmean,rsdev
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
-        if( .not. cline%defined('kv')      ) call cline%set('kv',      300.)
-        if( .not. cline%defined('cs')      ) call cline%set('cs',       2.7)
-        if( .not. cline%defined('fraca')   ) call cline%set('fraca',    0.1)
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',  512)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
-        if( .not. cline%defined('dfmin')   ) call cline%set('dfmin',    DFMIN_DEFAULT)
-        if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',    DFMAX_DEFAULT)
-        if( .not. cline%defined('ctfpatch')) call cline%set('ctfpatch','no')
+        type(ptcl_extractor)    :: extractor_raw, extractor_den
+        type(parameters)        :: params
+        type(image)             :: mic_raw, mic_shrink, mic_den
+        type(binimage)          :: mic_bin, img_cc
+        type(linked_list)       :: list_of_diams
+        type(list_iterator)     :: list_iter
+        type(stats_struct)      :: diam_stats
+        type(ctf_estimate_iter) :: ctfiter
+        type(ctf)               :: tfun
+        type(stack_io)          :: stkio_w
+        type(oris)              :: os_deftab
+        character(len=STDLEN)   :: ext
+        integer                 :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, nptcls, cnt, box_raw, box_den, i, nboxes
+        real                    :: scale, bin_t, diam, rmin, rmax, rmean, rsdev, smpd_shrink
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'no')
+        if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
+        if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
+        if( .not. cline%defined('fraca')            ) call cline%set('fraca',            0.1)
+        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512)
+        if( .not. cline%defined('hp')               ) call cline%set('hp',               30.)
+        if( .not. cline%defined('lp')               ) call cline%set('lp',                5.)
+        if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',  DFMIN_DEFAULT)
+        if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',  DFMAX_DEFAULT)
+        if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'no')
+        if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_class', 100)
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
@@ -610,7 +613,8 @@ contains
         ldim     = mic_shrink%get_ldim()
         ! output directory
         output_dir = PATH_HERE
-        allocate(mic_den_names(nmics), mic_bin_names(nmics), ctfvars(nmics), os_ctf(nmics))
+        allocate(mic_den_names(nmics), mic_bin_names(nmics),&
+        &ctfvars(nmics), os_ctf(nmics), ptcl_stk_names(nmics), ptcl_stk_den_names(nmics))
         ctfvars(:)%smpd    = params%smpd
         ctfvars(:)%kv      = params%kv
         ctfvars(:)%cs      = params%cs
@@ -620,6 +624,7 @@ contains
             call os_ctf(imic)%new(is_ptcl=.false.)
             call ctfiter%iterate(ctfvars(imic), micnames(imic), os_ctf(imic), trim(output_dir), l_gen_thumb=.true.)
             call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
+            smpd_shrink = mic_shrink%get_smpd()
             call cascade_filter_biomol( mic_shrink )
             mic_den_names(imic) = 'mic_shrink_den'//int2str_pad(imic,3)//'.mrc'
             call mic_shrink%write(mic_den_names(imic))
@@ -673,49 +678,78 @@ contains
         ! diameter stats & box size estimation
         diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! bacause of the 2X erosion in binarization
         call calc_stats(diams_arr, diam_stats)
-        print *, 'CC diameter (in Angs) stadistics'
+        print *, 'CC diameter (in Angs) statistics'
         print *, 'avg diam: ', diam_stats%avg
         print *, 'med diam: ', diam_stats%med
         print *, 'sde diam: ', diam_stats%sdev
         print *, 'min diam: ', diam_stats%minv
         print *, 'max diam: ', diam_stats%maxv
-        box_raw = find_magic_box(2 * nint(diam_stats%med/params%smpd))
+        box_raw = find_magic_box(BOXFAC * nint(diam_stats%med/params%smpd))
+        box_den = find_magic_box(BOXFAC * nint(diam_stats%med/SMPD_SHRINK1))
         print *, 'box diam: ', box_raw * params%smpd
         ! extraction from micrographs
-        call extractor%init_mic(box_raw, .false.)
+        call extractor_raw%init_mic(box_raw, .false.)
+        call extractor_den%init_mic(box_den, .false.)
         do imic = 1, nmics
             ! set output stack name
-            ext   = fname2ext(trim(basename(micnames(imic))))
-            stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(micnames(imic))), trim(ext)))//trim(STK_EXT)
+            ext                      = fname2ext(trim(basename(micnames(imic))))
+            ptcl_stk_names(imic)     = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(micnames(imic))),      trim(ext)))//trim(STK_EXT)
+            ptcl_stk_den_names(imic) = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_den_names(imic))), trim(ext)))//trim(STK_EXT)
             ! read raw
             call read_mic_subtr_backgr(micnames(imic), params%smpd, params%pcontrast, mic_raw)
-            ! phase-flip micrograph
+            ! read denoised
+            call read_mic(trim(mic_den_names(imic)), mic_den)
+            ! read binary
+            call read_mic(trim(mic_bin_names(imic)), mic_bin)
+            call mic_bin%set_imat
+            ! phase-flip raw micrograph
             tfun = ctf(ctfvars(imic)%smpd, ctfvars(imic)%kv, ctfvars(imic)%cs, ctfvars(imic)%fraca)
             call mic_raw%zero_edgeavg
             call mic_raw%fft
             call tfun%apply_serial(mic_raw, 'flip', ctfvars(imic))
             call mic_raw%ifft
-            ! read binary
-            call read_mic( trim(mic_bin_names(imic)), mic_bin)
-            call mic_bin%set_imat
             ! find centers of mass of connected components
             call identify_masscens(mic_bin, masscens)
-            nboxes  = size(masscens, dim=1)
-            boxdata = calc_boxdata(nboxes, box_raw, masscens, scale)
-            ! extraction
-            call prepimgbatch(nboxes, box_raw)
+            nboxes      = size(masscens, dim=1)
+            boxdata_raw = calc_boxdata(nboxes, box_raw, masscens, scale)
+            boxdata_den = calc_boxdata(nboxes, box_den, masscens, 1.0)
+            ! extraction from raw
+            call killimgbatch
+            call prepimgbatch(nboxes, box_raw, params%smpd)
             pinds = (/(i,i=1,nboxes)/)
-            call extractor%extract_particles_from_mic(mic_raw, pinds, boxdata(1:2,:), imgs(:nboxes), rmin,rmax,rmean,rsdev)
+            call extractor_raw%extract_particles_from_mic(mic_raw, pinds, boxdata_raw(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
             ! write stack
-            call stkio_w%open(stack, params%smpd, 'write', box=box_raw)
+            call stkio_w%open(ptcl_stk_names(imic), params%smpd, 'write', box=box_raw)
             do i = 1,nboxes
                 call stkio_w%write(i, imgs(i))
             enddo
             call stkio_w%close
-            call imgs(1)%update_header_stats(stack, [rmin,rmax,rmean,rsdev])
+            call imgs(1)%update_header_stats(ptcl_stk_names(imic), [rmin,rmax,rmean,rsdev])
+            ! extraction from den
+            call killimgbatch
+            call prepimgbatch(nboxes, box_den, SMPD_SHRINK1)
+            pinds = (/(i,i=1,nboxes)/)
+            call extractor_den%extract_particles_from_mic(mic_den, pinds, boxdata_den(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
+            ! write stack
+            call stkio_w%open(ptcl_stk_den_names(imic), SMPD_SHRINK1, 'write', box=box_den)
+            do i = 1,nboxes
+                call stkio_w%write(i, imgs(i))
+            enddo
+            call stkio_w%close
+            call imgs(1)%update_header_stats(ptcl_stk_den_names(imic), [rmin,rmax,rmean,rsdev])
         end do
+        ! output
+        call os_deftab%new(os_ctf)
+        call os_deftab%write('deftab.txt')
+        call write_filetable('stktab.txt', ptcl_stk_names)
         ! cleanup
-        call extractor%kill
+        call os_deftab%kill
+        do imic = 1, nmics
+            call os_ctf(imic)%kill
+        end do
+        deallocate(os_ctf)
+        call extractor_raw%kill
+        call extractor_den%kill
         call killimgbatch
 
         contains
@@ -733,8 +767,9 @@ contains
                 boxdata(3,:) = box
             end function calc_boxdata
 
-            subroutine prepimgbatch( nboxes, box )
+            subroutine prepimgbatch( nboxes, box, smpd )
                 integer, intent(in) :: nboxes, box
+                real,    intent(in) :: smpd
                 integer, parameter  :: BATCHSZ_DEFAULT = 1024
                 integer :: i, batchsz
                 logical :: doprep
@@ -750,7 +785,7 @@ contains
                     allocate(imgs(batchsz))
                     !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
                     do i = 1,batchsz
-                        call imgs(i)%new([box, box, 1], params%smpd, wthreads=.false.)
+                        call imgs(i)%new([box, box, 1], smpd, wthreads=.false.)
                     end do
                     !$omp end parallel do
                 endif
@@ -766,7 +801,7 @@ contains
                 endif
             end subroutine killimgbatch
 
-    end subroutine exec_binarize_mics
+    end subroutine exec_mini_stream
 
     subroutine exec_ppca_denoise( self, cline )
         use simple_imgproc,    only: make_pcavecs

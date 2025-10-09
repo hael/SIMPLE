@@ -63,6 +63,7 @@ type :: parameters
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
+    character(len=3)          :: input_is_movies='no' !< wheter filetab input is movies or not (yes|no){yes}
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
@@ -657,6 +658,7 @@ contains
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('inivol',         self%inivol)
+        call check_carg('input_is_movies', self%input_is_movies)
         call check_carg('interactive',    self%interactive)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)

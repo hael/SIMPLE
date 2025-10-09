@@ -831,7 +831,7 @@ contains
         call fopen(funit,filetable, 'replace', 'unknown', io_stat)
         call fileiochk("write_filetable failed to open file "//filetable,io_stat )
         do iline=1,nl
-            write(funit,'(a)') trim(filenames(iline))
+            write(funit,'(a)') simple_abspath(trim(filenames(iline)))
         end do
         call fclose(funit)
         call fileiochk("write_filetable failed to close",io_stat)

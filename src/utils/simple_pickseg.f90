@@ -172,7 +172,7 @@ contains
         enddo
         call calc_stats(diams, self%diam_stats)
         if( L_DEBUG )then 
-            print *, 'CC diameter (in Angs) stadistics'
+            print *, 'CC diameter (in Angs) statistics'
             print *, 'avg diam: ', self%diam_stats%avg
             print *, 'med diam: ', self%diam_stats%med
             print *, 'sde diam: ', self%diam_stats%sdev
