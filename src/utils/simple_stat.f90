@@ -1051,15 +1051,23 @@ contains
 
     subroutine scores2scores_percen( scores )
         real, intent(inout) :: scores(:)
-        call normalize_minmax(scores)     ! scores [0,1]
-        scores = 100. * scores            ! scores [0,100]
+        if( size(scores) == 1 )then
+            scores = min(1.0,max(scores, 0.0)) * 100.
+        else
+            call normalize_minmax(scores)     ! scores [0,1]
+            scores = 100. * scores            ! scores [0,100]
+        endif
     end subroutine scores2scores_percen
 
     subroutine dists2scores_percen( dists )
         real, intent(inout) :: dists(:)
-        call normalize_minmax(dists)     ! distances [0,1]
-        dists = -100. * (dists - 1.)     ! scores    [0,100
-        where( dists < SMALL) dists = 0. ! 4 pretty printing
+        if( size(dists) == 1 )then
+            dists = min(1.0,max(dists, 0.0)) * 100.
+        else
+            call normalize_minmax(dists)     ! distances [0,1]
+            dists = -100. * (dists - 1.)     ! scores    [0,100
+            where( dists < SMALL) dists = 0. ! 4 pretty printing
+        endif
     end subroutine dists2scores_percen
 
     function merge_smats( smat1, smat2 ) result( smat )

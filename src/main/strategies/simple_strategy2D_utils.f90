@@ -177,11 +177,11 @@ contains
             mm(i,:) = cavg_imgs(i)%minmax(mskrad)
         end do
         !$omp end parallel do
-        if( DEBUG )then
-            do i = 1, ncls_sel
-                call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
-            enddo
-        endif
+        ! if( DEBUG )then
+        !     do i = 1, ncls_sel
+        !         call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
+        !     enddo
+        ! endif
         call clsfrcs%kill
     end subroutine prep_cavgs4clustering
 
@@ -559,7 +559,9 @@ contains
             real              :: avgjscore
             logical           :: l_incl
             clust_info_arr(:)%good_bad = 0
-            if( nclust <= 5 )then
+            if( nclust == 1 )then
+                clust_info_arr(:)%good_bad      = 1
+            else if( nclust <= 5 )then
                 clust_info_arr(:)%good_bad      = 1
                 clust_info_arr(nclust)%good_bad = 0
             else
