@@ -1000,8 +1000,8 @@ contains
         endif
         call spproj%write_substk([params%fromp,params%top], params%outstk)
         ! extarct previous oris
-        os_ptcl2D_prev = spproj%os_ptcl3D%extract_subset([params%fromp,params%top])
-        os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset([params%fromp,params%top])
+        os_ptcl2D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
+        os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
         ! extract previous pinds
         pinds = nint(os_ptcl3D_prev%get_all('pind'))
         n     = size(pinds) 

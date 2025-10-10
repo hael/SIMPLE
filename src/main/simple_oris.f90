@@ -34,7 +34,8 @@ type :: oris
     generic            :: new => new_1, new_2
     procedure, private :: new_1, new_2
     procedure          :: reallocate
-    procedure          :: extract_subset
+    procedure, private :: extract_subset_1, extract_subset_2
+    generic            :: extract_subset => extract_subset_1, extract_subset_2
     ! GETTERS
     procedure          :: exists
     procedure          :: e1get
@@ -312,21 +313,32 @@ contains
         call tmp%kill
     end subroutine reallocate
 
-    function extract_subset( self, fromto ) result( self_sub )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: fromto(2)
+    function extract_subset_1( self, from, to ) result( self_sub )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: from, to
         type(oris) :: self_sub
         integer    :: n, cnt, i
-        logical    :: is_ptcl
-        n       = fromto(2) - fromto(1) + 1
-        is_ptcl = self%o(fromto(1))%is_particle()
-        call self_sub%new(n, is_ptcl)
+        n  = from - to + 1
+        call self_sub%new(n, self%is_particle())
         cnt = 0
-        do i = fromto(1), fromto(2)
+        do i = from, to
             cnt = cnt + 1
             call self_sub%o(cnt)%copy(self%o(i))
         end do
-    end function extract_subset
+    end function extract_subset_1
+
+    function extract_subset_2( self, inds ) result( self_sub )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: inds(:)
+        type(oris) :: self_sub
+        integer    :: n, i
+        logical    :: is_ptcl
+        n  = size(inds)
+        call self_sub%new(n, self%is_particle())
+        do i = 1,n
+            call self_sub%o(i)%copy(self%o(inds(i)))
+        end do
+    end function extract_subset_2
 
     ! GETTERS
 
