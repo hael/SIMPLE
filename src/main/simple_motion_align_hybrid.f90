@@ -441,7 +441,7 @@ contains
             l_calc_frameweights = .true.
         endif
         ! shift boundaries
-        trs = 5.*params_glob%scale
+        trs = 5.*params_glob%scale_movies
         ! search object allocation
         allocate(ftexp_srch(self%nframes))
         do iframe=1,self%nframes

@@ -159,9 +159,9 @@ contains
             endif
         endif
         ! scaling
-        if( params_glob%scale < 0.99 )then
-            ldim_scaled(1) = round2even(real(ldim(1))*params_glob%scale)
-            ldim_scaled(2) = round2even(real(ldim(2))*params_glob%scale)
+        if( params_glob%scale_movies < 0.99 )then
+            ldim_scaled(1) = round2even(real(ldim(1))*params_glob%scale_movies)
+            ldim_scaled(2) = round2even(real(ldim(2))*params_glob%scale_movies)
             ldim_scaled(3) = 1
             do_scale       = .true.
         else
@@ -169,7 +169,7 @@ contains
             do_scale    = .false.
         endif
         ! set sampling distance
-        smpd_scaled = smpd/params_glob%scale
+        smpd_scaled = smpd/params_glob%scale_movies
         ! set fixed frame to central one
         fixed_frame = nint(0.5*real(nframes))
         ! set reslims
@@ -292,7 +292,7 @@ contains
         call hybrid_srch%new(movie_frames_scaled)
         call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
         call hybrid_srch%set_bfactor(bfactor)
-        call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
+        call hybrid_srch%set_trs(params_glob%scale_movies*params_glob%trs)
         call hybrid_srch%set_rand_init_shifts(.true.)
         call hybrid_srch%set_fitshifts(FITSHIFTS)
         call hybrid_srch%set_fixed_frame(fixed_frame)
@@ -427,7 +427,7 @@ contains
         real(dp), allocatable :: polycoeffs(:)
         if( trim(params_glob%extractfrommov).eq.'yes' )then
             call motion_patch%get_poly_coeffs(polycoeffs)
-            if( do_scale ) polycoeffs = polycoeffs / real(params_glob%scale,dp)
+            if( do_scale ) polycoeffs = polycoeffs / real(params_glob%scale_movies,dp)
             call arr2file(polycoeffs, fname)
             deallocate(polycoeffs)
         endif
@@ -444,7 +444,7 @@ contains
         real(dp) :: dpscale
         real     :: shift(2), doseperframe
         integer  :: i,iframe, npoly, ndeadpixels, motion_model
-        dpscale = real(params_glob%scale,dp)
+        dpscale = real(params_glob%scale_movies,dp)
         motion_model = 0
         if( writepoly )then
             motion_model = 1
@@ -574,7 +574,7 @@ contains
         end do
         !$omp end parallel do
         rmsd = huge(rmsd(1))
-        call motion_patch%new(npatch, params_glob%scale*params_glob%trs)
+        call motion_patch%new(npatch, params_glob%scale_movies*params_glob%trs)
         write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',npatch(1),' x ',npatch(2),')'
         call motion_patch%set_fitshifts(FITSHIFTS)
         call motion_patch%set_frameweights(frameweights)

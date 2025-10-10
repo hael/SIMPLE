@@ -192,7 +192,7 @@ contains
             cline_make_pickrefs = cline
             call cline_make_pickrefs%set('prg','make_pickrefs')
             call cline_make_pickrefs%set('mkdir','no')
-            pickrefs_smpd = params%smpd / params%scale
+            pickrefs_smpd = params%smpd / params%scale_movies
             if( cline_make_pickrefs%defined('eer_upsampling') )then
                 pickrefs_smpd = pickrefs_smpd / real(params%eer_upsampling)
             endif
@@ -261,8 +261,8 @@ contains
         logical :: l_pick, l_del_forctf, l_skip_pick
         call cline%set('oritype', 'mic')
         call params%new(cline)
-        if( params%scale > 1.01 )then
-            THROW_HARD('scale cannot be > 1; exec_preprocess')
+        if( params%scale_movies > 1.01 )then
+            THROW_HARD('scale_movies cannot be > 1; exec_preprocess')
         endif
         l_pick = .false.
         ! if( cline%defined('picker') )then
@@ -523,8 +523,8 @@ contains
         if( nmovies == 0 )then
             THROW_HARD('No movie to process!')
         endif
-        if( params%scale > 1.01 )then
-            THROW_HARD('scale cannot be > 1; exec_motion_correct')
+        if( params%scale_movies > 1.01 )then
+            THROW_HARD('scale_movies cannot be > 1; exec_motion_correct')
         endif
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
