@@ -42,6 +42,7 @@ type :: parameters
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: doprint='no'
+    character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: empty3Dcavgs='yes'   !< whether 3D empty cavgs are okay(yes|no){yes}
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
@@ -487,9 +488,11 @@ type :: parameters
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
     real    :: scale=1.            !< image scale factor{1}
+    real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=2.             !< sampling distance; same as EMANs apix(in A)
+    real    :: smpd_downscale=SMPD4DOWNSCALE !< sampling distance for movie downscaling
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
@@ -628,6 +631,7 @@ contains
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
+        call check_carg('downscale',      self%downscale)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynreslim',      self%dynreslim)
         call check_carg('element',        self%element)
@@ -1014,6 +1018,7 @@ contains
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('smpd_crop',      self%smpd_crop)
+        call check_rarg('smpd_downscale', self%smpd_downscale)
         call check_rarg('smpd_target',    self%smpd_target)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
@@ -1329,6 +1334,15 @@ contains
                 endif
             else
                 ! we don't check for existence of refs as they can be output as well as input (cavgassemble)
+            endif
+        endif
+        ! deal with movie downscaling
+        self%scale_movies   = 1.0
+        if( trim(self%downscale).eq.'yes' )then
+            self%scale_movies = self%smpd / self%smpd_downscale
+            if( self%scale_movies > 1.0 )then
+                self%smpd_downscale = self%smpd
+                self%scale_movies   = 1.0
             endif
         endif
         ! smpd_crop/box_crop

@@ -254,7 +254,7 @@ contains
             nx    = max(1, floor(physz(1) / MC_PATCHSZ))    ! # of patches along x
             ny    = max(1, floor(physz(2) / MC_PATCHSZ))    ! # of patches along y
             ! Micrograph scaled pixel dimensions
-            pixsz = nint(real(pixsz) * params_glob%scale)
+            pixsz = nint(real(pixsz) * params_glob%scale_movies)
             if( fname2format(moviename) .eq. 'K' ) pixsz = pixsz * params_glob%eer_upsampling
             ! Patch size in pixel
             patchsz(1) = nint(real(pixsz(1)) / real(nx))

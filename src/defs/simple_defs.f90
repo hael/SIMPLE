@@ -35,8 +35,8 @@ real(sp),    parameter :: SMALL        = 1e-6
 real(sp),    parameter :: FTOL         = 1e-4
 real(dp),    parameter :: DSMALL       = 1.d-6
 real(dp),    parameter :: PISQR        = DPI*DPI
-complex(sp), parameter :: CMPLX_ZERO  = cmplx(0.,0.)
-complex(dp), parameter :: DCMPLX_ZERO = cmplx(0.d0,0.d0, kind=dp)
+complex(sp), parameter :: CMPLX_ZERO   = cmplx(0.,0.)
+complex(dp), parameter :: DCMPLX_ZERO  = cmplx(0.d0,0.d0, kind=dp)
 
 ! directory-based execution model
 character(len=:), allocatable :: cwd_glob_orig, cwd_glob
@@ -180,6 +180,7 @@ integer, parameter :: BUFSZ_DEFAULT             = 1024           !< Default stac
 ! power spectrum related stuff
 integer, parameter :: GUI_PSPECSZ               = 512            !< hard-coded image size for gui
 real,    parameter :: SMPD4VIZ                  = 1.25           !< default sampling distance for powerspectrum visualisation
+real,    parameter :: SMPD4DOWNSCALE            = 1.3            !< default sampling distance for downscaling in motion correction 
 real,    parameter :: LP_PSPEC_BACKGR_SUBTR     = 20.            !< default low-pass limit for power spectrum background subtraction
 
 ! constants for picker & extraction

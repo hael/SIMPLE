@@ -357,13 +357,13 @@ type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: remove_chunks
 type(simple_input_param) :: reject_cls
 type(simple_input_param) :: remap_cls
-type(simple_input_param) :: scale_movies
 type(simple_input_param) :: script
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
 type(simple_input_param) :: sigma_est
 type(simple_input_param) :: smooth_ext
 type(simple_input_param) :: smpd
+type(simple_input_param) :: smpd_downscale
 type(simple_input_param) :: smpd_target
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
@@ -1271,6 +1271,7 @@ contains
         call set_param(icefracthreshold,'icefracthreshold','num','Ice Fraction rejection threshold', 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}', 'Ice fraction threshold{1.0}', .false., 1.0)
         call set_param(astigthreshold,  'astigthreshold',  'num','Astigmatism rejection threshold', 'Micrographs with astigmatism (%) above the threshold will be ignored from further processing{10.0}', 'Astigmatism threshold{10.0}', .false., 10.0)
         call set_param(smpd,          'smpd',              'num','Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(smpd_downscale,'smpd_downscale',    'num','Sampling distance after downscale', 'Distance between neighbouring pixels in Angstroms after downscale', 'pixel size in Angstroms{1.3}', .false., 1.3)
         call set_param(smpd_target,   'smpd_target',       'num','Target sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
@@ -1381,7 +1382,6 @@ contains
         call set_param(star_model,     'star_model',   'file',   'Model STAR file name', 'Model STAR-formatted filename', 'e.g. model.star', .true., '')
         call set_param(star_ptcl,      'star_ptcl',    'file',   'Particles STAR file name', 'Particles STAR-formatted filename', 'e.g. particles.star', .true., '')
         call set_param(startype,       'startype',     'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
-        call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1){1.}', '{1.}', .false., 1.0)
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         call set_param(graphene_filt,  'graphene_filt','binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
@@ -1395,7 +1395,7 @@ contains
         call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
-        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|patch_refine){patch}','(patch|patch_refine){patch}', .false.,'patch')
+        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(iso|patch|patch_refine){patch}','(iso|patch|patch_refine){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|tight|no){no}', '(yes|tight|no){no}', .false., 'no')
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
@@ -3903,7 +3903,7 @@ contains
         call motion_correct%set_input('parm_ios', 1, total_dose, gui_submenu="data", gui_advanced=.false.)
         call motion_correct%set_input('parm_ios', 2, fraction_dose_target, gui_submenu="data")
         call motion_correct%set_input('parm_ios', 3, max_dose, gui_submenu="data")
-        call motion_correct%set_input('parm_ios', 4, scale_movies, gui_submenu="data")
+        call motion_correct%set_input('parm_ios', 4, smpd_downscale, gui_submenu="data")
         call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., '', gui_submenu="data")
         call motion_correct%set_input('parm_ios', 6, pspecsz, gui_submenu="motion correction")
@@ -4325,7 +4325,7 @@ contains
         call preprocess%set_input('parm_ios', 1,  total_dose)
         call preprocess%set_input('parm_ios', 2,  fraction_dose_target)
         call preprocess%set_input('parm_ios', 3,  max_dose)
-        call preprocess%set_input('parm_ios', 4,  scale_movies)
+        call preprocess%set_input('parm_ios', 4,  smpd_downscale)
         call preprocess%set_input('parm_ios', 5,  eer_fraction)
         call preprocess%set_input('parm_ios', 6,  eer_upsampling)
         call preprocess%set_input('parm_ios', 7,  pcontrast)
@@ -5312,7 +5312,7 @@ contains
         ! parameter input/output
         call preproc%set_input('parm_ios', 1, total_dose, gui_submenu="data", gui_advanced=.false.)
         call preproc%set_input('parm_ios', 2, fraction_dose_target, gui_submenu="data", gui_advanced=.false.)
-        call preproc%set_input('parm_ios', 3, scale_movies, gui_submenu="motion correction", gui_advanced=.false.)
+        call preproc%set_input('parm_ios', 3, smpd_downscale, gui_submenu="motion correction", gui_advanced=.false.)
         call preproc%set_input('parm_ios', 4, eer_fraction, gui_submenu="motion correction")
         call preproc%set_input('parm_ios', 5, eer_upsampling, gui_submenu="motion correction", gui_advanced=.false.)
         call preproc%set_input('parm_ios', 6, max_dose, gui_submenu="motion correction")

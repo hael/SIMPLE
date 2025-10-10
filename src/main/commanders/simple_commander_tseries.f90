@@ -281,6 +281,7 @@ contains
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
         if( .not. cline%defined('algorithm')  ) call cline%set('algorithm','patch')
+        if( .not. cline%defined('downscale')  ) call cline%set('downscale',   'no')
         call params%new(cline)
         call cline%set('numlen', real(params%numlen))
         if( cline%defined('boxfile') )then
@@ -332,6 +333,7 @@ contains
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
+        if( .not. cline%defined('downscale')  ) call cline%set('downscale',   'no')
         call params%new(cline)
         call spproj%read(params%projfile)
         nframes  = spproj%get_nframes()
