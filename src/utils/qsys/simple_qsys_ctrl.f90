@@ -3,6 +3,7 @@ module simple_qsys_ctrl
 include 'simple_lib.f08'
 use simple_qsys_base,  only: qsys_base
 use simple_qsys_slurm, only: qsys_slurm
+use simple_qsys_lsf,   only: qsys_lsf
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 use simple_mem_estimator
@@ -255,6 +256,8 @@ contains
         character(len=512) :: io_msg
         select type( pmyqsys => self%myqsys )
             class is(qsys_slurm)
+                ! all good
+            class is(qsys_lsf)
                 ! all good
             class DEFAULT
                 THROW_HARD('array submission only supported by SLURM')

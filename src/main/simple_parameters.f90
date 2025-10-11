@@ -256,7 +256,7 @@ type :: parameters
     character(len=STDLEN)     :: subprojname=''       !< SIMPLE  subproject name
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
-    character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
+    character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
