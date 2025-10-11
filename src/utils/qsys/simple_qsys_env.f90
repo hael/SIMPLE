@@ -6,6 +6,7 @@ use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
 use simple_qsys_local,   only: qsys_local
 use simple_qsys_slurm,   only: qsys_slurm
+use simple_qsys_lsf,     only: qsys_lsf
 use simple_qsys_pbs,     only: qsys_pbs
 use simple_qsys_sge,     only: qsys_sge
 use simple_qsys_ctrl,    only: qsys_ctrl
@@ -165,6 +166,8 @@ contains
                 aarray = .false.
             class is(qsys_slurm)
                 ! keep aarray value
+            class is(qsys_lsf)
+                ! keep aarray value
             class is(qsys_sge)
                 aarray = .false.
             class is(qsys_pbs)
@@ -255,6 +258,8 @@ contains
                 qsys = 'local'
             class is(qsys_slurm)
                 qsys = 'slurm'
+            class is(qsys_lsf)
+                qsys = 'lsf'
             class is(qsys_sge)
                 qsys = 'sge'
             class is(qsys_pbs)

@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_qsys_base,  only: qsys_base
 use simple_qsys_local, only: qsys_local
 use simple_qsys_slurm, only: qsys_slurm
+use simple_qsys_lsf,   only: qsys_lsf
 use simple_qsys_sge,   only: qsys_sge
 use simple_qsys_pbs,   only: qsys_pbs
 implicit none
@@ -34,6 +35,8 @@ contains
                 allocate(qsys_local :: self%qsys_base_type)
             case('slurm')
                 allocate(qsys_slurm :: self%qsys_base_type)
+            case('lsf')
+                allocate(qsys_lsf   :: self%qsys_base_type)
             case('sge')
                 allocate(qsys_sge   :: self%qsys_base_type)
             case('pbs')
