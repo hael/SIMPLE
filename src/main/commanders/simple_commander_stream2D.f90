@@ -1,11 +1,11 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commander_stream2D
 include 'simple_lib.f08'
-use simple_cmdline,            only: cmdline
-use simple_commander_base,     only: commander_base
-use simple_parameters,         only: parameters
-use simple_sp_project,         only: sp_project
-use simple_guistats,           only: guistats
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_parameters,     only: parameters
+use simple_sp_project,     only: sp_project
+use simple_guistats,       only: guistats
 use simple_stream_utils
 use simple_qsys_funs
 use simple_qsys_env
@@ -41,15 +41,15 @@ end type commander_stream_abinitio2D
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for processed projects
 character(len=STDLEN), parameter :: micspproj_fname      = './streamdata.simple'
 character(len=STDLEN), parameter :: REJECTED_CLS_STACK   = './rejected_cls.mrc'
-integer,               parameter :: LONGTIME        = 60    ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME        = 10    ! movie folder watched every WAITTIME seconds
-integer(kind=dp),      parameter :: FLUSH_TIMELIMIT = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
-integer,               parameter :: PAUSE_NITERS    = 5     ! # of iterations after which 2D analysis is paused
-integer,               parameter :: PAUSE_TIMELIMIT = 600   ! time (secs) after which 2D analysis is paused
+integer,               parameter :: LONGTIME             = 60    ! time lag after which a movie/project is processed
+integer,               parameter :: WAITTIME             = 10    ! movie folder watched every WAITTIME seconds
+integer(kind=dp),      parameter :: FLUSH_TIMELIMIT      = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
+integer,               parameter :: PAUSE_NITERS         = 5     ! # of iterations after which 2D analysis is paused
+integer,               parameter :: PAUSE_TIMELIMIT      = 600   ! time (secs) after which 2D analysis is paused
 
 contains
 
-     subroutine exec_mini_stream( self, cline )
+    subroutine exec_mini_stream( self, cline )
         use simple_micproc
         use simple_segmentation
         use simple_linked_list
@@ -74,22 +74,22 @@ contains
         real,                      allocatable :: diams_arr(:), masscens(:,:)
         type(ctfparams),           allocatable :: ctfvars(:)
         type(image),               allocatable :: imgs(:)
-        type(ptcl_extractor)                :: extractor_raw, extractor_den
-        type(parameters)                    :: params
-        type(image)                         :: mic_raw, mic_shrink, mic_den
-        type(binimage)                      :: mic_bin, img_cc
-        type(linked_list)                   :: list_of_diams
-        type(list_iterator)                 :: list_iter
-        type(stats_struct)                  :: diam_stats
-        type(ctf_estimate_iter)             :: ctfiter
-        type(ctf)                           :: tfun
-        type(stack_io)                      :: stkio_w
-        type(oris)                          :: os_deftab, os_ctf
-        type(ori)                           :: omic
-        type(cmdline)                       :: cline_new_proj, cline_new_project, cline_import_particles, cline_2Dsegpick
-        type(new_project_commander)         :: xnew_project
-        type(import_particles_commander)    :: ximport_particles
-        type(cluster2D_autoscale_commander) :: xcluster2D
+        type(ptcl_extractor)                   :: extractor_raw, extractor_den
+        type(parameters)                       :: params
+        type(image)                            :: mic_raw, mic_shrink, mic_den
+        type(binimage)                         :: mic_bin, img_cc
+        type(linked_list)                      :: list_of_diams
+        type(list_iterator)                    :: list_iter
+        type(stats_struct)                     :: diam_stats
+        type(ctf_estimate_iter)                :: ctfiter
+        type(ctf)                              :: tfun
+        type(stack_io)                         :: stkio_w
+        type(oris)                             :: os_deftab, os_ctf
+        type(ori)                              :: omic
+        type(cmdline)                          :: cline_new_proj, cline_new_project, cline_import_particles, cline_2Dsegpick
+        type(new_project_commander)            :: xnew_project
+        type(import_particles_commander)       :: ximport_particles
+        type(cluster2D_autoscale_commander)    :: xcluster2D
         character(len=STDLEN) :: ext
         integer               :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, ncls
         integer               :: nptcls, cnt, box_raw, box_den, i, nboxes
@@ -281,8 +281,8 @@ contains
         call ximport_particles%execute_safe(cline_import_particles)
         ! 3. 2D analysis
         ncls = max(MIN_NCLS,nptcls/params%nptcls_per_cls)
-        call cline_2Dsegpick%set('prg',            'cluster2D')
-        call cline_2Dsegpick%set('mkdir',                 'no')
+        call cline_2Dsegpick%set('prg',             'cluster2D')
+        call cline_2Dsegpick%set('mkdir',                  'no')
         call cline_2Dsegpick%set('ncls',                   ncls)
         call cline_2Dsegpick%set('autoscale',             'yes')
         call cline_2Dsegpick%set('lpstart',             LPSTART)
@@ -290,9 +290,6 @@ contains
         call cline_2Dsegpick%set('mskdiam',                  0.)
         call cline_2Dsegpick%set('nthr',            params%nthr)
         call cline_2Dsegpick%set('projfile', PROJFILE2D_SEGPICK)
-
-        call cline_2Dsegpick%printline 
-
         call xcluster2D%execute_safe(cline_2Dsegpick)
         ! cleanup
         call os_deftab%kill
@@ -710,6 +707,7 @@ contains
         ! end gracefully
         call http_communicator%term()
         call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS NORMAL STOP ****')
+        
         contains
 
             ! updates global records

@@ -131,13 +131,10 @@ contains
     subroutine exec_preprocess_distr( self, cline )
         class(preprocess_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(parameters)              :: params
-        type(qsys_env)                :: qenv
-        type(cmdline)                 :: cline_make_pickrefs
-        type(chash)                   :: job_descr
-        type(sp_project)              :: spproj
-        real    :: pickrefs_smpd
-        logical :: l_pick
+        type(parameters) :: params
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        type(sp_project) :: spproj
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
@@ -158,13 +155,6 @@ contains
         if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',          DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',          DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
-        ! picking
-        ! if( .not. cline%defined('picker')          ) call cline%set('picker',         'new')
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         PICK_LP_DEFAULT )
-        if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
-        if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
-        if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',        'no')
-        if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',    'no')
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
@@ -186,40 +176,6 @@ contains
         call flip_gain(cline, params%gainref, params%flipgain)
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
-        ! prepares picking references
-        l_pick = .false.
-        if( cline%defined('pickrefs') )then
-            cline_make_pickrefs = cline
-            call cline_make_pickrefs%set('prg','make_pickrefs')
-            call cline_make_pickrefs%set('mkdir','no')
-            pickrefs_smpd = params%smpd / params%scale_movies
-            if( cline_make_pickrefs%defined('eer_upsampling') )then
-                pickrefs_smpd = pickrefs_smpd / real(params%eer_upsampling)
-            endif
-            call cline_make_pickrefs%set('smpd', pickrefs_smpd)
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-            select case(trim(trim(params%picker)))
-                case('old')
-                    call cline_make_pickrefs%set('neg','yes')
-                case('new')
-                    ! nothing to do
-                case DEFAULT
-                    THROW_HARD('Picker not supported!')
-            end select
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-            l_pick = .true.
-        else if( cline%defined('moldiam') )then
-            l_pick = .true.
-        endif
-        ! options compatibility
-        if( trim(params%pick_roi).eq.'yes' )then
-            params%backgr_subtr = 'yes'
-            call cline%set('backgr_subtr', params%backgr_subtr)
-        endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -239,46 +195,29 @@ contains
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
-        use simple_picker_iter,         only: picker_iter
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)              :: params
         type(ori)                     :: o_mov
         type(ctf_estimate_iter)       :: ctfiter
         type(motion_correct_iter)     :: mciter
-        type(picker_iter)             :: piter
         type(extract_commander)       :: xextract
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
         type(Node), pointer           :: xmldoc, beamshiftnode, beamshiftnodex, beamshiftnodey
-        character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody
+        character(len=:), allocatable :: imgkind, moviename, fbody
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
         character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract, micname_intg
         character(len=LONGSTRLEN)     :: boxfile, eputiltgroup
-        real    :: smpd_pick
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
-        logical :: l_pick, l_del_forctf, l_skip_pick
+        logical :: l_del_forctf
         call cline%set('oritype', 'mic')
         call params%new(cline)
         if( params%scale_movies > 1.01 )then
             THROW_HARD('scale_movies cannot be > 1; exec_preprocess')
         endif
-        l_pick = .false.
-        ! if( cline%defined('picker') )then
-        !     select case(trim(params%picker))
-        !         case('old')
-        !             if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
-        !         case('new')
-        !             if(cline%defined('pickrefs'))then
-        !             else
-        !                 if( .not.cline%defined('moldiam') )then
-        !                     THROW_HARD('MOLDIAM required for picker=new')
-        !                 endif
-        !             endif
-        !     end select
-        !     l_pick = .true.
-        ! endif
+
         l_del_forctf = .false.
         ! read in movies
         call spproj%read( params%projfile )
@@ -286,7 +225,6 @@ contains
         ! output directories & naming
         output_dir_ctf_estimate        = PATH_HERE
         output_dir_motion_correct      = PATH_HERE
-        if( l_pick ) output_dir_picker = PATH_HERE
         if( params%stream.eq.'yes' )then
             output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
             output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
@@ -296,16 +234,7 @@ contains
             endif
             call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_preprocess :: preprocess; ")
             call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
-            if( l_pick )then
-                output_dir_picker  = trim(DIR_PICKER)
-                output_dir_extract = trim(DIR_EXTRACT)
-                if( cline%defined('dir') )then
-                    output_dir_picker  = filepath(params%dir,output_dir_picker)//'/'
-                    output_dir_extract = filepath(params%dir,output_dir_extract)//'/'
-                endif
-                call simple_mkdir(output_dir_picker, errmsg="commander_preprocess :: preprocess; ")
-                call simple_mkdir(output_dir_extract, errmsg="commander_preprocess :: preprocess;")
-            endif
+            
         endif
         if( cline%defined('fbody') )then
             fbody = trim(params%fbody)
@@ -375,20 +304,6 @@ contains
                 call o_mov%delete_entry('forctf')
                 call del_file(moviename_forctf)
             endif
-            ! optional rejection
-            l_skip_pick = .true.
-            if( trim(params%stream).eq.'yes' .and. trim(params%reject_mics).eq.'yes' )then
-                ! based on CTFRES
-                if( l_pick .and. o_mov%isthere('ctfres') )then
-                    l_skip_pick = o_mov%get('ctfres') > (params%ctfresthreshold-0.001)
-                    if( l_skip_pick ) call o_mov%set('nptcls',0)
-                end if
-                ! based on ice fraction
-                if( l_pick .and. .not.l_skip_pick .and. o_mov%isthere('icefrac') )then
-                    l_skip_pick = o_mov%get('icefrac') > (params%icefracthreshold-0.001)
-                    if( l_skip_pick ) call o_mov%set('nptcls',0)
-                endif
-            endif
             ! read xml
             if(o_mov%isthere('meta') .and. file_exists(trim(o_mov%get_static('meta')))) then
                 xmldoc => parseFile(trim(o_mov%get_static("meta")))
@@ -414,46 +329,8 @@ contains
             end if
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
-            ! pick
-            if( l_pick .and. (.not.l_skip_pick) )then
-                smpd_pick      = o_mov%get('smpd')
-                params_glob%lp = max(2.*smpd_pick, params%lp_pick)
-                call o_mov%getter('intg', moviename_intg)
-                call piter%iterate(cline, smpd_pick, moviename_intg, output_dir_picker, boxfile, nptcls_out)
-                call o_mov%set('nptcls',  nptcls_out)
-                if( nptcls_out > 0 )then
-                    call o_mov%set('boxfile', trim(boxfile))
-                else
-                    call o_mov%set('state',0.)
-                endif
-                ! update project
-                call spproj%os_mic%set_ori(imovie, o_mov)
-                ! extract particles
-                if( trim(params%stream) .eq. 'yes' )then
-                    ! needs to write and re-read project at the end as extract overwrites it
-                    call spproj%write_segment_inside(params%oritype)
-                    if( nptcls_out > 0 )then
-                        cline_extract = cline
-                        call cline_extract%set('smpd',      o_mov%get('smpd')) ! in case of scaling
-                        call cline_extract%set('dir',       trim(output_dir_extract))
-                        call cline_extract%set('pcontrast', params%pcontrast)
-                        call cline_extract%delete('msk')
-                        if( cline%defined('box_extract') )call cline_extract%set('box', params%box_extract)
-                        call xextract%execute(cline_extract)
-                        call spproj%kill
-                    endif
-                endif
-            endif
         end do
-        if( trim(params%stream).eq.'yes' )then
-            if( (.not.l_pick) .or. l_skip_pick)then
-                ! because extract performs the writing otherwise
-                call spproj%write_segment_inside(params%oritype)
-            endif
-        else
-            call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
-        endif
-        call piter%kill
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o_mov%kill
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_preprocess' )
@@ -928,9 +805,9 @@ contains
         if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
         which_picker = cline%get_carg('picker')
         if( trim(which_picker) .eq. 'seg' )then
-            if( .not. cline%defined('ndev')        ) call cline%set('ndev',      1.5)
+            if( .not. cline%defined('ndev')    ) call cline%set('ndev', 1.5)
         else
-            if( .not. cline%defined('ndev')        ) call cline%set('ndev',       2.)
+            if( .not. cline%defined('ndev')    ) call cline%set('ndev', 2.)
         endif
         call params%new(cline)
         ! sanity check
@@ -2324,60 +2201,29 @@ contains
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
-        real    :: ang, rot, lp, diam_max, smpd_here, sc
-        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ldim_sc(3), ncavgs, icavg
+        real    :: ang, rot, lp, diam_max, sc
+        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
         integer :: cnt, norefs, b, new_box
-        logical :: l_scale, l_moldiam = .false.
         ! error check
-        if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
+        if( cline%defined('vol1')          ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
-        if( cline%defined('moldiam') ) l_moldiam = .true.
         ! set defaults
         call set_automask2D_defaults(cline)
         call cline%set('oritype', 'mic')
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not.cline%defined('neg')   ) call cline%set('neg',    'no') ! default for new picker
         ! parse parameters
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
         ! read selected cavgs
-        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs, smpd=smpd_here)
-        if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
+        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs)
         ldim(3) = 1
-        ! Pixel size & scaling
-        ! smpd_here is the pixel size read in
-        ! params%smpd is the target pixel size of the micrograph
-        if( .not.cline%defined('smpd') ) params%smpd = smpd_here
-        l_scale    = .false.
         params%msk = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
-        if( abs(smpd_here-params%smpd) > 0.001 )then
-            sc = smpd_here/params%smpd
-            b  = round2even(real(ldim(1))*sc)
-            if( b /= ldim(1) )then
-                ! adjust image size and mask
-                l_scale    = .true.
-                ldim_sc    = [b,b,1]
-                params%msk = real(b/2) - COSMSKHALFWIDTH
-            endif
-        else
-            ldim_sc = ldim
-        endif
         ! read
         allocate( projs(ncavgs), masks(ncavgs) )
-        call stkio_r%open(params%pickrefs, smpd_here, 'read', bufsz=ncavgs)
+        call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
         do icavg=1,ncavgs
-            call projs(icavg)%new(ldim, smpd_here)
+            call projs(icavg)%new(ldim, params%smpd)
             call stkio_r%read(icavg, projs(icavg))
-            if( l_scale )then
-                ! scaling to final dimension
-                call projs(icavg)%fft
-                if( ldim_sc(1) > ldim(1) )then
-                    call projs(icavg)%pad_inplace(ldim_sc, antialiasing=.false.)
-                else
-                    call projs(icavg)%clip_inplace(ldim_sc)
-                endif
-                call projs(icavg)%ifft
-            endif
             call masks(icavg)%copy(projs(icavg))
         end do
         call stkio_r%close
@@ -2389,14 +2235,10 @@ contains
             call projs(icavg)%shift([shifts(icavg,1),shifts(icavg,2),0.])
         end do
         ! estimate new box size and clip
-        if( l_moldiam ) then
-            diam_max = params%moldiam
-        else
-            diam_max = maxval(diams)
-        end if
+        diam_max = maxval(diams)
         lp      = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
-        new_box = min(new_box, ldim_sc(1)) ! fail safe: new dimensions cannot be larger than required
+        new_box = min(new_box, ldim(1)) ! fail safe: new dimensions cannot be larger than required
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
         ldim_clip = [new_box, new_box, 1]
         do icavg=1,ncavgs
@@ -2421,7 +2263,6 @@ contains
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
                     call ref2D%clip(ref2D_clip)
-                    if( params%neg .eq. 'yes' ) call ref2D_clip%neg
                     call ref2D_clip%write(trim(PICKREFS_FBODY)//params%ext, cnt)
                     rot = rot + ang
                 end do
@@ -2430,7 +2271,6 @@ contains
             ! should never happen
             do iref=1,norefs
                 call projs(iref)%clip(ref2D_clip)
-                if( params%neg .eq. 'yes' ) call ref2D_clip%neg
                 call ref2D_clip%write(trim(PICKREFS_FBODY)//params%ext, iref)
             end do
         endif

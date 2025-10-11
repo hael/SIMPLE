@@ -493,6 +493,7 @@ type :: parameters
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=2.             !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_downscale=SMPD4DOWNSCALE !< sampling distance for movie downscaling
+    real    :: smpd_pickrefs       !< sampling distance of pickrefs
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
@@ -1019,6 +1020,7 @@ contains
         call check_rarg('smpd',           self%smpd)
         call check_rarg('smpd_crop',      self%smpd_crop)
         call check_rarg('smpd_downscale', self%smpd_downscale)
+        call check_rarg('smpd_pickrefs',  self%smpd_pickrefs)
         call check_rarg('smpd_target',    self%smpd_target)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
