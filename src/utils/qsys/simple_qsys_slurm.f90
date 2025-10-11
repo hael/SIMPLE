@@ -26,9 +26,7 @@ contains
     !> \brief  is a constructor
     subroutine new_slurm_env( self )
         class(qsys_slurm), intent(inout) :: self
-        ! make the container
         call self%env%new(MAXENVITEMS)
-        ! define the environment:
         ! ### USER PARAMETERS
         call self%env%push('user_account',          '#SBATCH --account')
         call self%env%push('user_email',            '#SBATCH --mail-user')

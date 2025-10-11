@@ -4311,11 +4311,10 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 15, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 11, 0, 11, 4, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
-        call preprocess%set_input('img_ios', 2, pickrefs)
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  total_dose)
         call preprocess%set_input('parm_ios', 2,  fraction_dose_target)
@@ -4323,17 +4322,13 @@ contains
         call preprocess%set_input('parm_ios', 4,  smpd_downscale)
         call preprocess%set_input('parm_ios', 5,  eer_fraction)
         call preprocess%set_input('parm_ios', 6,  eer_upsampling)
-        call preprocess%set_input('parm_ios', 7,  pcontrast)
-        call preprocess%set_input('parm_ios', 8,  'fbody', 'string', 'Template output micrograph name',&
+        call preprocess%set_input('parm_ios', 7,  'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess%set_input('parm_ios', 9,  pspecsz)
-        call preprocess%set_input('parm_ios',10,  numlen)
-        call preprocess%set_input('parm_ios',11,  ctfpatch)
-        call preprocess%set_input('parm_ios',12,  moldiam)
-        call preprocess%set_input('parm_ios',13,  picker)
-        call preprocess%set_input('parm_ios',14,  mskdiam)
+        call preprocess%set_input('parm_ios', 8,  pspecsz)
+        call preprocess%set_input('parm_ios', 9,  numlen)
+        call preprocess%set_input('parm_ios',10,  ctfpatch)
         preprocess%parm_ios(14)%required = .false.
-        call preprocess%set_input('parm_ios',15,  flipgain)
+        call preprocess%set_input('parm_ios',11,  flipgain)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4343,19 +4338,13 @@ contains
         call preprocess%set_input('srch_ctrls', 2, dfmin)
         call preprocess%set_input('srch_ctrls', 3, dfmax)
         call preprocess%set_input('srch_ctrls', 4, astigtol)
-        call preprocess%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess%set_input('srch_ctrls', 6, 'ndev', 'num', '# of sigmas for picking outlier detection', '# of standard deviations threshold for picking oulier detection{2.5}', '{2.5}', .false., 2.5)
-        call preprocess%set_input('srch_ctrls', 7, pgrp)
-        preprocess%srch_ctrls(7)%required = .false.
-        call preprocess%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call preprocess%set_input('srch_ctrls', 9, mcpatch)
-        call preprocess%set_input('srch_ctrls',10, nxpatch)
-        call preprocess%set_input('srch_ctrls',11, nypatch)
-        call preprocess%set_input('srch_ctrls',12, mcconvention)
-        call preprocess%set_input('srch_ctrls',13, algorithm)
-        call preprocess%set_input('srch_ctrls',14, mcpatch_thres)
-        call preprocess%set_input('srch_ctrls',15, pick_roi)
-        call preprocess%set_input('srch_ctrls',16, backgr_subtr)
+        call preprocess%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call preprocess%set_input('srch_ctrls', 6, mcpatch)
+        call preprocess%set_input('srch_ctrls', 7, nxpatch)
+        call preprocess%set_input('srch_ctrls', 8, nypatch)
+        call preprocess%set_input('srch_ctrls', 9, mcconvention)
+        call preprocess%set_input('srch_ctrls',10, algorithm)
+        call preprocess%set_input('srch_ctrls',11, mcpatch_thres)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -4365,7 +4354,6 @@ contains
         & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
         call preprocess%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
-        call preprocess%set_input('filt_ctrls', 5, lp_pick)
         ! mask controls
         ! <empty>
         ! computer controls
