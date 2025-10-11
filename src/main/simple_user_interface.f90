@@ -52,23 +52,23 @@ type :: simple_program
     logical :: sp_required = .true.
     ! existence flag
     logical :: exists = .false.
-    contains
-        procedure, private :: new
-        procedure, private :: set_input_1
-        procedure, private :: set_input_2
-        procedure, private :: set_input_3
-        generic,   private :: set_input => set_input_1, set_input_2, set_input_3
-        procedure          :: print_ui
-        procedure          :: print_cmdline
-        procedure          :: print_cmdline_latex
-        procedure          :: print_prg_descr_long
-        procedure          :: write2json
-        procedure          :: get_name
-        procedure          :: get_executable
-        procedure          :: get_nrequired_keys
-        procedure          :: get_required_keys
-        procedure          :: requires_sp_project
-        procedure, private :: kill
+  contains
+    procedure, private :: new
+    procedure, private :: set_input_1
+    procedure, private :: set_input_2
+    procedure, private :: set_input_3
+    generic,   private :: set_input => set_input_1, set_input_2, set_input_3
+    procedure          :: print_ui
+    procedure          :: print_cmdline
+    procedure          :: print_cmdline_latex
+    procedure          :: print_prg_descr_long
+    procedure          :: write2json
+    procedure          :: get_name
+    procedure          :: get_executable
+    procedure          :: get_nrequired_keys
+    procedure          :: get_required_keys
+    procedure          :: requires_sp_project
+    procedure, private :: kill
 end type simple_program
 
 ! declare simple_exec and single_exec program specifications here
@@ -3515,18 +3515,13 @@ contains
         &'Make pick references',&            ! descr_short
         &'is a program for making 2D references for particle picking',&
         &'simple_exec',&                     ! executable
-        &1, 3, 0, 0, 0, 0, 1, .false.)       ! # entries in each group, requires sp_project
+        &1, 0, 0, 0, 0, 0, 1, .true.)        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_pickrefs%set_input('img_ios', 1,  pickrefs)
-        make_pickrefs%img_ios(1)%required     = .true.
+        make_pickrefs%img_ios(1)%required = .true.
         ! parameter input/output
-        call make_pickrefs%set_input('parm_ios', 1, smpd)
-        make_pickrefs%parm_ios(1)%descr_short = 'Target sampling distance'
-        make_pickrefs%parm_ios(1)%descr_long  = 'Desired final pixel size (eg, that of micrograph to pick)'
-        make_pickrefs%parm_ios(1)%required    = .false.
-        call make_pickrefs%set_input('parm_ios', 2, neg)
-        call make_pickrefs%set_input('parm_ios', 3, moldiam)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
