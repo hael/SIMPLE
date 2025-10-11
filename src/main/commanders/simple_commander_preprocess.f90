@@ -157,7 +157,6 @@ contains
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
