@@ -402,8 +402,14 @@ contains
         diff_otsu_lev2 = minval(abs(pix_ts(:cnt)-ts(2)))
         if( diff_otsu_lev1 < diff_otsu_lev2 )then
             t_target = ts(1)
+
+            print *, 'detect_peak_thres_sortmeans used level 1 tresholding'
+        
         else
             t_target = ts(2)
+
+            print *, 'detect_peak_thres_sortmeans used level 2 tresholding'
+
         endif
         loc   = minval(abs(pix_ts(:cnt)-t_target))
         t_out = pix_ts(loc(1))

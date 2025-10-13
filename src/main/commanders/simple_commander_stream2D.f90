@@ -66,7 +66,7 @@ contains
         integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 200
         character(len=*),          parameter   :: PROJ2D_SEGPICK = 'proj2D_segpick', PROJFILE2D_SEGPICK = 'proj2D_segpick.simple'
         character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
-        character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:)
+        character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:), mic4viz_names(:)
         character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk_den_names(:)
         character(len=:),          allocatable :: fname, output_dir
         integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata_raw(:,:), boxdata_den(:,:), inds(:)
@@ -76,7 +76,7 @@ contains
         type(image),               allocatable :: imgs(:)
         type(ptcl_extractor)                   :: extractor_raw, extractor_den
         type(parameters)                       :: params
-        type(image)                            :: mic_raw, mic_shrink, mic_den
+        type(image)                            :: mic_raw, mic_shrink, mic_den, mic4viz
         type(binimage)                         :: mic_bin, img_cc
         type(linked_list)                      :: list_of_diams
         type(list_iterator)                    :: list_iter
@@ -116,7 +116,7 @@ contains
         ldim     = mic_shrink%get_ldim()
         ! output directory
         output_dir = PATH_HERE
-        allocate(mic_den_names(nmics), mic_bin_names(nmics),&
+        allocate(mic_den_names(nmics), mic_bin_names(nmics), mic4viz_names(nmics),&
         &ctfvars(nmics), ptcl_stk_names(nmics), ptcl_stk_den_names(nmics))
         ctfvars(:)%smpd    = params%smpd
         ctfvars(:)%kv      = params%kv
@@ -130,9 +130,11 @@ contains
             call ctfiter%iterate(ctfvars(imic), micnames(imic), omic, trim(output_dir), l_gen_thumb=.true.)
             call os_ctf%set_ori(imic, omic)
             call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
-            call cascade_filter_biomol( mic_shrink )
+            call cascade_filter_biomol( mic_shrink, mic4viz )
             mic_den_names(imic) = 'mic_shrink_den'//int2str_pad(imic,3)//'.mrc'
+            mic4viz_names(imic) = 'mic4viz'//int2str_pad(imic,3)//'.mrc'
             call mic_shrink%write(mic_den_names(imic))
+            call mic4viz%write(mic4viz_names(imic))
             call binarize_mic_den( mic_shrink, FRAC_FG, mic_bin )
             ! identify connected components
             call mic_bin%find_ccs(img_cc)
@@ -163,6 +165,7 @@ contains
             ! destruct
             call mic_raw%kill
             call mic_shrink%kill
+            call mic4viz%kill
             call mic_bin%kill_bimg
             call img_cc%kill_bimg
             deallocate(cc_imat, cc_imat_copy)
@@ -239,18 +242,10 @@ contains
             enddo
             call stkio_w%close
             call imgs(1)%update_header_stats(ptcl_stk_names(imic), [rmin,rmax,rmean,rsdev])
-            ! extraction from den
-            ! call killimgbatch
-            ! call prepimgbatch(nboxes, box_den, SMPD_SHRINK1)
-            ! inds = (/(i,i=1,nboxes)/)
-            ! call extractor_den%extract_particles_from_mic(mic_den, inds, boxdata_den(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
-            ! ! write stack
-            ! call stkio_w%open(ptcl_stk_den_names(imic), SMPD_SHRINK1, 'write', box=box_den)
-            ! do i = 1,nboxes
-            !     call stkio_w%write(i, imgs(i))
-            ! enddo
-            ! call stkio_w%close
-            ! call imgs(1)%update_header_stats(ptcl_stk_den_names(imic), [rmin,rmax,rmean,rsdev])
+            ! destruct
+            call mic_raw%kill
+            call mic_den%kill
+            call mic_bin%kill_bimg
         end do
         ! excludes zero state
         inds               = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
