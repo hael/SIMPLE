@@ -75,6 +75,7 @@ type(match_cavgs2afm_commander)             :: xmatch_cavgs2afm
 type(match_stacks_commander)                :: xmatch_stacks
 type(score_ptcls_commander)                 :: xscore_ptcls
 type(write_classes_commander)               :: xwrite_classes
+type(write_mic_filetab_commander)           :: xwrite_mic_filetab
 type(consolidate_chunks_commander)          :: xconsolidate_chunks
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
@@ -283,6 +284,8 @@ select case(trim(prg))
         call xscore_ptcls%execute(cline)
     case( 'write_classes' )
         call xwrite_classes%execute(cline)
+    case( 'write_mic_filetab' )
+        call xwrite_mic_filetab%execute(cline)
     case('consolidate_chunks')
         call xconsolidate_chunks%execute(cline)
 
@@ -482,7 +485,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('54b50277')
+call simple_print_git_version('b3e6001f')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

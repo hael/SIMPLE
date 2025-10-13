@@ -227,6 +227,7 @@ type(simple_program), target :: vizoris
 type(simple_program), target :: volanalyze
 type(simple_program), target :: volops
 type(simple_program), target :: write_classes
+type(simple_program), target :: write_mic_filetab
 type(simple_program), target :: zero_project_shifts
 
 ! declare common params here, with name same as flag
@@ -563,6 +564,7 @@ contains
         call new_volanalyze
         call new_volops
         call new_write_classes
+        call new_write_mic_filetab
         call new_zero_project_shifts
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
@@ -717,6 +719,7 @@ contains
         call push2prg_ptr_array(volanalyze)
         call push2prg_ptr_array(volops)
         call push2prg_ptr_array(write_classes)
+        call push2prg_ptr_array(write_mic_filetab)
         call push2prg_ptr_array(zero_project_shifts)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
         contains
@@ -1037,6 +1040,8 @@ contains
                 ptr2prg => volops
             case('write_classes')
                 ptr2prg => write_classes
+             case('write_mic_filetab')
+                ptr2prg => write_mic_filetab
             case('zero_project_shifts')
                 ptr2prg => zero_project_shifts
             case DEFAULT
@@ -1161,6 +1166,7 @@ contains
         write(logfhandle,'(A)') volanalyze%name
         write(logfhandle,'(A)') volops%name
         write(logfhandle,'(A)') write_classes%name
+        write(logfhandle,'(A)') write_mic_filetab%name
         write(logfhandle,'(A)') zero_project_shifts%name
     end subroutine list_simple_prgs_in_ui
 
@@ -5091,7 +5097,7 @@ contains
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 8, 5, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 9, 5, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -5104,6 +5110,7 @@ contains
         call selection%set_input('parm_ios', 6, 'nptcls_per_part', 'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
         call selection%set_input('parm_ios', 7, 'greedy_sampling', 'binary', 'Greedy balanced selection', 'Greedy balanced selection(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call selection%set_input('parm_ios', 8, 'nparts',          'num',    'Number of partitions in balancing', '# balanced parts', '# balanced parts', .false., 1.)
+        call selection%set_input('parm_ios', 9, dfmin)
         ! alternative inputs
         call selection%set_input('alt_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .false., '')
@@ -6382,6 +6389,31 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_write_classes
+
+    subroutine new_write_mic_filetab
+        ! PROGRAM SPECIFICATION
+        call write_mic_filetab%new(&
+        &'write_mic_filetab',&                                            ! name
+        &'Writes a filetable of state > 0 micrographs',&                  ! descr_short
+        &'is a program for writing a filetable of selected micrographs',& ! descr_long
+        &'simple_exec',&                                                  ! executable
+        &1, 1, 0, 0, 0, 0, 0, .true.)                                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call write_mic_filetab%set_input('img_ios', 1, 'fname', 'file', 'Filename micrograph list', 'Filename for list of micrograph files (*.mrc)', 'e.g. mics.txt', .true., '')
+        ! parameter input/output
+        call write_mic_filetab%set_input('parm_ios', 1, projfile)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_write_mic_filetab
 
     subroutine new_zero_project_shifts
         ! PROGRAM SPECIFICATION

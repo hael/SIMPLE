@@ -8388,14 +8388,9 @@ contains
             else
                 frac_fgs(cnt) = real(n_fg) / real(npix)
             endif
-            print *, iq, ' thres ',  pix_ts(cnt), ' frac_fg ', frac_fgs(cnt)
         end do
         loc      = minloc(abs(frac_fgs(:cnt) - frac_fg_target))
         thres    = pix_ts(loc(1))
-
-        print *, 'thres:   ', thres
-        print *, 'frac_fg: ', real(count(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= thres)) / real(npix)
-
     end subroutine calc_bin_thres
 
     subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
