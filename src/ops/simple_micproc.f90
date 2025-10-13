@@ -86,18 +86,20 @@ contains
         call mic_out%read(micname)
     end subroutine read_mic
 
-    subroutine cascade_filter_biomol( mic_shrink )
-        class(image), intent(inout) :: mic_shrink
+    subroutine cascade_filter_biomol( mic_shrink, mic4viz )
+        class(image),           intent(inout) :: mic_shrink
+        class(image), optional, intent(inout) :: mic4viz
         real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM_ICM = 100., DAMP = 10., FRAC_FG = 0.17, LAM_TV = 7.
         integer, parameter :: WINSZ_MED = 3
-        call cascade_filter(mic_shrink, DAMP, LP_UB, LAM_TV, LAM_ICM, WINSZ_MED)
+        call cascade_filter(mic_shrink, DAMP, LP_UB, LAM_TV, LAM_ICM, WINSZ_MED, mic4viz)
     end subroutine cascade_filter_biomol
 
-    subroutine cascade_filter( mic_shrink, damp_below_zero, lp, lam_tv, lam_icm, winsz_med )
+    subroutine cascade_filter( mic_shrink, damp_below_zero, lp, lam_tv, lam_icm, winsz_med, mic4viz )
         use simple_tvfilter, only: tvfilter
-        class(image), intent(inout) :: mic_shrink
-        real,         intent(in)    :: damp_below_zero, lp, lam_tv, lam_icm
-        integer,      intent(in)    :: winsz_med
+        class(image),           intent(inout) :: mic_shrink
+        real,                   intent(in)    :: damp_below_zero, lp, lam_tv, lam_icm
+        integer,                intent(in)    :: winsz_med
+        class(image), optional, intent(inout) :: mic4viz
         type(tvfilter) :: tvf
         call mic_shrink%zero_edgeavg
         ! dampens below zero
@@ -108,6 +110,7 @@ contains
         call tvf%new()
         call tvf%apply_filter(mic_shrink, lam_tv)
         call tvf%kill
+        call mic4viz%copy(mic_shrink)
         ! Non-local-means denoising
         call mic_shrink%NLmean2D
         ! Iterated conditional modes denoising
