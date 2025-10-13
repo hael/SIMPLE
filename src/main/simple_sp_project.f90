@@ -888,16 +888,20 @@ contains
         if(allocated(moviestab))deallocate(moviestab)
         n = 0
         do i=1,self%os_mic%get_noris()
-            if(self%os_mic%isthere(i,'movie')) n = n+1
+            if(self%os_mic%isthere(i,'movie'))then
+                if( self%os_mic%get_state(i) > 0 ) n = n+1
+            endif
         enddo
         if( n==0 )return
         allocate(moviestab(n))
         cnt = 0
         do i=1,self%os_mic%get_noris()
             if(self%os_mic%isthere(i,'movie'))then
-                cnt = cnt + 1
-                call self%os_mic%getter(i,'movie',mov)
-                moviestab(cnt) = trim(mov)
+                if( self%os_mic%get_state(i) > 0 )then
+                    cnt = cnt + 1
+                    call self%os_mic%getter(i,'movie',mov)
+                    moviestab(cnt) = trim(mov)
+                endif
             endif
         enddo
     end subroutine get_movies_table
@@ -908,14 +912,18 @@ contains
         character(len=:), allocatable :: imgkind, mic
         integer :: i,n,cnt
         if(allocated(micstab))deallocate(micstab)
-        n = self%get_nintgs()
+        n = 0
+        do i=1,self%os_mic%get_noris()
+            if(self%os_mic%isthere(i,'intg'))then
+                if( self%os_mic%get_state(i) > 0 ) n = n+1
+            endif
+        enddo
         if( n==0 )return
         allocate(micstab(n))
         cnt = 0
         do i=1,self%os_mic%get_noris()
-            if(self%os_mic%isthere(i,'imgkind'))then
-                call self%os_mic%getter(i,'imgkind',imgkind)
-                if( trim(imgkind).eq.'mic' )then
+            if(self%os_mic%isthere(i,'intg'))then
+                if( self%os_mic%get_state(i) > 0 )then
                     cnt = cnt + 1
                     call self%os_mic%getter(i,'intg',mic)
                     micstab(cnt) = trim(mic)

@@ -360,6 +360,55 @@ contains
         t     = ts(2)
     end subroutine detect_peak_thres_2
 
+    subroutine detect_peak_thres_sortmeans( n, n_ub, x, t_out )
+        integer, intent(in)  :: n, n_ub
+        real,    intent(in)  :: x(n)
+        real,    intent(out) :: t_out
+        integer, parameter   :: NQUANTA = 10
+        real,    allocatable :: arr(:), means(:), pix_ts(:), frac_fgs(:)
+        integer, allocatable :: labels(:), locn(:)
+        integer :: iq, n_fg, nvals, loc(1), cnt
+        real    :: ts(2), t_ini, t_target, diff_otsu_lev1, diff_otsu_lev2
+        ! generate two target thresholds with one- and two-level Otsu
+        locn  = maxnloc(x, n_ub)
+        t_ini = minval(x(locn))
+        arr   = pack(x, mask=x >= t_ini)
+        call otsu(size(arr), arr, ts(1))
+        arr   = pack(x, mask=x >= ts(1))
+        call otsu(size(arr), arr, ts(2))
+        ! quantize with sortmeans
+        allocate( means(NQUANTA), labels(NQUANTA), frac_fgs(NQUANTA), pix_ts(NQUANTA) )
+        means  = 0.
+        labels = 0
+        arr    = pack(x, mask=x >= t_ini)
+        nvals  = size(arr)
+        call sortmeans(arr, NQUANTA, means, labels)
+        cnt    = 0
+        do iq = 1, NQUANTA
+            if( count(labels == iq) == 0 )cycle
+            cnt         = cnt + 1
+            pix_ts(cnt) = minval(arr, mask=labels == iq )
+            n_fg        = count(arr >= pix_ts(cnt))
+            if( n_fg == nvals )then
+                frac_fgs(cnt) = 1.
+            else if( n_fg == 0 )then
+                frac_fgs(cnt) = 0.
+            else
+                frac_fgs(cnt) = real(n_fg) / real(nvals)
+            endif
+        end do
+        ! select the threshold from the quantization that minimizes the Manhattan distance
+        diff_otsu_lev1 = minval(abs(pix_ts(:cnt)-ts(1)))
+        diff_otsu_lev2 = minval(abs(pix_ts(:cnt)-ts(2)))
+        if( diff_otsu_lev1 < diff_otsu_lev2 )then
+            t_target = ts(1)
+        else
+            t_target = ts(2)
+        endif
+        loc   = minval(abs(pix_ts(:cnt)-t_target))
+        t_out = pix_ts(loc(1))
+    end subroutine detect_peak_thres_sortmeans
+
     ! hierarchical clustering
 
     ! distance threshold based hierarchical medoid clustering

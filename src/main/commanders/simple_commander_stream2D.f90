@@ -63,7 +63,7 @@ contains
         class(commander_mini_stream), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         real,                      parameter   :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17, LPSTART = 30., LPSTOP = 10.
-        integer,                   parameter   :: BOXFAC = 3, MIN_NCLS= 10
+        integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 200
         character(len=*),          parameter   :: PROJ2D_SEGPICK = 'proj2D_segpick', PROJFILE2D_SEGPICK = 'proj2D_segpick.simple'
         character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_bin_names(:)
@@ -280,7 +280,7 @@ contains
         call cline_import_particles%printline
         call ximport_particles%execute_safe(cline_import_particles)
         ! 3. 2D analysis
-        ncls = max(MIN_NCLS,nptcls/params%nptcls_per_cls)
+        ncls = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
         call cline_2Dsegpick%set('prg',             'cluster2D')
         call cline_2Dsegpick%set('mkdir',                  'no')
         call cline_2Dsegpick%set('ncls',                   ncls)

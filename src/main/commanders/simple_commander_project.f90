@@ -36,6 +36,7 @@ public :: prune_project_commander_distr
 public :: prune_project_commander
 public :: merge_projects_commander
 public :: split_stack_commander
+public :: write_mic_filetab_commander
 private
 #include "simple_local_flags.inc"
 
@@ -138,6 +139,11 @@ type, extends(commander_base) :: split_stack_commander
   contains
     procedure :: execute      => exec_split_stack
 end type split_stack_commander
+
+type, extends(commander_base) :: write_mic_filetab_commander
+  contains
+    procedure :: execute      => exec_write_mic_filetab
+end type write_mic_filetab_commander
 
 contains
 
@@ -1009,7 +1015,7 @@ contains
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
         integer                         :: state,nstates,nptcls,ipart,n_thumbnails
-        logical                         :: l_ctfres, l_icefrac, l_append
+        logical                         :: l_ctfres, l_icefrac, l_append, l_keep
         class(oris), pointer :: pos => NULL()
         l_append = .false.
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
@@ -1080,6 +1086,20 @@ contains
                     endif
                 enddo
             endif
+        else if( cline%defined('dfmin') )then
+            allocate(states(noris), source=nint(pos%get_all('state')))
+            do i = 1,noris
+                l_keep = .false.
+                if( states(i) > 0 )then
+                    if( pos%isthere(i, 'dfx') )then
+                        if( pos%get(i,'dfx') >= params%dfmin ) l_keep = .true.
+                    endif
+                    if( pos%isthere(i, 'dfy') )then
+                        if( pos%get(i,'dfy') >= params%dfmin ) l_keep = .true.
+                    endif
+                endif
+                if( .not. l_keep ) states(i) = 0
+            enddo
         else if( cline%defined('infile') )then
             ! selection based on text file input
             ! sanity check
@@ -1785,5 +1805,21 @@ contains
         call spproj%kill
         call simple_end('**** split_stack NORMAL STOP ****')
     end subroutine exec_split_stack
+
+    subroutine exec_write_mic_filetab( self, cline )
+        class(write_mic_filetab_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        character(len=LONGSTRLEN), allocatable :: micstab(:)
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
+        call params%new(cline)
+        call spproj%read(trim(params%projfile))
+        call spproj%get_mics_table(micstab)
+        call write_filetable(params%fname, micstab)
+        call spproj%kill
+        if( allocated(micstab) ) deallocate(micstab)
+        call simple_end('**** WRITE_MIC_FILETAB NORMAL STOP ****')
+    end subroutine exec_write_mic_filetab
 
 end module simple_commander_project
