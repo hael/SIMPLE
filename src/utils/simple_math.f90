@@ -365,7 +365,10 @@ contains
         real,    intent(in)  :: x(n)
         real,    intent(out) :: t_out
         integer, parameter   :: NQUANTA = 10
-        real,    parameter   :: FRAC_PEAK_TARGET = 0.25
+        ! real,    parameter   :: FRAC_PEAK_TARGET = 0.1 ! 5583 boxes on bgal tut data set in optimal mode
+        ! real,    parameter   :: FRAC_PEAK_TARGET = 0.2 ! 7249 boxes on bgal tut data set in optimal mode
+        real,    parameter   :: FRAC_PEAK_TARGET = 0.3   ! 7464 boxes on bgal tut data set in optimal mode
+        ! real,    parameter   :: FRAC_PEAK_TARGET = 0.4 ! 8624 boxes on bgal tut data set in optimal mode
         real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:)
         integer, allocatable :: labels(:), locn(:)
         integer :: iq, n_fg, nvals, loc(1), cnt, ind
@@ -392,17 +395,14 @@ contains
             else
                 frac_peaks(cnt) = real(n_fg) / real(nvals)
             endif
-
-            print *, cnt, ' frac_peaks(cnt): ', frac_peaks(cnt), ' peak_ts(cnt): ', peak_ts(cnt)
-
         end do
         loc = minloc(abs(frac_peaks(:cnt) - FRAC_PEAK_TARGET))
         select case(level)
-            case(1)
+            case(1) ! 5583 boxes on bgal tut data set, underpicked but not severley
                 ind = min(cnt,loc(1) + 1)
-            case(2)
+            case(2) ! 7427 boxes on bgal tut data set, looks optimal visually
                 ind = loc(1)
-            case(3)
+            case(3) ! 8627 boxes on bgal tut data set, overpicked but not severely
                 ind = max(1,  loc(1) - 1)
             case DEFAULT
                 ind = loc(1)
