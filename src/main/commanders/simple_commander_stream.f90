@@ -879,8 +879,13 @@ contains
         endif
          ! generate own project file if projfile isnt set
         if(cline%get_carg('projfile') .eq. '') then 
-            call cline%set('projname', 'pick_extract')
-            call cline%set('projfile', 'pick_extract.simple')
+            if(l_interactive) then
+                call cline%set('projname', 'initial_picking')
+                call cline%set('projfile', 'initial_picking.simple')
+            else
+                call cline%set('projname', 'pick_extract')
+                call cline%set('projfile', 'pick_extract.simple')
+            endif
             call spproj_glob%update_projinfo(cline)
             call spproj_glob%update_compenv(cline)
             call spproj_glob%write
@@ -1410,6 +1415,7 @@ contains
                     call http_communicator%json%update(http_communicator%job_json, "particles_extracted",   nptcls_glob,                                 found)
                     call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                  found)
                     call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,         found)
+                    if(histogram_moldiams%get_nbins() .gt. 0) call http_communicator%json%update(http_communicator%job_json, "best_diam",             dble(histogram_moldiams%mean()),             found)
                     if(spproj_glob%os_mic%isthere('thumb') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
                     .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                         i_max = 10
@@ -1471,10 +1477,11 @@ contains
                         deallocate(active_search_diameters)
                     end if
                     ! http stats 
-                    call http_communicator%json%update(http_communicator%job_json, "stage", "waiting for user input", found)
-                    call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                  found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,         found)
+                    call http_communicator%json%update(http_communicator%job_json, "stage",                 "waiting for user input",            found)
+                    call http_communicator%json%update(http_communicator%job_json, "user_input",            .true.,                              found)
+                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                          found)
+                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob, found)
+                    if(histogram_moldiams%get_nbins() .gt. 0) call http_communicator%json%update(http_communicator%job_json, "best_diam", dble(histogram_moldiams%mean()),     found)
                     ! create an empty picking_diameters json array
                     call http_communicator%json%remove(picking_diameters, destroy=.true.)
                     call http_communicator%json%create_array(picking_diameters, "picking_diameters")
@@ -1889,6 +1896,7 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_rejected",     0)
                 call http_communicator%json%add(http_communicator%job_json, "particles_extracted",      dble(0.0))
                 call http_communicator%json%add(http_communicator%job_json, "box_size",                 dble(0.0))
+                call http_communicator%json%add(http_communicator%job_json, "best_diam",                dble(0.0))
                 call http_communicator%json%add(http_communicator%job_json, "user_input",               .false.)
                 call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
                 call http_communicator%json%create_array(latest_extracted_particles, "latest_extracted_particles")

@@ -98,9 +98,10 @@ urlpatterns = [
     path("refinemoldiamstreaminitialpick/<int:jobid>",      views.refine_moldiam_stream_initial_pick,        name="refine_moldiam_stream_initial_pick"),
     path("increasemoldiamstreaminitialpick/<int:jobid>",      views.increase_moldiam_stream_initial_pick,        name="increase_moldiam_stream_initial_pick"),
     path("decreasemoldiamstreaminitialpick/<int:jobid>",      views.decrease_moldiam_stream_initial_pick,        name="decrease_moldiam_stream_initial_pick"),
-    path("selectrefsstreamgeneratepickrefs/<int:jobid>",      views.select_refs_stream_generate_pickrefs,        name="select_refs_stream_generate_pickrefs"),
+    path("selectrefsstreamgeneratepickrefs/<int:jobid>",    views.select_refs_stream_generate_pickrefs,        name="select_refs_stream_generate_pickrefs"),
     path("snapshotstreamclassification2D/<int:jobid>",      views.snapshot_stream_classification_2D,        name="snapshot_stream_classification_2D"),
-    path("selectstreamsieveparticles/<int:jobid>",         views.select_stream_sieve_particles,        name="select_stream_sieve_particles"),
-    path("linkstreamparticleset/<int:jobid>/<int:setid>/<path:filename>",         views.link_stream_particle_set,        name="link_stream_particle_set"),
+    path("selectstreamclassification2D/<int:jobid>",      views.select_stream_classification_2D,        name="select_stream_classification_2D"),
+    path("selectstreamsieveparticles/<int:jobid>",        views.select_stream_sieve_particles,        name="select_stream_sieve_particles"),
+    path("linkstreamparticleset/<int:jobid>/<int:setid>/<path:filename>/<path:type>",  views.link_stream_particle_set,        name="link_stream_particle_set"),
    
 ]

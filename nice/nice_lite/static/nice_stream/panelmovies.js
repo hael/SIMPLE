@@ -41,11 +41,13 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: data,
                   hoverOffset: 4,
-                  backgroundColor: "#98cef5"
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
                 },{
                   data: data2,
                   hoverOffset: 4,
-                  backgroundColor: "#eef0f2"
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bg'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
                 }
               ]
             }
@@ -94,11 +96,13 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: data,
                   hoverOffset: 4,
-                  backgroundColor: "#98cef5"
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
                 },{
                   data: data2,
                   hoverOffset: 4,
-                  backgroundColor: "#eef0f2"
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bg'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
                 }
               ]
             }
@@ -147,11 +151,13 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: data,
                   hoverOffset: 4,
-                  backgroundColor: "#98cef5"
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
                 },{
                   data: data2,
                   hoverOffset: 4,
-                  backgroundColor: "#eef0f2"
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bg'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
                 }
               ]
             }
@@ -197,7 +203,9 @@ window.addEventListener("load", () =>{
               labels: labels,
               datasets: [{
                   data: data,
-                  hoverOffset: 4
+                  hoverOffset: 4,
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
               }]
             }
         })

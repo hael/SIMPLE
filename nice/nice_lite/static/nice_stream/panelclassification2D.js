@@ -1,12 +1,14 @@
 let lastinteraction = Date.now();
 
-scrlRight = () => {
+scrlRight = (element, event) => {
+  event.preventDefault()
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.parentElement.scrollLeft += 77;
   lastinteraction = Date.now();
 }
 
-scrlLeft = () => {
+scrlLeft = (element, event) => {
+  event.preventDefault()
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.parentElement.scrollLeft -= 77;
   lastinteraction = Date.now();
@@ -24,6 +26,7 @@ toggleCls = (element) => {
       if(mskcanvas != undefined) mskcanvas.classList.remove("hidden")
     }
     lastinteraction = Date.now();
+    updateCounts()
 }
 
 selectCls = (element) => {
@@ -37,6 +40,27 @@ selectCls = (element) => {
     document.getElementById("snapshot_selection").value = selected
     const loadinggauze = document.getElementById("loadinggauze")
     loadinggauze.innerHTML = "generating snapshot ..."
+    loadinggauze.classList.remove("hidden")
+    loadinggauze.style.opacity = "1";
+    element.form.submit()
+    timeout = setTimeout(() => { 
+      // we know submit doesnt return for at least 2 seconds
+      const psets_iframe = window.parent.document.querySelector("#psets_iframe")
+      psets_iframe.src = psets_iframe.src
+    }, 1500);
+}
+
+selectClsFinal = (element) => {
+    const deselected = []
+    for(const cls2D of document.getElementsByClassName("cls2D")){
+        const idx  = Number(cls2D.dataset.idx)
+        if(cls2D.classList.contains("disabledbutton")){
+            deselected.push(idx)
+        }
+    }
+    document.getElementById("final_deselection").value = deselected
+    const loadinggauze = document.getElementById("loadinggauze")
+    loadinggauze.innerHTML = "generating final selection ..."
     loadinggauze.classList.remove("hidden")
     loadinggauze.style.opacity = "1";
     element.form.submit()
@@ -158,6 +182,7 @@ selectAbove = (element) => {
       threshold = false
     }
   }
+  updateCounts()
   hideMenu()
 }
 
@@ -182,7 +207,31 @@ selectBelow = (element) => {
       if(mskcanvas != undefined) mskcanvas.classList.remove("hidden")
     }
   }
+  updateCounts()
   hideMenu()
+}
+
+updateCounts = () => {
+  const clustercount          = document.querySelector("#clustercount")
+  const particlecount         = document.querySelector("#particlecount")
+  const final_selection_ptcls = document.querySelector("#final_selection_ptcls")
+  const cls2dcontainers       = document.querySelectorAll(".cls2dcontainer")
+  ncls       = 0
+  nptcls     = 0
+  nptcls_tot = 0
+  for(const cls2dcontainer of cls2dcontainers){
+    const deselected = cls2dcontainer.querySelector(".disabledbutton")
+    const pop = Number(cls2dcontainer.dataset.pop)
+    const idx = Number(cls2dcontainer.dataset.idx)
+    nptcls_tot = nptcls_tot + pop
+    if(deselected == undefined){
+      nptcls = nptcls + pop
+      ncls   = ncls + 1
+    }
+  }
+  clustercount.innerHTML = ncls.toLocaleString() + " / " + cls2dcontainers.length.toLocaleString() 
+  particlecount.innerHTML = nptcls.toLocaleString() + " / " + nptcls_tot.toLocaleString()
+  if(final_selection_ptcls != undefined) final_selection_ptcls.value = nptcls
 }
 
 window.addEventListener("load", () =>{
@@ -210,16 +259,16 @@ window.addEventListener("load", () =>{
             },
             data: {
             labels: [
-                'processing',
+                'queued',
                 'accepted',
                 'rejected'
             ],
             datasets: [{
                 data: [n_imported - n_accepted - n_rejected, n_accepted, n_rejected],
                 backgroundColor: [
-                'rgb(255, 99, 132)',
-                'rgb(54, 162, 235)',
-                'rgb(255, 205, 86)'
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                 ],
                 hoverOffset: 4
             }]
@@ -242,6 +291,7 @@ window.addEventListener("load", () =>{
     mskdiam_selector.value = half_mskdiam
     break
   }
+  updateCounts()
   drawMask()
 },false);
 

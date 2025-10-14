@@ -121,7 +121,7 @@ module simple_stream_communicator
             class(stream_http_communicator),           intent(inout) :: self
             character(*),                    optional, intent(in)    :: data
             type(json_value),                pointer                 :: response_json
-            character(len=512)            :: buf
+            character(len=XLONGSTRLEN)    :: buf
             character(len=:), allocatable :: cmd, tmp_file
             integer                       :: file_unit, stat
             logical                       :: found, terminate

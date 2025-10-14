@@ -7117,28 +7117,28 @@ contains
         call json%add(input, 'descr_long',  'pixel size (A)')
         call json%add(input, 'required',    .TRUE.)
         !! scale
-        call json%create_object(input, 'input')
-        call json%add(user_inputs, input)
-        call json%add(input, 'key',         'scale')
-        call json%add(input, 'keytype',     'multi')
-        call json%add(input, 'descr_short', 'Down-scaling factor')
-        call json%add(input, 'descr_long',  'Down-scaling factor')
-        call json%add(input, 'required',    .TRUE.)
-        call json%create_array(options, 'options')
-        call json%add(input, options)
-        call json%create_object(option, 'option')
-        call json%add(options, option)
-        call json%add(option, 'key',     '1X')
-        call json%add(option, 'val',     '1.0')
-        call json%add(option, 'default', .TRUE.)
-        call json%create_object(option, 'option')
-        call json%add(options, option)
-        call json%add(option, 'key', '2X')
-        call json%add(option, 'val', '0.5')
-        call json%create_object(option, 'option')
-        call json%add(options, option)
-        call json%add(option, 'key', '4X')
-        call json%add(option, 'val', '0.25')
+        ! call json%create_object(input, 'input')
+        ! call json%add(user_inputs, input)
+        ! call json%add(input, 'key',         'scale')
+        ! call json%add(input, 'keytype',     'multi')
+        ! call json%add(input, 'descr_short', 'Down-scaling factor')
+        ! call json%add(input, 'descr_long',  'Down-scaling factor')
+        ! call json%add(input, 'required',    .TRUE.)
+        ! call json%create_array(options, 'options')
+        ! call json%add(input, options)
+        ! call json%create_object(option, 'option')
+        ! call json%add(options, option)
+        ! call json%add(option, 'key',     '1X')
+        ! call json%add(option, 'val',     '1.0')
+        ! call json%add(option, 'default', .TRUE.)
+        ! call json%create_object(option, 'option')
+        ! call json%add(options, option)
+        ! call json%add(option, 'key', '2X')
+        ! call json%add(option, 'val', '0.5')
+        ! call json%create_object(option, 'option')
+        ! call json%add(options, option)
+        ! call json%add(option, 'key', '4X')
+        ! call json%add(option, 'val', '0.25')
         !! total_dose
         call json%create_object(input, 'input')
         call json%add(user_inputs, input)
@@ -7178,6 +7178,7 @@ contains
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'outdir=preprocessing') !important - directory names and name must match between processes
+    !    call json%add(process_inputs, '', 'smpd_downscale=1.5')   ! downsample to 1.5A
         call json%add(process_inputs, '', 'nparts=10')
         call json%add(process_inputs, '', 'nthr=4')
         !! assign_optics
@@ -7204,10 +7205,11 @@ contains
         call json%add(process_inputs, '', 'ninit=10')
         call json%add(process_inputs, '', 'ring=no')
         call json%add(process_inputs, '', 'interactive=yes')
+       ! call json%add(process_inputs, '', 'pick_roi=yes')
         call json%add(process_inputs, '', 'dir_target=preprocessing')
         call json%add(process_inputs, '', 'outdir=initial_picking') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'nparts=10')
-        call json%add(process_inputs, '', 'nthr=4')
+        call json%add(process_inputs, '', 'nparts=5')
+        call json%add(process_inputs, '', 'nthr=8')
         !! gen_picking_refs
         call json%create_object(process, 'process')
         call json%add(processes, process)
@@ -7234,6 +7236,7 @@ contains
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=preprocessing')
         call json%add(process_inputs, '', 'outdir=reference_based_picking') !important - directory names and name must match between processes
+        ! call json%add(process_inputs, '', 'pick_roi=yes')
         call json%add(process_inputs, '', 'nparts=10')
         call json%add(process_inputs, '', 'nthr=4')
         !! particle_sieving
@@ -7253,7 +7256,7 @@ contains
         call json%add(process_inputs, '', 'nchunks=2')
         call json%add(process_inputs, '', 'nparts=4')
         call json%add(process_inputs, '', 'nthr=8')
-        !! particle_sieving
+        !! 2D classification
         call json%create_object(process, 'process')
         call json%add(processes, process)
         call json%add(process, 'name',        'classification_2D') !important - directory names and name must match between processes
@@ -7263,9 +7266,9 @@ contains
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=particle_sieving')
         call json%add(process_inputs, '', 'outdir=classification_2D') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'ncls=50')
+        call json%add(process_inputs, '', 'ncls=200')
         call json%add(process_inputs, '', 'nparts=10')
-        call json%add(process_inputs, '', 'nthr=4')
+        call json%add(process_inputs, '', 'nthr=8')
         ! print & clean
         call json%print(ui, logfhandle)
         if( json%failed() )then

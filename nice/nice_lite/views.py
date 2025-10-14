@@ -47,9 +47,12 @@ def create_project(request):
     project.new(request)
     dataset = Dataset()
     dataset.new(project)
+    workspace = Workspace()
+    workspace.new(project)
     response = redirect('nice_lite:stream')
-    response.set_cookie(key='selected_project_id', value=project.id)
-    response.set_cookie(key='selected_dataset_id', value=dataset.id)
+    response.set_cookie(key='selected_project_id',   value=project.id)
+    response.set_cookie(key='selected_dataset_id',   value=dataset.id)
+    response.set_cookie(key='selected_workspace_id', value=workspace.id)
     return response
 
 @login_required(login_url="/login/")
@@ -169,7 +172,7 @@ def view_stream_initial_pick(request, jobid=None, jobidzoom=None):
 @login_required(login_url="/login/")
 def term_stream_initial_pick(request, jobid):
     job = Job(id=jobid)
-    job.terminate_intial_pick()
+    job.terminate_initial_pick()
     response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
     return response
 
@@ -187,7 +190,7 @@ def select_moldiam_stream_initial_pick(request, jobid):
     job = Job(id=jobid)
     diameter = request.POST["diameter"]
     job.select_moldiam_initial_pick(diameter)
-    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
+    response = redirect('nice_lite:view_stream', jobid=jobid)
     return response
 
 @login_required(login_url="/login/")
@@ -195,21 +198,21 @@ def refine_moldiam_stream_initial_pick(request, jobid):
     job = Job(id=jobid)
     refine_diameter = request.POST["refine_diameter"]
     job.update_moldiam_refine_initial_pick(refine_diameter)
-    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
+    response = redirect('nice_lite:view_stream_initial_pick_zoom', jobidzoom=jobid)
     return response
 
 @login_required(login_url="/login/")
 def increase_moldiam_stream_initial_pick(request, jobid):
     job = Job(id=jobid)
     job.update_moldiam_refine_initial_pick(-1)
-    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
+    response = redirect('nice_lite:view_stream_initial_pick_zoom', jobidzoom=jobid)
     return response
 
 @login_required(login_url="/login/")
 def decrease_moldiam_stream_initial_pick(request, jobid):
     job = Job(id=jobid)
     job.update_moldiam_refine_initial_pick(-2)
-    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
+    response = redirect('nice_lite:view_stream_initial_pick_zoom', jobidzoom=jobid)
     return response
 
 @login_required(login_url="/login/")
@@ -230,7 +233,7 @@ def restart_stream_generate_pickrefs(request, jobid):
     dataset = Dataset(request=request)
     job = Job(id=jobid)
     job.restart_generate_pickrefs(project, dataset)
-    response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
+    response = redirect('nice_lite:view_stream_generate_pickrefs', jobid=jobid)
     return response
 
 @login_required(login_url="/login/")
@@ -240,7 +243,7 @@ def select_refs_stream_generate_pickrefs(request, jobid):
     final_selection_source  = request.POST["final_selection_source"]
     final_selection_boxsize = request.POST["final_selection_boxsize"]
     job.select_refs_generate_pickrefs(final_selection, final_selection_source, final_selection_boxsize)
-    response = redirect('nice_lite:view_stream_generate_pickrefs', jobid=jobid)
+    response = redirect('nice_lite:view_stream', jobid=jobid)
     return response
 
 @login_required(login_url="/login/")
@@ -249,7 +252,19 @@ def snapshot_stream_classification_2D(request, jobid):
     snapshot_selection  = [int(numeric_string) for numeric_string in request.POST["snapshot_selection"].split(',')]
     snapshot_iteration = request.POST["snapshot_iteration"]
     job.snapshot_classification_2D(snapshot_selection, snapshot_iteration)
-    response = redirect('nice_lite:view_stream_classification_2D', jobid=jobid)
+    response = redirect('nice_lite:view_stream', jobid=jobid)
+    time.sleep(2) #sleep for user to see message
+    return response
+
+@login_required(login_url="/login/")
+def select_stream_classification_2D(request, jobid):
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job = Job(id=jobid)
+    final_deselection     = [int(numeric_string) for numeric_string in request.POST["final_deselection"].split(',')]
+    final_selection_ptcls = request.POST["final_selection_ptcls"]
+    job.selection_classification_2D(final_deselection, project, dataset, final_selection_ptcls)
+    response = redirect('nice_lite:view_stream', jobid=jobid)
     time.sleep(2) #sleep for user to see message
     return response
 
@@ -301,7 +316,7 @@ def select_stream_sieve_particles(request, jobid):
     accepted_cls2D = [int(numeric_string) for numeric_string in request.POST["accepted_cls2D"].split(',')]
     rejected_cls2D = [int(numeric_string) for numeric_string in request.POST["rejected_cls2D"].split(',')]
     job.select_sieve_particles(accepted_cls2D, rejected_cls2D)
-    response = redirect('nice_lite:view_stream_sieve_particles', jobid=jobid)
+    response = redirect('nice_lite:view_stream', jobid=jobid)
     return response
 
 @login_required(login_url="/login/")
@@ -385,11 +400,11 @@ def update_classification_2D_mskdiam(request, jobid):
     job = Job(id=jobid)
     mskdiam = request.POST["mskdiam"]
     job.update_mskdiam(mskdiam)
-    response = redirect('nice_lite:view_stream_classification_2D', jobid=jobid)
+    response = redirect('nice_lite:view_stream_classification_2D_zoom', jobidzoom=jobid)
     return response
 
 @login_required(login_url="/login/")
-def link_stream_particle_set(request, jobid, setid, filename):
+def link_stream_particle_set(request, jobid, setid, filename, type):
     # this ties stream and classic together !!!
     link_workspace_id = int(request.POST["link_workspace_id"])
     streamjob  = Job(id=jobid)
@@ -397,11 +412,16 @@ def link_stream_particle_set(request, jobid, setid, filename):
     project    = Project(request=request)
     workspace  = Workspace(workspace_id=link_workspace_id)
     dataset    = Dataset(request=request)
-    set_proj   = os.path.join(project.dirc, dataset.dirc, streamjob.dirc, "classification_2D", "snapshots", pathlib.Path(filename).stem, filename)
-    classicjob.linkParticleSet(project, workspace, set_proj)
-    classicjob.update_description("from " + dataset.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))
+    if type == "snapshot":
+        set_proj   = os.path.join(project.dirc, dataset.dirc, streamjob.dirc, "classification_2D", "snapshots", pathlib.Path(filename).stem, filename)
+        classicjob.linkParticleSet(project, workspace, set_proj)
+    elif type == "final":
+        set_proj  = os.path.join(project.dirc, dataset.dirc, streamjob.dirc, "classification_2D", "stream_abinitio2D.simple")
+        set_desel = os.path.join(project.dirc, dataset.dirc, streamjob.dirc, filename)
+        classicjob.linkParticleSetFinal(project, workspace, set_proj, set_desel)
+    classicjob.update_description("from " + dataset.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))    
     response = redirect('nice_lite:view_stream_particle_sets', jobid=jobid)
-    return response
+    return response   
 
 @login_required(login_url="/login/")
 def update_dataset_name(request):

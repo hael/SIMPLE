@@ -24,7 +24,7 @@
                 {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
                     <div class="flex flex-col">
                         <div class="font-bold text-[12px] pl-[10px]">movies</div>
-                        <div class="h-[100px] w-[240px] ml-[15px]">
+                        <div class="h-[50px] w-[150px] m-auto">
                             <canvas class="movies_pie_chart" data-imported={{ jobstats.movies_imported }} data-processed={{ jobstats.movies_processed }} data-rejected={{ jobstats.movies_rejected }}></canvas>
                         </div>
                     </div>

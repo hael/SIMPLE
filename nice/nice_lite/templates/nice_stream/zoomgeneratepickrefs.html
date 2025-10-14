@@ -25,7 +25,7 @@
                 {% if "particles_imported" in jobstats and "particles_processed" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
                     <div class="flex flex-col">
                         <div class="font-bold text-[12px] pl-[10px]">particles</div>
-                        <div class="h-[100px] w-[240px]">
+                        <div class="h-[50px] w-[240px] ml-[15px]">
                             <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-processed={{ jobstats.particles_processed }} data-rejected={{ jobstats.particles_rejected }}></canvas>
                         </div>
                     </div>
@@ -33,12 +33,36 @@
             </div>
             <div class="flex flex-row">
                  <div class="grid grid-cols-2 gap-1 text-[12px] pl-[10px] mt-[10px]">
+                    {% if status == "running" and "iteration" in jobstats and jobstats.iteration > 0 %}
+                        <div class="font-bold">iteration</div>
+                        <div>{{ jobstats.iteration }}</div>
+                    {% endif %}
                     {% if "selected_boxsize" in jobstats and jobstats.selected_boxsize > 0 %}
                         <div class="font-bold">selected boxsize</div>
                         <div>{{ jobstats.selected_boxsize }}px</div>
                     {% endif %}
                 </div>
             </div>
+            {% if status == "running" and jobstats.user_input is True %}
+                {%if "box_size" in jobstats %}
+                    <div class="flex flex-col">
+                        <div class="font-bold text-[12px] pl-[10px]">box size</div>
+                        <div class="flex flex-row justify-center items-center">
+                            <input type="range" id="box_size_selector" oninput="updateBoxSize()" data-boxsize={{ jobstats.box_size }}></input> 
+                            <div id="current_box_size" class="w-[20px] pl-[5px] text-[10px]"></div>
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="flex flex-row flex-1 justify-center items-center">
+                    <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_refs_stream_generate_pickrefs' jobid %}>
+                        {% csrf_token %}
+                        <input type="hidden" id="final_selection" name="final_selection" value=""/>
+                        <input type="hidden" id="final_selection_source" name="final_selection_source" value=""/>
+                        <input type="hidden" id="final_selection_boxsize" name="final_selection_boxsize" value=""/>
+                        <button class="userbutton animate-bounce !text-[14px]" onclick="selectRefs(this.form)">use selection</button>
+                    </form> 
+                </div>
+            {% endif %}
         </div>
         <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
             <div class="font-bold text-[12px]">log</div>
@@ -54,28 +78,8 @@
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
         <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             {% if status == "running" %}
-                {%if jobstats.user_input is True and "box_size" in jobstats %}
-                    <div class="flex flex-col">
-                        <div class="font-bold text-[12px] pl-[10px]">box size</div>
-                        <div class="flex flex-row justify-center items-center">
-                            <input type="range" id="box_size_selector" oninput="updateBoxSize()" data-boxsize={{ jobstats.box_size }}></input> 
-                            <div id="current_box_size" class="w-[20px] pr-[5px] text-[10px]"></div>
-                        </div>
-                    </div>
-                {% endif %}
-                {% if status == "running" and jobstats.user_input is True %}
-                    <div>
-                        <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_refs_stream_generate_pickrefs' jobid %}>
-                            {% csrf_token %}
-                            <input type="hidden" id="final_selection" name="final_selection" value=""/>
-                            <input type="hidden" id="final_selection_source" name="final_selection_source" value=""/>
-                            <input type="hidden" id="final_selection_boxsize" name="final_selection_boxsize" value=""/>
-                            <button class="userbutton" onclick="selectRefs(this.form)">use selected references</button>
-                        </form> 
-                    </div>
-                {% endif %}
                 {% if status == "running" and jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 and "iteration" in jobstats and jobstats.iteration > 0 %}
-                    <div class="font-bold text-[12px]">picking templates (iteration {{ jobstats.iteration }})</div>
+                    <div class="font-bold text-[12px]">available templates</div>
                     <div class="flex flex-1 flex-row items-baseline m-auto overflow-auto">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-scroll snap-y snap-mandatory">
                             <div id="picking_references" class="flex flex-wrap">
@@ -119,6 +123,10 @@
                             </div>
                         </div>
                     </div>
+                {% else %}
+                     <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
+                        generating references ...
+                    </div> 
                 {% endif %}
             {% endif %}
             {% if "selected_references" in jobstats and jobstats.selected_references|length > 0 %}

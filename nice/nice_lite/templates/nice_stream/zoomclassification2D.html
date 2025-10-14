@@ -25,7 +25,7 @@
                 {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
                     <div class="flex flex-col">
                         <div class="font-bold text-[12px] pl-[10px]">particles</div>
-                        <div class="h-[100px] w-[240px]">
+                        <div class="h-[50px] w-[240px]">
                             <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-accepted={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
                         </div>
                     </div>
@@ -37,8 +37,50 @@
                         <div class="font-bold">selected boxsize</div>
                         <div>{{ jobstats.selected_boxsize }}px</div>
                     {% endif %}
+                    {% if "iteration" in jobstats and jobstats.iteration > 0 %}
+                        <div class="font-bold">iteration</div>
+                        <div>{{ jobstats.iteration }}</div>
+                    {% endif %}
+                    {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                        <div class="font-bold mr-[5px]">clusters</div>
+                        <div id="clustercount"></div>
+                        <div class="font-bold mr-[5px]">particles</div>
+                        <div id="particlecount"></div>
+                    {% endif %}
                 </div>
             </div>
+            {% if status == "running" %}
+                {% if jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                    <div>
+                        <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' jobid %}>
+                            {% csrf_token %}
+                            <div class="font-bold text-[12px] ml-[10px]">mask diameter</div>
+                            <div class="flex flex-row items-center justify-center">
+                                <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)"></input>
+                                <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
+                                <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[10px]"></div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="flex flex-row flex-1 justify-center items-center">
+                        <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:snapshot_stream_classification_2D' jobid %}>
+                            {% csrf_token %}
+                            <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
+                            <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
+                            <button class="userbutton animate-bounce !text-[14px]" type="button" onclick="selectCls(this)">create snapshot particle set</button>
+                        </form>
+                    </div>
+                {% endif %}
+            {% elif status == "finished" %}
+                <div class="flex flex-row flex-1 justify-center items-center">
+                    <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:select_stream_classification_2D' jobid %}>
+                        {% csrf_token %}
+                        <input type="hidden" id="final_deselection"     name="final_deselection"     value=""/>
+                        <input type="hidden" id="final_selection_ptcls" name="final_selection_ptcls" value=""/>
+                        <button class="userbutton animate-bounce !text-[14px]" type="button" onclick="selectClsFinal(this)">create final particle set</button>
+                    </form>
+                </div>
+            {% endif %}
         </div>
         <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
             <div class="font-bold text-[12px]">log</div>
@@ -55,29 +97,12 @@
         <div class="relative flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <div id="loadinggauze" class="absolute text-[12px] flex h-[99%] w-[99%] bg-nice4bubble items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
             {% if status == "running" %}
-                {% if jobstats.user_input is True %}
-                    <div>
-                        <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' jobid %}>
-                            {% csrf_token %}
-                            <div class="font-bold text-[12px] ml-[10px]">mask diameter</div>
-                            <div class="flex flex-row items-center justify-center">
-                                <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)"></input>
-                                <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
-                                <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[10px]"></div>
-                            </div>
-                        </form>
-                    </div>
-                    <div>
-                         <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:snapshot_stream_classification_2D' jobid %}>
-                            {% csrf_token %}
-                            <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
-                            <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
-                            <button class="userbutton" type="button" onclick="selectCls(this)">snapshot</button>
-                        </form>
-                    </div>
-                {% endif %}
-                {% if jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0 %}                
-                    <div class="font-bold text-[12px] pl-[10px]">latest classes (iteration {{ jobstats.iteration }})</div>
+                {% if "stage" in jobstats and jobstats.stage == "updating mask diameter" %}
+                <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
+                        updating mask diameter ...
+                </div>
+                {% elif jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0 %}  
+                    <div class="font-bold text-[12px] pl-[10px]">latest classes</div>
                     <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
                             <div id="accepted_cls2D_slider" class="flex flex-wrap">

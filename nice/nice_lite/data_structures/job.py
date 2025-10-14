@@ -2,6 +2,7 @@
 import os
 import copy
 import datetime
+from time import gmtime, strftime
 from django.utils import timezone
 
 # local imports
@@ -281,6 +282,7 @@ class Job:
             jobmodel.classification_2D_update = updated
             for cls2D in self.classification_2D_stats["latest_cls2D"]:
                 cls2D["mskdiam"] = mskdiam
+            jobmodel.classification_2D_stats["stage"] = "updating mask diameter"
             jobmodel.classification_2D_stats = self.classification_2D_stats
             jobmodel.save() 
         
@@ -434,7 +436,7 @@ class Job:
             self.generate_pickrefs_stats["stage"]      = "saving selection"
             jobmodel.generate_pickrefs_stats = self.generate_pickrefs_stats
             jobmodel.save()
-            self.terminate_intial_pick()
+            self.terminate_initial_pick()
 
     def snapshot_classification_2D(self, snapshot_selection, snapshot_iteration):
         jobmodel = JobModel.objects.filter(id=self.id).first()
@@ -455,8 +457,30 @@ class Job:
                 "type"     : "snapshot",
                 "filename" : updated["snapshot_filename"]  
             }
-            self.particle_sets_stats["particle_sets"].append(newset)
+            self.particle_sets_stats["particle_sets"].insert(0, newset)
             jobmodel.particle_sets_stats  = self.particle_sets_stats
+            jobmodel.save()
+
+    def selection_classification_2D(self, final_deselection, project, dataset, final_selection_ptcls):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            if not "particle_sets" in self.particle_sets_stats:
+                self.particle_sets_stats["particle_sets"] = []
+            setid = len(self.particle_sets_stats["particle_sets"]) + 1
+            deselfile = "particle_set_" + str(setid) + "_deselected.txt"
+            with open(os.path.join(project.dirc, dataset.dirc, self.dirc, deselfile), "w") as f:
+                for deselected in final_deselection:
+                    f.write(str(deselected) + '\n')
+            newset = {
+                "id"       : setid,
+                "name"     : "particle set " + str(setid),
+                "type"     : "final",
+                "filename" : deselfile,
+                "nptcls"   : final_selection_ptcls, 
+                "ctime"    : strftime("%Y/%m/%d %H:%M", gmtime())
+            }
+            self.particle_sets_stats["particle_sets"].insert(0, newset)
+            jobmodel.particle_sets_stats = self.particle_sets_stats
             jobmodel.save()
 
     def select_sieve_particles(self, accepted_cls2D, rejected_cls2D):
@@ -474,7 +498,7 @@ class Job:
     def terminate(self):
         self.terminate_preprocess()
         self.terminate_optics()
-        self.terminate_intial_pick()
+        self.terminate_initial_pick()
         self.terminate_generate_pickrefs()
         self.terminate_reference_picking()
         self.terminate_sieve_particles()
@@ -483,7 +507,8 @@ class Job:
     def terminate_preprocess(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.preprocessing_update = {"terminate":True}
+            jobmodel.preprocessing_status     = "terminating"
+            jobmodel.preprocessing_update     = {"terminate":True}
             self.preprocessing_stats["stage"] = "terminating"
             jobmodel.preprocessing_stats = self.preprocessing_stats
             jobmodel.save()
@@ -491,15 +516,17 @@ class Job:
     def terminate_optics(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
+            jobmodel.optics_assignment_status     = "terminating"
             jobmodel.optics_assignment_update     = {"terminate":True}
             self.optics_assignment_stats["stage"] = "terminating"
             jobmodel.optics_assignment_stats = self.optics_assignment_stats
             jobmodel.save()
 
-    def terminate_intial_pick(self):
+    def terminate_initial_pick(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.initial_picking_update = {"terminate":True}
+            jobmodel.initial_picking_status     = "terminating"
+            jobmodel.initial_picking_update     = {"terminate":True}
             self.initial_picking_stats["stage"] = "terminating"
             jobmodel.initial_picking_stats = self.initial_picking_stats
             jobmodel.save()      
@@ -507,7 +534,8 @@ class Job:
     def terminate_generate_pickrefs(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.generate_pickrefs_update = {"terminate":True}
+            jobmodel.generate_pickrefs_status     = "terminating"
+            jobmodel.generate_pickrefs_update     = {"terminate":True}
             self.generate_pickrefs_stats["stage"] = "terminating"
             jobmodel.generate_pickrefs_stats = self.generate_pickrefs_stats
             jobmodel.save()      
@@ -515,7 +543,8 @@ class Job:
     def terminate_reference_picking(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.reference_picking_update = {"terminate":True}
+            jobmodel.reference_picking_status     = "terminating"
+            jobmodel.reference_picking_update     = {"terminate":True}
             self.reference_picking_stats["stage"] = "terminating"
             jobmodel.reference_picking_stats = self.reference_picking_stats
             jobmodel.save()      
@@ -523,7 +552,8 @@ class Job:
     def terminate_sieve_particles(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.particle_sieving_update = {"terminate":True}
+            jobmodel.particle_sieving_status     = "terminating"
+            jobmodel.particle_sieving_update     = {"terminate":True}
             self.particle_sieving_stats["stage"] = "terminating"
             jobmodel.particle_sieving_stats = self.particle_sieving_stats
             jobmodel.save()     
@@ -531,7 +561,8 @@ class Job:
     def terminate_classification_2D(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.classification_2D_update = {"terminate":True}
+            jobmodel.classification_2D_status     = "terminating"
+            jobmodel.classification_2D_update     = {"terminate":True}
             self.classification_2D_stats["stage"] = "terminating"
             jobmodel.classification_2D_stats = self.classification_2D_stats
             jobmodel.save()  
@@ -539,19 +570,20 @@ class Job:
     def restart_optics(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.optics_assignment_status    = "running"
+            jobmodel.optics_assignment_status    = "restarting"
             jobmodel.optics_assignment_heartbeat = timezone.now()
             jobmodel.optics_assignment_stats     = {}
             jobmodel.optics_assignment_update    = {}
             simplestream = SIMPLEStream()
             if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "optics_assignment"):
                 return
+            print("SAVE")
             jobmodel.save()    
     
     def restart_preprocess(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.preprocessing_status    = "running"
+            jobmodel.preprocessing_status    = "restarting"
             jobmodel.preprocessing_heartbeat = timezone.now()
             jobmodel.preprocessing_stats     = {}
             jobmodel.preprocessing_update    = {}
@@ -563,7 +595,7 @@ class Job:
     def restart_initial_pick(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.initial_picking_status    = "running"
+            jobmodel.initial_picking_status    = "restarting"
             jobmodel.initial_picking_heartbeat = timezone.now()
             jobmodel.initial_picking_stats     = {}
             jobmodel.initial_picking_update    = {}
@@ -575,7 +607,7 @@ class Job:
     def restart_generate_pickrefs(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.generate_pickrefs_status    = "running"
+            jobmodel.generate_pickrefs_status    = "restarting"
             jobmodel.generate_pickrefs_heartbeat = timezone.now()
             jobmodel.generate_pickrefs_stats     = {}
             jobmodel.generate_pickrefs_update    = {}
@@ -587,7 +619,7 @@ class Job:
     def restart_reference_picking(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.reference_picking_status    = "running"
+            jobmodel.reference_picking_status    = "restarting"
             jobmodel.reference_picking_heartbeat = timezone.now()
             jobmodel.reference_picking_stats     = {}
             jobmodel.reference_picking_update    = {}
@@ -599,7 +631,7 @@ class Job:
     def restart_sieve_particles(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.particle_sieving_status    = "running"
+            jobmodel.particle_sieving_status    = "restarting"
             jobmodel.particle_sieving_heartbeat = timezone.now()
             jobmodel.particle_sieving_stats     = {}
             jobmodel.particle_sieving_update    = {}
@@ -611,7 +643,7 @@ class Job:
     def restart_classification_2D(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
-            jobmodel.classification_2D_status    = "running"
+            jobmodel.classification_2D_status    = "restarting"
             jobmodel.classification_2D_heartbeat = timezone.now()
             jobmodel.classification_2D_stats     = {}
             jobmodel.classification_2D_update    = {}

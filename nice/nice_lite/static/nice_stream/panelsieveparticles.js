@@ -1,24 +1,28 @@
 let lastinteraction = Date.now();
 
-scrlRight = () => {
+scrlRight = (element, event) => {
+  event.preventDefault()
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.parentElement.scrollLeft += 72;
   lastinteraction = Date.now();
 }
 
-scrlLeft = () => {
+scrlLeft = (element, event) => {
+  event.preventDefault()
   const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
   accepted_cls2D_slider.parentElement.scrollLeft -= 72;
   lastinteraction = Date.now();
 }
 
-scrlRejectedRight = () => {
+scrlRejectedRight = (telementhis, event) => {
+  event.preventDefault()
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
   rejected_cls2D_slider.parentElement.scrollLeft += 72;
   lastinteraction = Date.now();
 }
 
-scrlRejectedLeft = () => {
+scrlRejectedLeft = (element, event) => {
+  event.preventDefault()
   const rejected_cls2D_slider = document.getElementById("rejected_cls2D_slider")
   rejected_cls2D_slider.parentElement.scrollLeft -= 72;
   lastinteraction = Date.now();
@@ -32,6 +36,7 @@ toggleSievecls = (element) => {
   }else{
     accepted_cls2D_slider.appendChild(element.parentElement)
   }
+  updateCounts()
   lastinteraction = Date.now();
 }
 
@@ -139,6 +144,7 @@ selectAbove = (element) => {
       threshold = false
     }
   }
+  updateCounts()
   hideMenu()
 }
 
@@ -156,7 +162,30 @@ selectBelow = (element) => {
       rejected_cls2D_slider.appendChild(clscontainer)
     }
   }
+  updateCounts()
   hideMenu()
+}
+
+updateCounts = () => {
+  const clustercount    = document.querySelector("#clustercount")
+  const particlecount   = document.querySelector("#particlecount")
+  if(clustercount == undefined || particlecount == undefined) return
+  const sieveclscontainers = document.querySelectorAll(".sieveclscontainer")
+  const sieveclscontainers_accepted = document.querySelectorAll("#accepted_cls2D_slider .sieveclscontainer")
+  ncls       = 0
+  nptcls     = 0
+  nptcls_tot = 0
+  for(const sieveclscontainer of sieveclscontainers){
+    const pop = Number(sieveclscontainer.dataset.pop)
+    nptcls_tot = nptcls_tot + pop
+  }
+  for(const sieveclscontainer of sieveclscontainers_accepted){
+    const pop = Number(sieveclscontainer.dataset.pop)
+    nptcls = nptcls + pop
+    ncls = ncls + 1
+  }
+  clustercount.innerHTML = ncls.toLocaleString() + " / " + sieveclscontainers.length.toLocaleString() 
+  particlecount.innerHTML = nptcls.toLocaleString() + " / " + nptcls_tot.toLocaleString()
 }
 
 window.addEventListener("load", () =>{
@@ -191,9 +220,9 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: [n_imported - n_accepted - n_rejected, n_accepted, n_rejected],
                   backgroundColor: [
-                  'rgb(255, 99, 132)',
-                  'rgb(54, 162, 235)',
-                  'rgb(255, 205, 86)'
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                   ],
                   hoverOffset: 4
               }]
@@ -203,10 +232,14 @@ window.addEventListener("load", () =>{
 },false);
 
 window.addEventListener("load", () =>{
-  document.getElementById("loadinggauze").style.opacity = "0";
-  setTimeout(function () {
-   document.getElementById("loadinggauze").style.display = "none";
-  }, 600);
+  const loadinggauze = document.getElementById("loadinggauze")
+  if(loadinggauze != undefined){
+    loadinggauze.style.opacity = "0";
+    setTimeout(function () {
+    document.getElementById("loadinggauze").style.display = "none";
+    }, 600);
+  }
+  updateCounts()
 })
 
 window.addEventListener("visibilitychange", (event) => {
