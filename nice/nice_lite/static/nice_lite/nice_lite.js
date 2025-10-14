@@ -5,7 +5,15 @@ changeProject = (element) => {
     if(selected_project_id == "new"){
         workspace_iframe = document.getElementById("workspace_iframe")
         workspace_iframe.src = element.form.dataset.newurl
-        element.options[0].selected = true
+        let selectselect = true
+        for(const option of element.options){
+            if(option.hasAttribute("selected")){
+                option.selected = true
+                selectselect = false
+                break
+            }
+        }
+        if(selectselect) element.options[0].selected = true
     }else{
         element.form.submit()
     }

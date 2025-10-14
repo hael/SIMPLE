@@ -1294,7 +1294,6 @@ contains
             call import_sets_into_pool( nimported )
             if( nimported > 0 )then
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "particles_imported",       nptcls_glob,      found)
                 call http_communicator%json%update(http_communicator%job_json, "last_particles_imported",  stream_datestr(), found)
                 time_last_import = time8()
                 iter_last_import = get_pool_iter()
@@ -1327,9 +1326,10 @@ contains
                 endif
             endif
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and classifying particles", found)    
-            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  0,                                   found)
-            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  0,                                   found)
+            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and classifying particles", found)
+            call http_communicator%json%update(http_communicator%job_json, "particles_imported",  nptcls_glob,                         found)
+            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  get_pool_assigned(),                 found)
+            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  get_pool_rejected(),                 found)
             call http_communicator%json%update(http_communicator%job_json, "iteration",           last_complete_iter,                  found) ! -1 as get_pool_iter returns currently running iteration
             if(get_pool_iter() > 1) then
                 call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)

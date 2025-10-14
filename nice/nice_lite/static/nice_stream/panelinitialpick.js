@@ -1,13 +1,15 @@
 let lastinteraction = Date.now();
 
-scrlRight = () => {
+scrlRight = (element, event) => {
+  event.preventDefault()
   const micrograph_slider = document.getElementById("micrographs_slider")
   const rect = micrograph_slider.getBoundingClientRect();
   micrograph_slider.scrollLeft += rect.width;
   lastinteraction = Date.now();
 }
 
-scrlLeft = () => {
+scrlLeft = (element, event) => {
+  event.preventDefault()
   const micrograph_slider = document.getElementById("micrographs_slider")
   const rect = micrograph_slider.getBoundingClientRect();
   micrograph_slider.scrollLeft -= rect.width;
@@ -43,13 +45,23 @@ var multipick_observer = new IntersectionObserver(
 )
 
 draw_overlay_coordinates = () => {
+
+    const closest = (arr, n) => arr.reduce((prev, curr) => Math.abs(curr - n) < Math.abs(prev - n) ? curr : prev);
+
     let multipick = true
+    let best_diam = 0
     const boxes_overlay = document.getElementById("boxes_overlay")
     if(boxes_overlay ==  null) return
     const picking_diameters = document.getElementById("picking_diameters")
     if(picking_diameters ==  null) multipick = false
     const diameter_input = document.getElementsByName("diameter")[0]
     if(diameter_input ==  null) multipick = false
+    const micrographs_slider = document.querySelector("#micrographs_slider")
+    if(micrographs_slider != undefined && "best_diam" in micrographs_slider.dataset && "picking_diameters" in micrographs_slider.dataset){
+      const available_diameters = JSON.parse(micrographs_slider.dataset.picking_diameters.replaceAll("'", '"'))
+      multipick = true
+      best_diam = closest(available_diameters, Number(micrographs_slider.dataset.best_diam))
+    } 
     const scale = boxes_overlay.width  / Number(boxes_overlay.dataset.xdim)
     // account for rectangular images
     var yoffset = (boxes_overlay.height - (scale * Number(boxes_overlay.dataset.ydim))) / 2
@@ -57,9 +69,12 @@ draw_overlay_coordinates = () => {
     const ctx = boxes_overlay.getContext("2d");
     ctx.clearRect(0, 0, boxes_overlay.width, boxes_overlay.height)
     if(multipick){
-      const available_diameters = JSON.parse(picking_diameters.dataset.diameters.replaceAll("'", '"'))
-      const selected_diameter = available_diameters[picking_diameters.value - 1]
-      diameter_input.value = selected_diameter
+      let selected_diameter = best_diam
+      if(picking_diameters != null){
+        const available_diameters = JSON.parse(picking_diameters.dataset.diameters.replaceAll("'", '"'))
+        selected_diameter = available_diameters[picking_diameters.value - 1]
+        diameter_input.value = selected_diameter
+      }
       for(const box of boxes){
         if(box["diameter"] == selected_diameter){
           ctx.strokeStyle = "yellow";
@@ -120,6 +135,19 @@ window.addEventListener("load", () =>{
 },false);
 
 window.addEventListener("load", () =>{
+
+    const closest = (arr, n) => arr.reduce((prev, curr) => Math.abs(curr - n) < Math.abs(prev - n) ? curr : prev);
+    
+    const micrographs_slider = document.querySelector("#micrographs_slider")
+    if(micrographs_slider != undefined && "best_diam" in micrographs_slider.dataset && "picking_diameters" in micrographs_slider.dataset){
+      const available_diameters = JSON.parse(micrographs_slider.dataset.picking_diameters.replaceAll("'", '"'))
+      const best_diam = closest(available_diameters, Number(micrographs_slider.dataset.best_diam))
+      const diameter_input = document.getElementsByName("diameter")[0]
+      if(diameter_input != undefined) diameter_input.value = available_diameters.indexOf(best_diam)
+    }
+},false);
+
+window.addEventListener("load", () =>{
     for(const micrographs_pie_chart of document.getElementsByClassName("micrographs_pie_chart")){
         const ctx = micrographs_pie_chart.getContext("2d");
         const n_imported  = Number(micrographs_pie_chart.dataset.imported) 
@@ -151,11 +179,12 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: [n_imported - n_processed - n_rejected, n_processed, n_rejected],
                   backgroundColor: [
-                  'rgb(255, 99, 132)',
-                  'rgb(54, 162, 235)',
-                  'rgb(255, 205, 86)'
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                   ],
-                  hoverOffset: 4
+                  hoverOffset: 4,
+                  borderColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble')
               }]
             }
         })

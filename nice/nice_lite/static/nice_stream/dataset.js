@@ -65,9 +65,9 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: [Number(movies_pie_chart.dataset.imported), Number(movies_pie_chart.dataset.processed), Number(movies_pie_chart.dataset.rejected)],
                   backgroundColor: [
-                  'rgb(255, 99, 132)',
-                  'rgb(54, 162, 235)',
-                  'rgb(255, 205, 86)'
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                   ],
                   hoverOffset: 4
               }]
@@ -106,9 +106,9 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: [Number(particles_pie_chart.dataset.imported) - Number(particles_pie_chart.dataset.accepted) - Number(particles_pie_chart.dataset.rejected), Number(particles_pie_chart.dataset.accepted), Number(particles_pie_chart.dataset.rejected)],
                   backgroundColor: [
-                  'rgb(255, 99, 132)',
-                  'rgb(54, 162, 235)',
-                  'rgb(255, 205, 86)'
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                   ],
                   hoverOffset: 4
               }]

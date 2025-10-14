@@ -20,7 +20,7 @@
                     {% if current_project_id == 0 %}
                         <option disabled selected value="" >select</option>
                     {% endif %}
-                    <option>new</option>
+                    <option value="new">✚ create new</option>
                     {% for project in projects %}
                         {% if project.id == current_project_id %}
                             <option selected value={{ project.id }}>{{ project.name }}</option>
@@ -39,7 +39,7 @@
                     {% if current_workspace_id == 0 %}
                         <option disabled selected value="">select</option>
                     {% endif %}
-                    <option value="new">new</option>
+                    <option value="new">✚ create new</option>
                     {% for workspace in workspaces %}
                         {% if workspace.id == current_workspace_id %}
                             <option selected value={{ workspace.id }}>{{ workspace.name }}</option>

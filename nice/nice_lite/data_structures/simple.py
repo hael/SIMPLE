@@ -72,10 +72,10 @@ class SIMPLEStream:
                 if shutil.which(dispatchmodel.scmd) is None: return False
                 submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
                 try:
-                    subprocess.run(submit_cmd,
+                    subprocess.Popen(submit_cmd,
                         cwd=self.base_dir,
                         start_new_session=True
-                        )
+                    )
                 except subprocess.CalledProcessError as cpe:
                     print(cpe.stderr, end="")
                     return False
@@ -184,12 +184,15 @@ class SIMPLE:
             ui_json = {}
         self.ui = ui_json
     
-    def start(self, args, base_dir, parent_dir, jobtype, jobid):
+    def start(self, args, base_dir, parent_dir, jobtype, jobid, parent_proj=None):
         self.base_dir    = base_dir
-        self.parent_proj = os.path.join(parent_dir, "workspace.simple")
         self.args        = args
         self.jobtype     = jobtype
         self.jobid       = jobid
+        if parent_proj == None:
+            self.parent_proj = os.path.join(parent_dir, "workspace.simple")
+        else:
+            self.parent_proj = parent_proj
         if self.base_dir == "":                  return False
         if not os.path.exists(self.base_dir):    return False
         if not os.path.isdir(self.base_dir):     return False
@@ -204,7 +207,7 @@ class SIMPLE:
         if self.tplt_simple_motif not in dispatchmodel.tplt: return False
         nthr_master = 1
         # copy project file to job dir
-        command_string = "cp -v " + self.parent_proj + " .\n"
+        command_string = "cp -v " + self.parent_proj + " workspace.simple\n"
         # update project file
         command_string += "simple_exec prg=update_project projfile=workspace.simple\n"
         command_string += self.executable

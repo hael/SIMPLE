@@ -133,6 +133,33 @@ class JobClassic:
         workspace.addChild(self.prnt, self.id)
         return True
     
+    def linkParticleSetFinal(self, project, workspace, set_proj, set_desel):
+        self.args = {} # ensure empty
+        self.prnt = 0
+        workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
+        jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
+        self.disp = jobmodels.count() + 1
+        self.pckg = 'simple'
+        self.prog = 'selection'
+        self.name = "particle set"
+        jobmodel = JobClassicModel(wspc=workspacemodel, cdat=timezone.now(), disp=self.disp, pckg=self.pckg, prog=self.prog, name=self.name, prnt=self.prnt)
+        jobmodel.save()
+        self.id = jobmodel.id
+        self.dirc = str(self.disp) + "_" + self.prog
+        if not self.createDir(os.path.join(project.dirc, workspace.dirc)):
+            return False
+        self.args["deselfile"] = set_desel
+        self.args["oritype"]   = "cls2D"
+        jobmodel.args = self.args
+        jobmodel.dirc = self.dirc
+        jobmodel.status = "queued"
+        jobmodel.save()
+        workspace.addChild(self.prnt, self.id)
+        simple = SIMPLE(pckg=self.pckg)
+        if not simple.start(self.args, os.path.join(project.dirc, workspace.dirc, self.dirc), os.path.join(project.dirc, workspace.dirc), self.prog, self.id, parent_proj=set_proj):
+            return False
+        return True
+    
     def load(self):
         jobmodel = JobClassicModel.objects.filter(id=self.id).first()
         if jobmodel is not None:

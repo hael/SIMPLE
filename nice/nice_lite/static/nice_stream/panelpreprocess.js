@@ -1,12 +1,14 @@
 let lastinteraction = Date.now();
 
-scrlRight = () => {
+scrlRight = (element, event) => {
+  event.preventDefault()
   const micrograph_slider = document.getElementById("micrograph_slider")
   micrograph_slider.scrollLeft += 200;
   lastinteraction = Date.now();
 }
 
-scrlLeft = () => {
+scrlLeft= (element, event) => {
+  event.preventDefault()
   const micrograph_slider = document.getElementById("micrograph_slider")
   micrograph_slider.scrollLeft -= 200;
   lastinteraction = Date.now();
@@ -77,11 +79,12 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: [n_imported - n_processed - n_rejected, n_processed, n_rejected],
                   backgroundColor: [
-                  'rgb(255, 99, 132)',
-                  'rgb(54, 162, 235)',
-                  'rgb(255, 205, 86)'
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                   ],
-                  hoverOffset: 4
+                  hoverOffset: 4,
+                  borderColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble')
               }]
             }
         })
@@ -200,9 +203,11 @@ window.addEventListener("load", () =>{
             data: {
               labels: labels,
               datasets: [{
-                  data: data,
+                  data:            data,
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
                   hoverOffset: 4
-              }]
+              }], 
             }
         })
     }
@@ -320,8 +325,10 @@ window.addEventListener("load", () =>{
             data: {
               labels: labels,
               datasets: [{
-                  data: data,
-                  hoverOffset: 4
+                  data:            data,
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
+                  hoverOffset:     4
               }]
             }
         })
@@ -440,8 +447,10 @@ window.addEventListener("load", () =>{
             data: {
               labels: labels,
               datasets: [{
-                  data: data,
-                  hoverOffset: 4
+                  data:            data,
+                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
+                  hoverOffset:     4
               }]
             }
         })

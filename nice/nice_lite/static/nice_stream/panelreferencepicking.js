@@ -145,9 +145,9 @@ window.addEventListener("load", () =>{
               datasets: [{
                   data: [n_imported - n_processed - n_rejected, n_processed, n_rejected],
                   backgroundColor: [
-                  'rgb(255, 99, 132)',
-                  'rgb(54, 162, 235)',
-                  'rgb(255, 205, 86)'
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                   ],
                   hoverOffset: 4
               }]
