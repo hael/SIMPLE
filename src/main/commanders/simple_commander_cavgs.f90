@@ -262,8 +262,10 @@ contains
         ! re-create cavg_imgs
         call dealloc_imgarr(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        ! write ranked clusters
-        call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_ranked', trim(params%ext))
+        ! write aligned clusters
+        call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', trim(params%ext))
+        ! write un-aligned clusters
+        call write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )
         ! update project
         call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
         do iclust = 1, nclust
