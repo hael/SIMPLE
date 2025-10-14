@@ -72,6 +72,7 @@ contains
         integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata_raw(:,:), boxdata_den(:,:), inds(:)
         class(*),                  allocatable :: any
         real,                      allocatable :: diams_arr(:), masscens(:,:)
+        logical,                   allocatable :: picking_mask(:,:)
         type(ctfparams),           allocatable :: ctfvars(:)
         type(image),               allocatable :: imgs(:)
         type(ptcl_extractor)                   :: extractor_raw, extractor_den
@@ -84,7 +85,7 @@ contains
         type(ctf_estimate_iter)                :: ctfiter
         type(ctf)                              :: tfun
         type(stack_io)                         :: stkio_w
-        type(oris)                             :: os_deftab, os_ctf
+        type(oris)                             :: os_deftab, os_ctf, tmp
         type(ori)                              :: omic
         type(cmdline)                          :: cline_new_proj, cline_new_project, cline_import_particles, cline_2Dsegpick
         type(new_project_commander)            :: xnew_project
@@ -92,7 +93,7 @@ contains
         type(cluster2D_autoscale_commander)    :: xcluster2D
         character(len=STDLEN) :: ext
         integer               :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, ncls
-        integer               :: nptcls, cnt, box_raw, box_den, i, nboxes
+        integer               :: nptcls, cnt, box_raw, box_den, i, nboxes, nmasked
         real                  :: scale, bin_t, diam, rmin, rmax, rmean, rsdev
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
@@ -130,12 +131,21 @@ contains
             call ctfiter%iterate(ctfvars(imic), micnames(imic), omic, trim(output_dir), l_gen_thumb=.true.)
             call os_ctf%set_ori(imic, omic)
             call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
+            call flag_amorphous_carbon(mic_shrink, picking_mask, nmasked)
+            if( real(nmasked) > 0.98 * product(ldim) )then
+                call omic%set_state(0)  ! carbon only micrograph
+                mic_den_names(imic) = NIL
+                mic4viz_names(imic) = NIL
+                mic_bin_names(imic) = NIL
+                cycle
+            endif
             call cascade_filter_biomol( mic_shrink, mic4viz )
             mic_den_names(imic) = 'mic_shrink_den'//int2str_pad(imic,3)//'.mrc'
             mic4viz_names(imic) = 'mic4viz'//int2str_pad(imic,3)//'.mrc'
             call mic_shrink%write(mic_den_names(imic))
             call mic4viz%write(mic4viz_names(imic))
             call binarize_mic_den( mic_shrink, FRAC_FG, mic_bin )
+            if( nmasked > 0 ) call mic_bin%apply_mask(picking_mask)
             ! identify connected components
             call mic_bin%find_ccs(img_cc)
             call img_cc%get_nccs(nccs)
@@ -170,6 +180,18 @@ contains
             call img_cc%kill_bimg
             deallocate(cc_imat, cc_imat_copy)
         end do
+        deallocate(picking_mask)
+        ! excludes zero state
+        inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
+        if( nmics /= size(inds) )then
+            mic_den_names = mic_den_names(inds)
+            mic4viz_names = mic4viz_names(inds)
+            mic_bin_names = mic_bin_names(imic)
+            tmp           = os_ctf%extract_subset(inds)
+            call os_ctf%copy(tmp)
+            call tmp%kill
+        endif
+        deallocate(inds)
         ! extract diameters into array
         nptcls = list_of_diams%size()
         allocate(diams_arr(nptcls), source=0.)
@@ -279,6 +301,7 @@ contains
         call cline_2Dsegpick%set('prg',             'cluster2D')
         call cline_2Dsegpick%set('mkdir',                  'no')
         call cline_2Dsegpick%set('ncls',                   ncls)
+        call cline_2Dsegpick%set('sigma_est',          'global')
         call cline_2Dsegpick%set('autoscale',             'yes')
         call cline_2Dsegpick%set('lpstart',             LPSTART)
         call cline_2Dsegpick%set('lpstop',               LPSTOP)
@@ -992,7 +1015,6 @@ contains
                 call img%kill
             end subroutine flag_complete_sets
 
-            
             subroutine communicator_init()
                 call http_communicator%json%add(http_communicator%job_json, "stage",                   "initialising")
                 call http_communicator%json%add(http_communicator%job_json, "particles_imported ",     0)

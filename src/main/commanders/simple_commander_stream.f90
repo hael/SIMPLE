@@ -1322,7 +1322,7 @@ contains
                             cline_make_pickrefs = cline
                             call cline_make_pickrefs%set('prg',   'make_pickrefs')
                             call cline_make_pickrefs%set('stream','no')
-                            call cline_make_pickrefs%set('smpd',  params%smpd) ! is the required output sampling distance
+                            call cline_make_pickrefs%set('smpd',  params%smpd)
                             call xmake_pickrefs%execute_safe(cline_make_pickrefs)
                             call cline_pick_extract%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
                             call mrc2jpeg_tiled(trim(PICKREFS_FBODY)//trim(params%ext), trim(PICKREFS_FBODY)//".jpeg", scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)

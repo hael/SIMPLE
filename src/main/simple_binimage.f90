@@ -49,6 +49,7 @@ type, extends(image) :: binimage
     procedure          :: inv_bimg 
     procedure          :: grow_bins
     procedure          :: max_dist
+    procedure          :: apply_mask
     ! MORPHOLOGICAL OPERATIONS
     procedure          :: dilate
     procedure          :: erode
@@ -539,6 +540,22 @@ contains
         end do
         dist = sqrt(maxdistsq)
     end subroutine max_dist
+
+    subroutine apply_mask(self, mask )
+        class(binimage), intent(inout) :: self
+        logical,         intent(in)    :: mask(:,:)
+        if( self%bldim(3) > 1 )then
+            THROW_HARD('2D images only: apply_mask')
+        endif
+        if( .not.all(self%bldim(1:2)==shape(mask)) )then
+            THROW_HARD('Incompatible dimensions: apply_mask')
+        endif
+        where( mask )
+            ! untouched
+        elsewhere
+            self%bimat(:,:,1) = 0
+        end where
+    end subroutine apply_mask
 
     ! This subroutine modifies the input cc image by making it bin
     ! where just the cc n_cc is kept.
