@@ -3521,13 +3521,13 @@ contains
         &'Make pick references',&            ! descr_short
         &'is a program for making 2D references for particle picking',&
         &'simple_exec',&                     ! executable
-        &1, 0, 0, 0, 0, 0, 1, .true.)        ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 0, 0, 1, .true.)        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_pickrefs%set_input('img_ios', 1,  pickrefs)
         make_pickrefs%img_ios(1)%required = .true.
         ! parameter input/output
-        ! <empty>
+        call make_pickrefs%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
