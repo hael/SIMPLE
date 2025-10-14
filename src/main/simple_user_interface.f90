@@ -4333,7 +4333,7 @@ contains
         call preprocess%set_input('parm_ios', 8,  pspecsz)
         call preprocess%set_input('parm_ios', 9,  numlen)
         call preprocess%set_input('parm_ios',10,  ctfpatch)
-        preprocess%parm_ios(14)%required = .false.
+        preprocess%parm_ios(10)%required = .false.
         call preprocess%set_input('parm_ios',11,  flipgain)
         ! alternative inputs
         ! <empty>
