@@ -200,8 +200,6 @@ contains
         type(ori)                     :: o_mov
         type(ctf_estimate_iter)       :: ctfiter
         type(motion_correct_iter)     :: mciter
-        type(extract_commander)       :: xextract
-        type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
         type(Node), pointer           :: xmldoc, beamshiftnode, beamshiftnodex, beamshiftnodey
@@ -233,7 +231,6 @@ contains
             endif
             call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_preprocess :: preprocess; ")
             call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
-            
         endif
         if( cline%defined('fbody') )then
             fbody = trim(params%fbody)
@@ -329,8 +326,14 @@ contains
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
         end do
-        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        if( trim(params%stream).eq.'yes' )then
+            call spproj%write_segment_inside(params%oritype)
+        else
+            call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        endif
+        ! cleanup
         call o_mov%kill
+        call spproj%kill
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
