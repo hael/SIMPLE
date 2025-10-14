@@ -4,14 +4,6 @@ use simple_strings
 use simple_error
 use simple_syslib
 implicit none
-
-public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
-public :: add2fbody, rm_from_fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, stemname
-public :: get_fpath, make_dirnames, make_filenames, filepath, del_files, move_files_in_cwd, fname2format, read_filetable
-public :: write_filetable, write_singlelineoftext, read_exit_code
-public :: arr2file, arr2txtfile, file2rarr, file2drarr, rmat2file, lmat2file, file2rmat, file2lmat
-public :: simple_copy_file, make_relativepath, basename_safe, get_relative_path
-private
 #include "simple_local_flags.inc"
 
 interface arr2file
@@ -34,7 +26,7 @@ interface del_files
     module procedure del_files_2
 end interface del_files
 
-integer, parameter :: MAX_UNIT_NUMBER = 1000
+integer, private, parameter :: MAX_UNIT_NUMBER = 1000
 
 contains
 
@@ -763,6 +755,18 @@ contains
         endif
         if( n_move > 0 ) deallocate(file_list)
     end subroutine move_files_in_cwd
+
+    subroutine move_files2dir( dir, file_list )
+        character(len=*),          intent(in) :: dir
+        character(len=LONGSTRLEN), intent(in) :: file_list(:)
+        integer :: n_move, i
+        n_move = size(file_list)
+        if( n_move > 0 )then
+            do i = 1, n_move
+                call simple_rename(trim(file_list(i)), trim(dir)//trim(file_list(i)))
+            end do
+        endif
+    end subroutine move_files2dir
 
     !>  \brief Return a one letter code for the file format designated by the extension in the fname
     !!         if .mrc: M
