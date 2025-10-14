@@ -38,7 +38,6 @@ type :: parameters
     character(len=3)          :: clear='no'           !< clear exising processing upon start (stream)
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
-    character(len=3)          :: crowded='yes'        !< wheter picking is done in crowded micrographs or not (yes|no){yes}
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: doprint='no'
@@ -250,6 +249,7 @@ type :: parameters
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
+    character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new){new}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
@@ -625,7 +625,6 @@ contains
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)
-        call check_carg('crowded',        self%crowded)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
         call check_carg('ctfstats',       self%ctfstats)
@@ -717,6 +716,7 @@ contains
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('pick_roi',       self%pick_roi)
+        call check_carg('particle_density', self%particle_density)
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('polar',          self%polar)

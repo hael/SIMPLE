@@ -360,24 +360,20 @@ contains
         t     = ts(2)
     end subroutine detect_peak_thres_2
 
-    subroutine detect_peak_thres_sortmeans( n, n_ub, x, t_out )
-        integer, intent(in)  :: n, n_ub
+    subroutine detect_peak_thres_sortmeans( n, level, n_ub, x, t_out )
+        integer, intent(in)  :: n, level, n_ub
         real,    intent(in)  :: x(n)
         real,    intent(out) :: t_out
         integer, parameter   :: NQUANTA = 10
-        real,    allocatable :: arr(:), means(:), pix_ts(:), frac_fgs(:)
+        real,    parameter   :: FRAC_PEAK_TARGET = 0.25
+        real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:)
         integer, allocatable :: labels(:), locn(:)
-        integer :: iq, n_fg, nvals, loc(1), cnt
-        real    :: ts(2), t_ini, t_target, diff_otsu_lev1, diff_otsu_lev2
-        ! generate two target thresholds with one- and two-level Otsu
+        integer :: iq, n_fg, nvals, loc(1), cnt, ind
+        real    :: t_ini
         locn  = maxnloc(x, n_ub)
         t_ini = minval(x(locn))
-        arr   = pack(x, mask=x >= t_ini)
-        call otsu(size(arr), arr, ts(1))
-        arr   = pack(x, mask=x >= ts(1))
-        call otsu(size(arr), arr, ts(2))
         ! quantize with sortmeans
-        allocate( means(NQUANTA), labels(NQUANTA), frac_fgs(NQUANTA), pix_ts(NQUANTA) )
+        allocate( means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA) )
         means  = 0.
         labels = 0
         arr    = pack(x, mask=x >= t_ini)
@@ -387,32 +383,31 @@ contains
         do iq = 1, NQUANTA
             if( count(labels == iq) == 0 )cycle
             cnt         = cnt + 1
-            pix_ts(cnt) = minval(arr, mask=labels == iq )
-            n_fg        = count(arr >= pix_ts(cnt))
+            peak_ts(cnt) = minval(arr, mask=labels == iq )
+            n_fg        = count(arr >= peak_ts(cnt))
             if( n_fg == nvals )then
-                frac_fgs(cnt) = 1.
+                frac_peaks(cnt) = 1.
             else if( n_fg == 0 )then
-                frac_fgs(cnt) = 0.
+                frac_peaks(cnt) = 0.
             else
-                frac_fgs(cnt) = real(n_fg) / real(nvals)
+                frac_peaks(cnt) = real(n_fg) / real(nvals)
             endif
+
+            print *, cnt, ' frac_peaks(cnt): ', frac_peaks(cnt), ' peak_ts(cnt): ', peak_ts(cnt)
+
         end do
-        ! select the threshold from the quantization that minimizes the Manhattan distance
-        diff_otsu_lev1 = minval(abs(pix_ts(:cnt)-ts(1)))
-        diff_otsu_lev2 = minval(abs(pix_ts(:cnt)-ts(2)))
-        if( diff_otsu_lev1 < diff_otsu_lev2 )then
-            t_target = ts(1)
-
-            print *, 'detect_peak_thres_sortmeans used level 1 tresholding'
-        
-        else
-            t_target = ts(2)
-
-            print *, 'detect_peak_thres_sortmeans used level 2 tresholding'
-
-        endif
-        loc   = minval(abs(pix_ts(:cnt)-t_target))
-        t_out = pix_ts(loc(1))
+        loc = minloc(abs(frac_peaks(:cnt) - FRAC_PEAK_TARGET))
+        select case(level)
+            case(1)
+                ind = min(cnt,loc(1) + 1)
+            case(2)
+                ind = loc(1)
+            case(3)
+                ind = max(1,  loc(1) - 1)
+            case DEFAULT
+                ind = loc(1)
+        end select
+        t_out = peak_ts(ind)
     end subroutine detect_peak_thres_sortmeans
 
     ! hierarchical clustering
