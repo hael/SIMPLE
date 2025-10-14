@@ -360,11 +360,16 @@ contains
         ! pixel size after downscaling
         self%smpd_shrink = max(smpd_raw,smpd_shrink)
         ! set peak threshold level
-        if( trim(params_glob%crowded) .eq. 'yes' )then
-            self%peak_thres_level = 1
-        else
-            self%peak_thres_level = 2
-        endif
+        select case(trim(params_glob%particle_density))
+            case('low')
+                self%peak_thres_level = 1
+            case('optimal')
+                self%peak_thres_level = 2
+            case('high')
+                self%peak_thres_level = 3
+            case DEFAULT
+                THROW_HARD('Unsupported particle density level')
+        end select
         ! set shrunken logical dimensions
         scale            = smpd_raw / self%smpd_shrink
         self%ldim(1)     = round2even(real(ldim_raw(1)) * scale)
@@ -715,7 +720,8 @@ contains
             self%npeaks = 0
             return
         endif
-        call detect_peak_thres(n, self%nboxes_ub, self%peak_thres_level, tmp, self%t)
+        ! call detect_peak_thres(n, self%nboxes_ub, self%peak_thres_level, tmp, self%t)
+        call detect_peak_thres_sortmeans(n, self%peak_thres_level, self%nboxes_ub, tmp, self%t)
         deallocate(tmp)
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )

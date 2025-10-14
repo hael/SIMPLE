@@ -249,7 +249,6 @@ type(simple_input_param) :: cn
 type(simple_input_param) :: cn_min
 type(simple_input_param) :: cn_max
 type(simple_input_param) :: combine_eo
-type(simple_input_param) :: crowded
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
@@ -338,6 +337,7 @@ type(simple_input_param) :: outfile
 type(simple_input_param) :: outside
 type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
+type(simple_input_param) :: particle_density
 type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: pgrp_start
@@ -1424,11 +1424,11 @@ contains
         call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(cc_iters,       'cc_iters',     'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
         call set_param(backgr_subtr,   'backgr_subtr', 'binary', 'Perform micrograph background subtraction(new picker only)', 'Perform micrograph background subtraction before picking/extraction(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(crowded,        'crowded',      'binary', 'Picking in crowded micrographs?', 'Picking in crowded micrographs?(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(nran,           'nran',         'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
         call set_param(nsample,        'nsample',      'num',    'Number of particles to sample', 'Number of particles to sample each iteration', '# particles to sample', .false., 0.)
         call set_param(nstates,        'nstates',      'num',    'Number of states', 'Number of conformational/compositional states to reconstruct', '# states to reconstruct', .false., 1.0)
         call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
+        call set_param(particle_density,'particle_density','multi', 'Particle density in micrographs', 'Particle density in micrographs(low|optimal|high){optimal}', '(low|optimal|high){optimal}', .false., 'optimal')
         call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
         call set_param(center_pdb,     'center_pdb',   'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
@@ -4143,7 +4143,7 @@ contains
         &'{2.5}', .false., 2.5, gui_submenu="picking", gui_advanced=.false.)
         call pick%set_input('srch_ctrls', 2, pick_roi, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 3, backgr_subtr, gui_submenu="picking")
-        call pick%set_input('srch_ctrls', 4, crowded, gui_submenu="picking")
+        call pick%set_input('srch_ctrls', 4, particle_density, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 5, 'winsz', 'num', 'Window size for sauvola', 'Window size for local sauvola binarisation', 'winsz in pixels ', .false., 32.)
         ! filter controls
         call pick%set_input('filt_ctrls', 1, lp, gui_submenu="picking")
