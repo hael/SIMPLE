@@ -8,12 +8,13 @@ implicit none
 
 contains
 
-    subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink )
-        character(len=*), intent(in)    :: micname !< micrograph file name
-        real,             intent(in)    :: smpd    !< sampling distance in A
-        real,             intent(in)    :: scale   !< scale factor
-        character(len=*), intent(in)    :: pcontrast
-        class(image),     intent(inout) :: mic_raw, mic_shrink
+    subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink, mic_mask )
+        character(len=*),              intent(in)    :: micname !< micrograph file name
+        real,                           intent(in)    :: smpd    !< sampling distance in A
+        real,                           intent(in)    :: scale   !< scale factor
+        character(len=*),               intent(in)    :: pcontrast
+        class(image),                   intent(inout) :: mic_raw, mic_shrink
+        logical, allocatable, optional, intent(inout) :: mic_mask(:,:)
         integer :: nframes, ldim(3), ldim_shrink(3)
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim, nframes)
@@ -38,6 +39,19 @@ contains
             case DEFAULT
                 THROW_HARD('uknown pcontrast parameter, use (black|white)')
         end select
+        ! attempt at detecting ice patches
+        if( present(mic_mask) )then
+            if( allocated(mic_mask) )then
+                if( .not.all(shape(mic_mask)==ldim_shrink(1:2)) )then
+                    deallocate(mic_mask)
+                    allocate(mic_mask(ldim_shrink(1),ldim_shrink(2)))
+                endif
+            else
+                allocate(mic_mask(ldim_shrink(1),ldim_shrink(2)))
+            endif
+            mic_mask = .true.
+            call flag_ice(mic_raw, mic_mask)
+        endif
         call mic_raw%mul(real(product(ldim))) ! to prevent numerical underflow when performing FFT
         ! shrink micrograph
         call mic_shrink%set_ft(.true.)
@@ -169,11 +183,10 @@ contains
 
     end subroutine identify_masscens
 
-    subroutine flag_amorphous_carbon( micrograph, picking_mask, nmasked )
+    subroutine flag_amorphous_carbon( micrograph, picking_mask )
         use simple_histogram, only: histogram
         class(image),         intent(in)    :: micrograph
         logical, allocatable, intent(inout) :: picking_mask(:,:)
-        integer,              intent(inout) :: nmasked
         integer, parameter :: K             = 5
         integer, parameter :: BOX           = 32 ! multiple of 4
         integer, parameter :: NBINS         = 64
@@ -187,7 +200,7 @@ contains
         type(histogram) :: khists(K)
         type(image)     :: mic, patches(nthr_glob)
         real    :: smpd
-        integer :: dims(3), pad, i
+        integer :: dims(3), i
         logical :: found, empty
         found  = .false.
         dims   = micrograph%get_ldim()
@@ -197,8 +210,7 @@ contains
         call mic%copy(micrograph)
         call clustering_rejection(found)
         if( found ) picking_mask = picking_mask .and. final_mask
-        nmasked = count(.not.final_mask(:,:))
-        if( DEBUG_HERE ) print *,' % amorphous carbon: ',100.*real(nmasked)/real(product(dims))
+        if( DEBUG_HERE ) print *,' % amorphous carbon: ',100.*real(count(.not.picking_mask))/real(product(dims))
         call mic%kill
         call rt%kill
         do i = 1,nthr_glob
@@ -512,5 +524,105 @@ contains
             end subroutine cluster
 
     end subroutine flag_amorphous_carbon
+
+    subroutine flag_ice( micrograph, mask )
+        class(image), intent(inout) :: micrograph   ! raw micrograph
+        logical,      intent(inout) :: mask(:,:)    ! picking mask at the size the first pass of picking is performed
+        real,    parameter   :: THRESHOLD = 5.
+        real,    parameter   :: SMPD_ICE  = ICE_BAND1/2. - 0.15
+        integer, parameter   :: BOX       = 128
+        type(image)          :: boximgs_heap(nthr_glob), img
+        real,    allocatable :: scores(:,:)
+        integer, allocatable :: counts(:,:)
+        real        :: score, scale, radius, smpd_raw, smpd_shrink
+        integer     :: ldim_raw(3), ldim_shrink(3), ldim(3),i,j,ithr,ii,jj
+        logical     :: outside
+        smpd_raw = micrograph%get_smpd()
+        if( smpd_raw > SMPD_ICE ) return
+        ldim_raw         = micrograph%get_ldim()
+        ldim_shrink(1:2) = shape(mask)
+        ldim_shrink(3)   = 1
+        smpd_shrink      = real(ldim_raw(1)) / real(ldim_shrink(1))
+        scale            = smpd_shrink / SMPD_ICE
+        ldim(1:2)        = round2even(real(ldim_shrink(1:2)) * scale)
+        ldim(3)          = 1
+        radius  = real(BOX)/2.- COSMSKHALFWIDTH
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%new([BOX,BOX,1], SMPD_ICE, wthreads=.false.)
+        end do
+        call img%new(ldim,SMPD_ICE)
+        call img%set_ft(.true.)
+        if( micrograph%is_ft() )then
+            call micrograph%clip(img)
+        else
+            call micrograph%fft
+            call micrograph%clip(img)
+            call micrograph%ifft
+        endif
+        call img%ifft
+        allocate(scores(ldim(1),ldim(2)),source=0.)
+        allocate(counts(ldim(1),ldim(2)),source=0)
+        !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,ithr,outside,score) proc_bind(close)
+        do i = 1,ldim(1)-BOX+1,BOX/2
+            do j = 1,ldim(2)-BOX+1,BOX/2
+                ithr = omp_get_thread_num() + 1
+                call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+                call boximgs_heap(ithr)%mask(radius,'soft')
+                call boximgs_heap(ithr)%fft
+                call boximgs_heap(ithr)%calc_ice_score(score)
+                !$omp critical
+                scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+                counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+                !$omp end critical
+            end do
+        end do
+        !$omp end parallel do
+        i = ldim(1)-BOX+1
+        !$omp parallel do schedule(static) default(shared) private(j,ithr,outside,score) proc_bind(close)
+        do j = 1,ldim(2)-BOX+1,BOX/2
+            ithr = omp_get_thread_num() + 1
+            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%fft
+            call boximgs_heap(ithr)%calc_ice_score(score)
+            !$omp critical
+            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+            !$omp end critical
+        enddo
+        !$omp end parallel do
+        j = ldim(2)-BOX+1
+        !$omp parallel do schedule(static) default(shared) private(i,ithr,outside,score) proc_bind(close)
+        do i = 1,ldim(1)-BOX+1,BOX/2
+            ithr = omp_get_thread_num() + 1
+            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%fft
+            call boximgs_heap(ithr)%calc_ice_score(score)
+            !$omp critical
+            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+            !$omp end critical
+        enddo
+        !$omp end parallel do
+        where( counts > 0 ) scores = scores / real(counts)
+        scale = real(ldim(1)) / real(ldim_shrink(1))
+        do i = 1,ldim_shrink(1)
+            ii = min(ldim(1), max(1, nint(scale*real(i))))
+            do j = 1,ldim_shrink(2)
+                jj = min(ldim(2), max(1, nint(scale*real(j))))
+                mask(i,j) = mask(i,j) .and. (scores(ii,jj) < THRESHOLD)
+            enddo
+        enddo
+        if( .not.all(mask) )then
+            print *,' % ice: ', 100.-100.*count(mask)/real(product(ldim_shrink))
+        endif
+        ! cleanup
+        call img%kill
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
+        deallocate(scores,counts)
+    end subroutine flag_ice
 
 end module simple_micproc
