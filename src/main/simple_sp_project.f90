@@ -140,7 +140,6 @@ contains
     procedure          :: write_segment_inside
     procedure          :: write_non_data_segments
     procedure          :: write_segment2txt
-    procedure          :: write_star_segments
     procedure          :: write_mics_star
     procedure          :: write_ptcl2D_star
     procedure, private :: segwriter
@@ -3831,13 +3830,17 @@ contains
 
     ! writers
 
-    subroutine write( self, fname, fromto, isegment )
+    subroutine write( self, fname, fromto, isegment, tempfile )
         class(sp_project),                    intent(inout) :: self
         character(len=*),           optional, intent(in)    :: fname
         integer,                    optional, intent(in)    :: fromto(2)
         integer(kind(ENUM_ORISEG)), optional, intent(in)    :: isegment
-        character(len=:), allocatable :: projfile
+        logical,                    optional, intent(in)    :: tempfile
+        character(len=:), allocatable :: projfile, tmpfile
         integer(kind(ENUM_ORISEG))    :: iseg
+        logical :: l_tmp
+        l_tmp = .false.
+        if( present(tempfile) ) l_tmp = tempfile
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
                 THROW_HARD('file format of: '//trim(fname)//' not supported; write')
@@ -3846,7 +3849,12 @@ contains
         else
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
-        call self%bos%open(projfile, del_if_exists=.true.)
+        if( l_tmp )then
+            tmpfile = swap_suffix(projfile, METADATA_EXT, '.tmp')
+            call self%bos%open(tmpfile, del_if_exists=.true.)
+        else
+            call self%bos%open(projfile, del_if_exists=.true.)
+        endif
         if( present(isegment) )then
             call self%segwriter(isegment, fromto)
         else
@@ -3857,6 +3865,7 @@ contains
         ! update header
         call self%bos%write_header
         call self%bos%close
+        if( l_tmp ) call simple_rename(tmpfile, projfile)
     end subroutine write
 
     subroutine write_segment_inside( self, oritype, fname, fromto )
@@ -4723,25 +4732,6 @@ contains
         if(allocated(tmpfile))   deallocate(tmpfile)
         if(allocated(stkname))   deallocate(stkname)
     end subroutine set_ptcl2D_thumb
-
-    subroutine write_star_segments( self )
-        class(sp_project),  intent(inout) :: self
-        ! type(starproject)                 :: starproj
-        ! write(logfhandle,'(A)')'>>> WRITING STAR FILES'
-        ! if (self%os_optics%get_noris() == 0) then
-        !     write(logfhandle,'(A,A)') char(9), 'NO OPTICS GROUPS SET: EXPORTING SINGLE OPTICS GROUP. YOU MAY WISH TO RUN ASSIGN_OPTICS_GROUPS PRIOR TO DOWNSTREAM PROCESSING'
-        ! end if
-        ! if (self%os_mic%get_noris() > 0) then
-        !     call starproj%export_mics(spproj)
-        ! end if
-        ! if (self%os_cls2D%get_noris() > 0) then
-        !     call starproj%export_cls2D(spproj)
-        ! end if
-        ! if (self%os_ptcl2D%get_noris() > 0) then
-        !     call starproj%export_ptcls2D(spproj)
-        ! end if
-        ! call starproj%kill
-    end subroutine write_star_segments
 
     subroutine write_mics_star( self, fname )
         class(sp_project),             intent(inout) :: self
