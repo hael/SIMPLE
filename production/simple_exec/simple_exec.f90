@@ -255,7 +255,11 @@ select case(trim(prg))
     case( 'make_cavgs' )
         call xmake_cavgs_distr%execute(cline)
     case( 'abinitio2D' )
-        call xabinitio2D%execute(cline)
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'abinitio2D', 'simple_exec')
+        else
+            call xabinitio2D%execute(cline)
+        endif
     case( 'cleanup2D' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
@@ -485,7 +489,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('f82b88cd')
+call simple_print_git_version('8f9a3fda')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
