@@ -8,6 +8,7 @@ class ProjectModel(models.Model):
     
 class DatasetModel(models.Model):
     disp = models.IntegerField(default=0)
+    jcnt = models.IntegerField(default=0)
     proj = models.ForeignKey(ProjectModel, on_delete=models.CASCADE)
     name = models.CharField(max_length=200, default='')
     desc = models.CharField(max_length=200, default='')
@@ -18,6 +19,7 @@ class DatasetModel(models.Model):
 
 class WorkspaceModel(models.Model):
     disp = models.IntegerField(default=0)
+    jcnt = models.IntegerField(default=0)
     proj = models.ForeignKey(ProjectModel, on_delete=models.CASCADE)
     name = models.CharField(max_length=200, default='')
     desc = models.CharField(max_length=200, default='')

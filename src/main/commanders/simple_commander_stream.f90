@@ -879,7 +879,7 @@ contains
         endif
          ! generate own project file if projfile isnt set
         if(cline%get_carg('projfile') .eq. '') then 
-            if(cline%get_carg('projfile') .eq. 'yes') then
+            if(cline%get_carg('interactive') .eq. 'yes') then
                 call cline%set('projname', 'initial_picking')
                 call cline%set('projfile', 'initial_picking.simple')
             else

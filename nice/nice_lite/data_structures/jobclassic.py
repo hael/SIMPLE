@@ -50,8 +50,11 @@ class JobClassic:
             if "csrfmiddlewaretoken" not in key and value != "":
                 self.args[key] = value
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
-        jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
-        self.disp = jobmodels.count() + 1
+        #jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
+        #self.disp = jobmodels.count() + 1
+        self.disp = workspacemodel.jcnt + 1
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
         self.pckg = package
         self.prog = jobtype
         self.name = jobtype.replace("_", " ")
@@ -65,11 +68,14 @@ class JobClassic:
         jobmodel.status = "queued"
         jobmodel.save()
         workspace.addChild(self.prnt, self.id)
-        parentjob = JobClassicModel.objects.filter(id=parentid).first()
-        if parentjob.status != "finished":
-            return False
+        parent_dir = os.path.join(project.dirc, workspace.dirc)
+        if parentid > 0:
+            parentjob = JobClassicModel.objects.filter(id=parentid).first()
+            if parentjob.status != "finished":
+                return False
+            parent_dir = os.path.join(project.dirc, workspace.dirc, parentjob.dirc)
         simple = SIMPLE(pckg=self.pckg)
-        if not simple.start(self.args, os.path.join(project.dirc, workspace.dirc, self.dirc), os.path.join(project.dirc, workspace.dirc, parentjob.dirc), self.prog, self.id):
+        if not simple.start(self.args, os.path.join(project.dirc, workspace.dirc, self.dirc), parent_dir, self.prog, self.id):
             return False
         return True
     
@@ -77,8 +83,11 @@ class JobClassic:
         self.args = {} # ensure empty
         self.prnt = parentid
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
-        jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
-        self.disp = jobmodels.count() + 1
+        #jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
+        #self.disp = jobmodels.count() + 1
+        self.disp = workspacemodel.jcnt + 1
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
         self.pckg = 'simple'
         self.prog = 'selection'
         self.name = 'user selection'
@@ -116,8 +125,11 @@ class JobClassic:
     def linkParticleSet(self, project, workspace, set_proj):
         self.args = {} # ensure empty
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
-        jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
-        self.disp = jobmodels.count() + 1
+        #jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
+        #self.disp = jobmodels.count() + 1
+        self.disp = workspacemodel.jcnt + 1
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
         self.name = "particle set"
         jobmodel = JobClassicModel(wspc=workspacemodel, cdat=timezone.now(), disp=self.disp, args={}, pckg="simple_stream", name=self.name)
         jobmodel.save()
@@ -137,8 +149,11 @@ class JobClassic:
         self.args = {} # ensure empty
         self.prnt = 0
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
-        jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
-        self.disp = jobmodels.count() + 1
+        #jobmodels = JobClassicModel.objects.filter(wspc=workspacemodel)
+        #self.disp = jobmodels.count() + 1
+        self.disp = workspacemodel.jcnt + 1
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
         self.pckg = 'simple'
         self.prog = 'selection'
         self.name = "particle set"
