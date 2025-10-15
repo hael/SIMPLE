@@ -58,7 +58,6 @@ contains
     procedure, private :: set_refs
     procedure, private :: set_gaurefs
     procedure, private :: setup_iterators
-    procedure, private :: flag_ice
     procedure, private :: gaumatch_boximgs
     procedure, private :: refmatch_boximgs
     procedure, private :: detect_peaks
@@ -234,15 +233,14 @@ contains
     end subroutine gaupick_multi
 
     subroutine gaupick( self, self_refine, dist_thres )
-        use simple_micproc, only: flag_amorphous_carbon
+        use simple_micproc, only: flag_amorphous_carbon, flag_ice
         class(pickgau),           intent(inout) :: self
         class(pickgau), optional, intent(inout) :: self_refine
         real,           optional, intent(in)    :: dist_thres ! distance threshold that applies to self, not self_refine
         integer, allocatable :: pos(:,:)
-        integer :: nmasked
         if( self%l_roi )then
-            call self%flag_ice
-            call flag_amorphous_carbon(self%mic_roi, self%l_mic_mask, nmasked)
+            call flag_ice(mic_raw, self%l_mic_mask)
+            call flag_amorphous_carbon(self%mic_roi, self%l_mic_mask)
             if( count(self%l_mic_mask) < nint(0.01*product(self%ldim)) )then
                 self%npeaks = 0
                 if( present(self_refine) ) self_refine%npeaks = 0
@@ -603,96 +601,6 @@ contains
         if( allocated(self%loc_sdevs) ) deallocate(self%loc_sdevs)
         allocate(self%loc_sdevs(self%nx_offset,self%ny_offset),  source = -1.)
     end subroutine setup_iterators
-
-    subroutine flag_ice( self )
-        class(pickgau), intent(inout) :: self
-        real,    parameter   :: THRESHOLD = 5.
-        real,    parameter   :: SMPD_ICE  = ICE_BAND1/2. - 0.15
-        integer, parameter   :: BOX = 128
-        type(image)          :: boximgs_heap(nthr_glob), img
-        real,    allocatable :: scores(:,:)
-        integer, allocatable :: counts(:,:)
-        real        :: score, scale, radius
-        integer     :: ldim(3),i,j,ithr,ii,jj
-        logical     :: outside
-        if( smpd_raw > SMPD_ICE ) return
-        scale   = self%smpd_shrink / SMPD_ICE
-        ldim(1) = round2even(real(self%ldim(1)) * scale)
-        ldim(2) = round2even(real(self%ldim(2)) * scale)
-        ldim(3) = 1
-        radius  = real(BOX)/2.- COSMSKHALFWIDTH
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%new([BOX,BOX,1], SMPD_ICE, wthreads=.false.)
-        end do
-        call img%new(ldim,SMPD_ICE)
-        call img%set_ft(.true.)
-        call mic_raw%fft
-        call mic_raw%clip(img)
-        call mic_raw%ifft
-        call img%ifft
-        allocate(scores(ldim(1),ldim(2)),source=0.)
-        allocate(counts(ldim(1),ldim(2)),source=0)
-        !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,ithr,outside,score) proc_bind(close)
-        do i = 1,ldim(1)-BOX+1,BOX/2
-            do j = 1,ldim(2)-BOX+1,BOX/2
-                ithr = omp_get_thread_num() + 1
-                call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
-                call boximgs_heap(ithr)%mask(radius,'soft')
-                call boximgs_heap(ithr)%fft
-                call boximgs_heap(ithr)%calc_ice_score(score)
-                scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
-                counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
-            end do
-        end do
-        !$omp end parallel do
-        i = ldim(1)-BOX+1
-        !$omp parallel do schedule(static) default(shared) private(j,ithr,outside,score) proc_bind(close)
-        do j = 1,ldim(2)-BOX+1,BOX/2
-            ithr = omp_get_thread_num() + 1
-            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
-            call boximgs_heap(ithr)%mask(radius,'soft')
-            call boximgs_heap(ithr)%fft
-            call boximgs_heap(ithr)%calc_ice_score(score)
-            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
-            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
-        enddo
-        !$omp end parallel do
-        j = ldim(2)-BOX+1
-        !$omp parallel do schedule(static) default(shared) private(i,ithr,outside,score) proc_bind(close)
-        do i = 1,ldim(1)-BOX+1,BOX/2
-            ithr = omp_get_thread_num() + 1
-            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
-            call boximgs_heap(ithr)%mask(radius,'soft')
-            call boximgs_heap(ithr)%fft
-            call boximgs_heap(ithr)%calc_ice_score(score)
-            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
-            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
-        enddo
-        !$omp end parallel do
-        where( counts > 0 ) scores = scores / real(counts)
-        scale = real(ldim(1)) / real(self%ldim(1))
-        do i = 1,self%ldim(1)
-            ii = min(ldim(1), max(1, nint(scale*real(i))))
-            do j = 1,self%ldim(2)
-                jj = min(ldim(2), max(1, nint(scale*real(j))))
-                self%l_mic_mask(i,j) = self%l_mic_mask(i,j) .and. (scores(ii,jj) < THRESHOLD)
-            enddo
-        enddo
-        if( .not.all(self%l_mic_mask(:,:)) )then
-            ! do i = 1,ldim(1)
-            !     do j = 1,ldim(2)
-            !         call img%set([i,j,1], scores(i,j))
-            !     end do
-            ! end do
-            ! call img%write(trim(self%fbody)//'_ice.mrc')
-            print *,' % ice water: ',&
-                &100.-100.*count(self%l_mic_mask(:,:))/real(product(self%ldim))
-        endif
-        call img%kill
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%kill
-        end do
-    end subroutine flag_ice
 
     subroutine gaumatch_boximgs( self )
         class(pickgau), intent(inout) :: self

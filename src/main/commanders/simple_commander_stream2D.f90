@@ -136,11 +136,15 @@ contains
         do imic = 1, nmics
             call omic%new(is_ptcl=.false.)
             call omic%set_state(1)  ! include by default
+            ! CTF estimation
             call ctfiter%iterate(ctfvars(imic), micnames(imic), omic, trim(output_dir), l_gen_thumb=.true.)
             call os_ctf%set_ori(imic, omic)
-            call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
-            call flag_amorphous_carbon(mic_shrink, picking_mask, nmasked)
-            if( real(nmasked) > 0.98 * product(ldim) )then
+            ! Segmentation prep
+            call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast,&
+            &mic_raw, mic_shrink, mic_mask=picking_mask)
+            call flag_amorphous_carbon(mic_shrink, picking_mask)
+            nmasked = count(.not.picking_mask)
+            if( real(nmasked) > 0.98 * real(product(ldim)) )then
                 call omic%set_state(0)  ! carbon only micrograph
                 mic4viz_names(imic) = NIL
                 mic_bin_names(imic) = NIL
@@ -190,7 +194,8 @@ contains
         inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
         if( nmics /= size(inds) )then
             mic4viz_names = mic4viz_names(inds)
-            mic_bin_names = mic_bin_names(imic)
+            mic_bin_names = mic_bin_names(inds)
+            ctfvars       = ctfvars(inds)
             tmp           = os_ctf%extract_subset(inds)
             call os_ctf%copy(tmp)
             call tmp%kill
@@ -289,6 +294,7 @@ contains
         nmics              = size(inds)
         ptcl_stk_names     = ptcl_stk_names(inds)
         ptcl_stk4viz_names = ptcl_stk4viz_names(inds)
+        ctfvars            = ctfvars(inds)
         os_deftab          = os_ctf%extract_subset(inds)
         ! output
         call os_deftab%write(DEFTAB)
@@ -1005,8 +1011,9 @@ contains
                     if( setslist%imported(iset) ) cycle
                     if( setslist%processed(iset) )then
                         destination = trim(DIR_STREAM_COMPLETED)//trim(DIR_SET)//int2str(iset)//trim(METADATA_EXT)
-                        call simple_copy_file(setslist%projfiles(iset), destination)
-                        setslist%imported(iset) = .true.
+                        call simple_rename(setslist%projfiles(iset), destination)
+                        setslist%projfiles(iset) = destination ! relocation
+                        setslist%imported(iset)  = .true.
                         write(logfhandle,'(A,I3)')'>>> COMPLETED SET ',setslist%ids(iset)
                         ! update particle counts
                         call spproj%read_segment('ptcl2D', destination)
@@ -1034,7 +1041,7 @@ contains
                                 call img%write(REJECTED_CLS_STACK, nimgs)
                             endif
                         enddo
-                        call spproj%kill()
+                        call spproj%kill
                     endif
                 enddo
                 call img%kill
