@@ -27,52 +27,64 @@
                 {% csrf_token %}
                 <div class="grid grid-cols-2 gap-4 text-[12px] grid-cols-[max-content_auto]">
                     {% for input in user_inputs %}
-                        <div class="font-bold">{{ input.descr_short }}</div>
-                        <div class="bg-nice4bg rounded">
-                            {% if input.keytype == "int" %}
-                                {% if input.required and "default" in input %}
-                                    <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>
-                                {% elif input.required %}
-                                    <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
-                                {% elif "default" in input %}
-                                    <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>   
-                                {% else %}
-                                    <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
-                                {% endif %}
-                            {% elif input.keytype == "float" %}
-                                {% if input.required and "default" in input %}
-                                    <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>
-                                {% elif input.required %}
-                                    <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
-                                {% elif "default" in input %}
-                                    <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>   
-                                {% else %}
-                                    <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
-                                {% endif %}
-                            {% elif input.keytype == "multi" %}
-                                {% if input.required %}
-                                    <select name={{ input.key }} required>
-                                {% else %}
-                                    <select name={{ input.key }}>
-                                {% endif %}
-                                {% for option in input.options %}
-                                    {% if "value" in input and option.val == input.value %}
-                                        <option value={{ option.val }} selected>{{ option.key }}</option>
-                                    {% elif "default" in option and option.default %}
-                                        <option value={{ option.val }} selected>{{ option.key }}</option>
-                                    {% else %}
-                                        <option value={{ option.val }}>{{ option.key }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                                </select>
+                        {% if input.keytype == "hidden" %}
+                            {% if input.required and "default" in input %}
+                                <input name={{ input.key }} type="hidden" required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>
+                            {% elif input.required %}
+                                <input name={{ input.key }} type="hidden" required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                            {% elif "default" in input %}
+                                <input name={{ input.key }} type="hidden" {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>   
                             {% else %}
-                                {% if input.required %}
-                                    <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
-                                {% else %}
-                                    <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
-                                {% endif %}
+                                <input name={{ input.key }} type="hidden" {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
                             {% endif %}
-                        </div>
+                        {% else %}
+                            <div class="font-bold">{{ input.descr_short }}</div>
+                            <div class="bg-nice4bg rounded">
+                                {% if input.keytype == "int" %}
+                                    {% if input.required and "default" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>
+                                    {% elif input.required %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% elif "default" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>   
+                                    {% else %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% endif %}
+                                {% elif input.keytype == "float" %}
+                                    {% if input.required and "default" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>
+                                    {% elif input.required %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% elif "default" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.default }}{% endif %}></input>   
+                                    {% else %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% endif %}
+                                {% elif input.keytype == "multi" %}
+                                    {% if input.required %}
+                                        <select name={{ input.key }} required>
+                                    {% else %}
+                                        <select name={{ input.key }}>
+                                    {% endif %}
+                                    {% for option in input.options %}
+                                        {% if "value" in input and option.val == input.value %}
+                                            <option value={{ option.val }} selected>{{ option.key }}</option>
+                                        {% elif "default" in option and option.default %}
+                                            <option value={{ option.val }} selected>{{ option.key }}</option>
+                                        {% else %}
+                                            <option value={{ option.val }}>{{ option.key }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                    </select>
+                                {% else %}
+                                    {% if input.required %}
+                                        <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% else %}
+                                        <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
                     {% endfor %}
                 </div>
                 <div class="flex mt-[20px] justify-center">

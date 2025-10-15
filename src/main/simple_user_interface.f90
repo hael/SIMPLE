@@ -7116,6 +7116,15 @@ contains
         call json%add(input, 'descr_short', 'pixel size (A)')
         call json%add(input, 'descr_long',  'pixel size (A)')
         call json%add(input, 'required',    .TRUE.)
+        !! smpd_downscale
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'smpd_downscale')
+        call json%add(input, 'keytype',     'hidden')
+        call json%add(input, 'descr_short', 'downscale pixel size (A)')
+        call json%add(input, 'descr_long',  'downscale pixel size (A)')
+        call json%add(input, 'required',    .TRUE.)
+        call json%add(input, 'default',     real2str(SMPD4DOWNSCALE))
         !! scale
         ! call json%create_object(input, 'input')
         ! call json%add(user_inputs, input)
@@ -7175,10 +7184,10 @@ contains
         call json%add(process_inputs, '', 'smpd')
         call json%add(process_inputs, '', 'scale')
         call json%add(process_inputs, '', 'total_dose')
+        call json%add(process_inputs, '', 'smpd_downscale')
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'outdir=preprocessing') !important - directory names and name must match between processes
-    !    call json%add(process_inputs, '', 'smpd_downscale=1.5')   ! downsample to 1.5A
         call json%add(process_inputs, '', 'nparts=10')
         call json%add(process_inputs, '', 'nthr=4')
         !! assign_optics
