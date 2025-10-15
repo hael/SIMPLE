@@ -29,7 +29,7 @@ scrlMicLeft = () => {
 var pick_observer = new IntersectionObserver(
   (entries, opts) => {
     entries.forEach(entry => { 
-      if(entry.intersectionRatio == 1){
+      if(entry.intersectionRatio > 0.5){
         const boxes_overlay = document.getElementById("boxes_overlay")
         if(boxes_overlay ==  null) return
         boxes_overlay.dataset.xdim  = entry.target.dataset.xdim
@@ -46,7 +46,6 @@ var pick_observer = new IntersectionObserver(
 )
 
 draw_overlay_coordinates = () => {
-    let multipick = true
     const boxes_overlay = document.getElementById("boxes_overlay")
     if(boxes_overlay ==  null) return
     const scale = boxes_overlay.width  / Number(boxes_overlay.dataset.xdim)

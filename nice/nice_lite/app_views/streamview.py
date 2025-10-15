@@ -20,6 +20,7 @@ class StreamView:
     def render(self):
         context = {
             "jobid" : self.job.id,
+            "disp"  : self.job.disp,
             "proj"  : self.job.dset.proj.name,
             "dset"  : self.job.dset.name,
             "args"  : self.job.args

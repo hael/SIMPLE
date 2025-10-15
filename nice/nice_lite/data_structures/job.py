@@ -61,8 +61,11 @@ class Job:
             if "csrfmiddlewaretoken" not in key and value != "":
                 self.args[key] = value
         datasetmodel = DatasetModel.objects.filter(id=dataset.id).first()
-        jobmodels = JobModel.objects.filter(dset=datasetmodel)
-        self.disp = jobmodels.count() + 1
+        #jobmodels = JobModel.objects.filter(dset=datasetmodel)
+      #  self.disp = jobmodels.count() + 1
+        self.disp = datasetmodel.jcnt + 1
+        datasetmodel.jcnt = self.disp
+        datasetmodel.save()
         jobmodel = JobModel(dset=datasetmodel, disp=self.disp, cdat=timezone.now(), args=self.args)
         jobmodel.save()
         self.id = jobmodel.id
@@ -152,47 +155,59 @@ class Job:
             self.classification_2D_stats  = jobmodel.classification_2D_stats
             self.particle_sets_stats      = jobmodel.particle_sets_stats
             # global status
-            failed   = False
+            running  = False
             finished = False
-            alarm    = False
-            failcount = 0
+            failed   = False
             if jobmodel.preprocessing_status == "finished":
                 finished = True
+            elif jobmodel.preprocessing_status == "failed":
+                failed = True
+            else:
+                running = True
             if jobmodel.optics_assignment_status == "finished":
                 finished = True
+            elif jobmodel.optics_assignment_status == "failed":
+                failed = True
+            else:
+                running = True   
             if jobmodel.initial_picking_status == "finished":
                 finished = True
+            elif jobmodel.initial_picking_status == "failed":
+                failed = True
+            else:
+                running = True
             if jobmodel.generate_pickrefs_status == "finished":
                 finished = True
+            elif jobmodel.generate_pickrefs_status == "failed":
+                failed = True
+            else:
+                running = True
             if jobmodel.reference_picking_status == "finished":
                 finished = True
+            elif jobmodel.reference_picking_status == "failed":
+                failed = True
+            else:
+                running = True
             if jobmodel.particle_sieving_status == "finished":
                 finished = True
+            elif jobmodel.particle_sieving_status == "failed":
+                failed = True
+            else:
+                running = True
             if jobmodel.classification_2D_status == "finished":
                 finished = True
-            if jobmodel.preprocessing_status == "failed":
-                failcount = failcount + 1
-            if jobmodel.optics_assignment_status == "failed":
-                failcount = failcount + 1
-            if jobmodel.initial_picking_status == "failed":
-                failcount = failcount + 1
-            if jobmodel.generate_pickrefs_status == "failed":
-                failcount = failcount + 1
-            if jobmodel.reference_picking_status == "failed":
-                failcount = failcount + 1
-            if jobmodel.particle_sieving_status == "failed":
-                failcount = failcount + 1
-            if jobmodel.classification_2D_status == "failed":
-                failcount = failcount + 1
-            if failcount > 0:
-                if failcount == 7:
-                    self.status = "failed"
-                else:
-                    self.status = "alarm"
-            elif finished:
-                self.status = "finished"
+            elif jobmodel.classification_2D_status == "failed":
+                failed = True
             else:
+                running = True
+            if not failed and running:
                 self.status = "running"
+            elif finished and not running and not failed:
+                self.status = "finished"
+            elif not running:
+                self.status = "failed"
+            else:
+                self.status = "alarm" 
             if jobmodel.status != self.status:
                 jobmodel.status = self.status
                 jobmodel.save()
