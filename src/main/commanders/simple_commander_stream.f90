@@ -879,7 +879,7 @@ contains
         endif
          ! generate own project file if projfile isnt set
         if(cline%get_carg('projfile') .eq. '') then 
-            if(l_interactive) then
+            if(cline%get_carg('projfile') .eq. 'yes') then
                 call cline%set('projname', 'initial_picking')
                 call cline%set('projfile', 'initial_picking.simple')
             else
@@ -2370,7 +2370,7 @@ contains
         if(found) then
             call json%get(http_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
             if(found) then
-                call write_selected_references(final_selection_source, final_selection, nxtiles, nytiles)
+                call write_selected_references(final_selection_source, final_selection, nxtiles, nytiles, params%smpd)
                 xtile = 0
                 ytile = 0
                 do i=0, size(final_selection) - 1
