@@ -113,6 +113,7 @@ character(len=*), parameter :: PTCL2D_STAR_BODY     = 'particles2D'
 ! MISCELLANEOUS
 character(len=3), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'
+character(len=*), parameter :: CLUST_MEDIODS_FNAME  = 'clust_medoids.bin'
 ! character constants
 character(len=*), parameter :: NEWLINE              = new_line('a')
 character(len=*), parameter :: SUPPRESS_MSG         = '2>/dev/null'

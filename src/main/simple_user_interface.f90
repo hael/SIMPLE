@@ -2320,7 +2320,7 @@ contains
         &'(fm|pow|hist|hybrid){fm}', .false., 'fm')
         ! filter controls
         call cluster_stack%set_input('filt_ctrls', 1, hp)
-        cluster_stack%filt_ctrls(1)%required = .true.
+        cluster_stack%filt_ctrls(1)%required = .false.
         call cluster_stack%set_input('filt_ctrls', 2, lp)
         cluster_stack%filt_ctrls(2)%required = .true.
         ! mask controls

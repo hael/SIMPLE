@@ -58,33 +58,35 @@ contains
         use simple_ctf,                only: ctf
         use simple_particle_extractor, only: ptcl_extractor
         use simple_commander_project
-        ! use simple_commander_cluster2D
         use simple_commander_abinitio2D
         use simple_stack_io
+        use simple_strategy2D_utils
+        use simple_commander_imgproc
         class(commander_mini_stream), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        real,             parameter :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17, LPSTART = 30., LPSTOP = 10.
-        character(len=*), parameter :: DIR_THUMBS    = 'thumbnails/'
-        character(len=*), parameter :: DIR_MIC_DEN   = 'micrographs_denoised/'
-        character(len=*), parameter :: DIR_MIC_BIN   = 'micrographs_binarized/'
-        character(len=*), parameter :: DIR_PTCLS_DEN = 'particles_denoised/'  ! these should be stacked together and substacks deleted
-        character(len=*), parameter :: DIR_BOXFILES  = 'boxfiles/'
-        integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 100
+        real,                      parameter   :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17, LPSTART = 30., LPSTOP = 8., FRAC_INCL = 0.8, LP_BIN = 20.
+        character(len=*),          parameter   :: DIR_THUMBS    = 'thumbnails/'
+        character(len=*),          parameter   :: DIR_MIC_DEN   = 'micrographs_denoised/'
+        character(len=*),          parameter   :: DIR_MIC_BIN   = 'micrographs_binarized/'
+        character(len=*),          parameter   :: DIR_PTCLS_DEN = 'particles_denoised/'  ! these should be stacked together and substacks deleted
+        character(len=*),          parameter   :: DIR_BOXFILES  = 'boxfiles/'
+        integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 100, NCLUST = NCLS_MIN
         character(len=*),          parameter   :: PROJ2D_SEGPICK = 'proj2D_segpick', PROJFILE2D_SEGPICK = 'proj2D_segpick.simple'
         character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
         character(len=LONGSTRLEN), allocatable :: thumb_names(:)
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_bin_names(:), mic4viz_names(:)
         character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk4viz_names(:)
         character(len=:),          allocatable :: fname, output_dir
-        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata_raw(:,:), boxdata4viz(:,:), inds(:)
+        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata_raw(:,:)
+        integer,                   allocatable :: boxdata4viz(:,:), inds(:), pops(:), pops_sorted(:), i_medoids(:)
         class(*),                  allocatable :: any
-        real,                      allocatable :: diams_arr(:), masscens(:,:)
-        logical,                   allocatable :: picking_mask(:,:)
+        real,                      allocatable :: diams_arr(:), masscens(:,:), resvals(:), resvals_sorted(:), tmp(:)
+        logical,                   allocatable :: picking_mask(:,:), clsmsk(:), l_non_junk(:)
         type(ctfparams),           allocatable :: ctfvars(:)
-        type(image),               allocatable :: imgs(:)
+        type(image),               allocatable :: imgs(:), cavg_imgs(:)
         type(ptcl_extractor)                   :: extractor_raw, extractor_den
         type(parameters)                       :: params
-        type(image)                            :: mic_raw, mic_shrink, mic4viz
+        type(image)                            :: mic_raw, mic_shrink, mic4viz, img_msk
         type(binimage)                         :: mic_bin, img_cc
         type(linked_list)                      :: list_of_diams
         type(list_iterator)                    :: list_iter
@@ -92,17 +94,20 @@ contains
         type(ctf_estimate_iter)                :: ctfiter
         type(ctf)                              :: tfun
         type(stack_io)                         :: stkio_w
-        type(oris)                             :: os_deftab, os_ctf, tmp
+        type(oris)                             :: os_deftab, os_ctf, o_tmp
         type(ori)                              :: omic
-        type(cmdline)                          :: cline_new_proj, cline_new_project, cline_import_particles, cline_2Dsegpick
+        type(cmdline)                          :: cline_new_proj, cline_new_project, cline_import_particles
+        type(cmdline)                          :: cline_2Dsegpick, cline_cluster_stk
         type(new_project_commander)            :: xnew_project
         type(import_particles_commander)       :: ximport_particles
-        ! type(cluster2D_autoscale_commander)    :: xcluster2D
-        type(abinitio2D_commander)             :: xcluster2D
+        type(abinitio2D_commander)             :: xabinitio2D
+        type(sp_project)                       :: spproj
+        type(cluster_stack_commander)          :: xcluster_stk
         character(len=STDLEN) :: ext
-        integer               :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, ncls
-        integer               :: nptcls, cnt, box_raw, box4viz, i, nboxes, nmasked
-        real                  :: scale, bin_t, diam, rmin, rmax, rmean, rsdev
+        integer               :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, ncls, ncls_sel, icls
+        integer               :: nptcls, cnt, box_raw, box4viz, i, nboxes, nmasked, pop_thres
+        real                  :: scale, bin_t, diam, rmin, rmax, rmean, rsdev, frac, mskrad
+        real                  :: hp_cluster, lp_cluster
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
         if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
@@ -194,11 +199,10 @@ contains
         inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
         if( nmics /= size(inds) )then
             mic4viz_names = mic4viz_names(inds)
-            mic_bin_names = mic_bin_names(inds)
-            ctfvars       = ctfvars(inds)
-            tmp           = os_ctf%extract_subset(inds)
-            call os_ctf%copy(tmp)
-            call tmp%kill
+            mic_bin_names = mic_bin_names(imic)
+            o_tmp           = os_ctf%extract_subset(inds)
+            call os_ctf%copy(o_tmp)
+            call o_tmp%kill
         endif
         deallocate(inds)
         ! extract diameters into array
@@ -301,8 +305,8 @@ contains
         call write_filetable(STKTAB, ptcl_stk_names)
         ! make first 2D
         ! 1. project creation
-        call cline_new_proj%set('dir',              PATH_HERE)
-        call cline_new_proj%set('projname',    PROJ2D_SEGPICK)
+        call cline_new_proj%set('dir',           PATH_HERE)
+        call cline_new_proj%set('projname', PROJ2D_SEGPICK)
         call xnew_project%execute(cline_new_proj)
         ! 2. particle import
         call cline_import_particles%set('prg',      'import_particles')
@@ -318,19 +322,65 @@ contains
         call ximport_particles%execute_safe(cline_import_particles)
         ! 3. 2D analysis
         ncls = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
-        ! call cline_2Dsegpick%set('prg',             'cluster2D')
         call cline_2Dsegpick%set('prg',            'abinitio2D')
         call cline_2Dsegpick%set('mkdir',                  'no')
         call cline_2Dsegpick%set('ncls',                   ncls)
         call cline_2Dsegpick%set('sigma_est',          'global')
         call cline_2Dsegpick%set('center',                'yes')
-        ! call cline_2Dsegpick%set('autoscale',             'yes')
-        ! call cline_2Dsegpick%set('lpstart',             LPSTART)
-        ! call cline_2Dsegpick%set('lpstop',               LPSTOP)
+        call cline_2Dsegpick%set('autoscale',             'yes')
+        call cline_2Dsegpick%set('lpstop',               LPSTOP)
         call cline_2Dsegpick%set('mskdiam',                  0.)
         call cline_2Dsegpick%set('nthr',            params%nthr)
         call cline_2Dsegpick%set('projfile', PROJFILE2D_SEGPICK)
-        call xcluster2D%execute_safe(cline_2Dsegpick)
+        call xabinitio2D%execute_safe(cline_2Dsegpick)
+        ! read project
+        call spproj%read(PROJFILE2D_SEGPICK)
+        ! extract cavgs from project
+        cavg_imgs = read_cavgs_into_imgarr( spproj )
+        ! flag non-junk cavgs
+        mskrad = real(box_raw/2) - COSMSKHALFWIDTH - 1.
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
+        ! first selection: pick the class averages that contain 80% of the data
+        nptcls  = spproj%os_ptcl2D%get_noris()
+        ncls    = spproj%os_cls2D%get_noris()
+        pops    = spproj%os_cls2D%get_all_asint('pop')
+        resvals = spproj%os_cls2D%get_all_asint('res')
+        pops_sorted = pops
+        call hpsort(pops_sorted)
+        call reverse(pops_sorted)
+        do icls = 1, ncls
+            frac = real(sum(pops_sorted(:icls))) / real(nptcls)
+            if( frac <= FRAC_INCL ) ncls_sel = icls
+        end do
+        pop_thres = pops_sorted(ncls_sel)
+        clsmsk    = pops >= pop_thres
+        where( .not. l_non_junk ) clsmsk = .false. ! merging of masks
+        ! re-read cavg_imgs with the mask
+        call dealloc_imgarr(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=clsmsk)
+        ncls_sel  = size(cavg_imgs)
+        ! pack resarr for congruency
+        resvals = pack(resvals, mask=clsmsk)
+        resvals_sorted = resvals
+        call hpsort(resvals_sorted)
+        lp_cluster = sum(resvals_sorted(:3))/3.
+        hp_cluster = real(box_raw/2) * params%smpd
+        ! write selected cavgs
+        call write_cavgs(cavg_imgs,'selected_cavgs'//trim(STK_EXT))
+        ! cluster cavgs
+        call cline_cluster_stk%set('mkdir',                          'no')
+        call cline_cluster_stk%set('stk', 'selected_cavgs'//trim(STK_EXT))
+        call cline_cluster_stk%set('ncls',                         NCLUST)
+        call cline_cluster_stk%set('clust_crit',                     'fm')
+        call cline_cluster_stk%set('hp',                       hp_cluster)
+        call cline_cluster_stk%set('lp',                       lp_cluster)
+        call cline_cluster_stk%set('mskdiam',                          0.)
+        call cline_cluster_stk%set('nthr',                    params%nthr)
+        call xcluster_stk%execute_safe(cline_cluster_stk)
+        tmp = file2rarr(CLUST_MEDIODS_FNAME)
+        i_medoids = nint(tmp)
+        call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT), i_medoids)
+        ! organize output in folders
         call simple_list_files('*jpg', thumb_names)
         call simple_mkdir(DIR_THUMBS)
         call move_files2dir(DIR_THUMBS, thumb_names)

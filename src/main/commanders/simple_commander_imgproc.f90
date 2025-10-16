@@ -1252,6 +1252,7 @@ contains
                 call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
             endif
         endif
+        call arr2file(real(i_medoids), CLUST_MEDIODS_FNAME)
         call dealloc_imgarr(stk_imgs)
         stk_imgs = read_cavgs_into_imgarr(params%stk)
         call write_cavgs( nimgs, stk_imgs, labels, 'cluster', '.mrcs' )
