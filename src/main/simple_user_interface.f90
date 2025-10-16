@@ -262,7 +262,6 @@ type(simple_input_param) :: dfmin
 type(simple_input_param) :: dir_movies
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eer_fraction
-type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
 type(simple_input_param) :: eo
 type(simple_input_param) :: flipgain
@@ -1362,8 +1361,7 @@ contains
         call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
         call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
-        call set_param(eer_fraction,   'eer_fraction', 'num',    '# of EER frames to fraction together', 'Number of raw EER frames to fraction together', '# EER frames{20}', .false., 20.)
-        call set_param(eer_upsampling, 'eer_upsampling','multi', 'EER up-sampling', 'EER up-sampling(1=4K|2=8K){1}', '(1|2){1}', .false., 1.)
+        call set_param(eer_fraction,   'eer_fraction', 'num',    '# of EER frames to fraction together', 'Number of raw EER frames in a movie fraction', '# EER frames{20}', .false., 20.)
         call set_param(gainref,        'gainref',      'file',   'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(mcpatch_thres,'mcpatch_thres','binary','Use motion correction patch threshold', 'Whether to use the threshold for motion correction patch solution(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
@@ -3895,7 +3893,7 @@ contains
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies).',&                     ! descr_long
         &'simple_exec',&                                                                ! executable
-        &1, 9, 0, 8, 3, 0, 2, .true.,&                                                  ! # entries in each group, requires sp_project
+        &1, 8, 0, 8, 3, 0, 2, .true.,&                                                  ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "data,motion correction,compute")     ! GUI                    
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3909,8 +3907,7 @@ contains
         &'Template output integrated movie name', 'e.g. mic_', .false., '', gui_submenu="data")
         call motion_correct%set_input('parm_ios', 6, pspecsz, gui_submenu="motion correction")
         call motion_correct%set_input('parm_ios', 7, eer_fraction, gui_submenu="data")
-        call motion_correct%set_input('parm_ios', 8, eer_upsampling, gui_submenu="data")
-        call motion_correct%set_input('parm_ios', 9, flipgain, gui_submenu="motion correction")
+        call motion_correct%set_input('parm_ios', 8, flipgain, gui_submenu="motion correction")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4317,7 +4314,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &1, 11, 0, 11, 4, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 10, 0, 11, 4, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -4327,14 +4324,13 @@ contains
         call preprocess%set_input('parm_ios', 3,  max_dose)
         call preprocess%set_input('parm_ios', 4,  smpd_downscale)
         call preprocess%set_input('parm_ios', 5,  eer_fraction)
-        call preprocess%set_input('parm_ios', 6,  eer_upsampling)
-        call preprocess%set_input('parm_ios', 7,  'fbody', 'string', 'Template output micrograph name',&
+        call preprocess%set_input('parm_ios', 6,  'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess%set_input('parm_ios', 8,  pspecsz)
-        call preprocess%set_input('parm_ios', 9,  numlen)
-        call preprocess%set_input('parm_ios',10,  ctfpatch)
-        preprocess%parm_ios(10)%required = .false.
-        call preprocess%set_input('parm_ios',11,  flipgain)
+        call preprocess%set_input('parm_ios', 7,  pspecsz)
+        call preprocess%set_input('parm_ios', 8,  numlen)
+        call preprocess%set_input('parm_ios', 9,  ctfpatch)
+        preprocess%parm_ios(9)%required = .false.
+        call preprocess%set_input('parm_ios',10,  flipgain)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -5290,7 +5286,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate'//&          ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                                  ! executable
-        &4, 11, 0, 4, 0, 0, 3, .true.,&                                                    ! # entries in each group, requires sp_project
+        &4, 10, 0, 4, 0, 0, 3, .true.,&                                                    ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "data,motion correction,CTF estimation")  ! GUI                 
         ! image input/output
         call preproc%set_input('img_ios', 1, dir_movies, gui_submenu="data", gui_advanced=.false.)
@@ -5304,17 +5300,16 @@ contains
         call preproc%set_input('parm_ios', 2, fraction_dose_target, gui_submenu="data", gui_advanced=.false.)
         call preproc%set_input('parm_ios', 3, smpd_downscale, gui_submenu="motion correction", gui_advanced=.false.)
         call preproc%set_input('parm_ios', 4, eer_fraction, gui_submenu="motion correction")
-        call preproc%set_input('parm_ios', 5, eer_upsampling, gui_submenu="motion correction", gui_advanced=.false.)
-        call preproc%set_input('parm_ios', 6, max_dose, gui_submenu="motion correction")
-        call preproc%set_input('parm_ios',7, kv, gui_submenu="data", gui_advanced=.false.)
+        call preproc%set_input('parm_ios', 5, max_dose, gui_submenu="motion correction")
+        call preproc%set_input('parm_ios',6, kv, gui_submenu="data", gui_advanced=.false.)
+        preproc%parm_ios(6)%required = .true.
+        call preproc%set_input('parm_ios',7, cs, gui_submenu="data", gui_advanced=.false.)
         preproc%parm_ios(7)%required = .true.
-        call preproc%set_input('parm_ios',8, cs, gui_submenu="data", gui_advanced=.false.)
+        call preproc%set_input('parm_ios',8, fraca, gui_submenu="data", gui_advanced=.false.)
         preproc%parm_ios(8)%required = .true.
-        call preproc%set_input('parm_ios',9, fraca, gui_submenu="data", gui_advanced=.false.)
+        call preproc%set_input('parm_ios',9, smpd, gui_submenu="data", gui_advanced=.false.)
         preproc%parm_ios(9)%required = .true.
-        call preproc%set_input('parm_ios',10, smpd, gui_submenu="data", gui_advanced=.false.)
-        preproc%parm_ios(10)%required = .true.
-        call preproc%set_input('parm_ios',11, flipgain, gui_submenu="motion correction")
+        call preproc%set_input('parm_ios',10, flipgain, gui_submenu="motion correction")
         ! alternative inputs
         ! <empty>
         ! search controls
