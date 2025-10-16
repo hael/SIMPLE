@@ -16,6 +16,7 @@ end interface
 interface write_cavgs
     module procedure write_cavgs_1
     module procedure write_cavgs_2
+    module procedure write_cavgs_3
 end interface
 
 ! objective function weights
@@ -665,6 +666,22 @@ contains
             call imgs(i)%write(fname, i)
         end do
     end subroutine write_cavgs_2
+
+    subroutine write_cavgs_3( imgs, fname, inds )
+        class(image),     intent(inout) :: imgs(:)
+        character(len=*), intent(in)    :: fname
+        integer,          intent(in)    :: inds(:)
+        integer :: n, i, ni, cnt, ind
+        n   = size(imgs)
+        ni  = size(inds)
+        cnt = 0
+        do i = 1, ni
+            ind = inds(i)
+            if( ind < 0 .or. ind > n ) THROW_HARD('fetched index ind out of range')
+            cnt = cnt + 1
+            call imgs(ind)%write(fname, cnt)
+        end do
+    end subroutine write_cavgs_3
 
     subroutine write_junk_cavgs( n, imgs, labels, ext )
         integer,          intent(in)    :: n
