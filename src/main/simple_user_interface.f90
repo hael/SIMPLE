@@ -2479,17 +2479,24 @@ contains
         &'denoising of micrographs',&                   ! descr_short
         &'is a program for denoising of micrographs',&  ! descr_long
         &'simple_stream',&                                ! executable
-        &1, 2, 0, 0, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
+        &1, 5, 0, 1, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call mini_stream%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
+        mini_stream%img_ios(1)%required = .true.
         ! parameter input/output
         call mini_stream%set_input('parm_ios', 1, smpd)
+        mini_stream%parm_ios(1)%required = .true.
         call mini_stream%set_input('parm_ios', 2, pcontrast)
+        call mini_stream%set_input('parm_ios', 3, kv)
+        mini_stream%parm_ios(4)%required = .true.
+        call mini_stream%set_input('parm_ios', 4, cs)
+        mini_stream%parm_ios(5)%required = .true.
+        call mini_stream%set_input('parm_ios', 5, fraca)
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call mini_stream%set_input('srch_ctrls',1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
         ! filter controls
         ! <empty>
         ! mask controls

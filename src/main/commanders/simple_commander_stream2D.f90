@@ -71,7 +71,7 @@ contains
         character(len=*),          parameter   :: DIR_PTCLS_DEN = 'particles_denoised/'  ! these should be stacked together and substacks deleted
         character(len=*),          parameter   :: DIR_BOXFILES  = 'boxfiles/'
         integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 100, NCLUST = NCLS_MIN
-        character(len=*),          parameter   :: PROJ2D_SEGPICK = 'proj2D_segpick', PROJFILE2D_SEGPICK = 'proj2D_segpick.simple'
+        character(len=*),          parameter   :: PROJ_MINI_STREAM = 'project_mini_stream', PROJFILE_MINI_STREAM = 'project_mini_stream.simple'
         character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
         character(len=LONGSTRLEN), allocatable :: thumb_names(:)
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_bin_names(:), mic4viz_names(:)
@@ -96,8 +96,7 @@ contains
         type(stack_io)                         :: stkio_w
         type(oris)                             :: os_deftab, os_ctf, o_tmp
         type(ori)                              :: omic
-        type(cmdline)                          :: cline_new_proj, cline_new_project, cline_import_particles
-        type(cmdline)                          :: cline_2Dsegpick, cline_cluster_stk
+        type(cmdline)                          :: cline_new_proj, cline_import_particles, cline_2Dsegpick, cline_cluster_stk
         type(new_project_commander)            :: xnew_project
         type(import_particles_commander)       :: ximport_particles
         type(abinitio2D_commander)             :: xabinitio2D
@@ -121,9 +120,9 @@ contains
         if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',   200)
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
-        nmics    = size(micnames)
+        nmics = size(micnames)
         ! read the first micrograph
-        scale    = params%smpd / SMPD_SHRINK1
+        scale = params%smpd / SMPD_SHRINK1
         call read_mic_subtr_backgr_shrink(micnames(1), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
         ! set logical dimensions
         ldim_raw = mic_raw%get_ldim()
@@ -146,7 +145,7 @@ contains
             call os_ctf%set_ori(imic, omic)
             ! Segmentation prep
             call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast,&
-            &mic_raw, mic_shrink, mic_mask=picking_mask)
+                &mic_raw, mic_shrink, mic_mask=picking_mask)
             call flag_amorphous_carbon(mic_shrink, picking_mask)
             nmasked = count(.not.picking_mask)
             if( real(nmasked) > 0.98 * real(product(ldim)) )then
@@ -304,37 +303,37 @@ contains
         call os_deftab%write(DEFTAB)
         call write_filetable(STKTAB, ptcl_stk_names)
         ! make first 2D
-        ! 1. project creation
+        ! project creation
         call cline_new_proj%set('dir',           PATH_HERE)
-        call cline_new_proj%set('projname', PROJ2D_SEGPICK)
+        call cline_new_proj%set('projname', PROJ_MINI_STREAM)
         call xnew_project%execute(cline_new_proj)
-        ! 2. particle import
-        call cline_import_particles%set('prg',      'import_particles')
-        call cline_import_particles%set('mkdir',                  'no')
-        call cline_import_particles%set('cs',                params%cs)
-        call cline_import_particles%set('fraca',          params%fraca)
-        call cline_import_particles%set('kv',                params%kv)
-        call cline_import_particles%set('smpd',            params%smpd)
-        call cline_import_particles%set('stktab',               STKTAB)
-        call cline_import_particles%set('deftab',               DEFTAB)
-        call cline_import_particles%set('ctf',                  'flip')
-        call cline_import_particles%set('projfile', PROJFILE2D_SEGPICK)
+        ! particle import
+        call cline_import_particles%set('prg',        'import_particles')
+        call cline_import_particles%set('mkdir',                    'no')
+        call cline_import_particles%set('cs',                  params%cs)
+        call cline_import_particles%set('fraca',            params%fraca)
+        call cline_import_particles%set('kv',                  params%kv)
+        call cline_import_particles%set('smpd',              params%smpd)
+        call cline_import_particles%set('stktab',                 STKTAB)
+        call cline_import_particles%set('deftab',                 DEFTAB)
+        call cline_import_particles%set('ctf',                    'flip')
+        call cline_import_particles%set('projfile', PROJFILE_MINI_STREAM)
         call ximport_particles%execute_safe(cline_import_particles)
-        ! 3. 2D analysis
+        ! 2D analysis
         ncls = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
-        call cline_2Dsegpick%set('prg',            'abinitio2D')
-        call cline_2Dsegpick%set('mkdir',                  'no')
-        call cline_2Dsegpick%set('ncls',                   ncls)
-        call cline_2Dsegpick%set('sigma_est',          'global')
-        call cline_2Dsegpick%set('center',                'yes')
-        call cline_2Dsegpick%set('autoscale',             'yes')
-        call cline_2Dsegpick%set('lpstop',               LPSTOP)
-        call cline_2Dsegpick%set('mskdiam',                  0.)
-        call cline_2Dsegpick%set('nthr',            params%nthr)
-        call cline_2Dsegpick%set('projfile', PROJFILE2D_SEGPICK)
+        call cline_2Dsegpick%set('prg',              'abinitio2D')
+        call cline_2Dsegpick%set('mkdir',                    'no')
+        call cline_2Dsegpick%set('ncls',                     ncls)
+        call cline_2Dsegpick%set('sigma_est',            'global')
+        call cline_2Dsegpick%set('center',                  'yes')
+        call cline_2Dsegpick%set('autoscale',               'yes')
+        call cline_2Dsegpick%set('lpstop',                 LPSTOP)
+        call cline_2Dsegpick%set('mskdiam',                    0.)
+        call cline_2Dsegpick%set('nthr',              params%nthr)
+        call cline_2Dsegpick%set('projfile', PROJFILE_MINI_STREAM)
         call xabinitio2D%execute_safe(cline_2Dsegpick)
         ! read project
-        call spproj%read(PROJFILE2D_SEGPICK)
+        call spproj%read(PROJFILE_MINI_STREAM)
         ! extract cavgs from project
         cavg_imgs = read_cavgs_into_imgarr( spproj )
         ! flag non-junk cavgs
