@@ -231,9 +231,25 @@ class Job:
             return False
         return True
     
-    def delete(self):
+    def delete(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        jobmodel.delete()
+        if dataset.ensureTrashfolder(project) and jobmodel is not None:
+            job_path   = os.path.join(project.dirc, dataset.dirc, self.dirc)
+            trash_path = os.path.join(dataset.trashfolder, self.dirc)
+            if not os.path.exists(job_path):
+                return 
+            if not os.path.isdir(job_path):
+                return 
+            if os.path.exists(trash_path):
+                return 
+            if os.path.isdir(trash_path):
+                return
+            try:
+                os.rename(job_path, trash_path)
+            except OSError as error:
+                print("Directory '%s' can not be renamed")
+                return
+            jobmodel.delete()
         
     def update_description(self, description):
         self.desc = description

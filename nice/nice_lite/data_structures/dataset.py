@@ -17,6 +17,7 @@ class Dataset:
     cdat     = ""
     mdat     = ""
     proj     = 0
+    trashfolder = ""
 
     def __init__(self, dataset_id=None, request=None):
         if dataset_id is not None:
@@ -67,7 +68,7 @@ class Dataset:
             return False
         
         new_dataset_dirc = ".dataset_" + str(self.id)
-        new_dataset_link = new_dataset_name.replace(" ", "_")
+        new_dataset_link = "ds_" + new_dataset_name.replace(" ", "_")
         new_dataset_path = os.path.join(project.dirc, new_dataset_dirc)
 
         try:
@@ -140,7 +141,7 @@ class Dataset:
             datasetmodel.name = new_dataset_name
             # strip any non-alphanumeric characters(except _)
             new_dataset_name = new_dataset_name.replace(" ", "_")
-            new_dataset_name = re.sub(r'\W+', '', new_dataset_name)
+            new_dataset_name = "ds_" + re.sub(r'\W+', '', new_dataset_name)
             current_dataset_link = os.path.join(project.dirc, self.link)
             new_dataset_link     = os.path.join(project.dirc, new_dataset_name)
             try :
@@ -173,5 +174,21 @@ class Dataset:
             return True
         return False
     
+    def ensureTrashfolder(self, project):
+        if not os.path.exists(os.path.join(project.dirc, self.dirc)):
+            return False
+        if not os.path.isdir(os.path.join(project.dirc, self.dirc)):
+            return False
+        trashfolder = os.path.join(project.dirc, self.dirc, "TRASH")
+        if os.path.isdir(trashfolder):
+            self.trashfolder = trashfolder
+            return True
+        try:
+            os.makedirs(trashfolder, exist_ok=True)
+        except OSError as error:
+            print("Directory '%s' can not be created")
+            return False
+        self.trashfolder = trashfolder
+        return True
 
 

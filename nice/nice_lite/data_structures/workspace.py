@@ -77,7 +77,7 @@ class Workspace:
             return False
         
         new_workspace_dirc = ".workspace_" + str(self.id)
-        new_workspace_link = new_workspace_name.replace(" ", "_")
+        new_workspace_link = "ws_" + new_workspace_name.replace(" ", "_")
         new_workspace_path = os.path.join(project.dirc, new_workspace_dirc)
 
         try:
@@ -267,7 +267,7 @@ class Workspace:
             workspacemodel.name = new_workspace_name
             # strip any non-alphanumeric characters(except _)
             new_workspace_name = new_workspace_name.replace(" ", "_")
-            new_workspace_name = re.sub(r'\W+', '', new_workspace_name)
+            new_workspace_name = "ws_" + re.sub(r'\W+', '', new_workspace_name)
             current_workspace_link = os.path.join(project.dirc, self.link)
             new_workspace_link     = os.path.join(project.dirc, new_workspace_name)
             try :
