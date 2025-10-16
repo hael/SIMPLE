@@ -35,6 +35,13 @@ deleteDataset = (element, datasetid) => {
   }
 }
 
+terminateStream = (element, jobid) => {
+  const confirmed = confirm("Please confirm that you wish to terminate all processes in stream " + jobid);
+  if(confirmed){
+    element.form.submit()
+  }
+}
+
 window.addEventListener("load", () =>{
     /* loads the current dataset on page load */
     for(const movies_pie_chart of document.getElementsByClassName("movies_pie_chart")){

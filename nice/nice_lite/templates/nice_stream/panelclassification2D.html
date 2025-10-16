@@ -98,6 +98,14 @@
                 </div>
             </div>
         {% endif %}
+        <div class="flex flex-row">
+            <div class="grid grid-cols-2 gap-1 text-[10px] pl-[10px] mt-[10px]">
+                {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 and "mskdiam" in jobstats.latest_cls2D.0 %}
+                    <div class="font-bold">mask diameter</div>
+                    <div>{{ jobstats.latest_cls2D.0.mskdiam }} Å</div>
+                {% endif %}
+            </div>
+        </div>
         {% if jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0 %}
             <div class="flex flex-col flex-1 max-w-[465px]">
                 <div>

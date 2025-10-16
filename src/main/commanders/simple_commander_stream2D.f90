@@ -527,6 +527,13 @@ contains
                 if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
             if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
             ! read mskdiam from file
@@ -1691,6 +1698,13 @@ contains
                 endif
                 call sleep(10)
                 call httpcom%send_jobstats()
+                if( httpcom%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call httpcom%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
     end subroutine waiting_for_folder

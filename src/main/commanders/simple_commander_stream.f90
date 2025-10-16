@@ -919,6 +919,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
@@ -930,6 +937,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
@@ -941,6 +955,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         if( l_multipick )then
@@ -972,6 +993,13 @@ contains
                             if(file_exists(trim(params%pickrefs))) exit
                             call sleep(10)
                             call http_communicator%send_jobstats()
+                            if( http_communicator%exit )then
+                                ! termination
+                                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                                call http_communicator%term()
+                                call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                                call EXIT(0)
+                            endif
                         end do
                   !  else
                   !      THROW_HARD('Could not find: '//trim(params%pickrefs))
@@ -2083,6 +2111,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
@@ -2094,6 +2129,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
@@ -2105,6 +2147,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         ! determine whether we are picking/extracting or extracting only
@@ -2771,6 +2820,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
@@ -2782,6 +2838,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
@@ -2793,6 +2856,13 @@ contains
                 endif
                 call sleep(10)
                 call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
             end do
         endif
         ! movie watcher init

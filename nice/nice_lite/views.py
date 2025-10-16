@@ -99,7 +99,9 @@ def terminate_stream(request, jobid):
 @login_required(login_url="/login/")
 def delete_stream(request, jobid):
     job = Job(id=jobid)
-    job.delete()
+    project = Project(request=request)
+    dataset = Dataset(request=request)
+    job.delete(project, dataset)
     response = redirect('nice_lite:dataset')
     return response
 

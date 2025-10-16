@@ -7258,7 +7258,7 @@ contains
         call json%add(process_inputs, '', 'interactive=yes')
         call json%add(process_inputs, '', 'mskdiam=0')
         call json%add(process_inputs, '', 'nchunks=2')
-        call json%add(process_inputs, '', 'nparts=4')
+        call json%add(process_inputs, '', 'nparts=8')
         call json%add(process_inputs, '', 'nthr=8')
         !! 2D classification
         call json%create_object(process, 'process')
