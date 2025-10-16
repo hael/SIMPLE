@@ -56,7 +56,7 @@ integer :: fixed_frame    = 0                             !< fixed frame of refe
 integer :: ldim(3)        = [0,0,0]                       !< logical dimension of frame
 integer :: ldim_orig(3)   = [0,0,0]                       !< logical dimension of frame (original, for use in motion_correct_iter)
 integer :: ldim_scaled(3) = [0,0,0]                       !< shrunken logical dimension of frame
-integer :: eer_fraction   = 0
+integer :: eer_fraction   = 0                             !< number of EER frames within a movie fraction
 real    :: total_dose     = 0.                            !< total dose in e/A2
 real    :: hp             = 0.                            !< high-pass limit
 real    :: lp             = 0.                            !< low-pass limit
@@ -108,7 +108,7 @@ contains
                 total_dose   = total_dose * real(nframes) * real(eer_fraction) / real(n_eer_frames)
             else
                 if( .not.params_glob%l_dose_weight )then
-                    THROW_HARD('Either eer_fraction or total_dose must be defined; motion_correct_init')
+                    THROW_HARD('Either EER_FRACTION or TOTAL_DOSE must be defined; motion_correct_init')
                 endif
                 call calc_eer_fraction(n_eer_frames, params_glob%fraction_dose_target, total_dose, nframes, eer_fraction)
             endif
@@ -116,11 +116,11 @@ contains
             if( params_glob%l_dose_weight )write(logfhandle,'(A,F8.2)')'>>> EFFECTIVE TOTAL DOSE:', total_dose
             select case(params_glob%eer_upsampling)
             case(1)
-                ! 4K, physical pixel size is by convention set on import
+                ! 4K x 4K, default movie pixel size
             case(2)
                 ldim    = 2 * ldim
                 ldim(3) = 1
-                smpd    = smpd / 2. !! 8K upsampling
+                smpd    = smpd / 2. ! x2 upsampling to 8K x 8K pixel sizze
             case DEFAULT
                 THROW_HARD('Unsupported up-sampling: '//int2str(params_glob%eer_upsampling)//'; motion_correct_init')
             end select

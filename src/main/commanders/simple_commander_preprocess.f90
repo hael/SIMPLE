@@ -144,7 +144,7 @@ contains
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
-        if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
+        if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',     1)
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
         if( .not. cline%defined('mcpatch_thres')   ) call cline%set('mcpatch_thres',  'yes')
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
@@ -214,7 +214,6 @@ contains
         if( params%scale_movies > 1.01 )then
             THROW_HARD('scale_movies cannot be > 1; exec_preprocess')
         endif
-
         l_del_forctf = .false.
         ! read in movies
         call spproj%read( params%projfile )

@@ -59,7 +59,7 @@ contains
         if( fname2format(moviename) .eq. 'K' )then
             ! eer movie
             if( (.not.params_glob%l_dose_weight) .and. (.not.cline%defined('eer_fraction')) )then
-                THROW_HARD('eer_fraction must be defined!')
+                THROW_HARD('EER_FRACTION must be defined when TOTAL_DOSE is absent!')
             endif
         endif
         ! make filenames
