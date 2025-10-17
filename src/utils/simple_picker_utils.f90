@@ -6,9 +6,10 @@ use simple_parameters, only: params_glob
 use simple_image,      only: image
 use simple_pickseg,    only: pickseg
 use simple_pickgau
+use simple_picksegdiam
 implicit none
 
-public :: exec_gaupick, exec_segpick
+public :: exec_gaupick, exec_segpick, exec_segdiampick
 private
 #include "simple_local_flags.inc"
 
@@ -146,5 +147,24 @@ contains
             boxfile_out = simple_abspath(boxfile)
         endif
     end subroutine exec_segpick
+
+    subroutine exec_segdiampick( micname, boxfile_out, nptcls, moldiam_max, dir_out )
+        character(len=*),           intent(in)  :: micname
+        character(len=LONGSTRLEN),  intent(out) :: boxfile_out
+        integer,                    intent(out) :: nptcls
+        real,                       intent(in)  :: moldiam_max
+        character(len=*), optional, intent(in)  :: dir_out
+        character(len=LONGSTRLEN) :: boxfile
+        type(picksegdiam) :: picker
+        boxfile = basename(fname_new_ext(trim(micname),'box'))
+        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
+        call picker%pick(micname, moldiam_max)
+        call picker%write_pos_and_diams(boxfile, nptcls)
+        if( nptcls == 0 )then
+            boxfile_out = ''
+        else
+            boxfile_out = simple_abspath(boxfile)
+        endif
+    end subroutine exec_segdiampick
 
 end module simple_picker_utils

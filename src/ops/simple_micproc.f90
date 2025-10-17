@@ -9,7 +9,7 @@ implicit none
 contains
 
     subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink, mic_mask )
-        character(len=*),              intent(in)    :: micname !< micrograph file name
+        character(len=*),               intent(in)    :: micname !< micrograph file name
         real,                           intent(in)    :: smpd    !< sampling distance in A
         real,                           intent(in)    :: scale   !< scale factor
         character(len=*),               intent(in)    :: pcontrast
@@ -164,7 +164,7 @@ contains
             px = center_mass_cc(i)
             masscens(i,:2) = px(:2)
         enddo
-
+        call img_cc%kill_bimg
     contains
 
         function center_mass_cc( i_cc ) result( px )
