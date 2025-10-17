@@ -57,6 +57,7 @@ contains
         use simple_ctf_estimate_iter,  only: ctf_estimate_iter
         use simple_ctf,                only: ctf
         use simple_particle_extractor, only: ptcl_extractor
+        use simple_picksegdiam
         use simple_commander_project
         use simple_commander_abinitio2D
         use simple_stack_io
@@ -64,7 +65,7 @@ contains
         use simple_commander_imgproc
         class(commander_mini_stream), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        real,                      parameter   :: SMPD_SHRINK1  = 4.0, FRAC_FG = 0.17, LPSTART = 30., LPSTOP = 8., FRAC_INCL = 0.8, LP_BIN = 20.
+        real,                      parameter   :: SMPD_SHRINK1  = 4.0, LPSTART = 30., LPSTOP = 8., FRAC_INCL = 0.8, LP_BIN = 20.
         character(len=*),          parameter   :: DIR_THUMBS    = 'thumbnails/'
         character(len=*),          parameter   :: DIR_MIC_DEN   = 'micrographs_denoised/'
         character(len=*),          parameter   :: DIR_MIC_BIN   = 'micrographs_binarized/'
@@ -76,20 +77,18 @@ contains
         character(len=LONGSTRLEN), allocatable :: thumb_names(:)
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_bin_names(:), mic4viz_names(:)
         character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk4viz_names(:)
-        character(len=:),          allocatable :: fname, output_dir
-        integer,                   allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:), boxdata_raw(:,:)
+        character(len=:),          allocatable :: output_dir
+        integer,                   allocatable :: boxdata_raw(:,:)
         integer,                   allocatable :: boxdata4viz(:,:), inds(:), pops(:), pops_sorted(:), i_medoids(:)
-        class(*),                  allocatable :: any
         real,                      allocatable :: diams_arr(:), masscens(:,:), resvals(:), resvals_sorted(:), tmp(:)
-        logical,                   allocatable :: picking_mask(:,:), clsmsk(:), l_non_junk(:)
+        logical,                   allocatable :: clsmsk(:), l_non_junk(:)
         type(ctfparams),           allocatable :: ctfvars(:)
         type(image),               allocatable :: imgs(:), cavg_imgs(:)
+        type(picksegdiam)                      :: picker
         type(ptcl_extractor)                   :: extractor_raw, extractor_den
         type(parameters)                       :: params
-        type(image)                            :: mic_raw, mic_shrink, mic4viz, img_msk
-        type(binimage)                         :: mic_bin, img_cc
-        type(linked_list)                      :: list_of_diams
-        type(list_iterator)                    :: list_iter
+        type(image)                            :: mic_raw, mic_shrink, mic4viz
+        type(binimage)                         :: mic_bin
         type(stats_struct)                     :: diam_stats
         type(ctf_estimate_iter)                :: ctfiter
         type(ctf)                              :: tfun
@@ -103,10 +102,9 @@ contains
         type(sp_project)                       :: spproj
         type(cluster_stack_commander)          :: xcluster_stk
         character(len=STDLEN) :: ext
-        integer               :: nmics, ldim_raw(3), ldim(3), imic, nccs, icc, ncls, ncls_sel, icls
-        integer               :: nptcls, cnt, box_raw, box4viz, i, nboxes, nmasked, pop_thres
-        real                  :: scale, bin_t, diam, rmin, rmax, rmean, rsdev, frac, mskrad
-        real                  :: hp_cluster, lp_cluster
+        integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls, ncls_sel, icls
+        integer               :: nptcls, box_raw, box4viz, i, nboxes, pop_thres
+        real                  :: scale, rmin, rmax, rmean, rsdev, frac, mskrad, hp_cluster, lp_cluster
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
         if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
@@ -129,96 +127,50 @@ contains
         ldim     = mic_shrink%get_ldim()
         ! output directory
         output_dir = PATH_HERE
-        allocate( mic_bin_names(nmics), mic4viz_names(nmics),&
-        &ctfvars(nmics), ptcl_stk_names(nmics), ptcl_stk4viz_names(nmics))
+        allocate(mic_bin_names(nmics), mic4viz_names(nmics),ctfvars(nmics))
         ctfvars(:)%smpd    = params%smpd
         ctfvars(:)%kv      = params%kv
         ctfvars(:)%cs      = params%cs
         ctfvars(:)%fraca   = params%fraca
         ctfvars(:)%ctfflag = CTFFLAG_FLIP
         call os_ctf%new(nmics, is_ptcl=.false.)
+        allocate(diams_arr(0))
         do imic = 1, nmics
             call omic%new(is_ptcl=.false.)
             call omic%set_state(1)  ! include by default
             ! CTF estimation
             call ctfiter%iterate(ctfvars(imic), micnames(imic), omic, trim(output_dir), l_gen_thumb=.true.)
             call os_ctf%set_ori(imic, omic)
-            ! Segmentation prep
-            call read_mic_subtr_backgr_shrink(micnames(imic), params%smpd, scale, params%pcontrast,&
-                &mic_raw, mic_shrink, mic_mask=picking_mask)
-            call flag_amorphous_carbon(mic_shrink, picking_mask)
-            nmasked = count(.not.picking_mask)
-            if( real(nmasked) > 0.98 * real(product(ldim)) )then
-                call omic%set_state(0)  ! carbon only micrograph
+            ! Segmentation & picking
+            mic4viz_names(imic) = 'mic4viz'//int2str_pad(imic,3)//'.mrc'
+            mic_bin_names(imic) = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
+            call picker%pick(micnames(imic), params%moldiam_max, vizfname=mic4viz_names(imic), binfname=mic_bin_names(imic))
+            if( picker%get_nboxes() == 0 )then
+                call os_ctf%set_state(imic, 0)
                 mic4viz_names(imic) = NIL
                 mic_bin_names(imic) = NIL
                 cycle
             endif
-            call cascade_filter_biomol( mic_shrink, mic4viz )
-            mic4viz_names(imic) = 'mic4viz'//int2str_pad(imic,3)//'.mrc'
-            call mic4viz%write(mic4viz_names(imic))
-            call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
-            if( nmasked > 0 ) call mic_bin%apply_mask(picking_mask)
-            ! identify connected components
-            call mic_bin%find_ccs(img_cc)
-            call img_cc%get_nccs(nccs)
-            ! gather size info
-            call img_cc%get_imat(cc_imat)
-            call img_cc%get_imat(cc_imat_copy)
-            do icc = 1, nccs
-                call img_cc%diameter_cc(icc, diam)
-                if( diam + 2. * SMPD_SHRINK1 > params%moldiam_max .or. diam < SMPD_SHRINK1 * 3. ) then
-                    ! remove connected component
-                    where ( cc_imat == icc ) cc_imat_copy = 0
-                else
-                    ! stash diameter
-                    call list_of_diams%push_back(diam) 
-                endif
-            end do
-            ! binarize back
-            cc_imat = cc_imat_copy
-            where( cc_imat_copy > 0 )
-                cc_imat = 1
-            elsewhere
-                cc_imat = 0
-            endwhere
-            call mic_bin%set_imat(cc_imat)
-            mic_bin_names(imic) = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
-            call mic_bin%write(mic_bin_names(imic))
-            ! destruct
-            call mic_raw%kill
-            call mic_shrink%kill
-            call mic4viz%kill
-            call mic_bin%kill_bimg
-            call img_cc%kill_bimg
-            deallocate(cc_imat, cc_imat_copy)
+            call picker%get_diameters(tmp)
+            diams_arr = [diams_arr(:), tmp(:)]
+            deallocate(tmp)
         end do
-        deallocate(picking_mask)
+        call picker%kill
         ! excludes zero state
         inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
         if( nmics /= size(inds) )then
+            ctfvars       = ctfvars(inds)
             mic4viz_names = mic4viz_names(inds)
-            mic_bin_names = mic_bin_names(imic)
-            o_tmp           = os_ctf%extract_subset(inds)
+            mic_bin_names = mic_bin_names(inds)
+            micnames      = micnames(inds)
+            o_tmp         = os_ctf%extract_subset(inds)
             call os_ctf%copy(o_tmp)
             call o_tmp%kill
+            nmics = size(inds)
         endif
         deallocate(inds)
-        ! extract diameters into array
-        nptcls = list_of_diams%size()
-        allocate(diams_arr(nptcls), source=0.)
-        list_iter = list_of_diams%begin()
-        cnt = 0
-        do while (list_iter%has_next())
-            call list_iter%next(any)
-            select type(any)
-                type is (real(kind(diam)))
-                    cnt = cnt + 1
-                    diams_arr(cnt) = any
-            end select
-        end do
         ! diameter stats & box size estimation
-        diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! bacause of the 2X erosion in binarization
+        diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! because of the 2X erosion in binarization
         call calc_stats(diams_arr, diam_stats)
         print *, 'CC diameter (in Angs) statistics'
         print *, 'avg diam: ', diam_stats%avg
@@ -229,7 +181,10 @@ contains
         box_raw = find_magic_box(BOXFAC * nint(diam_stats%med/params%smpd))
         box4viz = find_magic_box(BOXFAC * nint(diam_stats%med/SMPD_SHRINK1))
         print *, 'box diam: ', box_raw * params%smpd
+        ! Re-segmentation
+        call mic_bin%new_bimg(ldim, mic_shrink%get_smpd())
         ! extraction from micrographs
+        allocate(ptcl_stk_names(nmics), ptcl_stk4viz_names(nmics))
         call extractor_raw%init_mic(box_raw, .false.)
         call extractor_den%init_mic(box4viz, .false.)
         nptcls = 0
@@ -293,12 +248,16 @@ contains
             call mic_bin%kill_bimg
         end do
         ! excludes zero state
-        inds               = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
-        nmics              = size(inds)
-        ptcl_stk_names     = ptcl_stk_names(inds)
-        ptcl_stk4viz_names = ptcl_stk4viz_names(inds)
-        ctfvars            = ctfvars(inds)
-        os_deftab          = os_ctf%extract_subset(inds)
+        inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
+        if( size(inds) /= nmics )then
+            nmics              = size(inds)
+            micnames           = micnames(inds)
+            ptcl_stk_names     = ptcl_stk_names(inds)
+            ptcl_stk4viz_names = ptcl_stk4viz_names(inds)
+            ctfvars            = ctfvars(inds)
+        endif
+        os_deftab = os_ctf%extract_subset(inds)
+        deallocate(inds)
         ! output
         call os_deftab%write(DEFTAB)
         call write_filetable(STKTAB, ptcl_stk_names)

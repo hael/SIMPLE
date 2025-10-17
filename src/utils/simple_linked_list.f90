@@ -40,13 +40,13 @@ end type list_iterator
 
 contains
 
-    subroutine finalize_node(self)
+    pure subroutine finalize_node(self)
         type(node), intent(inout) :: self
         if (allocated(self%value)) deallocate(self%value)
         nullify(self%next)
     end subroutine finalize_node
 
-    pure integer function size(self) result(k)
+    pure elemental integer function size(self) result(k)
         class(linked_list), intent(in) :: self
         k = self%n
     end function size
@@ -56,7 +56,7 @@ contains
         tf = (self%n == 0)
     end function is_empty
 
-    subroutine clear(self)
+    elemental subroutine clear(self)
         class(linked_list), intent(inout) :: self
         type(node), pointer :: p, q
         p => self%head

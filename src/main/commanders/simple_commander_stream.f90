@@ -877,7 +877,7 @@ contains
             endif
             l_restart = .true.
         endif
-         ! generate own project file if projfile isnt set
+        ! generate own project file if projfile isnt set
         if(cline%get_carg('projfile') .eq. '') then 
             if(cline%get_carg('interactive') .eq. 'yes') then
                 call cline%set('projname', 'initial_picking')

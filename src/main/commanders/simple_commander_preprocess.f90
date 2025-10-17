@@ -850,6 +850,9 @@ contains
             else
                 THROW_HARD('Unsupported new picker mode')
             endif
+        case('segdiam')
+            ! reference-free segmentation-based for diameter estimation
+            if( templates_provided ) THROW_HARD('SEGDIAM picker does not requires PICKREFS input')
         end select
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
@@ -2106,6 +2109,10 @@ contains
                         if( .not.cline%defined('moldiam') )then
                             THROW_HARD('MOLDIAM required for picker=new')
                         endif
+                    endif
+                case('segdiam')
+                    if( .not.cline%defined('moldiam_max') )then
+                        THROW_HARD('MOLDIAM_MAX required for picker=segdiam')
                     endif
                 case DEFAULT
                     THROW_HARD('Unsupported PICKER: '//trim(params%picker))
