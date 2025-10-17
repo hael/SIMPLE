@@ -385,9 +385,9 @@ contains
         cnt    = 0
         do iq = 1, NQUANTA
             if( count(labels == iq) == 0 )cycle
-            cnt         = cnt + 1
+            cnt          = cnt + 1
             peak_ts(cnt) = minval(arr, mask=labels == iq )
-            n_fg        = count(arr >= peak_ts(cnt))
+            n_fg         = count(arr >= peak_ts(cnt))
             if( n_fg == nvals )then
                 frac_peaks(cnt) = 1.
             else if( n_fg == 0 )then
@@ -409,6 +409,66 @@ contains
         end select
         t_out = peak_ts(ind)
     end subroutine detect_peak_thres_sortmeans
+
+    subroutine detect_peak_thres_from_ref_distr( n, n_ub, x, ref_mask, t_out )
+        integer, intent(in)  :: n, n_ub
+        real,    intent(in)  :: x(n)
+        logical, intent(in)  :: ref_mask(n)
+        real,    intent(out) :: t_out
+        integer, parameter   :: NQUANTA = 10
+        real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), std_mean_diffs(:)
+        integer, allocatable :: labels(:), locn(:)
+        integer :: iq, n_fg, nvals, loc(1), cnt
+        real    :: t_ini, as_ref(2), as_thres(2)
+        locn  = maxnloc(x, n_ub)
+        t_ini = minval(x(locn))
+        ! quantize with sortmeans
+        allocate( means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA) )
+        means  = 0.
+        labels = 0
+        arr    = pack(x, mask=x >= t_ini)
+        nvals  = size(arr)
+        call sortmeans(arr, NQUANTA, means, labels)
+        cnt    = 0
+        do iq = 1, NQUANTA
+            if( count(labels == iq) == 0 )cycle
+            cnt          = cnt + 1
+            peak_ts(cnt) = minval(arr, mask=labels == iq)
+            n_fg         = count(arr >= peak_ts(cnt))
+            if( n_fg == nvals )then
+                frac_peaks(cnt) = 1.
+            else if( n_fg == 0 )then
+                frac_peaks(cnt) = 0.
+            else
+                frac_peaks(cnt) = real(n_fg) / real(nvals)
+            endif
+        end do
+        ! calculate the average and standard deviation of the reference distribution
+        call avg_sdev(x, as_ref(1), as_ref(2), mask=ref_mask)
+        ! calculate the average and standard deviation for the distributions obtained
+        ! when applying the hierarchy of thresholds & select the threshold that generates 
+        ! a distribution that minimizes the standard mean difference to the reference distribution
+        allocate(std_mean_diffs(cnt), source=0.)
+        do iq = 1, cnt
+            call avg_sdev(x, as_thres(1), as_thres(2), mask=x >= peak_ts(iq))
+            std_mean_diffs(iq) = abs(as_ref(1) - as_thres(1)) / sqrt(0.5 * (as_ref(2)**2. + as_thres(2)**2.))
+        end do
+        loc   = minloc(std_mean_diffs)
+        t_out = peak_ts(loc(1))
+
+        contains
+
+            subroutine avg_sdev( vec, avg, sdev, mask )
+                real,    intent(in)    :: vec(:)
+                real,    intent(inout) :: avg, sdev
+                logical, intent(in)    :: mask(:)
+                real    :: rn
+                rn   = real(count(mask))
+                avg  = sum(vec, mask=mask) / rn
+                sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+            end subroutine avg_sdev
+
+    end subroutine detect_peak_thres_from_ref_distr
 
     ! hierarchical clustering
 
