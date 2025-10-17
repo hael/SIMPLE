@@ -188,6 +188,34 @@ updateCounts = () => {
   particlecount.innerHTML = nptcls.toLocaleString() + " / " + nptcls_tot.toLocaleString()
 }
 
+updateBrightness = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--sieve-brightness', element.value / 100);
+}
+
+updateContrast = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--sieve-contrast', element.value / 100);
+}
+
+updateScale = (element) => {
+  const scale = element.value
+  for(const cls2D of document.querySelectorAll(".sievecls")){
+    cls2D.style.width  = scale + "px"
+    cls2D.style.height = scale + "px"
+  }
+  for(const cls2Dimg of document.querySelectorAll(".sieveclsimg")){
+    cls2Dimg.style.width  = scale + "px"
+    cls2Dimg.style.height = scale + "px"
+  }
+}
+
+window.addEventListener("load", () => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--sieve-contrast',   1.0);
+  cssroot.style.setProperty('--sieve-brightness', 1.0);
+})
+
 window.addEventListener("load", () =>{
     for(const particles_pie_chart of document.getElementsByClassName("particles_pie_chart")){
         const ctx = particles_pie_chart.getContext("2d");

@@ -78,10 +78,10 @@
                                             <select name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}>
                                         {% endif %}
                                         {% for option in input.options %}
-                                            {% if "default" in option and option.default %}
-                                                <option value={{ option.val }} selected >{{ option.key }}</option>
+                                            {% if "default" in input and option == input.default %}
+                                                <option value={{ option }} selected >{{ option }}</option>
                                             {% else %}
-                                                <option value={{ option.val }}>{{ option.key }}</option>
+                                                <option value={{ option }}>{{ option }}</option>
                                             {% endif %}
                                         {% endfor %}
                                         </select>

@@ -18,9 +18,19 @@ showMenu = (element, event) => {
   event.preventDefault()
   const selectmenu    = element.parentElement.parentElement.querySelector("[name='selectmenu']")
   const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
-  selectmenubox.style.top  = event.pageY + "px"
-  selectmenubox.style.left = event.pageX + "px"
   selectmenu.style.display = "flex"
+  const selectmenurect    = selectmenu.getBoundingClientRect()
+  const selectmenuboxrect = selectmenubox.getBoundingClientRect()
+  if(event.pageX + selectmenuboxrect.width > selectmenurect.width){
+    selectmenubox.style.left = selectmenu.width - selectmenubox.width + "px"
+  } else{
+    selectmenubox.style.left = event.pageX + "px"
+  }
+  if(event.pageY + selectmenuboxrect.height > selectmenurect.height){
+    selectmenubox.style.top = selectmenu.height - selectmenubox.height + "px"
+  } else{
+    selectmenubox.style.top  = event.pageY + "px"
+  }
   lastinteraction = Date.now();
 }
 
@@ -39,6 +49,13 @@ updateBrightness = (element) => {
 updateContrast = (element) => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--preprocess-contrast', element.value / 100);
+}
+
+updateScale = (element) => {
+  const width = element.value
+  for(const miccontainer of document.querySelectorAll(".miccontainer")){
+    miccontainer.style.width = width + "px"
+  }
 }
 
 window.addEventListener("load", () => {

@@ -19,6 +19,7 @@
     {% elif status == "terminating" %}
         <div class="absolute z-2 text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">terminating ...</div>
     {% endif %}
+    {%comment%}
     <div id="help" class="hidden absolute text-[10px] flex flex-col h-full w-full bg-nice4bubble top-[20px] transition-opacity duration-300 delay-300 ease-in-out">
         <div class="flex flex-row text-nice4header ">
             <div class="cursor-pointer" onclick="document.querySelector('#help').classList.toggle('hidden')">
@@ -32,6 +33,7 @@
             some help text
         </div>
     </div>
+    {%endcomment%}
     <div class="h-full flex-col flex justify-start">
         <div class="flex flex-row justify-end items-center">
             {% if status == "running" %}
@@ -84,11 +86,13 @@
                     </button>
                 </form>
             {% endif %}
+            {%comment%}
             <button class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="document.querySelector('#help').classList.toggle('hidden')" title="view tip">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
                     <path fill-rule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0Zm-6 3.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM7.293 5.293a1 1 0 1 1 .99 1.667c-.459.134-1.033.566-1.033 1.29v.25a.75.75 0 1 0 1.5 0v-.115a2.5 2.5 0 1 0-2.518-4.153.75.75 0 1 0 1.061 1.06Z" clip-rule="evenodd" />
                 </svg>
             </button>
+            {%endcomment%}
         </div>
         <div class="h-full flex-col flex justify-start">
             <div class="flex flex-row">

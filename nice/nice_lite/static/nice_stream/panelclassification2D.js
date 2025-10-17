@@ -234,6 +234,38 @@ updateCounts = () => {
   if(final_selection_ptcls != undefined) final_selection_ptcls.value = nptcls
 }
 
+updateBrightness = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--classification2D-brightness', element.value / 100);
+}
+
+updateContrast = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--classification2D-contrast', element.value / 100);
+}
+
+updateScale = (element) => {
+  const scale = element.value
+  for(const cls2D of document.querySelectorAll(".cls2D")){
+    cls2D.style.width  = scale + "px"
+    cls2D.style.height = scale + "px"
+  }
+  for(const cls2Dimg of document.querySelectorAll(".cls2Dimg")){
+    cls2Dimg.style.width  = scale + "px"
+    cls2Dimg.style.height = scale + "px"
+  }
+  for(const mskcanvas of document.querySelectorAll(".mskcanvas")){
+    mskcanvas.style.width  = scale + "px"
+    mskcanvas.style.height = scale + "px"
+  }
+}
+
+window.addEventListener("load", () => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--classification2D-contrast',   1.0);
+  cssroot.style.setProperty('--classification2D-brightness', 1.0);
+})
+
 window.addEventListener("load", () =>{
     for(const movies_pie_chart of document.getElementsByClassName("particles_pie_chart")){
         const ctx = movies_pie_chart.getContext("2d");

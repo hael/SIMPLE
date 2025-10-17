@@ -2,13 +2,15 @@ let lastinteraction = Date.now();
 
 scrlRight = () => {
   const micrograph_slider = document.getElementById("picking_references")
-  micrograph_slider.scrollLeft += 82;
+  const rect = micrograph_slider.getBoundingClientRect();
+  micrograph_slider.scrollLeft += rect.width;
   lastinteraction = Date.now();
 }
 
 scrlLeft = () => {
   const micrograph_slider = document.getElementById("picking_references")
-  micrograph_slider.scrollLeft -= 82;
+  const rect = micrograph_slider.getBoundingClientRect();
+  micrograph_slider.scrollLeft -= rect.width;
   lastinteraction = Date.now();
 }
 
@@ -87,6 +89,29 @@ updateBrightness = (element) => {
 updateContrast = (element) => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--preprocess-contrast', element.value / 100);
+}
+
+updateScale = (element) => {
+  const micrographs_slider = document.querySelector("#micrographs_slider")
+  const boxes_overlay      = document.querySelector("#boxes_overlay")
+  if(micrographs_slider != undefined) micrographs_slider.style.width = element.value + "px"
+  if(boxes_overlay      != undefined) {
+    boxes_overlay.height = element.value
+    boxes_overlay.width  = element.value
+  }
+  for(const miccontainer of document.querySelectorAll(".miccontainer")){
+    const img = miccontainer.querySelector("img")
+    if(img != undefined){
+      img.style.height = element.value + "px"
+      img.style.width  = element.value + "px"
+    }
+    const div = miccontainer.querySelector("div")
+    if(div != undefined){
+      div.style.height = element.value + "px"
+      div.style.width  = element.value + "px"
+    }
+  }
+  draw_overlay_coordinates()
 }
 
 window.addEventListener("load", () => {

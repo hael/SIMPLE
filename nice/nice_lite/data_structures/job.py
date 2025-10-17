@@ -6,7 +6,7 @@ from time import gmtime, strftime
 from django.utils import timezone
 
 # local imports
-from ..models import JobModel, DatasetModel, ProjectModel
+from ..models import JobModel, DatasetModel
 from .simple  import SIMPLEStream
 
 class Job:
@@ -233,7 +233,9 @@ class Job:
     
     def delete(self, project, dataset):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if dataset.ensureTrashfolder(project) and jobmodel is not None:
+        if jobmodel is not None:
+            jobmodel.delete()
+        if dataset.ensureTrashfolder(project):
             job_path   = os.path.join(project.dirc, dataset.dirc, self.dirc)
             trash_path = os.path.join(dataset.trashfolder, self.dirc)
             if not os.path.exists(job_path):
@@ -249,8 +251,8 @@ class Job:
             except OSError as error:
                 print("Directory '%s' can not be renamed")
                 return
-            jobmodel.delete()
-        
+        return
+    
     def update_description(self, description):
         self.desc = description
         jobmodel = JobModel.objects.filter(id=self.id).first()

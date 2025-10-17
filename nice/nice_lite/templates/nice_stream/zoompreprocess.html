@@ -79,6 +79,12 @@
                 <pre class="text-[10px]">{{error}}</pre>
             </div>
         </div>
+        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+            <div class="font-bold text-[12px] pl-[10px]">help</div>
+            <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
+                <div class="text-[10px]">some help text</div>
+            </div>
+        </div>
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
         <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
@@ -86,8 +92,8 @@
             {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
                 <div class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory">
                    {% for micrograph in jobstats.latest_micrographs %}
-                        <div class="snap-start w-[50%] p-[5px]" oncontextmenu="showMenu(this, event)" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
-                            <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness));" src={% url 'nice_lite:image' micrograph.path %} class="h-auto w-[100%] rounded"></img>
+                        <div class="miccontainer snap-start p-[5px]" style="width:600px;" oncontextmenu="showMenu(this, event)" data-ctfres={{ micrograph.ctfres| floatformat:1 }} data-dfx={{ micrograph.dfx| floatformat:2 }} data-dfy={{ micrograph.dfy| floatformat:2 }} title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
+                            <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness));" src={% url 'nice_lite:image' micrograph.path %} class="h-auto w-[1000px] rounded"></img>
                         </div>
                      {% endfor %} 
                      <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
@@ -99,6 +105,10 @@
                             <div class="flex flex-col">
                                 <div class="font-bold">brightness</div>
                                 <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="font-bold">scale</div>
+                                <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="1000" min="100" step="10" value="600"></input> 
                             </div>
                         </div>
                     </div>
