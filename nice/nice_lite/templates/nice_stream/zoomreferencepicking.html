@@ -60,12 +60,18 @@
                 <pre class="text-[10px]">{{error}}</pre>
             </div>
         </div>
+        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+            <div class="font-bold text-[12px] pl-[10px]">help</div>
+            <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
+                <div class="text-[10px]">some help text</div>
+            </div>
+        </div>
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
         <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <div class="font-bold text-[12px] pl-[10px]">latest micrographs</div>
             {% if "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %}
-                <div class="flex flex-col flex-1">
+                <div class="flex flex-col flex-1 overflow-y-auto">
                     <div class="flex flex-row items-center m-auto">
                         <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlMicLeft()">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
@@ -75,7 +81,7 @@
                         <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[500px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
                             <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="500" width="500"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
-                                <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                <div class="miccontainer snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <div class="w-[500px] h-[500px] m-auto">
                                         <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[500px] w-[500px] rounded m-auto"></img>
                                     </div>
@@ -91,6 +97,10 @@
                                 <div class="flex flex-col">
                                     <div class="font-bold">brightness</div>
                                     <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                </div>
+                                <div class="flex flex-col">
+                                    <div class="font-bold">scale</div>
+                                    <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="1000" min="100" step="1" value="500"></input> 
                                 </div>
                             </div>
                         </div>

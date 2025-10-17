@@ -160,6 +160,42 @@ updateBoxSize = () => {
     lastinteraction = Date.now();
 }
 
+updateBrightness = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--genpickrefs-brightness', element.value / 100);
+}
+
+updateContrast = (element) => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--genpickrefs-contrast', element.value / 100);
+}
+
+updateScale = (element) => {
+  const scale = element.value
+  for(const cls2D of document.querySelectorAll(".cls2D")){
+    cls2D.style.width  = scale + "px"
+    cls2D.style.height = scale + "px"
+  }
+  for(const cls2Dimg of document.querySelectorAll(".cls2Dimg")){
+    cls2Dimg.style.width  = scale + "px"
+    cls2Dimg.style.height = scale + "px"
+  }
+  for(const picktemplate of document.querySelectorAll(".picktemplate")){
+    picktemplate.style.width  = scale + "px"
+    picktemplate.style.height = scale + "px"
+  }
+  for(const picktemplateimg of document.querySelectorAll(".picktemplateimg")){
+    picktemplateimg.style.width  = scale + "px"
+    picktemplateimg.style.height = scale + "px"
+  }
+}
+
+window.addEventListener("load", () => {
+  var cssroot = document.querySelector(':root');
+  cssroot.style.setProperty('--genpickrefs-contrast',   1.0);
+  cssroot.style.setProperty('--genpickrefs-brightness', 1.0);
+})
+
 window.addEventListener("load", () =>{
     for(const movies_pie_chart of document.getElementsByClassName("particles_pie_chart")){
         const ctx = movies_pie_chart.getContext("2d");

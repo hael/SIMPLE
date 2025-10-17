@@ -92,6 +92,12 @@
                 <pre class="text-[10px]">{{error}}</pre>
             </div>
         </div>
+        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+            <div class="font-bold text-[12px] pl-[10px]">help</div>
+            <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
+                <div class="text-[10px]">some help text</div>
+            </div>
+        </div>
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
         <div class="relative flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
@@ -125,7 +131,7 @@
                                             </div>
                                         </div>
                                         <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2Dimg bg-black h-[100px] w-[100px]">
+                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
                                                 <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
                                                 <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
@@ -138,7 +144,19 @@
                                 {% endfor %}
                             </div>
                             <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                    <div class="flex flex-col">
+                                        <div class="font-bold">contrast</div>
+                                        <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="font-bold">brightness</div>
+                                        <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="font-bold">scale</div>
+                                        <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="400" min="20" step="10" value="100"></input> 
+                                    </div>
                                     <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
                                     <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
                                     <div id="selectabove" class="userbutton w-auto text-center">select above</div>
@@ -173,7 +191,7 @@
                                             </div>
                                         </div>
                                         <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="cls2Dimg bg-black h-[100px] w-[100px]">
+                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
                                                 <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
@@ -185,7 +203,19 @@
                                 {% endfor %}
                             </div>
                             <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                    <div class="flex flex-col">
+                                        <div class="font-bold">contrast</div>
+                                        <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="font-bold">brightness</div>
+                                        <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="font-bold">scale</div>
+                                        <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="400" min="20" step="10" value="100"></input> 
+                                    </div>
                                     <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
                                     <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
                                     <div id="selectabove" class="userbutton w-auto text-center">select above</div>

@@ -121,6 +121,26 @@ updateContrast = (element) => {
   cssroot.style.setProperty('--preprocess-contrast', element.value / 100);
 }
 
+updateScale = (element) => {
+  const micrographs_slider = document.querySelector("#micrographs_slider")
+  const boxes_overlay      = document.querySelector("#boxes_overlay")
+  if(micrographs_slider != undefined) micrographs_slider.style.width = element.value + "px"
+  if(boxes_overlay      != undefined) {
+    boxes_overlay.height = element.value
+    boxes_overlay.width  = element.value
+  }
+  for(const miccontainer of document.querySelectorAll(".miccontainer")){
+    miccontainer.style.height = element.value + "px"
+    miccontainer.style.width  = element.value + "px"
+    const img = miccontainer.querySelector("img")
+    if(img != undefined){
+      img.style.height = element.value + "px"
+      img.style.width  = element.value + "px"
+    }
+  }
+  draw_overlay_coordinates()
+}
+
 window.addEventListener("load", () => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--preprocess-contrast',   1.0);

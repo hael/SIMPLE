@@ -422,7 +422,10 @@ def link_stream_particle_set(request, jobid, setid, filename, type):
         set_desel = os.path.join(project.dirc, dataset.dirc, streamjob.dirc, filename)
         classicjob.linkParticleSetFinal(project, workspace, set_proj, set_desel)
     classicjob.update_description("from " + dataset.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))    
-    response = redirect('nice_lite:view_stream_particle_sets', jobid=jobid)
+    #response = redirect('nice_lite:view_stream_particle_sets', jobid=jobid)
+    response = redirect('nice_lite:classic')
+    response.set_cookie(key='selected_project_id',   value=project.id)
+    response.set_cookie(key='selected_workspace_id', value=workspace.id)
     return response   
 
 @login_required(login_url="/login/")
