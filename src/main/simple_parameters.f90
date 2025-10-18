@@ -469,7 +469,7 @@ type :: parameters
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)
     real    :: moldiam=140.        !< molecular diameter(in A)
-    real    :: moldiam_max=200.    !< upper bound molecular diameter(in A)
+    real    :: moldiam_max=500.    !< upper bound molecular diameter(in A)
     real    :: moldiam_refine=0.   !< upper bound molecular diameter(in A)
     real    :: moldiam_ring=0.     !< ring picker diameter(in A)
     real    :: moment=0.
