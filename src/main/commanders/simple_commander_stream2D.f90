@@ -82,7 +82,7 @@ contains
         integer,                   allocatable :: boxdata_raw(:,:)
         integer,                   allocatable :: boxdata4viz(:,:), inds(:), pops(:), pops_sorted(:), i_medoids(:)
         real,                      allocatable :: diams_arr(:), masscens(:,:), resvals(:), resvals_sorted(:), tmp(:)
-        logical,                   allocatable :: clsmsk(:), l_non_junk(:)
+        logical,                   allocatable :: clsmsk(:), l_non_junk(:), resmsk(:)
         type(ctfparams),           allocatable :: ctfvars(:)
         type(image),               allocatable :: imgs(:), cavg_imgs(:)
         type(picksegdiam)                      :: picker
@@ -105,7 +105,8 @@ contains
         character(len=STDLEN) :: ext
         integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls, ncls_sel, icls
         integer               :: nptcls, box_raw, box4viz, i, nboxes, pop_thres
-        real                  :: scale, rmin, rmax, rmean, rsdev, frac, mskrad, hp_cluster, lp_cluster
+        real                  :: scale, rmin, rmax, rmean, rsdev, frac, mskrad, hp_cluster, lp_cluster, res_thres
+        logical               :: l_empty
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
         if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
@@ -122,7 +123,7 @@ contains
         nmics = size(micnames)
         ! read the first micrograph
         scale = params%smpd / SMPD_SHRINK1
-        call read_mic_subtr_backgr_shrink(micnames(1), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink)
+        call read_mic_subtr_backgr_shrink(micnames(1), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink, l_empty)
         ! set logical dimensions
         ldim_raw = mic_raw%get_ldim()
         ldim     = mic_shrink%get_ldim()
@@ -202,7 +203,7 @@ contains
             ptcl_stk_names(imic)     = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(micnames(imic))),      trim(ext)))//trim(STK_EXT)
             ptcl_stk4viz_names(imic) = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic4viz_names(imic))), trim(ext)))//trim(STK_EXT)
             ! read raw
-            call read_mic_subtr_backgr(micnames(imic), params%smpd, params%pcontrast, mic_raw)
+            call read_mic_subtr_backgr(micnames(imic), params%smpd, params%pcontrast, mic_raw, l_empty)
             ! read 4viz
             call read_mic(trim(mic4viz_names(imic)), mic4viz)
             ! read binary
@@ -306,18 +307,21 @@ contains
         ! flag non-junk cavgs
         mskrad = real(box_raw/2) - COSMSKHALFWIDTH - 1.
         call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
-        if( count(l_non_junk) < NCLS_MIN )then
+        if( count(l_non_junk) <= NCLS_MIN )then
             ! re-read cavg_imgs with the mask
             call dealloc_imgarr(cavg_imgs)
             cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
             call write_cavgs(cavg_imgs,'selected_cavgs'//trim(STK_EXT))
             call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT))
         else
-            ! first selection: pick the class averages that contain 80% of the data
+            ! first selection:
+            ! (1) pick the class averages that contain 80% of the data
+            ! (2) pick the 80% best resolved class averages
             nptcls  = spproj%os_ptcl2D%get_noris()
             ncls    = spproj%os_cls2D%get_noris()
             pops    = spproj%os_cls2D%get_all_asint('pop')
             resvals = spproj%os_cls2D%get_all_asint('res')
+            ! population threshold
             pops_sorted = pops
             call hpsort(pops_sorted)
             call reverse(pops_sorted)
@@ -326,33 +330,45 @@ contains
                 if( frac <= FRAC_INCL ) ncls_sel = icls
             end do
             pop_thres = pops_sorted(ncls_sel)
-            clsmsk    = pops >= pop_thres
+            ! resolution threshold
+            resvals_sorted = resvals
+            call hpsort(resvals_sorted)
+            res_thres = resvals_sorted(nint(real(ncls) * 0.8))
+            ! create mask
+            clsmsk = pops    >= pop_thres
+            resmsk = resvals <= res_thres
+            where( .not. resmsk     ) clsmsk = .false. ! merging of masks
             where( .not. l_non_junk ) clsmsk = .false. ! merging of masks
             ! re-read cavg_imgs with the mask
             call dealloc_imgarr(cavg_imgs)
             cavg_imgs = read_cavgs_into_imgarr(spproj, mask=clsmsk)
             ncls_sel  = size(cavg_imgs)
-            ! pack resarr for congruency
-            resvals = pack(resvals, mask=clsmsk)
-            resvals_sorted = resvals
-            call hpsort(resvals_sorted)
-            lp_cluster = sum(resvals_sorted(:3))/3.
-            hp_cluster = real(box_raw/2) * params%smpd
-            ! write selected cavgs
-            call write_cavgs(cavg_imgs,'selected_cavgs'//trim(STK_EXT))
-            ! cluster cavgs
-            call cline_cluster_stk%set('mkdir',                          'no')
-            call cline_cluster_stk%set('stk', 'selected_cavgs'//trim(STK_EXT))
-            call cline_cluster_stk%set('ncls',                         NCLUST)
-            call cline_cluster_stk%set('clust_crit',                     'fm')
-            call cline_cluster_stk%set('hp',                       hp_cluster)
-            call cline_cluster_stk%set('lp',                       lp_cluster)
-            call cline_cluster_stk%set('mskdiam',                          0.)
-            call cline_cluster_stk%set('nthr',                    params%nthr)
-            call xcluster_stk%execute_safe(cline_cluster_stk)
-            tmp = file2rarr(CLUST_MEDIODS_FNAME)
-            i_medoids = nint(tmp)
-            call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT), i_medoids)
+            if( ncls_sel <= NCLS_MIN )then
+                call write_cavgs(cavg_imgs,'selected_cavgs'//trim(STK_EXT))
+                call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT))
+            else
+                ! pack resarr for congruency
+                resvals = pack(resvals, mask=clsmsk)
+                resvals_sorted = resvals
+                call hpsort(resvals_sorted)
+                lp_cluster = sum(resvals_sorted(:3))/3.
+                hp_cluster = real(box_raw/2) * params%smpd
+                ! write selected cavgs
+                call write_cavgs(cavg_imgs,'selected_cavgs'//trim(STK_EXT))
+                ! cluster cavgs
+                call cline_cluster_stk%set('mkdir',                          'no')
+                call cline_cluster_stk%set('stk', 'selected_cavgs'//trim(STK_EXT))
+                call cline_cluster_stk%set('ncls',                         NCLUST)
+                call cline_cluster_stk%set('clust_crit',                     'fm')
+                call cline_cluster_stk%set('hp',                       hp_cluster)
+                call cline_cluster_stk%set('lp',                       lp_cluster)
+                call cline_cluster_stk%set('mskdiam',                          0.)
+                call cline_cluster_stk%set('nthr',                    params%nthr)
+                call xcluster_stk%execute_safe(cline_cluster_stk)
+                tmp = file2rarr(CLUST_MEDIODS_FNAME)
+                i_medoids = nint(tmp)
+                call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT), i_medoids)
+            endif
         endif
         ! organize output in folders
         call simple_list_files('*jpg', thumb_names)

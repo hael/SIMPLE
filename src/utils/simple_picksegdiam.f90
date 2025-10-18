@@ -44,10 +44,12 @@ contains
         type(binimage) :: mic_shrink, mic_bin, img_cc
         real           :: rpos(2), diam, scale
         integer        :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
+        logical        :: l_empty
         call self%kill
         self%moldiam_max = moldiam_max
         scale = params_glob%smpd / SMPD_SHRINK1
-        call read_mic_subtr_backgr_shrink(micname, params_glob%smpd, scale, params_glob%pcontrast,mic_raw, mic_shrink)
+        call read_mic_subtr_backgr_shrink(micname, params_glob%smpd, scale, params_glob%pcontrast, mic_raw, mic_shrink, l_empty)
+        if( l_empty ) return
         ldim_raw = mic_raw%get_ldim()
         ldim     = mic_shrink%get_ldim()
         ! Prep segmentation
