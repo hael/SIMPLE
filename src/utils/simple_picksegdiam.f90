@@ -31,11 +31,11 @@ end type picksegdiam
 
 contains
 
-    subroutine pick( self, micname, moldiam_max, vizfname, binfname )
+    subroutine pick( self, micname, moldiam_max, vizfname, binfname, denfname )
         class(picksegdiam),         intent(inout) :: self
         character(len=*),           intent(in)    :: micname !< micrograph file name
         real,                       intent(in)    :: moldiam_max
-        character(len=*), optional, intent(in)    :: vizfname, binfname
+        character(len=*), optional, intent(in)    :: vizfname, binfname, denfname
         character(len=:), allocatable :: fname, output_dir
         integer,          allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
         real,             allocatable :: masscens(:,:)
@@ -56,6 +56,7 @@ contains
         if( real(nmasked) > 0.98 * real(product(ldim)) ) return
         call cascade_filter_biomol( mic_shrink, mic4viz )
         if( present(vizfname) ) call mic4viz%write(vizfname)
+        if( present(denfname) ) call mic_shrink%write(denfname)
         call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
         if( nmasked > 0 ) call mic_bin%apply_mask(picking_mask)
         ! identify connected components
