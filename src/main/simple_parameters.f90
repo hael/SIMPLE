@@ -214,7 +214,7 @@ type :: parameters
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
-    character(len=STDLEN)     :: clust_crit=''        !< clustering criterion (fm|pow|hist|hybrid){hybrid}
+    character(len=STDLEN)     :: clust_crit='hybrid'  !< clustering criterion (fm|pow|hist|hybrid){hybrid}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
@@ -622,6 +622,7 @@ contains
         call check_carg('clear',          self%clear)
         call check_carg('cls_init',       self%cls_init)
         call check_carg('clustinds',      self%clustinds)
+        call check_carg('clust_crit',     self%clust_crit)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
         call check_carg('continue',       self%continue)

@@ -128,6 +128,8 @@ contains
         if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',    'yes')
         if( .not. cline%defined('noise_norm')  ) call cline%set('noise_norm',  'no')
         if( .not. cline%defined('cavgw')       ) call cline%set('cavgw',       'no')
+        if( .not. cline%defined('lpstart')     ) call cline%set('lpstart',      20.)
+        if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',        8.)
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
