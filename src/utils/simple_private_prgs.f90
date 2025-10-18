@@ -744,7 +744,15 @@ contains
         ! required keys
         call private_prgs(25)%push_req_key('nptcls')
 
-        n_private_prgs = 25
+        ! suggest picking references
+        call private_prgs(26)%set_name('suggest_pickrefs')
+        ! required keys
+        call private_prgs(26)%push_req_key('ncls')
+        call private_prgs(26)%push_req_key('projfile')
+        ! optional keys
+        call private_prgs(26)%push_opt_key('nthr')
+
+        n_private_prgs = 26
     end subroutine new_private_prgs
 
 end module simple_private_prgs
