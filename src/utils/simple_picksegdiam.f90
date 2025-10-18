@@ -18,8 +18,8 @@ real, parameter :: FRAC_FG      = 0.17
 ! instance
 type picksegdiam
     private
-    real               :: moldiam_max
-    type(linked_list)  :: diameters, xpos, ypos
+    real              :: moldiam_max
+    type(linked_list) :: diameters, xpos, ypos
 contains
     procedure :: pick
     procedure :: get_nboxes

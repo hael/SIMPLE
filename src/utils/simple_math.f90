@@ -416,9 +416,11 @@ contains
         logical, intent(in)  :: ref_mask(n)
         real,    intent(out) :: t_out
         integer, parameter   :: NQUANTA = 10
+        real,    parameter   :: FRAC_PEAK_MAX = 0.4
         real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), std_mean_diffs(:)
-        integer, allocatable :: labels(:), locn(:)
-        integer :: iq, n_fg, nvals, loc(1), cnt
+        integer, allocatable :: labels(:), locn(:), n_thres(:)
+        logical, allocatable :: smd_mask(:)
+        integer :: iq, n_fg, nvals, loc(1), cnt, n_ref
         real    :: t_ini, as_ref(2), as_thres(2)
         locn  = maxnloc(x, n_ub)
         t_ini = minval(x(locn))
@@ -448,12 +450,21 @@ contains
         ! calculate the average and standard deviation for the distributions obtained
         ! when applying the hierarchy of thresholds & select the threshold that generates 
         ! a distribution that minimizes the standard mean difference to the reference distribution
-        allocate(std_mean_diffs(cnt), source=0.)
+        ! subject to the peak fraction being > FRAC_PEAK_MAX and the number of peaks larger than 
+        ! in the reference distribution
+        allocate(std_mean_diffs(cnt), n_thres(cnt), smd_mask(cnt))
+        n_ref = count(ref_mask)
         do iq = 1, cnt
+            n_thres(iq) = count(x >= peak_ts(iq))
             call avg_sdev(x, as_thres(1), as_thres(2), mask=x >= peak_ts(iq))
             std_mean_diffs(iq) = abs(as_ref(1) - as_thres(1)) / sqrt(0.5 * (as_ref(2)**2. + as_thres(2)**2.))
         end do
-        loc   = minloc(std_mean_diffs)
+        ! apply constraints
+        smd_mask = n_thres > n_ref
+        where(frac_peaks(:cnt) >= FRAC_PEAK_MAX) smd_mask = .false.
+        if( count(smd_mask) == 0 ) smd_mask = n_thres > n_ref
+        ! find minimum
+        loc   = minloc(std_mean_diffs, mask=(n_thres > n_ref).and.(frac_peaks(:cnt) < FRAC_PEAK_MAX))
         t_out = peak_ts(loc(1))
 
         contains
