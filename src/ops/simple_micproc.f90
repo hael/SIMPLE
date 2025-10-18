@@ -8,12 +8,13 @@ implicit none
 
 contains
 
-    subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink, mic_mask )
+    subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty, mic_mask )
         character(len=*),               intent(in)    :: micname !< micrograph file name
         real,                           intent(in)    :: smpd    !< sampling distance in A
         real,                           intent(in)    :: scale   !< scale factor
         character(len=*),               intent(in)    :: pcontrast
         class(image),                   intent(inout) :: mic_raw, mic_shrink
+        logical,                        intent(out)   :: l_empty
         logical, allocatable, optional, intent(inout) :: mic_mask(:,:)
         integer :: nframes, ldim(3), ldim_shrink(3)
         ! set micrograph info
@@ -28,6 +29,8 @@ contains
         ! read micrograph
         call mic_raw%new(ldim, smpd)
         call mic_raw%read(micname)
+        l_empty = mic_raw%is_empty()
+        if( l_empty ) return
         call mic_raw%subtract_background(HP_BACKGR_SUBTR)
         call mic_raw%fft
         select case(trim(pcontrast))
@@ -61,11 +64,12 @@ contains
         call mic_shrink%ifft
     end subroutine read_mic_subtr_backgr_shrink
 
-    subroutine read_mic_subtr_backgr( micname, smpd, pcontrast, mic_raw )
+    subroutine read_mic_subtr_backgr( micname, smpd, pcontrast, mic_raw, l_empty )
         character(len=*), intent(in)    :: micname !< micrograph file name
         real,             intent(in)    :: smpd    !< sampling distance in A
         character(len=*), intent(in)    :: pcontrast
         class(image),     intent(inout) :: mic_raw
+        logical,          intent(out)   :: l_empty
         integer :: nframes, ldim(3)
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim, nframes)
@@ -73,6 +77,8 @@ contains
         ! read micrograph
         call mic_raw%new(ldim, smpd)
         call mic_raw%read(micname)
+        l_empty = mic_raw%is_empty()
+        if( l_empty ) return
         call mic_raw%subtract_background(HP_BACKGR_SUBTR)
         call mic_raw%fft
         select case(trim(pcontrast))
