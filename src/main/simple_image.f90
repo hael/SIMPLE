@@ -315,7 +315,7 @@ contains
     procedure          :: norm
     procedure          :: variance
     procedure          :: norm_minmax
-    procedure, private :: norm4viz
+    procedure          :: norm4viz
     procedure          :: norm_ext
     procedure          :: norm_noise
     procedure          :: norm_within
