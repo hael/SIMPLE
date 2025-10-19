@@ -100,19 +100,21 @@ contains
         type(oris)                             :: os_deftab, os_ctf, o_tmp
         type(ori)                              :: omic
         type(cmdline)                          :: cline_new_proj, cline_import_movies, cline_import_particles
-        type(cmdline)                          :: cline_abinitio2D, cline_suggest_pickrefs, cline_pick_extract, cline_extract
-        type(cmdline)                          :: cline_2Drefpick
+        type(cmdline)                          :: cline_abinitio2D, cline_suggest_pickrefs, cline_make_pickrefs
+        type(cmdline)                          :: cline_pick_extract
         type(new_project_commander)            :: xnew_project
         type(import_movies_commander)          :: ximport_movies
         type(import_particles_commander)       :: ximport_particles
         type(abinitio2D_commander)             :: xabinitio2D
         type(suggest_pickrefs_commander)       :: xsuggest_pickrefs
+        type(make_pickrefs_commander)          :: xmake_pickrefs
         type(pick_extract_commander)           :: xpickextract
+        type(sp_project)                       :: spproj
         type(stats_struct)                     :: stats_nboxes
         character(len=STDLEN) :: ext
         integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls
         integer               :: nptcls, box_raw, box4viz, i, nboxes
-        real                  :: scale, rmin, rmax, rmean, rsdev
+        real                  :: scale, rmin, rmax, rmean, rsdev, mskdiam_estimate
         logical               :: l_empty
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
@@ -358,8 +360,16 @@ contains
         call cline_import_movies%set('projfile',   PROJFILE_MINI_STREAM2)
         call ximport_movies%execute_safe(cline_import_movies)
         ! re-pick with the suggested references
+        ! (1) make pickrefs
+        call cline_make_pickrefs%set('mkdir',                       'no')
+        call cline_make_pickrefs%set('pickrefs', 'suggested_pickrefs'//trim(STK_EXT))
+        call cline_make_pickrefs%set('smpd',                 params%smpd)
+        call cline_make_pickrefs%set('nthr',                 params%nthr)
+        call xmake_pickrefs%execute_safe(cline_make_pickrefs)
+        mskdiam_estimate = cline%get_rarg('mskdiam')
+        ! (2) pick and extract
         call cline_pick_extract%set('mkdir',                        'no')
-        call cline_pick_extract%set('pickrefs', 'suggested_pickrefs'//trim(STK_EXT))               
+        call cline_pick_extract%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)               
         call cline_pick_extract%set('pick_roi',                    'yes')
         call cline_pick_extract%set('stream',                      'yes')
         call cline_pick_extract%set('extract',                     'yes')
@@ -370,9 +380,15 @@ contains
         call cline_pick_extract%set('projfile',    PROJFILE_MINI_STREAM2)
         call xpickextract%execute_safe(cline_pick_extract)
         ! 2D analysis
+        call spproj%read(PROJFILE_MINI_STREAM2)
+        nptcls = spproj%os_ptcl2D%get_noris()
+        ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
+        call cline_abinitio2D%set('ncls',                           ncls)
+        call cline_abinitio2D%set('mskdiam',            mskdiam_estimate)
         call cline_abinitio2D%set('projfile',      PROJFILE_MINI_STREAM2)
         call xabinitio2D%execute_safe(cline_abinitio2D)
         ! cleanup
+        call spproj%kill
         call os_deftab%kill
         call os_ctf%kill
         call omic%kill
