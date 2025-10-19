@@ -85,7 +85,7 @@ contains
         character(len=:),          allocatable :: output_dir
         integer,                   allocatable :: boxdata_raw(:,:)
         integer,                   allocatable :: boxdata4viz(:,:), inds(:)
-        real,                      allocatable :: diams_arr(:), masscens(:,:), tmp(:)
+        real,                      allocatable :: diams_arr(:), masscens(:,:), tmp(:), rarr_nboxes(:)
         type(ctfparams),           allocatable :: ctfvars(:)
         type(image),               allocatable :: imgs(:)
         type(picksegdiam)                      :: picker
@@ -112,8 +112,8 @@ contains
         type(sp_project)                       :: spproj
         type(stats_struct)                     :: stats_nboxes
         character(len=STDLEN) :: ext
-        integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls
-        integer               :: nptcls, box_raw, box4viz, i, nboxes
+        integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls, loc(1)
+        integer               :: nptcls, box_raw, box4viz, i, nboxes, imic_maxpop, imic_minpop, imic_medpop
         real                  :: scale, rmin, rmax, rmean, rsdev, mskdiam_estimate
         logical               :: l_empty
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
@@ -197,10 +197,11 @@ contains
         ! Re-segmentation
         call mic_bin%new_bimg(ldim, mic_shrink%get_smpd())
         ! extraction from micrographs
-        allocate(ptcl_stk_names(nmics), ptcl_stk4viz_names(nmics))
+        allocate(ptcl_stk_names(nmics), ptcl_stk4viz_names(nmics), rarr_nboxes(nmics))
         call extractor_raw%init_mic(box_raw, .false.)
         call extractor_den%init_mic(box4viz, .false.)
-        nptcls = 0
+        nptcls      = 0
+        rarr_nboxes = 0.
         do imic = 1, nmics
             ! set output stack name
             ext                      = fname2ext(trim(basename(micnames(imic))))
@@ -221,7 +222,8 @@ contains
             call mic_raw%ifft
             ! find centers of mass of connected components
             call identify_masscens(mic_bin, masscens)
-            nboxes      = size(masscens, dim=1)
+            nboxes = size(masscens, dim=1)
+            rarr_nboxes(imic) = real(nboxes)
             ! sanity check
             if( nboxes == 0 )then
                 ptcl_stk_names(imic)     = NIL
@@ -260,6 +262,43 @@ contains
             call mic4viz%kill
             call mic_bin%kill_bimg
         end do
+        ! derive nboxes stats
+        call calc_stats(rarr_nboxes, stats_nboxes)
+        loc = minloc(abs(rarr_nboxes - stats_nboxes%maxv))
+        imic_maxpop = loc(1)
+        loc = minloc(abs(rarr_nboxes - stats_nboxes%minv))
+        imic_minpop = loc(1)
+        loc = minloc(abs(rarr_nboxes - stats_nboxes%med))
+        imic_medpop = loc(1)
+        ! write relevant jpegs
+        call read_mic(trim(mic4viz_names(imic_maxpop)),  mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_denoised_maxpop.jpg')
+        call read_mic(trim(mic4viz_names(imic_minpop)),  mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_denoised_minpop.jpg')
+        call read_mic(trim(mic4viz_names(imic_medpop)), mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_denoised_medpop.jpg')
+        call read_mic(trim(mic_den_names(imic_maxpop)),  mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_topographical_maxpop.jpg')
+        call read_mic(trim(mic_den_names(imic_minpop)),  mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_topographical_minpop.jpg')
+        call read_mic(trim(mic_den_names(imic_medpop)), mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_topographical_medpop.jpg')
+        call read_mic(trim(mic_bin_names(imic_maxpop)),  mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_binarized_maxpop.jpg')
+        call read_mic(trim(mic_bin_names(imic_minpop)),  mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_binarized_minpop.jpg')
+        call read_mic(trim(mic_bin_names(imic_medpop)), mic4viz)
+        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
+        call mic4viz%write_jpg('mic_binarized_medpop.jpg')
+        call mic4viz%kill
         ! excludes zero state
         inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
         if( size(inds) /= nmics )then
