@@ -2087,7 +2087,7 @@ contains
         call cline%set('oritype', 'mic')
         ! parse parameters
         call params%new(cline)
-        if( params%stream.ne.'yes' ) THROW_HARD('new streaming only application')
+        ! if( params%stream.ne.'yes' ) THROW_HARD('new streaming only application')
         l_extract   = trim(params%extract).eq.'yes'
         l_multipick = params%nmoldiams > 1
         ! read in movies
@@ -2363,6 +2363,7 @@ contains
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
         new_box = min(new_box, ldim(1)) ! fail safe: new dimensions cannot be larger than required
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
+        call cline%set('mskdiam', real(new_box) * params%smpd)
         ldim_clip = [new_box, new_box, 1]
         do icavg=1,ncavgs
             call projs(icavg)%bp(0.,lp)
@@ -2370,6 +2371,7 @@ contains
         ! write diam_max to file
         call moldiamori%new(1, .false.)
         call moldiamori%set(1, "moldiam", real(round2even(diam_max)))
+        call cline%set('moldiam', real(round2even(diam_max)))
         call moldiamori%write(1, trim(STREAM_MOLDIAM))
         call moldiamori%kill
         ! expand in in-plane rotation, clip and write to file
