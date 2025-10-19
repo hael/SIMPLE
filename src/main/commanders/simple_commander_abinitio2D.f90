@@ -191,11 +191,13 @@ contains
         call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
         call del_file(DIST_FBODY      //'.dat')
         call del_file(ASSIGNMENT_FBODY//'.dat')
+        deallocate(stage_parms)
         call spproj%kill
         nullify(spproj_field)
         call qsys_cleanup
         call simple_touch(ABINITIO2D_FINISHED)
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
+        
       contains
 
         ! Downscaling/cropping dimensions used throughout

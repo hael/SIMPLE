@@ -68,18 +68,20 @@ contains
         class(cmdline),               intent(inout) :: cline
         logical,                   parameter   :: DEBUG = .true.
         real,                      parameter   :: SMPD_SHRINK1  = 4.0, LPSTART = 30., LPSTOP = 8.
-        character(len=*),          parameter   :: DIR_THUMBS    = 'thumbnails/'
-        character(len=*),          parameter   :: DIR_MIC_DEN   = 'micrographs_denoised/'
-        character(len=*),          parameter   :: DIR_MIC_TOPO  = 'micrographs_topographical/'
-        character(len=*),          parameter   :: DIR_MIC_BIN   = 'micrographs_binarized/'
-        character(len=*),          parameter   :: DIR_PTCLS_DEN = 'particles_denoised/'  ! these should be stacked together and substacks deleted
-        character(len=*),          parameter   :: DIR_BOXFILES  = 'boxfiles/'
+        character(len=*),          parameter   :: DIR_THUMBS        = 'thumbnails/'
+        character(len=*),          parameter   :: DIR_MIC_DEN       = 'micrographs_denoised/'
+        character(len=*),          parameter   :: DIR_MIC_TOPO      = 'micrographs_topographical/'
+        character(len=*),          parameter   :: DIR_MIC_BIN       = 'micrographs_binarized/'
+        character(len=*),          parameter   :: DIR_PTCLS_SEGPICK = 'particles_segpick/'
+        character(len=*),          parameter   :: DIR_BOXFILES      = 'boxfiles/'
+        character(len=*),          parameter   :: DIR_CAVGS_SEGPICK = 'cavgs_segpick/'
         integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 100, NPICKREFS = NCLS_MIN
-        character(len=*),          parameter   :: PROJ_MINI_STREAM = 'project_mini_stream', PROJFILE_MINI_STREAM = 'project_mini_stream.simple'
+        character(len=*),          parameter   :: PROJ_MINI_STREAM1 = 'mini_stream_segpick', PROJFILE_MINI_STREAM1 = 'mini_stream_segpick.simple'
+        character(len=*),          parameter   :: PROJ_MINI_STREAM2 = 'mini_stream_refpick', PROJFILE_MINI_STREAM2 = 'mini_stream_refpick.simple'
         character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
-        character(len=LONGSTRLEN), allocatable :: thumb_names(:)
+        character(len=LONGSTRLEN), allocatable :: fnames(:)
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_bin_names(:), mic4viz_names(:), mic_den_names(:)
-        character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk4viz_names(:)
+        character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk4viz_names(:), cavgs_segpick_names(:)
         character(len=:),          allocatable :: output_dir
         integer,                   allocatable :: boxdata_raw(:,:)
         integer,                   allocatable :: boxdata4viz(:,:), inds(:)
@@ -98,15 +100,15 @@ contains
         type(oris)                             :: os_deftab, os_ctf, o_tmp
         type(ori)                              :: omic
         type(cmdline)                          :: cline_new_proj, cline_import_movies, cline_import_particles
-        type(cmdline)                          :: cline_abinitio2D, cline_suggest_pickrefs, cline_refpick, cline_extract
+        type(cmdline)                          :: cline_abinitio2D, cline_suggest_pickrefs, cline_pick_extract, cline_extract
         type(cmdline)                          :: cline_2Drefpick
         type(new_project_commander)            :: xnew_project
         type(import_movies_commander)          :: ximport_movies
         type(import_particles_commander)       :: ximport_particles
         type(abinitio2D_commander)             :: xabinitio2D
         type(suggest_pickrefs_commander)       :: xsuggest_pickrefs
-        type(pick_commander_distr)             :: xpick
-        type(extract_commander)                :: xextract
+        type(pick_extract_commander)           :: xpickextract
+        type(stats_struct)                     :: stats_nboxes
         character(len=STDLEN) :: ext
         integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls
         integer               :: nptcls, box_raw, box4viz, i, nboxes
@@ -270,33 +272,22 @@ contains
         ! output
         call os_deftab%write(DEFTAB)
         call write_filetable(STKTAB, ptcl_stk_names)
-        ! make first 2D
+        ! analyize particles identified by segmentation-based picking
         ! project creation
         call cline_new_proj%set('dir',           PATH_HERE)
-        call cline_new_proj%set('projname', PROJ_MINI_STREAM)
-        call xnew_project%execute(cline_new_proj)
-        ! movie import
-        call cline_import_movies%set('prg',              'import_movies')
-        call cline_import_movies%set('mkdir',                       'no')
-        call cline_import_movies%set('cs',                     params%cs)
-        call cline_import_movies%set('fraca',               params%fraca)
-        call cline_import_movies%set('kv',                     params%kv)
-        call cline_import_movies%set('smpd',                 params%smpd)
-        call cline_import_movies%set('filetab',           params%filetab)
-        call cline_import_movies%set('deftab',                    DEFTAB)
-        call cline_import_movies%set('ctf',                        'yes')
-        call ximport_movies%execute_safe(cline_import_movies)
+        call cline_new_proj%set('projname', PROJ_MINI_STREAM1)
+        call xnew_project%execute_safe(cline_new_proj)
         ! particle import
-        call cline_import_particles%set('prg',        'import_particles')
-        call cline_import_particles%set('mkdir',                    'no')
-        call cline_import_particles%set('cs',                  params%cs)
-        call cline_import_particles%set('fraca',            params%fraca)
-        call cline_import_particles%set('kv',                  params%kv)
-        call cline_import_particles%set('smpd',              params%smpd)
-        call cline_import_particles%set('stktab',                 STKTAB)
-        call cline_import_particles%set('deftab',                 DEFTAB)
-        call cline_import_particles%set('ctf',                    'flip')
-        call cline_import_particles%set('projfile', PROJFILE_MINI_STREAM)
+        call cline_import_particles%set('prg',         'import_particles')
+        call cline_import_particles%set('mkdir',                     'no')
+        call cline_import_particles%set('cs',                   params%cs)
+        call cline_import_particles%set('fraca',             params%fraca)
+        call cline_import_particles%set('kv',                   params%kv)
+        call cline_import_particles%set('smpd',               params%smpd)
+        call cline_import_particles%set('stktab',                  STKTAB)
+        call cline_import_particles%set('deftab',                  DEFTAB)
+        call cline_import_particles%set('ctf',                     'flip')
+        call cline_import_particles%set('projfile', PROJFILE_MINI_STREAM1)
         call ximport_particles%execute_safe(cline_import_particles)
         ! 2D analysis
         ncls = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
@@ -309,45 +300,78 @@ contains
         call cline_abinitio2D%set('lpstop',                        LPSTOP)
         call cline_abinitio2D%set('mskdiam',                           0.)
         call cline_abinitio2D%set('nthr',                     params%nthr)
-        call cline_abinitio2D%set('projfile',        PROJFILE_MINI_STREAM)
+        call cline_abinitio2D%set('projfile',       PROJFILE_MINI_STREAM1)
         call xabinitio2D%execute_safe(cline_abinitio2D)
         ! suggest picking references
-        call cline_suggest_pickrefs%set('prg',        'suggest_pickrefs')
-        call cline_suggest_pickrefs%set('mkdir',                    'no')
-        call cline_suggest_pickrefs%set('projfile', PROJFILE_MINI_STREAM)
-        call cline_suggest_pickrefs%set('ncls',                NPICKREFS)
-        call cline_suggest_pickrefs%set('nthr',              params%nthr)
+        call cline_suggest_pickrefs%set('prg',         'suggest_pickrefs')
+        call cline_suggest_pickrefs%set('mkdir',                     'no')
+        call cline_suggest_pickrefs%set('projfile', PROJFILE_MINI_STREAM1)
+        call cline_suggest_pickrefs%set('ncls',                 NPICKREFS)
+        call cline_suggest_pickrefs%set('nthr',               params%nthr)
         call xsuggest_pickrefs%execute_safe(cline_suggest_pickrefs)
-        ! re-pick with the suggested references
-        call cline_refpick%set('prg',                             'pick')
-        call cline_refpick%set('mkdir',                             'no')
-        call cline_refpick%set('pickrefs', 'suggested_pickrefs'//trim(STK_EXT))               
-        call cline_refpick%set('pick_roi',                         'yes')
-        call cline_refpick%set('nparts',                               1)
-        call cline_refpick%set('nthr',                       params%nthr)
-        call cline_refpick%set('projfile',          PROJFILE_MINI_STREAM)
-        call xpick%execute_safe(cline_refpick)
-        ! extract
-        call cline_extract%set('prg',                          'extract')
-        call cline_extract%set('mkdir',                             'no')
-        call cline_extract%set('nparts',                               1)
-        call cline_extract%set('nthr',                       params%nthr)
-        call cline_extract%set('projfile',          PROJFILE_MINI_STREAM)
-        call xextract%execute_safe(cline_extract)
-        ! 2D analysis
-        call xabinitio2D%execute_safe(cline_abinitio2D)
         ! organize output in folders
-        call simple_list_files('*jpg', thumb_names)
+        call simple_list_files('*jpg', fnames)
         call simple_mkdir(DIR_THUMBS)
-        call move_files2dir(DIR_THUMBS, thumb_names)
+        call move_files2dir(DIR_THUMBS, fnames)
+        deallocate(fnames)
         call simple_mkdir(DIR_MIC_DEN)
         call move_files2dir(DIR_MIC_DEN, mic4viz_names)
         call simple_mkdir(DIR_MIC_TOPO)
         call move_files2dir(DIR_MIC_TOPO, mic_den_names)
         call simple_mkdir(DIR_MIC_BIN)
         call move_files2dir(DIR_MIC_BIN, mic_bin_names)
-        call simple_mkdir(DIR_PTCLS_DEN)
-        call move_files2dir(DIR_PTCLS_DEN, ptcl_stk4viz_names)
+        call simple_mkdir(DIR_PTCLS_SEGPICK)
+        call move_files2dir(DIR_PTCLS_SEGPICK, ptcl_stk4viz_names)
+        call move_files2dir(DIR_PTCLS_SEGPICK, ptcl_stk_names)
+        call simple_list_files('cavgs_iter*mrc', fnames)
+        call simple_mkdir(DIR_CAVGS_SEGPICK)
+        call move_files2dir(DIR_CAVGS_SEGPICK, fnames)
+        deallocate(fnames)
+        call simple_list_files('clusters2D_iter*star', fnames)
+        call move_files2dir(DIR_CAVGS_SEGPICK, fnames)
+        deallocate(fnames)
+        call simple_list_files('sigma2_it_*star', fnames)
+        call move_files2dir(DIR_CAVGS_SEGPICK, fnames)
+        deallocate(fnames)
+        call simple_rename('classdoc_ranked.txt',    trim(DIR_CAVGS_SEGPICK)//'classdoc_ranked.txt')
+        call simple_rename('frcs.bin',               trim(DIR_CAVGS_SEGPICK)//'frcs.bin')
+        call simple_rename('sigma2_noise_part1.dat', trim(DIR_CAVGS_SEGPICK)//'sigma2_noise_part1.dat')
+        call simple_rename('init_pspec_part1.dat',   trim(DIR_CAVGS_SEGPICK)//'init_pspec_part1.dat')
+
+        ! REANALYZE
+
+        ! analyize particles identified by reference-based picking using suggested_pickrefs.mrc from segpick
+        ! project creation
+        call cline_new_proj%set('dir',           PATH_HERE)
+        call cline_new_proj%set('projname', PROJ_MINI_STREAM2)
+        call xnew_project%execute_safe(cline_new_proj)
+        ! movie import
+        call cline_import_movies%set('prg',              'import_movies')
+        call cline_import_movies%set('mkdir',                       'no')
+        call cline_import_movies%set('cs',                     params%cs)
+        call cline_import_movies%set('fraca',               params%fraca)
+        call cline_import_movies%set('kv',                     params%kv)
+        call cline_import_movies%set('smpd',                 params%smpd)
+        call cline_import_movies%set('filetab',           params%filetab)
+        call cline_import_movies%set('deftab',                    DEFTAB)
+        call cline_import_movies%set('ctf',                        'yes')
+        call cline_import_movies%set('projfile',   PROJFILE_MINI_STREAM2)
+        call ximport_movies%execute_safe(cline_import_movies)
+        ! re-pick with the suggested references
+        call cline_pick_extract%set('mkdir',                        'no')
+        call cline_pick_extract%set('pickrefs', 'suggested_pickrefs'//trim(STK_EXT))               
+        call cline_pick_extract%set('pick_roi',                    'yes')
+        call cline_pick_extract%set('stream',                      'yes')
+        call cline_pick_extract%set('extract',                     'yes')
+        call cline_pick_extract%set('dir',                    output_dir)
+        call cline_pick_extract%set('fromp',                           1)
+        call cline_pick_extract%set('top',                         nmics)
+        call cline_pick_extract%set('nthr',                  params%nthr)
+        call cline_pick_extract%set('projfile',    PROJFILE_MINI_STREAM2)
+        call xpickextract%execute_safe(cline_pick_extract)
+        ! 2D analysis
+        call cline_abinitio2D%set('projfile',      PROJFILE_MINI_STREAM2)
+        call xabinitio2D%execute_safe(cline_abinitio2D)
         ! cleanup
         call os_deftab%kill
         call os_ctf%kill
