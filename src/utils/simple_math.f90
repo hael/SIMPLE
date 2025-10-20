@@ -410,18 +410,18 @@ contains
         t_out = peak_ts(ind)
     end subroutine detect_peak_thres_sortmeans
 
-    subroutine detect_peak_thres_from_ref_distr( n, n_ub, x, ref_mask, t_out )
+    subroutine detect_peak_thres_sortmeans_bin_clust( n, n_ub, x, t_out )
         integer, intent(in)  :: n, n_ub
         real,    intent(in)  :: x(n)
-        logical, intent(in)  :: ref_mask(n)
+        ! logical, intent(in)  :: ref_mask(n)
         real,    intent(out) :: t_out
         integer, parameter   :: NQUANTA = 10
-        real,    parameter   :: FRAC_PEAK_MAX = 0.4
-        real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), std_mean_diffs(:)
+        ! real,    parameter   :: SMD_SMALL = 0.1
+        real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:)!, std_mean_diffs(:)
         integer, allocatable :: labels(:), locn(:), n_thres(:)
-        logical, allocatable :: smd_mask(:)
-        integer :: iq, n_fg, nvals, loc(1), cnt, n_ref
-        real    :: t_ini, as_ref(2), as_thres(2)
+        ! logical, allocatable :: smd_mask(:)
+        integer :: iq, n_fg, n_bg, nvals, loc(1), cnt, iq_min !, n_ref
+        real    :: t_ini, d, avg1, avg2, diff, diff_min !, as_ref(2), as_thres(2)
         locn  = maxnloc(x, n_ub)
         t_ini = minval(x(locn))
         ! quantize with sortmeans
@@ -445,27 +445,71 @@ contains
                 frac_peaks(cnt) = real(n_fg) / real(nvals)
             endif
         end do
+        ! binary clustering for dynamic threshold determination
+        diff_min = huge(d)
+        do iq = 1, cnt
+            n_fg = count(arr >= peak_ts(iq))
+            n_bg = nvals - n_fg
+            avg1 = sum(arr, mask=arr >= peak_ts(iq)) / real(n_fg)
+            avg2 = sum(arr, mask=arr <  peak_ts(iq)) / real(n_bg)
+            diff = sum(abs(arr - avg1), mask=arr >= peak_ts(iq)) + sum(abs(arr - avg2), mask=arr < peak_ts(iq))
+            if( diff < diff_min )then
+                diff_min = diff
+                iq_min   = iq
+            endif
+        end do
+        t_out = peak_ts(iq_min)
+
         ! calculate the average and standard deviation of the reference distribution
-        call avg_sdev(x, as_ref(1), as_ref(2), mask=ref_mask)
+        ! call avg_sdev(x, as_ref(1), as_ref(2), mask=ref_mask)
+
+
+        ! ! calculate the average and standard deviations for the distributions resulting 
+        ! ! from applying the hierarchy of tresholds, and calculate their standard mean
+        ! ! difference to the reference distribution
+        ! allocate(std_mean_diffs(cnt), npeaks(cnt))
+        ! do iq = 1, cnt
+        !     npeaks(iq) = count(x >= peak_ts(iq))
+        !     call avg_sdev(x, as_thres(1), as_thres(2), mask=x >= peak_ts(iq))
+        !     std_mean_diffs(iq) = abs(as_ref(1) - as_thres(1)) / sqrt(0.5 * (as_ref(2)**2. + as_thres(2)**2.))
+        ! end do
+        
+
+        ! binary clustering for dynamic threshold determination
+        ! do iq = 2, cnt
+        !     avg1 = sum(std_mean_diffs(:iq-1)) / real(iq - 1)
+        !     avg2 = sum(std_mean_diffs(iq:))   / real(cnt - iq + 1)
+        !     diff = abs(avg1 - avg2)
+        !     if( iq == 2 )then
+        !         diff_min = diff
+        !         iq_min   = 2
+        !     else
+        !         if( diff < diff_min )then
+        !             diff_min = diff
+        !             iq_min   = iq
+        !         endif
+        !     endif
+        ! end do
+        
         ! calculate the average and standard deviation for the distributions obtained
         ! when applying the hierarchy of thresholds & select the threshold that generates 
         ! a distribution that minimizes the standard mean difference to the reference distribution
         ! subject to the peak fraction being > FRAC_PEAK_MAX and the number of peaks larger than 
         ! in the reference distribution
-        allocate(std_mean_diffs(cnt), n_thres(cnt), smd_mask(cnt))
-        n_ref = count(ref_mask)
-        do iq = 1, cnt
-            n_thres(iq) = count(x >= peak_ts(iq))
-            call avg_sdev(x, as_thres(1), as_thres(2), mask=x >= peak_ts(iq))
-            std_mean_diffs(iq) = abs(as_ref(1) - as_thres(1)) / sqrt(0.5 * (as_ref(2)**2. + as_thres(2)**2.))
-        end do
-        ! apply constraints
-        smd_mask = n_thres > n_ref
-        where(frac_peaks(:cnt) >= FRAC_PEAK_MAX) smd_mask = .false.
-        if( count(smd_mask) == 0 ) smd_mask = n_thres > n_ref
-        ! find minimum
-        loc   = minloc(std_mean_diffs, mask=(n_thres > n_ref).and.(frac_peaks(:cnt) < FRAC_PEAK_MAX))
-        t_out = peak_ts(loc(1))
+        ! allocate(std_mean_diffs(cnt), n_thres(cnt), smd_mask(cnt))
+        ! n_ref = count(ref_mask)
+        ! do iq = 1, cnt
+        !     n_thres(iq) = count(x >= peak_ts(iq))
+        !     call avg_sdev(x, as_thres(1), as_thres(2), mask=x >= peak_ts(iq))
+        !     std_mean_diffs(iq) = abs(as_ref(1) - as_thres(1)) / sqrt(0.5 * (as_ref(2)**2. + as_thres(2)**2.))
+        ! end do
+        ! ! apply constraints
+        ! smd_mask = n_thres > n_ref
+        ! where(frac_peaks(:cnt) >= FRAC_PEAK_MAX) smd_mask = .false.
+        ! if( count(smd_mask) == 0 ) smd_mask = n_thres > n_ref
+
+        ! loc   = minloc(std_mean_diffs, mask=(n_thres > n_ref).and.(frac_peaks(:cnt) < FRAC_PEAK_MAX))
+        ! t_out = peak_ts(loc(1))
 
         contains
 
@@ -479,7 +523,7 @@ contains
                 sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
             end subroutine avg_sdev
 
-    end subroutine detect_peak_thres_from_ref_distr
+    end subroutine detect_peak_thres_sortmeans_bin_clust
 
     ! hierarchical clustering
 
