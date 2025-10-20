@@ -3,8 +3,8 @@ from django.db import models
 class ProjectModel(models.Model):
     name = models.CharField(max_length=200)
     date = models.DateTimeField()
-    desc = models.CharField(max_length=200, default='')
-    dirc = models.CharField(max_length=200, default='')
+    desc = models.CharField(max_length=1024, default='')
+    dirc = models.CharField(max_length=1024, default='')
     
 class DatasetModel(models.Model):
     disp = models.IntegerField(default=0)

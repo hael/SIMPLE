@@ -599,8 +599,9 @@ contains
         character(len=LONGSTRLEN) :: cmd
         character(len=LONGSTRLEN) :: tmpfile
         character(len=1) :: junk
-        integer :: sz, funit, ios, i, nlines
-        tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
+        integer :: sz, funit, ios, i, nlines, pid
+        pid = getpid()
+        tmpfile = '__simple_filelist_'//int2str(pid)//'__'
         cmd = 'ls -1f '//trim(pattern)//' > '//trim(tmpfile)
         call exec_cmdline( cmd, suppress_errors=.true.)
         inquire(file=trim(tmpfile), size=sz)

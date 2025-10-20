@@ -1058,14 +1058,24 @@ contains
     end subroutine update_user_params2D
 
     ! ends processing, generates project & cleanup
-    subroutine terminate_stream2D( records )
+    subroutine terminate_stream2D( records, optics_dir)
         type(projrecord), optional, allocatable, intent(in) :: records(:)
-        integer :: ipart
+        character(len=*), optional, intent(in)              :: optics_dir
+        character(len=:), allocatable                       :: mapfileprefix
+        integer :: ipart, lastmap
         call terminate_chunks
         if( pool_iter == 0 )then
             if( present(records) )then
                 ! no pool 2D analysis performed, all available info is written down
                 if( allocated(records) )then
+                    lastmap = 0
+                    if(present(optics_dir)) then
+                        call get_latest_optics_map()
+                        if(lastmap .gt. 0) then
+                            mapfileprefix = trim(optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(lastmap)
+                            call pool_proj%import_optics_map(mapfileprefix)
+                        endif
+                    endif
                     call projrecords2proj(records, pool_proj)
                     call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
                     call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
@@ -1084,7 +1094,11 @@ contains
                 enddo
                 call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
             endif
-            call write_project_stream2D(write_star=.true., clspath=.true.)
+            if(present(optics_dir)) then
+                call write_project_stream2D(write_star=.true., clspath=.true., optics_dir=optics_dir)
+            else
+                call write_project_stream2D(write_star=.true., clspath=.true.)
+            endif
             ! rank cavgs
             if( pool_iter >= 1 ) call rank_cavgs
         endif
@@ -1096,6 +1110,28 @@ contains
         if( .not.debug_here )then
             call qsys_cleanup
         endif
+
+        contains
+
+            subroutine get_latest_optics_map()
+                character(len=LONGSTRLEN), allocatable   :: map_list(:)
+                character(len=:),          allocatable   :: map_i_str
+                integer                                  :: imap, prefix_len, testmap
+                lastmap = 0
+                if(optics_dir .ne. "") then
+                    if(dir_exists(optics_dir)) call simple_list_files(optics_dir // '/' // OPTICS_MAP_PREFIX //'*' // TXT_EXT, map_list)
+                endif
+                if(allocated(map_list)) then
+                    prefix_len = len(optics_dir // '/' // OPTICS_MAP_PREFIX) + 1
+                    do imap=1, size(map_list)
+                        map_i_str = swap_suffix(map_list(imap)(prefix_len:), "", TXT_EXT)
+                        testmap = str2int(map_i_str)
+                        if(testmap > lastmap) lastmap = testmap
+                    enddo
+                    deallocate(map_list)
+                endif
+            end subroutine get_latest_optics_map
+
     end subroutine terminate_stream2D
 
     ! ends chunks processing
@@ -1107,21 +1143,22 @@ contains
     end subroutine terminate_chunks
 
     !> produces consolidated project
-    subroutine write_project_stream2D( write_star, clspath, snapshot_projfile, snapshot_starfile_base)
+    subroutine write_project_stream2D( write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir)
         logical,           optional, intent(in)    :: write_star
         logical,           optional, intent(in)    :: clspath
         character(len=*),  optional, intent(in)    :: snapshot_projfile, snapshot_starfile_base
+        character(len=*),  optional, intent(in)    :: optics_dir
         type(class_frcs)               :: frcs
         type(oris)                     :: os_backup
         type(sp_project)               :: snapshot_proj
       !  type(simple_nice_communicator) :: snapshot_comm
         type(json_core)                :: json
-        character(len=:),  allocatable :: projfile, projfname, cavgsfname, frcsfname, src, dest
+        character(len=:),  allocatable :: projfile, projfname, cavgsfname, frcsfname, src, dest, mapfileprefix
         character(len=:),  allocatable :: pool_refs, l_stkname, l_frcsname
         logical                        :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found = .false.
         logical,     parameter         :: DEBUG_HERE      = .false.
         real                           :: l_smpd
-        integer                        :: l_ncls
+        integer                        :: l_ncls, lastmap
         l_write_star = .false.
         l_clspath    = .false.
         l_snapshot   = .false.
@@ -1142,6 +1179,7 @@ contains
                 l_snapshot = .true.
             end if
         end if
+        lastmap = 0
         if(l_snapshot) then
             write(logfhandle, '(A,I4,A,A,A,I0,A)') ">>> WRITING SNAPSHOT FROM ITERATION ", snapshot_iteration, trim(snapshot_projfile), ' AT: ',cast_time_char(simple_gettime()), snapshot_jobid, params_glob%niceserver
             call json%destroy(snapshot_json)
@@ -1158,6 +1196,13 @@ contains
             if(snapshot_proj_found) then
                 if(.not. file_exists(stemname(stemname(snapshot_projfile)))) call simple_mkdir(stemname(stemname(snapshot_projfile)))
                 if(.not. file_exists(stemname(snapshot_projfile)))           call simple_mkdir(stemname(snapshot_projfile))
+                if(present(optics_dir)) then
+                    call get_latest_optics_map()
+                    if(lastmap .gt. 0) then
+                        mapfileprefix = trim(optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(lastmap)
+                        call snapshot_proj%import_optics_map(mapfileprefix)
+                    endif
+                endif
                 call apply_snapshot_selection(snapshot_proj)
                 call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd) 
                 call snapshot_proj%get_frcs(l_frcsname, 'frc2D')
@@ -1193,6 +1238,13 @@ contains
             snapshot_iteration = 0
         else
             write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
+            if(present(optics_dir)) then
+                call get_latest_optics_map()
+                if(lastmap .gt. 0) then
+                    mapfileprefix = trim(optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(lastmap)
+                    call pool_proj%import_optics_map(mapfileprefix)
+                endif
+            endif
             if( l_scaling )then
                 os_backup = pool_proj%os_cls2D
                 ! rescale classes
@@ -1271,6 +1323,25 @@ contains
             write(last_snapshot, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
         end subroutine set_snapshot_time
 
+        subroutine get_latest_optics_map()
+            character(len=LONGSTRLEN), allocatable   :: map_list(:)
+            character(len=:),          allocatable   :: map_i_str
+            integer                                  :: imap, prefix_len, testmap
+            lastmap = 0
+            if(optics_dir .ne. "") then
+                if(dir_exists(optics_dir)) call simple_list_files(optics_dir // '/' // OPTICS_MAP_PREFIX //'*' // TXT_EXT, map_list)
+            endif
+            if(allocated(map_list)) then
+                prefix_len = len(optics_dir // '/' // OPTICS_MAP_PREFIX) + 1
+                do imap=1, size(map_list)
+                    map_i_str = swap_suffix(map_list(imap)(prefix_len:), "", TXT_EXT)
+                    testmap = str2int(map_i_str)
+                    if(testmap > lastmap) lastmap = testmap
+                enddo
+                deallocate(map_list)
+            endif
+        end subroutine get_latest_optics_map
+        
     end subroutine write_project_stream2D
 
     ! POOL

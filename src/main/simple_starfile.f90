@@ -184,7 +184,7 @@ contains
         if (self%verbose) print *,'wrote micrographs table in: ', ms_complete; call flush(6)
     end subroutine write_mics_table
 
-    subroutine write_ptcl2D_table( self, ptcl2d_oris, stk_oris, mics_oris)
+    subroutine write_ptcl2D_table(self, ptcl2d_oris, stk_oris, mics_oris)
         class(starfile),            intent(inout) :: self
         class(oris),                intent(in)    :: ptcl2d_oris, stk_oris
         class(oris), optional,      intent(in)    :: mics_oris
