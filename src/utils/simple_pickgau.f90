@@ -721,7 +721,8 @@ contains
             return
         endif
         ! call detect_peak_thres(n, self%nboxes_ub, self%peak_thres_level, tmp, self%t)
-        call detect_peak_thres_sortmeans(n, self%peak_thres_level, self%nboxes_ub, tmp, self%t)
+        ! call detect_peak_thres_sortmeans(n, self%peak_thres_level, self%nboxes_ub, tmp, self%t)
+        call detect_peak_thres_sortmeans_bin_clust(n, self%nboxes_ub, tmp, self%t)
         deallocate(tmp)
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )
