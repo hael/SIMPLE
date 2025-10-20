@@ -390,7 +390,7 @@ contains
                     if( which_iter == 1) call cavger_kill
                     ! polar restoration
                     if( l_clin )then
-                        clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-5)/real(params_glob%extr_lim-4))))
+                        clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
                         call polar_cavger_merge_eos_and_norm(build_glob%eulspace, clinw)
                     else
                         call polar_cavger_merge_eos_and_norm

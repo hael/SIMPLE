@@ -1492,7 +1492,7 @@ contains
                 params%eullims = build%pgrpsyms%get_eullims()
                 call build%eulspace%new(params%ncls, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(build%eulspace)
-                clw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-5)/real(params_glob%extr_lim-4))))
+                clw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
                 call polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, clin_anneal=clw)
             else
                 call polar_cavger_new(pftcc, .false., nrefs=params%ncls)

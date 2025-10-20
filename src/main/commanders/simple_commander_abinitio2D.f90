@@ -398,7 +398,7 @@ contains
 
         subroutine set_cline_cluster2D( istage )
             integer,          intent(in)  :: istage
-            character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm, gauref
+            character(len=:), allocatable :: sh_first, refine, center, objfun, refs, icm, gauref, ref_type
             integer :: iphase, iter, imaxits, cc_iters, minits, extr_iter
             real    :: trs, lambda, gaufreq
             logical :: l_gauref, l_gaufreq_input
@@ -411,6 +411,7 @@ contains
                 l_gaufreq_input = cline%defined('gaufreq')
                 ! ICM used for cartesian filtering of random refs
                 params%l_icm    = istage==1
+                ref_type        = trim(params%ref_type)
             endif
             ! objective function
             if( params%cc_objfun == OBJFUN_CC )then
@@ -557,6 +558,7 @@ contains
                     icm       = 'no'
                     gauref    = 'no'
                     minits    = iter+1
+                    ref_type  = 'cavg'
                 end select
                 if( stage_parms(istage)%max_cls_pop > 0 )then
                     call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)
@@ -589,8 +591,9 @@ contains
             else
                 call cline_cluster2D%delete('gaufreq')
             endif
-            if( (trim(params%polar).eq.'yes') .and. trim(params%ref_type).eq.'vol' )then
-                center = 'no' ! because the references form a volume
+            if( trim(params%polar).eq.'yes')then
+                if( ref_type=='vol') center = 'no' ! because the references form a volume
+                call cline_cluster2D%set('ref_type', ref_type)
             endif
             call cline_cluster2D%set('minits',    minits)
             call cline_cluster2D%set('maxits',    imaxits)
