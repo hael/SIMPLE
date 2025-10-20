@@ -34,7 +34,7 @@ type(gen_pspecs_and_thumbs_commander)   :: xgen_pspecs_and_thumbs
 type(ctf_estimate_commander)            :: xctf_estimate
 type(pick_extract_commander)            :: xpick_extract
 type(pick_commander)                    :: xpick
-type(suggest_pickrefs_commander)        :: xsuggest_pickrefs
+type(shape_rank_cavgs_commander)        :: xshape_rank_cavgs
 type(make_pickrefs_commander)           :: xmake_pickrefs
 type(fractionate_movies_commander)      :: xfractionate_movies
 
@@ -147,8 +147,8 @@ select case(prg)
         call xpick_extract%execute(cline)
     case( 'pick' )
         call xpick%execute(cline)
-    case( 'suggest_pickrefs' )
-        call xsuggest_pickrefs%execute(cline)
+    case( 'shape_rank_cavgs' )
+        call xshape_rank_cavgs%execute(cline)
     case( 'make_pickrefs' )
         call xmake_pickrefs%execute(cline)
     case( 'fractionate_movies' )

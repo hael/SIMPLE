@@ -35,7 +35,7 @@ public :: reextract_commander_distr
 public :: reextract_commander
 public :: pick_extract_commander
 public :: make_pickrefs_commander
-public :: suggest_pickrefs_commander
+public :: shape_rank_cavgs_commander
 private
 #include "simple_local_flags.inc"
 
@@ -129,10 +129,10 @@ type, extends(commander_base) :: make_pickrefs_commander
     procedure :: execute      => exec_make_pickrefs
 end type make_pickrefs_commander
 
-type, extends(commander_base) :: suggest_pickrefs_commander
+type, extends(commander_base) :: shape_rank_cavgs_commander
   contains
-    procedure :: execute      => exec_suggest_pickrefs
-end type suggest_pickrefs_commander
+    procedure :: execute      => exec_shape_rank_cavgs
+end type shape_rank_cavgs_commander
 
 contains
 
@@ -2204,24 +2204,23 @@ contains
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
     end subroutine exec_pick_extract
 
-    subroutine exec_suggest_pickrefs( self, cline )
+    subroutine exec_shape_rank_cavgs( self, cline )
         use simple_masker, only: automask2D
         use simple_default_clines
         use simple_strategy2D_utils
-        class(suggest_pickrefs_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        real,        parameter   :: FRAC_INCL = 0.5, LP_BIN = 20.
+        class(shape_rank_cavgs_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        real,        parameter   :: LP_BIN = 20.
         integer,     parameter   :: MAXIT = 10
         type(parameters)         :: params
         type(sp_project)         :: spproj
         type(image), allocatable :: cavg_imgs(:), mask_imgs(:)
-        logical,     allocatable :: l_non_junk(:), clsmsk(:), resmsk(:)
-        real,        allocatable :: resvals(:), resvals_sorted(:), diams(:), shifts(:,:), means(:)
-        integer,     allocatable :: pops(:), pops_sorted(:), labels(:), selected_inds(:)
-        integer :: nptcls, ncls, ncls_sel, icls, ldim(3), loc(1), pop_thres
-        real    :: mskrad, frac, res_thres
-        if( .not.cline%defined('ncls')  ) THROW_HARD('NCLS must be informed!')
-        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        logical,     allocatable :: l_non_junk(:)
+        real,        allocatable :: resvals(:), diams(:), shifts(:,:)
+        integer,     allocatable :: pops(:), order(:)
+        integer :: nptcls, ncls, ncls_sel, icls, ldim(3), loc(1), i
+        real    :: mskrad
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         ! set defaults
         call set_automask2D_defaults(cline)
         ! parse parameters
@@ -2234,84 +2233,53 @@ contains
         ldim   = cavg_imgs(1)%get_ldim()
         mskrad = real(ldim(1)/2) - COSMSKHALFWIDTH - 1.
         call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
-        if( count(l_non_junk) <= params%ncls )then
-            ! re-read cavg_imgs with the mask
-            call dealloc_imgarr(cavg_imgs)
-            cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-            call write_cavgs(cavg_imgs,'selected_cavgs'//trim(STK_EXT))
-            call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT))
-        else
-            ! first selection:
-            ! (1) pick the class averages that contain 80% of the data
-            ! (2) pick the 80% best resolved class averages
-            nptcls  = spproj%os_ptcl2D%get_noris()
-            ncls    = spproj%os_cls2D%get_noris()
-            pops    = spproj%os_cls2D%get_all_asint('pop')
-            resvals = spproj%os_cls2D%get_all('res')
-            ! population threshold
-            ! pops_sorted = pops
-            ! call hpsort(pops_sorted)
-            ! call reverse(pops_sorted)
-            ! do icls = 1, ncls
-            !     frac = real(sum(pops_sorted(:icls))) / real(nptcls)
-            !     if( frac <= FRAC_INCL ) ncls_sel = icls
-            ! end do
-            ! pop_thres = pops_sorted(ncls_sel)
-            ! resolution threshold
-            resvals_sorted = resvals
-            call hpsort(resvals_sorted)
-            res_thres = resvals_sorted(nint(real(ncls) * FRAC_INCL))
-            ! create mask
-            ! clsmsk = pops    >= pop_thres
-            ! resmsk = resvals <= res_thres
-            clsmsk = resvals <= res_thres
-            ! where( .not. resmsk     ) clsmsk = .false. ! merging of masks
-            where( .not. l_non_junk ) clsmsk = .false. ! merging of masks
-            ! re-read cavg_imgs with the mask
-            call dealloc_imgarr(cavg_imgs)
-            cavg_imgs = read_cavgs_into_imgarr(spproj, mask=clsmsk)
-            ncls_sel  = size(cavg_imgs)
-            call write_cavgs(cavg_imgs,'selected_cavgs'//trim(STK_EXT))
-            if( ncls_sel <= params%ncls + 1 )then
-                call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT))
-            else
-                mask_imgs = read_cavgs_into_imgarr(spproj, mask=clsmsk)
-                ! Automasking
-                call automask2D(mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
-                ! shift
-                do icls = 1, ncls_sel
-                    call cavg_imgs(icls)%shift([shifts(icls,1),shifts(icls,2),0.])
-                end do
-                ! sortmeans quantization of estimated diameters
-                allocate( selected_inds(params%ncls), means(params%ncls) )
-                selected_inds = 0
-                means         = 0.
-                call sortmeans(diams, MAXIT, means, labels)
-                ! select best resolved average from each size quanta
-                resvals = pack(resvals, mask=clsmsk)
-                do icls = 1, params%ncls
-                    loc = minloc(resvals, mask=labels == icls)
-                    selected_inds(icls) = loc(1)
-                end do
-                call write_cavgs(cavg_imgs,'suggested_pickrefs'//trim(STK_EXT), selected_inds)
-            endif
-        endif
+        ! re-read non-junk cavg_imgs
+        call dealloc_imgarr(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        mask_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ncls_sel  = size(cavg_imgs) 
+        ! extract class populations
+        pops      = spproj%os_cls2D%get_all_asint('pop')
+        pops      = pack(pops, mask=l_non_junk)
+        ! extract class resolution values
+        resvals   = spproj%os_cls2D%get_all('res')
+        resvals   = pack(resvals, mask=l_non_junk)
+        ! Automasking
+        call automask2D(mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+        ! shift
+        do icls = 1, ncls_sel
+            call cavg_imgs(icls)%shift([shifts(icls,1),shifts(icls,2),0.])
+        end do
+        ! order
+        order = (/(i,i=1,ncls_sel)/)
+        call hpsort(order, p1_lt_p2 )
+        call reverse(order) ! largest first
+        call write_cavgs(cavg_imgs, SHAPE_RANKED_CAVGS_FNAME, order)
+        ! kill
         call spproj%kill
         call dealloc_imgarr(cavg_imgs)
         call dealloc_imgarr(mask_imgs)
         if( allocated(l_non_junk)     ) deallocate(l_non_junk)
-        if( allocated(clsmsk)         ) deallocate(clsmsk)
-        if( allocated(resmsk)         ) deallocate(resmsk)
         if( allocated(resvals)        ) deallocate(resvals)
-        if( allocated(resvals_sorted) ) deallocate(resvals_sorted)
         if( allocated(diams)          ) deallocate(diams)
         if( allocated(shifts)         ) deallocate(shifts)
-        if( allocated(means)          ) deallocate(means)
         if( allocated(pops)           ) deallocate(pops)
-        if( allocated(pops_sorted)    ) deallocate(pops_sorted)
-        if( allocated(labels)         ) deallocate(labels)
-        call simple_end('**** SIMPLE_SUGGEST_PICKREFS NORMAL STOP ****')
-    end subroutine exec_suggest_pickrefs
+        call simple_end('**** SIMPLE_SHAPE_RANK_CAVGS NORMAL STOP ****')
+
+        contains
+
+            function p1_lt_p2( p1, p2 ) result( val )
+                integer, intent(in) :: p1, p2
+                logical :: val
+                val = .false.
+                if( abs(diams(p1) - diams(p2)) <= 8. )then
+                    if( pops(p1) < pops(p2) ) val = .true.
+                else if( diams(p1) < diams(p2) )then
+                    val = .true.
+                endif
+            end function p1_lt_p2
+
+    end subroutine exec_shape_rank_cavgs
 
     subroutine exec_make_pickrefs( self, cline )
         class(make_pickrefs_commander), intent(inout) :: self

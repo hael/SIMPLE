@@ -745,9 +745,8 @@ contains
         call private_prgs(25)%push_req_key('nptcls')
 
         ! suggest picking references
-        call private_prgs(26)%set_name('suggest_pickrefs')
+        call private_prgs(26)%set_name('shape_rank_cavgs')
         ! required keys
-        call private_prgs(26)%push_req_key('ncls')
         call private_prgs(26)%push_req_key('projfile')
         ! optional keys
         call private_prgs(26)%push_opt_key('nthr')
