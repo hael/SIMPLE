@@ -120,6 +120,7 @@ contains
     procedure          :: report_state2mic
     procedure          :: set_boxcoords
     procedure          :: prune_particles
+    procedure          :: import_optics_map
     ! I/O
     ! printers
     procedure          :: print_info
@@ -142,6 +143,7 @@ contains
     procedure          :: write_segment2txt
     procedure          :: write_mics_star
     procedure          :: write_ptcl2D_star
+    procedure          :: write_optics_map
     procedure, private :: segwriter
     procedure          :: segwriter_inside
     ! destructor
@@ -4766,6 +4768,75 @@ contains
         call star%write_ptcl2D_table(self%os_ptcl2D, self%os_stk, mics_oris=self%os_mic)
         call star%complete()
     end subroutine write_ptcl2D_star
+
+    subroutine import_optics_map(self, mapfileprefix)
+        class(sp_project),             intent(inout) :: self
+        character(len=:), allocatable, intent(in)    :: mapfileprefix
+        type(nrtxtfile)                              :: mapfile
+        real,             allocatable                :: map_entries(:,:)
+        integer,          allocatable                :: mics_optics_map(:)
+        real                                         :: min_importind, max_importind
+        integer                                      :: il, nl, imic, iptcl, importind, stkind
+        if(self%os_mic%get_noris() .eq. 0)                return
+        if(.not.file_exists(mapfileprefix//METADATA_EXT)) return
+        if(.not.file_exists(mapfileprefix//TXT_EXT))      return
+        call mapfile%new(mapfileprefix//TXT_EXT, 1)
+        if( mapfile%get_nrecs_per_line() /= 2 )then
+            THROW_WARN('INVALID FORMAT FOR: '//trim(mapfileprefix//TXT_EXT))
+            call mapfile%kill
+        endif
+        nl = mapfile%get_ndatalines()
+        allocate(map_entries(2, nl))
+        do il = 1,nl
+            call mapfile%readNextDataLine(map_entries(:,il))
+        enddo
+        call mapfile%kill()
+        call self%os_mic%minmax('importind', min_importind, max_importind)
+        allocate(mics_optics_map(int(max_importind)), source=1)
+        do il = 1,nl
+            if(int(map_entries(1, il)) <= max_importind) mics_optics_map(int(map_entries(1, il))) = int(map_entries(2,il))
+        enddo
+        call self%os_mic%set_all2single('ogid', 1)
+        do imic=1, self%os_mic%get_noris()
+            importind = self%os_mic%get_int(imic, 'importind')
+            call self%os_mic%set(imic, 'ogid', mics_optics_map(importind))
+        enddo
+        if(self%os_stk%get_noris() .eq. self%os_mic%get_noris()) then
+            do imic=1, self%os_mic%get_noris()
+                call self%os_stk%set(imic, 'ogid', self%os_mic%get(imic, 'ogid'))
+            enddo
+        endif
+        if(self%os_ptcl2D%get_noris() > 0) then
+            do iptcl=1, self%os_ptcl2D%get_noris()
+                stkind = self%os_ptcl2D%get_int(iptcl, 'stkind')
+                call self%os_ptcl2D%set(iptcl, 'ogid', self%os_stk%get(stkind, 'ogid'))
+            end do
+        end if
+        call self%read_segment('optics', mapfileprefix//METADATA_EXT)
+        if(allocated(map_entries))     deallocate(map_entries)
+        if(allocated(mics_optics_map)) deallocate(mics_optics_map)
+    end subroutine import_optics_map
+
+    subroutine write_optics_map(self, fname_prefix)
+        class(sp_project),          intent(inout) :: self
+        character(len=*),           intent(in)    :: fname_prefix
+        type(sp_project)                          :: spproj_optics
+        type(nrtxtfile)                           :: map_file
+        real                                      :: mapline(2)
+        integer                                   :: imic
+        call map_file%new(fname_prefix//TXT_EXT, 2, 2)
+        do imic=1, self%os_mic%get_noris()
+            if(self%os_mic%isthere(imic, 'importind') .and. self%os_mic%isthere(imic, 'ogid')) then
+               mapline(1) = self%os_mic%get_int(imic, 'importind')
+               mapline(2) = self%os_mic%get_int(imic, 'ogid')
+               call map_file%write(mapline)
+            end if
+        end do
+        call map_file%kill()
+        call spproj_optics%os_optics%copy(self%os_optics, is_ptcl=.false.)
+        call spproj_optics%write(fname_prefix//METADATA_EXT)
+        !call self%segwriter('optics', fname_prefix//TXT_EXT)
+    end subroutine write_optics_map
 
     subroutine segwriter( self, isegment, fromto )
         class(sp_project), intent(inout) :: self

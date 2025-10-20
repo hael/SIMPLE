@@ -170,6 +170,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=LONGSTRLEN) :: mskvols(MAXS)=''
     character(len=LONGSTRLEN) :: niceserver=''        !< address and port of nice server for comms
+    character(len=LONGSTRLEN) :: optics_dir=''        !< directory containing stream optics
     character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: outdir=''            !< manually set output directory name
@@ -698,6 +699,7 @@ contains
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
+        call check_carg('optics_dir',     self%optics_dir)
         call check_carg('oritype',        self%oritype)
         call check_carg('outdir',         self%outdir)
         call check_carg('outside',        self%outside)

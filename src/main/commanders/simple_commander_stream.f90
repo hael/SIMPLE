@@ -20,6 +20,7 @@ use simple_nrtxtfile
 use simple_imgproc
 use simple_timer
 use simple_nice
+use simple_starfile
 implicit none
 
 real, parameter, dimension(21)  :: astig_bins     = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
@@ -2776,8 +2777,9 @@ contains
         type(json_value),          pointer     :: optics_assignments, optics_group     
         type(json_value),          pointer     :: optics_group_coordinates,  optics_group_coordinate        
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        integer                                :: nprojects, iproj, iori, new_oris, nimported, i, j
+        integer                                :: nprojects, iproj, iori, new_oris, nimported, i, j, map_count, imap
         logical                                :: found
+        map_count = 0
         call cline%set('mkdir', 'yes')
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
@@ -2933,6 +2935,15 @@ contains
                     call http_communicator%json%add(optics_group, "id", i)
                     call http_communicator%json%add(optics_assignments, optics_group)
                 enddo
+                map_count = map_count + 1
+                call spproj%write_optics_map(OPTICS_MAP_PREFIX // int2str(map_count))
+                ! remove old maps > 5 iterations ago
+                if(map_count > 5) then
+                    do imap=1, map_count - 5
+                        if(file_exists(OPTICS_MAP_PREFIX // int2str(imap) // TXT_EXT))      call del_file(OPTICS_MAP_PREFIX // int2str(imap) // TXT_EXT)
+                        if(file_exists(OPTICS_MAP_PREFIX // int2str(imap) // METADATA_EXT)) call del_file(OPTICS_MAP_PREFIX // int2str(imap) // METADATA_EXT)
+                    enddo
+                endif 
             else
                 call sleep(WAITTIME) ! may want to increase as 3s default
             endif

@@ -1494,7 +1494,8 @@ contains
                         if(found) then
                             call write_project_stream2D(&
                                 &snapshot_projfile=trim(cwd_glob) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' //snapshot_filename,&
-                                &snapshot_starfile_base=trim(cwd_glob) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"))
+                                &snapshot_starfile_base=trim(cwd_glob) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"),&
+                                &optics_dir=trim(params%optics_dir))
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_filename",  snapshot_filename)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    last_snapshot_nptcls)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_time",      stream_datestr())
@@ -1521,7 +1522,7 @@ contains
             call sleep(WAITTIME)
         enddo
         ! Cleanup and final project
-        call terminate_stream2D
+        call terminate_stream2D(optics_dir=trim(params%optics_dir))
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
