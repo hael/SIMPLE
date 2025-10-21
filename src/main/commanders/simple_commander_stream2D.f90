@@ -275,32 +275,32 @@ contains
         imic_medpop = loc(1)
         ! write relevant jpegs
         call read_mic(trim(mic4viz_names(imic_maxpop)),  mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_denoised_maxpop.jpg')
+        call mic4viz%write('mic_denoised_maxpop.mrc')
         call read_mic(trim(mic4viz_names(imic_minpop)),  mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_denoised_minpop.jpg')
+        call mic4viz%write('mic_denoised_minpop.mrc')
         call read_mic(trim(mic4viz_names(imic_medpop)), mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_denoised_medpop.jpg')
+        call mic4viz%write('mic_denoised_medpop.mrc')
         call read_mic(trim(mic_den_names(imic_maxpop)),  mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_topographical_maxpop.jpg')
+        call mic4viz%write('mic_topographical_maxpop.mrc')
         call read_mic(trim(mic_den_names(imic_minpop)),  mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_topographical_minpop.jpg')
+        call mic4viz%write('mic_topographical_minpop.mrc')
         call read_mic(trim(mic_den_names(imic_medpop)), mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_topographical_medpop.jpg')
+        call mic4viz%write('mic_topographical_medpop.mrc')
         call read_mic(trim(mic_bin_names(imic_maxpop)),  mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_binarized_maxpop.jpg')
+        call mic4viz%write('mic_binarized_maxpop.mrc')
         call read_mic(trim(mic_bin_names(imic_minpop)),  mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_binarized_minpop.jpg')
+        call mic4viz%write('mic_binarized_minpop.mrc')
         call read_mic(trim(mic_bin_names(imic_medpop)), mic4viz)
-        call mic4viz%norm4viz(brightness=80.0, maxmin=.true.)
         call mic4viz%write_jpg('mic_binarized_medpop.jpg')
+        call mic4viz%write('mic_binarized_medpop.mrc')
         call mic4viz%kill
         ! excludes zero state
         inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
@@ -437,13 +437,14 @@ contains
         type(parameters)                   :: params
         type(sp_project)                   :: spproj
         type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
-        type(cmdline)                      :: cline_make_pickrefs, cline_pick_extract, cline_abinitio2D
+        type(cmdline)                      :: cline_make_pickrefs, cline_pick_extract, cline_abinitio2D, cline_shape_rank
         type(new_project_commander)        :: xnew_project
         type(make_pickrefs_commander)      :: xmake_pickrefs
         type(import_movies_commander)      :: ximport_movies
         type(ctf_estimate_commander_distr) :: xctf_estimate
         type(pick_extract_commander)       :: xpickextract
         type(abinitio2D_commander)         :: xabinitio2D
+        type(shape_rank_cavgs_commander)   :: xshape_rank
         integer :: ncls, nmics, nptcls 
         real    :: mskdiam_estimate
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
@@ -523,6 +524,10 @@ contains
         call cline_abinitio2D%set('nthr',                    params%nthr)
         call cline_abinitio2D%set('projfile',     PROJFILE_VALIDATE_PICK)
         call xabinitio2D%execute_safe(cline_abinitio2D)
+        ! shape rank cavgs
+        call cline_shape_rank%set('nthr',                    params%nthr)
+        call cline_shape_rank%set('projfile',     PROJFILE_VALIDATE_PICK)
+        call xshape_rank%execute_safe(cline_shape_rank)
         ! organize output in folders
         call simple_list_files('*jpg', fnames)
         call simple_mkdir(DIR_THUMBS)
