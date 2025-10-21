@@ -28,6 +28,7 @@ type :: parameters
     character(len=3)          :: balance='no'         !< Balance class populations to smallest selected
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
+    character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
     character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
     character(len=3)          :: cavgw='no'           !< use class averages weights during 3D ab initio(yes|no){no}
@@ -252,6 +253,7 @@ type :: parameters
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new){new}
+    character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
     character(len=STDLEN)     :: subprojname=''       !< SIMPLE  subproject name
@@ -612,6 +614,7 @@ contains
         call check_carg('backgr_subtr',   self%backgr_subtr)
         call check_carg('balance',        self%balance)
         call check_carg('bin',            self%bin)
+        call check_carg('boxes',          self%boxes)
         call check_carg('cavg_ini',       self%cavg_ini)
         call check_carg('cavg_ini_ext',   self%cavg_ini_ext)
         call check_carg('cavgw',          self%cavgw)
@@ -722,6 +725,7 @@ contains
         call check_carg('particle_density', self%particle_density)
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
+        call check_carg('plot_key',       self%plot_key)
         call check_carg('polar',          self%polar)
         call check_carg('polar_frcs',     self%polar_frcs)
         call check_carg('pre_norm',       self%pre_norm)

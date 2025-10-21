@@ -314,7 +314,7 @@ class SIMPLEProjFile:
         self.ui = ui_json
         return self.ui
 
-    def getFieldStats(self, oritype, fromp=None, top=None, sortkey=None, sortasc=True, hist=False):
+    def getFieldStats(self, oritype, fromp=None, top=None, sortkey=None, sortasc=True, hist=False, boxes=False, plotkey=None):
         """
         Args:
             none
@@ -338,7 +338,12 @@ class SIMPLEProjFile:
         if sortasc is False:   
             cmd.append("sort_asc=no")
         if hist:   
-            cmd.append("hist=yes")   
+            cmd.append("hist=yes")  
+        if boxes:   
+            cmd.append("boxes=yes")
+        if plotkey is not None and sortkey is not None:
+            cmd.append("plot_key=" + plotkey)
+        print(cmd)
         try:
             ui_str = subprocess.run(
                 cmd, 

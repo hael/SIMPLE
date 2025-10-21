@@ -1289,6 +1289,7 @@ contains
                 endif
                 call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             endif
+            pool_proj%os_ptcl3D = pool_proj%os_ptcl2D ! test addition
             call pool_proj%write(projfile)
         endif
         ! 3d field

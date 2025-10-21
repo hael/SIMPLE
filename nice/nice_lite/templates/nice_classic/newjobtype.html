@@ -31,9 +31,17 @@
                     <img src={% static 'nice_classic/single_logo.png' %} class="w-[100px] m-[5px]"/>
                 </div>
             </div>
-            <div id="simpleprograms" class="flex flex-col mt-[5px] overflow-y-scroll mb-[10px]">
+            <div class="flex flex-row mt-[10px]">
+                <div class="flex flex-row text-nice4dark w-full items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clip-rule="evenodd" />
+                    </svg>
+                    <input type="text" class="bg-nice4bg flex-1 rounded-xl mx-[10px] text-[12px] px-[10px] py-[3px]" placeholder="filter" oninput="filterPrograms(this)"></input>
+                </div>    
+            </div>
+            <div id="simpleprograms" class="flex flex-col mt-[5px] overflow-y-scroll mb-[10px] snap-y snap-mandatory">
                 {% for program in simple_programs %}
-                    <form method="POST" action={% url 'nice_lite:new_job' parentid 'simple' program.prg %}>
+                    <form method="GET" action={% url 'nice_lite:new_job' parentid 'simple' program.prg %} class="program snap-start" data-disp='{{ program.disp }}' data-desc='{{ program.desc }}'>
                         {% csrf_token %}
                         <button type="submit" class="w-full">
                             <div class="flex flex-col items-start border-nice4header hover:border-nice4dark hover:bg-nice4bg border-[2px] rounded p-[5px] my-[5px]">
@@ -49,9 +57,9 @@
                     </form>
                 {% endfor %}
             </div>
-            <div id="singleprograms" class="flex flex-col mt-[5px] hidden overflow-y-scroll mb-[10px]">
+            <div id="singleprograms" class="flex flex-col mt-[5px] hidden overflow-y-scroll mb-[10px] snap-y snap-mandatory">
                 {% for program in single_programs %}
-                    <form method="POST" action={% url 'nice_lite:new_job' parentid 'single' program.prg %}>
+                    <form method="GET" action={% url 'nice_lite:new_job' parentid 'single' program.prg %} class="program snap-start" data-disp='{{ program.disp }}' data-desc='{{ program.desc }}'>
                         {% csrf_token %}
                         <button type="submit" class="w-full">
                             <div class="flex flex-col items-start border-nice4header hover:border-nice4dark hover:bg-nice4bg border-[2px] rounded p-[5px] my-[5px]">

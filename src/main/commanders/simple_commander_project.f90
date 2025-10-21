@@ -304,21 +304,22 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         integer          :: fromto(2)
-        logical          :: vol = .false.
+        logical          :: vol = .false., boxes = .false.
         if(cline%defined("oritype") .and. cline%get_carg('oritype') .eq. 'vol') then
             vol = .true.
             call cline%set("oritype", 'out')
         end if
         call params%new(cline, silent=.true.)
         call spproj%read_segment(params%oritype, params%projfile)
+        if(params%boxes .eq. 'yes') boxes = .true.
         if(trim(params%json) .eq. 'yes') then
             if(vol) params%oritype = "vol"
             if(params%fromp .lt. params%top) then
                 fromto(1) = params%fromp
                 fromto(2) = params%top
-                call spproj%print_segment_json(params%oritype, params%projfile, fromto=fromto, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist, nran=params%nran)
+                call spproj%print_segment_json(params%oritype, params%projfile, fromto=fromto, sort_key=params%sort, plot_key=params%plot_key, sort_asc=params%sort_asc, hist=params%hist, nran=params%nran, boxes=boxes)
             else
-                call spproj%print_segment_json(params%oritype, params%projfile, sort_key=params%sort, sort_asc=params%sort_asc, hist=params%hist, nran=params%nran)
+                call spproj%print_segment_json(params%oritype, params%projfile, sort_key=params%sort, plot_key=params%plot_key, sort_asc=params%sort_asc, hist=params%hist, nran=params%nran, boxes=boxes)
             end if
         else
             call spproj%print_segment(params%oritype)

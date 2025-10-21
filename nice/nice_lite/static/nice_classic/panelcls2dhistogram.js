@@ -30,6 +30,9 @@ window.addEventListener("load", () =>{
               labels: labels,
               datasets: [{
                   data: data,
+                  backgroundColor: [
+                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header')
+                  ],
                   hoverOffset: 4
               }]
             }

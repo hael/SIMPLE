@@ -250,11 +250,11 @@ class JobClassic:
         simpleprojfile = SIMPLEProjFile(projfile)
         return simpleprojfile.getGlobalStats()
 
-    def getProjectFieldStats(self, oritype, fromp=None, top=None, sortkey=None, sortasc=None, hist=False):
+    def getProjectFieldStats(self, oritype, fromp=None, top=None, sortkey=None, sortasc=None, hist=False, boxes=False, plotkey=None):
         jobmodel = JobClassicModel.objects.filter(id=self.id).first()
         projfile = os.path.join(jobmodel.wspc.proj.dirc, jobmodel.wspc.dirc, self.dirc, "workspace.simple")
         simpleprojfile = SIMPLEProjFile(projfile)
-        return simpleprojfile.getFieldStats(oritype, fromp, top, sortkey, sortasc, hist)
+        return simpleprojfile.getFieldStats(oritype, fromp, top, sortkey, sortasc, hist, boxes, plotkey)
 
     def updateStats(self, stats_json, project, workspace):
         jobmodel  = JobClassicModel.objects.filter(id=self.id).first()

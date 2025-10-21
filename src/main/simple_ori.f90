@@ -1105,13 +1105,19 @@ contains
         endif
     end function ori2str
 
-    subroutine ori2json( self, json_ori )
+    subroutine ori2json( self, json_ori, boxes )
         class(ori),                 intent(in)    :: self
+        logical,          optional, intent(in)    :: boxes
         type(json_value), pointer,  intent(inout) :: json_ori
         type(json_core)                           :: json
+        type(json_value), pointer                 :: box, boxes_array
+        type(nrtxtfile)                           :: boxfile
         character(len=XLONGSTRLEN), allocatable   :: keys(:)
         type(str4arr),              allocatable   :: hkeys(:)
-        integer :: sz_chash, sz_hash, i, j
+        real,                       allocatable   :: boxdata(:,:)
+        integer :: sz_chash, sz_hash, i, j, x, y, diameter, type
+        logical :: l_boxes = .false.
+        if(present(boxes)) l_boxes = boxes
         sz_chash = self%chtab%size_of()
         if( self%is_ptcl )then
             sz_hash = 0
@@ -1149,6 +1155,41 @@ contains
                 call json%add(json_ori, trim(keys(j)), dble(self%get(trim(keys(j))))) 
             end if
         end do
+        if(l_boxes .and. self%isthere('boxfile')) then
+            call json%create_array(boxes_array, "boxes")
+            call boxfile%new(trim(self%get_static('boxfile')), 1)
+            allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
+            if(boxfile%get_nrecs_per_line() == 5) then
+                ! standard boxfile
+                do i=1, boxfile%get_ndatalines()
+                    call boxfile%readNextDataLine(boxdata(:,i))
+                    call json%create_object(box, "")
+                    x = nint(boxdata(1,i) + boxdata(3,i)/2)
+                    y = nint(boxdata(2,i) + boxdata(4,i)/2)
+                    call json%add(box, "x",    x)
+                    call json%add(box, "y",    y)
+                    call json%add(boxes_array, box)
+                enddo
+            else if(boxfile%get_nrecs_per_line() == 6) then
+                ! multipick boxfile
+                do i=1, boxfile%get_ndatalines()
+                    call boxfile%readNextDataLine(boxdata(:,i))
+                    call json%create_object(box, "")
+                    x = nint(boxdata(1,i) + boxdata(3,i)/2)
+                    y = nint(boxdata(2,i) + boxdata(3,i)/2)
+                    diameter = floor(boxdata(4,i))
+                    type     = nint(boxdata(6,i))
+                    call json%add(box, "x",        x)
+                    call json%add(box, "y",        y)
+                    call json%add(box, "diameter", diameter)
+                    call json%add(box, "type",     type)
+                    call json%add(boxes_array, box)
+                enddo
+            endif
+            call boxfile%kill()
+            if(allocated(boxdata)) deallocate(boxdata)
+            call json%add(json_ori, boxes_array)
+        endif
     end subroutine ori2json
 
     pure subroutine ori2prec( self, prec )

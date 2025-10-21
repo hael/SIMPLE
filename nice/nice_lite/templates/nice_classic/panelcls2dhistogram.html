@@ -29,9 +29,9 @@
                 </form>
             {% endif %}
         </div>
-        <div class="flex flex-row flex-wrap flex-1">
+        <div class="flex flex-row flex-wrap flex-1 overflow-hidden">
             {% if "histogram" in cls2ds%}
-               <div class="h-full ml-[15px]">
+               <div class="h-full ml-[15px] w-full">
                     <canvas class="cls2d_histogram" data-labels='{{ cls2ds.histogram.labels }}' data-values='{{ cls2ds.histogram.data }}'></canvas>
                 </div>
             {% endif %}

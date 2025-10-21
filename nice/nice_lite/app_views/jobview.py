@@ -62,7 +62,7 @@ class JobViewMicrographs:
         if fromp is None and top is None:
             fromp = pages[page - 1]["fromp"]
             top   = pages[page - 1]["top"]
-        micsstats = self.job.getProjectFieldStats('mic', fromp=fromp, top=top, sortkey=self.sortkey, sortasc=self.sortasc)
+        micsstats = self.job.getProjectFieldStats('mic', fromp=fromp, top=top, sortkey=self.sortkey, sortasc=self.sortasc, boxes=True)
         if self.sortkey is not None and "data" in micsstats:
             for micstat in micsstats["data"]:
                micstat["sortval"] = round(micstat[self.sortkey], -int(math.floor(math.log10(abs(micstat[self.sortkey])))) + (2)) # 3 sig fig
@@ -100,7 +100,34 @@ class JobViewMicrographsHistogram:
         }
         response = render(self.request, self.template, context)
         return response
+    
+class JobViewMicrographsPlot:
 
+    template = "nice_classic/panelmicrographsplot.html"
+    sortkey  = "n"
+    plotkey  = "ctfres"
+
+    def __init__(self, request, jobid, sort_micrographs_key, plot_micrographs_key):
+        self.request = request
+        self.job     = JobClassic(id=jobid)
+        if sort_micrographs_key is not None:
+            self.sortkey = sort_micrographs_key
+        if plot_micrographs_key is not None:
+            self.plotkey = plot_micrographs_key
+
+    def render(self, fromp=None, top=None, page=None):
+        projstats = self.job.getProjectStats()
+        micsstats = self.job.getProjectFieldStats('mic', sortkey=self.sortkey, plotkey=self.plotkey)
+        context = {
+            "jobid"       : self.job.id,
+            "sortkey"     : self.sortkey,
+            "plotkey"     : self.plotkey,
+            "projstats"   : projstats,
+            "mics"        : micsstats,
+        }
+        response = render(self.request, self.template, context)
+        return response
+    
 class JobViewCls2D:
 
     template = "nice_classic/panelcls2d.html"
@@ -150,11 +177,11 @@ class JobViewCls2DHistogram:
     template = "nice_classic/panelcls2dhistogram.html"
     sortkey  = "pop"
 
-    def __init__(self, request, jobid, sort_micrographs_key):
+    def __init__(self, request, jobid, sort_cls2d_key):
         self.request = request
         self.job     = JobClassic(id=jobid)
-        if sort_micrographs_key is not None:
-            self.sortkey = sort_micrographs_key
+        if sort_cls2d_key is not None:
+            self.sortkey = sort_cls2d_key
 
     def render(self, fromp=None, top=None, page=None):
         projstats  = self.job.getProjectStats()
@@ -167,6 +194,33 @@ class JobViewCls2DHistogram:
         }
         response = render(self.request, self.template, context)
         return response
+    
+class JobViewCls2DPlot:
+
+    template = "nice_classic/panelcls2dplot.html"
+    sortkey  = "n"
+    plotkey  = "res"
+
+    def __init__(self, request, jobid, sort_cls2d_key, plot_cls2d_key):
+        self.request = request
+        self.job     = JobClassic(id=jobid)
+        if sort_cls2d_key is not None:
+            self.sortkey = sort_cls2d_key
+        if plot_cls2d_key is not None:
+            self.plotkey = plot_cls2d_key
+
+    def render(self, fromp=None, top=None, page=None):
+        projstats = self.job.getProjectStats()
+        cls2dstats = self.job.getProjectFieldStats('cls2D', sortkey=self.sortkey, plotkey=self.plotkey)
+        context = {
+            "jobid"       : self.job.id,
+            "sortkey"     : self.sortkey,
+            "plotkey"     : self.plotkey,
+            "projstats"   : projstats,
+            "cls2ds"      : cls2dstats,
+        }
+        response = render(self.request, self.template, context)
+        return response   
     
 class JobViewLogs:
 
