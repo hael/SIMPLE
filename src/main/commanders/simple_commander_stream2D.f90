@@ -496,7 +496,7 @@ contains
         call cline_make_pickrefs%set('smpd',                 params%smpd)
         call cline_make_pickrefs%set('nthr',                 params%nthr)
         call xmake_pickrefs%execute_safe(cline_make_pickrefs)
-        mskdiam_estimate = cline%get_rarg('mskdiam')
+        mskdiam_estimate = cline_make_pickrefs%get_rarg('mskdiam')
         ! pick and extract
         cline_pick_extract = cline
         call cline_pick_extract%set('mkdir',                        'no')
