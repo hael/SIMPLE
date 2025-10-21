@@ -1990,12 +1990,15 @@ contains
         str = self%o(i)%ori2str()
     end function ori2str
 
-    subroutine ori2json( self, i, json_ori)
+    subroutine ori2json( self, i, json_ori, boxes)
         class(oris),                  intent(in)    :: self
         integer,                      intent(in)    :: i
+        logical,          optional,   intent(in)    :: boxes
         type(json_value), pointer,    intent(inout) :: json_ori
         type(json_core)                             :: json
-        call self%o(i)%ori2json(json_ori)
+        logical :: l_boxes = .false.
+        if(present(boxes)) l_boxes = boxes
+        call self%o(i)%ori2json(json_ori, boxes=l_boxes)
         call json%add(json_ori, 'n', i) 
     end subroutine ori2json
 

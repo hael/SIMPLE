@@ -9,7 +9,8 @@ from django.contrib.auth            import login, logout, authenticate
 from .app_views.coreview       import CoreViewClassic
 from .app_views.newprojectview import NewProjectView
 from .app_views.workspaceview  import WorkspaceView
-from .app_views.jobview        import JobView, JobViewMicrographs, JobViewMicrographsHistogram, JobViewCls2D, JobViewCls2DHistogram, JobViewLogs
+from .app_views.jobview        import JobView, JobViewMicrographs, JobViewMicrographsHistogram, JobViewCls2D, JobViewCls2DHistogram
+from .app_views.jobview        import JobViewLogs, JobViewMicrographsPlot, JobViewCls2DPlot
 from .app_views.newjobview     import NewJobView, NewJobTypeView
 
 from .data_structures.project  import Project
@@ -59,6 +60,17 @@ def view_job_micrographs_histogram(request, jobid):
     return jobviewmicrographs.render()
 
 @login_required(login_url="/login/")
+def view_job_micrographs_plot(request, jobid):
+    sort_micrographs_key = None
+    if "sort_micrographs_key" in request.POST:
+        sort_micrographs_key = request.POST["sort_micrographs_key"]
+    plot_micrographs_key = None
+    if "plot_micrographs_key" in request.POST:
+        plot_micrographs_key = request.POST["plot_micrographs_key"]  
+    jobviewmicrographs = JobViewMicrographsPlot(request, jobid, sort_micrographs_key, plot_micrographs_key)
+    return jobviewmicrographs.render()
+
+@login_required(login_url="/login/")
 def view_job_cls2D(request, jobid):
     sort_cls2d_key = None
     if "sort_cls2d_key" in request.POST:
@@ -75,6 +87,17 @@ def view_job_cls2D_histogram(request, jobid):
     if "sort_cls2d_key" in request.POST:
         sort_cls2d_key = request.POST["sort_cls2d_key"]
     jobviewcls2d = JobViewCls2DHistogram(request, jobid, sort_cls2d_key)
+    return jobviewcls2d.render()
+
+@login_required(login_url="/login/")
+def view_job_cls2D_plot(request, jobid):
+    sort_cls2d_key = None
+    if "sort_cls2d_key" in request.POST:
+        sort_cls2d_key = request.POST["sort_cls2d_key"]
+    plot_cls2d_key = None
+    if "plot_cls2d_key" in request.POST:
+        plot_cls2d_key = request.POST["plot_cls2d_key"]  
+    jobviewcls2d = JobViewCls2DPlot(request, jobid, sort_cls2d_key, plot_cls2d_key)
     return jobviewcls2d.render()
 
 @login_required(login_url="/login/")

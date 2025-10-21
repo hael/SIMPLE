@@ -4468,13 +4468,17 @@ contains
         &'Print project field',&                                              ! descr_short
         &'is a program for printing an orientation field in the project data structure (segment in *.simple project file)',&  ! descr_long
         &'all',&                                                          ! executable
-        &0, 1, 0, 0, 0, 0, 0, .true.)                                        ! # entries in each group, requires sp_project
+        &0, 5, 0, 0, 0, 0, 0, .true.)                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call print_project_field%set_input('parm_ios', 1, oritype)
         print_project_field%parm_ios(1)%required = .true.
+        call print_project_field%set_input('parm_ios', 2, 'json',     'binary', 'output in JSON format', 'output in JSON format', '(yes|no){no}', .false., 'no')
+        call print_project_field%set_input('parm_ios', 3, 'boxes',    'binary', 'output coordinates in JSON format', 'output coordinates in JSON format', '(yes|no){no}', .false., 'no')
+        call print_project_field%set_input('parm_ios', 4, 'sort',     'string', 'sort oris on key', 'sort oris on key', 'e.g. ctfres', .false., '')
+        call print_project_field%set_input('parm_ios', 5, 'plot_key', 'string', 'plot plot_key on , sort on x', 'plot plot_key on , sort on x', 'e.g. dfx', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls

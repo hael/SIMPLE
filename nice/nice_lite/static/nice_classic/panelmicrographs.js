@@ -126,8 +126,44 @@ updateCounts = () => {
   let micrographsdeselection = []
   let micrographsdeselectiontext = sessionStorage.getItem("micrographsdeselection")
   if(micrographsdeselectiontext != null) micrographsdeselection = JSON.parse(micrographsdeselectiontext)
-  console.log(indices_pre.length, indices_post.length ,micrographcontainers.length , micrographsdeselection.length)
   micscount.innerHTML = (indices_pre.length + indices_post.length + micrographcontainers.length - micrographsdeselection.length) + "/" + (indices_pre.length + indices_post.length + micrographcontainers.length)
+}
+
+drawBoxes = () => {
+  const boxestoggle = document.querySelector('#boxestoggle')
+  if(boxestoggle == undefined) return
+  const display = boxestoggle.checked
+  for(const micrographcontainer of document.querySelectorAll(".micrographcontainer")){
+    const canvas = micrographcontainer.querySelector('.boxes_overlay')
+    if(canvas == undefined) continue
+    const micimg = micrographcontainer.querySelector('.micimg')
+    if(micimg == undefined) continue
+    if(!micrographcontainer.dataset.hasOwnProperty('boxes')) continue
+    if(!micrographcontainer.dataset.hasOwnProperty('xdim'))  continue
+    if(!micrographcontainer.dataset.hasOwnProperty('ydim'))  continue
+    const boxes = JSON.parse(micrographcontainer.dataset.boxes.replaceAll("'", '"'))
+    const xdim  = Number(micrographcontainer.dataset.xdim)
+    const ydim  = Number(micrographcontainer.dataset.ydim)
+    const imgrect   = micimg.getBoundingClientRect()
+    const imgwidth  = imgrect.width / 2 // divide by 2 as has PS
+    const imgheight = imgrect.height
+    canvas.width  = imgwidth
+    canvas.height = imgheight
+    canvas.style.marginLeft = imgwidth + "px"
+    const scale = imgwidth  / xdim
+    // account for rectangular images
+    var yoffset = (canvas.height - (scale * ydim)) / 2
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if(display){
+      for(const box of boxes){
+        ctx.strokeStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(box["x"] * scale, (box["y"] * scale) + yoffset, 0.5, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+  }
 }
 
 window.addEventListener("load", () =>{
@@ -149,4 +185,8 @@ window.addEventListener("load", () =>{
   setTimeout(function () {
    document.getElementById("loadinggauze").style.display = "none";
   }, 600);
+})
+
+window.addEventListener("load", () =>{
+  drawBoxes()
 })

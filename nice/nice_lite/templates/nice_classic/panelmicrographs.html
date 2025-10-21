@@ -22,7 +22,7 @@
                             <div id="micscount"></div>
                         </div>
                         <div class="flex justify-center">
-                            <div class="font-bold">sort</div>
+                            <div class="font-bold mr-[5px]">sort</div>
                             <select name="sort_micrographs_key" class="bg-nice4bg rounded" oninput="this.form.submit()">
                                 <option>n</option>
                                 {% for key in projstats.mic.numeric_keys %}
@@ -47,8 +47,17 @@
                         <input type="hidden" name="top" value={{ pages.0.top }}></input>
                         <input type="hidden" name="sort_micrographs_asc" value="{% if sortasc %}true{% else %}false{% endif %}"></input>
                     </div>
+                    {% if "boxes" in mics.data.0 %}
+                        <div class="flex pr-[20px]">
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="checkbox" value="" class="sr-only peer" id="boxestoggle" onchange="drawBoxes()">
+                                <div class="relative w-[24px] h-[12px] bg-nice4bg peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-nice4bubble rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-nice4header after:content-[''] after:absolute after:top-[0px] after:start-[0px] after:bg-nice4bubble after:border-nice4header after:border after:rounded-full after:h-[12px] after:w-[12px] after:transition-all peer-checked:bg-nice4success"></div>
+                                <div class="font-bold ml-[5px]">picks</div>
+                            </label>
+                        </div>
+                    {% endif %}
                     <div class="flex pr-[20px]">
-                        <div class="font-bold">page</div>
+                        <div class="font-bold mr-[5px]">page</div>
                         <select name="page" class="bg-nice4bg rounded" oninput="changePage(this)">
                             {% for page in pages %}
                                 <option data-fromp={{ page.fromp }} data-top={{ page.top }} {% if page.n == currentpage %} selected {% endif %}>{{ page.n }}</option>
@@ -62,7 +71,7 @@
             {% if "data" in mics %}
                 {% for micrograph in mics.data %}
                     {% if "thumb" in micrograph %}
-                        <div class="micrographcontainer snap-center" data-idx={{ micrograph.n }} onclick="toggleMicrograph(this, {{ micrograph.n }})" oncontextmenu="showMenu(this, event)" title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
+                        <div class="micrographcontainer snap-center" {% if "boxes" in micrograph %}data-boxes='{{ micrograph.boxes }}' data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }}{% endif %} data-idx={{ micrograph.n }} onclick="toggleMicrograph(this, {{ micrograph.n }})" oncontextmenu="showMenu(this, event)" title="defocus: {{ micrograph.dfx| floatformat:2 }}/{{ micrograph.dfy| floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres | floatformat:1 }}Å">
                             <div class="max-w-[600px] m-[5px] rounded bg-nice4bg px-[5px] pb-[5px] border-nice4header border-[1px]">
                                 {% if sortkey is not None and "sortval" in micrograph %}
                                     <div class="flex text-[10px]">
@@ -75,12 +84,13 @@
                                     </div>
                                 {% endif %}
                                 <div class="relative overflow-hidden">
+                                    <canvas class="boxes_overlay absolute hover:animate-pulse z-1" height="500" width="500"></canvas>
                                     <div class="deselected hidden absolute text-nice4alert scale-400 flex h-full w-full items-center justify-center">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                             <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                         </svg>
                                     </div>
-                                    <img src={% url 'nice_lite:image' micrograph.thumb %}></img>
+                                    <img src={% url 'nice_lite:image' micrograph.thumb %} class="micimg"></img>
                                 </div>
                             </div>
                         </div>

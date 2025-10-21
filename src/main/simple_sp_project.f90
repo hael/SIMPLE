@@ -4127,13 +4127,14 @@ contains
         end select
     end subroutine print_segment
 
-    subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist, nran )
+    subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist, nran, boxes, plot_key )
         class(sp_project),           intent(inout) :: self
         character(len=*),            intent(in)    :: oritype, projfile
-        character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist
+        character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist, plot_key
         integer,           optional, intent(in)    :: fromto(2), nran
+        logical,           optional, intent(in)    :: boxes
         type(json_core)                            :: json
-        type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori, json_pre, json_post
+        type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori, json_pre, json_post, json_plot
         type(oris)                                 :: vol_oris, fsc_oris
         type(ori)                                  :: tmp_ori
         character(len=:),  allocatable             :: stkname
@@ -4141,12 +4142,14 @@ contains
         integer,           allocatable             :: indices(:), pinds(:), indices_pre(:), indices_post(:)
         integer                                    :: ffromto(2), iori, noris, ncls, isprite, boxsize
         logical,           allocatable             :: l_mask(:)
-        logical                                    :: fromto_present, sort, sort_ascending, copy_oris
+        logical                                    :: fromto_present, sort, sort_ascending, copy_oris, l_boxes
         real,              allocatable             :: projections(:,:)
         real                                       :: smpd, rnd
         fromto_present = present(fromto)
         if( fromto_present ) ffromto = fromto
-        sort = .false.
+        l_boxes = .false.
+        if(present(boxes)) l_boxes = boxes
+        sort    = .false.
         if( present(sort_key) ) then
             if(sort_key .ne. '' .and. sort_key .ne. 'n') sort = .true.
         end if
@@ -4163,7 +4166,7 @@ contains
                 if( noris > 0 )then
                     call calculate_indices(self%os_mic)
                     do iori=1, size(indices)
-                        call self%os_mic%ori2json(indices(iori), json_ori)
+                        call self%os_mic%ori2json(indices(iori), json_ori, boxes=l_boxes)
                         call json%add(json_data, json_ori)
                     end do
                     call json%add(json_root, json_data)
@@ -4183,7 +4186,8 @@ contains
                         call json%add(json_root, json_post)
                         deallocate(indices_post)
                     end if
-                    if(present(hist)) call calculate_histogram(self%os_mic)
+                    if(present(hist))     call calculate_histogram(self%os_mic)
+                    if(present(plot_key)) call calculate_plot(self%os_mic)
                     deallocate(indices)
                 else
                     write(logfhandle,*) 'No mic-type oris available to print; sp_project :: print_segment_json'
@@ -4265,7 +4269,8 @@ contains
                         end if
                     end do
                     call json%add(json_root, json_data)
-                    if(present(hist)) call calculate_histogram(self%os_cls2D)
+                    if(present(hist))     call calculate_histogram(self%os_cls2D)
+                    if(present(plot_key)) call calculate_plot(self%os_cls2D)
                     deallocate(indices)
                 else
                     write(logfhandle,*) 'No cls2D-type oris available to print; sp_project :: print_segment_json'
@@ -4403,29 +4408,21 @@ contains
                 use simple_histogram
                 type(oris),        intent(in)  :: seg_oris
                 type(histogram)                :: histgrm
-                type(json_value),  pointer     :: data, labels!, datasets, dataset,
+                type(json_value),  pointer     :: data, labels
                 real,              allocatable :: rvec(:)
                 integer                        :: n_bins, i
                 n_bins = 20
                 if(hist .eq. 'yes') then
                     if((.not. sort_key .eq. '') .and. (.not. sort_key .eq. 'n')) then
                         call json%create_object(json_hist,'histogram')
-                    !    call json%add(json_hist, 'type', "plot_bar")
-                     !   call json%create_array(datasets, "datasets")
                         call json%create_array(data,     "data")
                         call json%create_array(labels,   "labels")
-                     !   call json%create_object(dataset, "dataset")
                         rvec = seg_oris%get_all(sort_key)
                         call histgrm%new(n_bins, rvec)
                         do i=1, n_bins
                             call json%add(data,   '', dble(histgrm%get(i)))
                             call json%add(labels, '', dble(histgrm%get_x(i)))
                         end do
-                       ! call json%add(dataset, 'backgroundColor', "rgba(30, 144, 255, 0.5)")
-                       ! call json%add(dataset, data)
-                      !  call json%add(datasets, dataset)
-                      !  call json%add(json_hist, datasets)
-                      !  call json%add(json_hist, labels)
                         call json%add(json_hist, data)
                         call json%add(json_hist, labels)
                         call json%add(json_root, json_hist)
@@ -4433,6 +4430,33 @@ contains
                     end if
                 end if
             end subroutine calculate_histogram
+
+            subroutine calculate_plot( seg_oris )
+                type(oris),        intent(in)  :: seg_oris
+                type(json_value),  pointer     :: data, xy
+                real,              allocatable :: rvecx(:), rvecy(:)
+                integer                        :: i
+                if((.not. sort_key .eq. '') .and. (.not. plot_key .eq. '')) then
+                    call json%create_object(json_plot, 'plot')
+                    call json%create_array(data,     "data")
+                    rvecx = seg_oris%get_all(sort_key)
+                    rvecy = seg_oris%get_all(plot_key)
+                    if(size(rvecx) .eq. size(rvecy)) then
+                        do i = 1, size(rvecx)
+                            call json%create_object(xy, 'xy')
+                            if(sort_key == 'n') then
+                                call json%add(xy, 'x', dble(i))
+                            else
+                                call json%add(xy, 'x', dble(rvecx(i)))
+                            endif
+                            call json%add(xy, 'y', dble(rvecy(i)))
+                            call json%add(data, xy)
+                        enddo
+                    endif
+                    call json%add(json_plot, data)
+                    call json%add(json_root, json_plot)
+                endif
+            end subroutine calculate_plot
 
             subroutine calculate_optics_plot()
                 type(json_value),  pointer :: optics_plot, datasets, dataset, data, xy
