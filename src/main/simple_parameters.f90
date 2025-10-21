@@ -96,7 +96,7 @@ type :: parameters
     character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
-    character(len=3)          :: pick_roi='no'
+    character(len=3)          :: pick_roi='yes'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: polar='no'           !< To use polar FT representation(yes|no){no}
     character(len=3)          :: polar_frcs='no'      !< calculate/print FRCs in polar comlin(yes|no){no}
@@ -326,6 +326,7 @@ type :: parameters
     integer :: maxnruns=0
     integer :: minits=0            !< minimum # iterations
     integer :: mrcmode=2
+    integer :: nboxes_max=0
     integer :: nchunks=0
     integer :: nchunksperset=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
@@ -878,6 +879,7 @@ contains
         call check_iarg('maxnruns',       self%maxnruns)
         call check_iarg('minits',         self%minits)
         call check_iarg('mrcmode',        self%mrcmode)
+        call check_iarg('nboxes_max',     self%nboxes_max)
         call check_iarg('nchunks',        self%nchunks)
         call check_iarg('nchunksperset',  self%nchunksperset)
         call check_iarg('ncls',           self%ncls)

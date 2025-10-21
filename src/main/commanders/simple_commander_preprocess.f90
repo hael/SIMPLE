@@ -808,7 +808,7 @@ contains
         if( .not. cline%defined('pcontrast')   ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('oritype')     ) call cline%set('oritype',     'mic')
         if( .not. cline%defined('thres')       ) call cline%set('thres',         24.)
-        if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',     'no')
+        if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',    'yes')
         if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr', 'no') 
         if( .not. cline%defined('picker')      ) call cline%set('picker',      'new')
         if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
@@ -2211,7 +2211,6 @@ contains
         class(shape_rank_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         real,        parameter   :: LP_BIN = 20.
-        integer,     parameter   :: MAXIT = 10
         type(parameters)         :: params
         type(sp_project)         :: spproj
         type(image), allocatable :: cavg_imgs(:), mask_imgs(:)

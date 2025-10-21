@@ -859,7 +859,7 @@ contains
         if( .not. cline%defined('astigthreshold'  )) call cline%set('astigthreshold',   ASTIG_THRESHOLD_STREAM)
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          PICK_LP_DEFAULT)
-        if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',         'no')
+        if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',         'yes')
         if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',     'no')
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',        'black')

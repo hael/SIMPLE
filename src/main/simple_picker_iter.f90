@@ -55,7 +55,11 @@ contains
             case('new')
                 if( cline%defined('pickrefs') )then 
                     call self%read_pickrefs(params_glob%pickrefs)
-                    call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
+                    if( cline%defined('nboxes_max') )then
+                        call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out, nboxes_max=params_glob%nboxes_max)
+                    else
+                        call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
+                    endif
                 else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams')  )then
                     ! at least moldiam is required
                     call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, moldiam_opt=moldiam_opt, dir_out=dir_out, append=l_append)
