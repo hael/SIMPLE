@@ -20,7 +20,7 @@ logical, parameter :: L_DEBUG      = .false.
 
 contains
 
-    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, moldiam_opt, append)
+    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, moldiam_opt, append, nboxes_max )
         use simple_strings, only: str2real, parsestr
         character(len=*),           intent(in)    :: micname
         character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
@@ -30,6 +30,7 @@ contains
         character(len=*), optional, intent(in)    :: dir_out
         real,             optional, intent(out)   :: moldiam_opt
         logical,          optional, intent(in)    :: append
+        integer,          optional, intent(in)    :: nboxes_max
         type(pickgau)             :: gaup, gaup_refine
         real,         allocatable :: moldiams(:)
         character(len=LONGSTRLEN) :: boxfile
@@ -101,7 +102,11 @@ contains
         else
             ! single moldiam pick
             if( present(pickrefs) )then
-                call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
+                if( present(nboxes_max) )then
+                    call gaup%new_refpicker(params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params_glob%nboxes_max)
+                else
+                    call gaup%new_refpicker(params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
+                endif
                 call gaup_refine%new_refpicker(params_glob%pcontrast, SMPD_SHRINK2, pickrefs, offset=1)
             else
                 call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, params_glob%moldiam, offset=OFFSET, roi=l_roi)

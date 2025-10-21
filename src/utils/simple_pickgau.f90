@@ -31,7 +31,7 @@ type pickgau
     real                     :: dist_thres  = 0., refine_dist_thres = 0.
     integer                  :: ldim(3), ldim_box(3), ldim_raw_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
-    integer                  :: peak_thres_level
+    integer                  :: peak_thres_level = 2, nboxes_max = 0
     character(len=STDLEN)    :: kind='none'
     ! peak stats
     real                     :: smd_corr = 0., ksstat_corr = 0., prob_corr = 0.
@@ -56,6 +56,7 @@ contains
     procedure          :: new_refpicker
     procedure, private :: new
     procedure, private :: set_refs
+    procedure, private :: set_nboxes_max
     procedure, private :: set_gaurefs
     procedure, private :: setup_iterators
     procedure, private :: gaumatch_boximgs
@@ -325,7 +326,7 @@ contains
         call self%set_gaurefs(moldiams)
     end subroutine new_gaupicker_multi
 
-    subroutine new_refpicker( self, pcontrast, smpd_shrink, imgs, offset, ndev, roi )
+    subroutine new_refpicker( self, pcontrast, smpd_shrink, imgs, offset, ndev, roi, nboxes_max )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
         real,              intent(in)    :: smpd_shrink
@@ -333,11 +334,15 @@ contains
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         logical, optional, intent(in)    :: roi
+        integer, optional, intent(in)    :: nboxes_max
         integer :: ldim(3)
         ldim    = imgs(1)%get_ldim()
         params_glob%moldiam = (real(ldim(1)) - 2. * COSMSKHALFWIDTH ) * imgs(1)%get_smpd() 
         call self%new( pcontrast, smpd_shrink, params_glob%moldiam, params_glob%moldiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
         call self%set_refs( imgs )
+        if( present(nboxes_max) )then
+            call self%set_nboxes_max(nboxes_max)
+        endif
     end subroutine new_refpicker
 
     subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev, roi, kind )
@@ -525,6 +530,12 @@ contains
         endif
         self%refpick = .true.
     end subroutine set_refs
+
+    subroutine set_nboxes_max( self, nboxes_max )
+        class(pickgau), intent(inout) :: self
+        integer,        intent(in)    :: nboxes_max
+        self%nboxes_max = nboxes_max
+    end subroutine set_nboxes_max
 
     subroutine set_gaurefs(self, moldiams)
         class(pickgau), intent(inout) :: self
@@ -720,10 +731,7 @@ contains
             self%npeaks = 0
             return
         endif
-        ! call detect_peak_thres(n, self%nboxes_ub, self%peak_thres_level, tmp, self%t)
-        ! call detect_peak_thres_sortmeans(n, self%peak_thres_level, self%nboxes_ub, tmp, self%t)
-        call detect_peak_thres_sortmeans_bin_clust(n, self%nboxes_ub, tmp, self%t)
-        deallocate(tmp)
+        call detect_peak_thres_sortmeans(n, self%peak_thres_level, self%nboxes_ub, tmp, self%t)       
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )
             ! there's a peak
@@ -733,13 +741,14 @@ contains
         self%npeaks = count(self%box_scores >= self%t)
         write(logfhandle,'(a,1x,f5.2)') 'peak threshold identified:             ', self%t
         write(logfhandle,'(a,1x,I5)'  ) '# peaks detected:                      ', self%npeaks
+        deallocate(tmp)
     end subroutine detect_peaks
 
     subroutine distance_filter( self, dist_thres )
         class(pickgau), intent(inout) :: self
         real, optional, intent(in)    :: dist_thres
         integer, allocatable :: pos_inds(:)
-        real,    allocatable :: pos_scores(:)
+        real,    allocatable :: pos_scores(:), tmp(:)
         logical, allocatable :: mask(:), selected_pos(:)
         integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, ithr, ipeak
         real    :: dist, dthres
@@ -811,6 +820,11 @@ contains
             self%box_scores = -1.
         end where
         !$omp end parallel workshare
+        if( self%nboxes_max > 0 .and. count(self%box_scores >= self%t) > self%nboxes_max )then
+            tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
+            call detect_peak_thres_for_npeaks(size(tmp), self%nboxes_max, tmp, self%t)
+            deallocate(tmp)
+        endif
         self%npeaks = count(self%box_scores >= self%t)
         if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
     end subroutine remove_outliers

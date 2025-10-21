@@ -304,6 +304,7 @@ type(simple_input_param) :: ml_reg
 type(simple_input_param) :: ml_reg_chunk
 type(simple_input_param) :: ml_reg_pool
 type(simple_input_param) :: mul
+type(simple_input_param) :: nboxes_max
 type(simple_input_param) :: nchunks
 type(simple_input_param) :: nchunksperset
 type(simple_input_param) :: ncls
@@ -1304,6 +1305,7 @@ contains
         call set_param(lp_pick,       'lp_pick',       'num',    'Low-pass limit for picking', 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         call set_param(lp_backgr,     'lp_backgr',     'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(mskdiam,       'mskdiam',       'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
+        call set_param(nboxes_max,    'nboxes_max',    'num',    'Max # boxes per micrograph', 'Max # boxes per micrograph', 'Max # boxes', .false., 500.)
         call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
         &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
         call set_param(ncls_start,    'ncls_start',    'num',    'Number of 2D clusters per subset of particles', 'Number of class averages used in the independent 2D analysis of each subset of particles', '# 2D clusters / subset', .true., 50.)
@@ -1422,7 +1424,7 @@ contains
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D analysis ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
         call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new|seg){new}', '(old|new|seg){new}', .false., 'new')
-        call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only){yes|no}', '{yes|no}', .false., 'no')
+        call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(cls_init,       'cls_init',     'multi',  'Scheme for initial class generation', 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
         call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
@@ -4125,7 +4127,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 7, 0, 5, 1, 0, 2, .true.,&                                     ! # entries in each group, requires sp_project
+        &1, 7, 0, 6, 1, 0, 2, .true.,&                                     ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "picking,compute")       ! GUI         
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4151,13 +4153,14 @@ contains
         call pick%set_input('srch_ctrls', 3, backgr_subtr, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 4, particle_density, gui_submenu="picking")
         call pick%set_input('srch_ctrls', 5, 'winsz', 'num', 'Window size for sauvola', 'Window size for local sauvola binarisation', 'winsz in pixels ', .false., 32.)
+        call pick%set_input('srch_ctrls', 6, nboxes_max, gui_submenu="picking")
         ! filter controls
         call pick%set_input('filt_ctrls', 1, lp, gui_submenu="picking")
         ! mask controls
         ! <empty>
         ! computer controls
         call pick%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call pick%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call pick%set_input('comp_ctrls', 2, nthr,   gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_pick
 
     subroutine new_pick_extract
@@ -6281,7 +6284,7 @@ contains
         &'validation of reference-based picking',&                   ! descr_short
         &'is a program for validation of reference-based picking',&  ! descr_long
         &'simple_stream',&                                           ! executable
-        &2, 5, 0, 1, 0, 0, 1, .false.)                               ! # entries in each group, requires sp_project
+        &2, 5, 0, 4, 0, 0, 1, .false.)                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call validate_refpick%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
@@ -6293,14 +6296,17 @@ contains
         validate_refpick%parm_ios(1)%required = .true.
         call validate_refpick%set_input('parm_ios', 2, pcontrast)
         call validate_refpick%set_input('parm_ios', 3, kv)
-        validate_refpick%parm_ios(4)%required = .true.
+        validate_refpick%parm_ios(3)%required = .true.
         call validate_refpick%set_input('parm_ios', 4, cs)
-        validate_refpick%parm_ios(5)%required = .true.
+        validate_refpick%parm_ios(4)%required = .true.
         call validate_refpick%set_input('parm_ios', 5, fraca)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call validate_refpick%set_input('srch_ctrls',1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
+        call validate_refpick%set_input('srch_ctrls', 1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
+        call validate_refpick%set_input('srch_ctrls', 2, pick_roi)
+        call validate_refpick%set_input('srch_ctrls', 3, particle_density)
+        call validate_refpick%set_input('srch_ctrls', 4, nboxes_max)
         ! filter controls
         ! <empty>
         ! mask controls

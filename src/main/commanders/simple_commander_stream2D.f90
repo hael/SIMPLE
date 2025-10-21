@@ -86,7 +86,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: fnames(:)
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_bin_names(:), mic4viz_names(:), mic_den_names(:)
         character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk4viz_names(:), cavgs_segpick_names(:)
-        character(len=:),          allocatable :: output_dir
+        character(len=:),          allocatable :: output_dir, stk, stkpath
         integer,                   allocatable :: boxdata_raw(:,:)
         integer,                   allocatable :: boxdata4viz(:,:), inds(:)
         real,                      allocatable :: diams_arr(:), masscens(:,:), tmp(:), rarr_nboxes(:)
@@ -104,12 +104,13 @@ contains
         type(oris)                             :: os_deftab, os_ctf, os_tmp
         type(ori)                              :: omic
         type(cmdline)                          :: cline_new_proj, cline_import_particles
-        type(cmdline)                          :: cline_abinitio2D
+        type(cmdline)                          :: cline_abinitio2D, cline_shape_rank
         type(new_project_commander)            :: xnew_project
         type(import_particles_commander)       :: ximport_particles
         type(abinitio2D_commander)             :: xabinitio2D
         type(sp_project)                       :: spproj
         type(stats_struct)                     :: stats_nboxes
+        type(shape_rank_cavgs_commander)       :: xshape_rank
         character(len=STDLEN) :: ext
         integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls, loc(1)
         integer               :: nptcls, box_raw, box4viz, i, nboxes, imic_maxpop, imic_minpop, imic_medpop
@@ -345,6 +346,10 @@ contains
         call cline_abinitio2D%set('nthr',                     params%nthr)
         call cline_abinitio2D%set('projfile',        PROJFILE_MINI_STREAM)
         call xabinitio2D%execute_safe(cline_abinitio2D)
+        ! shape rank cavgs
+        call cline_shape_rank%set('nthr',                     params%nthr)
+        call cline_shape_rank%set('projfile',        PROJFILE_MINI_STREAM)
+        call xshape_rank%execute_safe(cline_shape_rank)
         ! organize output in folders
         call simple_list_files('*jpg', fnames)
         call simple_mkdir(DIR_THUMBS)
@@ -452,6 +457,7 @@ contains
         if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',  DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'no')
         if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',   200)
+        if( .not. cline%defined('pick_roi')         ) call cline%set('pick_roi',       'yes')
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
@@ -492,15 +498,14 @@ contains
         call xmake_pickrefs%execute_safe(cline_make_pickrefs)
         mskdiam_estimate = cline%get_rarg('mskdiam')
         ! pick and extract
+        cline_pick_extract = cline
         call cline_pick_extract%set('mkdir',                        'no')
         call cline_pick_extract%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)               
-        call cline_pick_extract%set('pick_roi',                    'yes')
         call cline_pick_extract%set('stream',                      'yes')
         call cline_pick_extract%set('extract',                     'yes')
         call cline_pick_extract%set('dir',                    output_dir)
         call cline_pick_extract%set('fromp',                           1)
         call cline_pick_extract%set('top',                         nmics)
-        call cline_pick_extract%set('nthr',                  params%nthr)
         call cline_pick_extract%set('projfile',   PROJFILE_VALIDATE_PICK)
         call xpickextract%execute_safe(cline_pick_extract)
         ! 2D analysis
