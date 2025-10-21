@@ -52,12 +52,12 @@ program simple_test_2D_core_finder
     
     ! Allocations and parameter calculations
     ldim_refs = [ldim1(1), ldim1(2), 1]
-    nshells = int( nprad_vox / shell_size_vox )
-    center = ldim_refs(1:2) / 2 + 1.
+    nshells   = int( nprad_vox / shell_size_vox )
+    center    = ldim_refs(1:2) / 2 + 1.
     allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)), source=.false.)
-    call cavg%new(ldim_refs, smpd)
+    call   cavg%new(ldim_refs, smpd)
     call reproj%new(ldim_refs, smpd)
-    call diff%new(ldim_refs, smpd)
+    call   diff%new(ldim_refs, smpd)
 
     ! Results CSV File
     call fopen(funit, FILE=trim(fn_results), STATUS='REPLACE', action='WRITE')
