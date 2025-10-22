@@ -618,7 +618,7 @@ contains
             call cline_reproject%set('nspace', params%nspace)
             call cline_reproject%set('vol1',   'noisevol.mrc')
             call cline_reproject%set('outstk', params%refs)
-            call cline_reproject%set('mskdiam',params%smpd*(real(params%box)-COSMSKHALFWIDTH))
+            call cline_reproject%set('mskdiam',params%smpd*(real(params%box)-2.0*COSMSKHALFWIDTH))
             call xreproject%execute_safe(cline_reproject)
             call copy_imgfile(params%refs, params%refs_even, params%smpd, [1,params%nspace])
             call copy_imgfile(params%refs, params%refs_odd,  params%smpd, [1,params%nspace])
