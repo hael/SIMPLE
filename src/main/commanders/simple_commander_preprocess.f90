@@ -2120,7 +2120,7 @@ contains
                     endif
                 case('segdiam')
                     if( .not.cline%defined('moldiam_max') )then
-                        THROW_HARD('MOLDIAM_MAX required for picker=segdiam')
+                        THROW_WARN('MOLDIAM_MAX not set on command line, falling back on default value: '//int2str(int(params%moldiam_max))//' A')
                     endif
                 case DEFAULT
                     THROW_HARD('Unsupported PICKER: '//trim(params%picker))
