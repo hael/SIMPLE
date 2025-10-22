@@ -23,9 +23,9 @@ use simple_nice
 use simple_starfile
 implicit none
 
-real, parameter, dimension(21)  :: astig_bins     = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
-real, parameter, dimension(19)  :: ctfres_bins    = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
-real, parameter, dimension(21)  :: icescore_bins  = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
+real, parameter, dimension(21)  :: astig_bins    = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
+real, parameter, dimension(19)  :: ctfres_bins   = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
+real, parameter, dimension(21)  :: icescore_bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
 
 public :: commander_stream_preprocess
 public :: commander_stream_gen_picking_refs
@@ -911,60 +911,9 @@ contains
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
-        if(.not. dir_exists(trim(params%dir_target))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
+        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
         if( l_multipick )then
             interactive_waiting  = .false.
             l_extract            = .false.
@@ -2103,60 +2052,9 @@ contains
             THROW_HARD('Incorrect inputs: MAXPOP < NPTCLS_PER_CLS x NCLS')
         endif
         ! wait if dir_target doesn't exist yet
-        if(.not. dir_exists(trim(params%dir_target))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
+        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_GEN_PICKING_REFS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_GEN_PICKING_REFS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_GEN_PICKING_REFS USER STOP ****')
         ! determine whether we are picking/extracting or extracting only
         if( .not.dir_exists(trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED)) )then
             THROW_HARD('Invalid DIR_TARGET 1')
@@ -2813,60 +2711,9 @@ contains
         call spproj%read( params%projfile )
         if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(0, .false.)
         ! wait if dir_target doesn't exist yet
-        if(.not. dir_exists(trim(params%dir_target))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target), " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target))) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target), " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
-        if(.not. dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(params%dir_target)//'/spprojs_completed', " TO BE GENERATED"
-            do i=1, 360
-                if(dir_exists(trim(params%dir_target)//'/spprojs_completed')) then
-                    write(logfhandle, *) ">>> ", trim(params%dir_target)//'/spprojs_completed', " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call http_communicator%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
+        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         ! initialise progress monitor
