@@ -22,6 +22,7 @@ public :: projs_list
 public :: projrecord, projrecords2proj, kill_projrecords, class_rejection
 public :: procrecord, append_procrecord, kill_procrecords, stream_datestr
 public :: write_selected_references
+public :: wait_for_folder
 private
 #include "simple_local_flags.inc"
 
@@ -1165,6 +1166,31 @@ contains
         call frcs%kill
         call frcs_chunk%kill
     end subroutine merge_chunks
+
+    subroutine wait_for_folder( httpcom, folder, stopmsg )
+        use simple_stream_communicator, only:stream_http_communicator
+        class(stream_http_communicator), intent(inout) :: httpcom
+        character(len=*),                intent(in)    :: folder, stopmsg
+        integer :: i
+        if(.not. dir_exists(trim(folder))) then
+            write(logfhandle, *) ">>> WAITING FOR ", trim(folder), " TO BE GENERATED"
+            do i = 1,360
+                if(dir_exists(trim(folder))) then
+                    write(logfhandle, *) ">>> ", trim(folder), " FOUND"
+                    exit
+                endif
+                call sleep(10)
+                call httpcom%send_jobstats()
+                if( httpcom%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call httpcom%term()
+                    call simple_end(stopmsg)
+                    call EXIT(0)
+                endif
+            end do
+        endif
+    end subroutine wait_for_folder
 
     ! Class rejection routine based on image moments & Total Variation Distance
     subroutine class_rejection( os, mask, adjust )

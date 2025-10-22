@@ -24,7 +24,6 @@ contains
     procedure :: pick
     procedure :: get_nboxes
     procedure :: get_diameters
-    procedure :: get_diameters_list
     procedure :: write_pos_and_diams
     procedure :: kill
 end type picksegdiam
@@ -104,12 +103,6 @@ contains
         class(picksegdiam), intent(in) :: self
         get_nboxes = self%diameters%size()
     end function get_nboxes
-
-    function get_diameters_list( self )result( l )
-        class(picksegdiam), intent(in) :: self
-        type(linked_list) :: l
-        l = self%diameters
-    end function get_diameters_list
 
     subroutine get_diameters( self, arr )
         class(picksegdiam), intent(in) :: self

@@ -604,9 +604,9 @@ contains
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
-        call waiting_for_folder(http_communicator, params%dir_target)
-        call waiting_for_folder(http_communicator, trim(params%dir_target)//'/spprojs')
-        call waiting_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed')
+        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
         ! mskdiam
         if( .not. cline%defined('mskdiam') )then
             ! can this go now using 90% box size as msk?????
@@ -1423,8 +1423,8 @@ contains
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
-        call waiting_for_folder(http_communicator, params%dir_target)
-        call waiting_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed')
+        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -1771,31 +1771,5 @@ contains
             end subroutine communicator_add_cls2D
 
     end subroutine exec_stream_abinitio2D
-
-    ! PRIVATE UTILITIES
-
-    subroutine waiting_for_folder( httpcom, folder )
-        class(stream_http_communicator), intent(inout) :: httpcom
-        character(len=*),                intent(in)    :: folder
-        integer :: i
-        if(.not. dir_exists(trim(folder))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(folder), " TO BE GENERATED"
-            do i = 1,360
-                if(dir_exists(trim(folder))) then
-                    write(logfhandle, *) ">>> ", trim(folder), " FOUND"
-                    exit
-                endif
-                call sleep(10)
-                call httpcom%send_jobstats()
-                if( httpcom%exit )then
-                    ! termination
-                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                    call httpcom%term()
-                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                    call EXIT(0)
-                endif
-            end do
-        endif
-    end subroutine waiting_for_folder
 
 end module simple_commander_stream2D
