@@ -169,9 +169,9 @@ contains
     subroutine kill( self )
         class(picksegdiam), intent(inout) :: self
         self%moldiam_max = 0.
-        call self%diameters%clear
-        call self%xpos%clear
-        call self%ypos%clear
+        call self%diameters%kill
+        call self%xpos%kill
+        call self%ypos%kill
     end subroutine kill
 
 end module simple_picksegdiam

@@ -20,8 +20,7 @@ use simple_progress
 use simple_imgproc
 use simple_nice
 use simple_micproc
-use simple_segmentation
-use simple_linked_list        
+use simple_segmentation    
 use simple_picksegdiam
 use simple_commander_project
 use simple_commander_abinitio2D
