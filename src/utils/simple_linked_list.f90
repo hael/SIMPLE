@@ -8,7 +8,7 @@ type :: node
     class(*), allocatable :: value
     type(node), pointer   :: next => null()
 contains
-    final :: finalize_node
+    final :: kill_node
 end type node
 
 type :: linked_list
@@ -23,11 +23,10 @@ contains
     procedure :: front
     procedure :: back
     procedure :: at
-    procedure :: clear
+    procedure :: kill
     procedure :: size
     procedure :: is_empty
     procedure :: begin ! iterator to first
-    final     :: finalize_list
 end type linked_list
 
 type :: list_iterator
@@ -40,11 +39,11 @@ end type list_iterator
 
 contains
 
-    pure subroutine finalize_node(self)
+    pure subroutine kill_node(self)
         type(node), intent(inout) :: self
         if (allocated(self%value)) deallocate(self%value)
         nullify(self%next)
-    end subroutine finalize_node
+    end subroutine kill_node
 
     pure elemental integer function size(self) result(k)
         class(linked_list), intent(in) :: self
@@ -56,24 +55,19 @@ contains
         tf = (self%n == 0)
     end function is_empty
 
-    elemental subroutine clear(self)
+    elemental subroutine kill(self)
         class(linked_list), intent(inout) :: self
         type(node), pointer :: p, q
         p => self%head
         do while (associated(p))
             q => p%next
-            call finalize_node(p)  ! dealloc value & nullify next
+            call kill_node(p)  ! dealloc value & nullify next
             deallocate(p)
             p => q
         end do
         nullify(self%head, self%tail)
         self%n = 0
-    end subroutine clear
-
-    subroutine finalize_list(self)
-        type(linked_list), intent(inout) :: self
-        call self%clear()
-    end subroutine finalize_list
+    end subroutine kill
 
     !======================
     ! Push operations
@@ -129,7 +123,7 @@ contains
         else
             if (present(had_value)) had_value = .false.
         end if
-        call finalize_node(p)
+        call kill_node(p)
         deallocate(p)
         self%n = self%n - 1
     end subroutine pop_front

@@ -42,5 +42,5 @@ end do
 call lst%pop_front(any)
 print *, 'after pop_front, size =', lst%size()
 
-call lst%clear()
+call lst%kill
 end program simple_test_linked_list
