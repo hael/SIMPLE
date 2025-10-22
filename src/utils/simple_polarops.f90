@@ -240,12 +240,21 @@ contains
         select case(trim(params_glob%ref_type))
         case('cavg')
             ! 2D
-        case('clin','vol')
+        case('cavgvol')
+            ! 2.5D
             if(.not. present(reforis)) THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
             ! Common-line contribution weight
             clw = 1.d0
             if( present(cl_weight) ) clw = min(max(0.d0,real(cl_weight,dp)),1.d0)
-            ! Mirroring etc.
+            if( clw > 1.d-6 )then
+                ! Mirroring slices
+                call mirror_slices(reforis, build_glob%pgrpsyms)
+                ! Common-lines conribution
+                call calc_comlin_contrib(reforis, build_glob%pgrpsyms)
+            endif
+        case('clin','vol')
+            if(.not. present(reforis)) THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
+            ! Mirroring slices
             call mirror_slices(reforis, build_glob%pgrpsyms)
             ! Common-lines conribution
             call calc_comlin_contrib(reforis, build_glob%pgrpsyms)
@@ -265,23 +274,53 @@ contains
         select case(trim(params_glob%ref_type))
             case('cavg')
                 call restore_cavgs
+            case('cavgvol')
+                if( clw > 1.d-6 )then
+                    call calc_cavg_comlin_frcs(cavg2clin_frcs)
+                    call restore_cavgs_comlins(clw)
+                else
+                    call mirr_and_calc_cavg_comlin_frcs(cavg2clin_frcs)
+                    call restore_cavgs
+                endif
+                call cavg2clin_frcs%write('frcs_cavg2clin'//trim(BIN_EXT))
             case('clin')
                 call restore_comlins
             case('vol')
                 call calc_cavg_comlin_frcs(cavg2clin_frcs)
-                call cavg2clin_frcs%write('frcs_cavgclin'//trim(BIN_EXT))
-                call restore_cavgs_comlins(clw)
-            case DEFAULT
-                THROW_HARD('Unsupported ref_type mode. It should be cavg, clin, or vol')
+                call cavg2clin_frcs%write('frcs_cavg2clin'//trim(BIN_EXT))
+                call restore_cavgs_comlins(1.d0)
         end select
         ! Optional CL/CLS directional FRCs & filtering, part 2
-        if( trim(params_glob%polar_frcs) .eq. 'yes' )then
-            pfts_merg = pfts_merg * cavg_clin_frcs
-            deallocate(cavg_clin_frcs)
-        endif
-
+        if( trim(params_glob%polar_frcs) .eq. 'yes' ) pfts_merg = pfts_merg * cavg_clin_frcs
+        ! cleanup
+        call cavg2clin_frcs%kill
+        if( allocated(cavg_clin_frcs) ) deallocate(cavg_clin_frcs)
       contains
 
+        ! Mirror 2D classes, calculate CL contibution & FRCS
+        ! Module arrays are untouched on exit
+        subroutine mirr_and_calc_cavg_comlin_frcs( frcs )
+            class(class_frcs), intent(inout) :: frcs
+            complex(dp) :: pfte_backup(pftsz,kfromto(1):kfromto(2),ncls)
+            complex(dp) :: pfto_backup(pftsz,kfromto(1):kfromto(2),ncls)
+            real(dp)    :: ctf2e_backup(pftsz,kfromto(1):kfromto(2),ncls)
+            real(dp)    :: ctf2o_backup(pftsz,kfromto(1):kfromto(2),ncls)
+            ! backup classes
+            pfte_backup(:,:,:)  = pfts_even(:,:,:); pfto_backup(:,:,:)  = pfts_odd(:,:,:)
+            ctf2e_backup(:,:,:) = ctf2_even(:,:,:); ctf2o_backup(:,:,:) = ctf2_odd(:,:,:)
+            ! mirror classes belonging to the same slice
+            call mirror_slices(reforis, build_glob%pgrpsyms)
+            ! calculate the per slice CLs
+            call calc_comlin_contrib(reforis, build_glob%pgrpsyms)
+            ! CLs vs. CLS FRCs
+            call calc_cavg_comlin_frcs(frcs)
+            ! restores classes
+            pfts_even(:,:,:) = pfte_backup(:,:,:);  pfts_odd(:,:,:) = pfto_backup(:,:,:)
+            ctf2_even(:,:,:) = ctf2e_backup(:,:,:); ctf2_odd(:,:,:) = ctf2o_backup(:,:,:)
+        end subroutine mirr_and_calc_cavg_comlin_frcs
+
+        ! Calculate CL contibution & FRCS from mirrored 2D classes
+        ! Module arrays are untouched on exit
         subroutine calc_cavg_comlin_frcs( frcs )
             class(class_frcs), intent(inout) :: frcs
             real, allocatable :: frc(:)

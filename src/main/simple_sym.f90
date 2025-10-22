@@ -1877,7 +1877,7 @@ contains
 
     !>  \brief  is a destructor
     subroutine kill( self )
-        class(sym) :: self
+        class(sym), intent(inout) :: self
         if( allocated(self%subgrps) )deallocate( self%subgrps )
         call self%e_sym%kill
     end subroutine kill
