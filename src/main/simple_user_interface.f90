@@ -297,6 +297,7 @@ type(simple_input_param) :: mcconvention
 type(simple_input_param) :: min_rad
 type(simple_input_param) :: mirr
 type(simple_input_param) :: moldiam
+type(simple_input_param) :: moldiam_max
 type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
@@ -1406,6 +1407,7 @@ contains
         call set_param(cn_max,         'cn_max',       'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
         call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
+        call set_param(moldiam_max,    'moldiam_max',  'num',    'Max molecular diameter', 'Max molecular diameter(in Angstroms)','In Angstroms',.false., 300.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(iso|patch|patch_refine){patch}','(iso|patch|patch_refine){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
@@ -2487,7 +2489,7 @@ contains
         &'denoising of micrographs',&                   ! descr_short
         &'is a program for denoising of micrographs',&  ! descr_long
         &'simple_stream',&                                ! executable
-        &1, 5, 0, 1, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
+        &1, 6, 0, 1, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call mini_stream%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
@@ -2497,10 +2499,11 @@ contains
         mini_stream%parm_ios(1)%required = .true.
         call mini_stream%set_input('parm_ios', 2, pcontrast)
         call mini_stream%set_input('parm_ios', 3, kv)
-        mini_stream%parm_ios(4)%required = .true.
+        mini_stream%parm_ios(3)%required = .true.
         call mini_stream%set_input('parm_ios', 4, cs)
-        mini_stream%parm_ios(5)%required = .true.
+        mini_stream%parm_ios(4)%required = .true.
         call mini_stream%set_input('parm_ios', 5, fraca)
+        call mini_stream%set_input('parm_ios', 6, moldiam_max)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4139,8 +4142,7 @@ contains
         call pick%set_input('parm_ios', 4, picker, gui_submenu="picking")
         call pick%set_input('parm_ios', 5, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested', 'e.g. 5',&
         &.false., 5., gui_submenu="picking")
-        call pick%set_input_1('parm_ios', 6, 'moldiam_max', 'num', 'Upper bound molecular diameter in multipick', 'Upper bound molecular diameter in multipick',&
-        &'e.g. 200', .false., 200., gui_submenu="picking")
+        call pick%set_input('parm_ios', 6, moldiam_max, gui_submenu="picking")
         call pick%set_input('parm_ios', 7, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ',&
         &'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '', gui_submenu="picking")
         pick%parm_ios(7)%required = .false.
@@ -4185,8 +4187,7 @@ contains
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', gui_submenu="data")
         call pick_extract%set_input('parm_ios', 5, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested',&
         &'e.g. 5', .false., 5., gui_submenu="picking")
-        call pick_extract%set_input('parm_ios', 6, 'moldiam_max', 'num', 'Upper bound molecular diameter', 'Upper bound molecular diameter in multipick',&
-        &'e.g. 200', .false., 200., gui_submenu="picking")
+        call pick_extract%set_input('parm_ios', 6, moldiam_max, gui_submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls
