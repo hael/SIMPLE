@@ -71,7 +71,7 @@ contains
         class(commander_mini_stream), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         logical,                   parameter   :: DEBUG = .true.
-        real,                      parameter   :: SMPD_SHRINK1  = 4.0, LPSTART = 30., LPSTOP = 8.
+        real,                      parameter   :: SMPD_SHRINK1  = 4.0, LPSTOP = 8., SIGMA_CRIT = 2.
         character(len=*),          parameter   :: DIR_THUMBS        = 'thumbnails/'
         character(len=*),          parameter   :: DIR_MIC_DEN       = 'micrographs_denoised/'
         character(len=*),          parameter   :: DIR_MIC_TOPO      = 'micrographs_topographical/'
@@ -79,16 +79,15 @@ contains
         character(len=*),          parameter   :: DIR_PTCLS_SEGPICK = 'particles_segpick/'
         character(len=*),          parameter   :: DIR_BOXFILES      = 'boxfiles/'
         character(len=*),          parameter   :: DIR_CAVGS_SEGPICK = 'cavgs_segpick/'
-        integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 100
+        integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 100, NQ_DIAMS = 10
         character(len=*),          parameter   :: PROJ_MINI_STREAM = 'proj_mini_stream', PROJFILE_MINI_STREAM = 'proj_mini_stream.simple'
         character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
         character(len=LONGSTRLEN), allocatable :: fnames(:)
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_bin_names(:), mic4viz_names(:), mic_den_names(:)
         character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk4viz_names(:), cavgs_segpick_names(:)
         character(len=:),          allocatable :: output_dir, stk, stkpath
-        integer,                   allocatable :: boxdata_raw(:,:)
-        integer,                   allocatable :: boxdata4viz(:,:), inds(:)
-        real,                      allocatable :: diams_arr(:), masscens(:,:), tmp(:), rarr_nboxes(:)
+        integer,                   allocatable :: boxdata_raw(:,:), labels(:), boxdata4viz(:,:), inds(:), diam_labels(:)
+        real,                      allocatable :: diams_arr(:), diams_arr_ts(:), masscens(:,:), tmp(:), rarr_nboxes(:), diam_means(:), abs_z_scores(:)
         type(ctfparams),           allocatable :: ctfvars(:)
         type(image),               allocatable :: imgs(:)
         type(picksegdiam)                      :: picker
@@ -111,9 +110,9 @@ contains
         type(stats_struct)                     :: stats_nboxes
         type(shape_rank_cavgs_commander)       :: xshape_rank
         character(len=STDLEN) :: ext
-        integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls, loc(1)
+        integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls, loc(1), pop
         integer               :: nptcls, box_raw, box4viz, i, nboxes, imic_maxpop, imic_minpop, imic_medpop
-        real                  :: scale, rmin, rmax, rmean, rsdev, mskdiam_estimate
+        real                  :: scale, rmin, rmax, rmean, rsdev, mskdiam_estimate, mad
         logical               :: l_empty
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
@@ -144,7 +143,6 @@ contains
         ctfvars(:)%fraca   = params%fraca
         ctfvars(:)%ctfflag = CTFFLAG_FLIP
         call os_ctf%new(nmics, is_ptcl=.false.)
-        allocate(diams_arr(0))
         do imic = 1, nmics
             call omic%new(is_ptcl=.false.)
             call omic%set_state(1)  ! include by default
@@ -165,8 +163,13 @@ contains
                 cycle
             endif
             call picker%get_diameters(tmp)
-            diams_arr = [diams_arr(:), tmp(:)]
-            deallocate(tmp)
+            if( allocated(diams_arr) )then
+                diams_arr = [diams_arr(:), tmp(:)]
+                deallocate(tmp)
+            else
+                allocate(diams_arr(size(tmp)), source=tmp)
+                deallocate(tmp)
+            endif
         end do
         call picker%kill
         ! excludes zero state
@@ -187,6 +190,60 @@ contains
         diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! because of the 2X erosion in binarization
         call calc_stats(diams_arr, diam_stats)
         print *, 'CC diameter (in Angs) statistics'
+        print *, 'avg diam: ', diam_stats%avg
+        print *, 'med diam: ', diam_stats%med
+        print *, 'sde diam: ', diam_stats%sdev
+        print *, 'min diam: ', diam_stats%minv
+        print *, 'max diam: ', diam_stats%maxv
+        allocate( diam_means(NQ_DIAMS), diam_labels(NQ_DIAMS) )
+        ! quantization of diameters
+        call sortmeans(diams_arr, NQ_DIAMS, diam_means, diam_labels)
+        ! Z-score of quantas
+        mad = mad_gau(diams_arr, diam_stats%med)
+        allocate(abs_z_scores(NQ_DIAMS), source=abs((diam_means - diam_stats%med) / mad))
+
+
+        do i = 1, NQ_DIAMS
+            print *, 'diam quanta '//int2str_pad(i,2)//', avg diam: ', diam_means(i),&
+            &', % pop: ', 100 * real(count(diam_labels == i)) / real(size(diams_arr)),&
+            &', abs(zscore): ', abs_z_scores(i)
+        end do
+
+        ! level 1 tresholding
+        pop = 0
+        do i = 2, NQ_DIAMS - 1
+            pop = pop + count(diam_labels == i)
+        end do
+        print *, 'level 1 thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
+
+        ! level 2 tresholding
+        pop = 0
+        do i = 3, NQ_DIAMS - 2
+            pop = pop + count(diam_labels == i)
+        end do
+        print *, 'level 2 thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
+
+        ! hybrid level 1, zscore tresholding
+        pop = 0
+        
+        do i = 2, NQ_DIAMS - 1
+            if( abs_z_scores(i) < SIGMA_CRIT )then
+                pop = pop + count(diam_labels == i)
+                tmp = pack(diams_arr, mask=diam_labels == i)
+                if( allocated(diams_arr_ts) )then
+                    diams_arr_ts = [diams_arr_ts(:), tmp(:)]
+                    deallocate(tmp)
+                else
+                    allocate(diams_arr_ts(size(tmp)), source=tmp)
+                    deallocate(tmp)
+                endif
+            endif
+        end do
+        print *, 'hybrid level 1/zscore thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
+
+        ! calculate diams stats after hybrid thresholding
+        call calc_stats(diams_arr_ts, diam_stats)
+        print *, 'CC diameter (in Angs) statistics after thresholding'
         print *, 'avg diam: ', diam_stats%avg
         print *, 'med diam: ', diam_stats%med
         print *, 'sde diam: ', diam_stats%sdev
