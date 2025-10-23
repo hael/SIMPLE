@@ -267,30 +267,47 @@ contains
 
     !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
-        use simple_fsc, only: plot_fsc
+        use simple_fsc,        only: plot_fsc
+        use simple_class_frcs, only: class_frcs
         class(print_fsc_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)      :: params
         type(image)           :: img
+        type(class_frcs)      :: frcs
         character(len=STDLEN) :: tmpl_fname
         real,     allocatable :: res(:), fsc(:)
         integer               :: k,n
         real                  :: res0143, res05
+        logical :: l_fsc, l_frcs
         call params%new(cline)
-        call img%new([params%box,params%box,1], params%smpd)
-        res = img%get_res()
-        fsc = file2rarr(params%fsc)
-        n = size(fsc)
-        do k=1,n
-            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
-        end do
-        ! get & print resolution
-        call get_resolution(fsc, res, res05, res0143)
-        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
-        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
-        ! plot
-        tmpl_fname = get_fbody(params%fsc,trim(BIN_EXT),separator=.false.)
-        call plot_fsc(n, fsc, res, params%smpd, tmpl_fname)
+        l_fsc  = cline%defined('fsc')
+        l_frcs = cline%defined('frcs')
+        if( .not.l_fsc .and. .not.l_frcs ) THROW_HARD('FSC or FRCS must be defined!')
+        if( l_fsc )then
+            if( .not.cline%defined('smpd') .or. .not.cline%defined('box')) then
+                THROW_HARD('SMPD and BOX must be defined!')
+            endif
+            call img%new([params%box,params%box,1], params%smpd)
+            res = img%get_res()
+            fsc = file2rarr(params%fsc)
+            n = size(fsc)
+            do k=1,n
+                write(logfhandle,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
+            end do
+            ! get & print resolution
+            call get_resolution(fsc, res, res05, res0143)
+            write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
+            write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
+            ! plot
+            tmpl_fname = get_fbody(params%fsc,trim(BIN_EXT),separator=.false.)
+            call plot_fsc(n, fsc, res, params%smpd, tmpl_fname)
+            call img%kill
+        endif
+        if( l_frcs )then
+            call frcs%read(params%frcs)
+            call frcs%plot_frcs('frcs')
+            call frcs%kill
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
