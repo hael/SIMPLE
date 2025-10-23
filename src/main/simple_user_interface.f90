@@ -4417,15 +4417,19 @@ contains
         &'Print FSC file produced by REFINE3D',&                                 ! descr_short
         &'is a program for printing the binary FSC files produced by REFINE3D',& ! descr_long
         &'simple_exec',&                                                         ! executable
-        &0, 3, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call print_fsc%set_input('parm_ios', 1, smpd)
+        print_fsc%parm_ios(1)%required = .false.
         call print_fsc%set_input('parm_ios', 2, box)
+        print_fsc%parm_ios(2)%required = .false.
         call print_fsc%set_input('parm_ios', 3, 'fsc', 'file', 'FSC file', 'Binary file with FSC info',&
         'input binary file e.g. fsc_state01.bin', .true., 'fsc_state01.bin')
+        print_fsc%parm_ios(3)%required = .false.
+        call print_fsc%set_input('parm_ios', 4, frcs)
         ! alternative inputs
         ! <empty>
         ! search controls

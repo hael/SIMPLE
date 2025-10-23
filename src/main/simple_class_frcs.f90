@@ -44,6 +44,7 @@ contains
     procedure          :: read
     procedure          :: write
     procedure          :: print_frcs
+    procedure          :: plot_frcs
     ! destructor
     procedure          :: kill
 end type class_frcs
@@ -418,6 +419,35 @@ contains
             write(logfhandle,*) ''
         end do
     end subroutine print_frcs
+
+    subroutine plot_frcs( self, tmpl_fname )
+        use simple_fsc, only: plot_fsc
+        class(class_frcs), intent(inout) :: self
+        character(len=*),  intent(in)    :: tmpl_fname
+        character(len=:), allocatable :: fname, tmp, all_pdfs, cmd
+        real,             allocatable :: res(:), frc(:)
+        integer :: s, icls
+        res      = get_resarr(self%box4frc_calc, self%smpd)
+        allocate(frc(self%filtsz))
+        all_pdfs = ''
+        do s = 1,self%nstates
+            do icls = 1,self%ncls
+                tmp = int2str_pad(icls,6)
+                frc = self%frcs(s,icls,:)
+                call plot_fsc(self%filtsz, frc, res, self%smpd, tmp)
+                tmp = tmp//'.pdf'
+                if( icls==1 )then
+                    all_pdfs = tmp
+                else
+                    all_pdfs = all_pdfs//' '//tmp
+                endif
+            enddo
+            fname = trim(tmpl_fname)//'_state'//int2str_pad(s,2)//'.pdf'
+            cmd   = 'gs -dNOPAUSE -q -sDEVICE=pdfwrite -sOUTPUTFILE='//fname//' -dBATCH '//all_pdfs
+            call execute_command_line(cmd)
+            call execute_command_line('rm '//all_pdfs)
+        enddo
+    end subroutine plot_frcs
 
     ! destructor
 
