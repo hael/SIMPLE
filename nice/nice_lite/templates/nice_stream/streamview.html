@@ -1,0 +1,85 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_stream/streamview.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:dataset' %} title="back">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a> 
+        <div class="px-[10px] text-[18px] text-nice4dark">{{ disp }} stream</div>
+    </div>
+    <div id="streamview" class="w-full h-full flex flex-row flex-wrap p-[10px] pt-[0px] overflow-y-scroll content-start">
+        <div class="w-[324px]">
+            <div class="flex flex-col m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+                <div class="font-bold text-[12px] text-nice4dark">collection parameters</div>
+                <div class="grid grid-cols-2 grid-cols-[auto_auto] gap-y-[2px] gap-x-[10px] text-[10px] ml-[10px]">
+                    {% if "smpd" in args %}
+                        <div class="font-bold">sampling distance</div>
+                        <div>{{ args.smpd|floatformat:3  }} Å/px</div>
+                    {% endif %}
+                    {% if "smpd_downscale" in args %}
+                        <div class="font-bold">downsampled sampling distance</div>
+                        <div>{{ args.smpd_downscale|floatformat:3 }} Å/px</div>
+                    {% endif %} 
+                    {% if "cs" in args %}
+                        <div class="font-bold">spherical abberation</div>
+                        <div>{{ args.cs }} mm</div>
+                    {% endif %} 
+                    {% if "kv" in args %}   
+                        <div class="font-bold">acceleration voltage</div>
+                        <div>{{ args.kv }} kV</div>
+                    {% endif %} 
+                    {% if "fraca" in args %}
+                        <div class="font-bold">amplitude fraction</div>
+                        <div>{{ args.fraca }}</div>
+                    {% endif %} 
+                    {% if "scale" in args %}
+                        <div class="font-bold">downsampling</div>
+                        <div>{{ args.scale }}</div>
+                    {% endif %} 
+                    {% if "total_dose" in args %}
+                        <div class="font-bold">total dose</div>
+                        <div>{{ args.total_dose }} e/Å²</div>
+                    {% endif %} 
+                </div>
+            </div>
+            <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header mt-[10px]">
+                <iframe id="movies_iframe" height="258px" width="300px" src={% url 'nice_lite:view_stream_movies' jobid %}></iframe>
+            </div>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="preprocess_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_preprocess' jobid %}></iframe>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="optics_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_optics' jobid %}></iframe>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="inipick_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_initial_pick' jobid %}></iframe>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="genpickrefs_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_generate_pickrefs' jobid %}></iframe>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="refpick_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_reference_picking' jobid %}></iframe>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="sieve_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_sieve_particles' jobid %}></iframe>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="cls2D_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_classification_2D' jobid %}></iframe>
+        </div>
+        <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <iframe id="psets_iframe" height="400px" width="300px" src={% url 'nice_lite:view_stream_particle_sets' jobid %}></iframe>
+        </div>
+    </div>
+</body>
+</html>

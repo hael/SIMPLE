@@ -7332,6 +7332,7 @@ contains
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=particle_sieving')
+        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
         call json%add(process_inputs, '', 'outdir=classification_2D') !important - directory names and name must match between processes
         call json%add(process_inputs, '', 'ncls=200')
         call json%add(process_inputs, '', 'nparts=10')

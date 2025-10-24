@@ -539,7 +539,7 @@ class Job:
 
     def terminate_preprocess(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is not None:
+        if jobmodel is not None and jobmodel.status == "running":
             jobmodel.preprocessing_status     = "terminating"
             jobmodel.preprocessing_update     = {"terminate":True}
             self.preprocessing_stats["stage"] = "terminating"
@@ -548,7 +548,7 @@ class Job:
 
     def terminate_optics(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is not None:
+        if jobmodel is not None and jobmodel.status == "running":
             jobmodel.optics_assignment_status     = "terminating"
             jobmodel.optics_assignment_update     = {"terminate":True}
             self.optics_assignment_stats["stage"] = "terminating"
@@ -557,7 +557,7 @@ class Job:
 
     def terminate_initial_pick(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is not None:
+        if jobmodel is not None and jobmodel.status == "running":
             jobmodel.initial_picking_status     = "terminating"
             jobmodel.initial_picking_update     = {"terminate":True}
             self.initial_picking_stats["stage"] = "terminating"
@@ -566,7 +566,7 @@ class Job:
     
     def terminate_generate_pickrefs(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is not None:
+        if jobmodel is not None and jobmodel.status == "running":
             jobmodel.generate_pickrefs_status     = "terminating"
             jobmodel.generate_pickrefs_update     = {"terminate":True}
             self.generate_pickrefs_stats["stage"] = "terminating"
@@ -575,7 +575,7 @@ class Job:
     
     def terminate_reference_picking(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is not None:
+        if jobmodel is not None and jobmodel.status == "running":
             jobmodel.reference_picking_status     = "terminating"
             jobmodel.reference_picking_update     = {"terminate":True}
             self.reference_picking_stats["stage"] = "terminating"
@@ -584,7 +584,7 @@ class Job:
     
     def terminate_sieve_particles(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is not None:
+        if jobmodel is not None and jobmodel.status == "running":
             jobmodel.particle_sieving_status     = "terminating"
             jobmodel.particle_sieving_update     = {"terminate":True}
             self.particle_sieving_stats["stage"] = "terminating"
@@ -593,7 +593,7 @@ class Job:
 
     def terminate_classification_2D(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is not None:
+        if jobmodel is not None and jobmodel.status == "running":
             jobmodel.classification_2D_status     = "terminating"
             jobmodel.classification_2D_update     = {"terminate":True}
             self.classification_2D_stats["stage"] = "terminating"

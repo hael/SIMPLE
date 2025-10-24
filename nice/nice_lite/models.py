@@ -14,6 +14,7 @@ class DatasetModel(models.Model):
     desc = models.CharField(max_length=200, default='')
     dirc = models.CharField(max_length=200, default='')
     link = models.CharField(max_length=200, default='')
+    user = models.CharField(max_length=50,  default='')
     cdat = models.DateTimeField(auto_now_add=True, blank=True)
     mdat = models.DateTimeField(auto_now_add=True, blank=True)
 
@@ -25,6 +26,7 @@ class WorkspaceModel(models.Model):
     desc = models.CharField(max_length=200, default='')
     dirc = models.CharField(max_length=200, default='')
     link = models.CharField(max_length=200, default='')
+    user = models.CharField(max_length=50,  default='')
     cdat = models.DateTimeField(auto_now_add=True, blank=True)
     mdat = models.DateTimeField(auto_now_add=True, blank=True)
     nstr = models.JSONField(default=dict)

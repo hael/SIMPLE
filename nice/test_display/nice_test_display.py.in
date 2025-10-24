@@ -7,7 +7,7 @@ from dirsync    import sync
 
 if __name__ == "__main__":
     user_home = os.path.expanduser('~')
-    user_nice = os.path.join(user_home, ".nice", "nice_4_0")
+    user_nice = os.path.join(user_home, ".nice", "nice_4_0_test")
     src_nice  = "@SIMPLE_PATH@/nice"
     if not os.path.exists(user_nice):
         os.makedirs(user_nice)
@@ -16,10 +16,12 @@ if __name__ == "__main__":
     sync(src_nice, user_nice, 'sync', exclude=('^.git', '^build', '^db.sqlite3', '.*__pycache__.*', 'Makefile', 'CMake.*', '.*.cmake'))
     os.rename(os.path.join(user_nice, "nice_project", "settings_local.py"), os.path.join(user_nice, "nice_project", "settings.py"))
     print("updating database")
+    run(["sqlite3", "db.sqlite3", ".read @SIMPLE_PATH@/nice/test_display/test_display.sql"],          cwd=user_nice)
     run(["@SIMPLE_PATH@/nice/venv/bin/python3", "manage.py", "makemigrations"],          cwd=user_nice)
     run(["@SIMPLE_PATH@/nice/venv/bin/python3", "manage.py", "migrate"],                 cwd=user_nice)
     run(["@SIMPLE_PATH@/nice/venv/bin/python3", "manage.py", "ensurelocaluser"],         cwd=user_nice)
     run(["@SIMPLE_PATH@/nice/venv/bin/python3", "manage.py", "resetsubmissiontemplate", "@SIMPLE_PATH@"], cwd=user_nice)
+
     print("starting server")
     print("\tusername : ", os.getlogin())
     print("\tpassword : ", "simple")

@@ -10,8 +10,7 @@ from ..data_structures.simple  import SIMPLEStream
 
 class StreamView:
 
-    template = "nice_lite/streamview.html"
-   # simplestream = None
+    template = "nice_stream/streamview.html"
 
     def __init__(self, request, jobid):
         self.request = request
@@ -29,33 +28,6 @@ class StreamView:
         for cookie in  self.request.COOKIES:
             if "checksum" in cookie:
                 response.delete_cookie(key=cookie)
-        return response
-    
-class StreamViewLogs:
-
-    template = "nice_lite/streamviewlogs.html"
-   # simplestream = None
-
-    def __init__(self, request, jobid, log, error):
-        self.request = request
-        self.job     = Job(id=jobid)
-        jobdir = self.job.getAbsDir()
-        self.log   = os.path.join(jobdir, log)
-        self.error = os.path.join(jobdir, error)
-
-    def render(self):
-        context = {
-            "jobid" : self.job.id
-        }
-        if os.path.exists(self.log) and os.path.isfile(self.log):
-            with open(self.log, 'rb') as f:
-                logtext = f.read()
-                context["log"] = str(logtext, errors='replace')
-        if os.path.exists(self.error) and os.path.isfile(self.error):
-            with open(self.error, 'rb') as f:
-                errortext = f.read()
-                context["error"] = str(errortext, errors='replace')
-        response = render(self.request, self.template, context)
         return response
     
 class StreamViewMovies:

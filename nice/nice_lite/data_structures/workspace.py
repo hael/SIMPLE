@@ -20,6 +20,7 @@ class Workspace:
     link     = ""
     cdat     = ""
     mdat     = ""
+    user     = ""
     nstr     = {}
     nstrhtml = {}
     request  = None
@@ -53,10 +54,11 @@ class Workspace:
             self.nstr     = workspacemodel.nstr
             self.desc     = workspacemodel.desc
             self.disp     = workspacemodel.disp
+            self.user     = workspacemodel.user
             self.nstrhtml = copy.deepcopy(self.nstr)
             self.addNodesHTML()
 
-    def new(self, project):
+    def new(self, project, user):
         projectmodel = ProjectModel.objects.filter(id=project.id).first()
         if projectmodel is None:
             return False
@@ -70,7 +72,7 @@ class Workspace:
         workspacemodels = WorkspaceModel.objects.filter(proj=projectmodel)
         self.disp = workspacemodels.count() + 1
         new_workspace_name = "new workspace " + str(self.disp)
-        workspacemodel = WorkspaceModel(proj=projectmodel, disp=self.disp, name=new_workspace_name, cdat=timezone.now(), mdat=timezone.now())
+        workspacemodel = WorkspaceModel(proj=projectmodel, disp=self.disp, name=new_workspace_name, cdat=timezone.now(), mdat=timezone.now(), user=user)
         workspacemodel.save()
         self.id = workspacemodel.id
         if self.id == 0:

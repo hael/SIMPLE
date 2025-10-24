@@ -4,21 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" type="image/png" href="{% static 'images/square_logo.png' %}">
+    <link rel="shortcut icon" type="image/png" href="{% static 'nice_lite/simple_stream_min.png' %}">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src={% static 'nice_classic/classic.js' %}></script>
-    <title>SIMPLE Classic</title>
+    <script src={% static 'nice_stream/stream.js' %}></script>
+    <title>SIMPLE Stream</title>
 </head>
 <body class="w-full h-screen bg-white flex flex-col">
     <div class="bg-nice4header w-full flex flex-row items-center">
-        <img src={% static 'images/simple_logo_simple.png' %} class="h-[40px] mr-[20px] bg-white p-[10px]"/>
+        <img src={% static 'images/simple_stream.png' %} class="h-[40px] mr-[20px]"/>
         <div class="flex flex-row">
             <div class="font-bold text-white">project</div>
-            <form method="POST" data-newurl="{% url 'nice_lite:new_project' 'classic' %}">
+            <form method="POST" data-newurl="{% url 'nice_lite:new_project' 'stream' %}">
                 {% csrf_token %}
                 <select name="selected_project_id" onchange="changeProject(this)" class="bg-white rounded ml-[5px] pl-[5px]">
                     {% if current_project_id == 0 %}
-                        <option disabled selected value="" >select</option>
+                        <option disabled selected value="">select</option>
                     {% endif %}
                     <option value="new">✚ create new</option>
                     {% for project in projects %}
@@ -32,26 +32,26 @@
             </form>
         </div>
          <div class="flex flex-row mx-[20px]">
-            <div class="font-bold text-white">workspace</div>
-            <form method="POST" action={% url 'nice_lite:create_workspace' current_project_id %}>
+            <div class="font-bold text-white">dataset</div>
+            <form method="POST" action="createdataset">
                 {% csrf_token %}
-                <select name="selected_workspace_id" onchange="changeWorkspace(this)" class="bg-white rounded ml-[5px] pl-[5px]">
-                    {% if current_workspace_id == 0 %}
+                <select name="selected_dataset_id" onchange="changeDataset(this)" class="bg-white rounded ml-[5px] pl-[5px]">
+                    {% if current_dataset_id == 0 %}
                         <option disabled selected value="">select</option>
                     {% endif %}
                     <option value="new">✚ create new</option>
-                    {% for workspace in workspaces %}
-                        {% if workspace.id == current_workspace_id %}
-                            <option selected value={{ workspace.id }}>{{ workspace.name }}</option>
+                    {% for dataset in datasets %}
+                        {% if dataset.id == current_dataset_id %}
+                            <option selected value={{ dataset.id }}>{{ dataset.name }}</option>
                         {% else %}
-                            <option value={{ workspace.id }}>{{ workspace.name }}</option>
+                            <option value={{ dataset.id }}>{{ dataset.name }}</option>
                         {% endif %}
                     {% endfor %}
                 </select>
             </form>
         </div>
         <div class="flex flex-1 justify-end">
-            <a href={% url 'nice_lite:stream'%} class="mx-[10px] text-white" title="switch to stream">stream</a>
+            <a href={% url 'nice_lite:classic'%} class="mx-[10px] text-white" title="switch to classic">classic</a>
             <a href={% url 'nice_lite:logout'%} class="mx-[10px] text-white" title="logout">logout</a>
         </div>
     </div>
@@ -61,3 +61,4 @@
 
 </body>
 </html>
+

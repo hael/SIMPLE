@@ -23,6 +23,7 @@ option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (de
 option(GUI                         "Install the GUI." ON)
 option(BUILD_GUI                   "Build single user GUI from source." OFF)
 option(NICE                        "Install NICE." OFF)
+option(NICE_FQDN                   "Set NICE server fqdn else fqdn of compiling node is used." OFF)
 option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
 OPTION(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
 OPTION(USE_PROFILING               "Enable symbol generation without debug support." OFF)

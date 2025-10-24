@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+#BSUB -n XXXNCPUXXX
+#BSUB -R "rusage[mem=20000]"
+#BSUB -R "span[hosts=1]"
+
+export SIMPLE_DEFAULT_PARTITION_TIME=true
+export SIMPLE_PATH=@SIMPLE_PATH@
+export SIMPLE_EMAIL=''
+export SIMPLE_QSYS=lsf
+
+echo $$ > nice.pid
+echo "Running on $HOSTNAME"
+XXXSIMPLEXXX
