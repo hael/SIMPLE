@@ -1,0 +1,31 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" type="image/png" href="{% static 'images/square_logo.png' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <title>SIMPLE Login</title>
+</head>
+<body class="w-full h-screen bg-nice4bg flex flex-col justify-center items-center">
+  <div class="m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+    <div class="flex flex-col items-center">
+      <img src={% static 'images/simple_logo_simple.png' %} class="h-[30px] my-[20px]"/>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      <div class="grid grid-cols-2 gap-[2px] text-[12px] content-baseline grid-cols-[max-content_auto] m-[5px]">
+        <div class="font-bold">{{ form.username.label_tag }}</div>
+        <div class="bg-nice4bg rounded">{{ form.username }}</div>
+        <div class="font-bold">{{ form.password.label_tag }}</div>
+        <div class="bg-nice4bg rounded">{{ form.password }}</div>
+      </div>
+      <div class="flex justify-center items-center">
+        <input type="submit" value="login" class="userbutton">
+      </div>
+      <input type="hidden" name="next" value="{{ next }}">
+    </form>
+  </div>
+</body>
+</html>

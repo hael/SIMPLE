@@ -4,7 +4,7 @@ from ..data_structures.project import Project
 
 class NewProjectView:
 
-    template = "nice_lite/newproject.html"
+    template = "newproject.html"
 
     def __init__(self, request, caller):
         self.request = request

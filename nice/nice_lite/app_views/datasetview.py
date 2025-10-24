@@ -11,7 +11,7 @@ from ..data_structures.job     import Job
 
 class DatasetView:
 
-    template        = "nice_lite/dataset.html"
+    template        = "nice_stream/dataset.html"
     checksum_cookie = "dataset_checksum"
 
     def __init__(self, request, project=None, dataset=None):
@@ -44,9 +44,10 @@ class DatasetView:
                    "current_dataset_name" : self.dataset.name,
                    "created"              : self.dataset.cdat, 
                    "modified"             : self.dataset.mdat,
+                   "user"                 : self.dataset.user,
                    "folder"               : os.path.join(self.project.dirc, self.dataset.link),
                    "description"          : self.dataset.desc,
-                   "jobstats"             : jobstats,
+                   "jobstats"             : jobstats
                   }
         hash = hashlib.md5(json.dumps(context, sort_keys=True, default=str).encode())
         checksum = hash.hexdigest()

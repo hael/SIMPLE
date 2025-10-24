@@ -6,7 +6,7 @@ from ..data_structures.simple  import SIMPLEStream
 
 class NewStreamView:
 
-    template = "nice_lite/newstream.html"
+    template = "nice_stream/newstream.html"
     simplestream = None
 
     def __init__(self, request, args=None):

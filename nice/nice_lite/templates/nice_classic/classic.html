@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" type="image/png" href="{% static 'nice_classic/square_logo.png' %}">
+    <link rel="shortcut icon" type="image/png" href="{% static 'images/square_logo.png' %}">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <script src={% static 'nice_classic/classic.js' %}></script>
     <title>SIMPLE Classic</title>
 </head>
 <body class="w-full h-screen bg-white flex flex-col">
     <div class="bg-nice4header w-full flex flex-row items-center">
-        <img src={% static 'nice_classic/simple_logo_simple.png' %} class="h-[40px] mr-[20px] bg-white p-[10px]"/>
+        <img src={% static 'images/simple_logo_simple.png' %} class="h-[40px] mr-[20px] bg-white p-[10px]"/>
         <div class="flex flex-row">
             <div class="font-bold text-white">project</div>
             <form method="POST" data-newurl="{% url 'nice_lite:new_project' 'classic' %}">

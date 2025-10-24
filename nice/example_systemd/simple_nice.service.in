@@ -19,8 +19,6 @@ ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
 PrivateTmp=true
-# if your app does not need administrative capabilities, let systemd know
-ProtectSystem=strict
 # limits
 LimitMEMLOCK=128000
 LimitNOFILE=128000

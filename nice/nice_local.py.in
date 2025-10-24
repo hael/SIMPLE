@@ -14,6 +14,7 @@ if __name__ == "__main__":
         print("created", user_nice)
     print("syncing", src_nice, "->", user_nice)
     sync(src_nice, user_nice, 'sync', exclude=('^.git', '^build', '^db.sqlite3', '.*__pycache__.*', 'Makefile', 'CMake.*', '.*.cmake'))
+    os.rename(os.path.join(user_nice, "nice_project", "settings_local.py"), os.path.join(user_nice, "nice_project", "settings.py"))
     print("updating database")
     run(["@SIMPLE_PATH@/nice/venv/bin/python3", "manage.py", "makemigrations"],          cwd=user_nice)
     run(["@SIMPLE_PATH@/nice/venv/bin/python3", "manage.py", "migrate"],                 cwd=user_nice)

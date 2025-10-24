@@ -38,6 +38,7 @@ class WorkspaceView:
                    "current_workspace_name" : self.workspace.name,
                    "created"                : self.workspace.cdat, 
                    "modified"               : self.workspace.mdat,
+                   "user"                   : self.workspace.user,
                    "folder"                 : os.path.join(self.project.dirc, self.workspace.link),
                    "description"            : self.workspace.desc,
                    "nodes"                  : json.dumps(self.workspace.nstr)

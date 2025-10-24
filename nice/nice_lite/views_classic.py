@@ -1,21 +1,19 @@
 import time
 # global imports
-from django.shortcuts               import redirect, render
+from django.shortcuts               import redirect
 from django.http                    import HttpResponse
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth            import login, logout, authenticate
 
 # local imports
 from .app_views.coreview       import CoreViewClassic
-from .app_views.newprojectview import NewProjectView
 from .app_views.workspaceview  import WorkspaceView
 from .app_views.jobview        import JobView, JobViewMicrographs, JobViewMicrographsHistogram, JobViewCls2D, JobViewCls2DHistogram
 from .app_views.jobview        import JobViewLogs, JobViewMicrographsPlot, JobViewCls2DPlot
 from .app_views.newjobview     import NewJobView, NewJobTypeView
 
-from .data_structures.project  import Project
+from .data_structures.project    import Project
 from .data_structures.workspace  import Workspace
-from .data_structures.jobclassic      import JobClassic
+from .data_structures.jobclassic import JobClassic
 
 @login_required(login_url="/login")
 def classic(request):
@@ -145,7 +143,7 @@ def rerun_job(request, jobid):
 def create_workspace(request, projectid):
     project = Project(project_id=projectid)
     workspace = Workspace()
-    workspace.new(project)
+    workspace.new(project, request.user.username)
     response = redirect('nice_lite:classic')
     response.set_cookie(key='selected_project_id',   value=project.id)
     response.set_cookie(key='selected_workspace_id', value=workspace.id)

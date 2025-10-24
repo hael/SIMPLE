@@ -1,0 +1,64 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" type="image/png" href="{% static 'nice_lite/simple_stream_min.png' %}">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src={% static 'nice_stream/stream.js' %}></script>
+    <title>SIMPLE Stream</title>
+</head>
+<body class="w-full h-screen bg-white flex flex-col">
+    <div class="bg-nice4header w-full flex flex-row items-center">
+        <img src={% static 'images/simple_stream.png' %} class="h-[40px] mr-[20px]"/>
+        <div class="flex flex-row">
+            <div class="font-bold text-white">project</div>
+            <form method="POST" data-newurl="{% url 'nice_lite:new_project' 'stream' %}">
+                {% csrf_token %}
+                <select name="selected_project_id" onchange="changeProject(this)" class="bg-white rounded ml-[5px] pl-[5px]">
+                    {% if current_project_id == 0 %}
+                        <option disabled selected value="">select</option>
+                    {% endif %}
+                    <option value="new">✚ create new</option>
+                    {% for project in projects %}
+                        {% if project.id == current_project_id %}
+                            <option selected value={{ project.id }}>{{ project.name }}</option>
+                        {% else %}
+                            <option value={{ project.id }}>{{ project.name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+         <div class="flex flex-row mx-[20px]">
+            <div class="font-bold text-white">dataset</div>
+            <form method="POST" action="createdataset">
+                {% csrf_token %}
+                <select name="selected_dataset_id" onchange="changeDataset(this)" class="bg-white rounded ml-[5px] pl-[5px]">
+                    {% if current_dataset_id == 0 %}
+                        <option disabled selected value="">select</option>
+                    {% endif %}
+                    <option value="new">✚ create new</option>
+                    {% for dataset in datasets %}
+                        {% if dataset.id == current_dataset_id %}
+                            <option selected value={{ dataset.id }}>{{ dataset.name }}</option>
+                        {% else %}
+                            <option value={{ dataset.id }}>{{ dataset.name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        <div class="flex flex-1 justify-end">
+            <a href={% url 'nice_lite:classic'%} class="mx-[10px] text-white" title="switch to classic">classic</a>
+            <a href={% url 'nice_lite:logout'%} class="mx-[10px] text-white" title="logout">logout</a>
+        </div>
+    </div>
+    <div class="h-full w-full flex-1">
+        <iframe id="workspace_iframe" height="100%" width="100%"></iframe>
+    </div>
+
+</body>
+</html>
+

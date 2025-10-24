@@ -16,6 +16,7 @@ class Dataset:
     link     = ""
     cdat     = ""
     mdat     = ""
+    user     = ""
     proj     = 0
     trashfolder = ""
 
@@ -46,8 +47,9 @@ class Dataset:
             self.proj = datasetmodel.proj
             self.desc = datasetmodel.desc
             self.disp = datasetmodel.disp
+            self.user = datasetmodel.user
 
-    def new(self, project):
+    def new(self, project, user):
         projectmodel = ProjectModel.objects.filter(id=project.id).first()
         if projectmodel is None:
             return False
@@ -61,7 +63,7 @@ class Dataset:
         datasetmodels = DatasetModel.objects.filter(proj=projectmodel)
         self.disp = datasetmodels.count() + 1
         new_dataset_name = "new dataset " + str(self.disp)
-        datasetmodel = DatasetModel(proj=projectmodel, name=new_dataset_name, disp=self.disp, cdat=timezone.now(), mdat=timezone.now())
+        datasetmodel = DatasetModel(proj=projectmodel, name=new_dataset_name, disp=self.disp, cdat=timezone.now(), mdat=timezone.now(), user=user)
         datasetmodel.save()
         self.id = datasetmodel.id
         if self.id == 0:

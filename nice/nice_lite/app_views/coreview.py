@@ -8,7 +8,7 @@ from ..data_structures.workspace import Workspace
 
 class CoreViewStream:
 
-    template = "nice_lite/index.html"
+    template = "nice_stream/stream.html"
 
     def __init__(self, request, project=None, dataset=None):
         if project is not None:
@@ -78,7 +78,7 @@ class CoreViewClassic:
 
 class LoginView:
 
-    template = "nice_lite/login.html"
+    template = "login.html"
     
     def __init__(self, request):
         self.request = request
