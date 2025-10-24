@@ -5,11 +5,12 @@ include 'simple_lib.f08'
 use simple_parameters, only: params_glob
 use simple_image,      only: image
 use simple_pickseg,    only: pickseg
+use simple_pickref
 use simple_pickgau
 use simple_picksegdiam
 implicit none
 
-public :: exec_gaupick, exec_segpick, exec_segdiampick
+public :: exec_gaupick, exec_refpick, exec_segpick, exec_segdiampick
 private
 #include "simple_local_flags.inc"
 
@@ -20,17 +21,15 @@ logical, parameter :: L_DEBUG      = .false.
 
 contains
 
-    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, moldiam_opt, append, nboxes_max )
+    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, dir_out, moldiam_opt, append )
         use simple_strings, only: str2real, parsestr
-        character(len=*),           intent(in)    :: micname
-        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
-        real,                       intent(in)    :: smpd    !< sampling distance in A
-        integer,                    intent(out)   :: nptcls
-        class(image),     optional, intent(inout) :: pickrefs(:)
-        character(len=*), optional, intent(in)    :: dir_out
-        real,             optional, intent(out)   :: moldiam_opt
-        logical,          optional, intent(in)    :: append
-        integer,          optional, intent(in)    :: nboxes_max
+        character(len=*),           intent(in)  :: micname
+        character(len=LONGSTRLEN),  intent(out) :: boxfile_out
+        real,                       intent(in)  :: smpd    !< sampling distance in A
+        integer,                    intent(out) :: nptcls
+        character(len=*), optional, intent(in)  :: dir_out
+        real,             optional, intent(out) :: moldiam_opt
+        logical,          optional, intent(in)  :: append
         type(pickgau)             :: gaup, gaup_refine
         real,         allocatable :: moldiams(:)
         character(len=LONGSTRLEN) :: boxfile
@@ -44,7 +43,7 @@ contains
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
         l_roi          = trim(params_glob%pick_roi).eq.'yes'
         l_backgr_subtr = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
-        call read_mic_raw(micname, smpd, subtr_backgr=l_backgr_subtr)
+        call read_mic_raw_pickgau(micname, smpd, subtr_backgr=l_backgr_subtr)
         if( params_glob%nmoldiams > 1 )then
             moldiams = equispaced_vals(params_glob%moldiam, params_glob%moldiam_max, params_glob%nmoldiams)
             call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, boxfile, offset=OFFSET, moldiam_opt=mmoldiam_opt, append=l_append)
@@ -101,17 +100,8 @@ contains
             deallocate(moldiams)
         else
             ! single moldiam pick
-            if( present(pickrefs) )then
-                if( present(nboxes_max) )then
-                    call gaup%new_refpicker(params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params_glob%nboxes_max)
-                else
-                    call gaup%new_refpicker(params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
-                endif
-                call gaup_refine%new_refpicker(params_glob%pcontrast, SMPD_SHRINK2, pickrefs, offset=1)
-            else
-                call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, params_glob%moldiam, offset=OFFSET, roi=l_roi)
-                call gaup_refine%new_gaupicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%moldiam, params_glob%moldiam, offset=1)
-            endif
+            call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, params_glob%moldiam, offset=OFFSET, roi=l_roi)
+            call gaup_refine%new_gaupicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%moldiam, params_glob%moldiam, offset=1)
             call gaup%gaupick(gaup_refine)
             ! write
             maxdiam = params_glob%moldiam + params_glob%moldiam * BOX_EXP_FAC
@@ -126,6 +116,47 @@ contains
             call gaup_refine%kill
         endif
     end subroutine exec_gaupick
+
+    subroutine exec_refpick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, nboxes_max )
+        use simple_strings, only: str2real, parsestr
+        character(len=*),           intent(in)    :: micname
+        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
+        real,                       intent(in)    :: smpd    !< sampling distance in A
+        integer,                    intent(out)   :: nptcls
+        class(image),     optional, intent(inout) :: pickrefs(:)
+        character(len=*), optional, intent(in)    :: dir_out
+        integer,          optional, intent(in)    :: nboxes_max
+        type(pickref)             :: refp, refp_refine
+        real,         allocatable :: moldiams(:)
+        character(len=LONGSTRLEN) :: boxfile
+        character(len=4), allocatable :: moldiams_str(:)
+        real    :: maxdiam, mmoldiam_opt
+        integer :: box, istr, num_entries, idiam, num_moldiams
+        logical :: l_roi, l_backgr_subtr
+        boxfile = basename(fname_new_ext(trim(micname),'box'))
+        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
+        l_roi          = trim(params_glob%pick_roi).eq.'yes'
+        l_backgr_subtr = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
+        call read_mic_raw_pickref(micname, smpd, subtr_backgr=l_backgr_subtr)
+        if( present(nboxes_max) )then
+            call refp%new(params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params_glob%nboxes_max)
+        else
+            call refp%new(params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
+        endif
+        call refp_refine%new(params_glob%pcontrast, SMPD_SHRINK2, pickrefs, offset=1)
+        call refp%refpick(refp_refine)
+        ! write
+        maxdiam = params_glob%moldiam + params_glob%moldiam * BOX_EXP_FAC
+        box     = find_larger_magic_box(round2even(maxdiam / smpd))
+        call refp_refine%report_boxfile(box, smpd, boxfile, nptcls)
+        if( nptcls == 0 )then
+            boxfile_out = ''
+        else
+            boxfile_out = simple_abspath(boxfile)
+        endif
+        call refp%kill
+        call refp_refine%kill
+    end subroutine exec_refpick
 
     subroutine exec_segpick( micname, boxfile_out, nptcls, dir_out, moldiam, winsz )
         character(len=*),           intent(in)  :: micname

@@ -24,6 +24,10 @@ interface detect_peak_thres
     module procedure detect_peak_thres_1, detect_peak_thres_2
 end interface detect_peak_thres
 
+interface detect_peak_thres_sortmeans
+    module procedure detect_peak_thres_sortmeans_1, detect_peak_thres_sortmeans_2
+end interface detect_peak_thres_sortmeans
+
 logical, parameter, private :: warn=.false.
 
 contains
@@ -372,7 +376,7 @@ contains
         t   = tmp(ind)
     end subroutine detect_peak_thres_for_npeaks
 
-    subroutine detect_peak_thres_sortmeans( n, level, n_ub, x, t_out )
+    subroutine detect_peak_thres_sortmeans_1( n, level, n_ub, x, t_out )
         integer, intent(in)  :: n, level, n_ub
         real,    intent(in)  :: x(n)
         real,    intent(out) :: t_out
@@ -429,7 +433,53 @@ contains
                 ind = iq_min
         end select
         t_out = peak_ts(ind)
-    end subroutine detect_peak_thres_sortmeans
+    end subroutine detect_peak_thres_sortmeans_1
+
+    subroutine detect_peak_thres_sortmeans_2( n, x, t_out )
+        integer, intent(in)  :: n
+        real,    intent(in)  :: x(n)
+        real,    intent(out) :: t_out
+        integer, parameter   :: NQUANTA = 10
+        real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:)
+        integer, allocatable :: labels(:), n_thres(:)
+        integer :: iq, n_fg, n_bg, nvals, cnt, iq_min
+        real    :: d, avg1, avg2, diff, diff_min
+        ! quantize with sortmeans
+        allocate( means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA) )
+        means  = 0.
+        labels = 0
+        arr    = pack(x, mask=.true.)
+        nvals  = size(arr)
+        call sortmeans(arr, NQUANTA, means, labels)
+        cnt    = 0
+        do iq = 1, NQUANTA
+            if( count(labels == iq) == 0 )cycle
+            cnt          = cnt + 1
+            peak_ts(cnt) = minval(arr, mask=labels == iq)
+            n_fg         = count(arr >= peak_ts(cnt))
+            if( n_fg == nvals )then
+                frac_peaks(cnt) = 1.
+            else if( n_fg == 0 )then
+                frac_peaks(cnt) = 0.
+            else
+                frac_peaks(cnt) = real(n_fg) / real(nvals)
+            endif
+        end do
+        ! binary clustering for dynamic threshold determination
+        diff_min = huge(d)
+        do iq = 1, cnt
+            n_fg = count(arr >= peak_ts(iq))
+            n_bg = nvals - n_fg
+            avg1 = sum(arr, mask=arr >= peak_ts(iq)) / real(n_fg)
+            avg2 = sum(arr, mask=arr <  peak_ts(iq)) / real(n_bg)
+            diff = sum(abs(arr - avg1), mask=arr >= peak_ts(iq)) + sum(abs(arr - avg2), mask=arr < peak_ts(iq))
+            if( diff < diff_min )then
+                diff_min = diff
+                iq_min   = iq
+            endif
+        end do
+        t_out = peak_ts(iq_min)
+    end subroutine detect_peak_thres_sortmeans_2
 
     ! hierarchical clustering
 
