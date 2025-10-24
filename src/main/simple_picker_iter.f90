@@ -56,9 +56,9 @@ contains
                 if( cline%defined('pickrefs') )then 
                     call self%read_pickrefs(params_glob%pickrefs)
                     if( cline%defined('nboxes_max') )then
-                        call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out, nboxes_max=params_glob%nboxes_max)
+                        call exec_refpick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out, nboxes_max=params_glob%nboxes_max)
                     else
-                        call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
+                        call exec_refpick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
                     endif
                 else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams')  )then
                     ! at least moldiam is required

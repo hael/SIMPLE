@@ -6,7 +6,7 @@ use simple_parameters, only: params_glob
 use simple_image,      only: image
 implicit none
 
-public :: read_mic_raw, pickgau, gaupick_multi
+public :: read_mic_raw_pickgau, pickgau, gaupick_multi
 private
 #include "simple_local_flags.inc"
 
@@ -18,10 +18,9 @@ logical, parameter :: L_WRITE  = .false.
 logical, parameter :: L_DEBUG  = .false.
 
 ! class variables
-integer                       :: ldim_raw(3)
-real                          :: smpd_raw
-type(image)                   :: mic_raw
-character(len=:), allocatable :: fbody
+integer     :: ldim_raw(3)
+real        :: smpd_raw
+type(image) :: mic_raw
 
 ! instance
 type pickgau
@@ -277,11 +276,10 @@ contains
         endif
     end subroutine gaupick
 
-    subroutine read_mic_raw( micname, smpd, subtr_backgr )
+    subroutine read_mic_raw_pickgau( micname, smpd, subtr_backgr )
         character(len=*), intent(in) :: micname !< micrograph file name
         real,             intent(in) :: smpd    !< sampling distance in A
         logical, optional, intent(in) :: subtr_backgr
-        character(len=:), allocatable :: ext
         integer :: nframes
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes)
@@ -293,10 +291,7 @@ contains
         if( present(subtr_backgr) )then
             if( subtr_backgr ) call mic_raw%subtract_background(HP_BACKGR_SUBTR)
         endif
-        ! set fbody
-        ext   = fname2ext(trim(micname))
-        fbody = trim(get_fbody(basename(trim(micname)), ext))
-    end subroutine read_mic_raw
+    end subroutine read_mic_raw_pickgau
 
     subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev, roi, kind )
         class(pickgau),             intent(inout) :: self
