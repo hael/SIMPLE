@@ -127,11 +127,9 @@ contains
         character(len=*), optional, intent(in)    :: dir_out
         integer,          optional, intent(in)    :: nboxes_max
         type(pickref)             :: refp, refp_refine
-        real,         allocatable :: moldiams(:)
         character(len=LONGSTRLEN) :: boxfile
-        character(len=4), allocatable :: moldiams_str(:)
-        real    :: maxdiam, mmoldiam_opt
-        integer :: box, istr, num_entries, idiam, num_moldiams
+        real    :: maxdiam
+        integer :: box
         logical :: l_roi, l_backgr_subtr
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
@@ -146,7 +144,7 @@ contains
         call refp_refine%new(params_glob%pcontrast, SMPD_SHRINK2, pickrefs, offset=1)
         call refp%refpick(refp_refine)
         ! write
-        maxdiam = params_glob%moldiam + params_glob%moldiam * BOX_EXP_FAC
+        maxdiam = refp%get_maxdiam() + refp%get_maxdiam() * BOX_EXP_FAC
         box     = find_larger_magic_box(round2even(maxdiam / smpd))
         call refp_refine%report_boxfile(box, smpd, boxfile, nptcls)
         if( nptcls == 0 )then
