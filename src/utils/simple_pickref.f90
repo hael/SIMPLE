@@ -60,6 +60,7 @@ contains
     procedure          :: get_scores
     procedure          :: get_nboxes
     procedure          :: get_box
+    procedure          :: get_maxdiam
     procedure, private :: write_boxfile
     procedure          :: report_boxfile
     procedure, private :: refine_upscaled
@@ -325,9 +326,10 @@ contains
         class(pickref), intent(inout) :: self
         real, allocatable :: tmp(:)
         integer :: n
-        ! tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
-        tmp = pack(self%box_scores, mask=(self%box_scores > 0.)) ! only non-negative correlations are meaningful
-        n   = size(tmp)
+        ! select peak targests > 0
+        tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
+        n   = 0
+        if( allocated(tmp) ) n = size(tmp)
         if( n == 0 )then
             self%npeaks = 0
             return
@@ -344,7 +346,12 @@ contains
         ! 2nd peak detection
         deallocate(tmp)
         tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
-        n   = size(tmp)
+        n   = 0
+        if( allocated(tmp) ) n = size(tmp)
+        if( n == 0 )then
+            self%npeaks = 0
+            return
+        endif
         call detect_peak_thres_sortmeans(n, tmp, self%t)
         where( self%box_scores >= self%t )
             ! there's a peak
@@ -359,10 +366,10 @@ contains
 
     subroutine distance_filter( self )
         class(pickref), intent(inout) :: self
-        integer, allocatable :: pos_inds(:)
+        integer, allocatable :: pos_inds(:), order(:)
         real,    allocatable :: pos_scores(:), tmp(:)
         logical, allocatable :: mask(:), selected_pos(:)
-        integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, ithr, ipeak
+        integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, ithr, ipeak, i
         real    :: dist
         logical :: is_corr_peak
         pos_inds   = pack(self%inds_offset(:,:), mask=self%box_scores(:,:) >= self%t)
@@ -370,7 +377,15 @@ contains
         nbox       = size(pos_inds)
         allocate(mask(nbox),         source=.false.)
         allocate(selected_pos(nbox), source=.true. )
-        do ibox = 1,nbox
+        ! This is a greedy algorithm for distance thresholding. Hence, the order in which the peaks are considered
+        ! matters. Create an order from highest to lowest peak and traverse them in that order. In this way, the highest
+        ! peaks are selected and their neighbors are stripped off first
+        order = (/(i,i=1,nbox)/)
+        tmp   = pack(self%box_scores, mask=self%box_scores(:,:) >= self%t)
+        call hpsort(tmp, order)
+        deallocate(tmp)
+        do i = nbox, 1, -1 ! because highest peaks are last
+            ibox = order(i)
             mask = .false.
             !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
             do jbox = 1,nbox
@@ -531,6 +546,11 @@ contains
         class(pickref), intent(in) :: self
         get_box = self%ldim_raw_box(1)
     end function get_box
+
+    real function get_maxdiam( self )
+        class(pickref), intent(in) :: self
+        get_maxdiam = self%maxdiam
+    end function get_maxdiam
 
     pure function get_nboxes( self ) result( nboxes )
         class(pickref), intent(in) :: self

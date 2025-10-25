@@ -45,21 +45,17 @@ type pickgau
     ! scores & local standard deviations
     real,        allocatable :: box_scores(:,:), box_scores_mem(:,:), loc_sdevs(:,:), loc_sdevs_mem(:,:)
     ! flags
-    logical                  :: l_roi   = .false.
-    logical                  :: refpick = .false.
-    logical                  :: exists  = .false.
+    logical                  :: l_roi       = .false.
+    logical                  :: gaurefs_set = .false.
+    logical                  :: exists      = .false.
 contains
     procedure          :: gaupick
     procedure          :: new_gaupicker
     procedure          :: new_gaupicker_multi
-    procedure          :: new_refpicker
     procedure, private :: new
-    procedure, private :: set_refs
-    procedure, private :: set_nboxes_max
     procedure, private :: set_gaurefs
     procedure, private :: setup_iterators
     procedure, private :: gaumatch_boximgs
-    procedure, private :: refmatch_boximgs
     procedure, private :: detect_peaks
     procedure, private :: distance_filter
     procedure, private :: remove_outliers
@@ -250,11 +246,7 @@ contains
         ! establish iterators
         call self%setup_iterators
         ! matching
-        if( self%refpick )then
-            call self%refmatch_boximgs
-        else
-            call self%gaumatch_boximgs
-        endif
+        call self%gaumatch_boximgs
         call self%detect_peaks
         if( self%npeaks == 0 )then
             if( present(self_refine) ) self_refine%npeaks = 0
@@ -320,25 +312,6 @@ contains
         call self%new(pcontrast, smpd_shrink, moldiam_max, moldiam_max, box=box, offset=offset, ndev=ndev, roi=roi)
         call self%set_gaurefs(moldiams)
     end subroutine new_gaupicker_multi
-
-    subroutine new_refpicker( self, pcontrast, smpd_shrink, imgs, offset, ndev, roi, nboxes_max )
-        class(pickgau),    intent(inout) :: self
-        character(len=*),  intent(in)    :: pcontrast
-        real,              intent(in)    :: smpd_shrink
-        class(image),      intent(inout) :: imgs(:)
-        integer, optional, intent(in)    :: offset
-        real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
-        logical, optional, intent(in)    :: roi
-        integer, optional, intent(in)    :: nboxes_max
-        integer :: ldim(3)
-        ldim    = imgs(1)%get_ldim()
-        params_glob%moldiam = (real(ldim(1)) - 2. * COSMSKHALFWIDTH ) * imgs(1)%get_smpd() 
-        call self%new( pcontrast, smpd_shrink, params_glob%moldiam, params_glob%moldiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
-        call self%set_refs( imgs )
-        if( present(nboxes_max) )then
-            call self%set_nboxes_max(nboxes_max)
-        endif
-    end subroutine new_refpicker
 
     subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev, roi, kind )
         class(pickgau),             intent(inout) :: self
@@ -489,49 +462,6 @@ contains
         self%exists = .true.
     end subroutine new
 
-    subroutine set_refs( self, imgs )
-        class(pickgau), intent(inout) :: self
-        class(image),   intent(inout) :: imgs(:)
-        integer     :: ldim(3), iref
-        ldim       = imgs(1)%get_ldim()
-        if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
-        self%nrefs = size(imgs)
-        ! set # pixels in x/y for both box sizes
-        self%nx    = self%ldim(1) - self%ldim_box(1)
-        self%ny    = self%ldim(2) - self%ldim_box(2)
-        if( allocated(self%boxrefs) )then
-            do iref = 1,size(self%boxrefs)
-                call self%boxrefs(iref)%kill
-            end do
-            deallocate(self%boxrefs)
-        endif
-        if( allocated(self%l_err_refs) ) deallocate(self%l_err_refs)
-        allocate(self%l_err_refs(self%nrefs), self%boxrefs(self%nrefs))
-        !$omp parallel do schedule(static) default(shared) private(iref) proc_bind(close)
-        do iref = 1,self%nrefs
-            call imgs(iref)%fft
-            call self%boxrefs(iref)%new(self%ldim_box, self%smpd_shrink, wthreads=.false.)
-            call self%boxrefs(iref)%set_ft(.true.)
-            call imgs(iref)%clip(self%boxrefs(iref))
-            call imgs(iref)%ifft
-            call self%boxrefs(iref)%ifft
-            call self%boxrefs(iref)%prenorm4real_corr(self%l_err_refs(iref))
-        end do
-        !$omp end parallel do
-        if( L_WRITE )then
-            do iref = 1,self%nrefs
-                call self%boxrefs(iref)%write('boxrefs_shrink.mrc', iref)
-            enddo
-        endif
-        self%refpick = .true.
-    end subroutine set_refs
-
-    subroutine set_nboxes_max( self, nboxes_max )
-        class(pickgau), intent(inout) :: self
-        integer,        intent(in)    :: nboxes_max
-        self%nboxes_max = nboxes_max
-    end subroutine set_nboxes_max
-
     subroutine set_gaurefs(self, moldiams)
         class(pickgau), intent(inout) :: self
         real,           intent(in)    :: moldiams(:)
@@ -562,7 +492,7 @@ contains
                 call self%boxrefs(idiam)%write('gauref_moldiam'//numstr//'.mrc')
             endif
         end do
-        self%refpick = .true.
+        self%gaurefs_set = .true.
     end subroutine set_gaurefs
 
     subroutine setup_iterators( self )
@@ -667,7 +597,7 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
         ! calculate box_scores
-        if( self%refpick )then
+        if( self%gaurefs_set )then
             !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores,pos,l_err) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
@@ -1029,7 +959,7 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
         factor = real(offset_old) * (smpd_old / self%smpd_shrink)
-        if( self%refpick )then
+        if( self%gaurefs_set )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
             do ibox = 1,nbox
@@ -1131,10 +1061,10 @@ contains
                 end do
                 deallocate(self%boxrefs)
             endif
-            self%kind    = 'none'
-            self%l_roi   = .false.
-            self%refpick = .false.
-            self%exists  = .false.
+            self%kind        = 'none'
+            self%l_roi       = .false.
+            self%gaurefs_set = .false.
+            self%exists      = .false.
         endif
     end subroutine kill
 
