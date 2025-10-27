@@ -30,7 +30,7 @@ if(${NICE})
     add_custom_target(nice_build ALL
         DEPENDS nice_src
         DEPENDS nice_venv
-        COMMAND ./venv/bin/tailwindcss -i nice_lite/templates/nice_lite/tailwind.css -o nice_lite/static/nice_lite/nice_lite.css --minify
+        COMMAND ./venv/bin/tailwindcss -i nice_lite/templates/tailwind.css -o nice_lite/static/nice_lite/nice_lite.css --minify
         COMMAND ./venv/bin/python3 ${CMAKE_CURRENT_BINARY_DIR}/manage.py makemigrations
         COMMAND ./venv/bin/python3 ${CMAKE_CURRENT_BINARY_DIR}/manage.py migrate
         COMMAND ./venv/bin/python3 ${CMAKE_CURRENT_BINARY_DIR}/manage.py collectstatic --no-input

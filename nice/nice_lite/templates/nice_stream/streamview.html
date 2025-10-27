@@ -23,11 +23,11 @@
                 <div class="font-bold text-[12px] text-nice4dark">collection parameters</div>
                 <div class="grid grid-cols-2 grid-cols-[auto_auto] gap-y-[2px] gap-x-[10px] text-[10px] ml-[10px]">
                     {% if "smpd" in args %}
-                        <div class="font-bold">sampling distance</div>
+                        <div class="font-bold">pixel size</div>
                         <div>{{ args.smpd|floatformat:3  }} Å/px</div>
                     {% endif %}
                     {% if "smpd_downscale" in args %}
-                        <div class="font-bold">downsampled sampling distance</div>
+                        <div class="font-bold">downsampled pixel size</div>
                         <div>{{ args.smpd_downscale|floatformat:3 }} Å/px</div>
                     {% endif %} 
                     {% if "cs" in args %}
