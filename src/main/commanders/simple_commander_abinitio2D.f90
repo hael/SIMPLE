@@ -545,7 +545,6 @@ contains
                         else
                             gauref   = 'no'
                         endif
-
                     end select
                 case(2)
                     ! phase constants

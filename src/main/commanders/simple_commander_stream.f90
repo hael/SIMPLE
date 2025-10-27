@@ -2011,6 +2011,7 @@ contains
         if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',         'no')
         if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc_smpl')
         if( .not. cline%defined('maxpop')          ) call cline%set('maxpop',         MAXPOP_DEFAULT)
+        ! if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',         8.0) ! For future use
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
         if(envlen > 0) then
