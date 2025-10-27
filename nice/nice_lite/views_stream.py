@@ -1,3 +1,7 @@
+'''
+contains views associated with stream view
+'''
+
 # global imports
 import os
 import time
@@ -20,11 +24,17 @@ from .data_structures.jobclassic import JobClassic
 
 @login_required(login_url="/login")
 def stream(request):
+    '''
+    returns stream core view
+    '''
     coreviewstream = CoreViewStream(request)
     return coreviewstream.render()
 
 @login_required(login_url="/login/")
 def create_dataset(request):
+    '''
+    creates a new dataset, sets cookies and returns redirect to load
+    '''
     project = Project(request=request)
     dataset = Dataset()
     dataset.new(project, request.user.username)
@@ -35,6 +45,9 @@ def create_dataset(request):
 
 @login_required(login_url="/login/")
 def delete_dataset(request, datasetid):
+    '''
+    deletes a dataset from project and returns redirect to reload page
+    '''
     project = Project(request=request)
     dataset = Dataset(dataset_id=datasetid)
     dataset.delete(project)
@@ -43,22 +56,35 @@ def delete_dataset(request, datasetid):
 
 @login_required(login_url="/login/")
 def dataset(request):
+    '''
+    returns dataset view for dataset set in selected_dataset_id cookie
+    '''
     datasetview = DatasetView(request)
     return datasetview.render()
 
 @login_required(login_url="/login/")
 def new_stream(request):
+    '''
+    returns create stream page
+    '''
     newstreamview = NewStreamView(request)
     return newstreamview.render()
 
 @login_required(login_url="/login/")
 def rerun_stream(request, parentid):
+    '''
+    returns create stream page using arguments from previous stream job
+    with id=parentid
+    '''
     job = Job(id=parentid)
     newstreamview = NewStreamView(request, args=job.args)
     return newstreamview.render()
 
 @login_required(login_url="/login/")
 def terminate_stream(request, jobid):
+    '''
+    terminates stream and refreshes page by redirecting to dataset view
+    '''
     job = Job(id=jobid)
     job.terminate()
     response = redirect('nice_lite:dataset')
@@ -66,6 +92,9 @@ def terminate_stream(request, jobid):
 
 @login_required(login_url="/login/")
 def delete_stream(request, jobid):
+    '''
+    deletes stream and refreshes page by redirecting to dataset view
+    '''
     job = Job(id=jobid)
     project = Project(request=request)
     dataset = Dataset(request=request)
@@ -75,6 +104,9 @@ def delete_stream(request, jobid):
 
 @login_required(login_url="/login/")
 def create_stream(request):
+    '''
+    starts a new stream and refreshes page by redirecting to dataset view
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job()
@@ -84,21 +116,34 @@ def create_stream(request):
 
 @login_required(login_url="/login/")
 def view_stream(request, jobid):
+    '''
+    returns stream view 
+    '''
     streamview = StreamView(request, jobid)
     return streamview.render()
 
 @login_required(login_url="/login/")
 def view_stream_movies(request, jobid=None, jobidzoom=None):
+    '''
+    returns movies panel in stream view
+    '''
     streamviewmovies = StreamViewMovies(request, jobid, jobidzoom)
     return streamviewmovies.render()
 
 @login_required(login_url="/login/")
 def view_stream_preprocess(request, jobid=None, jobidzoom=None):
+    '''
+    returns preprocess panel in stream view
+    '''
     streamviewpreprocess = StreamViewPreprocess(request, jobid, jobidzoom)
     return streamviewpreprocess.render()
 
 @login_required(login_url="/login/")
 def term_stream_preprocess(request, jobid):
+    '''
+    sends termination signal to preprocess process and reloads preprocess panel
+    by redirection
+    '''
     job = Job(id=jobid)
     job.terminate_preprocess()
     response = redirect('nice_lite:view_stream_preprocess', jobid=jobid)
@@ -106,6 +151,10 @@ def term_stream_preprocess(request, jobid):
 
 @login_required(login_url="/login/")
 def restart_stream_preprocess(request, jobid):
+    '''
+    starts terminated preprocess process and reloads preprocess panel
+    by redirection
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job(id=jobid)
@@ -115,11 +164,18 @@ def restart_stream_preprocess(request, jobid):
 
 @login_required(login_url="/login/")
 def view_stream_optics(request, jobid=None, jobidzoom=None):
+    '''
+    returns optics panel in stream view
+    '''
     streamviewoptics = StreamViewOptics(request, jobid, jobidzoom)
     return streamviewoptics.render()
 
 @login_required(login_url="/login/")
 def term_stream_optics(request, jobid):
+    '''
+    sends termination signal to optics process and reloads optics panel
+    by redirection
+    '''
     job = Job(id=jobid)
     job.terminate_optics()
     response = redirect('nice_lite:view_stream_optics', jobid=jobid)
@@ -127,6 +183,10 @@ def term_stream_optics(request, jobid):
 
 @login_required(login_url="/login/")
 def restart_stream_optics(request, jobid):
+    '''
+    starts terminated optics process and reloads optics panel
+    by redirection
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job(id=jobid)
@@ -136,11 +196,18 @@ def restart_stream_optics(request, jobid):
 
 @login_required(login_url="/login/")
 def view_stream_initial_pick(request, jobid=None, jobidzoom=None):
+    '''
+    returns initial picking panel in stream view
+    '''
     streamviewinitialpick = StreamViewInitialPick(request, jobid, jobidzoom)
     return streamviewinitialpick.render()
 
 @login_required(login_url="/login/")
 def term_stream_initial_pick(request, jobid):
+    '''
+    sends termination signal to initial picking process and reloads intitial picking
+    panel by redirection
+    '''
     job = Job(id=jobid)
     job.terminate_initial_pick()
     response = redirect('nice_lite:view_stream_initial_pick', jobid=jobid)
@@ -148,6 +215,10 @@ def term_stream_initial_pick(request, jobid):
 
 @login_required(login_url="/login/")
 def restart_stream_initial_pick(request, jobid):
+    '''
+    starts terminated initial picking process and reloads intitial picking
+    panel by redirection
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job(id=jobid)
@@ -187,11 +258,18 @@ def decrease_moldiam_stream_initial_pick(request, jobid):
 
 @login_required(login_url="/login/")
 def view_stream_generate_pickrefs(request, jobid=None, jobidzoom=None):
+    '''
+    returns reference generation panel in stream view
+    '''
     streamviewgeneratepickrefs = StreamViewGeneratePickrefs(request, jobid, jobidzoom)
     return streamviewgeneratepickrefs.render()
 
 @login_required(login_url="/login/")
 def term_stream_generate_pickrefs(request, jobid):
+    '''
+    sends termination signal to pickrefs generation process and reloads pickrefs
+    generation panel by redirection
+    '''
     job = Job(id=jobid)
     job.terminate_generate_pickrefs()
     response = redirect('nice_lite:view_stream_generate_pickrefs', jobid=jobid)
@@ -199,6 +277,10 @@ def term_stream_generate_pickrefs(request, jobid):
 
 @login_required(login_url="/login/")
 def restart_stream_generate_pickrefs(request, jobid):
+    '''
+    restarts terminated pickrefs generation process and reloads pickrefs
+    generation panel by redirection
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job(id=jobid)
@@ -240,11 +322,18 @@ def select_stream_classification_2D(request, jobid):
 
 @login_required(login_url="/login/")
 def view_stream_reference_picking(request, jobid=None, jobidzoom=None):
+    '''
+    returns reference picking panel in stream view
+    '''
     streamviewreferencepicking = StreamViewReferencePicking(request, jobid, jobidzoom)
     return streamviewreferencepicking.render()
 
 @login_required(login_url="/login/")
 def term_stream_reference_picking(request, jobid):
+    '''
+    sends termination signal to reference picking process and reloads 
+    reference picking panel by redirection
+    '''
     job = Job(id=jobid)
     job.terminate_reference_picking()
     response = redirect('nice_lite:view_stream_reference_picking', jobid=jobid)
@@ -252,6 +341,10 @@ def term_stream_reference_picking(request, jobid):
 
 @login_required(login_url="/login/")
 def restart_stream_reference_picking(request, jobid):
+    '''
+    starts terminated reference picking process and reloads 
+    reference picking panel by redirection
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job(id=jobid)
@@ -261,11 +354,18 @@ def restart_stream_reference_picking(request, jobid):
 
 @login_required(login_url="/login/")
 def view_stream_sieve_particles(request, jobid=None, jobidzoom=None):
+    '''
+    returns particle sieving panel in stream view
+    '''
     streamviewsieveparticles = StreamViewSieveParticles(request, jobid, jobidzoom)
     return streamviewsieveparticles.render()
 
 @login_required(login_url="/login/")
 def term_stream_sieve_particles(request, jobid):
+    '''
+    sends termination signal to particle sieving process and reloads particle sieving
+    panel by redirection
+    '''
     job = Job(id=jobid)
     job.terminate_sieve_particles()
     response = redirect('nice_lite:view_stream_sieve_particles', jobid=jobid)
@@ -273,6 +373,10 @@ def term_stream_sieve_particles(request, jobid):
 
 @login_required(login_url="/login/")
 def restart_stream_sieve_particles(request, jobid):
+    '''
+    starts terminated particle sieving process and reloads particle sieving
+    panel by redirection
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job(id=jobid)
@@ -291,11 +395,18 @@ def select_stream_sieve_particles(request, jobid):
 
 @login_required(login_url="/login/")
 def view_stream_classification_2D(request, jobid=None, jobidzoom=None):
+    '''
+    returns 2D classification panel in stream view
+    '''
     streamviewclassification2D = StreamViewClassification2D(request, jobid, jobidzoom)
     return streamviewclassification2D.render()
 
 @login_required(login_url="/login/")
 def term_stream_classification_2D(request, jobid):
+    '''
+    sends termination signal to 2D classification process and reloads 2D classification panel
+    by redirection
+    '''
     job = Job(id=jobid)
     job.terminate_classification_2D()
     response = redirect('nice_lite:view_stream_classification_2D', jobid=jobid)
@@ -303,6 +414,10 @@ def term_stream_classification_2D(request, jobid):
 
 @login_required(login_url="/login/")
 def restart_stream_classification_2D(request, jobid):
+    '''
+    starts terminated 2D classification process and reloads 2D classification panel
+    by redirection
+    '''
     project = Project(request=request)
     dataset = Dataset(request=request)
     job = Job(id=jobid)
@@ -317,11 +432,17 @@ def view_logs(request, jobid, log, error):
 
 @login_required(login_url="/login/")
 def view_stream_particle_sets(request, jobid):
+    '''
+    returns particle sets panel in stream view
+    '''
     streamviewparticlesets = StreamViewParticleSets(request, jobid)
     return streamviewparticlesets.render()
 
 @login_required(login_url="/login/")
 def update_stream_description(request, jobid):
+    '''
+    update description for give stream jobid
+    '''
     job = Job(id=jobid)
     new_stream_description = request.POST["new_stream_description"]
     job.update_description(new_stream_description)

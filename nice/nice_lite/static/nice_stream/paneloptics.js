@@ -1,5 +1,19 @@
 let lastinteraction = Date.now();
 
+restartProcess = (element) => {
+  const confirmed = confirm("Please confirm that you wish to restart this process");
+  if(confirmed){
+    element.form.submit()
+  }
+}
+
+stopProcess = (element) => {
+  const confirmed = confirm("Please confirm that you wish to stop this process");
+  if(confirmed){
+    element.form.submit()
+  }
+}
+
 window.addEventListener("load", () =>{
     for(const optics_scatter_chart of document.getElementsByClassName("optics_scatter_chart")){
         const ctx = optics_scatter_chart.getContext("2d");

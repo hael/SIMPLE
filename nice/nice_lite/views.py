@@ -1,3 +1,7 @@
+'''
+contains common views to both stream and classic views
+'''
+
 # global imports
 from django.shortcuts               import redirect, render
 from django.http                    import HttpResponse
@@ -13,6 +17,10 @@ from .data_structures.workspace  import Workspace
 
 @login_required(login_url="/login")
 def index(request):
+    ''' 
+    return post-authentication select stream or classic page. Only displayed
+    when mode cookie is unset
+    '''
     mode = request.COOKIES.get('mode', 'none')
     if mode == "classic":
         response = redirect('nice_lite:classic')
@@ -23,6 +31,10 @@ def index(request):
     return response
 
 def user_login(request):
+    '''
+    if user authentication fails return login page else
+    redirect to stream
+    '''
     if request.method == 'POST':
         username = request.POST['username']
         password = request.POST['password']
@@ -35,16 +47,27 @@ def user_login(request):
     return loginview.render()
 
 def user_logout(request):
+    '''
+    logout authenticated user
+    '''
     logout(request)
     return HttpResponse("SUCCESSFUL LOGOUT.")
 
 @login_required(login_url="/login/")
 def new_project(request, caller):
+    '''
+    returns create new project page
+    '''
     newprojectview = NewProjectView(request, caller)
     return newprojectview.render()
 
 @login_required(login_url="/login/")
 def create_project(request):
+    '''
+    creates new project containing a new empty dataset and workspace. 
+    sets cookies to new project, workspace and dataset and redirects to 
+    stream view to load
+    '''
     project = Project()
     project.new(request)
     dataset = Dataset()

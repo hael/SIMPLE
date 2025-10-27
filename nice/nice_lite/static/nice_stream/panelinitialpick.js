@@ -1,5 +1,19 @@
 let lastinteraction = Date.now();
 
+restartProcess = (element) => {
+  const confirmed = confirm("Please confirm that you wish to restart this process");
+  if(confirmed){
+    element.form.submit()
+  }
+}
+
+stopProcess = (element) => {
+  const confirmed = confirm("Please confirm that you wish to stop this process");
+  if(confirmed){
+    element.form.submit()
+  }
+}
+
 scrlRight = (element, event) => {
   event.preventDefault()
   const micrograph_slider = document.getElementById("micrographs_slider")
