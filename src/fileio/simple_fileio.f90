@@ -367,6 +367,14 @@ contains
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
 
+    function append2basename( fname, suffix ) result( newname )
+        character(len=*), intent(in)  :: fname, suffix
+        character(len=:), allocatable :: bname, newname
+        bname = basename(trim(FNAME))
+        allocate(newname, source=add2fbody(bname, '.'//fname2ext(bname), trim(suffix)))
+        deallocate(bname)
+    end function append2basename
+
     function rm_from_fbody( fname, suffix, str ) result( newname )
         character(len=*), intent(in)  :: fname, suffix, str
         character(len=:), allocatable :: newname

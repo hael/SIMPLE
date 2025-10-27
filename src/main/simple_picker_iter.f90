@@ -78,7 +78,7 @@ contains
                     call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
                 endif
             case('segdiam')
-                call exec_segdiampick(moviename_intg, boxfile, nptcls_out,params_glob%moldiam_max, dir_out=dir_out)
+                call exec_segdiampick(moviename_intg, boxfile, smpd, nptcls_out, params_glob%moldiam_max, dir_out=dir_out)
         end select
     end subroutine iterate
 

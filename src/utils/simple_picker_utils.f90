@@ -182,9 +182,10 @@ contains
         endif
     end subroutine exec_segpick
 
-    subroutine exec_segdiampick( micname, boxfile_out, nptcls, moldiam_max, dir_out )
+    subroutine exec_segdiampick( micname, boxfile_out, smpd, nptcls, moldiam_max, dir_out )
         character(len=*),           intent(in)  :: micname
         character(len=LONGSTRLEN),  intent(out) :: boxfile_out
+        real,                       intent(in)  :: smpd    !< sampling distance in A
         integer,                    intent(out) :: nptcls
         real,                       intent(in)  :: moldiam_max
         character(len=*), optional, intent(in)  :: dir_out
@@ -192,7 +193,7 @@ contains
         type(picksegdiam) :: picker
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
-        call picker%pick(micname, moldiam_max)
+        call picker%pick(micname, SMPD, moldiam_max, params_glob%pcontrast)
         call picker%write_pos_and_diams(boxfile, nptcls)
         if( nptcls == 0 )then
             boxfile_out = ''
