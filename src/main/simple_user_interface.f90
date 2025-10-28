@@ -224,7 +224,6 @@ type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
 type(simple_program), target :: validate_refpick
-type(simple_program), target :: validate_segdiampick
 type(simple_program), target :: vizoris
 type(simple_program), target :: volanalyze
 type(simple_program), target :: volops
@@ -564,7 +563,6 @@ contains
         call new_uniform_filter3D
         call new_update_project
         call new_validate_refpick
-        call new_validate_segdiampick
         call new_vizoris
         call new_volanalyze
         call new_volops
@@ -721,7 +719,6 @@ contains
         call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(validate_refpick)
-        call push2prg_ptr_array(validate_segdiampick)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volanalyze)
         call push2prg_ptr_array(volops)
@@ -1041,8 +1038,6 @@ contains
                 ptr2prg => update_project
             case('validate_refpick')
                 ptr2prg => validate_refpick
-            case('validate_segdiampick')
-                ptr2prg => validate_segdiampick
             case('vizoris')
                 ptr2prg => vizoris
             case('volanalyze')
@@ -1174,7 +1169,6 @@ contains
         write(logfhandle,'(A)') uniform_filter3D%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') validate_refpick%name
-        write(logfhandle,'(A)') validate_segdiampick%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volanalyze%name
         write(logfhandle,'(A)') volops%name
@@ -6325,40 +6319,6 @@ contains
         ! computer controls
         call validate_refpick%set_input('comp_ctrls', 1, nthr)
     end subroutine new_validate_refpick
-
-    subroutine new_validate_segdiampick
-        ! PROGRAM SPECIFICATION
-        call validate_segdiampick%new(&
-        &'validate_segdiampick',&                                        ! name
-        &'validation of reference-based picking',&                   ! descr_short
-        &'is a program for validation of segementation-based picking',&  ! descr_long
-        &'simple_stream',&                                           ! executable
-        &1, 5, 0, 2, 0, 0, 1, .false.)                               ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call validate_segdiampick%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
-        validate_segdiampick%img_ios(1)%required = .true.
-        ! parameter input/output
-        call validate_segdiampick%set_input('parm_ios', 1, smpd)
-        validate_segdiampick%parm_ios(1)%required = .true.
-        call validate_segdiampick%set_input('parm_ios', 2, pcontrast)
-        call validate_segdiampick%set_input('parm_ios', 3, kv)
-        validate_segdiampick%parm_ios(3)%required = .true.
-        call validate_segdiampick%set_input('parm_ios', 4, cs)
-        validate_segdiampick%parm_ios(4)%required = .true.
-        call validate_segdiampick%set_input('parm_ios', 5, fraca)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call validate_segdiampick%set_input('srch_ctrls', 1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
-        call validate_segdiampick%set_input('srch_ctrls', 2, pick_roi)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call validate_segdiampick%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_validate_segdiampick
 
     subroutine new_vizoris
         ! PROGRAM SPECIFICATION

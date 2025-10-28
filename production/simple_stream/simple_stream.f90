@@ -12,7 +12,6 @@ implicit none
 
 ! PROGRAMS
 type(commander_mini_stream)             :: xmini_stream
-type(commander_validate_segdiampick)    :: xvalidate_segdiampick
 type(commander_validate_refpick)        :: xvalidate_refpick
 type(commander_stream_preprocess)       :: xpreprocess
 type(commander_stream_pick_extract)     :: xpick_extract
@@ -50,8 +49,6 @@ call script_exec(cline, trim(prg), 'simple_stream')
 select case(trim(prg))
     case( 'mini_stream' )
         call xmini_stream%execute(cline)
-    case( 'validate_segdiampick')
-        call xvalidate_segdiampick%execute(cline)
     case( 'validate_refpick')
         call xvalidate_refpick%execute(cline)
     case( 'preproc' )
@@ -76,7 +73,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d92f3697')
+call simple_print_git_version('085d8c11')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
