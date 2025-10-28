@@ -4,172 +4,174 @@ include 'simple_lib.f08'
 use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers
-use simple_commander_project
-use simple_commander_starproject
-use simple_commander_checks
-use simple_commander_distr
-use simple_commander_imgproc
-use simple_commander_pspec
-use simple_commander_mask
-use simple_commander_misc
-use simple_commander_oris
-use simple_commander_preprocess
-use simple_commander_cluster2D
-use simple_commander_cluster2D_stream
-use simple_commander_cavgs
-use simple_commander_abinitio
-use simple_commander_abinitio2D
-use simple_commander_refine3D
-use simple_commander_rec
-use simple_commander_relion
-use simple_commander_sim
-use simple_commander_volops
-use simple_commander_resolest
-use simple_commander_euclid
-use simple_commander_atoms
+use simple_commanders_project
+use simple_commanders_starproject
+use simple_commanders_checks
+use simple_commanders_distr
+use simple_commanders_imgproc
+use simple_commanders_mask
+use simple_commanders_misc
+use simple_commanders_oris
+use simple_commanders_preprocess
+use simple_commanders_cluster2D
+use simple_commanders_cluster2D_stream
+use simple_commanders_cavgs
+use simple_commanders_abinitio
+use simple_commanders_abinitio2D
+use simple_commanders_refine3D
+use simple_commanders_rec
+use simple_commanders_relion
+use simple_commanders_sim
+use simple_commanders_volops
+use simple_commanders_resolest
+use simple_commanders_euclid
+use simple_commanders_atoms
+use simple_commanders_validate
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT PROGRAMS
-type(new_project_commander)                 :: xnew_project
-type(update_project_commander)              :: xupdate_project
-type(print_project_info_commander)          :: xprint_project_info
-type(print_project_field_commander)         :: xprint_project_field
-type(zero_project_shifts_commander)         :: xzero_project_shifts
-type(import_movies_commander)               :: ximport_movies
-type(import_boxes_commander)                :: ximport_boxes
-type(import_particles_commander)            :: ximport_particles
-type(import_cavgs_commander)                :: ximport_cavgs
-type(replace_project_field_commander)       :: xreplace_project_field
-type(selection_commander)                   :: xselection
-type(export_relion_commander)               :: xexport_relion
-type(import_starproject_commander)          :: ximport_starproject
-type(export_starproject_commander)          :: xexport_starproject
-type(assign_optics_groups_commander)        :: xassign_optics_groups
-type(merge_projects_commander)              :: xmerge_projects
+type(commander_new_project)                 :: xnew_project
+type(commander_update_project)              :: xupdate_project
+type(commander_print_project_info)          :: xprint_project_info
+type(commander_print_project_field)         :: xprint_project_field
+type(commander_zero_project_shifts)         :: xzero_project_shifts
+type(commander_import_movies)               :: ximport_movies
+type(commander_import_boxes)                :: ximport_boxes
+type(commander_import_particles)            :: ximport_particles
+type(commander_import_cavgs)                :: ximport_cavgs
+type(commander_replace_project_field)       :: xreplace_project_field
+type(commander_selection)                   :: xselection
+type(commander_export_relion)               :: xexport_relion
+type(commander_import_starproject)          :: ximport_starproject
+type(commander_export_starproject)          :: xexport_starproject
+type(commander_assign_optics_groups)        :: xassign_optics_groups
+type(commander_merge_projects)              :: xmerge_projects
 
 ! PRE-PROCESSING WORKFLOWS
-type(preprocess_commander_distr)            :: xpreprocess
-type(extract_commander_distr)               :: xextract_distr
-type(reextract_commander_distr)             :: xreextract_distr
-type(motion_correct_commander_distr)        :: xmotion_correct_distr
-type(gen_pspecs_and_thumbs_commander_distr) :: xgen_pspecs_and_thumbs
-type(analyze_pspecs_commander)              :: xpow_anal
-type(ctf_estimate_commander_distr)          :: xctf_estimate_distr
-type(pick_commander_distr)                  :: xpick_distr
+type(commander_preprocess_distr)            :: xpreprocess
+type(commander_extract_distr)               :: xextract_distr
+type(commander_extract_distr)               :: xreextract_distr
+type(commander_motion_correct_distr)        :: xmotion_correct_distr
+type(commander_gen_pspecs_and_thumbs_distr) :: xgen_pspecs_and_thumbs
+type(commander_ctf_estimate_distr)          :: xctf_estimate_distr
+type(commander_pick_distr)                  :: xpick_distr
 
 ! CLUSTER2D WORKFLOWS
-type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
-type(abinitio2D_commander)                  :: xabinitio2D
-type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
-type(cluster2D_commander_subsets)           :: xcluster2D_subsets
-type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
-type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
-type(map_cavgs_states_commander)            :: xmap_cavgs_states
-type(sample_classes_commander)              :: xsample_classes
-type(cluster_cavgs_commander)               :: xcluster_cavgs
-type(cluster_stack_commander)               :: xcluster_stack
-type(select_clusters_commander)             :: xsel_clusts
-type(match_cavgs_commander)                 :: xmatch_cavgs
-type(match_cavgs2afm_commander)             :: xmatch_cavgs2afm
-type(match_stacks_commander)                :: xmatch_stacks
-type(score_ptcls_commander)                 :: xscore_ptcls
-type(write_classes_commander)               :: xwrite_classes
-type(write_mic_filetab_commander)           :: xwrite_mic_filetab
-type(consolidate_chunks_commander)          :: xconsolidate_chunks
+type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
+type(commander_abinitio2D)                  :: xabinitio2D
+type(commander_cluster2D_autoscale)         :: xcluster2D_hlev
+type(commander_cluster2D_subsets)           :: xcluster2D_subsets
+type(commander_cleanup2D_hlev)              :: xcleanup2D_distr
+type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
+type(commander_map_cavgs_states)            :: xmap_cavgs_states
+type(commander_sample_classes)              :: xsample_classes
+type(commander_cluster_cavgs)               :: xcluster_cavgs
+type(commander_cluster_stack)               :: xcluster_stack
+type(commander_select_clusters)             :: xsel_clusts
+type(commander_match_cavgs)                 :: xmatch_cavgs
+type(commander_match_cavgs2afm)             :: xmatch_cavgs2afm
+type(commander_match_stacks)                :: xmatch_stacks
+type(commander_score_ptcls)                 :: xscore_ptcls
+type(commander_write_classes)               :: xwrite_classes
+type(commander_write_mic_filetab)           :: xwrite_mic_filetab
+type(commander_consolidate_chunks)          :: xconsolidate_chunks
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-type(estimate_lpstages_commander)           :: xestimate_lpstages
-type(noisevol_commander)                    :: xnoisevol
-type(abinitio3D_cavgs_commander)            :: xabinitio3D_cavgs
-type(abinitio3D_cavgs_fast_commander)       :: xabinitio3D_cavgs_fast
-type(abinitio3D_commander)                  :: xabinitio3D
-type(multivol_assign_commander)             :: xmultivol_assign
-type(abinitio3D_parts_commander)            :: xabinitio3D_parts
+type(commander_estimate_lpstages)           :: xestimate_lpstages
+type(commander_noisevol)                    :: xnoisevol
+type(commander_abinitio3D_cavgs)            :: xabinitio3D_cavgs
+type(commander_abinitio3D_cavgs_fast)       :: xabinitio3D_cavgs_fast
+type(commander_abinitio3D)                  :: xabinitio3D
+type(commander_multivol_assign)             :: xmultivol_assign
 
 ! REFINE3D WORKFLOWS
-type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
-type(refine3D_distr_commander)              :: xrefine3D_distr
-type(refine3D_auto_commander)               :: xrefine3D_auto
-type(reconstruct3D_commander_distr)         :: xreconstruct3D
+type(commander_calc_pspec_distr)            :: xcalc_pspec_distr
+type(commander_refine3D_distr)              :: xrefine3D_distr
+type(commander_refine3D_auto)               :: xrefine3D_auto
+type(commander_reconstruct3D_distr)         :: xreconstruct3D
 
 ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(symaxis_search_commander)              :: xsymsrch
-type(symmetry_test_commander)               :: xsymtst
-type(symmetrize_map_commander)              :: xsymmetrize_map
-type(dock_volpair_commander)                :: xdock_volpair
-type(postprocess_commander)                 :: xpostprocess
-type(automask_commander)                    :: xautomask
-type(auto_spher_mask_commander)             :: xauto_spher_mask
-type(fractionate_movies_commander_distr)    :: xfractionate_movies
-type(comparemc_commander)                   :: xcomparemc
+type(commander_symaxis_search)              :: xsymsrch
+type(commander_symmetry_test)               :: xsymtst
+type(commander_symmetrize_map)              :: xsymmetrize_map
+type(commander_dock_volpair)                :: xdock_volpair
+type(commander_postprocess)                 :: xpostprocess
+type(commander_automask)                    :: xautomask
+type(commander_auto_spher_mask)             :: xauto_spher_mask
+type(commander_fractionate_movies_distr)    :: xfractionate_movies
+type(commander_comparemc)                   :: xcomparemc
+
+! VALIDATION WORKFLOWS
+type(commander_quick_look)                  :: xquick_look
+type(commander_check_refpick)               :: xcheck_refpick
 
 ! IMAGE PROCESSING PROGRAMS
-type(binarize_commander)                    :: xbinarize
-type(mask_commander)                        :: xmask
-type(automask2D_commander)                  :: xautomask2D
-type(fsc_commander)                         :: xfsc
-type(clin_fsc_commander)                    :: xclin_fsc
-type(nununiform_filter3D_commander)         :: xnununiform_filter3D
-type(centervol_commander)                   :: xcenter
-type(reproject_commander)                   :: xreproject
-type(volanalyze_commander)                  :: xvolanalyze
-type(volops_commander)                      :: xvolops
-type(convert_commander)                     :: xconvert
-type(ctfops_commander)                      :: xctfops
-type(ctf_phaseflip_commander)               :: xctf_phaseflip
-type(filter_commander)                      :: xfilter
-type(normalize_commander)                   :: xnormalize
-type(ppca_denoise_commander)                :: xppca_denoise
-type(ppca_denoise_classes_commander)        :: xppca_denoise_classes
-type(ppca_volvar_commander)                 :: xppca_volvar
-type(scale_commander)                       :: xscale
-type(stack_commander)                       :: xstack
-type(stackops_commander)                    :: xstackops
-type(uniform_filter2D_commander)            :: xuniform_filter2D
-type(uniform_filter3D_commander)            :: xuniform_filter3D
-type(icm2D_commander)                       :: xicm2D
-type(icm3D_commander)                       :: xicm3D
-type(make_pickrefs_commander)               :: xmake_pickrefs
+type(commander_binarize)                    :: xbinarize
+type(commander_mask)                        :: xmask
+type(commander_automask2D)                  :: xautomask2D
+type(commander_fsc)                         :: xfsc
+type(commander_clin_fsc)                    :: xclin_fsc
+type(commander_nununiform_filter3D)         :: xnununiform_filter3D
+type(commander_centervol)                   :: xcenter
+type(commander_reproject)                   :: xreproject
+type(commander_volanalyze)                  :: xvolanalyze
+type(commander_volops)                      :: xvolops
+type(commander_convert)                     :: xconvert
+type(commander_ctfops)                      :: xctfops
+type(commander_ctf_phaseflip)               :: xctf_phaseflip
+type(commander_filter)                      :: xfilter
+type(commander_normalize)                   :: xnormalize
+type(commander_ppca_denoise)                :: xppca_denoise
+type(commander_ppca_denoise_classes)        :: xppca_denoise_classes
+type(commander_ppca_volvar)                 :: xppca_volvar
+type(commander_scale)                       :: xscale
+type(commander_stack)                       :: xstack
+type(commander_stackops)                    :: xstackops
+type(commander_uniform_filter2D)            :: xuniform_filter2D
+type(commander_uniform_filter3D)            :: xuniform_filter3D
+type(commander_icm2D)                       :: xicm2D
+type(commander_icm3D)                       :: xicm3D
+type(commander_make_pickrefs)               :: xmake_pickrefs
 
 ! ORIENTATION PROCESSING PROGRAMS
-type(check_states_commander)                :: xcheck_states
-type(make_oris_commander)                   :: xmake_oris
-type(orisops_commander)                     :: xorisops
-type(oristats_commander)                    :: xoristats
-type(oriconsensus_commander)                :: xoriconsensus
-type(vizoris_commander)                     :: xvizoris
+type(commander_check_states)                :: xcheck_states
+type(commander_make_oris)                   :: xmake_oris
+type(commander_orisops)                     :: xorisops
+type(commander_oristats)                    :: xoristats
+type(commander_oriconsensus)                :: xoriconsensus
+type(commander_vizoris)                     :: xvizoris
 
 ! PRINT INFO PROGRAMS
-type(info_image_commander)                  :: xinfo_image
-type(info_stktab_commander)                 :: xinfo_stktab
-type(print_fsc_commander)                   :: xprint_fsc
-type(print_magic_boxes_commander)           :: xprint_magic_boxes
-type(print_dose_weights_commander)          :: xprint_dose_weights
+type(commander_info_image)                  :: xinfo_image
+type(commander_info_stktab)                 :: xinfo_stktab
+type(commander_print_fsc)                   :: xprint_fsc
+type(commander_print_magic_boxes)           :: xprint_magic_boxes
+type(commander_print_dose_weights)          :: xprint_dose_weights
 
 ! SIMULATOR PROGRAMS
-type(simulate_noise_commander)              :: xsimulate_noise
-type(simulate_particles_commander)          :: xsimulate_particles
-type(simulate_movie_commander)              :: xsimulate_movie
-type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
+type(commander_simulate_noise)              :: xsimulate_noise
+type(commander_simulate_particles)          :: xsimulate_particles
+type(commander_simulate_movie)              :: xsimulate_movie
+type(commander_simulate_subtomogram)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
-type(afm_commander)                         :: xafm
-type(scale_project_commander_distr)         :: xscale_project
-type(map2model_fsc_commander)               :: xmap2model_fsc
-type(map_validation_commander)              :: xmap_validation
-type(model_validation_commander)            :: xmodel_validation
-type(model_validation_eo_commander)         :: xmodel_validation_eo
-type(projops_commander)                     :: xprojops
-type(prune_project_commander_distr)         :: xprune_project
-type(pdb2mrc_commander)                     :: xpdb2mrc   
-type(sharpvol_commander)                    :: xsharpvol  
+type(commander_afm)                         :: xafm
+type(commander_scale_project_distr)         :: xscale_project
+type(commander_map2model_fsc)               :: xmap2model_fsc
+type(commander_map_validation)              :: xmap_validation
+type(commander_model_validation)            :: xmodel_validation
+type(commander_model_validation_eo)         :: xmodel_validation_eo
+type(commander_projops)                     :: xprojops
+type(commander_prune_project_distr)         :: xprune_project
+type(commander_pdb2mrc)                     :: xpdb2mrc   
+type(commander_sharpvol)                    :: xsharpvol  
 
 ! SYSTEM INTERACTION PROGRAMS
-type(mkdir_commander)                       :: xmkdir
+type(commander_mkdir)                       :: xmkdir
 
 ! PARALLEL PROCESSING PROGRAMS
-type(split_commander)                       :: xsplit
+type(commander_split)                       :: xsplit
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)                       :: xarg, prg, entire_line
@@ -244,8 +246,6 @@ select case(trim(prg))
         call xmotion_correct_distr%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
         call xgen_pspecs_and_thumbs%execute(cline)
-    case( 'analyze_pspecs' )
-        call xpow_anal%execute(cline)
     case( 'ctf_estimate' )
         call xctf_estimate_distr%execute(cline)
     case( 'pick' )
@@ -318,8 +318,6 @@ select case(trim(prg))
         endif
     case('multivol_assign')
         call xmultivol_assign%execute(cline)
-    case( 'abinitio3D_parts' )
-        call xabinitio3D_parts%execute(cline)
 
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
@@ -358,6 +356,12 @@ select case(trim(prg))
         call xfractionate_movies%execute(cline)
     case( 'comparemc' )
         call xcomparemc%execute(cline)
+
+    ! VALIDATION WORKFLOWS
+    case( 'quick_look' )
+        call xquick_look%execute(cline)
+    case( 'check_refpick' )
+        call xcheck_refpick%execute(cline)
 
     ! IMAGE PROCESSING PROGRAMS
     case( 'binarize' )
@@ -489,7 +493,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('6e4f3b0b')
+call simple_print_git_version('46d3e6c0')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

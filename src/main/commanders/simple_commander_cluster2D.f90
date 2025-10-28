@@ -1,5 +1,5 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
-module simple_commander_cluster2D
+module simple_commanders_cluster2D
 include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -12,14 +12,14 @@ use simple_qsys_env,          only: qsys_env
 use simple_image,             only: image
 use simple_stack_io,          only: stack_io
 use simple_starproject,       only: starproject
-use simple_commander_imgproc, only: scale_commander
+use simple_commanders_imgproc, only: commander_scale
 use simple_exec_helpers,      only: set_shmem_flag, set_master_num_threads
 use simple_pspecs,            only: pspecs
 use simple_strategy2D_utils
-use simple_commander_cavgs
+use simple_commanders_cavgs
 use simple_classaverager
 use simple_euclid_sigma2
-use simple_commander_euclid
+use simple_commanders_euclid
 use simple_qsys_funs
 use simple_procimgstk
 use simple_progress
@@ -27,88 +27,88 @@ use simple_default_clines
 use simple_nice
 implicit none
 
-public :: cleanup2D_commander_hlev
-public :: cluster2D_autoscale_commander
-public :: cluster2D_commander_distr
-public :: cluster2D_commander
-public :: prob_tab2D_commander
-public :: prob_tab2D_commander_distr
-public :: make_cavgs_commander_distr
-public :: make_cavgs_commander
-public :: cavgassemble_commander
-public :: write_classes_commander
-public :: ppca_denoise_classes_commander
+public :: commander_cleanup2D_hlev
+public :: commander_cluster2D_autoscale
+public :: commander_cluster2D_distr
+public :: commander_cluster2D
+public :: commander_prob_tab2D
+public :: commander_prob_tab2D_distr
+public :: commander_make_cavgs_distr
+public :: commander_make_cavgs
+public :: commander_cavgassemble
+public :: commander_write_classes
+public :: commander_ppca_denoise_classes
 public :: check_2dconv
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: cleanup2D_commander_hlev
+type, extends(commander_base) :: commander_cleanup2D_hlev
   contains
     procedure :: execute      => exec_cleanup2D
-end type cleanup2D_commander_hlev
+end type commander_cleanup2D_hlev
 
-type, extends(commander_base) :: cluster2D_autoscale_commander
+type, extends(commander_base) :: commander_cluster2D_autoscale
   contains
     procedure :: execute      => exec_cluster2D_autoscale
-end type cluster2D_autoscale_commander
+end type commander_cluster2D_autoscale
 
-type, extends(commander_base) :: cluster2D_commander_distr
+type, extends(commander_base) :: commander_cluster2D_distr
   contains
     procedure :: execute      => exec_cluster2D_distr
-end type cluster2D_commander_distr
+end type commander_cluster2D_distr
 
-type, extends(commander_base) :: cluster2D_commander
+type, extends(commander_base) :: commander_cluster2D
   contains
     procedure :: execute      => exec_cluster2D
-end type cluster2D_commander
+end type commander_cluster2D
 
-type, extends(commander_base) :: prob_tab2D_commander
+type, extends(commander_base) :: commander_prob_tab2D
   contains
     procedure :: execute      => exec_prob_tab2D
-end type prob_tab2D_commander
+end type commander_prob_tab2D
 
-type, extends(commander_base) :: prob_tab2D_commander_distr
+type, extends(commander_base) :: commander_prob_tab2D_distr
   contains
     procedure :: execute      => exec_prob_tab2D_distr
-end type prob_tab2D_commander_distr
+end type commander_prob_tab2D_distr
 
-type, extends(commander_base) :: make_cavgs_commander_distr
+type, extends(commander_base) :: commander_make_cavgs_distr
   contains
     procedure :: execute      => exec_make_cavgs_distr
-end type make_cavgs_commander_distr
+end type commander_make_cavgs_distr
 
-type, extends(commander_base) :: make_cavgs_commander
+type, extends(commander_base) :: commander_make_cavgs
   contains
     procedure :: execute      => exec_make_cavgs
-end type make_cavgs_commander
+end type commander_make_cavgs
 
-type, extends(commander_base) :: cavgassemble_commander
+type, extends(commander_base) :: commander_cavgassemble
   contains
     procedure :: execute      => exec_cavgassemble
-end type cavgassemble_commander
+end type commander_cavgassemble
 
-type, extends(commander_base) :: write_classes_commander
+type, extends(commander_base) :: commander_write_classes
   contains
     procedure :: execute      => exec_write_classes
-end type write_classes_commander
+end type commander_write_classes
 
-type, extends(commander_base) :: ppca_denoise_classes_commander
+type, extends(commander_base) :: commander_ppca_denoise_classes
   contains
     procedure :: execute      => exec_ppca_denoise_classes
-end type ppca_denoise_classes_commander
+end type commander_ppca_denoise_classes
 
 contains
 
     subroutine exec_make_cavgs_distr( self, cline )
-        class(make_cavgs_commander_distr), intent(inout) :: self
+        class(commander_make_cavgs_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)             :: params
         type(builder)                :: build
         type(cmdline)                :: cline_cavgassemble
         type(qsys_env)               :: qenv
         type(chash)                  :: job_descr
-        type(make_cavgs_commander)   :: xmk_cavgs_shmem
-        type(cavgassemble_commander) :: xcavgassemble
+        type(commander_make_cavgs)   :: xmk_cavgs_shmem
+        type(commander_cavgassemble) :: xcavgassemble
         integer :: ncls_here, nthr_here
         logical :: l_shmem
         call cline%set('wiener', 'full')
@@ -173,7 +173,7 @@ contains
 
     subroutine exec_make_cavgs( self, cline )
         use simple_polarops
-        class(make_cavgs_commander), intent(inout) :: self
+        class(commander_make_cavgs), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -276,7 +276,7 @@ contains
         else
             ! write partial sums
             call cavger_readwrite_partial_sums('write')
-            call qsys_job_finished('simple_commander_cluster2D :: exec_make_cavgs')
+            call qsys_job_finished('simple_commanders_cluster2D :: exec_make_cavgs')
         endif
         call cavger_kill
         ! end gracefully
@@ -287,14 +287,14 @@ contains
 
     subroutine exec_cleanup2D( self, cline )
         use simple_class_frcs,        only: class_frcs
-        class(cleanup2D_commander_hlev), intent(inout) :: self
+        class(commander_cleanup2D_hlev), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
-        type(cluster2D_commander_distr)  :: xcluster2D_distr
-        type(cluster2D_commander)        :: xcluster2D ! shared-memory implementation
-        type(scale_commander)            :: xscale
-        type(rank_cavgs_commander)       :: xrank_cavgs
-        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
+        type(commander_cluster2D_distr)  :: xcluster2D_distr
+        type(commander_cluster2D)        :: xcluster2D ! shared-memory implementation
+        type(commander_scale)            :: xscale
+        type(commander_rank_cavgs)       :: xrank_cavgs
+        type(commander_calc_pspec_distr) :: xcalc_pspec_distr
         ! command lines
         type(cmdline)                    :: cline_cluster2D1, cline_cluster2D2
         type(cmdline)                    :: cline_rank_cavgs, cline_scalerefs
@@ -539,20 +539,20 @@ contains
     end subroutine exec_cleanup2D
 
     subroutine exec_cluster2D_autoscale( self, cline )
-        class(cluster2D_autoscale_commander), intent(inout) :: self
+        class(commander_cluster2D_autoscale), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! constants
         integer, parameter :: MAXITS_STAGE1      = 10
         integer, parameter :: MAXITS_STAGE1_EXTR = 15
         integer, parameter :: MINBOX             = 88
         ! commanders
-        type(make_cavgs_commander_distr) :: xmake_cavgs_distr
-        type(make_cavgs_commander)       :: xmake_cavgs
-        type(cluster2D_commander_distr)  :: xcluster2D_distr
-        type(cluster2D_commander)        :: xcluster2D
-        type(rank_cavgs_commander)       :: xrank_cavgs
-        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
-        type(scale_commander)            :: xscale
+        type(commander_make_cavgs_distr) :: xmake_cavgs_distr
+        type(commander_make_cavgs)       :: xmake_cavgs
+        type(commander_cluster2D_distr)  :: xcluster2D_distr
+        type(commander_cluster2D)        :: xcluster2D
+        type(commander_rank_cavgs)       :: xrank_cavgs
+        type(commander_calc_pspec_distr) :: xcalc_pspec_distr
+        type(commander_scale)            :: xscale
         ! command lines
         type(cmdline) :: cline_cluster2D_stage1, cline_cluster2D_stage2
         type(cmdline) :: cline_scalerefs, cline_calc_pspec_distr
@@ -747,14 +747,14 @@ contains
     end subroutine exec_cluster2D_autoscale
 
     subroutine exec_cluster2D_distr( self, cline )
-        class(cluster2D_commander_distr), intent(inout) :: self
+        class(commander_cluster2D_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
-        type(make_cavgs_commander_distr)  :: xmake_cavgs
-        type(scale_commander)             :: xscale
-        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
-        type(cavgassemble_commander)      :: xcavgassemble
-        type(prob_tab2D_commander_distr)  :: xprob_tab2D_distr
+        type(commander_make_cavgs_distr)  :: xmake_cavgs
+        type(commander_scale)             :: xscale
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_cavgassemble)      :: xcavgassemble
+        type(commander_prob_tab2D_distr)  :: xprob_tab2D_distr
          type(simple_nice_communicator)   :: nice_communicator
         ! command lines
         type(cmdline) :: cline_check_2Dconv
@@ -1123,12 +1123,12 @@ contains
 
     subroutine exec_cluster2D( self, cline )
         use simple_strategy2D_matcher, only: cluster2D_exec
-        class(cluster2D_commander), intent(inout) :: self
+        class(commander_cluster2D), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(make_cavgs_commander)        :: xmake_cavgs
-        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
-        type(scale_commander)             :: xscale
-        type(prob_tab2D_commander_distr)  :: xprob_tab2D_distr
+        type(commander_make_cavgs)        :: xmake_cavgs
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_scale)             :: xscale
+        type(commander_prob_tab2D_distr)  :: xprob_tab2D_distr
         type(simple_nice_communicator)    :: nice_communicator
         type(cmdline)             :: cline_make_cavgs, cline_scalerefs, cline_prob_tab2D
         type(parameters)          :: params
@@ -1170,7 +1170,7 @@ contains
             call cluster2D_exec( cline, startit, converged )
             ! end gracefully
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-            call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
+            call qsys_job_finished('simple_commanders_cluster2D :: exec_cluster2D')
         else
             ! Polar specifics
             if( (trim(params%polar)=='yes') .and. (trim(params%ref_type)=='cavgvol') )then
@@ -1453,7 +1453,7 @@ contains
     subroutine exec_cavgassemble( self, cline )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_polarops
-        class(cavgassemble_commander), intent(inout) :: self
+        class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)       :: params
         type(builder)          :: build
@@ -1573,12 +1573,12 @@ contains
     subroutine exec_prob_tab2D_distr( self, cline )
         use simple_eul_prob_tab2D,     only: eul_prob_tab2D
         use simple_strategy2D_matcher, only: sample_ptcls4update2D
-        class(prob_tab2D_commander_distr), intent(inout) :: self
+        class(commander_prob_tab2D_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         integer,       allocatable :: pinds(:)
         type(builder)              :: build
         type(parameters)           :: params
-        type(prob_tab2D_commander) :: xprob_tab2D
+        type(commander_prob_tab2D) :: xprob_tab2D
         type(eul_prob_tab2D)       :: eulprob
         type(cmdline)              :: cline_prob_tab2D
         type(qsys_env)             :: qenv
@@ -1663,7 +1663,7 @@ contains
         call cline_prob_tab2D%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_job_finished('simple_commander_cluster2D :: exec_prob_tab2D_distr')
+        call qsys_job_finished('simple_commanders_cluster2D :: exec_prob_tab2D_distr')
         call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_TAB2D_DISTR NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D_distr
@@ -1673,7 +1673,7 @@ contains
         use simple_strategy2D3D_common, only: set_bp_range2D
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
-        class(prob_tab2D_commander), intent(inout) :: self
+        class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: fname
@@ -1757,12 +1757,12 @@ contains
         call eulprob%kill
         call build%kill_general_tbox
         call build%kill_strategy2D_tbox
-        call qsys_job_finished('simple_commander_cluster2D :: exec_prob_tab')
+        call qsys_job_finished('simple_commanders_cluster2D :: exec_prob_tab')
         call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D
 
     subroutine exec_write_classes( self, cline )
-        class(write_classes_commander), intent(inout) :: self
+        class(commander_write_classes), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -1856,7 +1856,7 @@ contains
         use simple_pca_svd,       only: pca_svd
         use simple_kpca_svd,      only: kpca_svd
         use simple_ppca_inmem,    only: ppca_inmem
-        class(ppca_denoise_classes_commander), intent(inout) :: self
+        class(commander_ppca_denoise_classes), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         integer,          parameter   :: MAXPCAITS = 15
         class(pca),       pointer     :: pca_ptr  => null()
@@ -2164,4 +2164,4 @@ contains
         endif
     end subroutine terminate_stream
 
-end module simple_commander_cluster2D
+end module simple_commanders_cluster2D

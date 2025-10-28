@@ -1,5 +1,5 @@
 ! concrete commander: miscallenaous routines
-module simple_commander_misc
+module simple_commanders_misc
 include 'simple_lib.f08'
 include "starfile/starfile_enum.inc"
 use simple_binoris_io
@@ -12,68 +12,68 @@ use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 implicit none
 
-public :: afm_commander
-public :: print_fsc_commander
-public :: print_magic_boxes_commander
-public :: print_dose_weights_commander
-public :: kstest_commander
-public :: pearsn_commander
-public :: mkdir_commander
-public :: fractionate_movies_commander_distr
-public :: fractionate_movies_commander
-public :: comparemc_commander
+public :: commander_afm
+public :: commander_print_fsc
+public :: commander_print_magic_boxes
+public :: commander_print_dose_weights
+public :: commander_kstest
+public :: commander_pearsn
+public :: commander_mkdir
+public :: commander_fractionate_movies_distr
+public :: commander_fractionate_movies
+public :: commander_comparemc
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: print_fsc_commander
+type, extends(commander_base) :: commander_print_fsc
   contains
     procedure :: execute       => exec_print_fsc
-end type print_fsc_commander
+end type commander_print_fsc
 
-type, extends(commander_base) :: print_magic_boxes_commander
+type, extends(commander_base) :: commander_print_magic_boxes
   contains
     procedure :: execute       => exec_print_magic_boxes
-end type print_magic_boxes_commander
+end type commander_print_magic_boxes
 
-type, extends(commander_base) :: print_dose_weights_commander
+type, extends(commander_base) :: commander_print_dose_weights
   contains
     procedure :: execute       => exec_print_dose_weights
-end type print_dose_weights_commander
+end type commander_print_dose_weights
 
-type, extends(commander_base) :: kstest_commander
+type, extends(commander_base) :: commander_kstest
   contains
     procedure :: execute       => exec_kstest
-end type kstest_commander
+end type commander_kstest
 
-type, extends(commander_base) :: pearsn_commander
+type, extends(commander_base) :: commander_pearsn
   contains
     procedure :: execute       => exec_pearsn
-end type pearsn_commander
+end type commander_pearsn
 
-type, extends(commander_base) :: mkdir_commander
+type, extends(commander_base) :: commander_mkdir
   contains
     procedure :: execute       => exec_mkdir
-end type mkdir_commander
+end type commander_mkdir
 
-type, extends(commander_base) :: fractionate_movies_commander_distr
+type, extends(commander_base) :: commander_fractionate_movies_distr
   contains
     procedure :: execute       => exec_fractionate_movies_distr
-end type fractionate_movies_commander_distr
+end type commander_fractionate_movies_distr
 
-type, extends(commander_base) :: fractionate_movies_commander
+type, extends(commander_base) :: commander_fractionate_movies
   contains
     procedure :: execute       => exec_fractionate_movies
-end type fractionate_movies_commander
+end type commander_fractionate_movies
 
-type, extends(commander_base) :: comparemc_commander
+type, extends(commander_base) :: commander_comparemc
   contains
     procedure :: execute       => exec_comparemc
-end type comparemc_commander
+end type commander_comparemc
 
-type, extends(commander_base) :: afm_commander
+type, extends(commander_base) :: commander_afm
   contains
     procedure :: execute       => exec_afm
-end type afm_commander
+end type commander_afm
 
 contains
 
@@ -83,7 +83,7 @@ contains
         use simple_corrmat
         use simple_aff_prop
         use simple_srch_sort_loc
-        class(afm_commander), intent(inout) :: self
+        class(commander_afm), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters), target :: params
         type(image), allocatable      :: img_arr(:), pick_vec(:), pick_vec_ds(:), height_trace(:), height_retrace(:), ordered_pick_vec(:)
@@ -269,7 +269,7 @@ contains
     subroutine exec_print_fsc( self, cline )
         use simple_fsc,        only: plot_fsc
         use simple_class_frcs, only: class_frcs
-        class(print_fsc_commander), intent(inout) :: self
+        class(commander_print_fsc), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)      :: params
         type(image)           :: img
@@ -314,7 +314,7 @@ contains
 
     !> for printing magic box sizes (fast FFT)
     subroutine exec_print_magic_boxes( self, cline )
-        class(print_magic_boxes_commander), intent(inout) :: self
+        class(commander_print_magic_boxes), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
         call params%new(cline)
@@ -324,7 +324,7 @@ contains
     end subroutine exec_print_magic_boxes
 
     subroutine exec_print_dose_weights( self, cline )
-        class(print_dose_weights_commander), intent(inout) :: self
+        class(commander_print_dose_weights), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters)  :: params
         real, allocatable :: weights(:,:), res(:)
@@ -347,7 +347,7 @@ contains
     end subroutine exec_print_dose_weights
 
     subroutine exec_kstest( self, cline )
-        class(kstest_commander), intent(inout) :: self
+        class(commander_kstest), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)   :: params
         integer            :: ndat1, ndat2
@@ -373,7 +373,7 @@ contains
     end subroutine exec_kstest
 
     subroutine exec_pearsn( self, cline )
-        class(pearsn_commander), intent(inout) :: self
+        class(commander_pearsn), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)   :: params
         integer            :: ndat1, ndat2
@@ -530,7 +530,7 @@ contains
     end subroutine exec_dsym_volinit
 
     subroutine exec_mkdir( self, cline )
-        class(mkdir_commander), intent(inout) :: self
+        class(commander_mkdir), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
         call cline%set('mkdir', 'yes')
@@ -541,7 +541,7 @@ contains
         use simple_starproject, only: starproject
         use simple_qsys_env,    only: qsys_env
         use simple_qsys_funs
-        class(fractionate_movies_commander_distr), intent(inout) :: self
+        class(commander_fractionate_movies_distr), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         type(parameters)  :: params
         type(sp_project)  :: spproj
@@ -593,7 +593,7 @@ contains
         use simple_micrograph_generator
         use simple_qsys_funs
         use simple_fsc, only: plot_fsc
-        class(fractionate_movies_commander), intent(inout) :: self
+        class(commander_fractionate_movies), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         logical,            parameter :: L_DEBUG = .false.
         character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname
@@ -715,7 +715,7 @@ contains
         use CPlot2D_wrapper_module
         integer, PARAMETER :: POLYDIM = 18
         integer, PARAMETER :: NGRID   = 25 ! has to be odd
-        class(comparemc_commander), intent(inout) :: self
+        class(commander_comparemc), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         real,                         allocatable :: rmsds(:), gofs(:,:), avg(:), std(:), npatch(:), rmsds2(:), avg2(:), std2(:)
         real(dp),                     allocatable :: poly1(:,:), poly2(:,:), x(:), y(:), t(:), offsets1(:,:), offsets2(:,:)
@@ -1122,4 +1122,4 @@ contains
         call nrsfile%kill
     end subroutine read_nrs_dat
 
-end module simple_commander_misc
+end module simple_commanders_misc

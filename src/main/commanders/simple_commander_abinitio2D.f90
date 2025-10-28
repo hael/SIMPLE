@@ -1,25 +1,25 @@
 ! concrete commander: high-level workflows
-module simple_commander_abinitio2D
+module simple_commanders_abinitio2D
 include 'simple_lib.f08'
 use simple_commander_base,      only: commander_base
 use simple_cmdline,             only: cmdline
 use simple_parameters,          only: parameters
 use simple_sp_project,          only: sp_project
 use simple_exec_helpers,        only: set_shmem_flag
-use simple_commander_cluster2D
-use simple_commander_cavgs
-use simple_commander_euclid
+use simple_commanders_cluster2D
+use simple_commanders_cavgs
+use simple_commanders_euclid
 use simple_qsys_funs
 implicit none
 
-public :: abinitio2D_commander, autosample2D
+public :: commander_abinitio2D, autosample2D
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: abinitio2D_commander
+type, extends(commander_base) :: commander_abinitio2D
     contains
     procedure :: execute => exec_abinitio2D
-end type abinitio2D_commander
+end type commander_abinitio2D
 
 ! Dimensions
 real,    parameter :: SMPD_TARGET     = 2.67
@@ -48,12 +48,12 @@ contains
 
     subroutine exec_abinitio2D( self, cline )
         use simple_classaverager, only: cavger_kill, cavger_write, cavger_readwrite_partial_sums
-        class(abinitio2D_commander), intent(inout) :: self
+        class(commander_abinitio2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
-        type(cluster2D_commander_distr)  :: xcluster2D_distr
-        type(cluster2D_commander)        :: xcluster2D
-        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
+        type(commander_cluster2D_distr)  :: xcluster2D_distr
+        type(commander_cluster2D)        :: xcluster2D
+        type(commander_calc_pspec_distr) :: xcalc_pspec_distr
         ! command lines
         type(cmdline)                    :: cline_cluster2D, cline_calc_pspec
         ! other
@@ -232,10 +232,10 @@ contains
         ! Deals with initial references dimensions when *not* abinitio
         subroutine inirefs
             use simple_procimgstk,        only: copy_imgfile
-            use simple_commander_imgproc, only: scale_commander
-            use simple_commander_volops,  only: noisevol_commander
-            type(scale_commander)         :: xscale
-            type(noisevol_commander)      :: xnoisevol
+            use simple_commanders_imgproc, only: commander_scale
+            use simple_commanders_volops,  only: commander_noisevol
+            type(commander_scale)         :: xscale
+            type(commander_noisevol)      :: xnoisevol
             type(cmdline)                 :: cline_scalerefs, cline_noisevol
             character(len=:), allocatable :: refs, refs_even, refs_odd
             real    :: smpd
@@ -667,9 +667,9 @@ contains
         end subroutine set_final_mapping
 
         subroutine gen_final_cavgs( iter )
-            type(make_cavgs_commander_distr) :: xmake_cavgs_distr
-            type(make_cavgs_commander)       :: xmake_cavgs
-            type(rank_cavgs_commander)       :: xrank_cavgs
+            type(commander_make_cavgs_distr) :: xmake_cavgs_distr
+            type(commander_make_cavgs)       :: xmake_cavgs
+            type(commander_rank_cavgs)       :: xrank_cavgs
             type(cmdline)                    :: cline_make_cavgs, cline_rank_cavgs
             character(len=:),    allocatable :: finalcavgs, finalcavgs_ranked
             integer :: iter
@@ -740,4 +740,4 @@ contains
         endif
     end subroutine autosample2D
 
-end module simple_commander_abinitio2D
+end module simple_commanders_abinitio2D

@@ -1,5 +1,5 @@
 ! concrete commander: streaming pre-processing routines
-module simple_commander_stream
+module simple_commanders_stream
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,            only: cmdline
@@ -12,9 +12,9 @@ use simple_guistats,           only: guistats
 use simple_moviewatcher,       only: moviewatcher
 use simple_stream_utils
 use simple_stream_communicator
-use simple_commander_cluster2D_stream
+use simple_commanders_cluster2D_stream
 use simple_qsys_funs
-use simple_commander_preprocess
+use simple_commanders_preprocess
 use simple_progress
 use simple_nrtxtfile
 use simple_imgproc
@@ -31,6 +31,7 @@ public :: commander_stream_preprocess
 public :: commander_stream_gen_picking_refs
 public :: commander_stream_pick_extract
 public :: commander_stream_assign_optics
+public :: commander_stream_mini
 public :: commander_stream_cluster2D
 
 private
@@ -55,6 +56,11 @@ type, extends(commander_base) :: commander_stream_assign_optics
   contains
     procedure :: execute => exec_stream_assign_optics
 end type commander_stream_assign_optics
+
+type, extends(commander_base) :: commander_stream_mini
+  contains
+    procedure :: execute => exec_stream_mini
+end type commander_stream_mini
 
 type, extends(commander_base) :: commander_stream_cluster2D
   contains
@@ -814,7 +820,7 @@ contains
         use simple_histogram,    only: histogram
         class(commander_stream_pick_extract), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(make_pickrefs_commander)          :: xmake_pickrefs
+        type(commander_make_pickrefs)          :: xmake_pickrefs
         type(parameters)                       :: params
         integer,                   parameter   :: INACTIVE_TIME = 900  ! inactive time triggers writing of project file
         logical,                   parameter   :: DEBUG_HERE    = .false.
@@ -2840,6 +2846,135 @@ contains
 
     end subroutine exec_stream_assign_optics
 
+    subroutine exec_stream_mini( self, cline )
+        class(commander_stream_mini), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        type(parameters)                       :: params
+        type(stream_http_communicator)         :: http_communicator
+        type(moviewatcher)                     :: project_buff
+        type(sp_project)                       :: spproj, spproj_part
+        type(starproject_stream)               :: starproj_stream
+        type(json_value),          pointer     :: optics_assignments, optics_group     
+        type(json_value),          pointer     :: optics_group_coordinates,  optics_group_coordinate        
+        character(len=LONGSTRLEN), allocatable :: projects(:)
+        integer                                :: nprojects, iproj, iori, new_oris, nimported, i, j, imap
+        logical                                :: found
+        call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
+        if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
+        ! sanity check for restart
+        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+            write(logfhandle, *) ">>> RESTARTING EXISTING JOB"
+            call del_file(TERM_STREAM)
+        endif
+        ! below may be redundant
+        if( cline%defined('dir_exec') )then
+            if( .not.file_exists(cline%get_carg('dir_exec')) )then
+                THROW_HARD('Previous directory does not exist: '//trim(cline%get_carg('dir_exec')))
+            endif
+            call del_file(TERM_STREAM)
+        endif
+        ! generate own project file if projfile isnt set
+        ! or all the individual processes try and read the same project file and it goes crazy
+        if(cline%get_carg('projfile') .eq. '') then 
+            call cline%set('projname', 'stream_mini')
+            call cline%set('projfile', 'stream_mini.simple')
+            call spproj%update_projinfo(cline)
+            call spproj%update_compenv(cline)
+            call spproj%write
+        endif
+        ! master parameters
+        call params%new(cline)
+        ! http communicator init
+        call http_communicator%create(params%niceprocid, params%niceserver, "stream_mini")
+        call communicator_init()
+        call http_communicator%send_jobstats()
+        ! master project file
+        call spproj%read( params%projfile )
+        if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(1, .false.) !!!!!!!?????
+        ! wait if dir_target doesn't exist yet
+        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_MINI USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_MINI USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_MINI USER STOP ****')
+        ! movie watcher init
+        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
+        ! Infinite loop
+        nimported = 0
+        do
+            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
+                ! termination
+                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
+                exit
+            endif
+            if( http_communicator%stop )then
+                ! termination
+                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                call spproj%kill
+                call qsys_cleanup
+                call simple_end('**** SIMPLE_STREAM_MINI USER STOP ****')
+                call EXIT(0)
+            endif
+            ! http stats
+            call http_communicator%json%update(http_communicator%job_json, "stage", "finding and processing new micrographs", found) 
+            ! detection of new projects
+            call project_buff%watch( nprojects, projects, max_nmovies=50 )
+            ! append projects to processing stack
+            if( nprojects > 0 )then
+                nimported = spproj%os_mic%get_noris()
+                if(nimported > 0) then
+                    new_oris  =  nimported + nprojects * NMOVS_SET
+                    call spproj%os_mic%reallocate(new_oris)
+                else
+                    new_oris = nprojects * NMOVS_SET
+                    call spproj%os_mic%new(new_oris, .false.)
+                end if
+                do iproj = 1, nprojects
+                    call project_buff%add2history(projects(iproj)) ! I got this one, so please don't give it to me again
+                    call spproj_part%read(trim(projects(iproj)))
+                    do iori = 1, NMOVS_SET
+                        nimported = nimported + 1
+                        call spproj%os_mic%transfer_ori(nimported, spproj_part%os_mic, iori)
+                    end do
+                    call spproj_part%kill()
+                enddo
+                write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
+                ! http stats
+                ! call http_communicator%json%update(http_communicator%job_json, "micrographs_assigned",     spproj%os_mic%get_noris(),    found)
+                ! call http_communicator%json%update(http_communicator%job_json, "optics_groups_assigned",   spproj%os_optics%get_noris(), found)
+                ! call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),             found)
+                ! call http_communicator%json%remove(optics_assignments, destroy=.true.)
+                ! call http_communicator%json%create_array(optics_assignments, "optics_assignments")
+                ! call http_communicator%json%add(http_communicator%job_json, optics_assignments) 
+            else
+                call sleep(WAITTIME) ! may want to increase as 3s default
+            endif
+            ! http stats send
+            call http_communicator%send_jobstats()
+        end do
+        ! termination
+        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found) 
+        call http_communicator%send_jobstats()
+        if(allocated(projects)) deallocate(projects)
+        ! cleanup
+        call spproj%write
+        call spproj%kill
+        ! end gracefully
+        call http_communicator%term()
+        call simple_end('**** SIMPLE_STREAM_MINI NORMAL STOP ****')
+
+        contains
+        
+            subroutine communicator_init()
+                call http_communicator%json%add(http_communicator%job_json, "stage",                    "initialising")
+                call http_communicator%json%add(http_communicator%job_json, "micrographs_assigned ",    0)
+                call http_communicator%json%add(http_communicator%job_json, "optics_groups_assigned",   0)
+                call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
+                call http_communicator%json%create_array(optics_assignments, "optics_assignments")
+                call http_communicator%json%add(http_communicator%job_json, optics_assignments)
+            end subroutine communicator_init
+
+    end subroutine exec_stream_mini
+
     subroutine exec_stream_cluster2D( self, cline )
         class(commander_stream_cluster2D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -3310,4 +3445,4 @@ contains
 
     end subroutine exec_stream_cluster2D
 
-end module simple_commander_stream
+end module simple_commanders_stream

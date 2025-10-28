@@ -1,5 +1,5 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
-module simple_commander_cluster2D_stream
+module simple_commanders_cluster2D_stream
 include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_commander_base,     only: commander_base
@@ -15,8 +15,8 @@ use simple_euclid_sigma2,      only: sigma2_star_from_iter
 use simple_guistats,           only: guistats
 use simple_stream_utils
 use simple_qsys_funs
-use simple_commander_cluster2D
-use simple_commander_cavgs
+use simple_commanders_cluster2D
+use simple_commanders_cavgs
 use simple_imgproc
 use simple_nice
 use FoX_dom
@@ -49,20 +49,20 @@ public :: generate_snapshot_for_abinitio
 ! Utilities
 public :: cleanup_root_folder, write_project_stream2D, test_repick, write_repick_refs
 ! Cluster2D subsets
-public :: cluster2D_commander_subsets, consolidate_chunks_commander
+public :: commander_cluster2D_subsets, commander_consolidate_chunks
 
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: cluster2D_commander_subsets
+type, extends(commander_base) :: commander_cluster2D_subsets
   contains
     procedure :: execute      => exec_cluster2D_subsets
-end type cluster2D_commander_subsets
+end type commander_cluster2D_subsets
 
-type, extends(commander_base) :: consolidate_chunks_commander
+type, extends(commander_base) :: commander_consolidate_chunks
   contains
     procedure :: execute      => exec_consolidate_chunks
-end type consolidate_chunks_commander
+end type commander_consolidate_chunks
 
 type scaled_dims
     real    :: smpd=0., msk=0.
@@ -3664,7 +3664,7 @@ contains
 
     ! For ranking class-averages
     subroutine rank_cavgs
-        type(rank_cavgs_commander) :: xrank_cavgs
+        type(commander_rank_cavgs) :: xrank_cavgs
         type(cmdline)              :: cline_rank_cavgs
         character(len=STDLEN)      :: refs_ranked, stk
         refs_ranked = add2fbody(refs_glob, params_glob%ext ,'_ranked')
@@ -3753,7 +3753,7 @@ contains
     ! cluster2D_subsets, only splits into chunks & analyze2D them
     !
     subroutine exec_cluster2D_subsets( self, cline )
-        class(cluster2D_commander_subsets), intent(inout) :: self
+        class(commander_cluster2D_subsets), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN),       parameter :: DIR_PROJS   = trim(PATH_HERE)//'spprojs/'
         integer,                     parameter :: WAITTIME    = 5
@@ -3931,7 +3931,7 @@ contains
         subroutine check_completed_chunks
             type(sp_project)                :: spproj
             type(stream_chunk), allocatable :: tmpchunks(:)
-            type(rank_cavgs_commander)      :: xrank_cavgs
+            type(commander_rank_cavgs)      :: xrank_cavgs
             type(cmdline)                   :: cline_rank_cavgs
             character(len=:),   allocatable :: cavgs_ranked, cavgs
             integer :: ichunk, jchunk, nthr2D, n
@@ -4142,8 +4142,8 @@ contains
         end subroutine consolidate_chunks
 
         subroutine cluster_and_match_sets
-            type(cluster_cavgs_commander) :: xcluster_cavgs
-            type(match_cavgs_commander)   :: xmatch_cavgs
+            type(commander_cluster_cavgs) :: xcluster_cavgs
+            type(commander_match_cavgs)   :: xmatch_cavgs
             type(cmdline)                 :: cline_cluster_cavgs, cline_match_cavgs
             character(len=:), allocatable :: path, projfile_ref
             character(len=XLONGSTRLEN)    :: cwd
@@ -4198,7 +4198,7 @@ contains
     end subroutine exec_cluster2D_subsets
 
     subroutine exec_consolidate_chunks( self, cline )
-        class(consolidate_chunks_commander), intent(inout) :: self
+        class(commander_consolidate_chunks), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters)                        :: params
         type(sp_project)                        :: spproj
@@ -4283,4 +4283,4 @@ contains
         call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
     end subroutine update_mskdiam
 
-end module simple_commander_cluster2D_stream
+end module simple_commanders_cluster2D_stream

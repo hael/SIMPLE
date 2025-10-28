@@ -1,5 +1,5 @@
 ! concrete commander: resolest for resolution estimation
-module simple_commander_resolest
+module simple_commanders_resolest
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
@@ -12,68 +12,68 @@ use simple_masker,         only: masker
 use simple_fsc
 implicit none
 
-public :: fsc_commander
-public :: clin_fsc_commander
-public :: nununiform_filter3D_commander
-public :: uniform_filter2D_commander
-public :: uniform_filter3D_commander
-public :: icm3D_commander
-public :: icm2D_commander
-public :: score_ptcls_commander
-public :: estimate_lpstages_commander
+public :: commander_fsc
+public :: commander_clin_fsc
+public :: commander_nununiform_filter3D
+public :: commander_uniform_filter2D
+public :: commander_uniform_filter3D
+public :: commander_icm3D
+public :: commander_icm2D
+public :: commander_score_ptcls
+public :: commander_estimate_lpstages
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: fsc_commander
+type, extends(commander_base) :: commander_fsc
   contains
     procedure :: execute      => exec_fsc
-end type fsc_commander
+end type commander_fsc
 
-type, extends(commander_base) :: clin_fsc_commander
+type, extends(commander_base) :: commander_clin_fsc
   contains
     procedure :: execute      => exec_clin_fsc
-end type clin_fsc_commander
+end type commander_clin_fsc
 
-type, extends(commander_base) :: uniform_filter2D_commander
+type, extends(commander_base) :: commander_uniform_filter2D
   contains
     procedure :: execute      => exec_uniform_filter2D
-end type uniform_filter2D_commander
+end type commander_uniform_filter2D
 
-type, extends(commander_base) :: nununiform_filter3D_commander
+type, extends(commander_base) :: commander_nununiform_filter3D
   contains
     procedure :: execute      => exec_nununiform_filter3D
-end type nununiform_filter3D_commander
+end type commander_nununiform_filter3D
 
-type, extends(commander_base) :: uniform_filter3D_commander
+type, extends(commander_base) :: commander_uniform_filter3D
   contains
     procedure :: execute      => exec_uniform_filter3D
-end type uniform_filter3D_commander
+end type commander_uniform_filter3D
 
-type, extends(commander_base) :: icm3D_commander
+type, extends(commander_base) :: commander_icm3D
   contains
     procedure :: execute      => exec_icm3D
-end type icm3D_commander
+end type commander_icm3D
 
-type, extends(commander_base) :: icm2D_commander
+type, extends(commander_base) :: commander_icm2D
   contains
     procedure :: execute      => exec_icm2D
-end type icm2D_commander
+end type commander_icm2D
 
-type, extends(commander_base) :: score_ptcls_commander
+type, extends(commander_base) :: commander_score_ptcls
   contains
     procedure :: execute      => exec_score_ptcls
-end type score_ptcls_commander
+end type commander_score_ptcls
 
-type, extends(commander_base) :: estimate_lpstages_commander
+type, extends(commander_base) :: commander_estimate_lpstages
   contains
     procedure :: execute      => exec_estimate_lpstages
-end type estimate_lpstages_commander
+end type commander_estimate_lpstages
 
 contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
-        class(fsc_commander), intent(inout) :: self
+        class(commander_fsc), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(parameters)          :: params
         type(image)               :: even, odd
@@ -132,7 +132,7 @@ contains
         use simple_polarops
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_strategy2D_utils, only: write_cavgs
-        class(clin_fsc_commander), intent(inout) :: self
+        class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:), cavgs(:)
@@ -181,7 +181,7 @@ contains
 
     subroutine exec_nununiform_filter3D(self, cline)
         use simple_opt_filter, only: nonuni_filt3D
-        class(nununiform_filter3D_commander), intent(inout) :: self
+        class(commander_nununiform_filter3D), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)  :: params
         type(image)       :: even, odd, mskvol
@@ -239,7 +239,7 @@ contains
 
     subroutine exec_uniform_filter3D(self, cline)
         use simple_opt_filter, only: estimate_lplim
-        class(uniform_filter3D_commander), intent(inout) :: self
+        class(commander_uniform_filter3D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)  :: params
         type(image)       :: even, odd, mskvol, odd_filt
@@ -277,7 +277,7 @@ contains
     end subroutine exec_uniform_filter3D
 
     subroutine exec_icm3D( self, cline )
-        class(icm3D_commander), intent(inout) :: self
+        class(commander_icm3D), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters)     :: params
         type(image)          :: even, odd, even_icm, odd_icm, avg, avg_icm
@@ -329,7 +329,7 @@ contains
 
     subroutine exec_uniform_filter2D( self, cline )
         use simple_opt_filter, only: estimate_lplims2D
-        class(uniform_filter2D_commander), intent(inout) :: self
+        class(commander_uniform_filter2D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(image),      allocatable :: odd(:), even(:), odd_filt(:)
         real,             allocatable :: lpsopt(:)
@@ -362,7 +362,7 @@ contains
     end subroutine exec_uniform_filter2D
 
     subroutine exec_icm2D( self, cline )
-        class(icm2D_commander), intent(inout) :: self
+        class(commander_icm2D), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: odd(:), even(:)
@@ -413,12 +413,12 @@ contains
         use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
         use simple_class_frcs,          only: class_frcs
         use simple_euclid_sigma2
-        use simple_commander_euclid
-        class(score_ptcls_commander), intent(inout) :: self
+        use simple_commanders_euclid
+        class(commander_score_ptcls), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(pftcc_shsrch_grad), allocatable :: grad_shsrch_objs(:)
         type(image),             allocatable :: eimgs(:), oimgs(:), cls_even(:), cls_odd(:)
-        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
+        type(commander_calc_pspec_distr) :: xcalc_pspec_distr
         type(polarft_corrcalc) :: pftcc
         type(builder)          :: build
         type(parameters)       :: params
@@ -650,7 +650,7 @@ contains
     end subroutine exec_score_ptcls
 
     subroutine exec_estimate_lpstages( self, cline )
-        class(estimate_lpstages_commander), intent(inout) :: self
+        class(commander_estimate_lpstages), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(builder)    :: build
         type(parameters) :: params
@@ -694,4 +694,4 @@ contains
 
     end subroutine exec_estimate_lpstages
 
-end module simple_commander_resolest
+end module simple_commanders_resolest

@@ -1,5 +1,5 @@
 ! concrete commander: high-level workflows
-module simple_commander_abinitio
+module simple_commanders_abinitio
 include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters, params_glob
@@ -7,51 +7,45 @@ use simple_sp_project,         only: sp_project
 use simple_stack_io,           only: stack_io
 use simple_qsys_env,           only: qsys_env
 use simple_commander_base,     only: commander_base
-use simple_commander_volops,   only: reproject_commander, symaxis_search_commander, postprocess_commander, symmetrize_map_commander
-use simple_commander_rec,      only: reconstruct3D_commander, reconstruct3D_commander_distr
-use simple_commander_refine3D, only: refine3D_commander, refine3D_distr_commander
-use simple_commander_mask,     only: automask_commander
+use simple_commanders_volops,   only: commander_reproject, commander_symaxis_search, commander_postprocess, commander_symmetrize_map
+use simple_commanders_rec,      only: commander_reconstruct3D, commander_reconstruct3D_distr
+use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_distr
+use simple_commanders_mask,     only: commander_automask
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_class_frcs,         only: class_frcs
 use simple_convergence,        only: convergence
 use simple_cluster_seed,       only: gen_labelling
-use simple_commander_euclid
+use simple_commanders_euclid
 use simple_euclid_sigma2
 use simple_qsys_funs
 use simple_decay_funs
 use simple_nice
 implicit none
 
-public :: abinitio3D_cavgs_commander, abinitio3D_cavgs_fast_commander, abinitio3D_commander
-public :: multivol_assign_commander, abinitio3D_parts_commander
+public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_fast, commander_abinitio3D, commander_multivol_assign
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: abinitio3D_cavgs_commander
+type, extends(commander_base) :: commander_abinitio3D_cavgs
     contains
     procedure :: execute => exec_abinitio3D_cavgs
-end type abinitio3D_cavgs_commander
+end type commander_abinitio3D_cavgs
 
-type, extends(commander_base) :: abinitio3D_cavgs_fast_commander
+type, extends(commander_base) :: commander_abinitio3D_cavgs_fast
     contains
     procedure :: execute => exec_abinitio3D_cavgs_fast
-end type abinitio3D_cavgs_fast_commander
+end type commander_abinitio3D_cavgs_fast
 
-type, extends(commander_base) :: abinitio3D_commander
+type, extends(commander_base) :: commander_abinitio3D
     contains
     procedure :: execute => exec_abinitio3D
-end type abinitio3D_commander
+end type commander_abinitio3D
 
-type, extends(commander_base) :: multivol_assign_commander
+type, extends(commander_base) :: commander_multivol_assign
     contains
     procedure :: execute => exec_multivol_assign
-end type multivol_assign_commander
-
-type, extends(commander_base) :: abinitio3D_parts_commander
-    contains
-    procedure :: execute => exec_abinitio3D_parts
-end type abinitio3D_parts_commander
+end type commander_multivol_assign
 
 ! class constants
 character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
@@ -97,13 +91,13 @@ contains
     !> for generation of an initial 3D model from class averages
     subroutine exec_abinitio3D_cavgs( self, cline )
         use simple_estimate_ssnr, only: lpstages_fast
-        class(abinitio3D_cavgs_commander), intent(inout) :: self
+        class(commander_abinitio3D_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=*),      parameter :: work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! shared-mem commanders
-        type(refine3D_commander)      :: xrefine3D
-        type(reconstruct3D_commander) :: xreconstruct3D
-        type(reproject_commander)     :: xreproject
+        type(commander_refine3D)      :: xrefine3D
+        type(commander_reconstruct3D) :: xreconstruct3D
+        type(commander_reproject)     :: xreproject
         ! other
         character(len=:), allocatable :: stk, stkpath, orig_stk, shifted_stk, stk_even, stk_odd, ext
         integer,          allocatable :: states(:)
@@ -182,7 +176,7 @@ contains
         ! retrieve cavgs stack info
         call spproj%get_cavgs_stk(stk, ncavgs, params%smpd, imgkind=params%imgkind, stkpath=stkpath)
         if(.not. file_exists(stk)) stk = trim(stkpath) // '/' // trim(stk)
-        if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; simple_commander_abinitio')
+        if(.not. file_exists(stk)) THROW_HARD('cavgs stk does not exist; simple_commanders_abinitio')
         states          = nint(spproj%os_cls2D%get_all('state'))
         orig_stk        = stk
         ext             = '.'//fname2ext(stk)
@@ -419,8 +413,8 @@ contains
             end subroutine conv_eo_states
 
             subroutine rank_cavgs
-                use simple_commander_cavgs, only: rank_cavgs_commander
-                type(rank_cavgs_commander) :: xrank_cavgs
+                use simple_commanders_cavgs, only: commander_rank_cavgs
+                type(commander_rank_cavgs) :: xrank_cavgs
                 type(cmdline)              :: cline_rank_cavgs
                 call cline_rank_cavgs%set('prg',      'rank_cavgs')
                 call cline_rank_cavgs%set('projfile', params%projfile)
@@ -436,9 +430,9 @@ contains
 
     !> for crude generation of an initial 3D model from class averages
     subroutine exec_abinitio3D_cavgs_fast( self, cline )
-        class(abinitio3D_cavgs_fast_commander), intent(inout) :: self
+        class(commander_abinitio3D_cavgs_fast), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        type(abinitio3D_cavgs_commander) :: xabinitio3D_cavgs
+        type(commander_abinitio3D_cavgs) :: xabinitio3D_cavgs
         type(parameters) :: params
         real             :: lpstart, lpstop
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -512,11 +506,11 @@ contains
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio3D( self, cline )
-        class(abinitio3D_commander), intent(inout) :: self
+        class(commander_abinitio3D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
-        type(refine3D_distr_commander)         :: xrefine3D
-        type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
+        type(commander_refine3D_distr)         :: xrefine3D
+        type(commander_reconstruct3D_distr)    :: xreconstruct3D_distr
         ! other
         character(len=:),   allocatable :: vol_name
         real,               allocatable :: rstates(:)
@@ -845,9 +839,9 @@ contains
     end subroutine exec_abinitio3D
 
     subroutine exec_multivol_assign( self, cline )
-        class(multivol_assign_commander), intent(inout) :: self
+        class(commander_multivol_assign), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(abinitio3D_commander)    :: xabini3D
+        type(commander_abinitio3D)    :: xabini3D
         character(len=:), allocatable :: srch_oris
         call cline%set('center',   'no')
         call cline%set('cavg_ini', 'no')
@@ -867,113 +861,6 @@ contains
         end select
         call xabini3D%execute(cline)
     end subroutine exec_multivol_assign
-    
-    subroutine exec_abinitio3D_parts( self, cline )
-        use simple_commander_project,   only: new_project_commander, selection_commander
-        use simple_exec_helpers,        only: gen_exec_cmd, async_exec
-        use simple_commander_cluster2D, only: make_cavgs_commander_distr
-        class(abinitio3D_parts_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        ! commanders
-        type(selection_commander)          :: xsel
-        type(new_project_commander)        :: xnew_project
-        type(make_cavgs_commander_distr)   :: xmake_cavgs_distr
-        ! command lines
-        type(cmdline)                      :: cline_split_bal, cline_new_proj, cline_mk_cavgs, cline_abinitio3D
-        ! other vars
-        character(len=STDLEN), allocatable :: projnames(:), projfnames(:)
-        character(len=LONGSTRLEN)          :: cwd
-        type(parameters)                   :: params
-        type(sp_project)                   :: spproj
-        integer                            :: iproj
-        logical, parameter                 :: L_USE_CAVGS = .false.
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        ! make master parameters
-        call params%new(cline)
-        call cline%set('mkdir', 'no')
-        ! provide initialization of 3D alignment using class averages?
-        l_ini3D = .false.
-        if( trim(params%cavg_ini).eq.'yes' )then
-            call ini3D_from_cavgs(cline)
-            call cline%set('cavg_ini_ext', 'yes')
-            l_ini3D = .true.
-        else
-            call cline%set('cavg_ini_ext', 'no')
-        endif
-        ! split stack so it does not happen downstream
-        call spproj%read(params%projfile)
-        call spproj%split_stk(max(params%nparts,params%nparts_per_part*params%nparts))
-        call spproj%kill
-        ! conduct balanced split
-        cline_split_bal = cline
-        call cline_split_bal%set('balance', 'yes')
-        call cline_split_bal%set('oritype', 'cls2D')
-        call xsel%execute(cline_split_bal)
-        ! make projects
-        allocate(projfnames(params%nparts), projnames(params%nparts))
-        do iproj = 1, params%nparts
-            projnames(iproj)  = BALPROJPARTFBODY//int2str(iproj)
-            projfnames(iproj) = BALPROJPARTFBODY//int2str(iproj)//'.simple'
-            call cline_new_proj%set('projname', trim(projnames(iproj)))
-            call cline_new_proj%set('projfile', trim(projfnames(iproj)))
-            call xnew_project%execute_safe(cline_new_proj)
-            call chdir('../')
-            call del_file(trim(projfnames(iproj)))
-        end do
-        if( L_USE_CAVGS )then
-            ! make class averages
-            do iproj = 1, params%nparts
-                call chdir('./'//trim(projnames(iproj)))
-                call simple_getcwd(cwd)
-                write(logfhandle,'(A)') 'CWD: '//trim(cwd)
-                call cline_mk_cavgs%set('prg',      'make_cavgs')
-                call cline_mk_cavgs%set('projfile',  trim(projfnames(iproj)))
-                call cline_mk_cavgs%set('mkdir',    'no') ! to avoid nested directory structure
-                call cline_mk_cavgs%set('refs',     'cavgs_'//BALPROJPARTFBODY//int2str(iproj)//'.mrc')
-                call cline_mk_cavgs%set('nparts',    params%nparts_per_part)
-                call cline_mk_cavgs%set('nthr',      params%nthr)
-                ! cmd = gen_exec_cmd(cline_mk_cavgs, 'simple_exec')
-                ! call exec_cmdline(cmd)
-                call xmake_cavgs_distr%execute_safe(cline_mk_cavgs)
-                call chdir('../')
-            end do
-            ! execute independent jobs for cross validation asynchronously
-            do iproj = 1, params%nparts
-                call chdir('./'//trim(projnames(iproj)))
-                call simple_getcwd(cwd)
-                write(logfhandle,'(A)') 'CWD: '//trim(cwd)
-                cline_abinitio3D = cline
-                call cline_abinitio3D%delete('nparts_per_part')
-                call cline_abinitio3D%delete('nparts')
-                call cline_abinitio3D%set('prg',        'abinitio3D_cavgs')
-                call cline_abinitio3D%set('projfile',    trim(projfnames(iproj)))
-                call cline_abinitio3D%set('mkdir',      'no') ! to avoid nested directory structure
-                ! cmd = gen_exec_cmd(cline_abinitio3D, 'simple_exec', 'ABINITIO3D_CAVGS')
-                call async_exec(cline_abinitio3D, 'simple_exec', 'ABINITIO3D_CAVGS')
-                call chdir('../')
-            end do
-        else
-            ! execute independent jobs for cross validation asynchronously
-            do iproj = 1, params%nparts
-                call chdir('./'//trim(projnames(iproj)))
-                call simple_getcwd(cwd)
-                write(logfhandle,'(A)') 'CWD: '//trim(cwd)
-                cline_abinitio3D = cline
-                call cline_abinitio3D%delete('nparts_per_part')
-                call cline_abinitio3D%delete('nthr_ini3D')
-                call cline_abinitio3D%set('cavg_ini',   'no')
-                call cline_abinitio3D%set('prg',        'abinitio3D')
-                call cline_abinitio3D%set('projfile',    trim(projfnames(iproj)))
-                call cline_abinitio3D%set('mkdir',      'no') ! to avoid nested directory structure
-                call cline_abinitio3D%set('nparts',      params%nparts_per_part)
-                call cline_abinitio3D%set('update_frac', 1.0) ! maximal nsample
-                ! cmd = gen_exec_cmd(cline_abinitio3D, 'simple_exec', 'ABINITIO3D')
-                call async_exec(cline_abinitio3D, 'simple_exec', 'ABINITIO3D')
-                call chdir('../')
-            end do
-        endif
-        call simple_end('**** SIMPLE_ABINITIO3D_PARTS NORMAL STOP ****')
-    end subroutine exec_abinitio3D_parts
 
     ! private helper routines
 
@@ -1103,7 +990,7 @@ contains
 
     subroutine ini3D_from_cavgs( cline )
         class(cmdline),    intent(inout) :: cline
-        type(abinitio3D_cavgs_commander) :: xini3D
+        type(commander_abinitio3D_cavgs) :: xini3D
         type(cmdline)                    :: cline_ini3D
         type(str4arr),    allocatable    :: files_that_stay(:)
         character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
@@ -1414,7 +1301,7 @@ contains
         class(sp_project),               intent(inout) :: spproj
         character(len=*),                intent(in)    :: projfile
         class(commander_base), optional, intent(inout) :: xreconstruct3D
-        type(symmetrize_map_commander) :: xsymmap
+        type(commander_symmetrize_map) :: xsymmap
         type(cmdline)                  :: cline_asymrec, cline_symrec
         character(len=:),  allocatable :: vol_iter, vol_sym
         real :: lpsym
@@ -1483,7 +1370,7 @@ contains
         character(len=*),      intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
         integer,               intent(in)    :: istage
-        type(automask_commander)       :: xautomask
+        type(commander_automask)       :: xautomask
         character(len=:),  allocatable :: str_state, vol, str, vol_even, vol_odd
         type(cmdline) :: cline_startrec, cline_automask
         integer       :: state
@@ -1614,7 +1501,7 @@ contains
 
     subroutine postprocess_final_rec( spproj )
         class(sp_project), intent(in) :: spproj
-        type(postprocess_commander)   :: xpostprocess
+        type(commander_postprocess)   :: xpostprocess
         character(len=:), allocatable :: str_state, vol_name, vol_pproc, vol_pproc_mirr, vol_final
         integer :: state
         do state = 1, params_glob%nstates
@@ -1716,4 +1603,4 @@ contains
         call noisevol%kill
     end subroutine generate_random_volumes
 
-end module simple_commander_abinitio
+end module simple_commanders_abinitio

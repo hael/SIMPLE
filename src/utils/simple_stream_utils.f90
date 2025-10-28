@@ -11,7 +11,7 @@ use simple_stack_io,       only: stack_io
 use simple_imgproc,        only: mrc2jpeg_tiled
 use simple_procimgstk,     only: scale_imgfile
 use simple_qsys_funs
-use simple_commander_cluster2D
+use simple_commanders_cluster2D
 use simple_progress
 use simple_nice
 

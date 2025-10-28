@@ -3,32 +3,32 @@ program single_exec
 include 'simple_lib.f08'
 use simple_user_interface,       only: make_user_interface, list_single_prgs_in_ui
 use simple_cmdline,              only: cmdline, cmdline_err
-use simple_commander_sim,        only: simulate_atoms_commander
-use simple_commander_preprocess, only: map_cavgs_selection_commander
-use simple_commander_imgproc,    only: estimate_diam_commander
+use simple_commanders_sim,        only: simulate_atoms_commander
+use simple_commanders_preprocess, only: commander_map_cavgs_selection
+use simple_commanders_imgproc,    only: estimate_diam_commander
 use simple_exec_helpers
-use simple_commander_project
-use simple_commander_cluster2D
-use simple_commander_tseries
-use simple_commander_oris
-use simple_commander_atoms
+use simple_commanders_project
+use simple_commanders_cluster2D
+use simple_commanders_tseries
+use simple_commanders_oris
+use simple_commanders_atoms
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT PROGRAMS
-type(new_project_commander)                   :: xnew_project
-type(update_project_commander)                :: xupdate_project
-type(print_project_info_commander)            :: xprint_project_info
-type(print_project_field_commander)           :: xprint_project_field
+type(commander_new_project)                   :: xnew_project
+type(commander_update_project)                :: xupdate_project
+type(commander_print_project_info)            :: xprint_project_info
+type(commander_print_project_field)           :: xprint_project_field
 type(tseries_import_commander)                :: xtseries_import
-type(import_particles_commander)              :: ximport_particles
-type(tseries_import_particles_commander)      :: xtseries_import_particles
-type(prune_project_commander_distr)           :: xprune_project
+type(commander_import_particles)              :: ximport_particles
+type(tseries_commander_import_particles)      :: xtseries_import_particles
+type(commander_prune_project_distr)           :: xprune_project
 
 ! TIME-SERIES PRE-PROCESSING PROGRAMS
 type(tseries_make_pickavg_commander)          :: xtseries_make_pickavg
-type(tseries_motion_correct_commander_distr)  :: xmcorr
-type(tseries_track_particles_commander_distr) :: xtrack
+type(commander_tseries_motion_correctdistr)  :: xmcorr
+type(commander_tseries_track_particles_distr) :: xtrack
 type(graphene_subtr_commander)                :: xgraphene_subtr
 type(denoise_trajectory_commander)            :: xden_traj
 
@@ -36,8 +36,8 @@ type(denoise_trajectory_commander)            :: xden_traj
 type(analysis2D_nano_commander)               :: xanalysis2D_nano
 type(center2D_nano_commander)                 :: xcenter2D
 type(cluster2D_nano_commander)                :: xcluster2D
-type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
-type(ppca_denoise_classes_commander)          :: xppca_denoise_classes
+type(commander_map_cavgs_selection)           :: xmap_cavgs_selection
+type(commander_ppca_denoise_classes)          :: xppca_denoise_classes
 type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
 type(refine3D_nano_commander)                 :: xrefine3D_nano
@@ -46,26 +46,26 @@ type(extract_subproj_commander)               :: xextract_subproj
 type(autorefine3D_nano_commander)             :: xautorefine3D_nano
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D
 type(tseries_core_finder_commander)           :: xtseries_core_finder
-type(tseries_swap_stack_commander)            :: xtseries_swap_stack
+type(tseries_swap_commander_stack)            :: xtseries_swap_stack
 
 ! VALIDATION PROGRAMS
-type(vizoris_commander)                       :: xvizoris
+type(commander_vizoris)                       :: xvizoris
 type(cavgsproc_nano_commander)                :: xcavgsproc
 type(cavgseoproc_nano_commander)              :: xcavgseoproc
-type(map2model_fsc_commander)                 :: xmap2model_fsc
-type(map_validation_commander)                :: xmap_validation
-type(model_validation_commander)              :: xmodel_validation
-type(model_validation_eo_commander)           :: xmodel_validation_eo
+type(commander_map2model_fsc)                 :: xmap2model_fsc
+type(commander_map_validation)                :: xmap_validation
+type(commander_model_validation)              :: xmodel_validation
+type(commander_model_validation_eo)           :: xmodel_validation_eo
 type(ptclsproc_nano_commander)                :: xptclsproc
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
-type(pdb2mrc_commander)                       :: xpdb2mrc
-type(detect_atoms_commander)                  :: xdetect_atoms
-type(conv_atom_denoise_commander)             :: xconv_atom_denoise
-type(atoms_stats_commander)                   :: xatoms_stats
-type(atoms_register_commander)                :: xatoms_register
-type(tseries_atoms_rmsd_commander)            :: xtseries_atoms_rmsd
-type(tseries_core_atoms_analysis_commander)   :: xtseries_core_atoms_analysis
+type(commander_pdb2mrc)                       :: xpdb2mrc
+type(commander_detect_atoms)                  :: xdetect_atoms
+type(commander_conv_atom_denoise)             :: xconv_atom_denoise
+type(commander_atoms_stats)                   :: xatoms_stats
+type(commander_atoms_register)                :: xatoms_register
+type(commander_tseries_atoms_rmsd)            :: xtseries_atoms_rmsd
+type(commander_tseries_core_atoms_analysis)   :: xtseries_core_atoms_analysis
 type(tseries_make_projavgs_commander)         :: xtseries_make_projavgs
 
 ! OTHER DECLARATIONS
@@ -215,7 +215,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('6e4f3b0b')
+call simple_print_git_version('46d3e6c0')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

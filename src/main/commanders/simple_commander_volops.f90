@@ -1,5 +1,5 @@
 ! concrete commander: operations on volumes
-module simple_commander_volops
+module simple_commanders_volops
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_strategy2D_utils
@@ -14,87 +14,87 @@ use simple_projector,      only: projector
 use simple_dock_vols,      only: dock_vols
 implicit none
 
-public :: centervol_commander
-public :: dock_volpair_commander
-public :: noisevol_commander
-public :: postprocess_commander
-public :: ppca_volvar_commander
-public :: reproject_commander
-public :: sharpvol_commander
-public :: symaxis_search_commander
-public :: symmetrize_map_commander
-public :: symmetry_test_commander
-public :: volanalyze_commander
-public :: volops_commander
+public :: commander_centervol
+public :: commander_dock_volpair
+public :: commander_noisevol
+public :: commander_postprocess
+public :: commander_ppca_volvar
+public :: commander_reproject
+public :: commander_sharpvol
+public :: commander_symaxis_search
+public :: commander_symmetrize_map
+public :: commander_symmetry_test
+public :: commander_volanalyze
+public :: commander_volops
 
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: centervol_commander
+type, extends(commander_base) :: commander_centervol
   contains
     procedure :: execute      => exec_centervol
-end type centervol_commander
+end type commander_centervol
 
-type, extends(commander_base) :: dock_volpair_commander
+type, extends(commander_base) :: commander_dock_volpair
   contains
     procedure :: execute      => exec_dock_volpair
-end type dock_volpair_commander
+end type commander_dock_volpair
 
-type, extends(commander_base) :: noisevol_commander
+type, extends(commander_base) :: commander_noisevol
   contains
     procedure :: execute      => exec_noisevol
-end type noisevol_commander
+end type commander_noisevol
 
-type, extends(commander_base) :: postprocess_commander
+type, extends(commander_base) :: commander_postprocess
  contains
    procedure :: execute      => exec_postprocess
-end type postprocess_commander
+end type commander_postprocess
 
-type, extends(commander_base) :: ppca_volvar_commander
+type, extends(commander_base) :: commander_ppca_volvar
   contains
     procedure :: execute      => exec_ppca_volvar
-end type ppca_volvar_commander
+end type commander_ppca_volvar
 
-type, extends(commander_base) :: reproject_commander
+type, extends(commander_base) :: commander_reproject
  contains
    procedure :: execute      => exec_reproject
-end type reproject_commander
+end type commander_reproject
 
-type, extends(commander_base) :: sharpvol_commander
+type, extends(commander_base) :: commander_sharpvol
   contains
     procedure :: execute      => exec_sharpvol
-end type sharpvol_commander
+end type commander_sharpvol
 
-type, extends(commander_base) :: symaxis_search_commander
+type, extends(commander_base) :: commander_symaxis_search
   contains
     procedure :: execute      => exec_symaxis_search
-end type symaxis_search_commander
+end type commander_symaxis_search
 
-type, extends(commander_base) :: symmetrize_map_commander
+type, extends(commander_base) :: commander_symmetrize_map
   contains
     procedure :: execute      => exec_symmetrize_map
-end type symmetrize_map_commander
+end type commander_symmetrize_map
 
-type, extends(commander_base) :: symmetry_test_commander
+type, extends(commander_base) :: commander_symmetry_test
   contains
     procedure :: execute      => exec_symmetry_test
-end type symmetry_test_commander
+end type commander_symmetry_test
 
-type, extends(commander_base) :: volanalyze_commander
+type, extends(commander_base) :: commander_volanalyze
   contains
     procedure :: execute      => exec_volanalyze
-end type volanalyze_commander
+end type commander_volanalyze
 
-type, extends(commander_base) :: volops_commander
+type, extends(commander_base) :: commander_volops
   contains
     procedure :: execute      => exec_volops
-end type volops_commander
+end type commander_volops
 
 contains
 
     !> centers a 3D volume and associated particle document
     subroutine exec_centervol( self, cline )
-        class(centervol_commander), intent(inout) :: self
+        class(commander_centervol), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
@@ -186,7 +186,7 @@ contains
         use simple_atoms,        only: atoms
         use simple_segmentation, only: otsu_img
         use simple_binimage,     only: binimage
-        class(sharpvol_commander), intent(inout) :: self
+        class(commander_sharpvol), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
         character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pproc, fname_lp, fname_mirr
@@ -317,7 +317,7 @@ contains
 
     subroutine exec_postprocess( self, cline )
         use simple_sp_project, only: sp_project
-        class(postprocess_commander), intent(inout) :: self
+        class(commander_postprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_mirr
         character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
@@ -438,7 +438,7 @@ contains
 
     !> exec_project generate projections from volume
     subroutine exec_reproject( self, cline )
-        class(reproject_commander), intent(inout) :: self
+        class(commander_reproject), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)         :: params
         type(builder)            :: build
@@ -513,7 +513,7 @@ contains
 
     subroutine exec_volanalyze( self, cline )
         use simple_volanalyzer
-        class(volanalyze_commander), intent(inout) :: self
+        class(commander_volanalyze), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',    'yes')
@@ -525,7 +525,7 @@ contains
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
     subroutine exec_volops( self, cline )
-        class(volops_commander), intent(inout) :: self
+        class(commander_volops), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -595,9 +595,9 @@ contains
 
     subroutine exec_noisevol( self, cline )
         use simple_procimgstk, only: copy_imgfile
-        class(noisevol_commander), intent(inout) :: self
+        class(commander_noisevol), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(reproject_commander) :: xreproject
+        type(commander_reproject) :: xreproject
         type(cmdline)             :: cline_reproject
         type(parameters)          :: params
         type(image)               :: noisevol
@@ -639,7 +639,7 @@ contains
     end subroutine exec_noisevol
     
     subroutine exec_dock_volpair( self, cline )
-        class(dock_volpair_commander), intent(inout) :: self
+        class(commander_dock_volpair), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(dock_vols)  :: dvols
         type(parameters) :: params
@@ -659,7 +659,7 @@ contains
     !> for identification of the principal symmetry axis
     subroutine exec_symaxis_search( self, cline )
         use simple_volpft_symsrch
-        class(symaxis_search_commander), intent(inout) :: self
+        class(commander_symaxis_search), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
         character(len=32), parameter :: SYMAXISTAB = 'sym_axis'//trim(TXT_EXT)
@@ -738,7 +738,7 @@ contains
 
     subroutine exec_symmetrize_map( self, cline )
         use simple_symanalyzer
-        class(symmetrize_map_commander), intent(inout) :: self
+        class(commander_symmetrize_map), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
@@ -818,7 +818,7 @@ contains
 
     subroutine exec_symmetry_test( self, cline )
         use simple_symanalyzer
-        class(symmetry_test_commander), intent(inout) :: self
+        class(commander_symmetry_test), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)      :: params
         type(builder)         :: build
@@ -875,7 +875,7 @@ contains
         use simple_pca_svd,    only: pca_svd
         use simple_kpca_svd,   only: kpca_svd
         use simple_image,      only: image
-        class(ppca_volvar_commander), intent(inout) :: self
+        class(commander_ppca_volvar), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,     parameter   :: MAXPCAITS = 15
         class(pca),  pointer     :: pca_ptr  => null()
@@ -913,4 +913,4 @@ contains
         call simple_end('**** SIMPLE_PPCA_VOLVAR NORMAL STOP ****')
     end subroutine exec_ppca_volvar
 
-end module simple_commander_volops
+end module simple_commanders_volops

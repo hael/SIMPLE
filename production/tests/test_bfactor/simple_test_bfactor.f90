@@ -12,7 +12,7 @@
 program simple_test_bfactor
     include 'simple_lib.f08'
     use simple_cmdline,            only: cmdline
-    use simple_commander_atoms,    only: atoms_stats_commander
+    use simple_commanders_atoms,    only: commander_atoms_stats
     use simple_atoms,              only: atoms
     implicit none
 
@@ -30,7 +30,7 @@ program simple_test_bfactor
 
     type (cmdline)              :: cline_atoms_stats
     type(atoms)                 :: inatoms
-    type(atoms_stats_commander) :: xatoms_stats
+    type(commander_atoms_stats) :: xatoms_stats
     type(stats), allocatable    :: ideal(:), fitiso(:), fitaniso(:)
     real, parameter             :: SMPD=0.358, MSKDIAM=40., NTHR=16., CORR_THRES=0.95
     real                        :: mean_abs_error(5), mean_pct_error(5)

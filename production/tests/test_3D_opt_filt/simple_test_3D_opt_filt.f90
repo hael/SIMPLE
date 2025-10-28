@@ -3,13 +3,13 @@ include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
-use simple_commander_resolest, only: nununiform_filter3D_commander
+use simple_commanders_resolest, only: commander_nununiform_filter3D
 use simple_image,              only: image
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_opt_filt
 type(image)                   :: even, odd, even_copy, odd_copy, noise, res_map
-type(nununiform_filter3D_commander) :: xnununiform_filter3D
+type(commander_nununiform_filter3D) :: xnununiform_filter3D
 integer                       :: nyq, ifoo, smooth_ext, rc
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 real, allocatable             :: res(:), corrs(:)

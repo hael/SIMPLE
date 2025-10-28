@@ -1,4 +1,4 @@
-module simple_commander_cavgs
+module simple_commanders_cavgs
 include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -12,43 +12,43 @@ use simple_stack_io,       only: stack_io
 use simple_strategy2D_utils
 implicit none
 
-public :: rank_cavgs_commander
-public :: cluster_cavgs_commander
-public :: select_clusters_commander
-public :: match_cavgs_commander
-public :: match_cavgs2afm_commander
+public :: commander_rank_cavgs
+public :: commander_cluster_cavgs
+public :: commander_select_clusters
+public :: commander_match_cavgs
+public :: commander_match_cavgs2afm
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: rank_cavgs_commander
+type, extends(commander_base) :: commander_rank_cavgs
     contains
         procedure :: execute      => exec_rank_cavgs
-end type rank_cavgs_commander
+end type commander_rank_cavgs
 
-type, extends(commander_base) :: cluster_cavgs_commander
+type, extends(commander_base) :: commander_cluster_cavgs
     contains
         procedure :: execute      => exec_cluster_cavgs
-end type cluster_cavgs_commander
+end type commander_cluster_cavgs
 
-type, extends(commander_base) :: select_clusters_commander
+type, extends(commander_base) :: commander_select_clusters
     contains
         procedure :: execute      => exec_select_clusters
-end type select_clusters_commander
+end type commander_select_clusters
 
-type, extends(commander_base) :: match_cavgs_commander
+type, extends(commander_base) :: commander_match_cavgs
     contains
         procedure :: execute      => exec_match_cavgs
-end type match_cavgs_commander
+end type commander_match_cavgs
 
-type, extends(commander_base) :: match_cavgs2afm_commander
+type, extends(commander_base) :: commander_match_cavgs2afm
     contains
         procedure :: execute      => exec_match_cavgs2afm
-end type match_cavgs2afm_commander
+end type commander_match_cavgs2afm
 
 contains
 
     subroutine exec_rank_cavgs( self, cline )
-        class(rank_cavgs_commander), intent(inout) :: self
+        class(commander_rank_cavgs), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(sp_project), target  :: spproj
         class(oris),      pointer :: os_ptr => null()
@@ -139,7 +139,7 @@ contains
 
     subroutine exec_cluster_cavgs( self, cline )
         use simple_clustering_utils, only: cluster_dmat
-        class(cluster_cavgs_commander), intent(inout) :: self
+        class(commander_cluster_cavgs), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         logical,          parameter   :: DEBUG = .true.
         real,             parameter   :: SCORE_THRES_INCL = 75.
@@ -360,7 +360,7 @@ contains
     end subroutine exec_cluster_cavgs
 
     subroutine exec_select_clusters( self, cline )
-        class(select_clusters_commander), intent(inout) :: self
+        class(commander_select_clusters), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(parameters)              :: params
         type(sp_project)              :: spproj
@@ -420,7 +420,7 @@ contains
     end subroutine exec_select_clusters
 
     subroutine exec_match_cavgs( self, cline )
-        class(match_cavgs_commander), intent(inout) :: self
+        class(commander_match_cavgs), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj_ref, spproj_match
@@ -530,7 +530,7 @@ contains
     end subroutine exec_match_cavgs
 
     subroutine exec_match_cavgs2afm( self, cline )
-        class(match_cavgs2afm_commander), intent(inout) :: self
+        class(commander_match_cavgs2afm), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj_ref
@@ -639,4 +639,4 @@ contains
         call simple_end('**** SIMPLE_match_cavgs2afmS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
     end subroutine exec_match_cavgs2afm
 
-end module simple_commander_cavgs
+end module simple_commanders_cavgs

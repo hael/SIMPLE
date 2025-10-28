@@ -1,5 +1,5 @@
 ! concrete commander: simulation routines
-module simple_commander_sim
+module simple_commanders_sim
 include 'simple_lib.f08'
 use simple_parameters,     only: parameters
 use simple_builder,        only: builder
@@ -10,33 +10,33 @@ use simple_simulator,      only: simimg
 use simple_commander_base, only: commander_base
 implicit none
 
-public :: simulate_noise_commander
-public :: simulate_particles_commander
-public :: simulate_movie_commander
-public :: simulate_subtomogram_commander
+public :: commander_simulate_noise
+public :: commander_simulate_particles
+public :: commander_simulate_movie
+public :: commander_simulate_subtomogram
 public :: simulate_atoms_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: simulate_noise_commander
+type, extends(commander_base) :: commander_simulate_noise
   contains
     procedure :: execute      => exec_simulate_noise
-end type simulate_noise_commander
+end type commander_simulate_noise
 
-type, extends(commander_base) :: simulate_particles_commander
+type, extends(commander_base) :: commander_simulate_particles
   contains
     procedure :: execute      => exec_simulate_particles
-end type simulate_particles_commander
+end type commander_simulate_particles
 
-type, extends(commander_base) :: simulate_movie_commander
+type, extends(commander_base) :: commander_simulate_movie
   contains
     procedure :: execute      => exec_simulate_movie
-end type simulate_movie_commander
+end type commander_simulate_movie
 
-type, extends(commander_base) :: simulate_subtomogram_commander
+type, extends(commander_base) :: commander_simulate_subtomogram
   contains
     procedure :: execute      => exec_simulate_subtomogram
-end type simulate_subtomogram_commander
+end type commander_simulate_subtomogram
 
 type, extends(commander_base) :: simulate_atoms_commander
   contains
@@ -46,7 +46,7 @@ end type simulate_atoms_commander
 contains
 
     subroutine exec_simulate_noise( self, cline )
-        class(simulate_noise_commander), intent(inout) :: self
+        class(commander_simulate_noise), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -72,7 +72,7 @@ contains
     subroutine exec_simulate_particles( self, cline )
         use simple_projector,           only: projector
         use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
-        class(simulate_particles_commander), intent(inout) :: self
+        class(commander_simulate_particles), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -226,7 +226,7 @@ contains
     end subroutine exec_simulate_particles
 
     subroutine exec_simulate_movie( self, cline )
-        class(simulate_movie_commander), intent(inout) :: self
+        class(commander_simulate_movie), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
@@ -412,7 +412,7 @@ contains
 
     subroutine exec_simulate_subtomogram( self, cline )
         use simple_projector_hlev, only: rotvol
-        class(simulate_subtomogram_commander), intent(inout) :: self
+        class(commander_simulate_subtomogram), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -669,4 +669,4 @@ contains
         call simple_end('**** SIMPLE_SIMULATE_FCC NORMAL STOP ****')
     end subroutine exec_simulate_atoms
 
-end module simple_commander_sim
+end module simple_commanders_sim

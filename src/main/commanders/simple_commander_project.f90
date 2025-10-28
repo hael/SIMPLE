@@ -1,5 +1,5 @@
 ! concrete commander: operations on projects (spproject) and associated files
-module simple_commander_project
+module simple_commanders_project
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
@@ -16,139 +16,139 @@ use simple_qsys_funs
 
 implicit none
 
-public :: new_project_commander
-public :: print_project_info_commander
-public :: print_project_vals_commander
-public :: print_project_field_commander
-public :: update_project_commander
-public :: zero_project_shifts_commander
-public :: import_movies_commander
-public :: import_boxes_commander
-public :: import_particles_commander
-public :: import_cavgs_commander
-public :: export_cavgs_commander
-public :: sample_classes_commander
-public :: selection_commander
-public :: replace_project_field_commander
-public :: scale_project_commander_distr
-public :: projops_commander
-public :: prune_project_commander_distr
-public :: prune_project_commander
-public :: merge_projects_commander
-public :: split_stack_commander
-public :: write_mic_filetab_commander
+public :: commander_new_project
+public :: commander_print_project_info
+public :: commander_print_project_vals
+public :: commander_print_project_field
+public :: commander_update_project
+public :: commander_zero_project_shifts
+public :: commander_import_movies
+public :: commander_import_boxes
+public :: commander_import_particles
+public :: commander_import_cavgs
+public :: commander_export_cavgs
+public :: commander_sample_classes
+public :: commander_selection
+public :: commander_replace_project_field
+public :: commander_scale_project_distr
+public :: commander_projops
+public :: commander_prune_project_distr
+public :: commander_prune_project
+public :: commander_merge_projects
+public :: split_commander_stack
+public :: commander_write_mic_filetab
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: new_project_commander
+type, extends(commander_base) :: commander_new_project
   contains
     procedure :: execute      => exec_new_project
-end type new_project_commander
+end type commander_new_project
 
-type, extends(commander_base) :: print_project_info_commander
+type, extends(commander_base) :: commander_print_project_info
   contains
     procedure :: execute      => exec_print_project_info
-end type print_project_info_commander
+end type commander_print_project_info
 
-type, extends(commander_base) :: print_project_vals_commander
+type, extends(commander_base) :: commander_print_project_vals
   contains
     procedure :: execute      => exec_print_project_vals
-end type print_project_vals_commander
+end type commander_print_project_vals
 
-type, extends(commander_base) :: print_project_field_commander
+type, extends(commander_base) :: commander_print_project_field
   contains
     procedure :: execute      => exec_print_project_field
-end type print_project_field_commander
+end type commander_print_project_field
 
-type, extends(commander_base) :: update_project_commander
+type, extends(commander_base) :: commander_update_project
   contains
     procedure :: execute      => exec_update_project
-end type update_project_commander
+end type commander_update_project
 
-type, extends(commander_base) :: zero_project_shifts_commander
+type, extends(commander_base) :: commander_zero_project_shifts
   contains
     procedure :: execute      => exec_zero_project_shifts
-end type zero_project_shifts_commander
+end type commander_zero_project_shifts
 
-type, extends(commander_base) :: import_movies_commander
+type, extends(commander_base) :: commander_import_movies
   contains
     procedure :: execute      => exec_import_movies
-end type import_movies_commander
+end type commander_import_movies
 
-type, extends(commander_base) :: import_boxes_commander
+type, extends(commander_base) :: commander_import_boxes
   contains
     procedure :: execute      => exec_import_boxes
-end type import_boxes_commander
+end type commander_import_boxes
 
-type, extends(commander_base) :: import_particles_commander
+type, extends(commander_base) :: commander_import_particles
   contains
     procedure :: execute      => exec_import_particles
-end type import_particles_commander
+end type commander_import_particles
 
-type, extends(commander_base) :: import_cavgs_commander
+type, extends(commander_base) :: commander_import_cavgs
   contains
     procedure :: execute      => exec_import_cavgs
-end type import_cavgs_commander
+end type commander_import_cavgs
 
-type, extends(commander_base) :: export_cavgs_commander
+type, extends(commander_base) :: commander_export_cavgs
   contains
     procedure :: execute      => exec_export_cavgs
-end type export_cavgs_commander
+end type commander_export_cavgs
 
-type, extends(commander_base) :: sample_classes_commander
+type, extends(commander_base) :: commander_sample_classes
   contains
     procedure :: execute      => exec_sample_classes
-end type sample_classes_commander
+end type commander_sample_classes
 
-type, extends(commander_base) :: selection_commander
+type, extends(commander_base) :: commander_selection
   contains
     procedure :: execute      => exec_selection
-end type selection_commander
+end type commander_selection
 
-type, extends(commander_base) :: replace_project_field_commander
+type, extends(commander_base) :: commander_replace_project_field
   contains
     procedure :: execute      => exec_replace_project_field
-end type replace_project_field_commander
+end type commander_replace_project_field
 
-type, extends(commander_base) :: scale_project_commander_distr
+type, extends(commander_base) :: commander_scale_project_distr
   contains
     procedure :: execute      => exec_scale_project_distr
-end type scale_project_commander_distr
+end type commander_scale_project_distr
 
-type, extends(commander_base) :: projops_commander
+type, extends(commander_base) :: commander_projops
   contains
     procedure :: execute      => exec_projops
-end type projops_commander
+end type commander_projops
 
-type, extends(commander_base) :: prune_project_commander_distr
+type, extends(commander_base) :: commander_prune_project_distr
   contains
     procedure :: execute      => exec_prune_project_distr
-end type prune_project_commander_distr
+end type commander_prune_project_distr
 
-type, extends(commander_base) :: prune_project_commander
+type, extends(commander_base) :: commander_prune_project
   contains
     procedure :: execute      => exec_prune_project
-end type prune_project_commander
+end type commander_prune_project
 
-type, extends(commander_base) :: merge_projects_commander
+type, extends(commander_base) :: commander_merge_projects
   contains
     procedure :: execute      => exec_merge_projects
-end type merge_projects_commander
+end type commander_merge_projects
 
-type, extends(commander_base) :: split_stack_commander
+type, extends(commander_base) :: split_commander_stack
   contains
     procedure :: execute      => exec_split_stack
-end type split_stack_commander
+end type split_commander_stack
 
-type, extends(commander_base) :: write_mic_filetab_commander
+type, extends(commander_base) :: commander_write_mic_filetab
   contains
     procedure :: execute      => exec_write_mic_filetab
-end type write_mic_filetab_commander
+end type commander_write_mic_filetab
 
 contains
 
     subroutine exec_new_project( self, cline )
-        class(new_project_commander), intent(inout) :: self
+        class(commander_new_project), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -204,7 +204,7 @@ contains
     end subroutine exec_new_project
 
     subroutine exec_print_project_info( self, cline )
-        class(print_project_info_commander), intent(inout) :: self
+        class(commander_print_project_info), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -220,7 +220,7 @@ contains
 
     subroutine exec_print_project_vals( self, cline )
         use simple_sp_project, only: oritype2segment
-        class(print_project_vals_commander), intent(inout) :: self
+        class(commander_print_project_vals), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(binoris)                 :: bos_doc
         character(len=:), allocatable :: keys, fname, oritype, str
@@ -294,12 +294,12 @@ contains
             do ikey=1,nargs
                 if( .not. keys_present(ikey) ) write(logfhandle,*) 'key: ', trim(args(ikey)), ' is missing in segment'
             end do
-            write(logfhandle,*) 'ERROR! print request failed due to missing keys; simple_commander_project :: exec_print_project_vals'
+            write(logfhandle,*) 'ERROR! print request failed due to missing keys; simple_commanders_project :: exec_print_project_vals'
         endif
     end subroutine exec_print_project_vals
 
     subroutine exec_print_project_field( self, cline )
-        class(print_project_field_commander), intent(inout) :: self
+        class(commander_print_project_field), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -328,7 +328,7 @@ contains
     end subroutine exec_print_project_field
 
     subroutine exec_update_project( self, cline )
-        class(update_project_commander), intent(inout) :: self
+        class(commander_update_project), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
@@ -350,7 +350,7 @@ contains
     end subroutine exec_update_project
 
     subroutine exec_zero_project_shifts( self, cline )
-        class(zero_project_shifts_commander), intent(inout) :: self
+        class(commander_zero_project_shifts), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
@@ -369,7 +369,7 @@ contains
     end subroutine exec_zero_project_shifts
 
     subroutine exec_import_movies( self, cline )
-        class(import_movies_commander), intent(inout) :: self
+        class(commander_import_movies), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(simple_nice_communicator)         :: nice_communicator
         type(parameters)                       :: params
@@ -506,7 +506,7 @@ contains
     end subroutine exec_import_movies
 
     subroutine exec_import_boxes( self, cline )
-        class(import_boxes_commander), intent(inout) :: self
+        class(commander_import_boxes), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
@@ -566,7 +566,7 @@ contains
     end subroutine exec_import_boxes
 
     subroutine exec_import_particles( self, cline )
-        class(import_particles_commander), intent(inout) :: self
+        class(commander_import_particles), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=:),      allocatable :: phaseplate, ctfstr
         character(LONGSTRLEN), allocatable :: stkfnames(:)
@@ -819,7 +819,7 @@ contains
     end subroutine exec_import_particles
 
     subroutine exec_import_cavgs( self, cline )
-        class(import_cavgs_commander), intent(inout) :: self
+        class(commander_import_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
@@ -844,7 +844,7 @@ contains
     end subroutine exec_import_cavgs
 
     subroutine exec_export_cavgs( self, cline )
-        class(export_cavgs_commander),   intent(inout) :: self
+        class(commander_export_cavgs),   intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
@@ -893,7 +893,7 @@ contains
     end subroutine exec_export_cavgs
 
     subroutine exec_sample_classes( self, cline )
-        class(sample_classes_commander), intent(inout) :: self
+        class(commander_sample_classes), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(simple_nice_communicator)  :: nice_communicator
         type(parameters)                :: params
@@ -1005,7 +1005,7 @@ contains
 
     subroutine exec_selection( self, cline )
         use simple_sp_project, only: oritype2segment
-        class(selection_commander), intent(inout) :: self
+        class(commander_selection), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
         type(stream_http_communicator)  :: http_communicator
@@ -1200,7 +1200,7 @@ contains
     end subroutine exec_selection
 
     subroutine exec_replace_project_field( self, cline )
-        class(replace_project_field_commander), intent(inout) :: self
+        class(commander_replace_project_field), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -1215,7 +1215,7 @@ contains
 
     subroutine exec_scale_project_distr( self, cline )
         use simple_builder,    only: builder
-        class(scale_project_commander_distr), intent(inout) :: self
+        class(commander_scale_project_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(chash),      allocatable :: part_params(:)
         character(len=:), allocatable :: projfile_sc
@@ -1312,7 +1312,7 @@ contains
     end subroutine exec_scale_project_distr
 
     subroutine exec_projops( self, cline )
-        class(projops_commander),     intent(inout) :: self
+        class(commander_projops),     intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)            :: params
         type(sp_project)            :: spproj
@@ -1392,7 +1392,7 @@ contains
     end subroutine exec_projops
 
     subroutine exec_prune_project_distr( self, cline )
-        class(prune_project_commander_distr), intent(inout) :: self
+        class(commander_prune_project_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
         type(parameters)              :: params
         type(cmdline)                 :: cline_distr
@@ -1559,7 +1559,7 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_qsys_funs, only: qsys_job_finished
-        class(prune_project_commander), intent(inout) :: self
+        class(commander_prune_project), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
         type(image)                   :: img
@@ -1613,7 +1613,7 @@ contains
         nstks = count(stks_mask)
         nstks_part = count(stks_mask(params%fromp:params%top))
         if( nstks_part == 0 )then
-            call qsys_job_finished('simple_commander_project :: exec_prune_project')
+            call qsys_job_finished('simple_commanders_project :: exec_prune_project')
             return
         endif
         call spproj_out%os_stk%new(nstks_part, is_ptcl=.false.)
@@ -1697,16 +1697,16 @@ contains
         call img%kill
         call o_stk%kill
         ! end gracefully
-        call qsys_job_finished('simple_commander_project :: exec_prune_project')
+        call qsys_job_finished('simple_commanders_project :: exec_prune_project')
     end subroutine exec_prune_project
 
     subroutine exec_merge_projects( self, cline )
-        use simple_commander_preprocess, only: reextract_commander_distr
-        class(merge_projects_commander), intent(inout) :: self
+        use simple_commanders_preprocess, only: commander_extract_distr
+        class(commander_merge_projects), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)                :: params
         type(cmdline)                   :: cline_reextract
-        type(reextract_commander_distr) :: xreextract_distr
+        type(commander_extract_distr) :: xreextract_distr
         type(sp_project),   allocatable :: spprojs(:)
         integer,            allocatable :: boxes(:), nmics(:)
         real,               allocatable :: smpds(:)
@@ -1790,7 +1790,7 @@ contains
     end subroutine exec_merge_projects
 
     subroutine exec_split_stack( self, cline )
-        class(split_stack_commander), intent(inout) :: self
+        class(split_commander_stack), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -1808,7 +1808,7 @@ contains
     end subroutine exec_split_stack
 
     subroutine exec_write_mic_filetab( self, cline )
-        class(write_mic_filetab_commander), intent(inout) :: self
+        class(commander_write_mic_filetab), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: micstab(:)
         type(parameters) :: params
@@ -1823,4 +1823,4 @@ contains
         call simple_end('**** WRITE_MIC_FILETAB NORMAL STOP ****')
     end subroutine exec_write_mic_filetab
 
-end module simple_commander_project
+end module simple_commanders_project

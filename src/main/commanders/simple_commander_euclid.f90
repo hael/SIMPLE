@@ -1,4 +1,4 @@
-module simple_commander_euclid
+module simple_commanders_euclid
 include 'simple_lib.f08'
 use simple_builder,          only: builder, build_glob
 use simple_cmdline,          only: cmdline
@@ -11,32 +11,32 @@ use simple_image,            only: image
 use simple_qsys_funs
 implicit none
 
-public :: calc_pspec_commander_distr
-public :: calc_pspec_commander
-public :: calc_pspec_assemble_commander
-public :: calc_group_sigmas_commander
+public :: commander_calc_pspec_distr
+public :: commander_calc_pspec
+public :: commander_calc_pspec_assemble
+public :: commander_calc_group_sigmas
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: calc_pspec_commander_distr
+type, extends(commander_base) :: commander_calc_pspec_distr
   contains
     procedure :: execute      => exec_calc_pspec_distr
-end type calc_pspec_commander_distr
+end type commander_calc_pspec_distr
 
-type, extends(commander_base) :: calc_pspec_commander
+type, extends(commander_base) :: commander_calc_pspec
   contains
     procedure :: execute      => exec_calc_pspec
-end type calc_pspec_commander
+end type commander_calc_pspec
 
-type, extends(commander_base) :: calc_pspec_assemble_commander
+type, extends(commander_base) :: commander_calc_pspec_assemble
   contains
     procedure :: execute      => exec_calc_pspec_assemble
-end type calc_pspec_assemble_commander
+end type commander_calc_pspec_assemble
 
-type, extends(commander_base) :: calc_group_sigmas_commander
+type, extends(commander_base) :: commander_calc_group_sigmas
   contains
     procedure :: execute      => exec_calc_group_sigmas
-end type calc_group_sigmas_commander
+end type commander_calc_group_sigmas
 
 type :: sigma_array
     character(len=:), allocatable :: fname
@@ -49,10 +49,10 @@ contains
 
     subroutine exec_calc_pspec_distr( self, cline )
         use simple_sp_project, only: sp_project
-        class(calc_pspec_commander_distr), intent(inout) :: self
+        class(commander_calc_pspec_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! commanders
-        type(calc_pspec_assemble_commander) :: xcalc_pspec_assemble
+        type(commander_calc_pspec_assemble) :: xcalc_pspec_assemble
         ! command lines
         type(cmdline)        :: cline_calc_pspec
         type(cmdline)        :: cline_calc_pspec_assemble
@@ -78,7 +78,7 @@ contains
             case('ptcl2D','ptcl3D','cls3D')
                 fall_over = spproj%get_nptcls() == 0
             case DEFAULT
-                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_euclid :: exec_calc_pspec_distr'
+                write(logfhandle,*)'Unsupported ORITYPE; simple_commanders_euclid :: exec_calc_pspec_distr'
         end select
         call spproj%ptr2oritype(params%oritype, spproj_field)
         if( fall_over )then
@@ -116,7 +116,7 @@ contains
 
     subroutine exec_calc_pspec( self, cline )
         use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
-        class(calc_pspec_commander), intent(inout) :: self
+        class(commander_calc_pspec), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)                :: params
         type(image)                     :: sum_img
@@ -205,12 +205,12 @@ contains
         call killimgbatch
         call sum_img%kill
         ! end gracefully
-        call qsys_job_finished('simple_commander_euclid :: exec_calc_pspec')
+        call qsys_job_finished('simple_commanders_euclid :: exec_calc_pspec')
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_pspec
 
     subroutine exec_calc_pspec_assemble( self, cline )
-        class(calc_pspec_assemble_commander), intent(inout) :: self
+        class(commander_calc_pspec_assemble), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)                 :: params
         type(image)                      :: avg_img
@@ -376,7 +376,7 @@ contains
     end subroutine exec_calc_pspec_assemble
 
     subroutine exec_calc_group_sigmas( self, cline )
-        class(calc_group_sigmas_commander), intent(inout) :: self
+        class(commander_calc_group_sigmas), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
@@ -466,4 +466,4 @@ contains
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
 
-end module simple_commander_euclid
+end module simple_commanders_euclid
