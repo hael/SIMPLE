@@ -97,6 +97,7 @@ type(simple_program), target :: ptclsproc_nano
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
+type(simple_program), target :: check_refpick
 type(simple_program), target :: check_states
 type(simple_program), target :: consolidate_chunks
 type(simple_program), target :: conv_atom_denoise
@@ -145,6 +146,7 @@ type(simple_program), target :: match_cavgs
 type(simple_program), target :: match_cavgs2afm
 type(simple_program), target :: match_stacks
 type(simple_program), target :: merge_projects
+type(simple_program), target :: mini_stream
 type(simple_program), target :: mkdir_
 type(simple_program), target :: map_validation
 type(simple_program), target :: model_validation
@@ -221,7 +223,6 @@ type(simple_program), target :: graphene_subtr
 type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
-type(simple_program), target :: check_refpick
 type(simple_program), target :: vizoris
 type(simple_program), target :: volanalyze
 type(simple_program), target :: volops
@@ -414,92 +415,93 @@ contains
         call set_prg_ptr_array
         call new_abinitio2D
         call new_abinitio2D_stream
+        call new_abinitio3D
         call new_abinitio3D_cavgs
         call new_abinitio3D_cavgs_fast
-        call new_abinitio3D
         call new_afm
         call new_analysis2D_nano
         call new_assign_optics
         call new_assign_optics_groups
-        call new_atoms_stats
         call new_atoms_register
+        call new_atoms_stats
+        call new_auto_spher_mask
         call new_automask
         call new_automask2D
-        call new_auto_spher_mask
-        call new_extract_substk
-        call new_extract_subproj
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
-        call new_cavgsproc_nano
         call new_cavgseoproc_nano
-        call new_ptclsproc_nano
+        call new_cavgsproc_nano
         call new_center
-        call new_cleanup2D
         call new_center2D_nano
+        call new_check_refpick
         call new_check_states
-        call new_consolidate_chunks
-        call new_conv_atom_denoise
+        call new_cleanup2D
         call new_clin_fsc
         call new_cluster2D
         call new_cluster2D_nano
-        call new_cluster2D_subsets
         call new_cluster2D_stream
+        call new_cluster2D_subsets
         call new_cluster_cavgs
         call new_cluster_stack
         call new_comparemc
+        call new_consolidate_chunks
+        call new_conv_atom_denoise
         call new_convert
         call new_ctf_estimate
-        call new_ctfops
         call new_ctf_phaseflip
-        call new_pdb2mrc
-        call new_quick_look
+        call new_ctfops
         call new_denoise_trajectory
         call new_detect_atoms
         call new_dock_volpair
-        call new_estimate_lpstages
         call new_estimate_diam
-        call new_extract
+        call new_estimate_lpstages
         call new_export_relion
         call new_export_starproject
+        call new_extract
+        call new_extract_subproj
+        call new_extract_substk
         call new_filter
         call new_fractionate_movies
         call new_fsc
-        call new_gen_pspecs_and_thumbs
         call new_gen_picking_refs
+        call new_gen_pspecs_and_thumbs
+        call new_graphene_subtr
         call new_icm2D
         call new_icm3D
-        call new_info_image
-        call new_info_stktab
         call new_import_boxes
         call new_import_cavgs
         call new_import_movies
         call new_import_particles
         call new_import_starproject
+        call new_info_image
+        call new_info_stktab
         call new_make_cavgs
         call new_make_oris
         call new_make_pickrefs
+        call new_map2model_fsc
         call new_map_cavgs_selection
         call new_map_cavgs_states
+        call new_map_validation
         call new_mask
         call new_match_cavgs
         call new_match_cavgs2afm
         call new_match_stacks
         call new_merge_projects
+        call new_mini_stream
         call new_mkdir_
-        call new_motion_correct
-        call new_map2model_fsc
-        call new_map_validation
         call new_model_validation
         call new_model_validation_eo
+        call new_motion_correct
         call new_multivol_assign
         call new_new_project
-        call new_nununiform_filter3D
         call new_noisevol
         call new_normalize
+        call new_nununiform_filter3D
+        call new_oriconsensus
         call new_orisops
         call new_oristats
-        call new_oriconsensus
+        call new_pdb2mrc
         call new_pick
         call new_pick_extract
         call new_postprocess
@@ -511,24 +513,26 @@ contains
         call new_print_dose_weights
         call new_print_fsc
         call new_print_magic_boxes
-        call new_print_project_info
         call new_print_project_field
+        call new_print_project_info
         call new_projops
         call new_prune_project
-        call new_reproject
+        call new_ptclsproc_nano
+        call new_quick_look
         call new_reconstruct3D
         call new_reextract
         call new_refine3D
         call new_refine3D_auto
         call new_refine3D_nano
         call new_replace_project_field
+        call new_reproject
         call new_sample_classes
-        call new_score_ptcls
-        call new_selection
         call new_scale
         call new_scale_project
+        call new_score_ptcls
         call new_select_
         call new_select_clusters
+        call new_selection
         call new_sharpvol
         call new_sieve_cavgs
         call new_simulate_atoms
@@ -537,8 +541,8 @@ contains
         call new_simulate_particles
         call new_simulate_subtomogram
         call new_split_
-        call new_stack
         call new_split_stack
+        call new_stack
         call new_stackops
         call new_symaxis_search
         call new_symmetrize_map
@@ -548,17 +552,15 @@ contains
         call new_tseries_core_finder
         call new_tseries_import
         call new_tseries_import_particles
-        call new_tseries_motion_correct
         call new_tseries_make_pickavg
         call new_tseries_make_projavgs
+        call new_tseries_motion_correct
+        call new_tseries_reconstruct3D
         call new_tseries_swap_stack
         call new_tseries_track_particles
-        call new_tseries_reconstruct3D
-        call new_graphene_subtr
         call new_uniform_filter2D
         call new_uniform_filter3D
         call new_update_project
-        call new_check_refpick
         call new_vizoris
         call new_volanalyze
         call new_volops
@@ -572,89 +574,90 @@ contains
         n_prg_ptrs = 0        
         call push2prg_ptr_array(abinitio2D)
         call push2prg_ptr_array(abinitio2D_stream)
+        call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_cavgs)
         call push2prg_ptr_array(abinitio3D_cavgs_fast)
-        call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
-        call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(atoms_register)
+        call push2prg_ptr_array(atoms_stats)
+        call push2prg_ptr_array(auto_spher_mask)
         call push2prg_ptr_array(automask)
         call push2prg_ptr_array(automask2D)
-        call push2prg_ptr_array(auto_spher_mask)
-        call push2prg_ptr_array(extract_substk)
-        call push2prg_ptr_array(extract_subproj)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
-        call push2prg_ptr_array(cavgsproc_nano)
         call push2prg_ptr_array(cavgseoproc_nano)
-        call push2prg_ptr_array(ptclsproc_nano)
+        call push2prg_ptr_array(cavgsproc_nano)
         call push2prg_ptr_array(center)
-        call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
+        call push2prg_ptr_array(check_refpick)
         call push2prg_ptr_array(check_states)
-        call push2prg_ptr_array(consolidate_chunks)
-        call push2prg_ptr_array(conv_atom_denoise)
+        call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(clin_fsc)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
-        call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster2D_stream)
+        call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster_cavgs)
         call push2prg_ptr_array(cluster_stack)
         call push2prg_ptr_array(comparemc)
+        call push2prg_ptr_array(consolidate_chunks)
+        call push2prg_ptr_array(conv_atom_denoise)
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(ctf_estimate)
-        call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(ctf_phaseflip)
-        call push2prg_ptr_array(pdb2mrc)
-        call push2prg_ptr_array(quick_look)
+        call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(denoise_trajectory)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
-        call push2prg_ptr_array(extract)
         call push2prg_ptr_array(export_relion)
         call push2prg_ptr_array(export_starproject)
+        call push2prg_ptr_array(extract)
+        call push2prg_ptr_array(extract_subproj)
+        call push2prg_ptr_array(extract_substk)
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
-        call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(gen_picking_refs)
+        call push2prg_ptr_array(gen_pspecs_and_thumbs)
+        call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(icm2D)
         call push2prg_ptr_array(icm3D)
-        call push2prg_ptr_array(info_image)
-        call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(import_boxes)
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
         call push2prg_ptr_array(import_particles)
         call push2prg_ptr_array(import_starproject)
+        call push2prg_ptr_array(info_image)
+        call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
         call push2prg_ptr_array(make_pickrefs)
         call push2prg_ptr_array(map2model_fsc)
         call push2prg_ptr_array(map_cavgs_selection)
         call push2prg_ptr_array(map_cavgs_states)
+        call push2prg_ptr_array(map_validation)
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(match_cavgs)
         call push2prg_ptr_array(match_cavgs2afm)
         call push2prg_ptr_array(match_stacks)
         call push2prg_ptr_array(merge_projects)
+        call push2prg_ptr_array(mini_stream)
         call push2prg_ptr_array(mkdir_)
-        call push2prg_ptr_array(motion_correct)
-        call push2prg_ptr_array(map_validation)
         call push2prg_ptr_array(model_validation)
         call push2prg_ptr_array(model_validation_eo)
+        call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(multivol_assign)
         call push2prg_ptr_array(new_project)
-        call push2prg_ptr_array(nununiform_filter3D)
         call push2prg_ptr_array(noisevol)
         call push2prg_ptr_array(normalize_)
+        call push2prg_ptr_array(nununiform_filter3D)
+        call push2prg_ptr_array(oriconsensus)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
-        call push2prg_ptr_array(oriconsensus)
+        call push2prg_ptr_array(pdb2mrc)
         call push2prg_ptr_array(pick)
         call push2prg_ptr_array(pick_extract)
         call push2prg_ptr_array(postprocess)
@@ -666,24 +669,26 @@ contains
         call push2prg_ptr_array(print_dose_weights)
         call push2prg_ptr_array(print_fsc)
         call push2prg_ptr_array(print_magic_boxes)
-        call push2prg_ptr_array(print_project_info)
         call push2prg_ptr_array(print_project_field)
+        call push2prg_ptr_array(print_project_info)
         call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
-        call push2prg_ptr_array(reproject)
+        call push2prg_ptr_array(ptclsproc_nano)
+        call push2prg_ptr_array(quick_look)
         call push2prg_ptr_array(reconstruct3D)
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
         call push2prg_ptr_array(refine3D_auto)
         call push2prg_ptr_array(refine3D_nano)
         call push2prg_ptr_array(replace_project_field)
+        call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(sample_classes)
-        call push2prg_ptr_array(selection)
         call push2prg_ptr_array(scale)
         call push2prg_ptr_array(scale_project)
         call push2prg_ptr_array(score_ptcls)
         call push2prg_ptr_array(select_)
         call push2prg_ptr_array(select_clusters)
+        call push2prg_ptr_array(selection)
         call push2prg_ptr_array(sharpvol)
         call push2prg_ptr_array(sieve_cavgs)
         call push2prg_ptr_array(simulate_atoms)
@@ -692,8 +697,8 @@ contains
         call push2prg_ptr_array(simulate_particles)
         call push2prg_ptr_array(simulate_subtomogram)
         call push2prg_ptr_array(split_)
-        call push2prg_ptr_array(stack)
         call push2prg_ptr_array(split_stack)
+        call push2prg_ptr_array(stack)
         call push2prg_ptr_array(stackops)
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
@@ -705,14 +710,12 @@ contains
         call push2prg_ptr_array(tseries_import_particles)
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
+        call push2prg_ptr_array(tseries_reconstruct3D)
         call push2prg_ptr_array(tseries_swap_stack)
         call push2prg_ptr_array(tseries_track_particles)
-        call push2prg_ptr_array(tseries_reconstruct3D)
-        call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(uniform_filter2D)
         call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
-        call push2prg_ptr_array(check_refpick)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volanalyze)
         call push2prg_ptr_array(volops)
@@ -720,6 +723,7 @@ contains
         call push2prg_ptr_array(write_mic_filetab)
         call push2prg_ptr_array(zero_project_shifts)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
+        
         contains
 
             subroutine push2prg_ptr_array( prg )
@@ -734,312 +738,160 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
-            case('abinitio2D')
-                ptr2prg => abinitio2D
-            case('abinitio2D_stream')
-                ptr2prg => abinitio2D_stream
-            case('abinitio3D_cavgs')
-                ptr2prg => abinitio3D_cavgs
-            case('abinitio3D_cavgs_fast')
-                ptr2prg => abinitio3D_cavgs_fast
-            case('abinitio3D')
-                ptr2prg => abinitio3D
-            case('afm')
-                ptr2prg => afm
-            case('analysis2D_nano')
-                ptr2prg => analysis2D_nano
-            case('assign_optics')
-                ptr2prg => assign_optics   
-            case('assign_optics_groups')
-                ptr2prg => assign_optics_groups
-            case('automask')
-                ptr2prg => automask
-            case('automask2D')
-                ptr2prg => automask2D
-            case('auto_spher_mask')
-                ptr2prg => auto_spher_mask
-            case('extract_substk')
-                ptr2prg => extract_substk
-            case('extract_subproj')
-                ptr2prg => extract_subproj
-            case('autorefine3D_nano')
-                ptr2prg => autorefine3D_nano
-            case('binarize')
-                ptr2prg => binarize
-            case('calc_pspec')
-                ptr2prg => calc_pspec
-            case('cavgsproc_nano')
-                ptr2prg => cavgsproc_nano
-            case('cavgseoproc_nano')
-                ptr2prg => cavgseoproc_nano
-            case('ptclsproc_nano')
-                ptr2prg => ptclsproc_nano
-            case('center')
-                ptr2prg => center
-            case('cleanup2D')
-                ptr2prg => cleanup2D
-            case('center2D_nano')
-                ptr2prg => center2D_nano
-            case('check_states')
-                ptr2prg => check_states
-            case('consolidate_chunks')
-                ptr2prg => consolidate_chunks
-            case('conv_atom_denoise')
-                ptr2prg => conv_atom_denoise
-            case('clin_fsc')
-                ptr2prg => clin_fsc
-            case('cluster2D')
-                ptr2prg => cluster2D
-            case('cluster2D_nano')
-                ptr2prg => cluster2D_nano
-            case('cluster2D_subsets')
-                ptr2prg => cluster2D_subsets
-            case('cluster2D_stream')
-                ptr2prg => cluster2D_stream
-            case('cluster_cavgs')
-                ptr2prg => cluster_cavgs
-            case('cluster_stack')
-                ptr2prg => cluster_stack
-            case('comparemc')
-                ptr2prg => comparemc
-            case('convert')
-                ptr2prg => convert
-            case('ctf_estimate')
-                ptr2prg => ctf_estimate
-            case('ctfops')
-                ptr2prg => ctfops
-            case('ctf_phaseflip')
-                ptr2prg => ctf_phaseflip
-            case('pdb2mrc')
-                ptr2prg => pdb2mrc
-            case('quick_look')
-                ptr2prg => quick_look
-            case('denoise_trajectory')
-                ptr2prg => denoise_trajectory
-            case('detect_atoms')
-                ptr2prg => detect_atoms
-            case('dock_volpair')
-                ptr2prg => dock_volpair
-            case('estimate_lpstages')
-                ptr2prg => estimate_lpstages
-            case('estimate_diam')
-                ptr2prg => estimate_diam
-            case('extract')
-                ptr2prg => extract
-            case('export_relion')
-                ptr2prg => export_relion
-            case('export_starproject')
-                ptr2prg => export_starproject
-            case('filter')
-                ptr2prg => filter
-            case('fsc')
-                ptr2prg => fsc
-            case('gen_pspecs_and_thumbs')
-                ptr2prg => gen_pspecs_and_thumbs
-            case('gen_picking_refs')
-                ptr2prg => gen_picking_refs
-            case('icm2D')
-                ptr2prg => icm2D
-            case('icm3D')
-                ptr2prg => icm3D
-            case('info_image')
-                ptr2prg => info_image
-            case('info_stktab')
-                ptr2prg => info_stktab
-            case('import_boxes')
-                ptr2prg => import_boxes
-            case('import_cavgs')
-                ptr2prg => import_cavgs
-            case('import_movies')
-                ptr2prg => import_movies
-            case('import_particles')
-                ptr2prg => import_particles
-            case('import_starproject')
-                ptr2prg => import_starproject
-            case('make_cavgs')
-                ptr2prg => make_cavgs
-            case('make_oris')
-                ptr2prg => make_oris
-            case('make_pickrefs')
-                ptr2prg => make_pickrefs
-            case('map_cavgs_selection')
-                ptr2prg => map_cavgs_selection
-            case('map_cavgs_states')
-                ptr2prg => map_cavgs_states
-            case('map2model_fsc')
-                ptr2prg => map2model_fsc
-            case('map_validation')
-                ptr2prg => map_validation
-            case('mask')
-                ptr2prg => mask
-            case('match_cavgs')
-                ptr2prg => match_cavgs
-            case('match_cavgs2afm')
-                ptr2prg => match_cavgs2afm
-            case('match_stacks')
-                ptr2prg => match_stacks
-            case('merge_projects')
-                ptr2prg => merge_projects
-            case('mkdir')
-                ptr2prg => mkdir_
-            case('motion_correct')
-                ptr2prg => motion_correct
-            case('model_validation')
-                ptr2prg => model_validation
-            case('model_validation_eo')
-                ptr2prg => model_validation_eo
-            case('multivol_assign')
-                ptr2prg => multivol_assign
-            case('new_project')
-                ptr2prg => new_project
-            case('nununiform_filter3D')
-                ptr2prg => nununiform_filter3D
-            case('noisevol')
-                ptr2prg => noisevol
-            case('normalize')
-                ptr2prg => normalize_
-            case('orisops')
-                ptr2prg => orisops
-            case('oristats')
-                ptr2prg => oristats
-            case('oriconsensus')
-                ptr2prg => oriconsensus
-            case('pick')
-                ptr2prg => pick
-            case('pick_extract')
-                ptr2prg => pick_extract
-            case('postprocess')
-                ptr2prg => postprocess
-            case('ppca_denoise')
-                ptr2prg => ppca_denoise
-            case('ppca_denoise_classes')
-                ptr2prg => ppca_denoise_classes
-            case('ppca_volvar')
-                ptr2prg => ppca_volvar
-            case('preproc')
-                ptr2prg => preproc
-            case('preprocess')
-                ptr2prg => preprocess
-            case('print_dose_weights')
-                ptr2prg => print_dose_weights
-            case('print_fsc')
-                ptr2prg => print_fsc
-            case('print_magic_boxes')
-                ptr2prg => print_magic_boxes
-            case('print_project_info')
-                ptr2prg => print_project_info
-            case('print_project_field')
-                ptr2prg => print_project_field
-            case('projops')
-                ptr2prg => projops  
-            case('prune_project')
-                ptr2prg => prune_project
-            case('score_ptcls')
-                ptr2prg => score_ptcls
-            case('atoms_stats')
-                ptr2prg => atoms_stats
-            case('atoms_register')
-                ptr2prg => atoms_register
-            case('reproject')
-                ptr2prg => reproject
-            case('reconstruct3D')
-                ptr2prg => reconstruct3D
-            case('reextract')
-                ptr2prg => reextract
-            case('refine3D')
-                ptr2prg => refine3D
-            case('refine3D_auto')
-                ptr2prg => refine3D_auto
-            case('refine3D_nano')
-                ptr2prg => refine3D_nano
-            case('fractionate_movies')
-                ptr2prg => fractionate_movies
-            case('replace_project_field')
-                ptr2prg => replace_project_field
-            case('sample_classes')
-                ptr2prg => sample_classes
-            case('selection')
-                ptr2prg => selection
-            case('scale')
-                ptr2prg => scale
-            case('scale_project')
-                ptr2prg => scale_project
-            case('select')
-                ptr2prg => select_
-            case('select_clusters')
-                ptr2prg => select_clusters
-            case('sharpvol')
-                ptr2prg => sharpvol
-            case('simulate_atoms')
-                ptr2prg => simulate_atoms
-            case('simulate_movie')
-                ptr2prg => simulate_movie
-            case('simulate_noise')
-                ptr2prg => simulate_noise
-            case('simulate_particles')
-                ptr2prg => simulate_particles
-            case('simulate_subtomogram')
-                ptr2prg => simulate_subtomogram
-            case('split')
-                ptr2prg => split_
-            case('stack')
-                ptr2prg => stack
-            case('split_stack')
-                ptr2prg => split_stack
-            case('stackops')
-                ptr2prg => stackops
-            case('sieve_cavgs')
-                ptr2prg => sieve_cavgs
-            case('symaxis_search')
-                ptr2prg => symaxis_search
-            case('symmetrize_map')
-                ptr2prg => symmetrize_map
-            case('symmetry_test')
-                ptr2prg => symmetry_test
-            case('tseries_atoms_rmsd')
-                ptr2prg => tseries_atoms_rmsd
-            case('tseries_core_atoms_analysis')
-                ptr2prg => tseries_core_atoms_analysis
-            case('tseries_core_finder')
-                ptr2prg => tseries_core_finder
-            case('tseries_import')
-                ptr2prg => tseries_import
-            case('tseries_import_particles')
-                ptr2prg => tseries_import_particles
-            case('tseries_make_pickavg')
-                ptr2prg => tseries_make_pickavg
-            case('tseries_make_projavgs')
-                ptr2prg => tseries_make_projavgs
-            case('tseries_motion_correct')
-                ptr2prg => tseries_motion_correct
-            case('tseries_swap_stack')
-                ptr2prg => tseries_swap_stack
-            case('tseries_track_particles')
-                ptr2prg => tseries_track_particles
-            case('tseries_reconstruct3D')
-                ptr2prg => tseries_reconstruct3D
-            case('graphene_subtr')
-                ptr2prg => graphene_subtr
-            case('uniform_filter2D')
-                ptr2prg => uniform_filter2D
-            case('uniform_filter3D')
-                ptr2prg => uniform_filter3D
-            case('update_project')
-                ptr2prg => update_project
-            case('check_refpick')
-                ptr2prg => check_refpick
-            case('vizoris')
-                ptr2prg => vizoris
-            case('volanalyze')
-                ptr2prg => volanalyze
-            case('volops')
-                ptr2prg => volops
-            case('write_classes')
-                ptr2prg => write_classes
-             case('write_mic_filetab')
-                ptr2prg => write_mic_filetab
-            case('zero_project_shifts')
-                ptr2prg => zero_project_shifts
+            case('abinitio2D');                  ptr2prg => abinitio2D
+            case('abinitio2D_stream');           ptr2prg => abinitio2D_stream
+            case('abinitio3D');                  ptr2prg => abinitio3D
+            case('abinitio3D_cavgs');            ptr2prg => abinitio3D_cavgs
+            case('abinitio3D_cavgs_fast');       ptr2prg => abinitio3D_cavgs_fast
+            case('afm');                         ptr2prg => afm
+            case('analysis2D_nano');             ptr2prg => analysis2D_nano
+            case('assign_optics');               ptr2prg => assign_optics   
+            case('assign_optics_groups');        ptr2prg => assign_optics_groups
+            case('atoms_register');              ptr2prg => atoms_register
+            case('atoms_stats');                 ptr2prg => atoms_stats
+            case('auto_spher_mask');             ptr2prg => auto_spher_mask
+            case('automask');                    ptr2prg => automask
+            case('automask2D');                  ptr2prg => automask2D
+            case('autorefine3D_nano');           ptr2prg => autorefine3D_nano
+            case('binarize');                    ptr2prg => binarize
+            case('calc_pspec');                  ptr2prg => calc_pspec
+            case('cavgseoproc_nano');            ptr2prg => cavgseoproc_nano
+            case('cavgsproc_nano');              ptr2prg => cavgsproc_nano
+            case('center');                      ptr2prg => center
+            case('center2D_nano');               ptr2prg => center2D_nano
+            case('check_refpick');               ptr2prg => check_refpick
+            case('check_states');                ptr2prg => check_states
+            case('cleanup2D');                   ptr2prg => cleanup2D
+            case('clin_fsc');                    ptr2prg => clin_fsc
+            case('cluster2D');                   ptr2prg => cluster2D
+            case('cluster2D_nano');              ptr2prg => cluster2D_nano
+            case('cluster2D_stream');            ptr2prg => cluster2D_stream
+            case('cluster2D_subsets');           ptr2prg => cluster2D_subsets
+            case('cluster_cavgs');               ptr2prg => cluster_cavgs
+            case('cluster_stack');               ptr2prg => cluster_stack
+            case('comparemc');                   ptr2prg => comparemc
+            case('consolidate_chunks');          ptr2prg => consolidate_chunks
+            case('conv_atom_denoise');           ptr2prg => conv_atom_denoise
+            case('convert');                     ptr2prg => convert
+            case('ctf_estimate');                ptr2prg => ctf_estimate
+            case('ctf_phaseflip');               ptr2prg => ctf_phaseflip
+            case('ctfops');                      ptr2prg => ctfops
+            case('denoise_trajectory');          ptr2prg => denoise_trajectory
+            case('detect_atoms');                ptr2prg => detect_atoms
+            case('dock_volpair');                ptr2prg => dock_volpair
+            case('estimate_diam');               ptr2prg => estimate_diam
+            case('estimate_lpstages');           ptr2prg => estimate_lpstages
+            case('export_relion');               ptr2prg => export_relion
+            case('export_starproject');          ptr2prg => export_starproject
+            case('extract');                     ptr2prg => extract
+            case('extract_subproj');             ptr2prg => extract_subproj
+            case('extract_substk');              ptr2prg => extract_substk
+            case('filter');                      ptr2prg => filter
+            case('fractionate_movies');          ptr2prg => fractionate_movies
+            case('fsc');                         ptr2prg => fsc
+            case('gen_picking_refs');            ptr2prg => gen_picking_refs
+            case('gen_pspecs_and_thumbs');       ptr2prg => gen_pspecs_and_thumbs
+            case('graphene_subtr');              ptr2prg => graphene_subtr
+            case('icm2D');                       ptr2prg => icm2D
+            case('icm3D');                       ptr2prg => icm3D
+            case('import_boxes');                ptr2prg => import_boxes
+            case('import_cavgs');                ptr2prg => import_cavgs
+            case('import_movies');               ptr2prg => import_movies
+            case('import_particles');            ptr2prg => import_particles
+            case('import_starproject');          ptr2prg => import_starproject
+            case('info_image');                  ptr2prg => info_image
+            case('info_stktab');                 ptr2prg => info_stktab
+            case('make_cavgs');                  ptr2prg => make_cavgs
+            case('make_oris');                   ptr2prg => make_oris
+            case('make_pickrefs');               ptr2prg => make_pickrefs
+            case('map2model_fsc');               ptr2prg => map2model_fsc
+            case('map_cavgs_selection');         ptr2prg => map_cavgs_selection
+            case('map_cavgs_states');            ptr2prg => map_cavgs_states
+            case('map_validation');              ptr2prg => map_validation
+            case('mask');                        ptr2prg => mask
+            case('match_cavgs');                 ptr2prg => match_cavgs
+            case('match_cavgs2afm');             ptr2prg => match_cavgs2afm
+            case('match_stacks');                ptr2prg => match_stacks
+            case('merge_projects');              ptr2prg => merge_projects
+            case('mini_stream');                 ptr2prg => mini_stream
+            case('mkdir');                       ptr2prg => mkdir_
+            case('model_validation');            ptr2prg => model_validation
+            case('model_validation_eo');         ptr2prg => model_validation_eo
+            case('motion_correct');              ptr2prg => motion_correct
+            case('multivol_assign');             ptr2prg => multivol_assign
+            case('new_project');                 ptr2prg => new_project
+            case('noisevol');                    ptr2prg => noisevol
+            case('normalize');                   ptr2prg => normalize_
+            case('nununiform_filter3D');         ptr2prg => nununiform_filter3D
+            case('oriconsensus');                ptr2prg => oriconsensus
+            case('orisops');                     ptr2prg => orisops
+            case('oristats');                    ptr2prg => oristats
+            case('pdb2mrc');                     ptr2prg => pdb2mrc
+            case('pick');                        ptr2prg => pick
+            case('pick_extract');                ptr2prg => pick_extract
+            case('postprocess');                 ptr2prg => postprocess
+            case('ppca_denoise');                ptr2prg => ppca_denoise
+            case('ppca_denoise_classes');        ptr2prg => ppca_denoise_classes
+            case('ppca_volvar');                 ptr2prg => ppca_volvar
+            case('preproc');                     ptr2prg => preproc
+            case('preprocess');                  ptr2prg => preprocess
+            case('print_dose_weights');          ptr2prg => print_dose_weights
+            case('print_fsc');                   ptr2prg => print_fsc
+            case('print_magic_boxes');           ptr2prg => print_magic_boxes
+            case('print_project_field');         ptr2prg => print_project_field
+            case('print_project_info');          ptr2prg => print_project_info
+            case('projops');                     ptr2prg => projops  
+            case('prune_project');               ptr2prg => prune_project
+            case('ptclsproc_nano');              ptr2prg => ptclsproc_nano
+            case('quick_look');                  ptr2prg => quick_look
+            case('reconstruct3D');               ptr2prg => reconstruct3D
+            case('reextract');                   ptr2prg => reextract
+            case('refine3D');                    ptr2prg => refine3D
+            case('refine3D_auto');               ptr2prg => refine3D_auto
+            case('refine3D_nano');               ptr2prg => refine3D_nano
+            case('replace_project_field');       ptr2prg => replace_project_field
+            case('reproject');                   ptr2prg => reproject
+            case('sample_classes');              ptr2prg => sample_classes
+            case('scale');                       ptr2prg => scale
+            case('scale_project');               ptr2prg => scale_project
+            case('score_ptcls');                 ptr2prg => score_ptcls
+            case('select');                      ptr2prg => select_
+            case('select_clusters');             ptr2prg => select_clusters
+            case('selection');                   ptr2prg => selection
+            case('sharpvol');                    ptr2prg => sharpvol
+            case('sieve_cavgs');                 ptr2prg => sieve_cavgs
+            case('simulate_atoms');              ptr2prg => simulate_atoms
+            case('simulate_movie');              ptr2prg => simulate_movie
+            case('simulate_noise');              ptr2prg => simulate_noise
+            case('simulate_particles');          ptr2prg => simulate_particles
+            case('simulate_subtomogram');        ptr2prg => simulate_subtomogram
+            case('split');                       ptr2prg => split_
+            case('split_stack');                 ptr2prg => split_stack
+            case('stack');                       ptr2prg => stack
+            case('stackops');                    ptr2prg => stackops
+            case('symaxis_search');              ptr2prg => symaxis_search
+            case('symmetrize_map');              ptr2prg => symmetrize_map
+            case('symmetry_test');               ptr2prg => symmetry_test
+            case('tseries_atoms_rmsd');          ptr2prg => tseries_atoms_rmsd
+            case('tseries_core_atoms_analysis'); ptr2prg => tseries_core_atoms_analysis
+            case('tseries_core_finder');         ptr2prg => tseries_core_finder
+            case('tseries_import');              ptr2prg => tseries_import
+            case('tseries_import_particles');    ptr2prg => tseries_import_particles
+            case('tseries_make_pickavg');        ptr2prg => tseries_make_pickavg
+            case('tseries_make_projavgs');       ptr2prg => tseries_make_projavgs
+            case('tseries_motion_correct');      ptr2prg => tseries_motion_correct
+            case('tseries_reconstruct3D');       ptr2prg => tseries_reconstruct3D
+            case('tseries_swap_stack');          ptr2prg => tseries_swap_stack
+            case('tseries_track_particles');     ptr2prg => tseries_track_particles
+            case('uniform_filter2D');            ptr2prg => uniform_filter2D
+            case('uniform_filter3D');            ptr2prg => uniform_filter3D
+            case('update_project');              ptr2prg => update_project
+            case('vizoris');                     ptr2prg => vizoris
+            case('volanalyze');                  ptr2prg => volanalyze
+            case('volops');                      ptr2prg => volops
+            case('write_classes');               ptr2prg => write_classes
+            case('write_mic_filetab');           ptr2prg => write_mic_filetab
+            case('zero_project_shifts');         ptr2prg => zero_project_shifts
             case DEFAULT
                 ptr2prg => null()
         end select
@@ -1047,73 +899,73 @@ contains
 
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') abinitio2D%name
+        write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') abinitio3D_cavgs%name
         write(logfhandle,'(A)') abinitio3D_cavgs_fast%name
-        write(logfhandle,'(A)') abinitio3D%name
         write(logfhandle,'(A)') afm%name
         write(logfhandle,'(A)') assign_optics_groups%name
+        write(logfhandle,'(A)') auto_spher_mask%name
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') automask2D%name
-        write(logfhandle,'(A)') auto_spher_mask%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') center%name
+        write(logfhandle,'(A)') check_refpick%name
         write(logfhandle,'(A)') check_states%name
-        write(logfhandle,'(A)') consolidate_chunks%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') clin_fsc%name
-        write(logfhandle,'(A)') cluster_cavgs%name
-        write(logfhandle,'(A)') cluster_stack%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_subsets%name
+        write(logfhandle,'(A)') cluster_cavgs%name
+        write(logfhandle,'(A)') cluster_stack%name
         write(logfhandle,'(A)') comparemc%name
+        write(logfhandle,'(A)') consolidate_chunks%name
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctf_estimate%name
-        write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') ctf_phaseflip%name
-        write(logfhandle,'(A)') quick_look%name
+        write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') estimate_lpstages%name
-        write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') export_relion%name
         write(logfhandle,'(A)') export_starproject%name
+        write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fractionate_movies%name
         write(logfhandle,'(A)') fsc%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
         write(logfhandle,'(A)') icm2D%name
         write(logfhandle,'(A)') icm3D%name
-        write(logfhandle,'(A)') info_image%name
-        write(logfhandle,'(A)') info_stktab%name
         write(logfhandle,'(A)') import_boxes%name
         write(logfhandle,'(A)') import_cavgs%name
         write(logfhandle,'(A)') import_movies%name
         write(logfhandle,'(A)') import_particles%name
         write(logfhandle,'(A)') import_starproject%name
+        write(logfhandle,'(A)') info_image%name
+        write(logfhandle,'(A)') info_stktab%name
         write(logfhandle,'(A)') make_cavgs%name
         write(logfhandle,'(A)') make_oris%name
         write(logfhandle,'(A)') make_pickrefs%name
+        write(logfhandle,'(A)') map2model_fsc%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') map_cavgs_states%name
         write(logfhandle,'(A)') map_validation%name
-        write(logfhandle,'(A)') map2model_fsc%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') match_cavgs%name
         write(logfhandle,'(A)') match_cavgs2afm%name
         write(logfhandle,'(A)') match_stacks%name
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mkdir_%name
-        write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') model_validation%name
         write(logfhandle,'(A)') model_validation_eo%name
+        write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') multivol_assign%name
         write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') nununiform_filter3D%name
         write(logfhandle,'(A)') noisevol%name
         write(logfhandle,'(A)') normalize_%name
+        write(logfhandle,'(A)') nununiform_filter3D%name
+        write(logfhandle,'(A)') oriconsensus%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
-        write(logfhandle,'(A)') oriconsensus%name
         write(logfhandle,'(A)') pdb2mrc%name
         write(logfhandle,'(A)') pick%name
         write(logfhandle,'(A)') postprocess%name
@@ -1124,31 +976,32 @@ contains
         write(logfhandle,'(A)') print_dose_weights%name
         write(logfhandle,'(A)') print_fsc%name
         write(logfhandle,'(A)') print_magic_boxes%name
-        write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') projops%name
         write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') score_ptcls%name
+        write(logfhandle,'(A)') quick_look%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
         write(logfhandle,'(A)') refine3D_auto%name
         write(logfhandle,'(A)') replace_project_field%name
-        write(logfhandle,'(A)') sample_classes%name
-        write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
+        write(logfhandle,'(A)') sample_classes%name
+        write(logfhandle,'(A)') scale%name
+        write(logfhandle,'(A)') scale_project%name
+        write(logfhandle,'(A)') score_ptcls%name
         write(logfhandle,'(A)') select_%name
         write(logfhandle,'(A)') select_clusters%name
+        write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') sharpvol%name
         write(logfhandle,'(A)') simulate_movie%name
         write(logfhandle,'(A)') simulate_noise%name
         write(logfhandle,'(A)') simulate_particles%name
         write(logfhandle,'(A)') simulate_subtomogram%name
-        write(logfhandle,'(A)') scale%name
-        write(logfhandle,'(A)') scale_project%name
         write(logfhandle,'(A)') split_%name
-        write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') split_stack%name
+        write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') stackops%name
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
@@ -1156,7 +1009,6 @@ contains
         write(logfhandle,'(A)') uniform_filter2D%name
         write(logfhandle,'(A)') uniform_filter3D%name
         write(logfhandle,'(A)') update_project%name
-        write(logfhandle,'(A)') check_refpick%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volanalyze%name
         write(logfhandle,'(A)') volops%name
@@ -1170,8 +1022,9 @@ contains
         write(logfhandle,'(A)') assign_optics%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') gen_picking_refs%name
-        write(logfhandle,'(A)') preproc%name
+        write(logfhandle,'(A)') mini_stream%name
         write(logfhandle,'(A)') pick_extract%name
+        write(logfhandle,'(A)') preproc%name
         write(logfhandle,'(A)') sieve_cavgs%name
     end subroutine list_stream_prgs_in_ui
 
@@ -1259,180 +1112,164 @@ contains
     end subroutine set_param_2
 
     subroutine set_common_params
-        call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., '')
-        call set_param(projfile_target,'projfile_target','file', 'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., '')
-        call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., '')
-        call set_param(stk2,          'stk2',          'file',   'Second Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk2.mrc')
-        call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
-        call set_param(ctf,           'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
-        &'(yes|no|flip){no}', .true., 'no')
-        call set_param(ctf_yes,       'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', '(yes|no|flip){yes}', .false., 'yes')
-        call set_param(ctfpatch,      'ctfpatch',      'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(ctfresthreshold,'ctfresthreshold','num',  'CTF Resolution rejection threshold', 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{50}', 'CTF resolution threshold(in Angstroms){50}', .false., 50.0)
-        call set_param(icefracthreshold,'icefracthreshold','num','Ice Fraction rejection threshold', 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}', 'Ice fraction threshold{1.0}', .false., 1.0)
-        call set_param(astigthreshold,  'astigthreshold',  'num','Astigmatism rejection threshold', 'Micrographs with astigmatism (%) above the threshold will be ignored from further processing{10.0}', 'Astigmatism threshold{10.0}', .false., 10.0)
-        call set_param(smpd,          'smpd',              'num','Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
-        call set_param(smpd_downscale,'smpd_downscale',    'num','Sampling distance after downscale', 'Distance between neighbouring pixels in Angstroms after downscale', 'pixel size in Angstroms{1.3}', .false., 1.3)
-        call set_param(smpd_target,   'smpd_target',       'num','Target sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
-        call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
-        &'.simple|.txt parameter file', .false., 'deftab'//trim(METADATA_EXT))
-        call set_param(oritab,        'oritab',        'file',   'Orientation and CTF parameter file', 'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false., 'oritab'//trim(METADATA_EXT))
-        call set_param(oritab2,       'oritab2',        'file',   '2nd orientation and CTF parameter file', '2nd orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false., 'oritab2'//trim(METADATA_EXT))
-        call set_param(outfile,       'outfile',       'file',   'Output orientation and CTF parameter file', 'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
-        call set_param(pdbout,        'pdbout',        'file',   'Output PDB volume-centered molecule', 'Output coordinates file in PDB format for the volume-centered molecule', 'e.g. output.pdb', .false., 'pdbout.pdb')
-        call set_param(dir_movies,    'dir_movies',    'dir',    'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .true., 'preprocess/')
-        call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous run', 'start iterations from here', .false., 1.0)
-        call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
-        &'max shift per iteration in pixels{5}', .false., 5.0)
-        call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
-        call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
-        call set_param(lp,            'lp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
-        call set_param(lp_pick,       'lp_pick',       'num',    'Low-pass limit for picking', 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
-        call set_param(lp_backgr,     'lp_backgr',     'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
-        call set_param(mskdiam,       'mskdiam',       'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
-        call set_param(nboxes_max,    'nboxes_max',    'num',    'Max # boxes per micrograph', 'Max # boxes per micrograph', 'Max # boxes', .false., 500.)
-        call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
-        &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
-        call set_param(ncls_start,    'ncls_start',    'num',    'Number of 2D clusters per subset of particles', 'Number of class averages used in the independent 2D analysis of each subset of particles', '# 2D clusters / subset', .true., 50.)
-        call set_param(nparts,        'nparts',        'num',    'Number of computing nodes', 'Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed &
-        &system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
-        call set_param(nparts_chunk,  'nparts_chunk',  'num',    'Number of computing nodes per subset', 'Number of computing nodes allocated to 2D analysis of each particles subset (chunk){1}', '# of nodes per subset{1}', .false., 1.0)
-        call set_param(nparts_pool,   'nparts_pool',   'num',    'Number of computing nodes for the pooled subsets', 'Number of computing nodes allocated to 2D analysis of the pooled particles subsets', '# of nodes for the pooled subsets', .false., 2.0)
-        call set_param(nthr,          'nthr',          'num',    'Number of threads per computing node, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
-        &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
-        call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
-        &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
-        call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
-        'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
-        call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
-        call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
-        call set_param(pgrp_start,    'pgrp_start',    'str',    'Initital point-group symmetry', 'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
-        call set_param(prune,         'prune',         'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
-        call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
-        &used', '# projections', .false., 2500.)
-        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc|prob){euclid}', '(euclid|cc|prob){euclid}', .false., 'euclid')
-        call set_param(reject_cls,    'reject_cls',    'binary', 'Whether to reject class averages', 'Whether to automatically reject 2D clusters and associated particles(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
-        call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
-        &'low-pass FSC criterion(0.143-0.5){0.143}', .false., 0.143)
-        call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
-        call set_param(total_dose,    'total_dose',    'num',    'Total exposure dose (e/Ang^2)', 'Total exposure dose (e/Ang^2)', 'in e/Ang^2', .false., 50.)
+        call set_param(algorithm,      'algorithm',       'multi',  'Algorithm for motion correction','Algorithm for motion correction(iso|patch|patch_refine){patch}','(iso|patch|patch_refine){patch}', .false.,'patch')
+        call set_param(angerr,         'angerr',          'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error in degrees', .false., 0.)
+        call set_param(astigthreshold, 'astigthreshold',  'num',    'Astigmatism rejection threshold', 'Micrographs with astigmatism (%) above the threshold will be ignored from further processing{10.0}', 'Astigmatism threshold{10.0}', .false., 10.0)
+        call set_param(astigtol,       'astigtol',        'num',    'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns{0.05}',  .false., 0.05)
+        call set_param(automsk,        'automsk',         'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|tight|no){no}', '(yes|tight|no){no}', .false., 'no')
+        call set_param(autosample,     'autosample',      'binary', 'Automated particles sampling scheme', 'Use automated sampling scheme to select particles subsets(yes|no){no}' , '(yes|no){no}', .false., 'no')
+        call set_param(backgr_subtr,   'backgr_subtr',    'binary', 'Perform micrograph background subtraction(new picker only)', 'Perform micrograph background subtraction before picking/extraction(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(bfac,           'bfac',            'num',    'B-factor for sharpening','B-factor for sharpening in Angstroms^2', 'B-factor in Angstroms^2', .false., 200.)
+        call set_param(box,            'box',             'num',    'Particle box size', 'Particle box size(in pixels)', '# pixels of box', .true., 0.)
+        call set_param(box_extract,    'box_extract',     'num',    'Extracted particle image size', 'Extracted particle image size(in pixels)', 'Extracted particle image size', .false., 0.)
+        call set_param(cc_iters,       'cc_iters',        'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
+        call set_param(center_pdb,     'center_pdb',      'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(clip,           'clip',            'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
+        call set_param(cls_init,       'cls_init',        'multi',  'Scheme for initial class generation', 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
+        call set_param(clustermode,    'clustermode',     'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint|intint){ar}', '(ar|dist|ang|maxint|intint){ar}', .true., 'ar')
+        call set_param(cn,             'cn',              'num',    'Fixed std coordination number', 'Minimum std cn to consider for dipole calc ', '8',  .false., 8.)
+        call set_param(cn_max,         'cn_max',          'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
+        call set_param(cn_min,         'cn_min',          'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '4',  .false., 4.)
+        call set_param(combine_eo,     'combine_eo',      'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(cs,             'cs',              'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
+        call set_param(ctf,            'ctf',             'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}', '(yes|no|flip){no}', .true., 'no')
+        call set_param(ctf_yes,        'ctf',             'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', '(yes|no|flip){yes}', .false., 'yes')
+        call set_param(ctfpatch,       'ctfpatch',        'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(ctfresthreshold,'ctfresthreshold', 'num',    'CTF Resolution rejection threshold', 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{50}', 'CTF resolution threshold(in Angstroms){50}', .false., 50.0)
+        call set_param(deftab,         'deftab',          'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values', '.simple|.txt parameter file', .false., 'deftab'//trim(METADATA_EXT))
+        call set_param(dferr,          'dferr',           'num',    'Underfocus error half-width',  'Uniform underfoucs error half-width(in microns)',  'defocus error in microns', .false., 1.)
+        call set_param(dfmax,          'dfmax',           'num',    'Expected maximum defocus', 'Expected maximum defocus in microns{5.0}', 'in microns{5.0}', .false., DFMAX_DEFAULT)
+        call set_param(dfmin,          'dfmin',           'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.2}', 'in microns{0.2}', .false., DFMIN_DEFAULT)
+        call set_param(dir_movies,     'dir_movies',      'dir',    'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .true., 'preprocess/')
+        call set_param(e1,             'e1',              'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
+        call set_param(e2,             'e2',              'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
+        call set_param(e3,             'e3',              'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
+        call set_param(eer_fraction,   'eer_fraction',    'num',    '# of EER frames to fraction together', 'Number of raw EER frames in a movie fraction', '# EER frames{20}', .false., 20.)
+        call set_param(element,        'element',         'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '  ')
+        call set_param(envfsc,         'envfsc',          'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
+        call set_param(eo,             'eo',              'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(flipgain,       'flipgain',        'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
+        call set_param(focusmskdiam,   'focusmskdiam',    'num',    'Mask diameter in focused refinement', 'Mask diameter in A for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask diameter in A', .false., 0.)
+        call set_param(frac,           'frac',            'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)', 'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
+        call set_param(fraca,          'fraca',           'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
         call set_param(fraction_dose_target,'fraction_dose_target','num','EER fraction dose target (e/Ang^2)', 'EER fraction dose target, used to determine how many EER frames are included in each movie fraction(e/Ang^2)', 'in e/Ang^2', .false., 1.)
-        call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
-        call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)
-        call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.2}', 'in microns{0.2}', .false., DFMIN_DEFAULT)
-        call set_param(dfmax,         'dfmax',         'num',    'Expected maximum defocus', 'Expected maximum defocus in microns{5.0}', 'in microns{5.0}', .false., DFMAX_DEFAULT)
-        call set_param(astigtol,      'astigtol',      'num',    'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns{0.05}',  .false., 0.05)
-        call set_param(mirr,          'mirr',          'multi',  'Perform mirroring', 'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false., 'no')
-        call set_param(bfac,          'bfac',          'num',    'B-factor for sharpening','B-factor for sharpening in Angstroms^2', 'B-factor in Angstroms^2', .false., 200.)
-        call set_param(outvol,        'outvol',        'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
-        call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(frcs,           'frcs',            'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
+        call set_param(gainref,        'gainref',         'file',   'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call set_param(graphene_filt,  'graphene_filt',   'binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
+        call set_param(hp,             'hp',              'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
+        call set_param(icefracthreshold,'icefracthreshold','num',   'Ice Fraction rejection threshold', 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}', 'Ice fraction threshold{1.0}', .false., 1.0)
+        call set_param(icm,            'icm',             'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per computing node', 'Memory in MB per part/computing node in distributed execution{16000}', 'MB per part{16000}', .false., 16000.)
-        call set_param(qsys_name,     'qsys_name',     'multi',  'Queue system kind', 'Queue system kind(local|slurm|pbs|lsf)', '(local|slurm|pbs|lsf)', .false., 'local')
-        call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS/LSF partition', 'Name of target partition of distributed computer system (SLURM/PBS/LSF)', 'give partition name', .false., '')
-        call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS/LSF)', 'give priority', .false., '')
-        call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS/LSF)', 'give your part', .false., '')
-        call set_param(box,            'box',          'num',    'Particle box size', 'Particle box size(in pixels)', '# pixels of box', .true., 0.)
-        call set_param(box_extract,    'box_extract',  'num',    'Extracted particle image size', 'Extracted particle image size(in pixels)', 'Extracted particle image size', .false., 0.)
-        call set_param(nchunks,        'nchunks',      'num',    'Number of subsets to classify simultaneously', 'Maximum number of particles subsets (chunks) to classify simultaneously', '# of subsets', .true., 2.)
-        call set_param(nchunksperset,  'nchunksperset','num',    'Number of subsets to group', 'Number of particles subsets (chunks) to group into a independent set', '# of subsets per set', .false., 1.)
-        call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
-        call set_param(nptcls_per_cls, 'nptcls_per_cls','num',   'Number of particles per cluster', 'Initial number of particles per cluster{35}', '# initial particles per cluster{35}', .false., 500.)
-        call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
-        call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
-        call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
-        call set_param(clustermode,    'clustermode',  'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint|intint){ar}', '(ar|dist|ang|maxint|intint){ar}', .true., 'ar')
-        call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
-        call set_param(angerr,         'angerr',       'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error in degrees', .false., 0.)
-        call set_param(dferr,          'dferr',        'num',    'Underfocus error half-width',  'Uniform underfoucs error half-width(in microns)',  'defocus error in microns', .false., 1.)
-        call set_param(oritype,        'oritype',      'multi',  'Oritype segment in project',  'Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}',&
-        &'(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}', .false., 'ptcl3D')
-        call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
-        call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
-        call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
-        call set_param(eer_fraction,   'eer_fraction', 'num',    '# of EER frames to fraction together', 'Number of raw EER frames in a movie fraction', '# EER frames{20}', .false., 20.)
-        call set_param(gainref,        'gainref',      'file',   'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
-        call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(mcpatch_thres,'mcpatch_thres','binary','Use motion correction patch threshold', 'Whether to use the threshold for motion correction patch solution(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
-        call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{5}', .false., 5.)
-        call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
-        call set_param(numlen,         'numlen',       'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
-        call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
-        call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
-        &'e.g. to create ./myproject/myproject.simple', .true., '')
-        call set_param(user_email,     'user_email',   'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
-        call set_param(time_per_image, 'time_per_image','num',   'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
-        call set_param(walltime,       'walltime',     'num',    'Walltime', 'Maximum execution time for job scheduling and management(23h59mins){86340}', 'in seconds(23h59mins){86340}', .false., 86340.)
-        call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS/LSF', 'User account name in SLURM/PBS/LSF system', 'e.g. Account084', .false., '')
-        call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS/LSF', 'User project name in SLURM/PBS/LSF system', 'e.g. Project001', .false., '')
-        call set_param(frcs,           'frcs',         'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
-        call set_param(focusmskdiam,   'focusmskdiam', 'num',    'Mask diameter in focused refinement', 'Mask diameter in A for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask diameter in A', .false., 0.)
-        call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
-        call set_param(star_datadir,   'star_datadir', 'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
-        call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'STAR-formatted filename', 'e.g. proj.star', .false., '')
-        call set_param(star_mic,       'star_mic',     'file',   'Micrographs STAR file name', 'Micrographs STAR-formatted filename', 'e.g. micrographs.star', .true., '')
-        call set_param(star_model,     'star_model',   'file',   'Model STAR file name', 'Model STAR-formatted filename', 'e.g. model.star', .true., '')
-        call set_param(star_ptcl,      'star_ptcl',    'file',   'Particles STAR file name', 'Particles STAR-formatted filename', 'e.g. particles.star', .true., '')
-        call set_param(startype,       'startype',     'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
-        call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
-        call set_param(graphene_filt,  'graphene_filt','binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
-        call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
-        call set_param(element,        'element',      'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '  ')
-        call set_param(tseries,        'tseries',      'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {300.}', '{300.}', .true., 300.)
-        call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {50.} ', '{50.}',  .true., 50.)
-        call set_param(cn,             'cn',           'num',    'Fixed std coordination number', 'Minimum std cn to consider for dipole calc ', '8',  .false., 8.)
-        call set_param(cn_min,         'cn_min',       'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '4',  .false., 4.)
-        call set_param(cn_max,         'cn_max',       'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
-        call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
-        call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
-        call set_param(moldiam_max,    'moldiam_max',  'num',    'Max molecular diameter', 'Max molecular diameter(in Angstroms)','In Angstroms',.false., 300.)
-        call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
-        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(iso|patch|patch_refine){patch}','(iso|patch|patch_refine){patch}', .false.,'patch')
-        call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
-        call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|tight|no){no}', '(yes|tight|no){no}', .false., 'no')
-        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
-        call set_param(max_dose,       'max_dose',     'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
-        call set_param(script,         'script',       'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(lpstart_nonuni, 'lpstart_nonuni','num',   'Low resolution limit, nonuniform filter', 'Low-pass limit in discrete nonuniform filter search{30 A}', 'input low-pass limit{30 A}', .false., 30.)
-        call set_param(nsearch,        'nsearch',      'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
-        call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
-        call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
-        call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(ml_reg_chunk,   'ml_reg_chunk', 'binary', 'Subset ML regularization', 'Subset Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(ml_reg_pool,    'ml_reg_pool',  'binary', 'Pool ML regularization', 'Pool Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
-        call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D analysis ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
-        call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new|seg){new}', '(old|new|seg){new}', .false., 'new')
-        call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(cls_init,       'cls_init',     'multi',  'Scheme for initial class generation', 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
-        call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
-        call set_param(kweight_chunk,  'kweight_chunk','multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
-        call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
-        call set_param(cc_iters,       'cc_iters',     'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
-        call set_param(backgr_subtr,   'backgr_subtr', 'binary', 'Perform micrograph background subtraction(new picker only)', 'Perform micrograph background subtraction before picking/extraction(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(nran,           'nran',         'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
-        call set_param(nsample,        'nsample',      'num',    'Number of particles to sample', 'Number of particles to sample each iteration', '# particles to sample', .false., 0.)
-        call set_param(nstates,        'nstates',      'num',    'Number of states', 'Number of conformational/compositional states to reconstruct', '# states to reconstruct', .false., 1.0)
-        call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
+        call set_param(kv,             'kv',              'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
+        call set_param(kweight,        'kweight',         'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(kweight_chunk,  'kweight_chunk',   'multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(kweight_pool,   'kweight_pool',    'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(lp,             'lp',              'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
+        call set_param(lp_backgr,      'lp_backgr',       'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
+        call set_param(lp_pick,        'lp_pick',         'num',    'Low-pass limit for picking', 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call set_param(lplim_crit,     'lplim_crit',      'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}', 'low-pass FSC criterion(0.143-0.5){0.143}', .false., 0.143)
+        call set_param(lpstart_nonuni, 'lpstart_nonuni',  'num',    'Low resolution limit, nonuniform filter', 'Low-pass limit in discrete nonuniform filter search{30 A}', 'input low-pass limit{30 A}', .false., 30.)
+        call set_param(lpthres,        'lpthres',         'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
+        call set_param(max_dose,       'max_dose',        'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
+        call set_param(max_rad,        'max_rad',         'num',    'Maximum radius in A', 'Maximum radius in A {300.}', '{300.}', .true., 300.)
+        call set_param(maxits,         'maxits',          'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
+        call set_param(maxnchunks,     'maxnchunks',      'num',    'Number of subsets after which 2D analysis ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
+        call set_param(mcconvention,   'mcconvention',    'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
+        call set_param(mcpatch,        'mcpatch',         'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(mcpatch_thres,  'mcpatch_thres',   'binary', 'Use motion correction patch threshold', 'Whether to use the threshold for motion correction patch solution(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(min_rad,        'min_rad',         'num',    'Minimum radius in A', 'Minimum radius in A {50.} ', '{50.}',  .true., 50.)
+        call set_param(mirr,           'mirr',            'multi',  'Perform mirroring', 'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false., 'no')
+        call set_param(ml_reg,         'ml_reg',          'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(ml_reg_chunk,   'ml_reg_chunk',    'binary', 'Subset ML regularization', 'Subset Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(ml_reg_pool,    'ml_reg_pool',     'binary', 'Pool ML regularization', 'Pool Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(moldiam,        'moldiam',         'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
+        call set_param(moldiam_max,    'moldiam_max',     'num',    'Max molecular diameter', 'Max molecular diameter(in Angstroms)','In Angstroms',.false., 300.)
+        call set_param(mskdiam,        'mskdiam',         'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
+        call set_param(mskfile,        'mskfile',         'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
+        call set_param(mul,            'mul',             'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
+        call set_param(nboxes_max,     'nboxes_max',      'num',    'Max # boxes per micrograph', 'Max # boxes per micrograph', 'Max # boxes', .false., 500.)
+        call set_param(nchunks,        'nchunks',         'num',    'Number of subsets to classify simultaneously', 'Maximum number of particles subsets (chunks) to classify simultaneously', '# of subsets', .true., 2.)
+        call set_param(nchunksperset,  'nchunksperset',   'num',    'Number of subsets to group', 'Number of particles subsets (chunks) to group into a independent set', '# of subsets per set', .false., 1.)
+        call set_param(ncls,           'ncls',            'num',    'Number of 2D clusters', 'Number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
+        call set_param(ncls_start,     'ncls_start',      'num',    'Number of 2D clusters per subset of particles', 'Number of class averages used in the independent 2D analysis of each subset of particles', '# 2D clusters / subset', .true., 50.)
+        call set_param(neg,            'neg',             'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(nonuniform,     'nonuniform',      'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(nparts,         'nparts',          'num',    'Number of computing nodes', 'Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
+        call set_param(nparts_chunk,   'nparts_chunk',    'num',    'Number of computing nodes per subset', 'Number of computing nodes allocated to 2D analysis of each particles subset (chunk){1}', '# of nodes per subset{1}', .false., 1.0)
+        call set_param(nparts_pool,    'nparts_pool',     'num',    'Number of computing nodes for the pooled subsets', 'Number of computing nodes allocated to 2D analysis of the pooled particles subsets', '# of nodes for the pooled subsets', .false., 2.0)
+        call set_param(nptcls,         'nptcls',          'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
+        call set_param(nptcls_per_cls, 'nptcls_per_cls',  'num',    'Number of particles per cluster', 'Initial number of particles per cluster{35}', '# initial particles per cluster{35}', .false., 500.)
+        call set_param(nran,           'nran',            'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
+        call set_param(nrestarts,      'nrestarts',       'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
+        call set_param(nsample,        'nsample',         'num',    'Number of particles to sample', 'Number of particles to sample each iteration', '# particles to sample', .false., 0.)
+        call set_param(nsearch,        'nsearch',         'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
+        call set_param(nsig,           'nsig',            'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
+        call set_param(nspace,         'nspace',          'num',    'Number of projection directions', 'Number of projection directions used', '# projections', .false., 2500.)
+        call set_param(nstates,        'nstates',         'num',    'Number of states', 'Number of conformational/compositional states to reconstruct', '# states to reconstruct', .false., 1.0)
+        call set_param(nthr,           'nthr',            'num',    'Number of threads per computing node, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
+        call set_param(numlen,         'numlen',          'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
+        call set_param(nxpatch,        'nxpatch',         'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{5}', .false., 5.)
+        call set_param(nypatch,        'nypatch',         'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
+        call set_param(objfun,         'objfun',          'multi',  'Objective function', 'Objective function(euclid|cc|prob){euclid}', '(euclid|cc|prob){euclid}', .false., 'euclid')
+        call set_param(oritab,         'oritab',          'file',   'Orientation and CTF parameter file', 'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', '.simple|.txt parameter file', .false., 'oritab'//trim(METADATA_EXT))
+        call set_param(oritab2,        'oritab2',         'file',   '2nd orientation and CTF parameter file', '2nd orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', '.simple|.txt parameter file', .false., 'oritab2'//trim(METADATA_EXT))
+        call set_param(oritype,        'oritype',         'multi',  'Oritype segment in project',  'Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}', '(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}', .false., 'ptcl3D')
+        call set_param(outfile,        'outfile',         'file',   'Output orientation and CTF parameter file', 'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', '.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
+        call set_param(outside,        'outside',         'binary', 'Extract outside stage boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(outstk,         'outstk',          'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
+        call set_param(outvol,         'outvol',          'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
         call set_param(particle_density,'particle_density','multi', 'Particle density in micrographs', 'Particle density in micrographs(low|optimal|high){optimal}', '(low|optimal|high){optimal}', .false., 'optimal')
-        call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(flipgain,       'flipgain',     'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
-        call set_param(center_pdb,     'center_pdb',   'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(outside,        'outside',      'binary', 'Extract outside stage boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(vol_dim,        'vol_dim',      'num',    'Simulated volume dimensions', 'Dimensions of the simulated volume in voxels', '# dimensions of the simulated volume', .false., 0.)
-        call set_param(autosample,     'autosample',   'binary', 'Automated particles sampling scheme', 'Use automated sampling scheme to select particles subsets(yes|no){no}' , '(yes|no){no}', .false., 'no')
+        call set_param(pcontrast,      'pcontrast',       'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call set_param(pdbout,         'pdbout',          'file',   'Output PDB volume-centered molecule', 'Output coordinates file in PDB format for the volume-centered molecule', 'e.g. output.pdb', .false., 'pdbout.pdb')
+        call set_param(pgrp,           'pgrp',            'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
+        call set_param(pgrp_start,     'pgrp_start',      'str',    'Initital point-group symmetry', 'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
+        call set_param(phaseplate,     'phaseplate',      'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(pick_roi,       'pick_roi',        'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(picker,         'picker',          'multi',  'Which picker to use', 'Which picker to use(old|new|seg){new}', '(old|new|seg){new}', .false., 'new')
+        call set_param(pickrefs,       'pickrefs',        'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
+        call set_param(projfile,       'projfile',        'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., '')
+        call set_param(projfile_target,'projfile_target', 'file',   'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., '')
+        call set_param(projname,       'projname',        'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for', 'e.g. to create ./myproject/myproject.simple', .true., '')
+        call set_param(prune,          'prune',           'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
+        call set_param(pspecsz,        'pspecsz',         'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)
+        call set_param(qsys_name,      'qsys_name',       'multi',  'Queue system kind', 'Queue system kind(local|slurm|pbs|lsf)', '(local|slurm|pbs|lsf)', .false., 'local')
+        call set_param(qsys_partition, 'qsys_partition',  'str',    'Name of SLURM/PBS/LSF partition', 'Name of target partition of distributed computer system (SLURM/PBS/LSF)', 'give partition name', .false., '')
+        call set_param(qsys_qos,       'qsys_qos',        'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS/LSF)', 'give priority', .false., '')
+        call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS/LSF)', 'give your part', .false., '')
+        call set_param(reject_cls,     'reject_cls',      'binary', 'Whether to reject class averages', 'Whether to automatically reject 2D clusters and associated particles(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(remap_cls,      'remap_cls',       'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(remove_chunks,  'remove_chunks',   'binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(script,         'script',          'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(sherr,          'sherr',           'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
+        call set_param(sigma_est,      'sigma_est',       'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
+        call set_param(smooth_ext,     'smooth_ext',      'num',    'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
+        call set_param(smpd,           'smpd',            'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(smpd_downscale, 'smpd_downscale',  'num',    'Sampling distance after downscale', 'Distance between neighbouring pixels in Angstroms after downscale', 'pixel size in Angstroms{1.3}', .false., 1.3)
+        call set_param(smpd_target,    'smpd_target',     'num',    'Target sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(star_datadir,   'star_datadir',    'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
+        call set_param(star_mic,       'star_mic',        'file',   'Micrographs STAR file name', 'Micrographs STAR-formatted filename', 'e.g. micrographs.star', .true., '')
+        call set_param(star_model,     'star_model',      'file',   'Model STAR file name', 'Model STAR-formatted filename', 'e.g. model.star', .true., '')
+        call set_param(star_ptcl,      'star_ptcl',       'file',   'Particles STAR file name', 'Particles STAR-formatted filename', 'e.g. particles.star', .true., '')
+        call set_param(starfile,       'starfile',        'file',   'STAR-format file name', 'STAR-formatted filename', 'e.g. proj.star', .false., '')
+        call set_param(startit,        'startit',         'num',    'First iteration', 'Index of first iteration when starting from a previous run', 'start iterations from here', .false., 1.0)
+        call set_param(startype,       'startype',        'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
+        call set_param(stepsz,         'stepsz',          'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
+        call set_param(stk,            'stk',             'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., '')
+        call set_param(stk2,           'stk2',            'file',   'Second Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk2.mrc')
+        call set_param(stktab,         'stktab',          'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
+        call set_param(time_per_image, 'time_per_image',  'num',    'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
+        call set_param(total_dose,     'total_dose',      'num',    'Total exposure dose (e/Ang^2)', 'Total exposure dose (e/Ang^2)', 'in e/Ang^2', .false., 50.)
+        call set_param(trs,            'trs',             'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts', 'max shift per iteration in pixels{5}', .false., 5.0)
+        call set_param(tseries,        'tseries',         'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(update_frac,    'update_frac',     'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
+        call set_param(user_account,   'user_account',    'str',    'User account name in SLURM/PBS/LSF', 'User account name in SLURM/PBS/LSF system', 'e.g. Account084', .false., '')
+        call set_param(user_email,     'user_email',      'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
+        call set_param(user_project,   'user_project',    'str',    'User project name in SLURM/PBS/LSF', 'User project name in SLURM/PBS/LSF system', 'e.g. Project001', .false., '')
+        call set_param(vol_dim,        'vol_dim',         'num',    'Simulated volume dimensions', 'Dimensions of the simulated volume in voxels', '# dimensions of the simulated volume', .false., 0.)
+        call set_param(walltime,       'walltime',        'num',    'Walltime', 'Maximum execution time for job scheduling and management(23h59mins){86340}', 'in seconds(23h59mins){86340}', .false., 86340.)
+        call set_param(wcrit,          'wcrit',           'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
+        call set_param(width,          'width',           'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
+        call set_param(wiener,         'wiener',          'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -3721,6 +3558,30 @@ contains
         call merge_projects%set_input('comp_ctrls', 1, nparts, gui_submenu="compute")
         call merge_projects%set_input('comp_ctrls', 2, nthr,   gui_submenu="compute")
     end subroutine new_merge_projects
+
+     subroutine new_mini_stream
+        ! PROGRAM SPECIFICATION
+        call mini_stream%new(&
+        &'mini_stream', &                                                ! name
+        &'Do a mini stream to create the opening 2D',&                   ! descr_short
+        &'is a program to do a mini stream to create the opening 2D',&   ! descr long
+        &'simple_stream',&                                               ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call mini_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_mini_stream
 
     subroutine new_mkdir_
         ! PROGRAM SPECIFICATION
