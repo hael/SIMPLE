@@ -12,7 +12,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options["simple_path"] is None:
             raise CommandError("simple_path missing from arguments")
-        localtemplate = f"""#!/usr/bin/bash
+        localtemplate = f"""#!/usr/bin/env bash
 # localtemplate
 export SIMPLE_PATH={options["simple_path"]}
 export SIMPLE_EMAIL=''

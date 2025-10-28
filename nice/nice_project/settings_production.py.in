@@ -72,9 +72,11 @@ WSGI_APPLICATION = 'nice_project.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 # replace sqlite with pysqlite
-__import__('pysqlite3')
-import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import platform
+if platform.system() is 'Linux':
+	__import__('pysqlite3')
+	import sys
+	sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 DATABASES = {
     'default': {
