@@ -1,5 +1,5 @@
 ! concrete commander: 3D reconstruction routines
-module simple_commander_rec
+module simple_commanders_rec
 include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
@@ -11,27 +11,27 @@ use simple_qsys_funs
 use simple_strategy2D3D_common
 implicit none
 
-public :: reconstruct3D_commander_distr
-public :: reconstruct3D_commander
-public :: volassemble_commander
+public :: commander_reconstruct3D_distr
+public :: commander_reconstruct3D
+public :: commander_volassemble
 public :: random_rec_commander_distr
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: reconstruct3D_commander_distr
+type, extends(commander_base) :: commander_reconstruct3D_distr
   contains
     procedure :: execute      => exec_reconstruct3D_distr
-end type reconstruct3D_commander_distr
+end type commander_reconstruct3D_distr
 
-type, extends(commander_base) :: reconstruct3D_commander
+type, extends(commander_base) :: commander_reconstruct3D
   contains
     procedure :: execute      => exec_reconstruct3D
-end type reconstruct3D_commander
+end type commander_reconstruct3D
 
-type, extends(commander_base) :: volassemble_commander
+type, extends(commander_base) :: commander_volassemble
   contains
     procedure :: execute      => exec_volassemble
-end type volassemble_commander
+end type commander_volassemble
 
 type, extends(commander_base) :: random_rec_commander_distr
   contains
@@ -41,10 +41,10 @@ end type random_rec_commander_distr
 contains
 
     subroutine exec_reconstruct3D_distr( self, cline )
-        class(reconstruct3D_commander_distr), intent(inout) :: self
+        class(commander_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(reconstruct3D_commander) :: xrec3D_shmem
-        type(volassemble_commander)   :: xvolassemble
+        type(commander_reconstruct3D) :: xrec3D_shmem
+        type(commander_volassemble)   :: xvolassemble
         character(len=STDLEN)         :: str_state, fsc_file
         type(parameters) :: params
         type(builder)    :: build
@@ -131,7 +131,7 @@ contains
 
     subroutine exec_reconstruct3D( self, cline )
         use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
-        class(reconstruct3D_commander), intent(inout) :: self
+        class(commander_reconstruct3D), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)                :: params
         type(builder)                   :: build
@@ -180,7 +180,7 @@ contains
         endif
         ! cleanup
         call eucl_sigma%kill
-        call qsys_job_finished('simple_commander_rec :: exec_reconstruct3D')
+        call qsys_job_finished('simple_commanders_rec :: exec_reconstruct3D')
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D
@@ -188,7 +188,7 @@ contains
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_image,            only: image
-        class(volassemble_commander), intent(inout) :: self
+        class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
@@ -376,7 +376,7 @@ contains
     subroutine exec_random_rec( self, cline )
         class(random_rec_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(reconstruct3D_commander_distr) :: xrec3D_distr
+        type(commander_reconstruct3D_distr) :: xrec3D_distr
         type(parameters) :: params
         type(builder)    :: build
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -391,4 +391,4 @@ contains
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_random_rec
 
-end module simple_commander_rec
+end module simple_commanders_rec

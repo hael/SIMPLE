@@ -2,13 +2,13 @@ program simple_test_stream
 include 'simple_lib.f08'
 use simple_cmdline,              only: cmdline
 use simple_parameters,           only: parameters
-use simple_commander_project,    only: new_project_commander
+use simple_commanders_project,    only: commander_new_project
 use simple_qsys_env,             only: qsys_env
 implicit none
 integer, parameter :: NMOLDIAMS = 5
 type(parameters)            :: params
 type(cmdline)               :: cline
-type(new_project_commander) :: xnew_project
+type(commander_new_project) :: xnew_project
 type(cmdline)               :: cline_new_project, cline_preproc
 type(cmdline)               :: cline_estimate_moldiam, cline_gaupick
 type(qsys_env)              :: qenv

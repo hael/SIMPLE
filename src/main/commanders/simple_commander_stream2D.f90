@@ -1,5 +1,5 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
-module simple_commander_stream2D
+module simple_commanders_stream2D
 include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_commander_base,     only: commander_base
@@ -13,38 +13,26 @@ use simple_particle_extractor, only: ptcl_extractor
 use simple_stream_utils
 use simple_qsys_funs
 use simple_qsys_env
-use simple_commander_cluster2D_stream
+use simple_commanders_cluster2D_stream
 use simple_moviewatcher
 use simple_stream_communicator
 use simple_progress
 use simple_imgproc
 use simple_nice
 use simple_micproc
-use simple_segmentation    
-use simple_picksegdiam
-use simple_commander_project
-use simple_commander_abinitio2D
+use simple_segmentation
+use simple_commanders_project
+use simple_commanders_abinitio2D
 use simple_stack_io
 use simple_strategy2D_utils
-use simple_commander_imgproc
-use simple_commander_preprocess
-use simple_mini_stream_utils
+use simple_commanders_imgproc
+use simple_commanders_preprocess
 implicit none
 
 private
 #include "simple_local_flags.inc"
 
-public :: commander_mini_stream, commander_validate_refpick, commander_stream_sieve_cavgs, commander_stream_abinitio2D
-
-type, extends(commander_base) :: commander_mini_stream
-  contains
-    procedure :: execute      => exec_mini_stream
-end type commander_mini_stream
-
-type, extends(commander_base) :: commander_validate_refpick
-  contains
-    procedure :: execute      => exec_validate_refpick
-end type commander_validate_refpick
+public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D
 
 type, extends(commander_base) :: commander_stream_sieve_cavgs
   contains
@@ -67,219 +55,6 @@ integer,               parameter :: PAUSE_NITERS         = 5     ! # of iteratio
 integer,               parameter :: PAUSE_TIMELIMIT      = 600   ! time (secs) after which 2D analysis is paused
 
 contains
-
-    subroutine exec_mini_stream( self, cline )
-        class(commander_mini_stream), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        character(len=*),          parameter   :: PROJ_MINI_STREAM     = 'proj_mini_stream'
-        character(len=*),          parameter   :: PROJFILE_MINI_STREAM = 'proj_mini_stream.simple'
-        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100
-        real,                      parameter   :: LPSTOP = 8.
-        character(len=LONGSTRLEN), allocatable :: micnames(:)
-        character(len=:),          allocatable :: output_dir
-        type(parameters)                   :: params
-        type(sp_project)                   :: spproj
-        type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
-        type(cmdline)                      :: cline_make_pickrefs, cline_extract, cline_abinitio2D, cline_shape_rank
-        type(new_project_commander)        :: xnew_project
-        type(make_pickrefs_commander)      :: xmake_pickrefs
-        type(import_movies_commander)      :: ximport_movies
-        type(ctf_estimate_commander_distr) :: xctf_estimate
-        type(extract_commander_distr)      :: xextract
-        type(abinitio2D_commander)         :: xabinitio2D
-        type(shape_rank_cavgs_commander)   :: xshape_rank
-        integer :: ncls, nmics, nptcls 
-        real    :: mskdiam_estimate
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
-        if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
-        if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
-        if( .not. cline%defined('fraca')            ) call cline%set('fraca',            0.1)
-        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512)
-        if( .not. cline%defined('hp')               ) call cline%set('hp',               30.)
-        if( .not. cline%defined('lp')               ) call cline%set('lp',                5.)
-        if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',  DFMIN_DEFAULT)
-        if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',  DFMAX_DEFAULT)
-        if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'no')
-        if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',   200)
-        if( .not. cline%defined('pick_roi')         ) call cline%set('pick_roi',       'yes')
-        call params%new(cline)
-        call read_filetable(params%filetab, micnames)
-        nmics = size(micnames)
-        ! output directory
-        output_dir = PATH_HERE
-        ! project creation
-        call cline_new_proj%set('dir',                         PATH_HERE)
-        call cline_new_proj%set('projname',             PROJ_MINI_STREAM)
-        call xnew_project%execute_safe(cline_new_proj)
-        ! movie import
-        call cline_import_movies%set('prg',           'import_movies')
-        call cline_import_movies%set('mkdir',                    'no')
-        call cline_import_movies%set('cs',                  params%cs)
-        call cline_import_movies%set('fraca',            params%fraca)
-        call cline_import_movies%set('kv',                  params%kv)
-        call cline_import_movies%set('smpd',              params%smpd)
-        call cline_import_movies%set('filetab',        params%filetab)
-        call cline_import_movies%set('ctf',                     'yes')
-        call cline_import_movies%set('projfile', PROJFILE_MINI_STREAM)
-        call ximport_movies%execute_safe(cline_import_movies)
-        ! CTF estimation
-        call cline_ctf_estimate%set('prg',             'ctf_estimate')
-        call cline_ctf_estimate%set('mkdir',                     'no')
-        call cline_ctf_estimate%set('ctfpatch',       params%ctfpatch)
-        call cline_ctf_estimate%set('dfmax',             params%dfmax)
-        call cline_ctf_estimate%set('dfmin',             params%dfmin)
-        call cline_ctf_estimate%set('hp',                   params%hp)
-        call cline_ctf_estimate%set('lp',                   params%lp)
-        call cline_ctf_estimate%set('nparts',                       1)
-        call cline_ctf_estimate%set('nthr',               params%nthr)
-        call cline_ctf_estimate%set('projfile',  PROJFILE_MINI_STREAM)
-        call xctf_estimate%execute_safe(cline_ctf_estimate)
-        ! this is the actual test
-        call spproj%read(PROJFILE_MINI_STREAM)
-        call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, mskdiam_estimate)
-        ! segdiampick_mics updates the project file on disk
-        ! extract
-        call cline_extract%set('prg',                      'extract')
-        call cline_extract%set('mkdir',                         'no')
-        call cline_extract%set('nparts',                           1)
-        call cline_extract%set('nthr',                   params%nthr)
-        call cline_extract%set('projfile',      PROJFILE_MINI_STREAM)
-        call xextract%execute_safe(cline_extract)
-        ! 2D analysis
-        call spproj%read(PROJFILE_MINI_STREAM)
-        nptcls = spproj%os_ptcl2D%get_noris()
-        ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
-        call cline_abinitio2D%set('prg',                'abinitio2D')
-        call cline_abinitio2D%set('mkdir',                      'no')
-        call cline_abinitio2D%set('ncls',                       ncls)
-        call cline_abinitio2D%set('sigma_est',              'global')
-        call cline_abinitio2D%set('center',                    'yes')
-        call cline_abinitio2D%set('autoscale',                 'yes')
-        call cline_abinitio2D%set('lpstop',                   LPSTOP)
-        call cline_abinitio2D%set('mskdiam',        mskdiam_estimate)
-        call cline_abinitio2D%set('nthr',                params%nthr)
-        call cline_abinitio2D%set('projfile',   PROJFILE_MINI_STREAM)
-        call xabinitio2D%execute_safe(cline_abinitio2D)
-        ! shape rank cavgs
-        call cline_shape_rank%set('nthr',                params%nthr)
-        call cline_shape_rank%set('projfile',   PROJFILE_MINI_STREAM)
-        call xshape_rank%execute_safe(cline_shape_rank)
-        ! destruct
-        call spproj%kill
-    end subroutine exec_mini_stream
-
-    subroutine exec_validate_refpick( self, cline )
-        class(commander_validate_refpick), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        character(len=*),          parameter   :: DIR_THUMBS             = 'thumbnails/'
-        character(len=*),          parameter   :: PROJ_MINI_STREAM    = 'proj_validate_refpick'
-        character(len=*),          parameter   :: PROJFILE_MINI_STREAM = 'proj_validate_refpick.simple'
-        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100
-        real,                      parameter   :: LPSTOP = 8.
-        character(len=LONGSTRLEN), allocatable :: micnames(:), fnames(:)
-        character(len=:),          allocatable :: output_dir
-        type(parameters)                   :: params
-        type(sp_project)                   :: spproj
-        type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
-        type(cmdline)                      :: cline_make_pickrefs, cline_pick_extract, cline_abinitio2D, cline_shape_rank
-        type(new_project_commander)        :: xnew_project
-        type(make_pickrefs_commander)      :: xmake_pickrefs
-        type(import_movies_commander)      :: ximport_movies
-        type(ctf_estimate_commander_distr) :: xctf_estimate
-        type(pick_extract_commander)       :: xpickextract
-        type(abinitio2D_commander)         :: xabinitio2D
-        type(shape_rank_cavgs_commander)   :: xshape_rank
-        integer :: ncls, nmics, nptcls 
-        real    :: mskdiam_estimate
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
-        if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
-        if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
-        if( .not. cline%defined('fraca')            ) call cline%set('fraca',            0.1)
-        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512)
-        if( .not. cline%defined('hp')               ) call cline%set('hp',               30.)
-        if( .not. cline%defined('lp')               ) call cline%set('lp',                5.)
-        if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',  DFMIN_DEFAULT)
-        if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',  DFMAX_DEFAULT)
-        if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'no')
-        if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',   200)
-        if( .not. cline%defined('pick_roi')         ) call cline%set('pick_roi',       'yes')
-        call params%new(cline)
-        call read_filetable(params%filetab, micnames)
-        nmics = size(micnames)
-        ! output directory
-        output_dir = PATH_HERE
-        ! project creation
-        call cline_new_proj%set('dir',                         PATH_HERE)
-        call cline_new_proj%set('projname',             PROJ_MINI_STREAM)
-        call xnew_project%execute_safe(cline_new_proj)
-        ! movie import
-        call cline_import_movies%set('prg',              'import_movies')
-        call cline_import_movies%set('mkdir',                       'no')
-        call cline_import_movies%set('cs',                     params%cs)
-        call cline_import_movies%set('fraca',               params%fraca)
-        call cline_import_movies%set('kv',                     params%kv)
-        call cline_import_movies%set('smpd',                 params%smpd)
-        call cline_import_movies%set('filetab',           params%filetab)
-        call cline_import_movies%set('ctf',                        'yes')
-        call cline_import_movies%set('projfile',  PROJFILE_MINI_STREAM)
-        call ximport_movies%execute_safe(cline_import_movies)
-        ! CTF estimation
-        call cline_ctf_estimate%set('prg',                'ctf_estimate')
-        call cline_ctf_estimate%set('mkdir',                        'no')
-        call cline_ctf_estimate%set('ctfpatch',          params%ctfpatch)
-        call cline_ctf_estimate%set('dfmax',                params%dfmax)
-        call cline_ctf_estimate%set('dfmin',                params%dfmin)
-        call cline_ctf_estimate%set('hp',                      params%hp)
-        call cline_ctf_estimate%set('lp',                      params%lp)
-        call cline_ctf_estimate%set('nparts',                          1)
-        call cline_ctf_estimate%set('nthr',                  params%nthr)
-        call cline_ctf_estimate%set('projfile',   PROJFILE_MINI_STREAM)
-        call xctf_estimate%execute_safe(cline_ctf_estimate)
-        ! make pickrefs
-        call cline_make_pickrefs%set('mkdir',                       'no')
-        call cline_make_pickrefs%set('pickrefs',         params%pickrefs)
-        call cline_make_pickrefs%set('smpd',                 params%smpd)
-        call cline_make_pickrefs%set('nthr',                 params%nthr)
-        call xmake_pickrefs%execute_safe(cline_make_pickrefs)
-        mskdiam_estimate = cline_make_pickrefs%get_rarg('mskdiam')
-        ! pick and extract
-        cline_pick_extract = cline
-        call cline_pick_extract%set('mkdir',                        'no')
-        call cline_pick_extract%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)               
-        call cline_pick_extract%set('stream',                      'yes')
-        call cline_pick_extract%set('extract',                     'yes')
-        call cline_pick_extract%set('dir',                    output_dir)
-        call cline_pick_extract%set('fromp',                           1)
-        call cline_pick_extract%set('top',                         nmics)
-        call cline_pick_extract%set('projfile',   PROJFILE_MINI_STREAM)
-        call xpickextract%execute_safe(cline_pick_extract)
-        ! 2D analysis
-        call spproj%read(PROJFILE_MINI_STREAM)
-        nptcls = spproj%os_ptcl2D%get_noris()
-        ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
-        call cline_abinitio2D%set('prg',                    'abinitio2D')
-        call cline_abinitio2D%set('mkdir',                          'no')
-        call cline_abinitio2D%set('ncls',                           ncls)
-        call cline_abinitio2D%set('sigma_est',                  'global')
-        call cline_abinitio2D%set('center',                        'yes')
-        call cline_abinitio2D%set('autoscale',                     'yes')
-        call cline_abinitio2D%set('lpstop',                       LPSTOP)
-        call cline_abinitio2D%set('mskdiam',            mskdiam_estimate)
-        call cline_abinitio2D%set('nthr',                    params%nthr)
-        call cline_abinitio2D%set('projfile',     PROJFILE_MINI_STREAM)
-        call xabinitio2D%execute_safe(cline_abinitio2D)
-        ! shape rank cavgs
-        call cline_shape_rank%set('nthr',                    params%nthr)
-        call cline_shape_rank%set('projfile',     PROJFILE_MINI_STREAM)
-        call xshape_rank%execute_safe(cline_shape_rank)
-        ! organize output in folders
-        call simple_list_files('*jpg', fnames)
-        call simple_mkdir(DIR_THUMBS)
-        call move_files2dir(DIR_THUMBS, fnames)
-        deallocate(fnames)
-        ! destruct
-        call spproj%kill
-    end subroutine exec_validate_refpick
 
     ! Manages individual chunks/sets classification, matching & rejection
     ! TODO: handling of un-classified particles
@@ -1516,4 +1291,4 @@ contains
 
     end subroutine exec_stream_abinitio2D
 
-end module simple_commander_stream2D
+end module simple_commanders_stream2D

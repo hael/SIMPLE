@@ -1,4 +1,4 @@
-module simple_commander_starproject
+module simple_commanders_starproject
 include 'simple_lib.f08'
 use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
@@ -10,31 +10,31 @@ use simple_jiffys,         only: simple_end
 use simple_nice
 implicit none
 
-public :: import_starproject_commander
-public :: export_starproject_commander
-public :: assign_optics_groups_commander
+public :: commander_import_starproject
+public :: commander_export_starproject
+public :: commander_assign_optics_groups
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: import_starproject_commander
+type, extends(commander_base) :: commander_import_starproject
   contains
     procedure :: execute      => exec_import_starproject
-end type import_starproject_commander
+end type commander_import_starproject
 
-type, extends(commander_base) :: export_starproject_commander
+type, extends(commander_base) :: commander_export_starproject
   contains
     procedure :: execute      => exec_export_starproject
-end type export_starproject_commander
+end type commander_export_starproject
 
-type, extends(commander_base) :: assign_optics_groups_commander
+type, extends(commander_base) :: commander_assign_optics_groups
   contains
     procedure :: execute      => exec_assign_optics_groups
-end type assign_optics_groups_commander
+end type commander_assign_optics_groups
 
 contains
 
     subroutine exec_import_starproject( self, cline )
-        class(import_starproject_commander), intent(inout) :: self
+        class(commander_import_starproject), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(starproject)         :: starproj
         type(parameters)          :: params
@@ -175,7 +175,7 @@ contains
     end subroutine exec_import_starproject
 
     ! subroutine exec_export_starproject( self, cline )
-    !     class(export_starproject_commander), intent(inout) :: self
+    !     class(commander_export_starproject), intent(inout) :: self
     !     class(cmdline),                      intent(inout) :: cline
     !     type(starproject) :: starproj
     !     type(parameters)  :: params
@@ -215,7 +215,7 @@ contains
     ! end subroutine exec_export_starproject
 
     subroutine exec_export_starproject( self, cline )
-        class(export_starproject_commander), intent(inout) :: self
+        class(commander_export_starproject), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
@@ -236,7 +236,7 @@ contains
     end subroutine exec_export_starproject
 
     subroutine exec_assign_optics_groups( self, cline )
-        class(assign_optics_groups_commander), intent(inout) :: self
+        class(commander_assign_optics_groups), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(starproject) :: starproj
         type(parameters)  :: params
@@ -261,4 +261,4 @@ contains
         call simple_end('**** ASSIGN_OPTICS_GROUPS NORMAL STOP ****')
     end subroutine exec_assign_optics_groups
 
-end module simple_commander_starproject
+end module simple_commanders_starproject

@@ -1,5 +1,5 @@
 ! concrete commander: general image processing routines
-module simple_commander_imgproc
+module simple_commanders_imgproc
 include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
@@ -12,87 +12,87 @@ use simple_strategy2D_utils
 use simple_nice
 implicit none
 
-public :: binarize_commander
-public :: edge_detect_commander
-public :: convert_commander
-public :: ctfops_commander
-public :: ctf_phaseflip_commander
-public :: filter_commander
-public :: ppca_denoise_commander
-public :: normalize_commander
-public :: scale_commander
-public :: stack_commander
-public :: stackops_commander
-public :: cluster_stack_commander
-public :: match_stacks_commander
+public :: commander_binarize
+public :: commander_edge_detect
+public :: commander_convert
+public :: commander_ctfops
+public :: commander_ctf_phaseflip
+public :: commander_filter
+public :: commander_ppca_denoise
+public :: commander_normalize
+public :: commander_scale
+public :: commander_stack
+public :: commander_stackops
+public :: commander_cluster_stack
+public :: commander_match_stacks
 public :: estimate_diam_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: binarize_commander
+type, extends(commander_base) :: commander_binarize
   contains
     procedure :: execute      => exec_binarize
-end type binarize_commander
+end type commander_binarize
 
-type, extends(commander_base) :: edge_detect_commander
+type, extends(commander_base) :: commander_edge_detect
   contains
     procedure :: execute      => exec_edge_detect
-end type edge_detect_commander
+end type commander_edge_detect
 
-type, extends(commander_base) :: convert_commander
+type, extends(commander_base) :: commander_convert
   contains
     procedure :: execute      => exec_convert
-end type convert_commander
+end type commander_convert
 
-type, extends(commander_base) :: ctfops_commander
+type, extends(commander_base) :: commander_ctfops
   contains
     procedure :: execute      => exec_ctfops
-end type ctfops_commander
+end type commander_ctfops
 
-type, extends(commander_base) :: ctf_phaseflip_commander
+type, extends(commander_base) :: commander_ctf_phaseflip
   contains
     procedure :: execute      => exec_ctf_phaseflip
-end type ctf_phaseflip_commander
+end type commander_ctf_phaseflip
 
-type, extends(commander_base) :: filter_commander
+type, extends(commander_base) :: commander_filter
   contains
     procedure :: execute      => exec_filter
-end type filter_commander
+end type commander_filter
 
-type, extends(commander_base) :: ppca_denoise_commander
+type, extends(commander_base) :: commander_ppca_denoise
   contains
     procedure :: execute      => exec_ppca_denoise
-end type ppca_denoise_commander
+end type commander_ppca_denoise
 
-type, extends(commander_base) :: normalize_commander
+type, extends(commander_base) :: commander_normalize
   contains
     procedure :: execute      => exec_normalize
-end type normalize_commander
+end type commander_normalize
 
-type, extends(commander_base) :: scale_commander
+type, extends(commander_base) :: commander_scale
   contains
     procedure :: execute      => exec_scale
-end type scale_commander
+end type commander_scale
 
-type, extends(commander_base) :: stack_commander
+type, extends(commander_base) :: commander_stack
   contains
     procedure :: execute      => exec_stack
-end type stack_commander
+end type commander_stack
 
-type, extends(commander_base) :: stackops_commander
+type, extends(commander_base) :: commander_stackops
   contains
     procedure :: execute      => exec_stackops
-end type stackops_commander
+end type commander_stackops
 
-type, extends(commander_base) :: cluster_stack_commander
+type, extends(commander_base) :: commander_cluster_stack
   contains
     procedure :: execute      => exec_cluster_stack
-end type cluster_stack_commander
+end type commander_cluster_stack
 
-type, extends(commander_base) :: match_stacks_commander
+type, extends(commander_base) :: commander_match_stacks
   contains
     procedure :: execute      => exec_match_stacks
-end type match_stacks_commander
+end type commander_match_stacks
 
 type, extends(commander_base) :: estimate_diam_commander
   contains
@@ -104,7 +104,7 @@ contains
     !> for binarization of stacks and volumes
     subroutine exec_binarize( self, cline )
         use simple_segmentation
-        class(binarize_commander), intent(inout) :: self
+        class(commander_binarize), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(binimage)   :: img_or_vol
@@ -192,7 +192,7 @@ contains
 
     !> for edge detection of stacks
     subroutine exec_edge_detect( self, cline )
-        class(edge_detect_commander), intent(inout) :: self
+        class(commander_edge_detect), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -309,7 +309,7 @@ contains
 
     !> for converting between SPIDER and MRC formats
     subroutine exec_convert( self, cline )
-        class(convert_commander), intent(inout) :: self
+        class(commander_convert), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -342,7 +342,7 @@ contains
     !> for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
         use simple_procimgstk, only: apply_ctf_imgfile
-        class(ctfops_commander), intent(inout) :: self
+        class(commander_ctfops), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -382,7 +382,7 @@ contains
         use simple_ctf,                 only: ctf
         use simple_strategy2D3D_common, only: read_imgbatch
         use simple_ori,                 only: ori
-        class(ctf_phaseflip_commander), intent(inout) :: self
+        class(commander_ctf_phaseflip), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(image), allocatable :: imgs(:)
         type(stack_io)   :: stkio_w
@@ -440,7 +440,7 @@ contains
     subroutine exec_filter( self, cline )
         use simple_procimgstk
         use simple_tvfilter, only: tvfilter
-        class(filter_commander), intent(inout) :: self
+        class(commander_filter), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
@@ -556,7 +556,7 @@ contains
         use simple_ppca_inmem, only: ppca_inmem
         use simple_pca_svd,    only: pca_svd
         use simple_kpca_svd,   only: kpca_svd
-        class(ppca_denoise_commander), intent(inout) :: self
+        class(commander_ppca_denoise), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer,           parameter   :: MAXPCAITS = 15
         class(pca),        pointer     :: pca_ptr  => null()
@@ -634,7 +634,7 @@ contains
     !! radius msk (pixels).
     subroutine exec_normalize( self, cline )
         use simple_procimgstk, only: norm_imgfile, noise_norm_imgfile
-        class(normalize_commander), intent(inout) :: self
+        class(commander_normalize), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
@@ -679,7 +679,7 @@ contains
     subroutine exec_scale( self, cline )
         use simple_procimgstk, only: scale_and_clip_imgfile, scale_imgfile, pad_imgfile, clip_imgfile
         use simple_qsys_funs,  only: qsys_job_finished
-        class(scale_commander), intent(inout) :: self
+        class(commander_scale), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -848,12 +848,12 @@ contains
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished( 'simple_commander_imgproc :: exec_scale' )
+        call qsys_job_finished( 'simple_commanders_imgproc :: exec_scale' )
     end subroutine exec_scale
 
    !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
-        class(stack_commander), intent(inout)  :: self
+        class(commander_stack), intent(inout)  :: self
         class(cmdline),         intent(inout)  :: cline
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         type(parameters) :: params
@@ -933,7 +933,7 @@ contains
     subroutine exec_stackops( self, cline )
         use simple_stackops
         use simple_procimgstk
-        class(stackops_commander), intent(inout) :: self
+        class(commander_stackops), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
@@ -1190,7 +1190,7 @@ contains
 
     subroutine exec_cluster_stack( self, cline )
         use simple_clustering_utils, only: cluster_dmat
-        class(cluster_stack_commander), intent(inout) :: self
+        class(commander_cluster_stack), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
         type(image),      allocatable :: stk_imgs(:), cluster_imgs(:)
@@ -1259,7 +1259,7 @@ contains
     end subroutine exec_cluster_stack
 
     subroutine exec_match_stacks( self, cline )
-        class(match_stacks_commander), intent(inout) :: self
+        class(commander_match_stacks), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
         type(image),       allocatable :: stk_imgs_ref(:), stk_imgs_match(:)
@@ -1384,4 +1384,4 @@ contains
         call simple_end('**** SIMPLE_ESTIMATE_DIAM NORMAL STOP ****')
     end subroutine exec_estimate_diam
 
-end module simple_commander_imgproc
+end module simple_commanders_imgproc

@@ -3,14 +3,14 @@ include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
-use simple_commander_volops,   only: reproject_commander
+use simple_commanders_volops,   only: commander_reproject
 use simple_image,              only: image
 use simple_butterworth,        only: butterworth_filter
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_projection
 type(image)                   :: img, noise, img_noisy, img_filt
-type(reproject_commander)     :: xreproject
+type(commander_reproject)     :: xreproject
 integer                       :: nptcls, rc, iptcl, find_stop, find_start, n_bin, n_vec, find_cur
 real                          :: ave, sdev, maxv, minv, noise_mean, noise_std
 character(len=:), allocatable :: cmd

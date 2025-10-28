@@ -1,5 +1,5 @@
 ! concrete commander: pre-processing routines
-module simple_commander_preprocess
+module simple_commanders_preprocess
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_builder,              only: builder
@@ -16,128 +16,128 @@ use simple_default_clines
 use simple_qsys_funs
 use simple_progress
 implicit none
-
-public :: preprocess_commander_distr
-public :: preprocess_commander
-public :: motion_correct_commander_distr
-public :: motion_correct_commander
-public :: gen_pspecs_and_thumbs_commander_distr
-public :: gen_pspecs_and_thumbs_commander
-public :: ctf_estimate_commander_distr
-public :: ctf_estimate_commander
-public :: map_cavgs_selection_commander
-public :: map_cavgs_states_commander
-public :: pick_commander_distr
-public :: pick_commander
-public :: extract_commander_distr
-public :: extract_commander
-public :: reextract_commander_distr
-public :: reextract_commander
-public :: pick_extract_commander
-public :: make_pickrefs_commander
-public :: shape_rank_cavgs_commander
-private
 #include "simple_local_flags.inc"
+! public :: commander_preprocess_distr
+! public :: commander_preprocess
+! public :: commander_motion_correct_distr
+! public :: commander_motion_correct
+! public :: commander_gen_pspecs_and_thumbs_distr
+! public :: commander_gen_pspecs_and_thumbs
+! public :: commander_ctf_estimate_distr
+! public :: commander_ctf_estimate
+! public :: commander_map_cavgs_selection
+! public :: commander_map_cavgs_states
+! public :: commander_pick_distr
+! public :: commander_pick
+! public :: commander_extract_distr
+! public :: commander_extract
+! public :: commander_extract_distr
+! public :: commander_reextract
+! public :: commander_pick_extract
+! public :: commander_make_pickrefs
+! public :: commander_shape_rank_cavgs
+! private
 
-type, extends(commander_base) :: preprocess_commander_distr
+
+type, extends(commander_base) :: commander_preprocess_distr
   contains
     procedure :: execute      => exec_preprocess_distr
-end type preprocess_commander_distr
+end type commander_preprocess_distr
 
-type, extends(commander_base) :: preprocess_commander
+type, extends(commander_base) :: commander_preprocess
   contains
     procedure :: execute      => exec_preprocess
-end type preprocess_commander
+end type commander_preprocess
 
-type, extends(commander_base) :: motion_correct_commander_distr
+type, extends(commander_base) :: commander_motion_correct_distr
   contains
     procedure :: execute      => exec_motion_correct_distr
-end type motion_correct_commander_distr
+end type commander_motion_correct_distr
 
-type, extends(commander_base) :: motion_correct_commander
+type, extends(commander_base) :: commander_motion_correct
   contains
     procedure :: execute      => exec_motion_correct
-end type motion_correct_commander
+end type commander_motion_correct
 
-type, extends(commander_base) :: gen_pspecs_and_thumbs_commander_distr
+type, extends(commander_base) :: commander_gen_pspecs_and_thumbs_distr
   contains
     procedure :: execute      => exec_gen_pspecs_and_thumbs_distr
-end type gen_pspecs_and_thumbs_commander_distr
+end type commander_gen_pspecs_and_thumbs_distr
 
-type, extends(commander_base) :: gen_pspecs_and_thumbs_commander
+type, extends(commander_base) :: commander_gen_pspecs_and_thumbs
   contains
     procedure :: execute      => exec_gen_pspecs_and_thumbs
-end type gen_pspecs_and_thumbs_commander
+end type commander_gen_pspecs_and_thumbs
 
-type, extends(commander_base) :: ctf_estimate_commander_distr
+type, extends(commander_base) :: commander_ctf_estimate_distr
   contains
     procedure :: execute      => exec_ctf_estimate_distr
-end type ctf_estimate_commander_distr
+end type commander_ctf_estimate_distr
 
-type, extends(commander_base) :: ctf_estimate_commander
+type, extends(commander_base) :: commander_ctf_estimate
   contains
     procedure :: execute      => exec_ctf_estimate
-end type ctf_estimate_commander
+end type commander_ctf_estimate
 
-type, extends(commander_base) :: map_cavgs_selection_commander
+type, extends(commander_base) :: commander_map_cavgs_selection
   contains
     procedure :: execute      => exec_map_cavgs_selection
-end type map_cavgs_selection_commander
+end type commander_map_cavgs_selection
 
-type, extends(commander_base) :: map_cavgs_states_commander
+type, extends(commander_base) :: commander_map_cavgs_states
   contains
     procedure :: execute      => exec_map_cavgs_states
-end type map_cavgs_states_commander
+end type commander_map_cavgs_states
 
-type, extends(commander_base) :: pick_commander_distr
+type, extends(commander_base) :: commander_pick_distr
   contains
     procedure :: execute      => exec_pick_distr
-end type pick_commander_distr
+end type commander_pick_distr
 
-type, extends(commander_base) :: pick_commander
+type, extends(commander_base) :: commander_pick
   contains
     procedure :: execute      => exec_pick
-end type pick_commander
+end type commander_pick
 
-type, extends(commander_base) :: extract_commander_distr
+type, extends(commander_base) :: commander_extract_distr
   contains
     procedure :: execute      => exec_extract_distr
-end type extract_commander_distr
+end type commander_extract_distr
 
-type, extends(commander_base) :: extract_commander
+type, extends(commander_base) :: commander_extract
   contains
     procedure :: execute      => exec_extract
-end type extract_commander
+end type commander_extract
 
-type, extends(commander_base) :: reextract_commander_distr
+type, extends(commander_base) :: commander_reextract_distr
   contains
     procedure :: execute      => exec_reextract_distr
-end type reextract_commander_distr
+end type commander_reextract_distr
 
-type, extends(commander_base) :: reextract_commander
+type, extends(commander_base) :: commander_reextract
   contains
     procedure :: execute      => exec_reextract
-end type reextract_commander
+end type commander_reextract
 
-type, extends(commander_base) :: pick_extract_commander
+type, extends(commander_base) :: commander_pick_extract
   contains
     procedure :: execute      => exec_pick_extract
-end type pick_extract_commander
+end type commander_pick_extract
 
-type, extends(commander_base) :: make_pickrefs_commander
+type, extends(commander_base) :: commander_make_pickrefs
   contains
     procedure :: execute      => exec_make_pickrefs
-end type make_pickrefs_commander
+end type commander_make_pickrefs
 
-type, extends(commander_base) :: shape_rank_cavgs_commander
+type, extends(commander_base) :: commander_shape_rank_cavgs
   contains
     procedure :: execute      => exec_shape_rank_cavgs
-end type shape_rank_cavgs_commander
+end type commander_shape_rank_cavgs
 
 contains
 
     subroutine exec_preprocess_distr( self, cline )
-        class(preprocess_commander_distr), intent(inout) :: self
+        class(commander_preprocess_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters) :: params
         type(qsys_env)   :: qenv
@@ -202,7 +202,7 @@ contains
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
-        class(preprocess_commander), intent(inout) :: self
+        class(commander_preprocess), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)              :: params
         type(ori)                     :: o_mov
@@ -342,12 +342,12 @@ contains
         call o_mov%kill
         call spproj%kill
         ! end gracefully
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_preprocess' )
+        call qsys_job_finished( 'simple_commanders_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
     subroutine exec_motion_correct_distr( self, cline )
-        class(motion_correct_commander_distr), intent(inout) :: self
+        class(commander_motion_correct_distr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -392,7 +392,7 @@ contains
     subroutine exec_motion_correct( self, cline )
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
-        class(motion_correct_commander), intent(inout) :: self
+        class(commander_motion_correct), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
         type(parameters)              :: params
         type(motion_correct_iter)     :: mciter
@@ -455,12 +455,12 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(  'simple_commander_preprocess :: exec_motion_correct' )
+        call qsys_job_finished(  'simple_commanders_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
     subroutine exec_gen_pspecs_and_thumbs_distr( self, cline )
-        class(gen_pspecs_and_thumbs_commander_distr), intent(inout) :: self
+        class(commander_gen_pspecs_and_thumbs_distr), intent(inout) :: self
         class(cmdline),                               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -502,7 +502,7 @@ contains
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
         use simple_sp_project,       only: sp_project
         use simple_pspec_thumb_iter, only: pspec_thumb_iter
-        class(gen_pspecs_and_thumbs_commander), intent(inout) :: self
+        class(commander_gen_pspecs_and_thumbs), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
         type(parameters)              :: params
         type(pspec_thumb_iter)        :: ptiter
@@ -549,12 +549,12 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished('simple_commander_preprocess :: exec_gen_pspecs_and_thumbs')
+        call qsys_job_finished('simple_commanders_preprocess :: exec_gen_pspecs_and_thumbs')
         call simple_end('**** SIMPLE_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
     end subroutine exec_gen_pspecs_and_thumbs
 
     subroutine exec_ctf_estimate_distr( self, cline )
-        class(ctf_estimate_commander_distr), intent(inout) :: self
+        class(commander_ctf_estimate_distr), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters)              :: params
         type(sp_project)              :: spproj
@@ -598,7 +598,7 @@ contains
     subroutine exec_ctf_estimate( self, cline )
         use simple_sp_project,          only: sp_project
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
-        class(ctf_estimate_commander), intent(inout) :: self
+        class(commander_ctf_estimate), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
         type(parameters)              :: params
         type(sp_project)              :: spproj
@@ -670,13 +670,13 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(  'simple_commander_preprocess :: exec_ctf_estimate' )
+        call qsys_job_finished(  'simple_commanders_preprocess :: exec_ctf_estimate' )
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate
 
     subroutine exec_map_cavgs_selection( self, cline )
         use simple_corrmat,             only: calc_cartesian_corrmat
-        class(map_cavgs_selection_commander), intent(inout) :: self
+        class(commander_map_cavgs_selection), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
@@ -731,7 +731,7 @@ contains
 
     subroutine exec_map_cavgs_states( self, cline )
         use simple_corrmat, only: calc_cartesian_corrmat
-        class(map_cavgs_states_commander), intent(inout) :: self
+        class(commander_map_cavgs_states), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline !< command line input
         type(parameters)                   :: params
         type(builder)                      :: build
@@ -791,7 +791,7 @@ contains
     end subroutine exec_map_cavgs_states
 
     subroutine exec_pick_distr( self, cline )
-        class(pick_commander_distr), intent(inout) :: self
+        class(commander_pick_distr), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -910,7 +910,7 @@ contains
 
     subroutine exec_pick( self, cline )
         use simple_picker_iter, only: picker_iter
-        class(pick_commander), intent(inout) :: self
+        class(commander_pick), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(parameters)              :: params
         type(sp_project)              :: spproj
@@ -970,12 +970,12 @@ contains
         call spproj%kill
         call piter%kill
         ! end gracefully
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_pick' )
+        call qsys_job_finished( 'simple_commanders_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
     subroutine exec_extract_distr( self, cline )
-        class(extract_commander_distr), intent(inout) :: self
+        class(commander_extract_distr), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(parameters)                        :: params
         type(sp_project)                        :: spproj, spproj_part
@@ -1023,15 +1023,15 @@ contains
             if( file_exists(params%dir_box) )then
                 call simple_list_files_regexp(params%dir_box,'\.box$', boxfiles)
                 if(.not.allocated(boxfiles))then
-                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 1'
+                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commanders_preprocess::exec_extract 1'
                     THROW_HARD('No box file found; exec_extract, 1')
                 endif
                 if(size(boxfiles)==0)then
-                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 2'
+                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commanders_preprocess::exec_extract 2'
                     THROW_HARD('No box file found; exec_extract 2')
                 endif
             else
-                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commander_preprocess::exec_extract'
+                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commanders_preprocess::exec_extract'
                 THROW_HARD('box directory does not exist; exec_extract')
             endif
             call cline%set('dir_box', params%dir_box)
@@ -1182,7 +1182,7 @@ contains
         use simple_ctf,                 only: ctf
         use simple_ctf_estimate_fit,    only: ctf_estimate_fit
         use simple_particle_extractor,  only: ptcl_extractor
-        class(extract_commander), intent(inout) :: self
+        class(commander_extract), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(image),                allocatable :: imgs(:)
         type(parameters)                        :: params
@@ -1258,7 +1258,7 @@ contains
         ! input boxes
         if( cline%defined('dir_box') )then
             if( .not.file_exists(params%dir_box) )then
-                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commander_preprocess::exec_extract'
+                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commanders_preprocess::exec_extract'
                 THROW_HARD('box directory does not exist; exec_extract')
             endif
         endif
@@ -1520,7 +1520,7 @@ contains
         call o_tmp%kill
         call os_mic%kill
         if( prog_write ) call progressfile_update(1.0)
-        call qsys_job_finished('simple_commander_preprocess :: exec_extract')
+        call qsys_job_finished('simple_commanders_preprocess :: exec_extract')
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
         contains
 
@@ -1558,7 +1558,7 @@ contains
     end subroutine exec_extract
 
     subroutine exec_reextract_distr( self, cline )
-        class(reextract_commander_distr), intent(inout) :: self
+        class(commander_reextract_distr), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(parameters)                        :: params
         type(sp_project)                        :: spproj
@@ -1730,7 +1730,7 @@ contains
         use simple_ctf,                 only: ctf
         use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
         use simple_particle_extractor,  only: ptcl_extractor
-        class(reextract_commander), intent(inout) :: self
+        class(commander_reextract), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline !< command line input
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_in
@@ -2058,7 +2058,7 @@ contains
         call spproj%write(params%outfile)
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls
         ! end gracefully
-        call qsys_job_finished('simple_commander_preprocess :: exec_reextract')
+        call qsys_job_finished('simple_commanders_preprocess :: exec_reextract')
         call build%kill_general_tbox
         call o_mic%kill
         call o_stk%kill
@@ -2069,13 +2069,13 @@ contains
     subroutine exec_pick_extract( self, cline )
         use simple_sp_project,  only: sp_project
         use simple_picker_iter, only: picker_iter
-        class(pick_extract_commander), intent(inout) :: self
+        class(commander_pick_extract), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)              :: params
         type(oris)                    :: os_mic
         type(ori)                     :: o_mic
         type(picker_iter)             :: piter
-        type(extract_commander)       :: xextract
+        type(commander_extract)       :: xextract
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
@@ -2198,7 +2198,7 @@ contains
             call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! end gracefully
-        call qsys_job_finished(  'simple_commander_preprocess :: exec_pick_extract' )
+        call qsys_job_finished(  'simple_commanders_preprocess :: exec_pick_extract' )
         call o_mic%kill
         call piter%kill
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
@@ -2208,14 +2208,14 @@ contains
         use simple_masker, only: automask2D
         use simple_default_clines
         use simple_strategy2D_utils
-        class(shape_rank_cavgs_commander), intent(inout) :: self
+        class(commander_shape_rank_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         real,        parameter   :: LP_BIN = 20.
         type(parameters)         :: params
         type(sp_project)         :: spproj
         type(image), allocatable :: cavg_imgs(:), mask_imgs(:), masked_imgs(:)
         logical,     allocatable :: l_non_junk(:)
-        real,        allocatable :: resvals(:), diams(:), shifts(:,:), ints(:)
+        real,        allocatable :: diams(:), shifts(:,:), ints(:)
         integer,     allocatable :: pops(:), order(:)
         integer :: nptcls, ncls, ncls_sel, icls, ldim(3), loc(1), i
         real    :: mskrad
@@ -2241,9 +2241,6 @@ contains
         ! extract class populations
         pops      = spproj%os_cls2D%get_all_asint('pop')
         pops      = pack(pops, mask=l_non_junk)
-        ! extract class resolution values
-        resvals   = spproj%os_cls2D%get_all('res')
-        resvals   = pack(resvals, mask=l_non_junk)
         ! Automasking
         call automask2D(mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         ! calc integrated intesities and shift
@@ -2263,24 +2260,12 @@ contains
         call dealloc_imgarr(cavg_imgs)
         call dealloc_imgarr(mask_imgs)
         if( allocated(l_non_junk)     ) deallocate(l_non_junk)
-        if( allocated(resvals)        ) deallocate(resvals)
         if( allocated(diams)          ) deallocate(diams)
         if( allocated(shifts)         ) deallocate(shifts)
         if( allocated(pops)           ) deallocate(pops)
         call simple_end('**** SIMPLE_SHAPE_RANK_CAVGS NORMAL STOP ****')
 
         contains
-
-            ! function p1_lt_p2( p1, p2 ) result( val )
-            !     integer, intent(in) :: p1, p2
-            !     logical :: val
-            !     val = .false.
-            !     if( abs(diams(p1) - diams(p2)) <= 8. )then
-            !         if( pops(p1) < pops(p2) ) val = .true.
-            !     else if( diams(p1) < diams(p2) )then
-            !         val = .true.
-            !     endif
-            ! end function p1_lt_p2
 
             function p1_lt_p2( p1, p2 ) result( val )
                 integer, intent(in) :: p1, p2
@@ -2296,7 +2281,7 @@ contains
     end subroutine exec_shape_rank_cavgs
 
     subroutine exec_make_pickrefs( self, cline )
-        class(make_pickrefs_commander), intent(inout) :: self
+        class(commander_make_pickrefs), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)         :: params
         type(stack_io)           :: stkio_r
@@ -2405,4 +2390,4 @@ contains
         if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) box_inside = .false.
     end function box_inside
 
-end module simple_commander_preprocess
+end module simple_commanders_preprocess

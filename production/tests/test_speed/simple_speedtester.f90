@@ -1,15 +1,15 @@
 module simple_speedtester
 use simple_image,              only: image
-use simple_commander_refine3D, only: refine3D_distr_commander
-use simple_commander_volops,   only: reproject_commander
+use simple_commanders_refine3D, only: commander_refine3D_distr
+use simple_commanders_volops,   only: commander_reproject
 use simple_cmdline,            only: cmdline
 implicit none
 
 integer, parameter            :: BOX=200, SQRAD=40, NSPACE=50
 real,    parameter            :: SMPD=1.1, MSK=50., TRS=5.0
 type(image)                   :: cube, square
-type(reproject_commander)     :: xproject
-type(refine3D_distr_commander) :: xprime3D
+type(commander_reproject)     :: xproject
+type(commander_refine3D_distr) :: xprime3D
 type(cmdline)                 :: cline_project, cline_refine3D
 
 contains

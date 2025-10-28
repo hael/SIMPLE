@@ -1,4 +1,4 @@
-module simple_commander_atoms
+module simple_commanders_atoms
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
@@ -10,74 +10,74 @@ use simple_nanoparticle_utils
 use simple_atoms,          only: atoms
 implicit none
 
-public :: atoms_stats_commander
-public :: atoms_register_commander
-public :: conv_atom_denoise_commander
-public :: detect_atoms_commander
-public :: map2model_fsc_commander
-public :: map_validation_commander
-public :: model_validation_commander
-public :: model_validation_eo_commander
-public :: pdb2mrc_commander
-public :: tseries_atoms_rmsd_commander
-public :: tseries_core_atoms_analysis_commander
+public :: commander_atoms_stats
+public :: commander_atoms_register
+public :: commander_conv_atom_denoise
+public :: commander_detect_atoms
+public :: commander_map2model_fsc
+public :: commander_map_validation
+public :: commander_model_validation
+public :: commander_model_validation_eo
+public :: commander_pdb2mrc
+public :: commander_tseries_atoms_rmsd
+public :: commander_tseries_core_atoms_analysis
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: atoms_stats_commander
+type, extends(commander_base) :: commander_atoms_stats
   contains
     procedure :: execute      => exec_atoms_stats
-end type atoms_stats_commander
+end type commander_atoms_stats
 
-type, extends(commander_base) :: atoms_register_commander
+type, extends(commander_base) :: commander_atoms_register
   contains
     procedure :: execute      => exec_atoms_register
-end type atoms_register_commander
+end type commander_atoms_register
 
-type, extends(commander_base) :: conv_atom_denoise_commander
+type, extends(commander_base) :: commander_conv_atom_denoise
   contains
     procedure :: execute      => exec_conv_atom_denoise
-end type conv_atom_denoise_commander
+end type commander_conv_atom_denoise
 
-type, extends(commander_base) :: detect_atoms_commander
+type, extends(commander_base) :: commander_detect_atoms
   contains
     procedure :: execute      => exec_detect_atoms
-end type detect_atoms_commander
+end type commander_detect_atoms
 
-type, extends(commander_base) :: map2model_fsc_commander
+type, extends(commander_base) :: commander_map2model_fsc
   contains
     procedure :: execute      => exec_map2model_fsc
-end type map2model_fsc_commander
+end type commander_map2model_fsc
 
-type, extends(commander_base) :: map_validation_commander
+type, extends(commander_base) :: commander_map_validation
   contains
     procedure :: execute      => exec_map_validation
-end type map_validation_commander
+end type commander_map_validation
 
-type, extends(commander_base) :: model_validation_commander
+type, extends(commander_base) :: commander_model_validation
   contains
     procedure :: execute      => exec_model_validation
-end type model_validation_commander
+end type commander_model_validation
 
-type, extends(commander_base) :: model_validation_eo_commander
+type, extends(commander_base) :: commander_model_validation_eo
   contains
     procedure :: execute      => exec_model_validation_eo
-end type model_validation_eo_commander
+end type commander_model_validation_eo
 
-type, extends(commander_base) :: pdb2mrc_commander
+type, extends(commander_base) :: commander_pdb2mrc
   contains
     procedure :: execute      => exec_pdb2mrc
-end type pdb2mrc_commander
+end type commander_pdb2mrc
 
-type, extends(commander_base) :: tseries_atoms_rmsd_commander
+type, extends(commander_base) :: commander_tseries_atoms_rmsd
   contains
     procedure :: execute      => exec_tseries_atoms_rmsd
-end type tseries_atoms_rmsd_commander
+end type commander_tseries_atoms_rmsd
 
-type, extends(commander_base) :: tseries_core_atoms_analysis_commander
+type, extends(commander_base) :: commander_tseries_core_atoms_analysis
   contains
     procedure :: execute      => exec_tseries_core_atoms_analysis
-end type tseries_core_atoms_analysis_commander
+end type commander_tseries_core_atoms_analysis
 
 type :: common_atoms
     integer           :: ind1, ind2, ncommon, ndiff
@@ -90,7 +90,7 @@ end type common_atoms
 contains
 
     subroutine exec_atoms_stats( self, cline )
-        class(atoms_stats_commander), intent(inout) :: self
+        class(commander_atoms_stats), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
         type(parameters)      :: params
         type(nanoparticle)    :: nano
@@ -129,7 +129,7 @@ contains
     end subroutine exec_atoms_stats
 
     subroutine exec_atoms_register( self, cline )
-        class(atoms_register_commander), intent(inout) :: self
+        class(commander_atoms_register), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
         type(parameters)  :: params
         real, allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:), mat_mirr(:,:)
@@ -167,7 +167,7 @@ contains
     end subroutine exec_atoms_register
 
     subroutine exec_conv_atom_denoise( self, cline )
-        class(conv_atom_denoise_commander), intent(inout) :: self
+        class(commander_conv_atom_denoise), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)   :: params
         type(nanoparticle) :: nano
@@ -181,7 +181,7 @@ contains
     end subroutine exec_conv_atom_denoise
 
     subroutine exec_detect_atoms( self, cline )
-        class(detect_atoms_commander), intent(inout) :: self
+        class(commander_detect_atoms), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
         type(nanoparticle) :: nano
@@ -212,11 +212,11 @@ contains
     end subroutine exec_detect_atoms
 
     subroutine exec_map2model_fsc( self, cline )
-        use simple_commander_resolest, only: fsc_commander
-        class(map2model_fsc_commander), intent(inout) :: self
+        use simple_commanders_resolest, only: commander_fsc
+        class(commander_map2model_fsc), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(pdb2mrc_commander) :: xpdb2mrc
-        type(fsc_commander)     :: xfsc
+        type(commander_pdb2mrc) :: xpdb2mrc
+        type(commander_fsc)     :: xfsc
         type(cmdline)           :: cline_pdb2mrc, cline_fsc
         type(parameters)        :: params
         ! parse parameters
@@ -240,7 +240,7 @@ contains
     end subroutine exec_map2model_fsc
    
     subroutine exec_map_validation( self, cline )
-        class(map_validation_commander), intent(inout) :: self
+        class(commander_map_validation), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
@@ -276,7 +276,7 @@ contains
     end subroutine exec_map_validation
 
     subroutine exec_model_validation( self, cline )
-        class(model_validation_commander), intent(inout) :: self
+        class(commander_model_validation), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
@@ -289,10 +289,10 @@ contains
     end subroutine exec_model_validation
 
     subroutine exec_model_validation_eo( self, cline )
-        use simple_commander_volops, only: sharpvol_commander
-        class(model_validation_eo_commander), intent(inout) :: self
+        use simple_commanders_volops, only: commander_sharpvol
+        class(commander_model_validation_eo), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(sharpvol_commander) :: xsharpvol
+        type(commander_sharpvol) :: xsharpvol
         type(cmdline)    :: cline_sharpvol1, cline_sharpvol2
         type(parameters) :: params
         type(atoms)      :: molecule
@@ -320,7 +320,7 @@ contains
     end subroutine exec_model_validation_eo
 
     subroutine exec_pdb2mrc( self, cline )
-        class(pdb2mrc_commander), intent(inout) :: self
+        class(commander_pdb2mrc), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
@@ -351,7 +351,7 @@ contains
     end subroutine exec_pdb2mrc
 
     subroutine exec_tseries_atoms_rmsd( self, cline )
-        class(tseries_atoms_rmsd_commander), intent(inout) :: self
+        class(commander_tseries_atoms_rmsd), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline !< command line input
         character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
         real,               allocatable :: pdbmat1(:,:), pdbmat2(:,:), dists(:), distmat(:,:), dists_neigh(:)
@@ -406,7 +406,7 @@ contains
     end subroutine exec_tseries_atoms_rmsd
 
     subroutine exec_tseries_core_atoms_analysis( self, cline )
-        class(tseries_core_atoms_analysis_commander), intent(inout) :: self
+        class(commander_tseries_core_atoms_analysis), intent(inout) :: self
         class(cmdline),                               intent(inout) :: cline !< command line input
         character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_bfac(:), pdbfnames_fringe(:)
         type(common_atoms),        allocatable :: atms_common(:)
@@ -494,4 +494,4 @@ contains
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
     end subroutine exec_tseries_core_atoms_analysis
 
-end module simple_commander_atoms
+end module simple_commanders_atoms

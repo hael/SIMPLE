@@ -7,7 +7,7 @@ use simple_image,             only: image
 use simple_parameters,        only: parameters, params_glob
 use simple_polarizer,         only: polarizer
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_commander_volops,  only: reproject_commander
+use simple_commanders_volops,  only: commander_reproject
 implicit none
 type(cmdline)                 :: cline, cline_projection
 type(builder)                 :: b
@@ -15,7 +15,7 @@ type(parameters)              :: p
 type(polarft_corrcalc)        :: pftcc
 type(polarizer)               :: img_copy
 type(pftcc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
-type(reproject_commander)     :: xreproject
+type(commander_reproject)     :: xreproject
 character(len=:), allocatable :: cmd
 logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0

@@ -1,5 +1,5 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
-module simple_commander_refine3D
+module simple_commanders_refine3D
 include 'simple_lib.f08'
 use simple_builder,          only: builder, build_glob
 use simple_cmdline,          only: cmdline
@@ -8,24 +8,24 @@ use simple_parameters,       only: parameters, params_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
-use simple_commander_volops, only: postprocess_commander
-use simple_commander_mask,   only: automask_commander
+use simple_commanders_volops, only: commander_postprocess
+use simple_commanders_mask,   only: commander_automask
 use simple_decay_funs,       only: inv_cos_decay, cos_decay
 use simple_image,            only: image
 use simple_masker,           only: masker
 use simple_exec_helpers,     only: set_master_num_threads
-use simple_commander_euclid
+use simple_commanders_euclid
 use simple_qsys_funs
 implicit none
 
 public :: nspace_commander
-public :: refine3D_auto_commander
-public :: refine3D_distr_commander
-public :: refine3D_commander
+public :: commander_refine3D_auto
+public :: commander_refine3D_distr
+public :: commander_refine3D
 public :: estimate_first_sigmas_commander
-public :: check_3Dconv_commander
-public :: prob_tab_commander
-public :: prob_align_commander
+public :: commander_check_3Dconv
+public :: commander_prob_tab
+public :: commander_prob_align
 private
 #include "simple_local_flags.inc"
 
@@ -34,40 +34,40 @@ type, extends(commander_base) :: nspace_commander
    procedure :: execute      => exec_nspace
 end type nspace_commander
 
-type, extends(commander_base) :: refine3D_auto_commander
+type, extends(commander_base) :: commander_refine3D_auto
   contains
     procedure :: execute      => exec_refine3D_auto
-end type refine3D_auto_commander
+end type commander_refine3D_auto
 
-type, extends(commander_base) :: refine3D_distr_commander
+type, extends(commander_base) :: commander_refine3D_distr
   contains
     procedure :: execute      => exec_refine3D_distr
-end type refine3D_distr_commander
+end type commander_refine3D_distr
 
-type, extends(commander_base) :: refine3D_commander
+type, extends(commander_base) :: commander_refine3D
   contains
     procedure :: execute      => exec_refine3D
-end type refine3D_commander
+end type commander_refine3D
 
 type, extends(commander_base) :: estimate_first_sigmas_commander
   contains
     procedure :: execute      => exec_estimate_first_sigmas
 end type estimate_first_sigmas_commander
 
-type, extends(commander_base) :: check_3Dconv_commander
+type, extends(commander_base) :: commander_check_3Dconv
   contains
     procedure :: execute      => exec_check_3Dconv
-end type check_3Dconv_commander
+end type commander_check_3Dconv
 
-type, extends(commander_base) :: prob_tab_commander
+type, extends(commander_base) :: commander_prob_tab
   contains
     procedure :: execute      => exec_prob_tab
-end type prob_tab_commander
+end type commander_prob_tab
 
-type, extends(commander_base) :: prob_align_commander
+type, extends(commander_base) :: commander_prob_align
   contains
     procedure :: execute      => exec_prob_align
-end type prob_align_commander
+end type commander_prob_align
 
 contains
 
@@ -89,12 +89,12 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
-        use simple_commander_rec, only: reconstruct3D_commander_distr
+        use simple_commanders_rec, only: commander_reconstruct3D_distr
         use simple_sp_project,    only: sp_project
-        class(refine3D_auto_commander), intent(inout) :: self
+        class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_reconstruct3D_distr
-        type(postprocess_commander) :: xpostprocess
+        type(commander_postprocess) :: xpostprocess
         type(parameters)            :: params
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 1.3
@@ -106,8 +106,8 @@ contains
         integer          :: box_crop, maxits_phase1, maxits_phase2, iter
         logical          :: l_autoscale
         ! commanders
-        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
-        type(refine3D_distr_commander)      :: xrefine3D_distr
+        type(commander_reconstruct3D_distr) :: xreconstruct3D_distr
+        type(commander_refine3D_distr)      :: xrefine3D_distr
         ! hard defaults
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
@@ -221,24 +221,24 @@ contains
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
-        use simple_commander_rec,    only: reconstruct3D_commander_distr, volassemble_commander
+        use simple_commanders_rec,    only: commander_reconstruct3D_distr, commander_volassemble
         use simple_fsc,              only: plot_fsc
-        use simple_commander_euclid, only: calc_group_sigmas_commander
+        use simple_commanders_euclid, only: commander_calc_group_sigmas
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_euclid_sigma2,    only: sigma2_star_from_iter
         use simple_polarops
-        class(refine3D_distr_commander), intent(inout) :: self
+        class(commander_refine3D_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
-        type(reconstruct3D_commander_distr)   :: xreconstruct3D_distr
-        type(calc_pspec_commander_distr)      :: xcalc_pspec_distr
-        type(check_3Dconv_commander)          :: xcheck_3Dconv
-        type(postprocess_commander)           :: xpostprocess
-        type(refine3D_commander)              :: xrefine3D_shmem
-        type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
+        type(commander_reconstruct3D_distr)   :: xreconstruct3D_distr
+        type(commander_calc_pspec_distr)      :: xcalc_pspec_distr
+        type(commander_check_3Dconv)          :: xcheck_3Dconv
+        type(commander_postprocess)           :: xpostprocess
+        type(commander_refine3D)              :: xrefine3D_shmem
+        type(commander_calc_group_sigmas)     :: xcalc_group_sigmas
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
-        type(prob_align_commander)            :: xprob_align_distr
-        type(volassemble_commander)           :: xvolassemble
+        type(commander_prob_align)            :: xprob_align_distr
+        type(commander_volassemble)           :: xvolassemble
         type(polarft_corrcalc)                :: pftcc
         ! command lines
         type(cmdline) :: cline_reconstruct3D_distr
@@ -296,7 +296,7 @@ contains
             case('cls3D')
                 fall_over = build%spproj%os_out%get_noris() == 0
             case DEFAULT
-                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_refine3D :: exec_refine3D_distr'
+                write(logfhandle,*)'Unsupported ORITYPE; simple_commanders_refine3D :: exec_refine3D_distr'
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_refine3D_distr')
         if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
@@ -735,13 +735,13 @@ contains
     ! this routine should be kept minimal and clean of all automasking, postprocessing, etc. for performance
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
-        class(refine3D_commander), intent(inout) :: self
+        class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
-        type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
-        type(calc_pspec_assemble_commander)   :: xcalc_pspec_assemble
-        type(calc_pspec_commander)            :: xcalc_pspec
-        type(prob_align_commander)            :: xprob_align
+        type(commander_calc_group_sigmas)     :: xcalc_group_sigmas
+        type(commander_calc_pspec_assemble)   :: xcalc_pspec_assemble
+        type(commander_calc_pspec)            :: xcalc_pspec
+        type(commander_prob_align)            :: xprob_align
         type(parameters)                      :: params
         type(builder)                         :: build
         type(cmdline)                         :: cline_calc_group_sigmas, cline_prob_align
@@ -911,7 +911,7 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         class(estimate_first_sigmas_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         ! command lines
         type(cmdline)    :: cline_first_sigmas, cline_calc_group_sigmas
         ! other variables
@@ -985,7 +985,7 @@ contains
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
         use simple_parameters,  only: params_glob
-        class(check_3Dconv_commander), intent(inout) :: self
+        class(commander_check_3Dconv), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
@@ -1018,7 +1018,7 @@ contains
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_euclid_sigma2,       only: euclid_sigma2
-        class(prob_tab_commander), intent(inout) :: self
+        class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:)
@@ -1059,7 +1059,7 @@ contains
         call killimgbatch
         call pftcc%kill
         call build%kill_general_tbox
-        call qsys_job_finished('simple_commander_refine3D :: exec_prob_tab')
+        call qsys_job_finished('simple_commanders_refine3D :: exec_prob_tab')
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
 
@@ -1068,13 +1068,13 @@ contains
         !$ use omp_lib_kinds
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
-        class(prob_align_commander), intent(inout) :: self
+        class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,            allocatable :: pinds(:)
         character(len=:),   allocatable :: fname
         type(builder)                   :: build
         type(parameters)                :: params
-        type(prob_tab_commander)        :: xprob_tab
+        type(commander_prob_tab)        :: xprob_tab
         type(eul_prob_tab)              :: eulprob_obj_glob
         type(cmdline)                   :: cline_prob_tab
         type(qsys_env)                  :: qenv
@@ -1135,9 +1135,9 @@ contains
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_job_finished('simple_commander_refine3D :: exec_prob_align')
+        call qsys_job_finished('simple_commanders_refine3D :: exec_prob_align')
         call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align
 
-end module simple_commander_refine3D
+end module simple_commanders_refine3D

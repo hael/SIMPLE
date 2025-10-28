@@ -1,5 +1,5 @@
 ! concrete commander: masking routines
-module simple_commander_mask
+module simple_commanders_mask
 include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
@@ -10,32 +10,32 @@ use simple_masker,         only: masker
 use simple_default_clines
 implicit none
 
-public :: mask_commander
-public :: automask2D_commander
-public :: automask_commander
-public :: auto_spher_mask_commander
+public :: commander_mask
+public :: commander_automask2D
+public :: commander_automask
+public :: commander_auto_spher_mask
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: mask_commander 
+type, extends(commander_base) :: commander_mask 
  contains
    procedure :: execute      => exec_mask
-end type mask_commander
+end type commander_mask
 
-type, extends(commander_base) :: automask2D_commander
+type, extends(commander_base) :: commander_automask2D
   contains
     procedure :: execute      => exec_automask2D
-end type automask2D_commander
+end type commander_automask2D
 
-type, extends(commander_base) :: automask_commander
+type, extends(commander_base) :: commander_automask
  contains
    procedure :: execute      => exec_automask
-end type automask_commander
+end type commander_automask
 
-type, extends(commander_base) :: auto_spher_mask_commander
+type, extends(commander_base) :: commander_auto_spher_mask
  contains
    procedure :: execute      => exec_auto_spher_mask
-end type auto_spher_mask_commander
+end type commander_auto_spher_mask
 
 contains
 
@@ -43,7 +43,7 @@ contains
     subroutine exec_mask( self, cline )
         use simple_procimgstk, only: mask_imgfile, taper_edges_imgfile
         use simple_atoms,      only: atoms
-        class(mask_commander), intent(inout) :: self
+        class(commander_mask), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(parameters)           :: params
         type(builder)              :: build
@@ -113,7 +113,7 @@ contains
     !> for automasking of class averages
     subroutine exec_automask2D( self, cline )
         use simple_masker, only: automask2D
-        class(automask2D_commander), intent(inout) :: self
+        class(commander_automask2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)         :: params
         type(image), allocatable :: imgs(:), masks(:)
@@ -144,7 +144,7 @@ contains
 
     !> for automasking of volume
     subroutine exec_automask( self, cline )
-        class(automask_commander), intent(inout) :: self
+        class(commander_automask), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(builder)    :: build
         type(parameters) :: params
@@ -179,7 +179,7 @@ contains
     end subroutine exec_automask
 
     subroutine exec_auto_spher_mask( self, cline )
-        class(auto_spher_mask_commander), intent(inout) :: self
+        class(commander_auto_spher_mask), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(builder)    :: build
         type(parameters) :: params
@@ -204,4 +204,4 @@ contains
         call simple_end('**** SIMPLE_AUTO_SPHER_MASK NORMAL STOP ****')
     end subroutine exec_auto_spher_mask
 
-end module simple_commander_mask
+end module simple_commanders_mask

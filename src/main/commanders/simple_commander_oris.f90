@@ -1,5 +1,5 @@
 ! concrete commander: operations on orientations
-module simple_commander_oris
+module simple_commanders_oris
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
@@ -9,56 +9,56 @@ use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 implicit none
 
-public :: check_states_commander
-public :: make_oris_commander
-public :: orisops_commander
-public :: oristats_commander
-public :: oriconsensus_commander
-public :: rotmats2oris_commander
-public :: vizoris_commander
+public :: commander_check_states
+public :: commander_make_oris
+public :: commander_orisops
+public :: commander_oristats
+public :: commander_oriconsensus
+public :: commander_rotmats2oris
+public :: commander_vizoris
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: make_oris_commander
+type, extends(commander_base) :: commander_make_oris
   contains
     procedure :: execute      => exec_make_oris
-end type make_oris_commander
+end type commander_make_oris
 
-type, extends(commander_base) :: orisops_commander
+type, extends(commander_base) :: commander_orisops
   contains
     procedure :: execute      => exec_orisops
-end type orisops_commander
+end type commander_orisops
 
-type, extends(commander_base) :: oristats_commander
+type, extends(commander_base) :: commander_oristats
   contains
     procedure :: execute      => exec_oristats
-end type oristats_commander
+end type commander_oristats
 
-type, extends(commander_base) :: oriconsensus_commander
+type, extends(commander_base) :: commander_oriconsensus
   contains
     procedure :: execute      => exec_oriconsensus
-end type oriconsensus_commander
+end type commander_oriconsensus
 
-type, extends(commander_base) :: rotmats2oris_commander
+type, extends(commander_base) :: commander_rotmats2oris
   contains
     procedure :: execute      => exec_rotmats2oris
-end type rotmats2oris_commander
+end type commander_rotmats2oris
 
-type, extends(commander_base) :: vizoris_commander
+type, extends(commander_base) :: commander_vizoris
   contains
     procedure :: execute      => exec_vizoris
-end type vizoris_commander
+end type commander_vizoris
 
-type, extends(commander_base) :: check_states_commander
+type, extends(commander_base) :: commander_check_states
   contains
     procedure :: execute      => check_states
-end type check_states_commander
+end type commander_check_states
 
 contains
 
     !> for making SIMPLE orientation/parameter files
     subroutine exec_make_oris( self, cline )
-        class(make_oris_commander), intent(inout) :: self
+        class(commander_make_oris), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -117,7 +117,7 @@ contains
     end subroutine exec_make_oris
 
     subroutine exec_orisops( self, cline )
-        class(orisops_commander), intent(inout) :: self
+        class(commander_orisops), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -176,7 +176,7 @@ contains
 
     !> for analyzing SIMPLE orientation/parameter files
     subroutine exec_oristats( self, cline )
-        class(oristats_commander), intent(inout) :: self
+        class(commander_oristats), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
@@ -373,7 +373,7 @@ contains
     end subroutine exec_oristats
 
     subroutine exec_oriconsensus( self, cline )
-        class(oriconsensus_commander), intent(inout) :: self
+        class(commander_oriconsensus), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(sp_project),          allocatable :: spprojs(:)
         character(len=LONGSTRLEN), allocatable :: projfnames(:)
@@ -438,7 +438,7 @@ contains
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )
-        class(rotmats2oris_commander),  intent(inout) :: self
+        class(commander_rotmats2oris),  intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(nrtxtfile) :: rotmats
@@ -482,7 +482,7 @@ contains
     end subroutine exec_rotmats2oris
 
     subroutine exec_vizoris( self, cline )
-        class(vizoris_commander), intent(inout) :: self
+        class(commander_vizoris), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters)      :: params
         type(builder)         :: build
@@ -521,7 +521,7 @@ contains
             ! output
             fname = trim(params%fbody)//'.bild'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname),iostat=io_stat)
-             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+             if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             ! header
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 10"
@@ -561,7 +561,7 @@ contains
             fname  = trim(params%fbody)//'_motion.bild'
             radius = 0.02
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
+             if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed ", io_stat)
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
             write(funit,'(A)')".sphere 0 0 0 0.1"
@@ -595,7 +595,7 @@ contains
             allocate(euldists(n))
             fname  = trim(params%fbody)//'_motion.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
                 call build%spproj_field%get_ori(i, o)
                 if( i==1 )then
@@ -626,7 +626,7 @@ contains
     end subroutine exec_vizoris
 
     subroutine check_states( self, cline )
-        class(check_states_commander), intent(inout) :: self
+        class(commander_check_states), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
@@ -745,4 +745,4 @@ contains
 
     end subroutine check_states
 
-end module simple_commander_oris
+end module simple_commanders_oris

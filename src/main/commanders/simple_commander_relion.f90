@@ -1,4 +1,4 @@
-module simple_commander_relion
+module simple_commanders_relion
 include 'simple_lib.f08'
 use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
@@ -7,19 +7,19 @@ use simple_relion,         only: relion_project
 use simple_parameters,     only: parameters, params_glob
 implicit none
 
-public :: export_relion_commander
+public :: commander_export_relion
 private
 
-type, extends(commander_base) :: export_relion_commander
+type, extends(commander_base) :: commander_export_relion
 contains
     procedure :: execute      => exec_export_relion
-end type export_relion_commander
+end type commander_export_relion
 
 #include "simple_local_flags.inc"
 contains
 
     subroutine exec_export_relion( self, cline )
-        class(export_relion_commander), intent(inout) :: self
+        class(commander_export_relion), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
         type(parameters)     :: params
         type(sp_project)     :: spproj
@@ -40,4 +40,4 @@ contains
         call simple_end('**** export_relion NORMAL STOP ****')
     end subroutine exec_export_relion
 
-end module simple_commander_relion
+end module simple_commanders_relion

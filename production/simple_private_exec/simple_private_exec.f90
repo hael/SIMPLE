@@ -5,95 +5,95 @@ use simple_cmdline,        only: cmdline, cmdline_err
 use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_ui_latex, print_stream_ui_json
 use simple_private_prgs,   only: make_private_user_interface
 use simple_symanalyzer,    only: print_subgroups
-use simple_commander_project
-use simple_commander_checks
-use simple_commander_distr
-use simple_commander_misc
-use simple_commander_mask
-use simple_commander_imgproc
-use simple_commander_oris
-use simple_commander_preprocess
-use simple_commander_cluster2D
-use simple_commander_cavgs
-use simple_commander_refine3D
-use simple_commander_euclid
-use simple_commander_rec
-use simple_commander_sim
-use simple_commander_volops
-use simple_commander_tseries
-use simple_commander_resolest
+use simple_commanders_project
+use simple_commanders_checks
+use simple_commanders_distr
+use simple_commanders_misc
+use simple_commanders_mask
+use simple_commanders_imgproc
+use simple_commanders_oris
+use simple_commanders_preprocess
+use simple_commanders_cluster2D
+use simple_commanders_cavgs
+use simple_commanders_refine3D
+use simple_commanders_euclid
+use simple_commanders_rec
+use simple_commanders_sim
+use simple_commanders_volops
+use simple_commanders_tseries
+use simple_commanders_resolest
 implicit none
 #include "simple_local_flags.inc"
 
 ! PRE-PROCESSING PROGRAMS
-type(preprocess_commander)              :: xpreprocess
-type(extract_commander)                 :: xextract
-type(reextract_commander)               :: xreextract
-type(motion_correct_commander)          :: xmotion_correct
-type(gen_pspecs_and_thumbs_commander)   :: xgen_pspecs_and_thumbs
-type(ctf_estimate_commander)            :: xctf_estimate
-type(pick_extract_commander)            :: xpick_extract
-type(pick_commander)                    :: xpick
-type(shape_rank_cavgs_commander)        :: xshape_rank_cavgs
-type(make_pickrefs_commander)           :: xmake_pickrefs
-type(fractionate_movies_commander)      :: xfractionate_movies
+type(commander_preprocess)              :: xpreprocess
+type(commander_extract)                 :: xextract
+type(commander_reextract)               :: xreextract
+type(commander_motion_correct)          :: xmotion_correct
+type(commander_gen_pspecs_and_thumbs)   :: xgen_pspecs_and_thumbs
+type(commander_ctf_estimate)            :: xctf_estimate
+type(commander_pick_extract)            :: xpick_extract
+type(commander_pick)                    :: xpick
+type(commander_shape_rank_cavgs)        :: xshape_rank_cavgs
+type(commander_make_pickrefs)           :: xmake_pickrefs
+type(commander_fractionate_movies)      :: xfractionate_movies
 
 ! CLUSTER2D PROGRAMS
-type(make_cavgs_commander)              :: xmake_cavgs
-type(cluster2D_commander)               :: xcluster2D
-type(cluster2D_commander_distr)         :: xcluster2D_distr
-type(cavgassemble_commander)            :: xcavgassemble
-type(rank_cavgs_commander)              :: xrank_cavgs
-type(export_cavgs_commander)            :: xexport_cavgs
-type(prob_tab2D_commander)              :: xprob_tab2D
+type(commander_make_cavgs)              :: xmake_cavgs
+type(commander_cluster2D)               :: xcluster2D
+type(commander_cluster2D_distr)         :: xcluster2D_distr
+type(commander_cavgassemble)            :: xcavgassemble
+type(commander_rank_cavgs)              :: xrank_cavgs
+type(commander_export_cavgs)            :: xexport_cavgs
+type(commander_prob_tab2D)              :: xprob_tab2D
 
 ! REFINE3D PROGRAMS
-type(refine3D_commander)                :: xrefine3D
-type(calc_pspec_commander_distr)        :: xcalc_pspec_distr
-type(calc_pspec_commander)              :: xcalc_pspec
-type(calc_pspec_assemble_commander)     :: xcalc_pspec_assemble
-type(check_3Dconv_commander)            :: xcheck_3Dconv
-type(calc_group_sigmas_commander)       :: xcalc_group_sigmas
-type(prob_tab_commander)                :: xprob_tab
-type(prob_align_commander)              :: xprob_align
+type(commander_refine3D)                :: xrefine3D
+type(commander_calc_pspec_distr)        :: xcalc_pspec_distr
+type(commander_calc_pspec)              :: xcalc_pspec
+type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
+type(commander_check_3Dconv)            :: xcheck_3Dconv
+type(commander_calc_group_sigmas)       :: xcalc_group_sigmas
+type(commander_prob_tab)                :: xprob_tab
+type(commander_prob_align)              :: xprob_align
 
 ! RECONSTRUCTION PROGRAMS
-type(volassemble_commander)             :: xvolassemble
-type(reconstruct3D_commander)           :: xreconstruct3D
+type(commander_volassemble)             :: xvolassemble
+type(commander_reconstruct3D)           :: xreconstruct3D
 
 ! CHECKER PROGRAMS
-type(check_box_commander)               :: xcheck_box
-type(check_nptcls_commander)            :: xcheck_nptcls
-type(check_stoch_update_commander)      :: xcheck_stoch_update
-type(check_update_frac_commander)       :: xcheck_update_frac
+type(commander_check_box)               :: xcheck_box
+type(commander_check_nptcls)            :: xcheck_nptcls
+type(commander_check_stoch_update)      :: xcheck_stoch_update
+type(commander_check_update_frac)       :: xcheck_update_frac
 
 ! VOLOPS PROGRAMS
-type(postprocess_commander)             :: xpostprocess
-type(automask_commander)                :: xautomask
+type(commander_postprocess)             :: xpostprocess
+type(commander_automask)                :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
-type(scale_commander)                   :: xscale
-type(binarize_commander)                :: xbinarize
-type(edge_detect_commander)             :: xdetector
+type(commander_scale)                   :: xscale
+type(commander_binarize)                :: xbinarize
+type(commander_edge_detect)             :: xdetector
 
 ! MISCELLANOUS PROGRAMS
-type(kstest_commander)                  :: xkstst
-type(pearsn_commander)                  :: xpearsn
+type(commander_kstest)                  :: xkstst
+type(commander_pearsn)                  :: xpearsn
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(rotmats2oris_commander)            :: xrotmats2oris
-type(print_project_vals_commander)      :: xprint_project_vals
+type(commander_rotmats2oris)            :: xrotmats2oris
+type(commander_print_project_vals)      :: xprint_project_vals
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(prune_project_commander)           :: xprune_project
-type(scale_project_commander_distr)     :: xscale_project_distr
+type(commander_prune_project)           :: xprune_project
+type(commander_scale_project_distr)     :: xscale_project_distr
 
 ! TIME-SERIES ANALYSIS PROGRAMS
-type(tseries_track_particles_commander) :: xtseries_track_particles
-type(tseries_motion_correct_commander)  :: xtseries_mcorr
+type(commander_tseries_track_particles) :: xtseries_track_particles
+type(commander_tseries_motion_correct)  :: xtseries_mcorr
 
 ! PARALLEL PROCESSING PROGRAMS
-type(split_commander)                   :: xsplit
+type(commander_split)                   :: xsplit
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)   :: xarg, prg

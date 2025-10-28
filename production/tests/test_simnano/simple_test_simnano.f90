@@ -6,7 +6,7 @@ use simple_ctf,        only: ctf
 use simple_simulator,  only: simimg
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
-use simple_commander_sim, only: simulate_atoms_commander
+use simple_commanders_sim, only: simulate_atoms_commander
 implicit none
 type(simulate_atoms_commander) :: xsim_atoms
 type(parameters) :: params

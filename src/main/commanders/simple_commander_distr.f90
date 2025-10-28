@@ -1,5 +1,5 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
-module simple_commander_distr
+module simple_commanders_distr
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
@@ -7,27 +7,27 @@ use simple_parameters,     only: parameters
 use simple_stack_io,       only: stack_io
 implicit none
 
-public :: split_pairs_commander
-public :: split_commander
+public :: commander_split_pairs
+public :: commander_split
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: split_pairs_commander
+type, extends(commander_base) :: commander_split_pairs
   contains
     procedure :: execute      => exec_split_pairs
-end type split_pairs_commander
+end type commander_split_pairs
 
-type, extends(commander_base) :: split_commander
+type, extends(commander_base) :: commander_split
   contains
     procedure :: execute      => exec_split
-end type split_commander
+end type commander_split
 
 contains
 
     !> for splitting calculations between pairs of objects into balanced partitions
     subroutine exec_split_pairs( self, cline )
         use simple_map_reduce, only: split_pairs_in_parts
-        class(split_pairs_commander), intent(inout) :: self
+        class(commander_split_pairs), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         call params%new(cline)
@@ -40,7 +40,7 @@ contains
     subroutine exec_split( self, cline )
         use simple_map_reduce ! use all in there
         use simple_image, only: image
-        class(split_commander), intent(inout) :: self
+        class(commander_split), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters)     :: p
         type(image)          :: img
@@ -71,4 +71,4 @@ contains
         call simple_end('**** SIMPLE_SPLIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split
 
-end module simple_commander_distr
+end module simple_commanders_distr

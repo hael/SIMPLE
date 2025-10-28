@@ -1,55 +1,55 @@
 ! concrete commander: checking routines
-module simple_commander_checks
+module simple_commanders_checks
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 implicit none
 
-public :: check_box_commander
-public :: check_nptcls_commander
-public :: check_stoch_update_commander
-public :: check_update_frac_commander
-public :: info_image_commander
-public :: info_stktab_commander
+public :: commander_check_box
+public :: commander_check_nptcls
+public :: commander_check_stoch_update
+public :: commander_check_update_frac
+public :: commander_info_image
+public :: commander_info_stktab
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: check_box_commander
+type, extends(commander_base) :: commander_check_box
   contains
     procedure :: execute      => exec_check_box
-end type check_box_commander
+end type commander_check_box
 
-type, extends(commander_base) :: check_nptcls_commander
+type, extends(commander_base) :: commander_check_nptcls
   contains
     procedure :: execute      => exec_check_nptcls
-end type check_nptcls_commander
+end type commander_check_nptcls
 
-type, extends(commander_base) :: check_stoch_update_commander
+type, extends(commander_base) :: commander_check_stoch_update
   contains
     procedure :: execute      => exec_check_stoch_update
-end type check_stoch_update_commander
+end type commander_check_stoch_update
 
-type, extends(commander_base) :: check_update_frac_commander
+type, extends(commander_base) :: commander_check_update_frac
   contains
     procedure :: execute      => exec_check_update_frac
-end type check_update_frac_commander
+end type commander_check_update_frac
 
-type, extends(commander_base) :: info_image_commander
+type, extends(commander_base) :: commander_info_image
  contains
    procedure :: execute      => exec_info_image
-end type info_image_commander
+end type commander_info_image
 
-type, extends(commander_base) :: info_stktab_commander
+type, extends(commander_base) :: commander_info_stktab
  contains
    procedure :: execute      => exec_info_stktab
-end type info_stktab_commander
+end type commander_info_stktab
 
 contains
 
     !> for checking the image dimensions of MRC and SPIDER stacks and volumes
     subroutine exec_check_box( self, cline )
-        class(check_box_commander), intent(inout) :: self
+        class(commander_check_box), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters) :: params
         if( cline%defined('stk') .or. cline%defined('vol1') )then
@@ -66,7 +66,7 @@ contains
 
     !> for checking the number of images in MRC and SPIDER stacks
     subroutine exec_check_nptcls( self, cline )
-        class(check_nptcls_commander), intent(inout) :: self
+        class(commander_check_nptcls), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
         call params%new(cline)
@@ -78,7 +78,7 @@ contains
 
     subroutine exec_check_stoch_update( self, cline )
         use simple_decay_funs
-        class(check_stoch_update_commander), intent(inout) :: self
+        class(commander_check_stoch_update), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         integer          :: i, nsampl_fromto(2), nsampl
@@ -95,7 +95,7 @@ contains
 
     subroutine exec_check_update_frac( self, cline )
         use simple_decay_funs
-        class(check_update_frac_commander), intent(inout) :: self
+        class(commander_check_update_frac), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
         integer          :: minmax(2), nsampl, i
@@ -121,7 +121,7 @@ contains
     !> for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_info_image( self, cline)
         use simple_image,   only: image
-        class(info_image_commander), intent(inout) :: self
+        class(commander_info_image), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(image)      :: img
@@ -155,7 +155,7 @@ contains
 
     !> for printing information about stktab
     subroutine exec_info_stktab( self, cline )
-        class(info_stktab_commander), intent(inout) :: self
+        class(commander_info_stktab), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(LONGSTRLEN), allocatable :: stkfnames(:)
         type(parameters) :: params
@@ -190,4 +190,4 @@ contains
         call simple_end('**** SIMPLE_INFO_STKTAB NORMAL STOP ****')
     end subroutine exec_info_stktab
 
-end module simple_commander_checks
+end module simple_commanders_checks

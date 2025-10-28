@@ -79,8 +79,6 @@ type(simple_program), target :: abinitio2D_stream
 type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D_cavgs_fast
 type(simple_program), target :: abinitio3D
-type(simple_program), target :: abinitio3D_parts
-type(simple_program), target :: analyze_pspecs
 type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
@@ -114,7 +112,7 @@ type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: ctf_phaseflip
-type(simple_program), target :: mini_stream
+type(simple_program), target :: quick_look
 type(simple_program), target :: denoise_trajectory
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
@@ -223,7 +221,7 @@ type(simple_program), target :: graphene_subtr
 type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
-type(simple_program), target :: validate_refpick
+type(simple_program), target :: check_refpick
 type(simple_program), target :: vizoris
 type(simple_program), target :: volanalyze
 type(simple_program), target :: volops
@@ -419,8 +417,6 @@ contains
         call new_abinitio3D_cavgs
         call new_abinitio3D_cavgs_fast
         call new_abinitio3D
-        call new_abinitio3D_parts
-        call new_analyze_pspecs
         call new_afm
         call new_analysis2D_nano
         call new_assign_optics
@@ -457,7 +453,7 @@ contains
         call new_ctfops
         call new_ctf_phaseflip
         call new_pdb2mrc
-        call new_mini_stream
+        call new_quick_look
         call new_denoise_trajectory
         call new_detect_atoms
         call new_dock_volpair
@@ -562,7 +558,7 @@ contains
         call new_uniform_filter2D
         call new_uniform_filter3D
         call new_update_project
-        call new_validate_refpick
+        call new_check_refpick
         call new_vizoris
         call new_volanalyze
         call new_volops
@@ -579,8 +575,6 @@ contains
         call push2prg_ptr_array(abinitio3D_cavgs)
         call push2prg_ptr_array(abinitio3D_cavgs_fast)
         call push2prg_ptr_array(abinitio3D)
-        call push2prg_ptr_array(abinitio3D_parts)
-        call push2prg_ptr_array(analyze_pspecs)
         call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
@@ -616,7 +610,7 @@ contains
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(pdb2mrc)
-        call push2prg_ptr_array(mini_stream)
+        call push2prg_ptr_array(quick_look)
         call push2prg_ptr_array(denoise_trajectory)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
@@ -718,7 +712,7 @@ contains
         call push2prg_ptr_array(uniform_filter2D)
         call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
-        call push2prg_ptr_array(validate_refpick)
+        call push2prg_ptr_array(check_refpick)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volanalyze)
         call push2prg_ptr_array(volops)
@@ -750,10 +744,6 @@ contains
                 ptr2prg => abinitio3D_cavgs_fast
             case('abinitio3D')
                 ptr2prg => abinitio3D
-            case('abinitio3D_parts')
-                ptr2prg => abinitio3D_parts
-            case('analyze_pspecs')
-                ptr2prg => analyze_pspecs
             case('afm')
                 ptr2prg => afm
             case('analysis2D_nano')
@@ -822,8 +812,8 @@ contains
                 ptr2prg => ctf_phaseflip
             case('pdb2mrc')
                 ptr2prg => pdb2mrc
-            case('mini_stream')
-                ptr2prg => mini_stream
+            case('quick_look')
+                ptr2prg => quick_look
             case('denoise_trajectory')
                 ptr2prg => denoise_trajectory
             case('detect_atoms')
@@ -1036,8 +1026,8 @@ contains
                 ptr2prg => uniform_filter3D
             case('update_project')
                 ptr2prg => update_project
-            case('validate_refpick')
-                ptr2prg => validate_refpick
+            case('check_refpick')
+                ptr2prg => check_refpick
             case('vizoris')
                 ptr2prg => vizoris
             case('volanalyze')
@@ -1060,8 +1050,6 @@ contains
         write(logfhandle,'(A)') abinitio3D_cavgs%name
         write(logfhandle,'(A)') abinitio3D_cavgs_fast%name
         write(logfhandle,'(A)') abinitio3D%name
-        write(logfhandle,'(A)') abinitio3D_parts%name
-        write(logfhandle,'(A)') analyze_pspecs%name
         write(logfhandle,'(A)') afm%name
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
@@ -1083,7 +1071,7 @@ contains
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') ctf_phaseflip%name
-        write(logfhandle,'(A)') mini_stream%name
+        write(logfhandle,'(A)') quick_look%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') estimate_lpstages%name
         write(logfhandle,'(A)') extract%name
@@ -1168,7 +1156,7 @@ contains
         write(logfhandle,'(A)') uniform_filter2D%name
         write(logfhandle,'(A)') uniform_filter3D%name
         write(logfhandle,'(A)') update_project%name
-        write(logfhandle,'(A)') validate_refpick%name
+        write(logfhandle,'(A)') check_refpick%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volanalyze%name
         write(logfhandle,'(A)') volops%name
@@ -2482,39 +2470,39 @@ contains
         ! <empty>
     end subroutine new_ctf_phaseflip
 
-    subroutine new_mini_stream
+    subroutine new_quick_look
         ! PROGRAM SPECIFICATION
-        call mini_stream%new(&
-        &'mini_stream',&                               ! name
-        &'denoising of micrographs',&                   ! descr_short
-        &'is a program for denoising of micrographs',&  ! descr_long
-        &'simple_stream',&                                ! executable
+        call quick_look%new(&
+        &'quick_look',&                                 ! name
+        &'standalone mini_stream for a quick look',&    ! descr_short
+        &'is a program for doing a standalone mini_stream for a quick look',&  ! descr_long
+        &'simple_exec',&                                ! executable
         &1, 6, 0, 1, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call mini_stream%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
-        mini_stream%img_ios(1)%required = .true.
+        call quick_look%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
+        quick_look%img_ios(1)%required = .true.
         ! parameter input/output
-        call mini_stream%set_input('parm_ios', 1, smpd)
-        mini_stream%parm_ios(1)%required = .true.
-        call mini_stream%set_input('parm_ios', 2, pcontrast)
-        call mini_stream%set_input('parm_ios', 3, kv)
-        mini_stream%parm_ios(3)%required = .true.
-        call mini_stream%set_input('parm_ios', 4, cs)
-        mini_stream%parm_ios(4)%required = .true.
-        call mini_stream%set_input('parm_ios', 5, fraca)
-        call mini_stream%set_input('parm_ios', 6, moldiam_max)
+        call quick_look%set_input('parm_ios', 1, smpd)
+        quick_look%parm_ios(1)%required = .true.
+        call quick_look%set_input('parm_ios', 2, pcontrast)
+        call quick_look%set_input('parm_ios', 3, kv)
+        quick_look%parm_ios(3)%required = .true.
+        call quick_look%set_input('parm_ios', 4, cs)
+        quick_look%parm_ios(4)%required = .true.
+        call quick_look%set_input('parm_ios', 5, fraca)
+        call quick_look%set_input('parm_ios', 6, moldiam_max)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call mini_stream%set_input('srch_ctrls',1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
+        call quick_look%set_input('srch_ctrls',1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
         ! filter controls
         ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call mini_stream%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_mini_stream
+        call quick_look%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_quick_look
 
     subroutine new_denoise_trajectory
         ! PROGRAM SPECIFICATION
@@ -3235,72 +3223,6 @@ contains
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
         abinitio3D%comp_ctrls(3)%required = .false.
     end subroutine new_abinitio3D
-
-    subroutine new_abinitio3D_parts
-        ! PROGRAM SPECIFICATION
-        call abinitio3D_parts%new(&
-        &'abinitio3D_parts',&                                                   ! name
-        &'cross-validated 3D ab initio model generation from particles',&       ! descr_short
-        &'is a distributed workflow for generating a set of ab initio 3D models for cross-validation',&                                                     ! descr_long
-        &'simple_exec',&                                                        ! executable
-        &0, 2, 0, 4, 3, 1, 3, .true.,&                                          ! # entries in each group, requires sp_project    
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute" ) ! GUI                                                      
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call abinitio3D_parts%set_input('parm_ios', 1, 'nparts', 'num', 'Number of parts for balanced splitting of the particles', '# parts after balancing', '# parts after balancing', .true., 1.0)
-        call abinitio3D_parts%set_input('parm_ios', 2, 'nptcls_per_part', 'num', 'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call abinitio3D_parts%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        call abinitio3D_parts%set_input('srch_ctrls', 2, pgrp, gui_submenu="model", gui_advanced=.false.)
-        call abinitio3D_parts%set_input('srch_ctrls', 3, pgrp_start, gui_submenu="model")
-        call abinitio3D_parts%set_input('srch_ctrls', 4, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
-        ! filter controls
-        call abinitio3D_parts%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call abinitio3D_parts%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio3D_parts%set_input('filt_ctrls', 3, icm)
-        ! mask controls
-        call abinitio3D_parts%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        ! computer controls
-        call abinitio3D_parts%set_input('comp_ctrls', 1, 'nparts_per_part', 'num', 'Number of computing nodes per part', '# partitions for distributed memory execution of balanced parts', 'divide each balanced part job into # parts', .false., 1.0)
-        abinitio3D_parts%comp_ctrls(1)%required = .false.
-        call abinitio3D_parts%set_input('comp_ctrls', 2, nthr,       gui_submenu="compute", gui_advanced=.false.)
-        call abinitio3D_parts%set_input('comp_ctrls', 3, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
-        &logical threads in a socket.', '# shared-memory CPU threads', .true., 0., gui_submenu="compute", gui_advanced=.false.)
-        abinitio3D_parts%comp_ctrls(3)%required = .false.
-    end subroutine new_abinitio3D_parts
-
-    subroutine new_analyze_pspecs
-        ! PROGRAM SPECIFICATION
-        call analyze_pspecs%new(&
-        &'analyze_pspecs',&
-        &'',&
-        &'',&
-        &'simple_exec',&
-        &0, 0, 0, 0, 2, 1, 1, .true.)                                                     
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call analyze_pspecs%set_input('filt_ctrls', 1, hp)
-        call analyze_pspecs%set_input('filt_ctrls', 2, lp)
-        ! mask controls
-        call analyze_pspecs%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call analyze_pspecs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_analyze_pspecs
 
     subroutine new_import_boxes
         ! PROGRAM SPECIFICATION
@@ -6282,43 +6204,43 @@ contains
         call update_project%set_input('comp_ctrls', 9, walltime)
     end subroutine new_update_project
 
-    subroutine new_validate_refpick
+    subroutine new_check_refpick
         ! PROGRAM SPECIFICATION
-        call validate_refpick%new(&
-        &'validate_refpick',&                                        ! name
+        call check_refpick%new(&
+        &'check_refpick',&                                        ! name
         &'validation of reference-based picking',&                   ! descr_short
         &'is a program for validation of reference-based picking',&  ! descr_long
         &'simple_stream',&                                           ! executable
         &2, 5, 0, 4, 0, 0, 1, .false.)                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call validate_refpick%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
-        validate_refpick%img_ios(1)%required = .true.
-        call validate_refpick%set_input('img_ios', 2,  pickrefs)
-        validate_refpick%img_ios(2)%required = .true.
+        call check_refpick%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
+        check_refpick%img_ios(1)%required = .true.
+        call check_refpick%set_input('img_ios', 2,  pickrefs)
+        check_refpick%img_ios(2)%required = .true.
         ! parameter input/output
-        call validate_refpick%set_input('parm_ios', 1, smpd)
-        validate_refpick%parm_ios(1)%required = .true.
-        call validate_refpick%set_input('parm_ios', 2, pcontrast)
-        call validate_refpick%set_input('parm_ios', 3, kv)
-        validate_refpick%parm_ios(3)%required = .true.
-        call validate_refpick%set_input('parm_ios', 4, cs)
-        validate_refpick%parm_ios(4)%required = .true.
-        call validate_refpick%set_input('parm_ios', 5, fraca)
+        call check_refpick%set_input('parm_ios', 1, smpd)
+        check_refpick%parm_ios(1)%required = .true.
+        call check_refpick%set_input('parm_ios', 2, pcontrast)
+        call check_refpick%set_input('parm_ios', 3, kv)
+        check_refpick%parm_ios(3)%required = .true.
+        call check_refpick%set_input('parm_ios', 4, cs)
+        check_refpick%parm_ios(4)%required = .true.
+        call check_refpick%set_input('parm_ios', 5, fraca)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call validate_refpick%set_input('srch_ctrls', 1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
-        call validate_refpick%set_input('srch_ctrls', 2, pick_roi)
-        call validate_refpick%set_input('srch_ctrls', 3, particle_density)
-        call validate_refpick%set_input('srch_ctrls', 4, nboxes_max)
+        call check_refpick%set_input('srch_ctrls', 1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
+        call check_refpick%set_input('srch_ctrls', 2, pick_roi)
+        call check_refpick%set_input('srch_ctrls', 3, particle_density)
+        call check_refpick%set_input('srch_ctrls', 4, nboxes_max)
         ! filter controls
         ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call validate_refpick%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_validate_refpick
+        call check_refpick%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_check_refpick
 
     subroutine new_vizoris
         ! PROGRAM SPECIFICATION

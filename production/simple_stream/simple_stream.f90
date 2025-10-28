@@ -4,15 +4,14 @@ include 'simple_lib.f08'
 use simple_user_interface, only: make_user_interface, list_stream_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers
-use simple_commander_stream
-use simple_commander_stream2D
+use simple_commanders_stream
+use simple_commanders_stream2D
 
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROGRAMS
-type(commander_mini_stream)             :: xmini_stream
-type(commander_validate_refpick)        :: xvalidate_refpick
+type(commander_stream_mini)             :: xstream_mini
 type(commander_stream_preprocess)       :: xpreprocess
 type(commander_stream_pick_extract)     :: xpick_extract
 type(commander_stream_gen_picking_refs) :: xgen_picking_refs
@@ -47,10 +46,8 @@ call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, trim(prg), 'simple_stream')
 select case(trim(prg))
-    case( 'mini_stream' )
-        call xmini_stream%execute(cline)
-    case( 'validate_refpick')
-        call xvalidate_refpick%execute(cline)
+    case( 'stream_mini' )
+        call xstream_mini%execute(cline)
     case( 'preproc' )
         call xpreprocess%execute(cline)
     case( 'pick_extract' )
@@ -73,7 +70,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('6e4f3b0b')
+call simple_print_git_version('46d3e6c0')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

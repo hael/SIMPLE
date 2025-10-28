@@ -1,21 +1,21 @@
-program simple_test_mini_stream
+program simple_test_quick_look
 include 'simple_lib.f08'
-use simple_cmdline,              only: cmdline
-use simple_parameters,           only: parameters
-use simple_commander_project,    only: new_project_commander
-use simple_commander_stream2D,   only: commander_mini_stream
-use simple_commander_preprocess, only: preprocess_commander
+use simple_cmdline,               only: cmdline
+use simple_parameters,            only: parameters
+use simple_commanders_project,    only: commander_new_project
+use simple_commanders_validate,   only: commander_quick_look
+use simple_commanders_preprocess, only: commander_preprocess
 implicit none
 character(len=LONGSTRLEN), allocatable :: dataset_commands(:)
-type(cmdline)               :: cline, cline_dataset, cline_new_project, cline_preprocess, cline_mini_stream
+type(cmdline)               :: cline, cline_dataset, cline_new_project, cline_preprocess, cline_quick_look
 type(parameters)            :: params
-type(new_project_commander) :: xnew_project
-type(preprocess_commander)  :: xpreprocess
-type(commander_mini_stream) :: xmini_stream
+type(commander_new_project) :: xnew_project
+type(commander_preprocess)  :: xpreprocess
+type(commander_quick_look)  :: xquick_look
 integer                     :: i, ndata_sets
 ! Parsing
 if( command_argument_count() < 1 )then
-    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mini_stream fname=filetab.txt'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_quick_look fname=filetab.txt'
     call exit(-1)
 else 
     call cline%parse_oldschool
@@ -58,14 +58,14 @@ do i = 1, ndata_sets
     call cline_preprocess%set('total_dose', params%total_dose)
     call xpreprocess%execute(cline_preprocess)
     call cline_dataset%kill
-    ! mini_stream 
-    call cline_mini_stream%set('filetab', params%filetab)
-    call cline_mini_stream%set('moldiam_max', params%moldiam_max)
-    call xmini_stream%execute(cline_mini_stream)
+    ! quick_look 
+    call cline_quick_look%set('filetab', params%filetab)
+    call cline_quick_look%set('moldiam_max', params%moldiam_max)
+    call xquick_look%execute(cline_quick_look)
     call cline_dataset%kill
     call cline_new_project%kill
     call cline_preprocess%kill
     call cline_dataset%kill
 enddo
 ! copy movies to local storage?
-end program simple_test_mini_stream
+end program simple_test_quick_look
