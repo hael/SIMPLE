@@ -1983,7 +1983,7 @@ contains
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
         integer                                :: xtile, ytile, nxtiles, nytiles
         integer,                   allocatable :: final_selection(:), final_boxsize(:)
-        logical                                :: l_haschanged, l_once, l_pick_extract, l_user, json_found, l_restart
+        logical                                :: l_haschanged, l_once, l_pick_extract, l_user, l_restart
         logical(LK)                            :: found 
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -2011,7 +2011,6 @@ contains
         if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',         'no')
         if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc_smpl')
         if( .not. cline%defined('maxpop')          ) call cline%set('maxpop',         MAXPOP_DEFAULT)
-        ! if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',         8.0) ! For future use
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
         if(envlen > 0) then
@@ -2045,6 +2044,10 @@ contains
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         call cline%delete('maxpop')
+        if( trim(params%algorithm).eq.'new' )then
+            if( .not. cline%defined('lpstop') ) call cline%set('lpstop', 8.0)
+            params%lpstop = cline%get_rarg('lpstop')
+        endif
         ! http communicator init
         call http_communicator%create(params%niceprocid, params%niceserver, "generate_picking_refs")
         call communicator_init()
@@ -2131,6 +2134,7 @@ contains
             else
                 params%box = 0
             endif
+            call cline_pick_extract%delete('algorithm')
         else
             ! extraction only
             cline_extract = cline
@@ -2144,16 +2148,17 @@ contains
             else
                 params%box = 0
             endif
+             call cline_extract%delete('algorithm')
         endif
         ! Infinite loop
-        prev_stacksz          = 0
-        iter                  = 0
-        n_imported            = 0   ! global number of imported processed micrographs
-        n_failed_jobs         = 0
-        n_added               = 0   ! global number of micrographs added to processing stack
-        l_haschanged          = .false.
-        l_once                = .true.
-        l_user                = .false.
+        prev_stacksz  = 0
+        iter          = 0
+        n_imported    = 0       ! global number of imported processed micrographs
+        n_failed_jobs = 0
+        n_added       = 0       ! global number of micrographs added to processing stack
+        l_haschanged  = .false.
+        l_once        = .true.
+        l_user        = .false.
         do
             if( file_exists(trim(TERM_STREAM)) .or. file_exists(STREAM_REJECT_CLS) .or. http_communicator%exit)then
                 ! termination
@@ -2170,7 +2175,7 @@ contains
             endif
             iter = iter + 1
             ! detection of new projects
-            if( nptcls_glob > params%maxpop .and. project_buff%does_exist() )then
+            if( (nptcls_glob > params%maxpop) .and. project_buff%does_exist() )then
                 ! limit reached
                 call project_buff%kill
                 write(logfhandle,'(A)')'>>> PICKING/EXTRACTION OF PARTICLES WILL STOP FROM NOW'
@@ -2253,13 +2258,21 @@ contains
             ! 2D section
             if( l_once .and. (nptcls_glob > params%nptcls_per_cls*params%ncls) )then
                 if( .not.cline%defined('mskdiam') ) params%mskdiam = 0.85 * real(params%box) * params%smpd
-                call init_cluster2D_stream( cline, spproj_glob, micspproj_fname, reference_generation=.true. )
+                if( trim(params%algorithm).eq.'new' )then
+                    call init_pool_clustering( cline, spproj_glob, micspproj_fname, reference_generation=.true. )
+                else
+                    call init_cluster2D_stream( cline, spproj_glob, micspproj_fname, reference_generation=.true. )
+                endif
                 l_once = .false.
             endif
             call update_pool_status
             call update_pool
             call import_records_into_pool( projrecords )
-            call analyze2D_pool
+            if( trim(params%algorithm).eq.'new' )then
+                call iterate_pool_all
+            else
+                call analyze2D_pool
+            endif
             if(  params%nparts > 1 ) then
                 call sleep(WAITTIME)
             else

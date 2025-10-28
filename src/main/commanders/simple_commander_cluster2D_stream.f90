@@ -26,7 +26,7 @@ implicit none
 
 public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
 ! Pool
-public :: import_records_into_pool, analyze2D_pool, iterate_pool, update_pool_status, update_pool
+public :: import_records_into_pool, analyze2D_pool, iterate_pool, iterate_pool_all, update_pool_status, update_pool
 public :: reject_from_pool, reject_from_pool_user, write_pool_cls_selected_user
 public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
 public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected, get_pool_ptr
@@ -178,7 +178,7 @@ contains
         if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
         ! bookkeeping & directory structure
         numlen         = len(int2str(params_glob%nparts_pool))
-        refs_glob      = 'start_cavgs'//params_glob%ext
+        refs_glob      = 'start2Drefs'//params_glob%ext
         pool_available = .true.
         pool_iter      = 0
         call simple_mkdir(POOL_DIR, verbose=.false.)
@@ -574,13 +574,20 @@ contains
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D_pool%set('sigma_est', params_glob%sigma_est)
         call cline_cluster2D_pool%set('kweight',   params_glob%kweight_pool)
-        call cline_cluster2D_pool%set('cls_init',  params_glob%cls_init)
+        if( cline%defined('cls_init') )then
+            call cline_cluster2D_pool%set('cls_init', params_glob%cls_init)
+        else
+            call cline_cluster2D_pool%set('cls_init', 'rand')
+        endif
         if( cline%defined('center') )then
             carg = cline%get_carg('center')
             call cline_cluster2D_pool%set('center',carg)
             deallocate(carg)
         else
             call cline_cluster2D_pool%set('center','yes')
+        endif
+        if( .not.cline%defined('center_type') )then
+            call cline_cluster2D_pool%set('center_type', 'seg')
         endif
         call cline_cluster2D_pool%set('extr_iter', 99999)
         call cline_cluster2D_pool%set('extr_lim',  MAX_EXTRLIM2D)
@@ -1064,43 +1071,29 @@ contains
         character(len=:), allocatable                       :: mapfileprefix
         integer :: ipart, lastmap
         call terminate_chunks
-        if( pool_iter == 0 )then
-            if( present(records) )then
-                ! no pool 2D analysis performed, all available info is written down
-                if( allocated(records) )then
-                    lastmap = 0
-                    if(present(optics_dir)) then
-                        call get_latest_optics_map()
-                        if(lastmap .gt. 0) then
-                            mapfileprefix = trim(optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(lastmap)
-                            call pool_proj%import_optics_map(mapfileprefix)
-                        endif
-                    endif
-                    call projrecords2proj(records, pool_proj)
-                    call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
-                    call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
-                    call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
-                    call pool_proj%write(orig_projfile)
-                endif
-            endif
+        if( pool_iter <= 0 )then
+            ! no 2D yet
+            call write_raw_project
         else
             if( .not.pool_available )then
                 pool_iter = pool_iter-1 ! iteration pool_iter not complete so fall back on previous iteration
-                refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
-                ! tricking the asynchronous master process to come to a hard stop
-                call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
-                do ipart = 1,params_glob%nparts_pool
-                    call simple_touch(trim(POOL_DIR)//trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen))
-                enddo
-                call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
+                if( pool_iter <= 0 )then
+                    ! no 2D yet
+                    call write_raw_project
+                else
+                    refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+                    ! tricking the asynchronous master process to come to a hard stop
+                    call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
+                    do ipart = 1,params_glob%nparts_pool
+                        call simple_touch(trim(POOL_DIR)//trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen))
+                    enddo
+                    call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
+                endif
             endif
-            if(present(optics_dir)) then
+            if( pool_iter >= 1 )then
                 call write_project_stream2D(write_star=.true., clspath=.true., optics_dir=optics_dir)
-            else
-                call write_project_stream2D(write_star=.true., clspath=.true.)
+                call rank_cavgs
             endif
-            ! rank cavgs
-            if( pool_iter >= 1 ) call rank_cavgs
         endif
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
@@ -1112,6 +1105,27 @@ contains
         endif
 
         contains
+
+            ! no pool clustering performed, all available info is written down
+            subroutine write_raw_project
+                if( present(records) )then
+                    if( allocated(records) )then
+                        lastmap = 0
+                        if(present(optics_dir)) then
+                            call get_latest_optics_map()
+                            if(lastmap .gt. 0) then
+                                mapfileprefix = trim(optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(lastmap)
+                                call pool_proj%import_optics_map(mapfileprefix)
+                            endif
+                        endif
+                        call projrecords2proj(records, pool_proj)
+                        call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
+                        call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
+                        call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
+                        call pool_proj%write(orig_projfile)
+                    endif
+                endif
+            end subroutine write_raw_project
 
             subroutine get_latest_optics_map()
                 character(len=LONGSTRLEN), allocatable   :: map_list(:)
@@ -1756,9 +1770,9 @@ contains
         real    :: frac_update, smpd
         integer :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
-        if( l_no_chunks ) THROW_HARD('Designed for pre-clustered/matched particles!')
         if( .not. stream2D_active ) return
         if( .not. pool_available )  return
+        if( l_no_chunks ) THROW_HARD('Designed for pre-clustered/matched particles!')
         if( L_BENCH ) t_tot  = tic()
         nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
         nptcls_glob          = nptcls_tot
@@ -1890,7 +1904,7 @@ contains
             !$omp end parallel do
         endif
         ! Consolidate sigmas doc
-        call consolidate_sigmas
+        call consolidate_sigmas(spproj, nstks2update)
         ! update command line with fractional update parameters
         call cline_cluster2D_pool%delete('update_frac')
         frac_update = 1.0
@@ -1939,7 +1953,7 @@ contains
             random_generator = ran_tabu(nstks_tot)
             call random_generator%shuffle(stk_order)
             nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
-            nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
+            nptcls_sel    = 0 ! # of ptcls excluding state=1 within selected stacks
             do i = 1,nstks_tot
                 j = stk_order(i)
                 if( nptcls_sel > lim_ufrac_nptcls ) cycle
@@ -1999,40 +2013,6 @@ contains
             endif
         end subroutine biased_stack_sampling
 
-        subroutine consolidate_sigmas
-            use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
-            character(len=:),          allocatable :: stack_fname, ext, fbody
-            character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
-            integer :: i, istk
-            if( l_update_sigmas )then
-                if( trim(params_glob%sigma_est).eq.'group' )then
-                    allocate(sigma_fnames(nstks2update))
-                    do istk = 1,nstks2update
-                        call spproj%os_stk%getter(istk,'stk',stack_fname)
-                        stack_fname = basename(stack_fname)
-                        ext         = fname2ext(stack_fname)
-                        fbody       = get_fbody(stack_fname, ext)
-                        sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
-                    enddo
-                    call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                    deallocate(sigma_fnames)
-                else
-                    ! sigma_est=global & first iteration
-                    if( pool_iter==1 )then
-                        allocate(sigma_fnames(glob_chunk_id))
-                        do i = 1,glob_chunk_id
-                            sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//trim(STAR_EXT)
-                        enddo
-                        call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                        deallocate(sigma_fnames)
-                    endif
-                endif
-                do i = 1,params_glob%nparts_pool
-                    call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
-                enddo
-            endif
-        end subroutine consolidate_sigmas
-
     end subroutine iterate_pool
 
     ! Performs one iteration of all particles in the pool
@@ -2049,9 +2029,9 @@ contains
         real    :: gamma, lambda, lp_refgen
         integer :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer :: icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
-        if( .not. l_no_chunks ) THROW_HARD('Only designed for raw particles input (no pre-clustering/matching)!')
         if( .not. stream2D_active ) return
         if( .not. pool_available )  return
+        if( .not. l_no_chunks ) THROW_HARD('Only designed for raw particles input (no pre-clustering/matching)!')
         if( L_BENCH ) t_tot  = tic()
         nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
         nptcls_glob          = nptcls_tot
@@ -2084,9 +2064,12 @@ contains
         if( pool_iter == 1 )then
             call cline_cluster2D_pool%delete('frcs')
             call cline_cluster2D_pool%delete('refs')
-            call cline_cluster2D_pool%set('extr_iter', 1)
             lambda    = LAMBDA_REFGEN
             lp_refgen = lpstart
+            call cline_cluster2D_pool%set('extr_iter', 1)
+            call cline_cluster2D_pool%set('lp',        lp_refgen)
+            call cline_cluster2D_pool%set('icm',       'yes')
+            call cline_cluster2D_pool%set('lambda',    lambda)
             ! sigmas2 are calculated first thing
             allocate(clines(2))
             call clines(1)%set('prg',        'calc_pspec_distr')
@@ -2098,8 +2081,6 @@ contains
             call clines(1)%set('sigma_est',  'global')
             call clines(1)%set('nparts',     params_glob%nparts_pool)
             clines(2) = cline_cluster2D_pool
-            ! Resolution limit
-            call cline_cluster2D_pool%set('lp', lp_refgen)
         else
             if( pool_iter < ITERLIM_REFGEN )then
                 gamma = min(1.0, max(0.0, real(ITERLIM_REFGEN-pool_iter)/real(ITERLIM_REFGEN-1)))
@@ -2117,6 +2098,7 @@ contains
                 lambda = 0.0
                 call cline_cluster2D_pool%set('lpstop',    lpstop)
                 call cline_cluster2D_pool%set('icm',       'no')
+                call cline_cluster2D_pool%delete('lp')
                 call cline_cluster2D_pool%delete('extr_iter')
                 call cline_cluster2D_pool%delete('lambda')
             endif
@@ -2137,24 +2119,15 @@ contains
         call spproj%projinfo%delete_entry('projname')
         call spproj%projinfo%delete_entry('projfile')
         call spproj%update_projinfo( cline_cluster2D_pool )
-        ! Sampling of stacks that will be used for this iteration
-        ! counting number of stacks & selected particles
-        nstks_tot  = pool_proj%os_stk%get_noris()
-        nptcls_old = 0 ! Total # of particles with state=1
-        !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl)&
-        !$omp default(shared) reduction(+:nptcls_old)
-        do istk = 1,nstks_tot
-            fromp = pool_proj%os_stk%get_fromp(istk)
-            top   = pool_proj%os_stk%get_top(istk)
-            do iptcl = fromp,top
-                if( pool_proj%os_ptcl2D%get_state(iptcl) > 0 ) nptcls_old  = nptcls_old + 1
-            enddo
-        enddo
-        !$omp end parallel do
+        ! All stacks and particles are used
+        nstks_tot = pool_proj%os_stk%get_noris()
+        if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
+        allocate(pool_stacks_mask(nstks_tot), source=.true.)
+        nstks2update         = count(pool_stacks_mask)
+        nptcls2update        = pool_proj%os_ptcl2D%get_noris()
+        nptcls_old           = pool_proj%os_ptcl2D%get_noris(consider_state=.true.)
         nptcls_rejected_glob = nptcls_glob - nptcls_old
         ! Transfer all stacks & particles
-        allocate(pool_stacks_mask(nstks_tot), source=.false.)
-        nstks2update = count(pool_stacks_mask)
         call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
         call spproj%os_ptcl2D%new(nptcls2update, is_ptcl=.true.)
         i     = 0
@@ -2195,7 +2168,7 @@ contains
             !$omp end parallel do
         endif
         ! Consolidate sigmas doc
-        call consolidate_sigmas
+        call consolidate_sigmas(spproj, nstks2update)
         ! write project
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call spproj%kill
@@ -2210,49 +2183,49 @@ contains
             call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, LOGFILE)
         endif
         pool_available = .false.
-        write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
-        &' / ', nptcls_tot,' PARTICLES'
+        write(logfhandle,'(A,I6,A,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_tot,' PARTICLES'
         if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
         ! cleanup
         if( allocated(clspops) )deallocate(clspops)
         call tidy_2Dstream_iter
-      contains
-
-        subroutine consolidate_sigmas
-            use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
-            character(len=:),          allocatable :: stack_fname, ext, fbody
-            character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
-            integer :: i, istk
-            if( l_update_sigmas )then
-                if( trim(params_glob%sigma_est).eq.'group' )then
-                    allocate(sigma_fnames(nstks2update))
-                    do istk = 1,nstks2update
-                        call spproj%os_stk%getter(istk,'stk',stack_fname)
-                        stack_fname = basename(stack_fname)
-                        ext         = fname2ext(stack_fname)
-                        fbody       = get_fbody(stack_fname, ext)
-                        sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
-                    enddo
-                    call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                    deallocate(sigma_fnames)
-                else
-                    ! sigma_est=global & first iteration
-                    if( pool_iter==1 )then
-                        allocate(sigma_fnames(glob_chunk_id))
-                        do i = 1,glob_chunk_id
-                            sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//trim(STAR_EXT)
-                        enddo
-                        call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
-                        deallocate(sigma_fnames)
-                    endif
-                endif
-                do i = 1,params_glob%nparts_pool
-                    call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
-                enddo
-            endif
-        end subroutine consolidate_sigmas
-
     end subroutine iterate_pool_all
+
+    ! Private utility to aggregate sigma2
+    subroutine consolidate_sigmas( project, nstks )
+        use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
+        type(sp_project),           intent(in) :: project
+        integer,                    intent(in) :: nstks
+        character(len=:),          allocatable :: stack_fname, ext, fbody
+        character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
+        integer :: i, istk
+        if( l_update_sigmas )then
+            if( trim(params_glob%sigma_est).eq.'group' )then
+                allocate(sigma_fnames(nstks))
+                do istk = 1,nstks
+                    call project%os_stk%getter(istk,'stk',stack_fname)
+                    stack_fname = basename(stack_fname)
+                    ext         = fname2ext(stack_fname)
+                    fbody       = get_fbody(stack_fname, ext)
+                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//trim(STAR_EXT)
+                enddo
+                call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                deallocate(sigma_fnames)
+            else
+                ! sigma_est=global & first iteration
+                if( pool_iter==1 )then
+                    allocate(sigma_fnames(glob_chunk_id))
+                    do i = 1,glob_chunk_id
+                        sigma_fnames(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(i)//trim(STAR_EXT)
+                    enddo
+                    call average_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
+                    deallocate(sigma_fnames)
+                endif
+            endif
+            do i = 1,params_glob%nparts_pool
+                call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
+            enddo
+        endif
+    end subroutine consolidate_sigmas
 
     ! Flags pool availibility & updates the global name of references
     subroutine update_pool_status
@@ -3346,7 +3319,7 @@ contains
                     ! all new classes can be imported, no remapping
                     if( ncls_glob == 0 )then
                         ! first transfer : copy classes, frcs & class parameters
-                        refs_glob = 'start_cavgs'//params_glob%ext
+                        refs_glob = 'start2Drefs'//params_glob%ext
                         do icls= 1,params_glob%ncls_start
                             call transfer_cavg(cavgs_chunk,dir_chunk,icls,refs_glob,icls)
                         enddo
