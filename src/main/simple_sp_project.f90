@@ -2316,13 +2316,20 @@ contains
 
     real function get_smpd( self )
         class(sp_project), target, intent(inout) :: self
-        integer :: n_os_stk
-        get_smpd  = 0.
+        integer :: n_os_stk, n_os_mic
+        get_smpd = 0.
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            THROW_HARD('empty os_stk field! get_smpd')
+            THROW_WARN('empty os_stk field! get_smpd, reverting to os_mic field')
+            n_os_mic = self%os_mic%get_noris()
+            if( n_os_mic == 0 )then
+                THROW_HARD('empty os_mic field! get_smpd, aborting')
+            else
+                get_smpd = self%os_mic%get(1,'smpd')
+            endif
+        else
+            get_smpd = self%os_stk%get(1,'smpd')
         endif
-        get_smpd = self%os_stk%get(1,'smpd')
     end function get_smpd
 
     integer function get_nmovies( self )

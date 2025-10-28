@@ -115,6 +115,7 @@ contains
         ! mskdiam estimate in A
         mskdiam = min((real(box_raw) - COSMSKHALFWIDTH) * smpd, diam_stats%maxv)
         mskdiam = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, mskdiam)
+        print *, 'msk diam: ', mskdiam
         ! re-pick with diameter constraints applied
         do imic = 1, nmics
             boxfile = basename(fname_new_ext(trim(micnames(imic)),'box'))
