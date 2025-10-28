@@ -17,7 +17,7 @@ public :: auto_spher_mask_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: mask_commander
+type, extends(commander_base) :: mask_commander 
  contains
    procedure :: execute      => exec_mask
 end type mask_commander

@@ -86,6 +86,7 @@ contains
     procedure, private :: get_rmat_at_1, get_rmat_at_2
     generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
     procedure          :: get_avg_int
+    procedure          :: get_sum_int
     procedure          :: set_rmat_at
     procedure, private :: set_1, set_2
     generic            :: set => set_1, set_2
@@ -1451,12 +1452,18 @@ contains
         integer :: num_pixels
         if (self%is_3d()) then
             num_pixels = self%ldim(1) * self%ldim(2) * self%ldim(3)
-            avg_int = sum(self%rmat) / num_pixels
+            avg_int = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / num_pixels
         else
             num_pixels = self%ldim(1) * self%ldim(2)
-            avg_int = sum(self%rmat) / num_pixels
+            avg_int = sum(self%rmat(:self%ldim(1),:self%ldim(2),1)) / num_pixels
         end if
     end function get_avg_int
+
+    function get_sum_int(self) result(sum_int)
+        class(image), intent(in) :: self
+        real :: sum_int
+        sum_int = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+    end function get_sum_int
 
     pure subroutine set_rmat_at( self, i,j,k, val )
         class(image), intent(inout) :: self
