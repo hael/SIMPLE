@@ -425,16 +425,15 @@ contains
         class(class_frcs), intent(inout) :: self
         character(len=*),  intent(in)    :: tmpl_fname
         character(len=:), allocatable :: fname, tmp, all_pdfs, cmd
-        real,             allocatable :: res(:), frc(:)
+        real,             allocatable :: frc(:)
         integer :: s, icls
-        res      = get_resarr(self%box4frc_calc, self%smpd)
         allocate(frc(self%filtsz))
         all_pdfs = ''
         do s = 1,self%nstates
             do icls = 1,self%ncls
                 tmp = int2str_pad(icls,6)
                 frc = self%frcs(s,icls,:)
-                call plot_fsc(self%filtsz, frc, res, self%smpd, tmp)
+                call plot_fsc(self%filtsz, frc, self%res4frc_calc, self%smpd, tmp)
                 tmp = tmp//'.pdf'
                 if( icls==1 )then
                     all_pdfs = tmp

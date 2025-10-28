@@ -236,8 +236,10 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
+        call self%grad_shsrch_first_obj%kill
         call self%opeaks%kill
         call self%o_prev%kill
+        if( allocated(self%refine) ) deallocate(self%refine)
     end subroutine kill
 
 end module simple_strategy3D_srch

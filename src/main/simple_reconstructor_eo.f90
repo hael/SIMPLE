@@ -701,7 +701,7 @@ contains
         class(reconstructor_eo), intent(inout) :: self !< instance
         if( self%exists )then
             ! kill composites
-            call self%envmask%kill
+            call self%envmask%kill_bimg
             call self%even%dealloc_rho
             call self%even%kill
             call self%odd%dealloc_rho
