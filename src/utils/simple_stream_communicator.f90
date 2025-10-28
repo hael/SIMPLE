@@ -57,6 +57,7 @@ module simple_stream_communicator
             class(stream_http_communicator), intent(inout) :: self
             type(json_value),                pointer       :: jobstats_json
             integer                                        :: file_unit, stat
+            if( .not.self%active ) return
             call self%json%add(self%job_json, "terminate", .true.)
             call self%json%create_object(jobstats_json,'')
             call self%json%add(jobstats_json, "jobid", self%id)
