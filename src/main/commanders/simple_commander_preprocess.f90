@@ -2213,9 +2213,9 @@ contains
         real,        parameter   :: LP_BIN = 20.
         type(parameters)         :: params
         type(sp_project)         :: spproj
-        type(image), allocatable :: cavg_imgs(:), mask_imgs(:)
+        type(image), allocatable :: cavg_imgs(:), mask_imgs(:), masked_imgs(:)
         logical,     allocatable :: l_non_junk(:)
-        real,        allocatable :: resvals(:), diams(:), shifts(:,:)
+        real,        allocatable :: resvals(:), diams(:), shifts(:,:), ints(:)
         integer,     allocatable :: pops(:), order(:)
         integer :: nptcls, ncls, ncls_sel, icls, ldim(3), loc(1), i
         real    :: mskrad
@@ -2234,9 +2234,10 @@ contains
         call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
         ! re-read non-junk cavg_imgs
         call dealloc_imgarr(cavg_imgs)
-        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        mask_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        ncls_sel  = size(cavg_imgs) 
+        cavg_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        mask_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        masked_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ncls_sel  = size(cavg_imgs)
         ! extract class populations
         pops      = spproj%os_cls2D%get_all_asint('pop')
         pops      = pack(pops, mask=l_non_junk)
@@ -2245,8 +2246,11 @@ contains
         resvals   = pack(resvals, mask=l_non_junk)
         ! Automasking
         call automask2D(mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
-        ! shift
+        ! calc integrated intesities and shift
+        allocate(ints(ncls_sel), source=0.)
         do icls = 1, ncls_sel
+            call masked_imgs(icls)%mul(mask_imgs(icls))
+            ints(icls) = masked_imgs(icls)%get_sum_int()
             call cavg_imgs(icls)%shift([shifts(icls,1),shifts(icls,2),0.])
         end do
         ! order
@@ -2267,12 +2271,23 @@ contains
 
         contains
 
+            ! function p1_lt_p2( p1, p2 ) result( val )
+            !     integer, intent(in) :: p1, p2
+            !     logical :: val
+            !     val = .false.
+            !     if( abs(diams(p1) - diams(p2)) <= 8. )then
+            !         if( pops(p1) < pops(p2) ) val = .true.
+            !     else if( diams(p1) < diams(p2) )then
+            !         val = .true.
+            !     endif
+            ! end function p1_lt_p2
+
             function p1_lt_p2( p1, p2 ) result( val )
                 integer, intent(in) :: p1, p2
                 logical :: val
                 val = .false.
-                if( abs(diams(p1) - diams(p2)) <= 8. )then
-                    if( pops(p1) < pops(p2) ) val = .true.
+                if( ints(p1) < ints(p2) )then
+                    val = .true.
                 else if( diams(p1) < diams(p2) )then
                     val = .true.
                 endif
