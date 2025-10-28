@@ -34,7 +34,7 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: commander_mini_stream, commander_validate_refpick, commander_validate_segdiampick, commander_stream_sieve_cavgs, commander_stream_abinitio2D
+public :: commander_mini_stream, commander_validate_refpick, commander_stream_sieve_cavgs, commander_stream_abinitio2D
 
 type, extends(commander_base) :: commander_mini_stream
   contains
@@ -45,12 +45,6 @@ type, extends(commander_base) :: commander_validate_refpick
   contains
     procedure :: execute      => exec_validate_refpick
 end type commander_validate_refpick
-
-type, extends(commander_base) :: commander_validate_segdiampick
-  contains
-    procedure :: execute      => exec_validate_segdiampick
-
-end type commander_validate_segdiampick
 
 type, extends(commander_base) :: commander_stream_sieve_cavgs
   contains
@@ -77,50 +71,25 @@ contains
     subroutine exec_mini_stream( self, cline )
         class(commander_mini_stream), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        logical,                   parameter   :: DEBUG = .true.
-        real,                      parameter   :: SMPD_SHRINK1  = 4.0, LPSTOP = 8., SIGMA_CRIT = 2.
-        character(len=*),          parameter   :: DIR_THUMBS        = 'thumbnails/'
-        character(len=*),          parameter   :: DIR_MIC_DEN       = 'micrographs_denoised/'
-        character(len=*),          parameter   :: DIR_MIC_TOPO      = 'micrographs_topographical/'
-        character(len=*),          parameter   :: DIR_MIC_BIN       = 'micrographs_binarized/'
-        character(len=*),          parameter   :: DIR_PTCLS_SEGPICK = 'particles_segpick/'
-        character(len=*),          parameter   :: DIR_BOXFILES      = 'boxfiles/'
-        character(len=*),          parameter   :: DIR_CAVGS_SEGPICK = 'cavgs_segpick/'
-        integer,                   parameter   :: BOXFAC = 3, NCLS_MIN = 10, NCLS_MAX = 100, NQ_DIAMS = 10
-        character(len=*),          parameter   :: PROJ_MINI_STREAM = 'proj_mini_stream', PROJFILE_MINI_STREAM = 'proj_mini_stream.simple'
-        character(len=*),          parameter   :: DEFTAB = 'deftab.txt', STKTAB = 'stktab.txt'
-        character(len=LONGSTRLEN), allocatable :: fnames(:)
-        character(len=LONGSTRLEN), allocatable :: micnames(:), mic_bin_names(:), mic_den_names(:), mic_topo_names(:)
-        character(len=LONGSTRLEN), allocatable :: ptcl_stk_names(:), ptcl_stk4viz_names(:), cavgs_segpick_names(:)
-        character(len=:),          allocatable :: output_dir, stk, stkpath
-        integer,                   allocatable :: boxdata_raw(:,:), labels(:), inds(:), diam_labels(:)
-        real,                      allocatable :: diams_arr(:), diams_arr_ts(:), masscens(:,:), tmp(:), rarr_nboxes(:), diam_means(:), abs_z_scores(:)
-        type(ctfparams),           allocatable :: ctfvars(:)
-        type(image),               allocatable :: imgs(:)
-        type(picksegdiam)                      :: picker
-        type(ptcl_extractor)                   :: extractor_raw
-        type(parameters)                       :: params
-        type(image)                            :: mic_raw, mic_shrink, mic4viz
-        type(binimage)                         :: mic_bin
-        type(stats_struct)                     :: diam_stats
-        type(ctf_estimate_iter)                :: ctfiter
-        type(ctf)                              :: tfun
-        type(stack_io)                         :: stkio_w
-        type(oris)                             :: os_deftab, os_ctf, os_tmp
-        type(ori)                              :: omic
-        type(cmdline)                          :: cline_new_proj, cline_import_particles
-        type(cmdline)                          :: cline_abinitio2D, cline_shape_rank
-        type(new_project_commander)            :: xnew_project
-        type(import_particles_commander)       :: ximport_particles
-        type(abinitio2D_commander)             :: xabinitio2D
-        type(sp_project)                       :: spproj
-        type(stats_struct)                     :: stats_nboxes
-        type(shape_rank_cavgs_commander)       :: xshape_rank
-        character(len=STDLEN) :: ext
-        integer               :: nmics, ldim_raw(3), ldim(3), imic, ncls, loc(1), pop
-        integer               :: nptcls, box_raw, i, nboxes, imic_maxpop, imic_minpop, imic_medpop
-        real                  :: scale, rmin, rmax, rmean, rsdev, mskdiam_estimate, mad
-        logical               :: l_empty
+        character(len=*),          parameter   :: PROJ_MINI_STREAM     = 'proj_mini_stream'
+        character(len=*),          parameter   :: PROJFILE_MINI_STREAM = 'proj_mini_stream.simple'
+        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100
+        real,                      parameter   :: LPSTOP = 8.
+        character(len=LONGSTRLEN), allocatable :: micnames(:)
+        character(len=:),          allocatable :: output_dir
+        type(parameters)                   :: params
+        type(sp_project)                   :: spproj
+        type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
+        type(cmdline)                      :: cline_make_pickrefs, cline_extract, cline_abinitio2D, cline_shape_rank
+        type(new_project_commander)        :: xnew_project
+        type(make_pickrefs_commander)      :: xmake_pickrefs
+        type(import_movies_commander)      :: ximport_movies
+        type(ctf_estimate_commander_distr) :: xctf_estimate
+        type(extract_commander_distr)      :: xextract
+        type(abinitio2D_commander)         :: xabinitio2D
+        type(shape_rank_cavgs_commander)   :: xshape_rank
+        integer :: ncls, nmics, nptcls 
+        real    :: mskdiam_estimate
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
         if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
@@ -132,351 +101,79 @@ contains
         if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',  DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'no')
         if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',   200)
+        if( .not. cline%defined('pick_roi')         ) call cline%set('pick_roi',       'yes')
         call params%new(cline)
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
-        ! read the first micrograph
-        scale = params%smpd / SMPD_SHRINK1
-        call read_mic_subtr_backgr_shrink(micnames(1), params%smpd, scale, params%pcontrast, mic_raw, mic_shrink, l_empty)
-        ! set logical dimensions
-        ldim_raw = mic_raw%get_ldim()
-        ldim     = mic_shrink%get_ldim()
         ! output directory
         output_dir = PATH_HERE
-        allocate(mic_bin_names(nmics), mic_den_names(nmics), ctfvars(nmics), mic_topo_names(nmics))
-        ctfvars(:)%smpd    = params%smpd
-        ctfvars(:)%kv      = params%kv
-        ctfvars(:)%cs      = params%cs
-        ctfvars(:)%fraca   = params%fraca
-        ctfvars(:)%ctfflag = CTFFLAG_FLIP
-        call os_ctf%new(nmics, is_ptcl=.false.)
-        do imic = 1, nmics
-            call omic%new(is_ptcl=.false.)
-            call omic%set_state(1)  ! include by default
-            ! CTF estimation
-            call ctfiter%iterate(ctfvars(imic), micnames(imic), omic, trim(output_dir), l_gen_thumb=.true.)
-            call os_ctf%set_ori(imic, omic)
-            ! Segmentation & picking
-            mic_den_names(imic)  = 'mic4viz'//int2str_pad(imic,3)//'.mrc'
-            mic_topo_names(imic) = 'mic_shrink_topo'//int2str_pad(imic,3)//'.mrc'
-            mic_bin_names(imic)  = 'mic_shrink_bin'//int2str_pad(imic,3)//'.mrc'
-            call picker%pick(micnames(imic), params%smpd, params%moldiam_max, params%pcontrast, denfname=mic_den_names(imic),&
-                topofname=mic_topo_names(imic), binfname=mic_bin_names(imic) )
-            if( picker%get_nboxes() == 0 )then
-                call os_ctf%set_state(imic, 0)
-                mic_den_names(imic) = NIL
-                mic_topo_names(imic) = NIL
-                mic_bin_names(imic) = NIL
-                cycle
-            endif
-            call picker%get_diameters(tmp)
-            if( allocated(diams_arr) )then
-                diams_arr = [diams_arr(:), tmp(:)]
-                deallocate(tmp)
-            else
-                allocate(diams_arr(size(tmp)), source=tmp)
-                deallocate(tmp)
-            endif
-        end do
-        call picker%kill
-        ! excludes zero state
-        inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
-        if( nmics /= size(inds) )then
-            ctfvars       = ctfvars(inds)
-            mic_den_names = mic_den_names(inds)
-            mic_topo_names = mic_topo_names(inds)
-            mic_bin_names = mic_bin_names(inds)
-            micnames      = micnames(inds)
-            os_tmp        = os_ctf%extract_subset(inds)
-            call os_ctf%copy(os_tmp)
-            call os_tmp%kill
-            nmics = size(inds)
-        endif
-        deallocate(inds)
-        ! diameter stats & box size estimation
-        diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! because of the 2X erosion in binarization
-        call calc_stats(diams_arr, diam_stats)
-        print *, 'CC diameter (in Angs) statistics'
-        print *, 'avg diam: ', diam_stats%avg
-        print *, 'med diam: ', diam_stats%med
-        print *, 'sde diam: ', diam_stats%sdev
-        print *, 'min diam: ', diam_stats%minv
-        print *, 'max diam: ', diam_stats%maxv
-        allocate( diam_means(NQ_DIAMS), diam_labels(NQ_DIAMS) )
-        ! quantization of diameters
-        call sortmeans(diams_arr, NQ_DIAMS, diam_means, diam_labels)
-        ! Z-score of quantas
-        mad = mad_gau(diams_arr, diam_stats%med)
-        allocate(abs_z_scores(NQ_DIAMS), source=abs((diam_means - diam_stats%med) / mad))
-
-
-        do i = 1, NQ_DIAMS
-            print *, 'diam quanta '//int2str_pad(i,2)//', avg diam: ', diam_means(i),&
-            &', % pop: ', 100 * real(count(diam_labels == i)) / real(size(diams_arr)),&
-            &', abs(zscore): ', abs_z_scores(i)
-        end do
-
-        ! level 1 tresholding
-        pop = 0
-        do i = 2, NQ_DIAMS - 1
-            pop = pop + count(diam_labels == i)
-        end do
-        print *, 'level 1 thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
-
-        ! level 2 tresholding
-        pop = 0
-        do i = 3, NQ_DIAMS - 2
-            pop = pop + count(diam_labels == i)
-        end do
-        print *, 'level 2 thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
-
-        ! hybrid level 1, zscore tresholding
-        pop = 0
-        
-        do i = 2, NQ_DIAMS - 1
-            if( abs_z_scores(i) < SIGMA_CRIT )then
-                pop = pop + count(diam_labels == i)
-                tmp = pack(diams_arr, mask=diam_labels == i)
-                if( allocated(diams_arr_ts) )then
-                    diams_arr_ts = [diams_arr_ts(:), tmp(:)]
-                    deallocate(tmp)
-                else
-                    allocate(diams_arr_ts(size(tmp)), source=tmp)
-                    deallocate(tmp)
-                endif
-            endif
-        end do
-        print *, 'hybrid level 1/zscore thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
-
-        ! calculate diams stats after hybrid thresholding
-        call calc_stats(diams_arr_ts, diam_stats)
-        print *, 'CC diameter (in Angs) statistics after thresholding'
-        print *, 'avg diam: ', diam_stats%avg
-        print *, 'med diam: ', diam_stats%med
-        print *, 'sde diam: ', diam_stats%sdev
-        print *, 'min diam: ', diam_stats%minv
-        print *, 'max diam: ', diam_stats%maxv
-        box_raw = find_magic_box(BOXFAC * nint(diam_stats%med/params%smpd))
-        print *, 'box diam: ', box_raw * params%smpd
-        ! Re-segmentation
-        call mic_bin%new_bimg(ldim, mic_shrink%get_smpd())
-        ! extraction from micrographs
-        allocate(ptcl_stk_names(nmics), ptcl_stk4viz_names(nmics), rarr_nboxes(nmics))
-        call extractor_raw%init_mic(box_raw, .false.)
-        nptcls      = 0
-        rarr_nboxes = 0.
-        do imic = 1, nmics
-            ! set output stack names
-            ext                      = fname2ext(trim(basename(micnames(imic))))
-            ptcl_stk_names(imic)     = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(micnames(imic))),      trim(ext)))//trim(STK_EXT)
-            ptcl_stk4viz_names(imic) = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_den_names(imic))), trim(ext)))//trim(STK_EXT)
-            ! read raw
-            call read_mic_subtr_backgr(micnames(imic), params%smpd, params%pcontrast, mic_raw, l_empty)
-            ! read 4viz
-            call read_mic(trim(mic_den_names(imic)), mic4viz)
-            ! read binary
-            call read_mic(trim(mic_bin_names(imic)), mic_bin)
-            call mic_bin%set_imat
-            ! phase-flip raw micrograph
-            tfun = ctf(ctfvars(imic)%smpd, ctfvars(imic)%kv, ctfvars(imic)%cs, ctfvars(imic)%fraca)
-            call mic_raw%zero_edgeavg
-            call mic_raw%fft
-            call tfun%apply_serial(mic_raw, 'flip', ctfvars(imic))
-            call mic_raw%ifft
-            ! find centers of mass of connected components
-            call identify_masscens(mic_bin, masscens)
-            nboxes = size(masscens, dim=1)
-            rarr_nboxes(imic) = real(nboxes)
-            ! sanity check
-            if( nboxes == 0 )then
-                mic_den_names(imic) = NIL
-                mic_topo_names(imic) = NIL
-                mic_bin_names(imic) = NIL
-                call os_ctf%set_state(imic,0)
-                cycle
-            endif
-            nptcls      = nptcls + nboxes
-            boxdata_raw = calc_boxdata(nboxes, box_raw, masscens, scale)
-            ! extraction from raw
-            call killimgbatch
-            call prepimgbatch(nboxes, box_raw, params%smpd)
-            call extractor_raw%extract_particles_from_mic(mic_raw, inds, boxdata_raw(1:2,:), imgs(:nboxes), rmin, rmax, rmean, rsdev)
-            ! write stack
-            call stkio_w%open(ptcl_stk_names(imic), params%smpd, 'write', box=box_raw)
-            do i = 1,nboxes
-                call stkio_w%write(i, imgs(i))
-            enddo
-            call stkio_w%close
-            call imgs(1)%update_header_stats(ptcl_stk_names(imic), [rmin,rmax,rmean,rsdev])
-            ! destruct
-            call mic_raw%kill
-            call mic4viz%kill
-            call mic_bin%kill_bimg
-        end do
-        ! derive nboxes stats
-        call calc_stats(rarr_nboxes, stats_nboxes)
-        loc = minloc(abs(rarr_nboxes - stats_nboxes%maxv))
-        imic_maxpop = loc(1)
-        loc = minloc(abs(rarr_nboxes - stats_nboxes%minv))
-        imic_minpop = loc(1)
-        loc = minloc(abs(rarr_nboxes - stats_nboxes%med))
-        imic_medpop = loc(1)
-        ! write relevant jpegs
-        call read_mic(trim(mic_den_names(imic_maxpop)),  mic4viz)
-        call mic4viz%write_jpg('mic_denoised_maxpop.jpg')
-        call mic4viz%write('mic_denoised_maxpop.mrc')
-        call read_mic(trim(mic_den_names(imic_minpop)),  mic4viz)
-        call mic4viz%write_jpg('mic_denoised_minpop.jpg')
-        call mic4viz%write('mic_denoised_minpop.mrc')
-        call read_mic(trim(mic_den_names(imic_medpop)), mic4viz)
-        call mic4viz%write_jpg('mic_denoised_medpop.jpg')
-        call mic4viz%write('mic_denoised_medpop.mrc')
-        call read_mic(trim(mic_topo_names(imic_maxpop)),  mic4viz)
-        call mic4viz%write_jpg('mic_topographical_maxpop.jpg')
-        call mic4viz%write('mic_topographical_maxpop.mrc')
-        call read_mic(trim(mic_topo_names(imic_minpop)),  mic4viz)
-        call mic4viz%write_jpg('mic_topographical_minpop.jpg')
-        call mic4viz%write('mic_topographical_minpop.mrc')
-        call read_mic(trim(mic_topo_names(imic_medpop)), mic4viz)
-        call mic4viz%write_jpg('mic_topographical_medpop.jpg')
-        call mic4viz%write('mic_topographical_medpop.mrc')
-        call read_mic(trim(mic_bin_names(imic_maxpop)),  mic4viz)
-        call mic4viz%write_jpg('mic_binarized_maxpop.jpg')
-        call mic4viz%write('mic_binarized_maxpop.mrc')
-        call read_mic(trim(mic_bin_names(imic_minpop)),  mic4viz)
-        call mic4viz%write_jpg('mic_binarized_minpop.jpg')
-        call mic4viz%write('mic_binarized_minpop.mrc')
-        call read_mic(trim(mic_bin_names(imic_medpop)), mic4viz)
-        call mic4viz%write_jpg('mic_binarized_medpop.jpg')
-        call mic4viz%write('mic_binarized_medpop.mrc')
-        call mic4viz%kill
-        ! excludes zero state
-        inds = pack((/(i,i=1,nmics)/), mask=os_ctf%get_all('state')>0.5)
-        if( nmics /= size(inds) )then
-            nmics              = size(inds)
-            micnames           = micnames(inds)
-            ptcl_stk_names     = ptcl_stk_names(inds)
-            ptcl_stk4viz_names = ptcl_stk4viz_names(inds)
-            ctfvars            = ctfvars(inds)
-        endif
-        os_deftab = os_ctf%extract_subset(inds)
-        deallocate(inds)
-        ! output
-        call os_deftab%write(DEFTAB)
-        call write_filetable(STKTAB, ptcl_stk_names)
-        ! analyize particles identified by segmentation-based picking
         ! project creation
-        call cline_new_proj%set('dir',           PATH_HERE)
-        call cline_new_proj%set('projname', PROJ_MINI_STREAM)
+        call cline_new_proj%set('dir',                         PATH_HERE)
+        call cline_new_proj%set('projname',             PROJ_MINI_STREAM)
         call xnew_project%execute_safe(cline_new_proj)
-        ! particle import
-        call cline_import_particles%set('prg',         'import_particles')
-        call cline_import_particles%set('mkdir',                     'no')
-        call cline_import_particles%set('cs',                   params%cs)
-        call cline_import_particles%set('fraca',             params%fraca)
-        call cline_import_particles%set('kv',                   params%kv)
-        call cline_import_particles%set('smpd',               params%smpd)
-        call cline_import_particles%set('stktab',                  STKTAB)
-        call cline_import_particles%set('deftab',                  DEFTAB)
-        call cline_import_particles%set('ctf',                     'flip')
-        call cline_import_particles%set('projfile',  PROJFILE_MINI_STREAM)
-        call ximport_particles%execute_safe(cline_import_particles)
+        ! movie import
+        call cline_import_movies%set('prg',           'import_movies')
+        call cline_import_movies%set('mkdir',                    'no')
+        call cline_import_movies%set('cs',                  params%cs)
+        call cline_import_movies%set('fraca',            params%fraca)
+        call cline_import_movies%set('kv',                  params%kv)
+        call cline_import_movies%set('smpd',              params%smpd)
+        call cline_import_movies%set('filetab',        params%filetab)
+        call cline_import_movies%set('ctf',                     'yes')
+        call cline_import_movies%set('projfile', PROJFILE_MINI_STREAM)
+        call ximport_movies%execute_safe(cline_import_movies)
+        ! CTF estimation
+        call cline_ctf_estimate%set('prg',             'ctf_estimate')
+        call cline_ctf_estimate%set('mkdir',                     'no')
+        call cline_ctf_estimate%set('ctfpatch',       params%ctfpatch)
+        call cline_ctf_estimate%set('dfmax',             params%dfmax)
+        call cline_ctf_estimate%set('dfmin',             params%dfmin)
+        call cline_ctf_estimate%set('hp',                   params%hp)
+        call cline_ctf_estimate%set('lp',                   params%lp)
+        call cline_ctf_estimate%set('nparts',                       1)
+        call cline_ctf_estimate%set('nthr',               params%nthr)
+        call cline_ctf_estimate%set('projfile',  PROJFILE_MINI_STREAM)
+        call xctf_estimate%execute_safe(cline_ctf_estimate)
+        ! this is the actual test
+        call spproj%read(PROJFILE_MINI_STREAM)
+        call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, mskdiam_estimate)
+        ! segdiampick_mics updates the project file on disk
+        ! extract
+        call cline_extract%set('prg',                      'extract')
+        call cline_extract%set('mkdir',                         'no')
+        call cline_extract%set('nparts',                           1)
+        call cline_extract%set('nthr',                   params%nthr)
+        call cline_extract%set('projfile',      PROJFILE_MINI_STREAM)
+        call xextract%execute_safe(cline_extract)
         ! 2D analysis
-        ncls = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
-        call cline_abinitio2D%set('prg',                     'abinitio2D')
-        call cline_abinitio2D%set('mkdir',                           'no')
-        call cline_abinitio2D%set('ncls',                            ncls)
-        call cline_abinitio2D%set('sigma_est',                   'global')
-        call cline_abinitio2D%set('center',                         'yes')
-        call cline_abinitio2D%set('autoscale',                      'yes')
-        call cline_abinitio2D%set('lpstop',                        LPSTOP)
-        call cline_abinitio2D%set('mskdiam',                           0.)
-        call cline_abinitio2D%set('nthr',                     params%nthr)
-        call cline_abinitio2D%set('projfile',        PROJFILE_MINI_STREAM)
+        call spproj%read(PROJFILE_MINI_STREAM)
+        nptcls = spproj%os_ptcl2D%get_noris()
+        ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
+        call cline_abinitio2D%set('prg',                'abinitio2D')
+        call cline_abinitio2D%set('mkdir',                      'no')
+        call cline_abinitio2D%set('ncls',                       ncls)
+        call cline_abinitio2D%set('sigma_est',              'global')
+        call cline_abinitio2D%set('center',                    'yes')
+        call cline_abinitio2D%set('autoscale',                 'yes')
+        call cline_abinitio2D%set('lpstop',                   LPSTOP)
+        call cline_abinitio2D%set('mskdiam',        mskdiam_estimate)
+        call cline_abinitio2D%set('nthr',                params%nthr)
+        call cline_abinitio2D%set('projfile',   PROJFILE_MINI_STREAM)
         call xabinitio2D%execute_safe(cline_abinitio2D)
         ! shape rank cavgs
-        call cline_shape_rank%set('nthr',                     params%nthr)
-        call cline_shape_rank%set('projfile',        PROJFILE_MINI_STREAM)
+        call cline_shape_rank%set('nthr',                params%nthr)
+        call cline_shape_rank%set('projfile',   PROJFILE_MINI_STREAM)
         call xshape_rank%execute_safe(cline_shape_rank)
-        ! organize output in folders
-        call simple_list_files('*jpg', fnames)
-        call simple_mkdir(DIR_THUMBS)
-        call move_files2dir(DIR_THUMBS, fnames)
-        deallocate(fnames)
-        call simple_mkdir(DIR_MIC_DEN)
-        call move_files2dir(DIR_MIC_DEN, mic_den_names)
-        call simple_mkdir(DIR_MIC_TOPO)
-        call move_files2dir(DIR_MIC_TOPO, mic_topo_names)
-        call simple_mkdir(DIR_MIC_BIN)
-        call move_files2dir(DIR_MIC_BIN, mic_bin_names)
-        call simple_mkdir(DIR_PTCLS_SEGPICK)
-        call move_files2dir(DIR_PTCLS_SEGPICK, ptcl_stk4viz_names)
-        call move_files2dir(DIR_PTCLS_SEGPICK, ptcl_stk_names)
-        ! cleanup
+        ! destruct
         call spproj%kill
-        call os_deftab%kill
-        call os_ctf%kill
-        call omic%kill
-        call extractor_raw%kill
-        call killimgbatch
-
-        contains
-
-            function calc_boxdata( nboxes, box, masscens, scale ) result( boxdata )
-                integer, intent(in)  :: nboxes, box
-                real,    intent(in)  :: masscens(nboxes,2)
-                real,    intent(in)  :: scale
-                integer, allocatable :: boxdata(:,:)
-                integer :: ibox
-                allocate(boxdata(3,nboxes), source=0)
-                do ibox = 1, nboxes
-                    boxdata(1:2,ibox) = nint(((1./scale) * masscens(ibox,:2))-real(box)/2.)
-                enddo
-                boxdata(3,:) = box
-            end function calc_boxdata
-
-            subroutine prepimgbatch( nboxes, box, smpd )
-                integer, intent(in) :: nboxes, box
-                real,    intent(in) :: smpd
-                integer, parameter  :: BATCHSZ_DEFAULT = 1024
-                integer :: i, batchsz
-                logical :: doprep
-                batchsz = max(BATCHSZ_DEFAULT, nboxes)
-                doprep  = .false.
-                if( .not. allocated(imgs) )then
-                    doprep = .true.
-                else
-                    if( nboxes > size(imgs) ) doprep = .true.
-                    if( doprep ) call killimgbatch
-                endif
-                if( doprep )then
-                    allocate(imgs(batchsz))
-                    !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-                    do i = 1,batchsz
-                        call imgs(i)%new([box, box, 1], smpd, wthreads=.false.)
-                    end do
-                    !$omp end parallel do
-                endif
-            end subroutine prepimgbatch
-
-            subroutine killimgbatch
-                integer :: i
-                if( allocated(imgs) )then
-                    do i = 1,size(imgs)
-                        call imgs(i)%kill
-                    end do
-                    deallocate(imgs)
-                endif
-            end subroutine killimgbatch
-
     end subroutine exec_mini_stream
 
     subroutine exec_validate_refpick( self, cline )
         class(commander_validate_refpick), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=*),          parameter   :: DIR_THUMBS             = 'thumbnails/'
-        character(len=*),          parameter   :: PROJ_VALIDATE_PICK     = 'proj_validate_refpick'
-        character(len=*),          parameter   :: PROJFILE_VALIDATE_PICK = 'proj_validate_refpick.simple'
+        character(len=*),          parameter   :: PROJ_MINI_STREAM    = 'proj_validate_refpick'
+        character(len=*),          parameter   :: PROJFILE_MINI_STREAM = 'proj_validate_refpick.simple'
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100
         real,                      parameter   :: LPSTOP = 8.
         character(len=LONGSTRLEN), allocatable :: micnames(:), fnames(:)
@@ -513,7 +210,7 @@ contains
         output_dir = PATH_HERE
         ! project creation
         call cline_new_proj%set('dir',                         PATH_HERE)
-        call cline_new_proj%set('projname',           PROJ_VALIDATE_PICK)
+        call cline_new_proj%set('projname',             PROJ_MINI_STREAM)
         call xnew_project%execute_safe(cline_new_proj)
         ! movie import
         call cline_import_movies%set('prg',              'import_movies')
@@ -524,7 +221,7 @@ contains
         call cline_import_movies%set('smpd',                 params%smpd)
         call cline_import_movies%set('filetab',           params%filetab)
         call cline_import_movies%set('ctf',                        'yes')
-        call cline_import_movies%set('projfile',  PROJFILE_VALIDATE_PICK)
+        call cline_import_movies%set('projfile',  PROJFILE_MINI_STREAM)
         call ximport_movies%execute_safe(cline_import_movies)
         ! CTF estimation
         call cline_ctf_estimate%set('prg',                'ctf_estimate')
@@ -536,7 +233,7 @@ contains
         call cline_ctf_estimate%set('lp',                      params%lp)
         call cline_ctf_estimate%set('nparts',                          1)
         call cline_ctf_estimate%set('nthr',                  params%nthr)
-        call cline_ctf_estimate%set('projfile',   PROJFILE_VALIDATE_PICK)
+        call cline_ctf_estimate%set('projfile',   PROJFILE_MINI_STREAM)
         call xctf_estimate%execute_safe(cline_ctf_estimate)
         ! make pickrefs
         call cline_make_pickrefs%set('mkdir',                       'no')
@@ -554,10 +251,10 @@ contains
         call cline_pick_extract%set('dir',                    output_dir)
         call cline_pick_extract%set('fromp',                           1)
         call cline_pick_extract%set('top',                         nmics)
-        call cline_pick_extract%set('projfile',   PROJFILE_VALIDATE_PICK)
+        call cline_pick_extract%set('projfile',   PROJFILE_MINI_STREAM)
         call xpickextract%execute_safe(cline_pick_extract)
         ! 2D analysis
-        call spproj%read(PROJFILE_VALIDATE_PICK)
+        call spproj%read(PROJFILE_MINI_STREAM)
         nptcls = spproj%os_ptcl2D%get_noris()
         ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
         call cline_abinitio2D%set('prg',                    'abinitio2D')
@@ -569,11 +266,11 @@ contains
         call cline_abinitio2D%set('lpstop',                       LPSTOP)
         call cline_abinitio2D%set('mskdiam',            mskdiam_estimate)
         call cline_abinitio2D%set('nthr',                    params%nthr)
-        call cline_abinitio2D%set('projfile',     PROJFILE_VALIDATE_PICK)
+        call cline_abinitio2D%set('projfile',     PROJFILE_MINI_STREAM)
         call xabinitio2D%execute_safe(cline_abinitio2D)
         ! shape rank cavgs
         call cline_shape_rank%set('nthr',                    params%nthr)
-        call cline_shape_rank%set('projfile',     PROJFILE_VALIDATE_PICK)
+        call cline_shape_rank%set('projfile',     PROJFILE_MINI_STREAM)
         call xshape_rank%execute_safe(cline_shape_rank)
         ! organize output in folders
         call simple_list_files('*jpg', fnames)
@@ -583,112 +280,6 @@ contains
         ! destruct
         call spproj%kill
     end subroutine exec_validate_refpick
-
-    subroutine exec_validate_segdiampick( self, cline )
-        class(commander_validate_segdiampick), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
-        character(len=*),          parameter   :: DIR_THUMBS             = 'thumbnails/'
-        character(len=*),          parameter   :: PROJ_VALIDATE_PICK     = 'proj_validate_refpick'
-        character(len=*),          parameter   :: PROJFILE_VALIDATE_PICK = 'proj_validate_refpick.simple'
-        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100
-        real,                      parameter   :: LPSTOP = 8.
-        character(len=LONGSTRLEN), allocatable :: micnames(:), fnames(:)
-        character(len=:),          allocatable :: output_dir
-        type(parameters)                   :: params
-        type(sp_project)                   :: spproj
-        type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
-        type(cmdline)                      :: cline_make_pickrefs, cline_extract, cline_abinitio2D, cline_shape_rank
-        type(new_project_commander)        :: xnew_project
-        type(make_pickrefs_commander)      :: xmake_pickrefs
-        type(import_movies_commander)      :: ximport_movies
-        type(ctf_estimate_commander_distr) :: xctf_estimate
-        type(extract_commander_distr)      :: xextract
-        type(abinitio2D_commander)         :: xabinitio2D
-        type(shape_rank_cavgs_commander)   :: xshape_rank
-        integer :: ncls, nmics, nptcls 
-        real    :: mskdiam_estimate
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
-        if( .not. cline%defined('kv')               ) call cline%set('kv',              300.)
-        if( .not. cline%defined('cs')               ) call cline%set('cs',               2.7)
-        if( .not. cline%defined('fraca')            ) call cline%set('fraca',            0.1)
-        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512)
-        if( .not. cline%defined('hp')               ) call cline%set('hp',               30.)
-        if( .not. cline%defined('lp')               ) call cline%set('lp',                5.)
-        if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',  DFMIN_DEFAULT)
-        if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',  DFMAX_DEFAULT)
-        if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'no')
-        if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',   200)
-        if( .not. cline%defined('pick_roi')         ) call cline%set('pick_roi',       'yes')
-        call params%new(cline)
-        call read_filetable(params%filetab, micnames)
-        nmics = size(micnames)
-        ! output directory
-        output_dir = PATH_HERE
-        ! project creation
-        call cline_new_proj%set('dir',                         PATH_HERE)
-        call cline_new_proj%set('projname',           PROJ_VALIDATE_PICK)
-        call xnew_project%execute_safe(cline_new_proj)
-        ! movie import
-        call cline_import_movies%set('prg',              'import_movies')
-        call cline_import_movies%set('mkdir',                       'no')
-        call cline_import_movies%set('cs',                     params%cs)
-        call cline_import_movies%set('fraca',               params%fraca)
-        call cline_import_movies%set('kv',                     params%kv)
-        call cline_import_movies%set('smpd',                 params%smpd)
-        call cline_import_movies%set('filetab',           params%filetab)
-        call cline_import_movies%set('ctf',                        'yes')
-        call cline_import_movies%set('projfile',  PROJFILE_VALIDATE_PICK)
-        call ximport_movies%execute_safe(cline_import_movies)
-        ! CTF estimation
-        call cline_ctf_estimate%set('prg',                'ctf_estimate')
-        call cline_ctf_estimate%set('mkdir',                        'no')
-        call cline_ctf_estimate%set('ctfpatch',          params%ctfpatch)
-        call cline_ctf_estimate%set('dfmax',                params%dfmax)
-        call cline_ctf_estimate%set('dfmin',                params%dfmin)
-        call cline_ctf_estimate%set('hp',                      params%hp)
-        call cline_ctf_estimate%set('lp',                      params%lp)
-        call cline_ctf_estimate%set('nparts',                          1)
-        call cline_ctf_estimate%set('nthr',                  params%nthr)
-        call cline_ctf_estimate%set('projfile',   PROJFILE_VALIDATE_PICK)
-        call xctf_estimate%execute_safe(cline_ctf_estimate)
-        ! this is the actual test
-        call spproj%read(PROJFILE_VALIDATE_PICK)
-        call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, mskdiam_estimate)
-        ! segdiampick_mics updates the project file on disk
-        ! extract
-        call cline_extract%set('prg',                          'extract')
-        call cline_extract%set('mkdir',                             'no')
-        call cline_extract%set('nparts',                               1)
-        call cline_extract%set('nthr',                       params%nthr)
-        call cline_extract%set('projfile',        PROJFILE_VALIDATE_PICK)
-        call xextract%execute_safe(cline_extract)
-        ! 2D analysis
-        call spproj%read(PROJFILE_VALIDATE_PICK)
-        nptcls = spproj%os_ptcl2D%get_noris()
-        ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
-        call cline_abinitio2D%set('prg',                    'abinitio2D')
-        call cline_abinitio2D%set('mkdir',                          'no')
-        call cline_abinitio2D%set('ncls',                           ncls)
-        call cline_abinitio2D%set('sigma_est',                  'global')
-        call cline_abinitio2D%set('center',                        'yes')
-        call cline_abinitio2D%set('autoscale',                     'yes')
-        call cline_abinitio2D%set('lpstop',                       LPSTOP)
-        call cline_abinitio2D%set('mskdiam',            mskdiam_estimate)
-        call cline_abinitio2D%set('nthr',                    params%nthr)
-        call cline_abinitio2D%set('projfile',     PROJFILE_VALIDATE_PICK)
-        call xabinitio2D%execute_safe(cline_abinitio2D)
-        ! shape rank cavgs
-        call cline_shape_rank%set('nthr',                    params%nthr)
-        call cline_shape_rank%set('projfile',     PROJFILE_VALIDATE_PICK)
-        call xshape_rank%execute_safe(cline_shape_rank)
-        ! organize output in folders
-        call simple_list_files('*jpg', fnames)
-        call simple_mkdir(DIR_THUMBS)
-        call move_files2dir(DIR_THUMBS, fnames)
-        deallocate(fnames)
-        ! destruct
-        call spproj%kill
-    end subroutine exec_validate_segdiampick
 
     ! Manages individual chunks/sets classification, matching & rejection
     ! TODO: handling of un-classified particles
