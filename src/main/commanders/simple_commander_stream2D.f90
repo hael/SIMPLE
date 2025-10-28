@@ -602,7 +602,7 @@ contains
         type(make_pickrefs_commander)      :: xmake_pickrefs
         type(import_movies_commander)      :: ximport_movies
         type(ctf_estimate_commander_distr) :: xctf_estimate
-        type(extract_commander)            :: xextract
+        type(extract_commander_distr)      :: xextract
         type(abinitio2D_commander)         :: xabinitio2D
         type(shape_rank_cavgs_commander)   :: xshape_rank
         integer :: ncls, nmics, nptcls 
@@ -656,7 +656,7 @@ contains
         call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, mskdiam_estimate)
         ! segdiampick_mics updates the project file on disk
         ! extract
-        cline_extract = cline
+        call cline_extract%set('prg',                          'extract')
         call cline_extract%set('mkdir',                             'no')
         call cline_extract%set('nparts',                               1)
         call cline_extract%set('nthr',                       params%nthr)

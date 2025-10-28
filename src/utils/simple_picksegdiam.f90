@@ -104,17 +104,21 @@ contains
         character(len=*),   intent(in)    :: binmicname !< binarized micrograph file name, smpd is SMPD_SHRINK1
         real,               intent(in)    :: diam_fromto(2)
         integer,  allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
+        real,     allocatable :: masscens(:,:)
         type(binimage) :: mic_bin, img_cc
         real           :: rpos(2), diam, diam_adj, scale
-        integer        :: pos(2), icc, nccs
+        integer        :: pos(2), icc, nccs, nboxes, ldim(3), nframes
         logical        :: l_empty
         call self%kill
         scale = smpd_raw / SMPD_SHRINK1
         ! read binary
-        call read_mic(trim(binmicname), mic_bin)
-        call mic_bin%set_imat            
+        call find_ldim_nptcls(trim(binmicname), ldim, nframes)
+        if( ldim(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
+        call mic_bin%new_bimg(ldim, SMPD_SHRINK1)
+        call mic_bin%read_bimg(trim(binmicname), 1)
+        call img_cc%new_bimg(ldim, SMPD_SHRINK1)
         ! identify connected components
-        call mic_bin%find_ccs(img_cc)
+        call mic_bin%find_ccs(img_cc, update_imat=.true.)
         call img_cc%get_nccs(nccs)
         ! gather size info
         call img_cc%get_imat(cc_imat)
@@ -208,7 +212,7 @@ contains
             end select
             x = x - box_here/2
             y = y - box_here/2
-            write(funit,'(3I7,F8.1,F8.3,F4.1)') x, y, box_here, diams(i), 1.0, 1.0
+            write(funit,'(4I7,2F8.1)') x, y, box_here, box_here, diams(i)
         end do
         call fclose(funit)
         deallocate(diams,any)
