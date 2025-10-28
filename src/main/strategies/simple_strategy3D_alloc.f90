@@ -131,6 +131,8 @@ contains
         if( allocated(s3D%proj_space_corrs)    ) deallocate(s3D%proj_space_corrs)
         if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
         if( allocated(s3D%proj_space_w)        ) deallocate(s3D%proj_space_w)
+        if( allocated(s3D%smpl_refs_athres)    ) deallocate(s3D%smpl_refs_athres)
+        if( allocated(s3D%smpl_inpl_athres)    ) deallocate(s3D%smpl_inpl_athres)
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob
                 call s3D%rts(ithr)%kill

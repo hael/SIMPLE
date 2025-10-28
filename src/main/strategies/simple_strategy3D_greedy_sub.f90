@@ -97,6 +97,8 @@ contains
             call self%s%inpl_srch_peaks
             ! prepare orientation
             call self%oris_assign
+            ! cleanup
+            call o%kill
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

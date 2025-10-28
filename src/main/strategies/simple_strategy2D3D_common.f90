@@ -1024,6 +1024,8 @@ contains
         call instrimg%kill
         call killrecvols()
         call orientation%kill
+        call o_thres%kill
+        call o_mirr%kill
     end subroutine calc_projdir3Drec
 
     subroutine norm_struct_facts( cline )
