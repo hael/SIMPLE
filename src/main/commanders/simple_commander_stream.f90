@@ -70,8 +70,6 @@ end type commander_stream_cluster2D
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spprojs/'           ! location for projects to be processed
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
-integer,               parameter :: NMOVS_SET      = 5                                           ! number of movies processed at once (>1)
-integer,               parameter :: NMOVS_SET_TIFF = 3                                           ! number of TIFF movies processed at once (>1)
 integer,               parameter :: LONGTIME       = 60                                          ! time lag after which a movie/project is processed
 integer,               parameter :: WAITTIME       = 10                                          ! movie folder watched every WAITTIME seconds
 integer,               parameter :: SHORTWAIT      = 2                                           ! movie folder watched every SHORTTIME seconds in shmem
@@ -242,7 +240,7 @@ contains
         stat_icefrac_threshold = 0.
         stat_ctfres_threshold  = 0.
         call cline_exec%set('fromp',1)
-        call cline_exec%set('top',  NMOVS_SET)
+        call cline_exec%set('top',  STREAM_NMOVS_SET)
         do
             if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit )then
                 ! termination
@@ -266,14 +264,14 @@ contains
             call http_communicator%json%update(http_communicator%job_json, "cutoff_astigmatism",  dble(params%astigthreshold),         found)
             call http_communicator%json%update(http_communicator%job_json, "movies_rate",         movie_buff%rate,                     found)
             ! detection of new movies
-            call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts*NMOVS_SET )
+            call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts*STREAM_NMOVS_SET )
             ! append movies to processing stack
-            if( nmovies >= NMOVS_SET )then
-                nsets = floor(real(nmovies) / real(NMOVS_SET))
+            if( nmovies >= STREAM_NMOVS_SET )then
+                nsets = floor(real(nmovies) / real(STREAM_NMOVS_SET))
                 cnt   = 0
                 do iset = 1,nsets
-                    i = (iset-1)*NMOVS_SET+1
-                    j = iset*NMOVS_SET
+                    i = (iset-1)*STREAM_NMOVS_SET+1
+                    j = iset*STREAM_NMOVS_SET
                     call create_movies_set_project(movies(i:j))
                     call qenv%qscripts%add_to_streaming( cline_exec )
                     do imovie = i,j
@@ -281,7 +279,7 @@ contains
                         cnt     = cnt     + 1
                         n_added = n_added + 1 ! global number of movie sets
                     enddo
-                    if( cnt == min(params%nparts*NMOVS_SET,nmovies) ) exit
+                    if( cnt == min(params%nparts*STREAM_NMOVS_SET,nmovies) ) exit
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
@@ -296,7 +294,7 @@ contains
             stacksz = qenv%qscripts%get_stacksz()
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
-                write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz*NMOVS_SET
+                write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz*STREAM_NMOVS_SET
             endif
             ! fetch completed jobs list
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -512,7 +510,7 @@ contains
                 n_spprojs = size(completed_jobs_clines) ! projects to import
                 if( n_spprojs == 0 )return
                 n_old = spproj_glob%os_mic%get_noris()       ! previously processed mmovies
-                nmics = NMOVS_SET * n_spprojs           ! incoming number of processed movies
+                nmics = STREAM_NMOVS_SET * n_spprojs           ! incoming number of processed movies
                 allocate(streamspprojs(n_spprojs), completed_fnames(n_spprojs), mics_mask(nmics))
                 ! read all
                 do iproj = 1,n_spprojs
@@ -521,7 +519,7 @@ contains
                     completed_fnames(iproj) = trim(abs_fname)
                     call streamspprojs(iproj)%read_segment('mic', completed_fnames(iproj))
                     cnt = 0
-                    do imic = (iproj-1)*NMOVS_SET+1, iproj*NMOVS_SET
+                    do imic = (iproj-1)*STREAM_NMOVS_SET+1, iproj*STREAM_NMOVS_SET
                         cnt = cnt + 1
                         mics_mask(imic) = streamspprojs(iproj)%os_mic%get_state(cnt) == 1
                     enddo
@@ -542,7 +540,7 @@ contains
                     imic = 0
                     j    = n_old
                     do iproj = 1,n_spprojs
-                        do i = 1,NMOVS_SET
+                        do i = 1,STREAM_NMOVS_SET
                             imic = imic+1
                             if( mics_mask(imic) )then
                                 j = j + 1
@@ -555,8 +553,8 @@ contains
                 endif
                 ! finally we move the completed projects to appropriate directory
                 do iproj = 1,n_spprojs
-                    imic = (iproj-1)*NMOVS_SET+1
-                    if( any(mics_mask(imic:imic+NMOVS_SET-1)) )then
+                    imic = (iproj-1)*STREAM_NMOVS_SET+1
+                    if( any(mics_mask(imic:imic+STREAM_NMOVS_SET-1)) )then
                         fname = trim(DIR_STREAM_COMPLETED)//trim(basename(completed_fnames(iproj)))
                         call simple_rename(completed_fnames(iproj), fname)
                     endif
@@ -567,7 +565,7 @@ contains
             end subroutine update_projects_list
 
             subroutine create_movies_set_project( movie_names )
-                character(len=LONGSTRLEN), intent(in) :: movie_names(NMOVS_SET)
+                character(len=LONGSTRLEN), intent(in) :: movie_names(STREAM_NMOVS_SET)
                 type(sp_project)             :: spproj_here
                 type(ctfparams)              :: ctfvars
                 character(len=LONGSTRLEN)    :: projname, projfile, xmlfile, xmldir
@@ -593,8 +591,8 @@ contains
                 ctfvars%kv           = params%kv
                 ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
-                call spproj_here%add_movies(movie_names(1:NMOVS_SET), ctfvars, verbose = .false.)
-                do imov = 1,NMOVS_SET
+                call spproj_here%add_movies(movie_names(1:STREAM_NMOVS_SET), ctfvars, verbose = .false.)
+                do imov = 1,STREAM_NMOVS_SET
                     import_counter = import_counter + 1
                     call spproj_here%os_mic%set(imov, "importind", real(import_counter))
                     call spproj_here%os_mic%set(imov, "tiltgrp",   0.0)
@@ -631,7 +629,7 @@ contains
                 endif
                 n_spprojs = size(completed_fnames)
                 ! import into global project
-                allocate(spprojs(n_spprojs), mics_mask(n_spprojs*NMOVS_SET))
+                allocate(spprojs(n_spprojs), mics_mask(n_spprojs*STREAM_NMOVS_SET))
                 jmic = 0
                 do iproj = 1,n_spprojs
                     call spprojs(iproj)%read_segment('mic', completed_fnames(iproj))
@@ -1150,7 +1148,7 @@ contains
                 if(n_added >= params%ninit .and. .not. pause_import ) then
                     write(logfhandle,'(A,A,A)') '>>> NEW MICROGRAPH IMPORT PAUSED AFTER ', int2str(params%ninit), ' MICROGRAPHS WHILE INITIAL PICKING IS PERFORMED';
                     ! http
-                    call http_communicator%json%update(http_communicator%job_json, "stage", "initial search on " // int2str(project_buff%n_history * NMOVS_SET) // " micrographs", found)
+                    call http_communicator%json%update(http_communicator%job_json, "stage", "initial search on " // int2str(project_buff%n_history * STREAM_NMOVS_SET) // " micrographs", found)
                     pause_import = .true.
                 end if
                 ! restart pick if moldiam_refine updated in append mode
@@ -1347,7 +1345,7 @@ contains
                 endif
                 l_projects_left = cnt .ne. nprojects
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     project_buff%n_history * NMOVS_SET, found)
+                call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     project_buff%n_history * STREAM_NMOVS_SET, found)
                 call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(), found)
             else
                 l_projects_left = .false.
@@ -2762,22 +2760,22 @@ contains
             if( nprojects > 0 )then
                 nimported = spproj%os_mic%get_noris()
                 if(nimported > 0) then
-                    new_oris  =  nimported + nprojects * NMOVS_SET
+                    new_oris  =  nimported + nprojects * STREAM_NMOVS_SET
                     call spproj%os_mic%reallocate(new_oris)
                 else
-                    new_oris = nprojects * NMOVS_SET
+                    new_oris = nprojects * STREAM_NMOVS_SET
                     call spproj%os_mic%new(new_oris, .false.)
                 end if
                 do iproj = 1, nprojects
                     call project_buff%add2history(projects(iproj))
                     call spproj_part%read(trim(projects(iproj)))
-                    do iori = 1, NMOVS_SET
+                    do iori = 1, STREAM_NMOVS_SET
                         nimported = nimported + 1
                         call spproj%os_mic%transfer_ori(nimported, spproj_part%os_mic, iori)
                     end do
                     call spproj_part%kill()
                 enddo
-                write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
                 call starproj_stream%stream_export_optics(spproj, params%outdir)
                 call starproj_stream%stream_export_micrographs(spproj, params%outdir, optics_set=.true.)
                 ! http stats
@@ -2922,22 +2920,22 @@ contains
             if( nprojects > 0 )then
                 nimported = spproj%os_mic%get_noris()
                 if(nimported > 0) then
-                    new_oris  =  nimported + nprojects * NMOVS_SET
+                    new_oris  =  nimported + nprojects * STREAM_NMOVS_SET
                     call spproj%os_mic%reallocate(new_oris)
                 else
-                    new_oris = nprojects * NMOVS_SET
+                    new_oris = nprojects * STREAM_NMOVS_SET
                     call spproj%os_mic%new(new_oris, .false.)
                 end if
                 do iproj = 1, nprojects
                     call project_buff%add2history(projects(iproj)) ! I got this one, so please don't give it to me again
                     call spproj_part%read(trim(projects(iproj)))
-                    do iori = 1, NMOVS_SET
+                    do iori = 1, STREAM_NMOVS_SET
                         nimported = nimported + 1
                         call spproj%os_mic%transfer_ori(nimported, spproj_part%os_mic, iori)
                     end do
                     call spproj_part%kill()
                 enddo
-                write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
                 ! http stats
                 ! call http_communicator%json%update(http_communicator%job_json, "micrographs_assigned",     spproj%os_mic%get_noris(),    found)
                 ! call http_communicator%json%update(http_communicator%job_json, "optics_groups_assigned",   spproj%os_optics%get_noris(), found)
