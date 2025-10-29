@@ -318,7 +318,7 @@ contains
         integer,     intent(in) :: from, to
         type(oris) :: self_sub
         integer    :: n, cnt, i
-        n  = from - to + 1
+        n  = to - from + 1
         call self_sub%new(n, self%is_particle())
         cnt = 0
         do i = from, to
