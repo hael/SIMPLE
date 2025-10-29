@@ -27,7 +27,7 @@ implicit none
 public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
 ! Pool
 public :: import_records_into_pool, analyze2D_pool, iterate_pool, iterate_pool_all, update_pool_status, update_pool
-public :: reject_from_pool, reject_from_pool_user, write_pool_cls_selected_user
+public :: reject_from_pool, reject_from_pool_user
 public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
 public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected, get_pool_ptr
 public :: get_pool_n_classes, get_pool_n_classes_rejected, get_pool_iter_time, get_pool_cavgs_jpeg, get_pool_cavgs_mrc
@@ -2545,65 +2545,6 @@ contains
             endif
         enddo
     end subroutine apply_snapshot_selection
-
-    ! GUI class selection/reporting, only used in gen_picking_refs
-    subroutine write_pool_cls_selected_user
-        type(image)              :: img, jpegimg
-        type(stack_io)           :: stkio_r, stkio_w
-        type(oris)               :: cls2reject
-        logical, allocatable     :: cls_mask(:)
-        integer                  :: i, nl, icls, isel
-        if( .not. stream2D_active ) return
-        if( pool_proj%os_cls2D%get_noris() == 0 ) return
-        if( .not.file_exists(STREAM_REJECT_CLS) ) return
-        nl = nlines(STREAM_REJECT_CLS)
-        if( nl == 0 ) return
-        call cls2reject%new(nl,is_ptcl=.false.)
-        call cls2reject%read(STREAM_REJECT_CLS)
-        call del_file(STREAM_REJECT_CLS)
-        if( cls2reject%get_noris() == 0 ) return
-        allocate(cls_mask(ncls_glob), source=.true.)
-        do i = 1,pool_proj%os_cls2D%get_noris()
-            if( pool_proj%os_cls2D%get_int(i,'pop') == 0 ) cls_mask(i) = .false.
-            if( pool_proj%os_cls2D%get_state(i)     == 0 ) cls_mask(i) = .false.
-        enddo
-        do i = 1,cls2reject%get_noris()
-            icls = cls2reject%get_class(i)
-            if( icls == 0 ) cycle
-            if( icls > ncls_glob ) cycle
-            cls_mask(icls) = .false.
-        enddo
-        call cls2reject%kill
-        write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ',count(cls_mask),' clusters'
-        if( count(cls_mask) == 0 ) return
-        write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT)
-        call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
-        call jpegimg%new([params_glob%box, params_glob%box * count(cls_mask), 1], params_glob%smpd) 
-        call stkio_r%open(trim(POOL_DIR) // trim(refs_glob), params_glob%smpd, 'read', bufsz=ncls_glob)
-        call stkio_r%read_whole
-        call stkio_w%open(trim(POOL_DIR) // STREAM_SELECTED_REFS//trim(STK_EXT), params_glob%smpd, 'write', box=params_glob%box, bufsz=count(cls_mask))
-        isel = 1
-        do icls = 1,ncls_glob
-            if( .not. cls_mask(icls) ) then
-                call pool_proj%os_cls2D%set_state(icls, 0)
-            else
-                call pool_proj%os_cls2D%set_state(icls, 1)
-                call pool_proj%os_cls2D%set(icls,'stk', trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // trim(STK_EXT))
-                call pool_proj%os_cls2D%set_stkind(icls, isel)
-                call stkio_r%get_image(icls, img)
-                call stkio_w%write(isel, img)
-                call jpegimg%tile(img, 1, isel) 
-                isel = isel + 1
-            endif
-        enddo
-        call jpegimg%write_jpg(trim(POOL_DIR) // STREAM_SELECTED_REFS // trim(JPG_EXT))
-        call stkio_r%close
-        call stkio_w%close
-        call img%kill
-        call jpegimg%kill
-        call starproj_stream%stream_export_picking_references(pool_proj, params_glob%outdir)
-        if(allocated(cls_mask)) deallocate(cls_mask)
-    end subroutine write_pool_cls_selected_user
 
     ! write jpeg of refs_glob    
     subroutine generate_pool_jpeg(filename)

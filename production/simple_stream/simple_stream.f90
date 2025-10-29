@@ -11,10 +11,9 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PROGRAMS
-type(commander_stream_mini)             :: xstream_mini
+type(commander_stream_gen_pickrefs)     :: xgen_pickrefs
 type(commander_stream_preprocess)       :: xpreprocess
 type(commander_stream_pick_extract)     :: xpick_extract
-type(commander_stream_gen_picking_refs) :: xgen_picking_refs
 type(commander_stream_assign_optics)    :: xassign_optics
 type(commander_stream_sieve_cavgs)      :: xsieve_cavgs
 type(commander_stream_cluster2D)        :: xcluster2D_stream
@@ -46,14 +45,12 @@ call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, trim(prg), 'simple_stream')
 select case(trim(prg))
-    case( 'stream_mini' )
-        call xstream_mini%execute(cline)
+    case( 'gen_pickrefs' )
+        call xgen_pickrefs%execute(cline)
     case( 'preproc' )
         call xpreprocess%execute(cline)
     case( 'pick_extract' )
         call xpick_extract%execute(cline)
-    case( 'gen_picking_refs' )
-        call xgen_picking_refs%execute(cline)
     case( 'assign_optics' )
         call xassign_optics%execute(cline)
     case( 'sieve_cavgs' )
@@ -70,7 +67,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('7e28c5cf')
+call simple_print_git_version('1dfdbb81')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

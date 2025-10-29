@@ -1066,7 +1066,7 @@ contains
         enddo
         if( nmics == 0 ) THROW_HARD('No particles to extract! exec_extract')
         ! progress
-        call progressfile_init_parts(params%nparts) 
+        ! call progressfile_init_parts(params%nparts) 
         ! DISTRIBUTED EXTRACTION
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
@@ -1151,7 +1151,7 @@ contains
         ! final write
         call spproj%write(params%projfile)
         ! progress
-        call progressfile_complete_parts(params%nparts) 
+        ! call progressfile_complete_parts(params%nparts) 
         ! clean
         call spproj%kill
         call o_mic%kill
@@ -1249,9 +1249,9 @@ contains
             prog_write = .true.
             if( cline%defined('part') ) then 
                 prog_part = .true.
-                call progressfile_init_part(cline%get_iarg('part'))
+                ! call progressfile_init_part(cline%get_iarg('part'))
             else
-                call progressfile_init()
+                ! call progressfile_init()
             endif
             call spproj_in%kill
         endif
@@ -1477,9 +1477,9 @@ contains
                     if( (real(imic) / real(nmics_here)) > prog + 0.05 ) then
                         prog = real(imic) / real(nmics_here)
                         if(prog_part) then 
-                            call progressfile_update_part(cline%get_iarg('part'), prog)
+                            ! call progressfile_update_part(cline%get_iarg('part'), prog)
                         else
-                            call progressfile_update(prog)
+                            ! call progressfile_update(prog)
                         endif
                         write(logfhandle,'(f4.0,1x,a)') 100.*prog, 'percent of the micrographs processed'
                     endif
@@ -1519,7 +1519,7 @@ contains
         call o_mic%kill
         call o_tmp%kill
         call os_mic%kill
-        if( prog_write ) call progressfile_update(1.0)
+        ! if( prog_write ) call progressfile_update(1.0)
         call qsys_job_finished('simple_commanders_preprocess :: exec_extract')
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
         contains
@@ -2208,6 +2208,7 @@ contains
         use simple_masker, only: automask2D
         use simple_default_clines
         use simple_strategy2D_utils
+        use simple_gui_utils, only: shape_ranked_cavgs2jpg
         class(commander_shape_rank_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         real,        parameter   :: LP_BIN = 20.
@@ -2216,8 +2217,8 @@ contains
         type(image), allocatable :: cavg_imgs(:), mask_imgs(:), masked_imgs(:)
         logical,     allocatable :: l_non_junk(:)
         real,        allocatable :: diams(:), shifts(:,:), ints(:)
-        integer,     allocatable :: pops(:), order(:)
-        integer :: nptcls, ncls, ncls_sel, icls, ldim(3), loc(1), i
+        integer,     allocatable :: pops(:), order(:), clsinds(:), cavg_inds(:)
+        integer :: nptcls, ncls, ncls_sel, icls, ldim(3), loc(1), i, irank, xtiles, ytiles
         real    :: mskrad
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         ! set defaults
@@ -2232,6 +2233,8 @@ contains
         ldim   = cavg_imgs(1)%get_ldim()
         mskrad = real(ldim(1)/2) - COSMSKHALFWIDTH - 1.
         call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
+        clsinds = (/(icls,icls=1,size(cavg_imgs))/)
+        clsinds = pack(clsinds, mask=l_non_junk)
         ! re-read non-junk cavg_imgs
         call dealloc_imgarr(cavg_imgs)
         cavg_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
@@ -2254,15 +2257,27 @@ contains
         order = (/(i,i=1,ncls_sel)/)
         call hpsort(order, p1_lt_p2 )
         call reverse(order) ! largest first
-        call write_cavgs(cavg_imgs, SHAPE_RANKED_CAVGS_FNAME, order)
+        ! communicate ranks to project file
+        call spproj%os_cls2D%set_all2single('shape_rank', 0)
+        do irank = 1, ncls_sel
+            icls = clsinds(order(irank))
+            call spproj%os_cls2D%set(icls, 'shape_rank', irank)
+        end do
+        ! write ranks to project file
+        call spproj%write_segment_inside('cls2D')
+        ! write class averages
+        call write_cavgs(cavg_imgs, SHAPE_RANKED_CAVGS_MRCNAME, order)
+        call shape_ranked_cavgs2jpg(spproj, cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
         ! kill
         call spproj%kill
         call dealloc_imgarr(cavg_imgs)
         call dealloc_imgarr(mask_imgs)
-        if( allocated(l_non_junk)     ) deallocate(l_non_junk)
-        if( allocated(diams)          ) deallocate(diams)
-        if( allocated(shifts)         ) deallocate(shifts)
-        if( allocated(pops)           ) deallocate(pops)
+        if( allocated(cavg_inds)  ) deallocate(cavg_inds)
+        if( allocated(clsinds)    ) deallocate(clsinds)
+        if( allocated(l_non_junk) ) deallocate(l_non_junk)
+        if( allocated(diams)      ) deallocate(diams)
+        if( allocated(shifts)     ) deallocate(shifts)
+        if( allocated(pops)       ) deallocate(pops)
         call simple_end('**** SIMPLE_SHAPE_RANK_CAVGS NORMAL STOP ****')
 
         contains

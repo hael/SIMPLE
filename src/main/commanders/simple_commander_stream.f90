@@ -28,10 +28,9 @@ real, parameter, dimension(19)  :: ctfres_bins   = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0
 real, parameter, dimension(21)  :: icescore_bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
 
 public :: commander_stream_preprocess
-public :: commander_stream_gen_picking_refs
 public :: commander_stream_pick_extract
 public :: commander_stream_assign_optics
-public :: commander_stream_mini
+public :: commander_stream_gen_pickrefs
 public :: commander_stream_cluster2D
 
 private
@@ -47,20 +46,15 @@ type, extends(commander_base) :: commander_stream_pick_extract
     procedure :: execute => exec_stream_pick_extract
 end type commander_stream_pick_extract
 
-type, extends(commander_base) :: commander_stream_gen_picking_refs
-  contains
-    procedure :: execute => exec_stream_gen_picking_refs
-end type commander_stream_gen_picking_refs
-
 type, extends(commander_base) :: commander_stream_assign_optics
   contains
     procedure :: execute => exec_stream_assign_optics
 end type commander_stream_assign_optics
 
-type, extends(commander_base) :: commander_stream_mini
+type, extends(commander_base) :: commander_stream_gen_pickrefs
   contains
-    procedure :: execute => exec_stream_mini
-end type commander_stream_mini
+    procedure :: execute => exec_gen_pickrefs
+end type commander_stream_gen_pickrefs
 
 type, extends(commander_base) :: commander_stream_cluster2D
   contains
@@ -1959,729 +1953,6 @@ contains
 
     end subroutine exec_stream_pick_extract
 
-    subroutine exec_stream_gen_picking_refs( self, cline )
-        class(commander_stream_gen_picking_refs), intent(inout) :: self
-        class(cmdline),                           intent(inout) :: cline
-        character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        integer,                   parameter   :: MAXPOP_DEFAULT  = 200000 ! # of particles after wich picking is stopped
-        logical,                   parameter   :: DEBUG_HERE      = .FALSE.
-        type(parameters)                       :: params
-        type(stream_http_communicator)         :: http_communicator
-        type(json_value),          pointer     :: latest_cls2D, selected_references
-        class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
-        type(projrecord),          allocatable :: projrecords(:)
-        type(qsys_env)                         :: qenv
-        type(cmdline)                          :: cline_extract, cline_pick_extract
-        type(moviewatcher)                     :: project_buff
-        type(sp_project)                       :: spproj_glob
-        type(starproject_stream)               :: starproj_stream
-        type(json_core)                        :: json
-        type(nrtxtfile)                        :: boxsize_file
-        character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker, final_selection_source
-        character(len=LONGSTRLEN)              :: cwd_job
-        character(len=STDLEN)                  :: refgen_nthr_env, refgen_part_env
-        integer                                :: extract_set_counter    ! Internal counter of projects to be processed
-        integer                                :: i, nmics_sel, nmics_rej, nmics_rejected_glob, final_selection_boxsize
-        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, iproj, envlen
-        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
-        integer                                :: xtile, ytile, nxtiles, nytiles
-        integer,                   allocatable :: final_selection(:), final_boxsize(:)
-        logical                                :: l_haschanged, l_once, l_pick_extract, l_user, l_restart
-        logical(LK)                            :: found 
-        call cline%set('oritype',      'mic')
-        call cline%set('mkdir',        'yes')
-        call cline%set('picker',       'new')
-        call cline%set('reject_cls',   'no')
-        call cline%set('autoscale',    'yes')
-        call cline%set('kweight_chunk','default')
-        call cline%set('kweight_pool', 'default')
-        call cline%set('prune',        'no')
-        call cline%set('wiener',       'full')
-        if( .not. cline%defined('outdir')          ) call cline%set('outdir',           '')
-        if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29*60) ! 29 minutes
-        ! micrograph selection
-        if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'yes')
-        if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
-        if( .not. cline%defined('icefracthreshold')) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
-        if( .not. cline%defined('astigthreshold'  )) call cline%set('astigthreshold',   ASTIG_THRESHOLD_STREAM)
-        ! extraction
-        if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',     'no')
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',        'black')
-        if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',   'no')
-        ! 2D analysis
-        if( .not. cline%defined('ncls')            ) call cline%set('ncls',           30)
-        if( .not. cline%defined('nptcls_per_cls')  ) call cline%set('nptcls_per_cls', 500)
-        if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',         'no')
-        if( .not. cline%defined('refine')          ) call cline%set('refine',         'snhc_smpl')
-        if( .not. cline%defined('maxpop')          ) call cline%set('maxpop',         MAXPOP_DEFAULT)
-        ! ev overrides
-        call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
-        if(envlen > 0) then
-            call cline%set('nthr',   str2int(refgen_nthr_env))
-            call cline%set('nthr2D', str2int(refgen_nthr_env))
-        end if
-        ! sanity check for restart
-        l_restart = .false.
-        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
-            l_restart = .true.
-        endif
-        if( cline%defined('dir_exec') )then
-            if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
-            endif
-        endif
-        ! generate own project file if projfile isnt set
-        if(cline%get_carg('projfile') .eq. '') then 
-            call cline%set('projname', 'gen_pick_refs')
-            call cline%set('projfile', 'gen_pick_refs.simple')
-            call spproj_glob%update_projinfo(cline)
-            call spproj_glob%update_compenv(cline)
-            call spproj_glob%write
-        endif
-        ! master parameters
-        call cline%set('numlen', 5.)
-        call cline%set('stream','yes')
-        call params%new(cline)
-        params%split_mode = 'stream'
-        params%ncunits    = params%nparts
-        call simple_getcwd(cwd_job)
-        call cline%set('mkdir', 'no')
-        call cline%delete('maxpop')
-        if( trim(params%algorithm).eq.'new' )then
-            if( .not. cline%defined('lpstop') ) call cline%set('lpstop', 8.0)
-            params%lpstop = cline%get_rarg('lpstop')
-        endif
-        ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver, "generate_picking_refs")
-        call communicator_init()
-        call http_communicator%send_jobstats()
-        if( params%nptcls_per_cls*params%ncls > params%maxpop )then
-            THROW_HARD('Incorrect inputs: MAXPOP < NPTCLS_PER_CLS x NCLS')
-        endif
-        ! wait if dir_target doesn't exist yet
-        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_GEN_PICKING_REFS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_GEN_PICKING_REFS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_GEN_PICKING_REFS USER STOP ****')
-        ! determine whether we are picking/extracting or extracting only
-        if( .not.dir_exists(trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED)) )then
-            THROW_HARD('Invalid DIR_TARGET 1')
-        endif
-        l_pick_extract = .false.
-        if( dir_exists(trim(params%dir_target)//'/'//trim(DIR_MOTION_CORRECT)) )then
-            l_pick_extract = .true.
-        else
-            if( .not.dir_exists(trim(params%dir_target)//'/'//trim(DIR_PICKER)) )then
-                THROW_HARD('Invalid DIR_TARGET 2')
-            endif
-        endif
-        ! master project file
-        call spproj_glob%read( params%projfile )
-        ! force local if nparts < 2
-        if(params%nparts < 2) then
-            call spproj_glob%compenv%set(1, 'qsys_name', 'local')
-            call spproj_glob%write_non_data_segments(trim(params%projfile))
-        endif
-        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
-        ! movie watcher init
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
-        ! 2D parameters
-        params%nchunks     = 0
-        params%ncls_start  = params%ncls
-        params%ml_reg_pool = params%ml_reg
-        ! directories
-        output_dir         = trim(PATH_HERE)//trim(DIR_STREAM)
-        output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
-        output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
-        ! restart
-        extract_set_counter = 0
-        nptcls_glob         = 0     ! global number of particles
-        nmics_rejected_glob = 0     ! global number of micrographs rejected
-        nmic_star           = 0
-        if( l_restart )then
-            ! no restart here, the folder is wiped
-            if( cline%defined('dir_exec') ) call cline%delete('dir_exec')
-            call cleanup_root_folder(all=.true.)
-            call del_file(micspproj_fname)
-            call simple_rmdir(output_dir)
-            call simple_rmdir(STDERROUT_DIR)
-            call simple_rmdir(trim(output_dir)//trim(STDERROUT_DIR))
-            call simple_rmdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
-            call simple_rmdir(output_dir_picker)
-            call simple_rmdir(output_dir_extract)
-        endif
-        ! output directories
-        call simple_mkdir(output_dir)
-        call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
-        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
-        call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
-        call simple_mkdir(output_dir_extract,errmsg="commander_stream :: exec_stream_pick_extract;  ")
-        ! initialise progress monitor
-        call progressfile_init()
-        ! setup the environment for distributed execution
-        call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
-        if(envlen > 0) then
-            call qenv%new(1,stream=.true.,qsys_partition=trim(refgen_part_env))
-        else
-            call qenv%new(1,stream=.true.)
-        end if
-        ! command line for execution
-        if( l_pick_extract )then
-            cline_pick_extract = cline
-            call cline_pick_extract%set('prg','pick_extract')
-            call cline_pick_extract%set('dir','../')
-            call cline_pick_extract%set('extract','yes')
-            if( cline%defined('box_extract') )then
-                params%box = params%box_extract
-                call cline_pick_extract%delete('box_extract')
-                call cline_pick_extract%set('box', params%box)
-            else
-                params%box = 0
-            endif
-            call cline_pick_extract%delete('algorithm')
-        else
-            ! extraction only
-            cline_extract = cline
-            call cline_extract%set('prg','extract')
-            call cline_extract%set('dir','../'//trim(trim(DIR_EXTRACT)))
-            call cline_extract%set('extract','yes')
-            if( cline%defined('box_extract') )then
-                params%box = params%box_extract
-                call cline_extract%delete('box_extract')
-                call cline_extract%set('box', params%box)
-            else
-                params%box = 0
-            endif
-             call cline_extract%delete('algorithm')
-        endif
-        ! Infinite loop
-        prev_stacksz  = 0
-        iter          = 0
-        n_imported    = 0       ! global number of imported processed micrographs
-        n_failed_jobs = 0
-        n_added       = 0       ! global number of micrographs added to processing stack
-        l_haschanged  = .false.
-        l_once        = .true.
-        l_user        = .false.
-        do
-            if( file_exists(trim(TERM_STREAM)) .or. file_exists(STREAM_REJECT_CLS) .or. http_communicator%exit)then
-                ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
-                exit
-            endif
-            if( http_communicator%stop )then
-                ! termination
-                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                call spproj_glob%kill
-                call qsys_cleanup
-                call simple_end('**** SIMPLE_STREAM GEN_PICKING_REFERENCES USER STOP ****')
-                call EXIT(0)
-            endif
-            iter = iter + 1
-            ! detection of new projects
-            if( (nptcls_glob > params%maxpop) .and. project_buff%does_exist() )then
-                ! limit reached
-                call project_buff%kill
-                write(logfhandle,'(A)')'>>> PICKING/EXTRACTION OF PARTICLES WILL STOP FROM NOW'
-            endif
-            call project_buff%watch( nprojects, projects, max_nmovies=params%nparts )
-            ! append projects to processing stack
-            if( nprojects > 0 )then
-                cnt   = 0
-                nmics = 0
-                do iproj = 1, nprojects
-                    call create_individual_project(projects(iproj), nmics_sel, nmics_rej)
-                    call project_buff%add2history(projects(iproj))
-                    if( nmics_sel > 0 )then
-                        if( l_pick_extract )then
-                            call qenv%qscripts%add_to_streaming(cline_pick_extract)
-                        else
-                            call qenv%qscripts%add_to_streaming(cline_extract)
-                        endif
-                        call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
-                        cnt   = cnt   + 1
-                        nmics = nmics + nmics_sel
-                    endif
-                    n_added             = n_added + nmics_sel
-                    nmics_rejected_glob = nmics_rejected_glob + nmics_rej
-                    if( cnt == min(params%nparts, nprojects) ) exit
-                enddo
-                if( nmics > 0 )then
-                    write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
-                endif
-                ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "last_particles_imported", stream_datestr(), found)    
-            endif
-            ! submit jobs
-            call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
-            stacksz = qenv%qscripts%get_stacksz()
-            if( stacksz .ne. prev_stacksz )then
-                prev_stacksz = stacksz                          ! # of projects
-                stacksz      = qenv%qscripts%get_stack_range()  ! # of micrographs
-                write(logfhandle,'(A,I6)')'>>> MICROGRAPHS TO PROCESS:                 ', stacksz
-            endif
-            ! fetch completed jobs list & updates
-            if( qenv%qscripts%get_done_stacksz() > 0 )then
-                call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                call update_records_with_project( projrecords, n_imported )
-                call completed_jobs_clines(:)%kill
-                deallocate(completed_jobs_clines)
-            else
-                n_imported = 0
-            endif
-            ! failed jobs
-            if( qenv%qscripts%get_failed_stacksz() > 0 )then
-                call qenv%qscripts%get_stream_fail_stack( failed_jobs_clines, n_fail_iter )
-                if( n_fail_iter > 0 )then
-                    n_failed_jobs = n_failed_jobs + n_fail_iter
-                    call failed_jobs_clines(:)%kill
-                    deallocate(failed_jobs_clines)
-                endif
-            endif
-            ! project update
-            if( n_imported > 0 )then
-                n_imported = spproj_glob%os_mic%get_noris()
-                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
-                write(logfhandle,'(A,I8)')       '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
-                write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
-                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
-                ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "particles_imported", nptcls_glob, found)
-                ! write project for gui, micrographs field only
-                l_haschanged = .true.
-                ! always write micrographs snapshot if less than 1000 mics, else every 100
-                if( n_imported < 1000 .and. l_haschanged )then
-                    call update_user_params(cline)
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
-                else if( n_imported > nmic_star + 100 .and. l_haschanged )then
-                    call update_user_params(cline)
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
-                    nmic_star = n_imported
-                endif
-            endif
-            ! 2D section
-            if( l_once .and. (nptcls_glob > params%nptcls_per_cls*params%ncls) )then
-                if( .not.cline%defined('mskdiam') ) params%mskdiam = 0.85 * real(params%box) * params%smpd
-                if( trim(params%algorithm).eq.'new' )then
-                    call init_pool_clustering( cline, spproj_glob, micspproj_fname, reference_generation=.true. )
-                else
-                    call init_cluster2D_stream( cline, spproj_glob, micspproj_fname, reference_generation=.true. )
-                endif
-                l_once = .false.
-            endif
-            call update_pool_status
-            call update_pool
-            call import_records_into_pool( projrecords )
-            if( trim(params%algorithm).eq.'new' )then
-                call iterate_pool_all
-            else
-                call analyze2D_pool
-            endif
-            if(  params%nparts > 1 ) then
-                call sleep(WAITTIME)
-            else
-                call sleep(SHORTWAIT)
-            endif
-            if(l_once) then
-                call http_communicator%json%update(http_communicator%job_json, "stage", "importing and extracting >" // int2str(params%nptcls_per_cls*params%ncls) // " particles", found)
-            else 
-                if(get_pool_iter() > 2) then ! put back to 10!!!!
-                    ! http stats
-                    call http_communicator%json%update(http_communicator%job_json, "stage",      "iterating whilst waiting for user input", found)
-                    call http_communicator%json%update(http_communicator%job_json, "user_input", .true.,                                    found)
-                    xtile = 0
-                    ytile = 0
-                    call http_communicator%json%remove(latest_cls2D, destroy=.true.)
-                    call http_communicator%json%create_array(latest_cls2D, "latest_cls2D")
-                    call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
-                    if(allocated(pool_jpeg_map)) then
-                        do i=0, size(pool_jpeg_map) - 1
-                            call communicator_add_cls2D(trim(get_pool_cavgs_jpeg()),&
-                                &trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()),&
-                                &pool_jpeg_map(i + 1),&
-                                &xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1)),&
-                                &ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1)),&
-                                &100 * get_pool_cavgs_jpeg_ntilesy(),&
-                                &100 * get_pool_cavgs_jpeg_ntilesx(),&
-                                &pop=pool_jpeg_pop(i + 1),&
-                                &res=pool_jpeg_res(i + 1))
-                            xtile = xtile + 1
-                            if(xtile .eq. get_pool_cavgs_jpeg_ntilesx()) then
-                                xtile = 0
-                                ytile = ytile + 1
-                            endif
-                        end do
-                    endif
-                else
-                    call http_communicator%json%update(http_communicator%job_json, "stage", "performing 10 initial 2D iterations", found)
-                end if
-                call http_communicator%json%update(http_communicator%job_json, "particles_processed", get_pool_assigned(), found)
-                call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  get_pool_rejected(), found)
-                call http_communicator%json%update(http_communicator%job_json, "iteration",           get_pool_iter(),     found)
-                call http_communicator%json%update(http_communicator%job_json, "box_size",            get_box(),           found)
-            end if
-            call http_communicator%send_jobstats()
-        end do
-        ! termination
-        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
-        call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
-        call http_communicator%json%remove(latest_cls2D, destroy=.true.)
-        if( l_once )then
-            ! nothing to write
-        else
-            call terminate_stream2D(projrecords)
-        endif
-        if(file_exists(STREAM_REJECT_CLS)) call write_pool_cls_selected_user
-        call json%get(http_communicator%update_arguments, 'final_selection', final_selection, found)
-        if(found) then
-            call json%get(http_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
-            if(found) then
-                call write_selected_references(final_selection_source, final_selection, nxtiles, nytiles, params%smpd)
-                xtile = 0
-                ytile = 0
-                do i=0, size(final_selection) - 1
-                    call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
-                        &xtile * (100.0 / (nxtiles - 1)),&
-                        &ytile * (100.0 / (nytiles - 1)),&
-                        &100 * nytiles,&
-                        &100 * nxtiles,&
-                        &pop=pool_jpeg_pop(i + 1),&
-                        &res=pool_jpeg_res(i + 1))
-                    xtile = xtile + 1
-                    if(xtile .eq. nxtiles) then
-                        xtile = 0
-                        ytile = ytile + 1
-                    endif
-                end do
-            endif
-        endif
-        if(allocated(final_selection)) deallocate(final_selection)
-        call json%get(http_communicator%update_arguments, 'final_selection_boxsize', final_selection_boxsize, found)
-        if(found) then
-            call http_communicator%json%update(http_communicator%job_json, "selected_boxsize", final_selection_boxsize, found)
-            allocate(final_boxsize(1))
-            final_boxsize(1) = final_selection_boxsize
-            call boxsize_file%new(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // TXT_EXT, 2, 1)
-            call boxsize_file%write(final_boxsize)
-            call boxsize_file%kill()
-            deallocate(final_boxsize)
-        endif
-        ! cleanup
-        call kill_projrecords(projrecords)
-        call spproj_glob%kill
-        call qsys_cleanup
-        ! end gracefully
-        call http_communicator%term()
-        call simple_end('**** SIMPLE_STREAM_GENERATE_PICKING_REFERENCES NORMAL STOP ****')
-
-        contains
-
-            ! updates global project, returns records of processed micrographs
-            subroutine update_records_with_project( records, nimported )
-                type(projrecord), allocatable, intent(inout) :: records(:)
-                integer,                       intent(inout) :: nimported
-                type(sp_project), allocatable :: spprojs(:)
-                type(projrecord), allocatable :: old_records(:)
-                character(len=:), allocatable :: fname, abs_fname, new_fname
-                integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic
-                n_completed = 0
-                nimported   = 0
-                ! previously imported
-                n_old = 0 ! on first import
-                if( allocated(records) ) n_old = size(records)
-                ! projects to import
-                n_spprojs = size(completed_jobs_clines)
-                if( n_spprojs == 0 )return
-                allocate(spprojs(n_spprojs))
-                ! because extract purges state=0 and nptcls=0 mics,
-                ! all mics can be assumed associated with particles
-                nmics = 0
-                do iproj = 1,n_spprojs
-                    fname = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                    call spprojs(iproj)%read_segment('mic', fname)
-                    nmics = nmics + spprojs(iproj)%os_mic%get_noris()
-                enddo
-                if( nmics == 0 )then
-                    ! nothing to import
-                else
-                    ! import micrographs
-                    n_completed   = n_old + nmics
-                    nimported     = nmics
-                    nprev_imports = spproj_glob%os_mic%get_noris()
-                    ! reallocate global project
-                    if( nprev_imports == 0 )then
-                        call spproj_glob%os_mic%new(nmics, is_ptcl=.false.) ! first import
-                        allocate(projrecords(nmics))
-                    else
-                        call spproj_glob%os_mic%reallocate(n_completed)
-                        call move_alloc(projrecords, old_records)
-                        allocate(projrecords(n_completed))
-                        if( n_old > 0 ) projrecords(1:n_old) = old_records(:)
-                    call kill_projrecords(old_records)
-                    endif
-                    ! update records and global project
-                    j = n_old
-                    do iproj = 1,n_spprojs
-                        if( spprojs(iproj)%os_mic%get_noris() == 0 ) cycle
-                        ! move project to appropriate directory
-                        fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                        new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                        call simple_rename(fname, new_fname)
-                        abs_fname = simple_abspath(new_fname, errmsg='stream gen_picking_refs :: update_projects_list 1')
-                        ! records & project
-                        do imic = 1,spprojs(iproj)%os_mic%get_noris()
-                            j = j + 1
-                            projrecords(j)%projname = trim(abs_fname)
-                            projrecords(j)%micind   = imic
-                            nptcls      = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
-                            nptcls_glob = nptcls_glob + nptcls ! global update
-                            projrecords(j)%nptcls     = nptcls
-                            projrecords(j)%nptcls_sel = nptcls
-                            call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
-                        enddo
-                    enddo
-                endif
-                ! cleanup
-                do iproj = 1,n_spprojs
-                    call spprojs(iproj)%kill
-                enddo
-                deallocate(spprojs)
-            end subroutine update_records_with_project
-
-            ! prepares project for processing and performs micrograph selection
-            subroutine create_individual_project( project_fname, nselected, nrejected )
-                use simple_nrtxtfile, only: nrtxtfile
-                character(len=*), intent(in)  :: project_fname
-                integer,          intent(out) :: nselected, nrejected
-                type(sp_project)              :: tmp_proj, spproj_here
-                type(nrtxtfile)               :: boxfile_multi, boxfile
-                real,            allocatable  :: entries(:,:), dists(:)
-                integer,         allocatable  :: states(:)
-                logical,         allocatable  :: mask(:)
-                character(len=STDLEN)         :: proj_fname, projname, projfile
-                character(len=LONGSTRLEN)     :: path, boxfname
-                real    :: selected_moldiam
-                integer :: imic, nmics, cnt, l, nl, nb, i,j,ind, vals(5)
-                nselected = 0
-                nrejected = 0
-                call tmp_proj%read_segment('mic', project_fname)
-                allocate(states(tmp_proj%os_mic%get_noris()), source=nint(tmp_proj%os_mic%get_all('state')))
-                nmics     = count(states==1)
-                nselected = nmics
-                nrejected = tmp_proj%os_mic%get_noris() - nselected
-                if( nmics == 0 )then
-                    call tmp_proj%kill
-                    return ! nothing to add to queue
-                endif
-                ! micrograph rejection
-                if( trim(params%reject_mics).eq.'yes' )then
-                    do imic = 1,tmp_proj%os_mic%get_noris()
-                        if( states(imic) == 0 ) cycle
-                        if( tmp_proj%os_mic%isthere(imic, 'ctfres') )then
-                            if( tmp_proj%os_mic%get(imic,'ctfres') > (params%ctfresthreshold-0.001) ) states(imic) = 0
-                        end if
-                        if( tmp_proj%os_mic%isthere(imic, 'icefrac') )then
-                            if( tmp_proj%os_mic%get(imic,'icefrac') > (params%icefracthreshold-0.001) ) states(imic) = 0
-                        end if
-                        if( tmp_proj%os_mic%isthere(imic, 'astig') )then
-                            if( tmp_proj%os_mic%get(imic,'astig') > (params%astigthreshold-0.001) ) states(imic) = 0
-                        end if
-                    enddo
-                    nmics     = count(states==1)
-                    nselected = nmics
-                    nrejected = tmp_proj%os_mic%get_noris() - nselected
-                    if( nselected == 0 )then
-                        call tmp_proj%kill
-                        return ! nothing to add to queue
-                    endif
-                endif
-                if( l_pick_extract )then
-                    do imic = 1,tmp_proj%os_mic%get_noris()
-                        if( states(imic) == 1 )then
-                            params%smpd = tmp_proj%os_mic%get(imic, 'smpd')
-                            exit
-                        endif
-                    enddo
-                else
-                    ! select diameter, multi moldiam boxfile format: pick_gau%report_multipick
-                    if( .not.tmp_proj%os_mic%isthere('boxfile') ) return
-                    do imic = 1,tmp_proj%os_mic%get_noris()
-                        if( states(imic) /= 1 ) cycle
-                        boxfname = trim(tmp_proj%os_mic%get_static(imic,'boxfile'))
-                        if( .not. file_exists(boxfname) )then
-                            THROW_WARN('FILE NOT FOUND: '//trim(boxfname))
-                            cycle
-                        endif
-                        call boxfile_multi%new(boxfname, 1)
-                        if( boxfile_multi%get_nrecs_per_line() /= 6 )then
-                            THROW_WARN('INVALID FORMAT FOR: '//trim(boxfname))
-                            states(imic) = 0
-                            call boxfile_multi%kill
-                            cycle
-                        endif
-                        nl = boxfile_multi%get_ndatalines()
-                        if(allocated(entries)) deallocate(entries,dists)
-                        allocate(entries(6,nl),dists(nl),source=0.)
-                        do l = 1,nl
-                            call boxfile_multi%readNextDataLine(entries(:,l))
-                        enddo
-                        call boxfile_multi%kill
-                        dists = entries(4,:) - params%moldiam
-                        if( any(dists > 0.) )then
-                            selected_moldiam = minval(entries(4,:), mask=dists>-0.001)
-                        else
-                            selected_moldiam = maxval(entries(4,:))
-                        endif
-                        allocate(mask(nl),source=.false.)
-                        if(params%moldiam == 0.0) then
-                            mask = .true.
-                        else if(params%box == 0) then
-                            mask = abs(entries(4,:)-selected_moldiam) < 0.001
-                        else
-                            mask = abs(entries(3,:)-params%box) < 0.001
-                        endif
-                        nb   = count(mask)
-                        if( nb < 1 )then
-                            states(imic) = 0
-                        else
-                            ! update to global extraction box size
-                            if( .not.cline%defined('box_extract') )then
-                                ind = 0
-                                do j = 1,nl
-                                    if( mask(j) )then
-                                        ind = j
-                                        exit
-                                    endif
-                                enddo
-                                if( ind == 0 ) THROW_HARD('BOX SIZE ERROR')
-                                if( params%box==0 )then
-                                    params%box  = nint(entries(3,ind)) ! first time
-                                else
-                                    if( nint(entries(3,ind)) /= params%box )then
-                                        THROW_HARD('INCONSISTENT EXTRACTION BOX SIZES '//trim(boxfname)//' '//int2str(params%box)//' '//int2str(nint(entries(3,ind))))
-                                    endif
-                                endif
-                            endif
-                            params%smpd = tmp_proj%os_mic%get(imic, 'smpd')
-                            ! write new boxfile
-                            path = trim(cwd_glob)//'/'//trim(output_dir_picker)//'/'//basename(boxfname)
-                            call boxfile%new(path, 2, wanted_recs_per_line=5)
-                            vals(5) = -3
-                            do i = 1,nl
-                                if( mask(i) )then
-                                    vals(1:2) = nint(entries(1:2,i))
-                                    vals(3:4) = nint(entries(3,i))
-                                    call boxfile%write(vals)
-                                endif
-                            enddo
-                            call boxfile%kill
-                            call tmp_proj%os_mic%set(imic,'boxfile',path)
-                        endif
-                        deallocate(mask)
-                    enddo
-                endif
-                if( all(states==0) )then
-                    call tmp_proj%kill
-                    return
-                endif
-                ! as per update_projinfo
-                path       = trim(cwd_glob)//'/'//trim(output_dir)
-                proj_fname = basename(project_fname)
-                projname   = trim(get_fbody(trim(proj_fname), trim(METADATA_EXT), separator=.false.))
-                projfile   = trim(projname)//trim(METADATA_EXT)
-                call spproj_here%projinfo%new(1, is_ptcl=.false.)
-                call spproj_here%projinfo%set(1,'projname', projname)
-                call spproj_here%projinfo%set(1,'projfile', projfile)
-                call spproj_here%projinfo%set(1,'cwd',      path)
-                ! from current global project
-                spproj_here%compenv = spproj_glob%compenv
-                spproj_here%jobproc = spproj_glob%jobproc
-                ! import
-                call spproj_here%os_mic%new(nmics,is_ptcl=.false.)
-                cnt = 0
-                do imic = 1,tmp_proj%os_mic%get_noris()
-                    if( states(imic) == 0 ) cycle
-                    cnt = cnt+1
-                    call spproj_here%os_mic%transfer_ori(cnt, tmp_proj%os_mic, imic)
-                enddo
-                nselected = cnt
-                nrejected = tmp_proj%os_mic%get_noris() - nselected
-                ! update for execution
-                extract_set_counter = extract_set_counter + 1
-                projname = int2str_pad(extract_set_counter,params%numlen)
-                projfile = trim(projname)//trim(METADATA_EXT)
-                if( l_pick_extract )then
-                    call cline_pick_extract%set('projname', trim(projname))
-                    call cline_pick_extract%set('projfile', trim(projfile))
-                    call cline_pick_extract%set('fromp',    1)
-                    call cline_pick_extract%set('top',      nselected)
-                else
-                    call cline_extract%set('projname', trim(projname))
-                    call cline_extract%set('projfile', trim(projfile))
-                    call cline_extract%set('fromp',    1)
-                    call cline_extract%set('top',      nselected)
-                endif
-                call spproj_here%write(trim(path)//'/'//trim(projfile))
-                call spproj_here%kill
-                call tmp_proj%kill
-            end subroutine create_individual_project
-
-            subroutine communicator_init()
-                call http_communicator%json%add(http_communicator%job_json, "stage",                   "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "particles_imported",      0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_processed",     0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_rejected",      0)
-                call http_communicator%json%add(http_communicator%job_json, "iteration",               0)
-                call http_communicator%json%add(http_communicator%job_json, "box_size",                0)
-                call http_communicator%json%add(http_communicator%job_json, "selected_boxsize",        0)
-                call http_communicator%json%add(http_communicator%job_json, "last_particles_imported", "")
-                call http_communicator%json%add(http_communicator%job_json, "user_input",              .false.)
-                call http_communicator%json%create_array(latest_cls2D, "latest_cls2D")
-                call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
-                call http_communicator%json%create_array(selected_references, "selected_references")
-                call http_communicator%json%add(http_communicator%job_json, selected_references)
-            end subroutine communicator_init
-
-            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop)
-                character(*),      intent(in) :: path, mrcpath
-                real,              intent(in) :: spritex, spritey
-                integer,           intent(in) :: spriteh, spritew, mrc_idx
-                integer, optional, intent(in) :: pop
-                real,    optional, intent(in) :: res
-                type(json_value),  pointer    :: template
-                call http_communicator%json%create_object(template, "")
-                call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "mrcpath", mrcpath)
-                call http_communicator%json%add(template, "mrcidx",  mrc_idx)
-                call http_communicator%json%add(template, "spritex", dble(spritex))
-                call http_communicator%json%add(template, "spritey", dble(spritey))
-                call http_communicator%json%add(template, "spriteh", spriteh)
-                call http_communicator%json%add(template, "spritew", spritew)
-                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
-                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
-                call http_communicator%json%add(latest_cls2D, template)
-            end subroutine communicator_add_cls2D
-
-            subroutine communicator_add_selected_reference(path, spritex, spritey, spriteh, spritew, res, pop)
-                character(*),      intent(in) :: path
-                real,              intent(in) :: spritex, spritey
-                integer,           intent(in) :: spriteh, spritew
-                integer, optional, intent(in) :: pop
-                real,    optional, intent(in) :: res
-                type(json_value),  pointer    :: template
-                call http_communicator%json%create_object(template, "")
-                call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "spritex", dble(spritex))
-                call http_communicator%json%add(template, "spritey", dble(spritey))
-                call http_communicator%json%add(template, "spriteh", spriteh)
-                call http_communicator%json%add(template, "spritew", spritew)
-                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
-                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
-                call http_communicator%json%add(selected_references, template)
-            end subroutine communicator_add_selected_reference
-
-    end subroutine exec_stream_gen_picking_refs
-
     subroutine exec_stream_assign_optics( self, cline )
         class(commander_stream_assign_optics), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
@@ -2844,22 +2115,36 @@ contains
 
     end subroutine exec_stream_assign_optics
 
-    subroutine exec_stream_mini( self, cline )
-        class(commander_stream_mini), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
+    subroutine exec_gen_pickrefs( self, cline )
+        use simple_mini_stream_utils
+        use simple_commanders_abinitio2D
+        use simple_gui_utils, only: shape_ranked_cavgs2jpg
+        class(commander_stream_gen_pickrefs), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
         type(parameters)                       :: params
-        type(stream_http_communicator)         :: http_communicator
+        type(stream_http_communicator)         :: http_communicator, http_gen_pickrefs_communicator
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj, spproj_part
         type(starproject_stream)               :: starproj_stream
-        type(json_value),          pointer     :: optics_assignments, optics_group     
-        type(json_value),          pointer     :: optics_group_coordinates,  optics_group_coordinate        
+        type(cmdline)                          :: cline_extract, cline_abinitio2D, cline_shape_rank
+        type(commander_extract_distr)          :: xextract
+        type(commander_abinitio2D)             :: xabinitio2D
+        type(commander_shape_rank_cavgs)       :: xshape_rank
+        type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references      
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        integer                                :: nprojects, iproj, iori, new_oris, nimported, i, j, imap
+        integer,                   allocatable :: cavg_inds(:)
+        character(len=*),          parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
+        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
+        real,                      parameter   :: LPSTOP = 8.
+        integer                                :: nprojects, iori, i, j, imap, nptcls, ncls, nthr2D, box_in_pix
+        integer                                :: ithumb, xtiles, ytiles, xtile, ytile
         logical                                :: found
-        call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
-        if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
+        real                                   :: mskdiam_estimate
+        if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',            'yes')
+        if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',     200)
+        if( .not. cline%defined('pick_roi')         ) call cline%set('pick_roi',         'yes')
+        if( .not. cline%defined('outdir')           ) call cline%set('outdir',              '')
         ! sanity check for restart
         if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
             write(logfhandle, *) ">>> RESTARTING EXISTING JOB"
@@ -2875,8 +2160,8 @@ contains
         ! generate own project file if projfile isnt set
         ! or all the individual processes try and read the same project file and it goes crazy
         if(cline%get_carg('projfile') .eq. '') then 
-            call cline%set('projname', 'stream_mini')
-            call cline%set('projfile', 'stream_mini.simple')
+            call cline%set('projname', PROJNAME_GEN_PICKREFS)
+            call cline%set('projfile', PROJFILE_GEN_PICKREFS)
             call spproj%update_projinfo(cline)
             call spproj%update_compenv(cline)
             call spproj%write
@@ -2884,94 +2169,253 @@ contains
         ! master parameters
         call params%new(cline)
         ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver, "stream_mini")
-        call communicator_init()
+        call http_communicator%create(params%niceprocid, params%niceserver, "initial_picking")
+        call http_gen_pickrefs_communicator%create(params%niceprocid, params%niceserver, "generate_picking_refs")
+        call communicator_init_initial_picking()
+        call communicator_gen_pickrefs_init()
         call http_communicator%send_jobstats()
+        call http_gen_pickrefs_communicator%send_jobstats()
         ! master project file
         call spproj%read( params%projfile )
         if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(1, .false.) !!!!!!!?????
         ! wait if dir_target doesn't exist yet
-        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_MINI USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_MINI USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_MINI USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_GEN_PICKREFS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_GEN_PICKREFS USER STOP ****')
+        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_GEN_PICKREFS USER STOP ****')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
-        ! Infinite loop
-        nimported = 0
-        do
-            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
-                ! termination
-                write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
-                exit
-            endif
-            if( http_communicator%stop )then
-                ! termination
-                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                call spproj%kill
-                call qsys_cleanup
-                call simple_end('**** SIMPLE_STREAM_MINI USER STOP ****')
-                call EXIT(0)
-            endif
-            ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage", "finding and processing new micrographs", found) 
-            ! detection of new projects
-            call project_buff%watch( nprojects, projects, max_nmovies=50 )
-            ! append projects to processing stack
-            if( nprojects > 0 )then
-                nimported = spproj%os_mic%get_noris()
-                if(nimported > 0) then
-                    new_oris  =  nimported + nprojects * STREAM_NMOVS_SET
-                    call spproj%os_mic%reallocate(new_oris)
-                else
-                    new_oris = nprojects * STREAM_NMOVS_SET
-                    call spproj%os_mic%new(new_oris, .false.)
-                end if
-                do iproj = 1, nprojects
-                    call project_buff%add2history(projects(iproj)) ! I got this one, so please don't give it to me again
-                    call spproj_part%read(trim(projects(iproj)))
-                    do iori = 1, STREAM_NMOVS_SET
-                        nimported = nimported + 1
-                        call spproj%os_mic%transfer_ori(nimported, spproj_part%os_mic, iori)
-                    end do
-                    call spproj_part%kill()
-                enddo
-                write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
-                ! http stats
-                ! call http_communicator%json%update(http_communicator%job_json, "micrographs_assigned",     spproj%os_mic%get_noris(),    found)
-                ! call http_communicator%json%update(http_communicator%job_json, "optics_groups_assigned",   spproj%os_optics%get_noris(), found)
-                ! call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),             found)
-                ! call http_communicator%json%remove(optics_assignments, destroy=.true.)
-                ! call http_communicator%json%create_array(optics_assignments, "optics_assignments")
-                ! call http_communicator%json%add(http_communicator%job_json, optics_assignments) 
-            else
-                call sleep(WAITTIME) ! may want to increase as 3s default
-            endif
-            ! http stats send
+        ! import at least 20 micrographs
+        call micimporter( 20 )
+        ! segmentation-based picking
+        call segdiampick_mics(spproj, params%pcontrast, 20, params%moldiam_max, box_in_pix, mskdiam_estimate)
+        ! send initial picking display info to gui
+        if(spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
+        .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile')) then
+            ! create an empty latest_picked_micrographs json array
+            call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
+            call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+            call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
+            do ithumb=0, NTHUMB_MAX - 1
+                call communicator_add_micrograph(trim(adjustl(spproj%os_mic%get_static(spproj%os_mic%get_noris() - ithumb, "thumb_den"))),&
+                    nint(spproj%os_mic%get(spproj%os_mic%get_noris() - ithumb, "xdim")),&
+                    nint(spproj%os_mic%get(spproj%os_mic%get_noris() - ithumb, "ydim")),&
+                    trim(adjustl(spproj%os_mic%get_static(spproj%os_mic%get_noris() - ithumb, "boxfile")))&
+                )
+            end do
             call http_communicator%send_jobstats()
-        end do
+            call http_gen_pickrefs_communicator%send_jobstats()
+        endif       
+        ! extract
+        call cline_extract%set('prg',                    'extract')
+        call cline_extract%set('mkdir',                       'no')
+        call cline_extract%set('nparts',               params%nthr)
+        call cline_extract%set('nthr',                           1)
+        call cline_extract%set('projfile',   PROJFILE_GEN_PICKREFS)
+        call xextract%execute_safe(cline_extract)
+        call spproj%read(PROJFILE_GEN_PICKREFS)
+        ! send generate pickrefs display info to gui
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_extracted",     dble(spproj%os_ptcl2D%get_noris()))
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",               dble(mskdiam_estimate))
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",                box_in_pix)
+        call http_gen_pickrefs_communicator%send_jobstats()
+        ! 2D analysis
+        nptcls = spproj%os_ptcl2D%get_noris()
+        ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
+        nthr2D = max(1,floor(real(params%nthr)/4.))
+        call cline_abinitio2D%set('prg',               'abinitio2D')
+        call cline_abinitio2D%set('mkdir',                     'no')
+        call cline_abinitio2D%set('ncls',                      ncls)
+        call cline_abinitio2D%set('sigma_est',             'global')
+        call cline_abinitio2D%set('center',                   'yes')
+        call cline_abinitio2D%set('autoscale',                'yes')
+        call cline_abinitio2D%set('lpstop',                  LPSTOP)
+        call cline_abinitio2D%set('mskdiam',       mskdiam_estimate)
+        call cline_abinitio2D%set('nthr',                    nthr2D)
+        call cline_abinitio2D%set('nparts',                NPARTS2D)
+        call cline_abinitio2D%set('projfile', PROJFILE_GEN_PICKREFS)
+        call xabinitio2D%execute_safe(cline_abinitio2D)
+        ! shape rank cavgs
+        call cline_shape_rank%set('nthr',               params%nthr)
+        call cline_shape_rank%set('projfile', PROJFILE_GEN_PICKREFS)
+        call xshape_rank%execute_safe(cline_shape_rank)
+        call spproj%read(PROJFILE_GEN_PICKREFS)
+        call shape_ranked_cavgs2jpg(spproj, cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
+        ! send generate pickrefs display info to gui
+        xtile = 0
+        ytile = 0
+        call http_gen_pickrefs_communicator%json%remove(latest_cls2D, destroy=.true.)
+        call http_gen_pickrefs_communicator%json%create_array(latest_cls2D, "latest_cls2D")
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, latest_cls2D)
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input", .true.)
+        if(allocated(cavg_inds)) then
+            do i=0, size(cavg_inds) - 1
+                call communicator_add_cls2D(trim(cwd_glob) // '/' // SHAPE_RANKED_CAVGS_JPGNAME,&
+                    trim(cwd_glob) // '/' // SHAPE_RANKED_CAVGS_MRCNAME,&
+                    cavg_inds(i + 1),&
+                    xtile * (100.0 / (xtiles - 1)),&
+                    ytile * (100.0 / (ytiles - 1)),&
+                    100 * ytiles,&
+                    100 * xtiles,&
+                    pop=spproj%os_cls2D%get_int(cavg_inds(i + 1), 'pop'),&
+                    res=spproj%os_cls2D%get(cavg_inds(i + 1), 'res')&
+                )
+                xtile = xtile + 1
+                if(xtile .eq. xtiles) then
+                    xtile = 0
+                    ytile = ytile + 1
+                endif
+            end do
+        endif
         ! termination
-        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found) 
+        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
+        call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "stage", "terminating", found)
         call http_communicator%send_jobstats()
-        if(allocated(projects)) deallocate(projects)
+        call http_gen_pickrefs_communicator%send_jobstats()
+        if( allocated(projects)  ) deallocate(projects)
+        if( allocated(cavg_inds) ) deallocate(cavg_inds)
         ! cleanup
-        call spproj%write
+        !call spproj%write
         call spproj%kill
         ! end gracefully
         call http_communicator%term()
-        call simple_end('**** SIMPLE_STREAM_MINI NORMAL STOP ****')
+        call http_gen_pickrefs_communicator%term()
+        call simple_end('**** SIMPLE_GEN_PICKREFS NORMAL STOP ****')
 
         contains
-        
-            subroutine communicator_init()
-                call http_communicator%json%add(http_communicator%job_json, "stage",                    "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_assigned ",    0)
-                call http_communicator%json%add(http_communicator%job_json, "optics_groups_assigned",   0)
-                call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
-                call http_communicator%json%create_array(optics_assignments, "optics_assignments")
-                call http_communicator%json%add(http_communicator%job_json, optics_assignments)
-            end subroutine communicator_init
 
-    end subroutine exec_stream_mini
+            subroutine micimporter( nmics )
+                integer, intent(in) :: nmics
+                integer :: n_imported, n_new_oris, iproj, iori
+                n_imported= 0
+                do
+                    if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
+                        ! termination
+                        write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
+                        exit
+                    endif
+                    if( http_communicator%stop )then
+                        ! termination
+                        write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                        call spproj%kill
+                        call qsys_cleanup
+                        call simple_end('**** SIMPLE_GEN_PICKREFS USER STOP ****')
+                        call EXIT(0)
+                    endif
+                    ! http stats
+                    call http_communicator%json%update(http_communicator%job_json, "stage", "finding and importing new micrographs to project", found) 
+                    ! detection of new projects
+                    call project_buff%watch( nprojects, projects, max_nmovies=50 )
+                    ! append projects to processing stack
+                    if( nprojects > 0 )then
+                        n_imported= spproj%os_mic%get_noris()
+                        if(n_imported> 0) then
+                            n_new_oris  =  n_imported+ nprojects * STREAM_NMOVS_SET
+                            call spproj%os_mic%reallocate(n_new_oris)
+                        else
+                            n_new_oris = nprojects * STREAM_NMOVS_SET
+                            call spproj%os_mic%new(n_new_oris, .false.)
+                        end if
+                        do iproj = 1, nprojects 
+                            call project_buff%add2history(projects(iproj)) ! I got this one, so please don't give it to me again
+                            call spproj_part%read(trim(projects(iproj)))
+                            do iori = 1, STREAM_NMOVS_SET
+                                n_imported= n_imported+ 1
+                                call spproj%os_mic%transfer_ori(n_imported, spproj_part%os_mic, iori)
+                            end do
+                            call spproj_part%kill()
+                        enddo
+                        write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
+                        ! http stats
+                        call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     spproj%os_mic%get_noris(),    found)
+                        call http_communicator%json%update(http_communicator%job_json, "micrographs_accepted",     spproj%os_mic%get_noris(),    found)
+                        call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",                             0,    found)
+                        call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),             found)
+                    else
+                        call sleep(WAITTIME) ! may want to increase as 3s default
+                    endif
+                    ! http stats send
+                    call http_communicator%send_jobstats() ! needs to be called so the gui doesn't think the process is dead, "fancy heartbeat"
+                    call http_gen_pickrefs_communicator%send_jobstats()
+                    if( spproj%os_mic%get_noris() >= nmics ) return
+                end do
+            end subroutine micimporter
+
+            subroutine communicator_init_initial_picking()
+                call http_communicator%json%add(http_communicator%job_json, "stage",               "initialising")
+                call http_communicator%json%add(http_communicator%job_json, "micrographs_imported",     0)
+                call http_communicator%json%add(http_communicator%job_json, "micrographs_accepted",     0)
+                call http_communicator%json%add(http_communicator%job_json, "micrographs_rejected",     0)
+                call http_communicator%json%add(http_communicator%job_json, "user_input",               .false.)
+                call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
+                call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+                call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
+            end subroutine communicator_init_initial_picking
+
+            subroutine communicator_gen_pickrefs_init()
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "stage",                   "initialising")
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_extracted",     dble(0.0))
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",               dble(0.0))
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",                0)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "selected_boxsize",        0)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input",              .false.)
+                call http_gen_pickrefs_communicator%json%create_array(latest_cls2D, "latest_cls2D")
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, latest_cls2D)
+                call http_gen_pickrefs_communicator%json%create_array(selected_references, "selected_references")
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, selected_references)
+            end subroutine communicator_gen_pickrefs_init
+
+            subroutine communicator_add_micrograph(path, xdim, ydim, boxfile_path)
+                character(*),     intent(in)  :: path, boxfile_path
+                integer,          intent(in)  :: xdim, ydim
+                type(nrtxtfile)               :: boxfile
+                type(json_value), pointer     :: micrograph, boxes, box
+                real,             allocatable :: boxdata(:,:)
+                integer                       :: i, x, y, diameter, type
+                call http_communicator%json%create_object(micrograph, "")
+                call http_communicator%json%add(micrograph, "path",    path)
+                call http_communicator%json%add(micrograph, "xdim"   , xdim)
+                call http_communicator%json%add(micrograph, "ydim",    ydim)
+                call http_communicator%json%create_array(boxes, "boxes")
+                call boxfile%new(boxfile_path, 1)
+                allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
+                if(boxfile%get_nrecs_per_line() >= 4) then
+                    do i=1, boxfile%get_ndatalines()
+                        call boxfile%readNextDataLine(boxdata(:,i))
+                        call http_communicator%json%create_object(box, "")
+                        x = nint(boxdata(1,i) + boxdata(3,i)/2)
+                        y = nint(boxdata(2,i) + boxdata(4,i)/2)
+                        call http_communicator%json%add(box, "x",    x)
+                        call http_communicator%json%add(box, "y",    y)
+                        call http_communicator%json%add(boxes, box)
+                    enddo
+                endif
+                call boxfile%kill()
+                deallocate(boxdata)
+                call http_communicator%json%add(micrograph, boxes)
+                call http_communicator%json%add(latest_picked_micrographs, micrograph)
+            end subroutine communicator_add_micrograph
+            
+            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop)
+                 character(*),      intent(in) :: path, mrcpath
+                 real,              intent(in) :: spritex, spritey
+                 integer,           intent(in) :: spriteh, spritew, mrc_idx
+                 integer, optional, intent(in) :: pop
+                 real,    optional, intent(in) :: res
+                 type(json_value),  pointer    :: template
+                 call http_communicator%json%create_object(template, "")
+                 call http_communicator%json%add(template, "path",    path)
+                 call http_communicator%json%add(template, "mrcpath", mrcpath)
+                 call http_communicator%json%add(template, "mrcidx",  mrc_idx)
+                 call http_communicator%json%add(template, "spritex", dble(spritex))
+                 call http_communicator%json%add(template, "spritey", dble(spritey))
+                 call http_communicator%json%add(template, "spriteh", spriteh)
+                 call http_communicator%json%add(template, "spritew", spritew)
+                 if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
+                 if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
+                 call http_communicator%json%add(latest_cls2D, template)
+             end subroutine communicator_add_cls2D
+
+    end subroutine exec_gen_pickrefs
 
     subroutine exec_stream_cluster2D( self, cline )
         class(commander_stream_cluster2D), intent(inout) :: self
