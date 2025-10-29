@@ -73,59 +73,60 @@ end type simple_program
 
 ! declare simple_exec and single_exec program specifications here
 ! instances of this class - special
-
 type(simple_program), target :: abinitio2D
 type(simple_program), target :: abinitio2D_stream
+type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_cavgs
 type(simple_program), target :: abinitio3D_cavgs_fast
-type(simple_program), target :: abinitio3D
 type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
-type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: assign_optics
+type(simple_program), target :: assign_optics_groups
+type(simple_program), target :: atoms_register
+type(simple_program), target :: atoms_stats
+type(simple_program), target :: auto_spher_mask
 type(simple_program), target :: automask
 type(simple_program), target :: automask2D
-type(simple_program), target :: auto_spher_mask
-type(simple_program), target :: extract_substk
-type(simple_program), target :: extract_subproj
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
-type(simple_program), target :: cavgsproc_nano
 type(simple_program), target :: cavgseoproc_nano
-type(simple_program), target :: ptclsproc_nano
+type(simple_program), target :: cavgsproc_nano
 type(simple_program), target :: center
-type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_refpick
 type(simple_program), target :: check_states
-type(simple_program), target :: consolidate_chunks
-type(simple_program), target :: conv_atom_denoise
+type(simple_program), target :: cleanup2D
 type(simple_program), target :: clin_fsc
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
-type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster2D_stream
+type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: cluster_stack
 type(simple_program), target :: comparemc
+type(simple_program), target :: consolidate_chunks
+type(simple_program), target :: conv_atom_denoise
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
-type(simple_program), target :: ctfops
 type(simple_program), target :: ctf_phaseflip
-type(simple_program), target :: quick_look
+type(simple_program), target :: ctfops
 type(simple_program), target :: denoise_trajectory
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
-type(simple_program), target :: estimate_lpstages
 type(simple_program), target :: estimate_diam
+type(simple_program), target :: estimate_lpstages
 type(simple_program), target :: export_relion
 type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
+type(simple_program), target :: extract_subproj
+type(simple_program), target :: extract_substk
 type(simple_program), target :: filter
+type(simple_program), target :: fractionate_movies
 type(simple_program), target :: fsc
+type(simple_program), target :: gen_pickrefs
 type(simple_program), target :: gen_pspecs_and_thumbs
-type(simple_program), target :: gen_picking_refs
+type(simple_program), target :: graphene_subtr
 type(simple_program), target :: icm2D
 type(simple_program), target :: icm3D
 type(simple_program), target :: import_boxes
@@ -141,6 +142,7 @@ type(simple_program), target :: make_pickrefs
 type(simple_program), target :: map2model_fsc
 type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
+type(simple_program), target :: map_validation
 type(simple_program), target :: mask
 type(simple_program), target :: match_cavgs
 type(simple_program), target :: match_cavgs2afm
@@ -148,18 +150,17 @@ type(simple_program), target :: match_stacks
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mini_stream
 type(simple_program), target :: mkdir_
-type(simple_program), target :: map_validation
 type(simple_program), target :: model_validation
 type(simple_program), target :: model_validation_eo
 type(simple_program), target :: motion_correct
 type(simple_program), target :: multivol_assign
 type(simple_program), target :: new_project
-type(simple_program), target :: nununiform_filter3D
 type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
+type(simple_program), target :: nununiform_filter3D
+type(simple_program), target :: oriconsensus
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
-type(simple_program), target :: oriconsensus
 type(simple_program), target :: pdb2mrc
 type(simple_program), target :: pick
 type(simple_program), target :: pick_extract
@@ -177,34 +178,32 @@ type(simple_program), target :: print_project_info
 type(simple_program), target :: print_ui_stream
 type(simple_program), target :: projops
 type(simple_program), target :: prune_project
-type(simple_program), target :: score_ptcls
-type(simple_program), target :: atoms_stats
-type(simple_program), target :: atoms_register
+type(simple_program), target :: ptclsproc_nano
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_auto
 type(simple_program), target :: refine3D_nano
-type(simple_program), target :: fractionate_movies
 type(simple_program), target :: replace_project_field
-type(simple_program), target :: sample_classes
-type(simple_program), target :: selection
 type(simple_program), target :: reproject
+type(simple_program), target :: sample_classes
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
+type(simple_program), target :: score_ptcls
 type(simple_program), target :: select_
 type(simple_program), target :: select_clusters
+type(simple_program), target :: selection
 type(simple_program), target :: sharpvol
+type(simple_program), target :: sieve_cavgs
 type(simple_program), target :: simulate_atoms
 type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
 type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: split_
-type(simple_program), target :: stack
 type(simple_program), target :: split_stack
+type(simple_program), target :: stack
 type(simple_program), target :: stackops
-type(simple_program), target :: sieve_cavgs
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
@@ -214,12 +213,11 @@ type(simple_program), target :: tseries_core_finder
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_make_pickavg
+type(simple_program), target :: tseries_make_projavgs
 type(simple_program), target :: tseries_motion_correct
+type(simple_program), target :: tseries_reconstruct3D
 type(simple_program), target :: tseries_swap_stack
 type(simple_program), target :: tseries_track_particles
-type(simple_program), target :: tseries_reconstruct3D
-type(simple_program), target :: tseries_make_projavgs
-type(simple_program), target :: graphene_subtr
 type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
@@ -237,22 +235,23 @@ type(simple_input_param) :: astigthreshold
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: automsk
 type(simple_input_param) :: autosample
-type(simple_input_param) :: bfac
 type(simple_input_param) :: backgr_subtr
+type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: box_extract
 type(simple_input_param) :: cc_iters
+type(simple_input_param) :: center_pdb
 type(simple_input_param) :: clip
 type(simple_input_param) :: cls_init
 type(simple_input_param) :: clustermode
 type(simple_input_param) :: cn
-type(simple_input_param) :: cn_min
 type(simple_input_param) :: cn_max
+type(simple_input_param) :: cn_min
 type(simple_input_param) :: combine_eo
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
-type(simple_input_param) :: ctfpatch
 type(simple_input_param) :: ctf_yes
+type(simple_input_param) :: ctfpatch
 type(simple_input_param) :: ctfresthreshold
 type(simple_input_param) :: deftab
 type(simple_input_param) :: dferr
@@ -262,6 +261,7 @@ type(simple_input_param) :: dir_movies
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eer_fraction
 type(simple_input_param) :: element
+type(simple_input_param) :: envfsc
 type(simple_input_param) :: eo
 type(simple_input_param) :: flipgain
 type(simple_input_param) :: focusmskdiam
@@ -274,7 +274,6 @@ type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: hp
 type(simple_input_param) :: icefracthreshold
 type(simple_input_param) :: icm
-type(simple_input_param) :: center_pdb
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: kweight
@@ -282,27 +281,26 @@ type(simple_input_param) :: kweight_chunk
 type(simple_input_param) :: kweight_pool
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
-type(simple_input_param) :: lpstart_nonuni
 type(simple_input_param) :: lp_pick
 type(simple_input_param) :: lplim_crit
+type(simple_input_param) :: lpstart_nonuni
 type(simple_input_param) :: lpthres
 type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
 type(simple_input_param) :: maxnchunks
+type(simple_input_param) :: mcconvention
 type(simple_input_param) :: mcpatch
 type(simple_input_param) :: mcpatch_thres
-type(simple_input_param) :: mcconvention
 type(simple_input_param) :: min_rad
 type(simple_input_param) :: mirr
+type(simple_input_param) :: ml_reg
+type(simple_input_param) :: ml_reg_chunk
+type(simple_input_param) :: ml_reg_pool
 type(simple_input_param) :: moldiam
 type(simple_input_param) :: moldiam_max
 type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
-type(simple_input_param) :: envfsc
-type(simple_input_param) :: ml_reg
-type(simple_input_param) :: ml_reg_chunk
-type(simple_input_param) :: ml_reg_pool
 type(simple_input_param) :: mul
 type(simple_input_param) :: nboxes_max
 type(simple_input_param) :: nchunks
@@ -312,6 +310,7 @@ type(simple_input_param) :: ncls_start
 type(simple_input_param) :: neg
 type(simple_input_param) :: niceprocid
 type(simple_input_param) :: niceserver
+type(simple_input_param) :: nonuniform
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nparts_chunk
 type(simple_input_param) :: nparts_pool
@@ -325,11 +324,9 @@ type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nstates
 type(simple_input_param) :: nthr
-type(simple_input_param) :: nonuniform
 type(simple_input_param) :: numlen
 type(simple_input_param) :: nxpatch
 type(simple_input_param) :: nypatch
-type(simple_input_param) :: pdbout
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: oritab2
@@ -341,11 +338,12 @@ type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
 type(simple_input_param) :: particle_density
 type(simple_input_param) :: pcontrast
+type(simple_input_param) :: pdbout
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: pgrp_start
 type(simple_input_param) :: phaseplate
-type(simple_input_param) :: picker
 type(simple_input_param) :: pick_roi
+type(simple_input_param) :: picker
 type(simple_input_param) :: pickrefs
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
@@ -356,9 +354,9 @@ type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
-type(simple_input_param) :: remove_chunks
 type(simple_input_param) :: reject_cls
 type(simple_input_param) :: remap_cls
+type(simple_input_param) :: remove_chunks
 type(simple_input_param) :: script
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
@@ -368,16 +366,16 @@ type(simple_input_param) :: smpd
 type(simple_input_param) :: smpd_downscale
 type(simple_input_param) :: smpd_target
 type(simple_input_param) :: star_datadir
-type(simple_input_param) :: starfile
 type(simple_input_param) :: star_mic
 type(simple_input_param) :: star_model
 type(simple_input_param) :: star_ptcl
+type(simple_input_param) :: starfile
 type(simple_input_param) :: startit
 type(simple_input_param) :: startype
+type(simple_input_param) :: stepsz
 type(simple_input_param) :: stk
 type(simple_input_param) :: stk2
 type(simple_input_param) :: stktab
-type(simple_input_param) :: stepsz
 type(simple_input_param) :: time_per_image
 type(simple_input_param) :: total_dose
 type(simple_input_param) :: trs
@@ -464,7 +462,7 @@ contains
         call new_filter
         call new_fractionate_movies
         call new_fsc
-        call new_gen_picking_refs
+        call new_gen_pickrefs
         call new_gen_pspecs_and_thumbs
         call new_graphene_subtr
         call new_icm2D
@@ -518,7 +516,6 @@ contains
         call new_projops
         call new_prune_project
         call new_ptclsproc_nano
-        call new_quick_look
         call new_reconstruct3D
         call new_reextract
         call new_refine3D
@@ -620,7 +617,7 @@ contains
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
-        call push2prg_ptr_array(gen_picking_refs)
+        call push2prg_ptr_array(gen_pickrefs)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(icm2D)
@@ -674,7 +671,6 @@ contains
         call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(ptclsproc_nano)
-        call push2prg_ptr_array(quick_look)
         call push2prg_ptr_array(reconstruct3D)
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
@@ -789,7 +785,7 @@ contains
             case('filter');                      ptr2prg => filter
             case('fractionate_movies');          ptr2prg => fractionate_movies
             case('fsc');                         ptr2prg => fsc
-            case('gen_picking_refs');            ptr2prg => gen_picking_refs
+            case('gen_pickrefs');                ptr2prg => gen_pickrefs
             case('gen_pspecs_and_thumbs');       ptr2prg => gen_pspecs_and_thumbs
             case('graphene_subtr');              ptr2prg => graphene_subtr
             case('icm2D');                       ptr2prg => icm2D
@@ -813,7 +809,7 @@ contains
             case('match_cavgs2afm');             ptr2prg => match_cavgs2afm
             case('match_stacks');                ptr2prg => match_stacks
             case('merge_projects');              ptr2prg => merge_projects
-            case('mini_stream');                 ptr2prg => mini_stream
+            case('mini_stream');                  ptr2prg => mini_stream
             case('mkdir');                       ptr2prg => mkdir_
             case('model_validation');            ptr2prg => model_validation
             case('model_validation_eo');         ptr2prg => model_validation_eo
@@ -843,7 +839,6 @@ contains
             case('projops');                     ptr2prg => projops  
             case('prune_project');               ptr2prg => prune_project
             case('ptclsproc_nano');              ptr2prg => ptclsproc_nano
-            case('quick_look');                  ptr2prg => quick_look
             case('reconstruct3D');               ptr2prg => reconstruct3D
             case('reextract');                   ptr2prg => reextract
             case('refine3D');                    ptr2prg => refine3D
@@ -954,6 +949,7 @@ contains
         write(logfhandle,'(A)') match_cavgs2afm%name
         write(logfhandle,'(A)') match_stacks%name
         write(logfhandle,'(A)') merge_projects%name
+        write(logfhandle,'(A)') mini_stream%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') model_validation%name
         write(logfhandle,'(A)') model_validation_eo%name
@@ -980,7 +976,6 @@ contains
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') projops%name
         write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') quick_look%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
@@ -1021,8 +1016,7 @@ contains
         write(logfhandle,'(A)') abinitio2D_stream%name
         write(logfhandle,'(A)') assign_optics%name
         write(logfhandle,'(A)') cluster2D_stream%name
-        write(logfhandle,'(A)') gen_picking_refs%name
-        write(logfhandle,'(A)') mini_stream%name
+        write(logfhandle,'(A)') gen_pickrefs%name
         write(logfhandle,'(A)') pick_extract%name
         write(logfhandle,'(A)') preproc%name
         write(logfhandle,'(A)') sieve_cavgs%name
@@ -2307,40 +2301,6 @@ contains
         ! <empty>
     end subroutine new_ctf_phaseflip
 
-    subroutine new_quick_look
-        ! PROGRAM SPECIFICATION
-        call quick_look%new(&
-        &'quick_look',&                                 ! name
-        &'standalone mini_stream for a quick look',&    ! descr_short
-        &'is a program for doing a standalone mini_stream for a quick look',&  ! descr_long
-        &'simple_exec',&                                ! executable
-        &1, 6, 0, 1, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call quick_look%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
-        quick_look%img_ios(1)%required = .true.
-        ! parameter input/output
-        call quick_look%set_input('parm_ios', 1, smpd)
-        quick_look%parm_ios(1)%required = .true.
-        call quick_look%set_input('parm_ios', 2, pcontrast)
-        call quick_look%set_input('parm_ios', 3, kv)
-        quick_look%parm_ios(3)%required = .true.
-        call quick_look%set_input('parm_ios', 4, cs)
-        quick_look%parm_ios(4)%required = .true.
-        call quick_look%set_input('parm_ios', 5, fraca)
-        call quick_look%set_input('parm_ios', 6, moldiam_max)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call quick_look%set_input('srch_ctrls',1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call quick_look%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_quick_look
-
     subroutine new_denoise_trajectory
         ! PROGRAM SPECIFICATION
         call denoise_trajectory%new(&
@@ -2666,60 +2626,6 @@ contains
         call gen_pspecs_and_thumbs%set_input('comp_ctrls', 1, nparts)
         call gen_pspecs_and_thumbs%set_input('comp_ctrls', 2, nthr)
     end subroutine new_gen_pspecs_and_thumbs
-
-    subroutine new_gen_picking_refs
-        ! PROGRAM SPECIFICATION
-        call gen_picking_refs%new(&
-        &'gen_picking_refs', &                                                               ! name
-        &'Generation of picking references in streaming mode',&                              ! descr_short
-        &'is a distributed workflow that executes picking and extraction'//&                 ! descr_long
-        &' in streaming mode as the microscope collects the data',&
-        &'simple_stream',&                                                                   ! executable
-        &1, 5, 0, 2, 3, 1, 5, .true.,&                                                       ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,picking,extract,cluster 2D,compute") ! GUI                             
-        ! image input/output
-        call gen_picking_refs%set_input('img_ios', 1, 'dir_exec', 'file', 'Previous run directory',&
-            &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .false., '', gui_submenu="data")
-        ! parameter input/output
-        call gen_picking_refs%set_input('parm_ios', 1, pcontrast, gui_submenu="picking")
-        call gen_picking_refs%set_input('parm_ios', 2, box_extract)
-        call gen_picking_refs%set_input('parm_ios', 3, moldiam, gui_submenu="picking")
-        call gen_picking_refs%set_input('parm_ios', 4, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', gui_submenu="data")
-        call gen_picking_refs%set_input('parm_ios', 5, 'maxpop', 'num', 'Maximum number of particles processed',&
-        &'Maximum number of particles extracted and classified{200000}', '{200000}', .false., 200000., gui_submenu="extract")
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call gen_picking_refs%set_input('srch_ctrls',1, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
-        gen_picking_refs%srch_ctrls(1)%rval_default = 500.
-        call gen_picking_refs%set_input('srch_ctrls', 2, ncls, gui_submenu="cluster 2D", gui_advanced=.false.)
-        gen_picking_refs%srch_ctrls(2)%required = .false.
-        ! filter controls
-        call gen_picking_refs%set_input('filt_ctrls', 1, ctfresthreshold, gui_submenu="data")
-        gen_picking_refs%filt_ctrls(1)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
-        gen_picking_refs%filt_ctrls(1)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
-        gen_picking_refs%filt_ctrls(1)%rval_default      = CTFRES_THRESHOLD_STREAM
-        call gen_picking_refs%set_input('filt_ctrls', 2, icefracthreshold, gui_submenu="data")
-        gen_picking_refs%filt_ctrls(2)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
-        gen_picking_refs%filt_ctrls(2)%descr_placeholder = 'Ice fraction threshold{1.0}'
-        gen_picking_refs%filt_ctrls(2)%rval_default      = ICEFRAC_THRESHOLD_STREAM
-        call gen_picking_refs%set_input('filt_ctrls', 3, astigthreshold, gui_submenu="data")
-        gen_picking_refs%filt_ctrls(3)%descr_long        = 'Micrographs with an astigmatism (%) above the threshold will be ignored from further processing{10.0}'
-        gen_picking_refs%filt_ctrls(3)%descr_placeholder = 'Astigmatism threshold{10.0}'
-        gen_picking_refs%filt_ctrls(3)%rval_default      = ASTIG_THRESHOLD_STREAM
-        ! mask controls
-        call gen_picking_refs%set_input('mask_ctrls', 1, mskdiam, gui_submenu="cluster 2D")
-        gen_picking_refs%mask_ctrls(1)%required = .false.
-        ! computer controls
-        call gen_picking_refs%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call gen_picking_refs%set_input('comp_ctrls', 2, 'nthr2D', 'num', 'Number of threads/node for 2D analysis', 'Number of threads per node allocated to 2D analysis',&
-        &'# of threads for per node', .true., 1., gui_submenu="compute")
-        call gen_picking_refs%set_input('comp_ctrls', 3, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call gen_picking_refs%set_input('comp_ctrls', 4, nparts_pool, gui_submenu="compute", gui_advanced=.false.)
-        call gen_picking_refs%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
-    end subroutine new_gen_picking_refs
 
     subroutine new_import_starproject
         ! PROGRAM SPECIFICATION
@@ -3559,28 +3465,38 @@ contains
         call merge_projects%set_input('comp_ctrls', 2, nthr,   gui_submenu="compute")
     end subroutine new_merge_projects
 
-     subroutine new_mini_stream
+    subroutine new_mini_stream
         ! PROGRAM SPECIFICATION
         call mini_stream%new(&
-        &'mini_stream', &                                                ! name
-        &'Do a mini stream to create the opening 2D',&                   ! descr_short
-        &'is a program to do a mini stream to create the opening 2D',&   ! descr long
-        &'simple_stream',&                                               ! executable
-        &0, 1, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        &'mini_stream',&                                 ! name
+        &'standalone mini_stream for a quick look',&    ! descr_short
+        &'is a program for doing a standalone mini_stream for a quick look',&  ! descr_long
+        &'simple_exec',&                                ! executable
+        &1, 6, 0, 1, 0, 0, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
+        call mini_stream%set_input('img_ios', 1, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
+        mini_stream%img_ios(1)%required = .true.
         ! parameter input/output
-        call mini_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        call mini_stream%set_input('parm_ios', 1, smpd)
+        mini_stream%parm_ios(1)%required = .true.
+        call mini_stream%set_input('parm_ios', 2, pcontrast)
+        call mini_stream%set_input('parm_ios', 3, kv)
+        mini_stream%parm_ios(3)%required = .true.
+        call mini_stream%set_input('parm_ios', 4, cs)
+        mini_stream%parm_ios(4)%required = .true.
+        call mini_stream%set_input('parm_ios', 5, fraca)
+        call mini_stream%set_input('parm_ios', 6, moldiam_max)
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call mini_stream%set_input('srch_ctrls',1, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
         ! filter controls
         ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
+        call mini_stream%set_input('comp_ctrls', 1, nthr)
     end subroutine new_mini_stream
 
     subroutine new_mkdir_
@@ -5972,6 +5888,30 @@ contains
         call tseries_reconstruct3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_tseries_reconstruct3D
 
+    subroutine new_gen_pickrefs
+        ! PROGRAM SPECIFICATION
+        call gen_pickrefs%new(&
+        &'gen_pickrefs', &                                                ! name
+        &'Do a mini stream to create the opening 2D for generation of picking references',&  ! descr_short
+        &'is a program to do a mini stream to create the opening 2D',&   ! descr long
+        &'simple_stream',&                                               ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call gen_pickrefs%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_gen_pickrefs
+
     subroutine new_graphene_subtr
         ! PROGRAM SPECIFICATION
         call graphene_subtr%new(&
@@ -7041,38 +6981,10 @@ contains
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=preprocessing')
         call json%add(process_inputs, '', 'outdir=optics_assignment') !important - directory names and name must match between processes
-        !! initial_picking
-        call json%create_object(process, 'process')
-        call json%add(processes, process)
-        call json%add(process, 'name',        'initial_picking') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'pick_extract')
-        call json%add(process, 'nthr_master', 4)
-        call json%create_array(process_inputs, 'static_inputs')
-        call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'moldiam=100')
-        call json%add(process_inputs, '', 'moldiam_max=500')
-        call json%add(process_inputs, '', 'nmoldiams=5')
-        call json%add(process_inputs, '', 'ninit=10')
-        call json%add(process_inputs, '', 'ring=no')
-        call json%add(process_inputs, '', 'interactive=yes')
-       ! call json%add(process_inputs, '', 'pick_roi=yes')
-        call json%add(process_inputs, '', 'dir_target=preprocessing')
-        call json%add(process_inputs, '', 'outdir=initial_picking') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'nparts=5')
-        call json%add(process_inputs, '', 'nthr=8')
-        !! gen_picking_refs
-        call json%create_object(process, 'process')
-        call json%add(processes, process)
-        call json%add(process, 'name',        'generate_picking_refs') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'gen_picking_refs')
-        call json%add(process, 'nthr_master', 4)
-        call json%create_array(process_inputs, 'static_inputs')
-        call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'dir_target=initial_picking')
-        call json%add(process_inputs, '', 'outdir=generate_picking_refs') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'nparts=10')
-        call json%add(process_inputs, '', 'nthr=4')
-        call json%add(process_inputs, '', 'nthr2D=8')
+        !! opening 2D
+
+        ! 2 be implemented
+        
         !! reference_based_picking
         call json%create_object(process, 'process')
         call json%add(processes, process)

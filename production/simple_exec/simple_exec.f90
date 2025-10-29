@@ -103,7 +103,7 @@ type(commander_fractionate_movies_distr)    :: xfractionate_movies
 type(commander_comparemc)                   :: xcomparemc
 
 ! VALIDATION WORKFLOWS
-type(commander_quick_look)                  :: xquick_look
+type(commander_mini_stream)                  :: xmini_stream
 type(commander_check_refpick)               :: xcheck_refpick
 
 ! IMAGE PROCESSING PROGRAMS
@@ -358,8 +358,8 @@ select case(trim(prg))
         call xcomparemc%execute(cline)
 
     ! VALIDATION WORKFLOWS
-    case( 'quick_look' )
-        call xquick_look%execute(cline)
+    case( 'mini_stream' )
+        call xmini_stream%execute(cline)
     case( 'check_refpick' )
         call xcheck_refpick%execute(cline)
 
@@ -493,7 +493,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('7e28c5cf')
+call simple_print_git_version('1dfdbb81')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

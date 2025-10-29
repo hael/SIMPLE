@@ -7,16 +7,18 @@ use simple_binimage,    only: binimage
 use simple_image,       only: image
 use simple_picksegdiam, only: picksegdiam
 use simple_micproc
+use simple_gui_utils
 implicit none
 #include "simple_local_flags.inc"
 
 contains
 
-    subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, mskdiam )
+    subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam )
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: pcontrast
         integer,           intent(in)    :: mic_to     ! last micrograph to process
         real,              intent(in)    :: moldiam_max
+        integer,           intent(out)   :: box_in_pix
         real,              intent(out)   :: mskdiam    ! estimated mask diameter
         logical, parameter :: DEBUG = .true.
         real,    parameter :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
@@ -32,7 +34,7 @@ contains
         type(binimage)     :: mic_bin
         type(stats_struct) :: diam_stats
         type(stats_struct) :: stats_nboxes
-        integer :: nmics, ldim_raw(3), ldim(3), imic, loc(1), pop, nptcls, box_raw, i, nboxes
+        integer :: nmics, ldim_raw(3), ldim(3), imic, loc(1), pop, nptcls, i, nboxes
         real    :: scale, mad, smpd
         logical :: l_empty
         ! parse project
@@ -110,17 +112,17 @@ contains
         print *, 'min diam: ', diam_stats%minv
         print *, 'max diam: ', diam_stats%maxv
         ! box size estimate in pixels
-        box_raw = find_magic_box(BOXFAC * nint(diam_stats%med/smpd))
-        print *, 'box diam: ', box_raw * smpd
+        box_in_pix = find_magic_box(BOXFAC * nint(diam_stats%med/smpd))
+        print *, 'box diam: ', box_in_pix * smpd
         ! mskdiam estimate in A
-        mskdiam = min((real(box_raw) - COSMSKHALFWIDTH) * smpd, diam_stats%maxv)
+        mskdiam = min((real(box_in_pix) - COSMSKHALFWIDTH) * smpd, diam_stats%maxv)
         mskdiam = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, mskdiam)
         print *, 'msk diam: ', mskdiam
         ! re-pick with diameter constraints applied
         do imic = 1, nmics
             boxfile = basename(fname_new_ext(trim(micnames(imic)),'box'))
             call picker%pick(ldim_raw, smpd, mic_bin_names(imic), [diam_stats%minv,diam_stats%maxv])
-            call picker%write_pos_and_diams(boxfile, nptcls, box_raw)
+            call picker%write_pos_and_diams(boxfile, nptcls, box_in_pix)
             if( nptcls == 0 )then
                 boxfile_out = ''
             else
@@ -133,7 +135,7 @@ contains
                 fbody_here      = get_fbody(trim(fbody_here), trim(ext))
                 fname_thumb_den = trim(adjustl(fbody_here))//DEN_SUFFIX//trim(JPG_EXT)
                 call read_mic(trim(mic_den_names(imic)), mic_den)
-                call mic_den%write_jpg(fname_thumb_den, norm=.true., quality=90)
+                call mic2thumb(mic_den, fname_thumb_den)
                 call spproj%os_mic%set(imic, 'thumb_den', simple_abspath(fname_thumb_den))
             else
                 call spproj%os_mic%set(imic, 'thumb_den', '')
