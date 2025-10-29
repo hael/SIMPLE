@@ -1318,7 +1318,7 @@ contains
         type(commander_stream_sieve_cavgs)     :: xsieve_cavgs
         type(sp_project)                       :: spproj
         character(len=LONGSTRLEN) :: boxfile
-        integer                   :: nmics,nboxes,imic,nptcls,nselmics,i,jmic,to,iproj,np
+        integer                   :: nmics,nboxes,imic,nptcls,nselmics,jmic,to,iproj,np
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',           'yes')
         ! CTF
         if( .not. cline%defined('hp')             ) call cline%set('hp',                30.)
@@ -1328,8 +1328,6 @@ contains
         if( .not. cline%defined('ctfpatch')       ) call cline%set('ctfpatch',        'yes')
         ! # of particles
         if( .not. cline%defined('maxpop')         ) call cline%set('maxpop', MAXPOP_DEFAULT)
-        ! Sieve_cavgs
-        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',    500)
         ! Compute
         call cline%set('nparts', 1)
         ! command-line parsing
@@ -1421,7 +1419,6 @@ contains
         ! Align & Sieve
         call cline_sieve_cavgs%set('prg',           'sieve_cavgs')
         call cline_sieve_cavgs%set('ncls',           params%ncls)
-        call cline_sieve_cavgs%set('nptcls_per_cls', params%nptcls_per_cls)
         call cline_sieve_cavgs%set('nchunks',        1)
         call cline_sieve_cavgs%set('nchunksperset',  1)
         call cline_sieve_cavgs%set('nparts',         params%nparts)
@@ -1429,6 +1426,11 @@ contains
         call cline_sieve_cavgs%set('dir_target',     params%cwd)
         call cline_sieve_cavgs%set('projfile',       PROJFILE)
         call cline_sieve_cavgs%set('remove_chunks',  'no')
+        if( cline%defined('nptcls_per_cls') )then
+            call cline_sieve_cavgs%set('nptcls_per_cls', params%nptcls_per_cls)
+        else
+            call cline_sieve_cavgs%set('nptcls_per_cls', floor(real(nptcls)/real(params%ncls)))
+        endif
         ! optional mskdiam
         if( cline%defined('mskdiam') ) call cline_sieve_cavgs%set('mskdiam', params%mskdiam)
         call xsieve_cavgs%execute_safe(cline_sieve_cavgs)
