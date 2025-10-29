@@ -103,12 +103,12 @@
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div id="micrographs_slider" class="flex flex-row w-[500px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="500" width="500"></canvas>
+                        <div id="micrographs_slider" class="flex flex-row w-[512px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="512" width="512"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph" oncontextmenu="showMenu(this, event)" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
-                                    <div class="w-[500px] h-[500px] m-auto">
-                                        <img style="background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[500px] w-[500px] rounded m-auto"></img>
+                                    <div class="w-[512px] h-[512px] m-auto">
+                                        <img src={% url 'nice_lite:image' micrograph.path %} class="h-[512px] w-[512px] rounded m-auto"></img>
                                     </div>
                                 </div>
                             {% endfor %}
@@ -140,12 +140,12 @@
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[500] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="500" width="500"></canvas>
+                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[512] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="512" width="512"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
-                                    <div class="w-[500px] h-[500px] m-auto">
-                                        <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[500px] w-[500px] rounded"></img>
+                                    <div class="w-[512px] h-[512px] m-auto">
+                                        <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[512px] w-[512px] rounded"></img>
                                     </div>
                                 </div>
                             {% endfor %}
@@ -178,12 +178,12 @@
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[500] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="500" width="500"></canvas>
+                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[512] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="512" width="512"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
                                 <div class="snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
-                                    <div class="miccontainer w-[500px] h-[500px] m-auto">
-                                        <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[500px] w-[500px] rounded"></img>
+                                    <div class="miccontainer w-[512px] h-[512px] m-auto">
+                                        <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[512px] w-[512px] rounded"></img>
                                     </div>
                                 </div>
                             {% endfor %}
@@ -196,11 +196,11 @@
                                 </div>
                                 <div class="flex flex-col">
                                     <div class="font-bold">brightness</div>
-                                    <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                    <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="64"></input> 
                                 </div>
                                 <div class="flex flex-col">
                                     <div class="font-bold">scale</div>
-                                    <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="1000" min="100" step="1" value="500"></input> 
+                                    <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="1000" min="100" step="1" value="512"></input> 
                                 </div>
                             </div>
                         </div>

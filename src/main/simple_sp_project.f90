@@ -1,6 +1,13 @@
 module simple_sp_project
 include 'simple_lib.f08'
-use simple_starfile
+use simple_cmdline,           only: cmdline
+use simple_discrete_stack_io, only: dstack_io
+use simple_map_reduce,        only: split_nobjs_even
+use simple_gui_utils
+use simple_histogram
+use simple_image
+use simple_stack_io
+use simple_starfile        
 use json_kinds
 use json_module
 implicit none
@@ -146,6 +153,8 @@ contains
     procedure          :: write_optics_map
     procedure, private :: segwriter
     procedure          :: segwriter_inside
+    procedure          :: cavgs2jpg
+    procedure          :: shape_ranked_cavgs2jpg
     ! destructor
     procedure          :: kill
 end type sp_project
@@ -192,7 +201,6 @@ contains
     ! field updaters
 
     subroutine update_projinfo_1( self, cline )
-        use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
         character(len=:), allocatable :: projname
@@ -234,7 +242,6 @@ contains
     end subroutine update_projinfo_1
 
     subroutine update_projinfo_2( self, projfile )
-        use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: projfile
         character(len=:), allocatable    :: projname
@@ -259,7 +266,6 @@ contains
     end subroutine update_projinfo_2
 
     subroutine update_compenv( self, cline )
-        use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
         character(len=STDLEN)            :: env_var
@@ -1350,10 +1356,6 @@ contains
     
     !>  Only commits to disk when a change to the project is made
     subroutine split_stk( self, nparts, dir )
-        use simple_map_reduce,        only: split_nobjs_even
-        use simple_image,             only: image
-        use simple_stack_io,          only: stack_io
-        use simple_discrete_stack_io, only: dstack_io
         class(sp_project),          intent(inout) :: self
         integer,                    intent(in)    :: nparts
         character(len=*), optional, intent(in)    :: dir
@@ -1460,9 +1462,6 @@ contains
     end subroutine split_stk
 
     subroutine write_substk( self, fromto, stkout )
-        use simple_image,             only: image
-        use simple_stack_io,          only: stack_io
-        use simple_discrete_stack_io, only: dstack_io
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: fromto(2)
         character(len=*),  intent(in)    :: stkout
@@ -2787,7 +2786,6 @@ contains
 
     subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale, dir )
         ! this probably needs an oritype input for dealing with scale class averages
-        use simple_cmdline, only: cmdline
         class(sp_project),             intent(inout) :: self
         real,                          intent(inout) :: smpd_target
         character(len=:), allocatable, intent(out)   :: new_projfile
@@ -2848,7 +2846,6 @@ contains
 
     !> for merging alignment documents from SIMPLE runs in distributed mode
     subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in )
-        use simple_map_reduce, only: split_nobjs_even
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: nptcls, ndocs
         character(len=*),  intent(in)    :: oritype, fbody
@@ -4412,7 +4409,6 @@ contains
             subroutine calculate_histogram( seg_oris )
                 use, intrinsic :: iso_c_binding 
                 include 'simple_lib.f08'
-                use simple_histogram
                 type(oris),        intent(in)  :: seg_oris
                 type(histogram)                :: histgrm
                 type(json_value),  pointer     :: data, labels
@@ -4692,7 +4688,6 @@ contains
     end subroutine print_segment_json
 
     subroutine set_cavgs_thumb( self, projfile )
-        use simple_imgproc
         class(sp_project),  intent(inout) :: self
         character(len=*),   intent(in)    :: projfile
         character(len=:),   allocatable   :: stkname
@@ -4718,9 +4713,6 @@ contains
     end subroutine set_cavgs_thumb
 
     subroutine set_ptcl2D_thumb( self, projfile, indices, boxsize )
-        use simple_image
-        use simple_imgproc
-        use simple_stack_io
         class(sp_project),               intent(inout) :: self
         character(len=*),                intent(in)    :: projfile
         integer,            allocatable, intent(in)    :: indices(:)
@@ -4928,6 +4920,133 @@ contains
                 call self%bos%write_segment_inside(isegment, self%compenv)
         end select
     end subroutine segwriter_inside
+
+    subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles )
+        class(sp_project),    intent(inout) :: self
+        integer, allocatable, intent(inout) :: cavg_inds(:)
+        character(len=*),     intent(in)    :: jpgname
+        integer,              intent(out)   :: xtiles, ytiles
+        logical,          allocatable :: cls_mask(:)
+        character(len=:), allocatable :: cavgsstk, stkpath
+        type(image)    :: img, jpegimg
+        type(stack_io) :: stkio_r
+        integer        :: i, icls, isel, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
+        real           :: smpd
+        ncls = self%os_cls2D%get_noris()
+        if( ncls == 0 ) return
+        if( allocated(cavg_inds) ) deallocate(cavg_inds)
+        allocate(cls_mask(ncls), cavg_inds(ncls))
+        cls_mask = .true.
+        do icls = 1, ncls
+            if( self%os_cls2D%get_int(icls,'pop') == 0 ) cls_mask(icls) = .false.
+            if( self%os_cls2D%get_state(icls)     == 0 ) cls_mask(icls) = .false.
+            cavg_inds(icls) = icls
+        enddo
+        ncls_sel = count(cls_mask)
+        if( ncls_sel == 0 ) return
+        call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg', stkpath=stkpath)
+        if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
+        if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
+        if( ncls /= ncls_stk ) THROW_HARD('Inconsistent # cavgs in spproj and stack file')
+        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        ldim_read    = stkio_r%get_ldim()
+        ldim_read(3) = 1
+        call stkio_r%read_whole
+        xtiles = floor(sqrt(real(ncls_sel)))
+        ytiles = ceiling(real(ncls_sel) / real(xtiles))
+        call jpegimg%new([xtiles * JPEG_DIM, ytiles * JPEG_DIM, 1], smpd)
+        isel   = 0
+        ix     = 1
+        iy     = 1
+        ntiles = 0
+        do icls = 1,ncls
+            if( cls_mask(icls) ) then
+                isel = isel + 1
+                call img%new(ldim_read, smpd)
+                call stkio_r%get_image(icls, img)
+                call img%fft
+                if(ldim_read(1) > JPEG_DIM) then
+                    call img%clip_inplace([JPEG_DIM,JPEG_DIM,1])
+                else
+                    call img%pad_inplace([JPEG_DIM,JPEG_DIM,1], backgr=0., antialiasing=.false.)
+                end if
+                call img%ifft
+                call jpegimg%tile(img, ix, iy)
+                ntiles = ntiles + 1
+                ix = ix + 1
+                if(ix > xtiles) then
+                    ix = 1
+                    iy = iy + 1
+                end if
+            endif
+        enddo
+        call jpegimg%write_jpg(jpgname)
+        call stkio_r%close
+        call img%kill
+        call jpegimg%kill
+    end subroutine cavgs2jpg
+
+    subroutine shape_ranked_cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles )
+        class(sp_project),    intent(inout) :: self
+        integer, allocatable, intent(inout) :: cavg_inds(:)
+        character(len=*),     intent(in)    :: jpgname
+        integer,              intent(out)   :: xtiles, ytiles
+        integer,          allocatable :: shape_ranks(:)
+        character(len=:), allocatable :: cavgsstk, stkpath
+        type(image)    :: img, jpegimg
+        type(stack_io) :: stkio_r
+        integer        :: i, icls, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
+        real           :: smpd
+        ncls = self%os_cls2D%get_noris()
+        if( ncls == 0 ) return
+        if( .not. self%os_cls2D%isthere('shape_rank') ) THROW_HARD('No shape ranking available!')
+        if( allocated(cavg_inds) ) deallocate(cavg_inds)
+        allocate(shape_ranks(ncls), cavg_inds(ncls))
+        do icls = 1, ncls
+            shape_ranks(icls) = self%os_cls2D%get_int(icls,'shape_rank')
+            cavg_inds(icls)   = icls
+        end do
+        cavg_inds   = pack(cavg_inds,   mask=shape_ranks > 0)
+        shape_ranks = pack(shape_ranks, mask=shape_ranks > 0)
+        call hpsort(shape_ranks, cavg_inds)
+        call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg', stkpath=stkpath)
+        if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
+        if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
+        if( ncls /= ncls_stk ) THROW_HARD('Inconsistent # cavgs in spproj and stack file')
+        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        ldim_read    = stkio_r%get_ldim()
+        ldim_read(3) = 1
+        call stkio_r%read_whole
+        ncls_sel = size(cavg_inds)
+        xtiles   = floor(sqrt(real(ncls_sel)))
+        ytiles   = ceiling(real(ncls_sel) / real(xtiles))
+        call jpegimg%new([xtiles * JPEG_DIM, ytiles * JPEG_DIM, 1], smpd)
+        ix     = 1
+        iy     = 1
+        ntiles = 0
+        do icls = 1,ncls_sel
+            call img%new(ldim_read, smpd)
+            call stkio_r%get_image(cavg_inds(icls), img)
+            call img%fft
+            if(ldim_read(1) > JPEG_DIM) then
+                call img%clip_inplace([JPEG_DIM,JPEG_DIM,1])
+            else
+                call img%pad_inplace([JPEG_DIM,JPEG_DIM,1], backgr=0., antialiasing=.false.)
+            end if
+            call img%ifft
+            call jpegimg%tile(img, ix, iy)
+            ntiles = ntiles + 1
+            ix = ix + 1
+            if(ix > xtiles) then
+                ix = 1
+                iy = iy + 1
+            end if
+        enddo
+        call jpegimg%write_jpg(jpgname)
+        call stkio_r%close
+        call img%kill
+        call jpegimg%kill
+    end subroutine shape_ranked_cavgs2jpg
 
     ! destructor
 

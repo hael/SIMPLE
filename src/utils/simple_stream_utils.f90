@@ -3,17 +3,17 @@ include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_parameters,     only: params_glob
-use simple_sp_project,     only: sp_project
-use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
-use simple_stack_io,       only: stack_io
-use simple_imgproc,        only: mrc2jpeg_tiled
+use simple_parameters,     only: params_glob
 use simple_procimgstk,     only: scale_imgfile
-use simple_qsys_funs
+use simple_qsys_env,       only: qsys_env
+use simple_sp_project,     only: sp_project
+use simple_stack_io,       only: stack_io
 use simple_commanders_cluster2D
-use simple_progress
+use simple_gui_utils
 use simple_nice
+use simple_progress
+use simple_qsys_funs
 
 implicit none
 
@@ -1299,37 +1299,29 @@ contains
         write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
     end function stream_datestr
 
-    subroutine write_selected_references(imgfile, selection, nxtiles, nytiles, smpd_new)
+    subroutine write_selected_references(imgfile, selection, nxtiles, nytiles, smpd)
         integer, allocatable, intent(in)    :: selection(:)
         character(*),         intent(in)    :: imgfile
+        real,                 intent(in)    :: smpd
         integer,              intent(inout) :: nxtiles, nytiles
-        !integer,              intent(in)    :: ldim_new(3)
-        real,                 intent(in)    :: smpd_new
         type(image)                         :: img
         type(stack_io)                      :: stkio_r, stkio_w
-        integer                             :: ldim(3) = [0,0,0], ldim_new(3) = [0,0,0]
+        integer                             :: ldim(3) = [0,0,0]
         integer                             :: icls, stat, ncls
-        real                                :: smpd, tilescale, smpd_scaled
         if(size(selection) == 0) return
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', size(selection),' clusters'
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
-        call find_ldim_nptcls(imgfile, ldim, ncls, smpd=smpd)
+        call find_ldim_nptcls(imgfile, ldim, ncls)
         call img%new([ldim(1), ldim(2), 1], smpd)
         call stkio_r%open(imgfile, smpd, 'read', bufsz=ncls)
         call stkio_r%read_whole
-        call stkio_w%open(STREAM_SELECTED_REFS//"_unscaled"//STK_EXT, smpd, 'write', box=ldim(1), bufsz=size(selection))
+        call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=ldim(1), bufsz=size(selection))
         do icls=1, size(selection)
             call stkio_r%get_image(selection(icls), img)
             call stkio_w%write(icls, img)
         end do
         call stkio_r%close
         call stkio_w%close
-        ! scale to original sampling
-        ldim_new(1) = round2even(ldim(1) * (smpd / smpd_new)) 
-        ldim_new(2) = round2even(ldim(2) * (smpd / smpd_new)) 
-        ldim_new(3) = 1
-        call scale_imgfile(STREAM_SELECTED_REFS//"_unscaled"//STK_EXT, STREAM_SELECTED_REFS // STK_EXT, smpd, ldim_new, smpd_scaled)
-        write(logfhandle,'(A,F8.2)')'>>> SCALED SELECTED CLUSTERS TO: ', smpd_scaled
         ! write jpeg
         call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
         call img%kill
