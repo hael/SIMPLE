@@ -1355,13 +1355,14 @@ contains
         ! Prep for CTF estimation, picking & extraction
         call simple_mkdir(DIR_CTF)
         call simple_mkdir(DIR_PICKER)
+        call simple_mkdir(DIR_PTCLS)
         call simple_mkdir('spprojs/')
         call simple_mkdir('spprojs_completed/')
-        call simple_mkdir('particles/')
         call cline_extract%set('prg',     'extract')
         call cline_extract%set('mkdir',   'no')
         call cline_extract%set('nthr',     params%nthr)
-        call cline_extract%set('stream',  'yes')    ! micrograph pruning
+        call cline_extract%set('stream',  'yes')            ! micrograph pruning
+        call cline_extract%set('smpd',     params%smpd)     ! stream=yes
         call cline_extract%set('dir',      PATH_HERE)
         if( cline%defined('box') ) call cline_extract%set('box', params%box)
         ctfvars%smpd    = params%smpd
@@ -1388,6 +1389,7 @@ contains
                 call omic%set('cs',      params%cs)
                 call omic%set('kv',      params%kv)
                 call omic%set('fraca',   params%fraca)
+                call omic%set('ctf',     'yes')
                 call os_mic%set_ori(jmic, omic)
                 call omic%kill
                 ! CTFres/icefrac selection goes here
@@ -1448,7 +1450,7 @@ contains
                 integer                       :: nm, ns
                 iproj = iproj+1
                 fname = 'proj_'//int2str_pad(iproj,5)//trim(METADATA_EXT)
-                call simple_chdir('particles')
+                call simple_chdir(DIR_PTCLS)
                 proj%os_mic  = os_mic%extract_subset(fromm, tomm)
                 proj%compenv = spproj%compenv
                 call proj%update_projinfo(fname)
