@@ -731,7 +731,7 @@ contains
         jptcl = 0
         fromp = 1
         do imic = 1,nmics
-            ! read individual project (up to NMOVS_SET entries)
+            ! read individual project (up to STREAM_NMOVS_SET entries)
             projname = trim(records(imic)%projname)
             if( trim(projname) /= trim(prev_projname) )then
                 call tmpproj%kill

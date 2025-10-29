@@ -33,6 +33,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D
+public :: stream_test_sieve_cavgs
 
 type, extends(commander_base) :: commander_stream_sieve_cavgs
   contains
@@ -1290,5 +1291,177 @@ contains
             end subroutine communicator_add_cls2D
 
     end subroutine exec_stream_abinitio2D
+
+    subroutine stream_test_sieve_cavgs( cline )
+        use simple_commanders_preprocess, only: commander_make_pickrefs, commander_extract
+        use simple_commanders_project,    only: commander_new_project
+        use simple_picker_utils,          only: exec_refpick
+        class(cmdline),          intent(inout) :: cline
+        real,                      parameter   :: LPSTART = 30., LPSTOP = 8.
+        integer,                   parameter   :: MAX_NMICS      = 100
+        integer,                   parameter   :: MAXPOP_DEFAULT = 100000
+        character(len=*),          parameter   :: DIR_CTF    = 'ctf/'
+        character(len=*),          parameter   :: DIR_PICKER = 'picker/'
+        character(len=*),          parameter   :: DIR_PTCLS  = 'particles/'
+        character(len=*),          parameter   :: PROJNAME = 'project', PROJFILE = 'project.simple'
+        character(len=LONGSTRLEN), allocatable :: micnames(:)
+        type(image),               allocatable :: pickrefs(:)
+        type(parameters)                       :: params
+        type(ctfparams)                        :: ctfvars
+        type(ctf_estimate_iter)                :: ctfiter
+        type(ori)                              :: omic
+        type(oris)                             :: os_mic
+        type(cmdline)                          :: cline_new_proj, cline_extract
+        type(cmdline)                          :: cline_make_pickrefs, cline_sieve_cavgs
+        type(commander_new_project)            :: xnew_project
+        type(commander_make_pickrefs)          :: xmakepickrefs
+        type(commander_stream_sieve_cavgs)     :: xsieve_cavgs
+        type(sp_project)                       :: spproj
+        character(len=LONGSTRLEN) :: boxfile
+        integer                   :: nmics,nboxes,imic,nptcls,nselmics,i,jmic,to,iproj,np
+        if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',           'yes')
+        ! CTF
+        if( .not. cline%defined('hp')             ) call cline%set('hp',                30.)
+        if( .not. cline%defined('lp')             ) call cline%set('lp',                 5.)
+        if( .not. cline%defined('dfmin')          ) call cline%set('dfmin',   DFMIN_DEFAULT)
+        if( .not. cline%defined('dfmax')          ) call cline%set('dfmax',   DFMAX_DEFAULT)
+        if( .not. cline%defined('ctfpatch')       ) call cline%set('ctfpatch',        'yes')
+        ! # of particles
+        if( .not. cline%defined('maxpop')         ) call cline%set('maxpop', MAXPOP_DEFAULT)
+        ! Sieve_cavgs
+        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',    500)
+        ! Compute
+        call cline%set('nparts', 1)
+        ! command-line parsing
+        call params%new(cline)
+        ! project creation
+        call cline_new_proj%set('dir',      PATH_HERE)
+        call cline_new_proj%set('projname', PROJNAME)
+        call xnew_project%execute_safe(cline_new_proj)
+        call spproj%read(PROJFILE)
+        ! Micrographs list
+        call read_filetable(params%filetab, micnames)
+        nmics = size(micnames)
+        write(*,*) 'Initial # of micrographs: ', nmics
+        ! Picking references
+        call cline_make_pickrefs%set('prg',     'make_pickrefs')
+        call cline_make_pickrefs%set('mkdir',   'no')
+        call cline_make_pickrefs%set('projfile', PROJFILE)
+        call cline_make_pickrefs%set('nthr',     params%nthr)
+        call cline_make_pickrefs%set('pickrefs', params%pickrefs)
+        call cline_make_pickrefs%set('smpd',     params%smpd)
+        call xmakepickrefs%execute_safe(cline_make_pickrefs)
+        params%pickrefs = trim(PICKREFS_FBODY)//params%ext
+        pickrefs        = read_cavgs_into_imgarr(params%pickrefs)
+        write(*,*) 'Prepared picking references'
+        ! Prep for CTF estimation, picking & extraction
+        call simple_mkdir(DIR_CTF)
+        call simple_mkdir(DIR_PICKER)
+        call simple_mkdir('spprojs/')
+        call simple_mkdir('spprojs_completed/')
+        call simple_mkdir('particles/')
+        call cline_extract%set('prg',     'extract')
+        call cline_extract%set('mkdir',   'no')
+        call cline_extract%set('nthr',     params%nthr)
+        call cline_extract%set('stream',  'yes')    ! micrograph pruning
+        call cline_extract%set('dir',      PATH_HERE)
+        if( cline%defined('box') ) call cline_extract%set('box', params%box)
+        ctfvars%smpd    = params%smpd
+        ctfvars%kv      = params%kv
+        ctfvars%cs      = params%cs
+        ctfvars%fraca   = params%fraca
+        ctfvars%ctfflag = CTFFLAG_YES
+        call os_mic%new(nmics, is_ptcl=.false.)
+        call os_mic%set_all2single('state',0)
+        nboxes = 0
+        iproj  = 0
+        nptcls = 0
+        do imic = 1, nmics, STREAM_NMOVS_SET
+            to = min(nmics,imic+STREAM_NMOVS_SET-1)
+            if( to == imic ) exit
+            do jmic = imic,to
+                ! CTF estimation
+                call omic%new(is_ptcl=.false.)
+                call omic%set_state(1)
+                call ctfiter%iterate(ctfvars, micnames(jmic), omic, trim(DIR_CTF), l_gen_thumb=.true.)
+                call omic%set('intg',    micnames(jmic)) ! for future project import
+                call omic%set('imgkind', 'mic')
+                call omic%set('smpd',    params%smpd)
+                call omic%set('cs',      params%cs)
+                call omic%set('kv',      params%kv)
+                call omic%set('fraca',   params%fraca)
+                call os_mic%set_ori(jmic, omic)
+                call omic%kill
+                ! CTFres/icefrac selection goes here
+                if( os_mic%get_state(jmic)==0 ) cycle
+                ! Picking
+                call exec_refpick( micnames(jmic), boxfile, params%smpd, np, pickrefs, DIR_PICKER )
+                if( np > 0 )then
+                    call os_mic%set(jmic, 'boxfile', simple_abspath(boxfile))
+                    nboxes   = nboxes   + np
+                    nselmics = nselmics + 1
+                else
+                    call os_mic%set_state(jmic, 0)
+                    cycle
+                endif
+            enddo
+            ! Extract
+            call extract2project( imic, to, np )
+            nptcls = nptcls + np
+            write(logfhandle,*)'>>> imic, #mics, #picks #extracted', imic, nselmics, nboxes, nptcls
+            ! limits
+            if( nselmics > MAX_NMICS )     exit
+            if( nptcls   > params%maxpop ) exit
+        end do
+        write(*,*)'Picked micrographs:  ', nmics
+        write(*,*)'Picked particles:    ', nboxes
+        write(*,*)'Extracted particles: ', nptcls
+        call dealloc_imgarr(pickrefs)
+        call os_mic%kill
+        ! Align & Sieve
+        call cline_sieve_cavgs%set('prg',           'sieve_cavgs')
+        call cline_sieve_cavgs%set('ncls',           params%ncls)
+        call cline_sieve_cavgs%set('nptcls_per_cls', params%nptcls_per_cls)
+        call cline_sieve_cavgs%set('nchunks',        1)
+        call cline_sieve_cavgs%set('nchunksperset',  1)
+        call cline_sieve_cavgs%set('nparts',         params%nparts)
+        call cline_sieve_cavgs%set('nthr',           params%nthr)
+        call cline_sieve_cavgs%set('dir_target',     params%cwd)
+        call cline_sieve_cavgs%set('projfile',       PROJFILE)
+        call cline_sieve_cavgs%set('remove_chunks',  'no')
+        ! optional mskdiam
+        if( cline%defined('mskdiam') ) call cline_sieve_cavgs%set('mskdiam', params%mskdiam)
+        call xsieve_cavgs%execute_safe(cline_sieve_cavgs)
+        ! cleanup
+        call spproj%kill
+        contains
+
+            ! extract & packages into lots of particles
+            subroutine extract2project( fromm, tomm, nptcls_extracted )
+                integer,        intent(in)    :: fromm, tomm
+                integer,        intent(inout) :: nptcls_extracted
+                type(sp_project)              :: proj
+                type(commander_extract)       :: xextract
+                character(len=:), allocatable :: fname
+                integer                       :: nm, ns
+                iproj = iproj+1
+                fname = 'proj_'//int2str_pad(iproj,5)//trim(METADATA_EXT)
+                call simple_chdir('particles')
+                proj%os_mic  = os_mic%extract_subset(fromm, tomm)
+                proj%compenv = spproj%compenv
+                call proj%update_projinfo(fname)
+                call proj%write(fname)
+                call cline_extract%set('fromp',    1)
+                call cline_extract%set('top',      tomm-fromm+1)
+                call cline_extract%set('projfile', fname)
+                call xextract%execute_safe(cline_extract)
+                call proj%read_data_info(fname, nm, ns, nptcls_extracted)
+                call simple_rename(fname, '../spprojs_completed/'//fname)
+                call del_files(JOB_FINISHED_FBODY, 1)
+                call simple_chdir('..')
+                call proj%kill
+            end subroutine extract2project
+
+    end subroutine stream_test_sieve_cavgs
 
 end module simple_commanders_stream2D

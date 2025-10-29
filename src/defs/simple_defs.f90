@@ -266,6 +266,8 @@ real,    parameter :: POOL_THRESHOLD_FACTOR     = 1.25           !< class reject
 real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< 2D analysis: When the number of classes to reject is too high rejection is skipped
 integer, parameter :: STREAM_SRCHLIM            = 5              !< 2D analysis: maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< 2D analysis: cap for adjusting update_frac in 2D streaming
+integer, parameter :: STREAM_NMOVS_SET          = 5              !< number of movies processed at once (>1)
+integer, parameter :: STREAM_NMOVS_SET_TIFF     = 3              !< number of TIFF movies processed at once (>1)
 
 ! nanoparticles
 real,    parameter :: AMSKLP_NANO               = 5.
