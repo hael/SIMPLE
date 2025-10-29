@@ -1,24 +1,24 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commanders_cluster2D_stream
 include 'simple_lib.f08'
+use simple_class_frcs,         only: class_frcs
 use simple_cmdline,            only: cmdline
 use simple_commander_base,     only: commander_base
-use simple_parameters,         only: parameters, params_glob
-use simple_sp_project,         only: sp_project
-use simple_qsys_env,           only: qsys_env
+use simple_euclid_sigma2,      only: sigma2_star_from_iter
+use simple_guistats,           only: guistats
 use simple_image,              only: image
-use simple_class_frcs,         only: class_frcs
+use simple_parameters,         only: parameters, params_glob
+use simple_qsys_env,           only: qsys_env
+use simple_sp_project,         only: sp_project
 use simple_stack_io,           only: stack_io
 use simple_starproject,        only: starproject
 use simple_starproject_stream, only: starproject_stream
-use simple_euclid_sigma2,      only: sigma2_star_from_iter
-use simple_guistats,           only: guistats
-use simple_stream_utils
-use simple_qsys_funs
-use simple_commanders_cluster2D
 use simple_commanders_cavgs
-use simple_imgproc
+use simple_commanders_cluster2D
+use simple_gui_utils
 use simple_nice
+use simple_qsys_funs
+use simple_stream_utils
 use FoX_dom
 use json_kinds
 use json_module

@@ -5,7 +5,7 @@ use simple_image,    only: image
 use simple_stack_io, only: stack_io
 implicit none
 
-public :: make_pcavecs, make_pcavol, mrc2jpeg_tiled
+public :: make_pcavecs, make_pcavol
 
 private
 
@@ -104,62 +104,5 @@ contains
             pcavec(:,i) = pcavec(:,i) - avg
         enddo
     end subroutine make_pcavol
-
-    ! write tiled jpeg of mrc file
-    subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles)
-        character(len=*),               intent(in)  :: mrcfile, outfile
-        real,    optional,              intent(out) :: scale
-        integer, optional,              intent(out) :: ntiles, n_xtiles, n_ytiles
-        logical, optional, allocatable, intent(in)  :: msk(:)
-        type(image)    :: img, img_pad, img_jpeg
-        type(stack_io) :: stkio_r
-        integer        :: ldim_stk(3)
-        integer        :: ncls_here, xtiles, ytiles, icls, ix, iy, l_ntiles
-        real           :: smpd
-        smpd = 1.0
-        if(.not. file_exists(trim(mrcfile))) return
-        call find_ldim_nptcls(trim(mrcfile), ldim_stk, ncls_here)
-        xtiles = floor(sqrt(real(ncls_here)))
-        ytiles = ceiling(real(ncls_here) / real(xtiles))
-        call img%new([ldim_stk(1), ldim_stk(1), 1], smpd)
-        call img_pad%new([JPEG_DIM, JPEG_DIM, 1], smpd)
-        call img_jpeg%new([xtiles * JPEG_DIM, ytiles * JPEG_DIM, 1], smpd)
-        call stkio_r%open(trim(mrcfile), smpd, 'read', bufsz=ncls_here)
-        call stkio_r%read_whole
-        ix = 1
-        iy = 1
-        l_ntiles = 0
-        do icls=1, ncls_here
-            if(present(msk)) then
-                if( .not. msk(icls)) cycle
-            end if
-            call img%zero_and_unflag_ft
-            call stkio_r%get_image(icls, img)
-            call img%fft
-            if(ldim_stk(1) > JPEG_DIM) then
-                call img%clip(img_pad)
-            else
-                call img%pad(img_pad, backgr=0., antialiasing=.false.)
-            end if
-            call img_pad%ifft
-            call img_jpeg%tile(img_pad, ix, iy)
-            l_ntiles = l_ntiles + 1
-            ix = ix + 1
-            if(ix > xtiles) then
-                ix = 1
-                iy = iy + 1
-            end if
-        enddo
-        call stkio_r%close()
-        call img_jpeg%write_jpg(trim(outfile) // ".tmp")
-        call simple_rename(trim(outfile) // ".tmp", trim(outfile), overwrite=.true.)
-        if(present(scale))  scale  = real(JPEG_DIM) / ldim_stk(1)
-        if(present(ntiles)) ntiles = l_ntiles
-        if(present(n_xtiles)) n_xtiles = xtiles
-        if(present(n_ytiles)) n_ytiles = ytiles
-        call img%kill()
-        call img_pad%kill()
-        call img_jpeg%kill()
-    end subroutine mrc2jpeg_tiled
 
 end module simple_imgproc

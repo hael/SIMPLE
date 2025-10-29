@@ -1,26 +1,26 @@
 ! concrete commander: streaming pre-processing routines
 module simple_commanders_stream
 include 'simple_lib.f08'
-use simple_binoris_io
 use simple_cmdline,            only: cmdline
-use simple_parameters,         only: parameters
 use simple_commander_base,     only: commander_base
-use simple_sp_project,         only: sp_project
-use simple_qsys_env,           only: qsys_env
-use simple_starproject_stream, only: starproject_stream
 use simple_guistats,           only: guistats
 use simple_moviewatcher,       only: moviewatcher
-use simple_stream_utils
-use simple_stream_communicator
+use simple_parameters,         only: parameters
+use simple_qsys_env,           only: qsys_env
+use simple_sp_project,         only: sp_project
+use simple_starproject_stream, only: starproject_stream
+use simple_binoris_io
 use simple_commanders_cluster2D_stream
-use simple_qsys_funs
 use simple_commanders_preprocess
-use simple_progress
-use simple_nrtxtfile
-use simple_imgproc
-use simple_timer
+use simple_gui_utils
 use simple_nice
+use simple_nrtxtfile
+use simple_progress
+use simple_qsys_funs
 use simple_starfile
+use simple_stream_communicator
+use simple_stream_utils
+use simple_timer
 implicit none
 
 real, parameter, dimension(21)  :: astig_bins    = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
@@ -2118,7 +2118,6 @@ contains
     subroutine exec_gen_pickrefs( self, cline )
         use simple_mini_stream_utils
         use simple_commanders_abinitio2D
-        use simple_gui_utils, only: shape_ranked_cavgs2jpg
         class(commander_stream_gen_pickrefs), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)                       :: params
@@ -2132,10 +2131,12 @@ contains
         type(commander_shape_rank_cavgs)       :: xshape_rank
         type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references      
         character(len=LONGSTRLEN), allocatable :: projects(:)
+        character(len=:),          allocatable :: final_selection_source
         integer,                   allocatable :: cavg_inds(:)
         character(len=*),          parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                      parameter   :: LPSTOP = 8.
+        integer,                   allocatable :: final_selection(:)
         integer                                :: nprojects, iori, i, j, imap, nptcls, ncls, nthr2D, box_in_pix
         integer                                :: ithumb, xtiles, ytiles, xtile, ytile
         logical                                :: found
@@ -2239,7 +2240,7 @@ contains
         call cline_shape_rank%set('projfile', PROJFILE_GEN_PICKREFS)
         call xshape_rank%execute_safe(cline_shape_rank)
         call spproj%read(PROJFILE_GEN_PICKREFS)
-        call shape_ranked_cavgs2jpg(spproj, cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
+        call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
         ! send generate pickrefs display info to gui
         xtile = 0
         ytile = 0
@@ -2266,6 +2267,36 @@ contains
                 endif
             end do
         endif
+        ! wait for user interaction
+        do 
+            call http_communicator%send_jobstats()
+            call http_gen_pickrefs_communicator%send_jobstats()
+            call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection', final_selection, found)
+            if(found) then
+                call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
+                if(found) then
+                    call write_selected_references(final_selection_source, final_selection, xtiles, ytiles, params%smpd)
+                    xtile = 0
+                    ytile = 0
+                    do i=0, size(final_selection) - 1
+                        call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
+                            &xtile * (100.0 / (xtiles - 1)),&
+                            &ytile * (100.0 / (ytiles - 1)),&
+                            &100 * ytiles,&
+                            &100 * xtiles,&
+                            &pop=1,&
+                            &res=1.1)
+                        xtile = xtile + 1
+                        if(xtile .eq. xtiles) then
+                            xtile = 0
+                            ytile = ytile + 1
+                        endif
+                    end do
+                endif
+                exit
+            endif
+            call sleep(WAITTIME) ! may want to increase as 3s default
+        enddo
         ! termination
         call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
         call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "stage", "terminating", found)
@@ -2402,18 +2433,36 @@ contains
                  integer, optional, intent(in) :: pop
                  real,    optional, intent(in) :: res
                  type(json_value),  pointer    :: template
-                 call http_communicator%json%create_object(template, "")
-                 call http_communicator%json%add(template, "path",    path)
-                 call http_communicator%json%add(template, "mrcpath", mrcpath)
-                 call http_communicator%json%add(template, "mrcidx",  mrc_idx)
-                 call http_communicator%json%add(template, "spritex", dble(spritex))
-                 call http_communicator%json%add(template, "spritey", dble(spritey))
-                 call http_communicator%json%add(template, "spriteh", spriteh)
-                 call http_communicator%json%add(template, "spritew", spritew)
-                 if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
-                 if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
-                 call http_communicator%json%add(latest_cls2D, template)
+                 call http_gen_pickrefs_communicator%json%create_object(template, "")
+                 call http_gen_pickrefs_communicator%json%add(template, "path",    path)
+                 call http_gen_pickrefs_communicator%json%add(template, "mrcpath", mrcpath)
+                 call http_gen_pickrefs_communicator%json%add(template, "mrcidx",  mrc_idx)
+                 call http_gen_pickrefs_communicator%json%add(template, "spritex", dble(spritex))
+                 call http_gen_pickrefs_communicator%json%add(template, "spritey", dble(spritey))
+                 call http_gen_pickrefs_communicator%json%add(template, "spriteh", spriteh)
+                 call http_gen_pickrefs_communicator%json%add(template, "spritew", spritew)
+                 if(present(res)) call http_gen_pickrefs_communicator%json%add(template, "res",     dble(res))
+                 if(present(pop)) call http_gen_pickrefs_communicator%json%add(template, "pop",     pop)
+                 call http_gen_pickrefs_communicator%json%add(latest_cls2D, template)
              end subroutine communicator_add_cls2D
+
+             subroutine communicator_add_selected_reference(path, spritex, spritey, spriteh, spritew, res, pop)
+                character(*),      intent(in) :: path
+                real,              intent(in) :: spritex, spritey
+                integer,           intent(in) :: spriteh, spritew
+                integer, optional, intent(in) :: pop
+                real,    optional, intent(in) :: res
+                type(json_value),  pointer    :: template
+                call http_gen_pickrefs_communicator%json%create_object(template, "")
+                call http_gen_pickrefs_communicator%json%add(template, "path",    path)
+                call http_gen_pickrefs_communicator%json%add(template, "spritex", dble(spritex))
+                call http_gen_pickrefs_communicator%json%add(template, "spritey", dble(spritey))
+                call http_gen_pickrefs_communicator%json%add(template, "spriteh", spriteh)
+                call http_gen_pickrefs_communicator%json%add(template, "spritew", spritew)
+                if(present(res)) call http_gen_pickrefs_communicator%json%add(template, "res",     dble(res))
+                if(present(pop)) call http_gen_pickrefs_communicator%json%add(template, "pop",     pop)
+                call http_gen_pickrefs_communicator%json%add(selected_references, template)
+            end subroutine communicator_add_selected_reference
 
     end subroutine exec_gen_pickrefs
 

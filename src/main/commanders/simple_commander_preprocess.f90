@@ -2208,7 +2208,6 @@ contains
         use simple_masker, only: automask2D
         use simple_default_clines
         use simple_strategy2D_utils
-        use simple_gui_utils, only: shape_ranked_cavgs2jpg
         class(commander_shape_rank_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         real,        parameter   :: LP_BIN = 20.
@@ -2267,7 +2266,7 @@ contains
         call spproj%write_segment_inside('cls2D')
         ! write class averages
         call write_cavgs(cavg_imgs, SHAPE_RANKED_CAVGS_MRCNAME, order)
-        call shape_ranked_cavgs2jpg(spproj, cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
+        call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
         ! kill
         call spproj%kill
         call dealloc_imgarr(cavg_imgs)

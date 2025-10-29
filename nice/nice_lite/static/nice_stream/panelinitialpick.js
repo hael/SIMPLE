@@ -75,35 +75,26 @@ draw_overlay_coordinates = () => {
       const available_diameters = JSON.parse(micrographs_slider.dataset.picking_diameters.replaceAll("'", '"'))
       multipick = true
       best_diam = closest(available_diameters, Number(micrographs_slider.dataset.best_diam))
-    } 
-    const scale = boxes_overlay.width  / Number(boxes_overlay.dataset.xdim)
+    }
+    const xdim = Number(boxes_overlay.dataset.xdim)
+    const ydim = Number(boxes_overlay.dataset.ydim)
+    let scale  = 1
+    if(xdim > ydim){
+      scale = boxes_overlay.width  / Number(boxes_overlay.dataset.xdim)
+    }else{
+      scale = boxes_overlay.height  / Number(boxes_overlay.dataset.ydim)
+    }
     // account for rectangular images
     var yoffset = (boxes_overlay.height - (scale * Number(boxes_overlay.dataset.ydim))) / 2
+    var xoffset = (boxes_overlay.width  - (scale * Number(boxes_overlay.dataset.xdim))) / 2
     const boxes = JSON.parse(boxes_overlay.dataset.boxes.replaceAll("'", '"'))
     const ctx = boxes_overlay.getContext("2d");
     ctx.clearRect(0, 0, boxes_overlay.width, boxes_overlay.height)
-    if(multipick){
-      let selected_diameter = best_diam
-      if(picking_diameters != null){
-        const available_diameters = JSON.parse(picking_diameters.dataset.diameters.replaceAll("'", '"'))
-        selected_diameter = available_diameters[picking_diameters.value - 1]
-        diameter_input.value = selected_diameter
-      }
-      for(const box of boxes){
-        if(box["diameter"] == selected_diameter){
-          ctx.strokeStyle = "yellow";
-          ctx.beginPath();
-          ctx.arc(box["x"] * scale, (box["y"] * scale) + yoffset, 0.5, 0, 2 * Math.PI);
-          ctx.stroke();
-        }
-      }
-    }else{
-      for(const box of boxes){
-        ctx.strokeStyle = "yellow";
-        ctx.beginPath();
-        ctx.arc(box["x"] * scale, (box["y"] * scale) + yoffset, 0.5, 0, 2 * Math.PI);
-        ctx.stroke();
-      }
+    for(const box of boxes){
+      ctx.strokeStyle = "yellow";
+      ctx.beginPath();
+      ctx.arc((box["x"] * scale) + xoffset, (box["y"] * scale) + yoffset, 1, 0, 2 * Math.PI);
+      ctx.stroke();
     }
     lastinteraction = Date.now();
 }

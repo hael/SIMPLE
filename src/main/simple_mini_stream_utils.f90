@@ -135,7 +135,7 @@ contains
                 fbody_here      = get_fbody(trim(fbody_here), trim(ext))
                 fname_thumb_den = trim(adjustl(fbody_here))//DEN_SUFFIX//trim(JPG_EXT)
                 call read_mic(trim(mic_den_names(imic)), mic_den)
-                call mic2thumb(mic_den, fname_thumb_den)
+                call mic2thumb(mic_den, fname_thumb_den, l_neg=.true.) ! particles black
                 call spproj%os_mic%set(imic, 'thumb_den', simple_abspath(fname_thumb_den))
             else
                 call spproj%os_mic%set(imic, 'thumb_den', '')
