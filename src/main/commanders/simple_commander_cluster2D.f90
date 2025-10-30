@@ -26,20 +26,6 @@ use simple_progress
 use simple_default_clines
 use simple_nice
 implicit none
-
-public :: commander_cleanup2D_hlev
-public :: commander_cluster2D_autoscale
-public :: commander_cluster2D_distr
-public :: commander_cluster2D
-public :: commander_prob_tab2D
-public :: commander_prob_tab2D_distr
-public :: commander_make_cavgs_distr
-public :: commander_make_cavgs
-public :: commander_cavgassemble
-public :: commander_write_classes
-public :: commander_ppca_denoise_classes
-public :: check_2dconv
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_cleanup2D_hlev

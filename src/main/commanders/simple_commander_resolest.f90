@@ -11,17 +11,6 @@ use simple_image,          only: image
 use simple_masker,         only: masker
 use simple_fsc
 implicit none
-
-public :: commander_fsc
-public :: commander_clin_fsc
-public :: commander_nununiform_filter3D
-public :: commander_uniform_filter2D
-public :: commander_uniform_filter3D
-public :: commander_icm3D
-public :: commander_icm2D
-public :: commander_score_ptcls
-public :: commander_estimate_lpstages
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_fsc

@@ -13,11 +13,7 @@ use simple_commanders_abinitio2D
 use simple_commanders_preprocess
 use simple_mini_stream_utils
 implicit none
-
-private
 #include "simple_local_flags.inc"
-
-public :: commander_mini_stream, commander_check_refpick
 
 type, extends(commander_base) :: commander_mini_stream
   contains
@@ -33,7 +29,7 @@ contains
 
     subroutine exec_mini_stream( self, cline )
         class(commander_mini_stream), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
+        class(cmdline),               intent(inout) :: cline
         character(len=*),          parameter   :: PROJ_MINI_STREAM     = 'proj_mini_stream'
         character(len=*),          parameter   :: PROJFILE_MINI_STREAM = 'proj_mini_stream.simple'
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100

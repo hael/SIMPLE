@@ -10,12 +10,6 @@ use simple_exec_helpers,   only: set_master_num_threads
 use simple_qsys_funs
 use simple_strategy2D3D_common
 implicit none
-
-public :: commander_reconstruct3D_distr
-public :: commander_reconstruct3D
-public :: commander_volassemble
-public :: random_rec_commander_distr
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_reconstruct3D_distr

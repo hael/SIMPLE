@@ -9,13 +9,6 @@ use simple_ctf,            only: ctf
 use simple_simulator,      only: simimg
 use simple_commander_base, only: commander_base
 implicit none
-
-public :: commander_simulate_noise
-public :: commander_simulate_particles
-public :: commander_simulate_movie
-public :: commander_simulate_subtomogram
-public :: simulate_atoms_commander
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_simulate_noise

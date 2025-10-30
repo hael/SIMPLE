@@ -9,12 +9,6 @@ use simple_image,          only: image
 use simple_masker,         only: masker
 use simple_default_clines
 implicit none
-
-public :: commander_mask
-public :: commander_automask2D
-public :: commander_automask
-public :: commander_auto_spher_mask
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_mask 

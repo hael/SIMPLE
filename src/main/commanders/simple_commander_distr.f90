@@ -6,10 +6,6 @@ use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 use simple_stack_io,       only: stack_io
 implicit none
-
-public :: commander_split_pairs
-public :: commander_split
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_split_pairs

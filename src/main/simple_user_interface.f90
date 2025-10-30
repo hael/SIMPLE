@@ -137,7 +137,6 @@ type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
-type(simple_program), target :: make_pickrefs
 type(simple_program), target :: map2model_fsc
 type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
@@ -475,7 +474,6 @@ contains
         call new_info_stktab
         call new_make_cavgs
         call new_make_oris
-        call new_make_pickrefs
         call new_map2model_fsc
         call new_map_cavgs_selection
         call new_map_cavgs_states
@@ -630,7 +628,6 @@ contains
         call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
-        call push2prg_ptr_array(make_pickrefs)
         call push2prg_ptr_array(map2model_fsc)
         call push2prg_ptr_array(map_cavgs_selection)
         call push2prg_ptr_array(map_cavgs_states)
@@ -798,7 +795,6 @@ contains
             case('info_stktab');                 ptr2prg => info_stktab
             case('make_cavgs');                  ptr2prg => make_cavgs
             case('make_oris');                   ptr2prg => make_oris
-            case('make_pickrefs');               ptr2prg => make_pickrefs
             case('map2model_fsc');               ptr2prg => map2model_fsc
             case('map_cavgs_selection');         ptr2prg => map_cavgs_selection
             case('map_cavgs_states');            ptr2prg => map_cavgs_states
@@ -938,7 +934,6 @@ contains
         write(logfhandle,'(A)') info_stktab%name
         write(logfhandle,'(A)') make_cavgs%name
         write(logfhandle,'(A)') make_oris%name
-        write(logfhandle,'(A)') make_pickrefs%name
         write(logfhandle,'(A)') map2model_fsc%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') map_cavgs_states%name
@@ -3193,32 +3188,6 @@ contains
         ! computer controls
         call make_oris%set_input('comp_ctrls', 1, nthr)
     end subroutine new_make_oris
-
-    subroutine new_make_pickrefs
-        ! PROGRAM SPECIFICATION
-        call make_pickrefs%new(&
-        &'make_pickrefs',&                   ! name
-        &'Make pick references',&            ! descr_short
-        &'is a program for making 2D references for particle picking',&
-        &'simple_exec',&                     ! executable
-        &1, 1, 0, 0, 0, 0, 1, .true.)        ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call make_pickrefs%set_input('img_ios', 1,  pickrefs)
-        make_pickrefs%img_ios(1)%required = .true.
-        ! parameter input/output
-        call make_pickrefs%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call make_pickrefs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_make_pickrefs
 
     subroutine new_map_cavgs_selection
         ! PROGRAM SPECIFICATION

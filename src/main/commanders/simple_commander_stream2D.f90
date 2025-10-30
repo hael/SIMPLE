@@ -29,11 +29,9 @@ use simple_stream_communicator
 use simple_stream_utils
 implicit none
 
+public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D, stream_test_sieve_cavgs
 private
 #include "simple_local_flags.inc"
-
-public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D
-public :: stream_test_sieve_cavgs
 
 type, extends(commander_base) :: commander_stream_sieve_cavgs
   contains

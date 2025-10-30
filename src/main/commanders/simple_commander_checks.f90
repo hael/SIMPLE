@@ -5,14 +5,6 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 implicit none
-
-public :: commander_check_box
-public :: commander_check_nptcls
-public :: commander_check_stoch_update
-public :: commander_check_update_frac
-public :: commander_info_image
-public :: commander_info_stktab
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_check_box

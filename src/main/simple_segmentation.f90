@@ -120,11 +120,11 @@ contains
         ! apply particle crowding level adjustement
         select case(level)
             case(1)
-                ind = min(cnt,iq_min + 1) ! fewer peaks
+                ind = iq_min              ! fewer peaks
             case(2)
-                ind = iq_min
+                ind = max(1,  iq_min - 1) ! optimal # peaks
             case(3)
-                ind = max(1,  iq_min - 1) ! more peaks
+                ind = max(1,  iq_min - 2) ! more peaks
             case DEFAULT
                 ind = iq_min
         end select

@@ -20,32 +20,6 @@ use simple_qsys_funs
 use simple_binoris_io
 use simple_nice
 implicit none
-
-public :: tseries_import_commander
-public :: tseries_commander_import_particles
-public :: tseries_make_pickavg_commander
-public :: commander_tseries_motion_correctdistr
-public :: commander_tseries_motion_correct
-public :: commander_tseries_track_particles_distr
-public :: commander_tseries_track_particles
-public :: analysis2D_nano_commander
-public :: center2D_nano_commander
-public :: cluster2D_nano_commander
-public :: tseries_commander_ctf_estimate
-public :: extract_substk_commander
-public :: extract_subproj_commander
-public :: autorefine3D_nano_commander
-public :: refine3D_nano_commander
-public :: cavgsproc_nano_commander
-public :: cavgseoproc_nano_commander
-public :: ptclsproc_nano_commander
-public :: graphene_subtr_commander
-public :: denoise_trajectory_commander
-public :: tseries_swap_commander_stack
-public :: tseries_reconstruct3D_distr
-public :: tseries_core_finder_commander
-public :: tseries_make_projavgs_commander
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: tseries_import_commander

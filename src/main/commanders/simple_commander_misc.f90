@@ -11,18 +11,6 @@ use simple_image,          only: image
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 implicit none
-
-public :: commander_afm
-public :: commander_print_fsc
-public :: commander_print_magic_boxes
-public :: commander_print_dose_weights
-public :: commander_kstest
-public :: commander_pearsn
-public :: commander_mkdir
-public :: commander_fractionate_movies_distr
-public :: commander_fractionate_movies
-public :: commander_comparemc
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_print_fsc
