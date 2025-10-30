@@ -35,7 +35,7 @@ type pickref
     real                     :: smd_corr = 0., ksstat_corr = 0., prob_corr = 0.
     real                     :: a_corr_peak = 0., s_corr_peak = 0., a_corr_nonpeak = 0., s_corr_nonpeak = 0.
     ! images
-    type(image)              :: mic_shrink, mic_roi
+    type(image)              :: mic_shrink, mic_roi, mic_copy
     type(image), allocatable :: boxrefs(:)
     ! masks
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
@@ -44,8 +44,9 @@ type pickref
     ! scores & local standard deviations
     real,        allocatable :: box_scores(:,:), box_scores_mem(:,:), loc_sdevs(:,:), loc_sdevs_mem(:,:)
     ! flags
-    logical                  :: l_roi   = .false.
-    logical                  :: exists  = .false.
+    logical                  :: l_black_ptcls_input = .true.
+    logical                  :: l_roi               = .false.
+    logical                  :: exists              = .false.
 contains
     procedure          :: new
     procedure          :: refpick
@@ -62,6 +63,7 @@ contains
     procedure          :: get_box
     procedure          :: get_maxdiam
     procedure, private :: write_boxfile
+    procedure          :: report_thumb_den
     procedure          :: report_boxfile
     procedure, private :: refine_upscaled
     procedure          :: kill
@@ -192,10 +194,12 @@ contains
         call mic_raw%mul(real(product(ldim_raw))) ! to prevent numerical underflow when performing FFT
         call mic_raw%fft
         call mic_raw%clip(self%mic_shrink)
+        self%l_black_ptcls_input = .false.
         select case(trim(pcontrast))
             case('black')
                 ! flip contrast (assuming black particle contrast on input)
                 call self%mic_shrink%mul(-1.)
+                self%l_black_ptcls_input = .true.
             case('white')
                 ! nothing to do
             case DEFAULT
@@ -211,6 +215,7 @@ contains
         endif
         ! low-pass filter mic_shrink
         lp = min(max(LP_LB,MSKDIAM2LP * self%maxdiam),LP_UB)
+        call self%mic_copy%copy(self%mic_shrink)
         call self%mic_shrink%bp(0.,lp)
         if( allocated(self%l_mic_mask) ) deallocate(self%l_mic_mask)
         allocate(self%l_mic_mask(self%ldim(1),self%ldim(2)), source=.true.)
@@ -573,6 +578,15 @@ contains
         call fclose(funit)
     end subroutine write_boxfile
 
+    subroutine report_thumb_den( self, fname_thumb_den )
+        use simple_micproc,   only: tv_filter_biomol
+        use simple_gui_utils, only: mic2thumb
+        class(pickref),   intent(inout) :: self
+        character(len=*), intent(in)    :: fname_thumb_den 
+        call tv_filter_biomol(self%mic_copy)
+        call mic2thumb(self%mic_copy, fname_thumb_den, l_neg=self%l_black_ptcls_input) ! particles black
+    end subroutine report_thumb_den
+    
     ! for writing boxes with arbitrary box size
     subroutine report_boxfile( self, box, smpd, fname, nptcls )
         class(pickref),            intent(in)  :: self
@@ -717,6 +731,7 @@ contains
         if( self%exists )then
             call self%mic_shrink%kill
             call self%mic_roi%kill
+            call self%mic_copy%kill
             if( allocated(self%l_mic_mask)     ) deallocate(self%l_mic_mask)
             if( allocated(self%l_err_refs)     ) deallocate(self%l_err_refs)
             if( allocated(self%positions)      ) deallocate(self%positions)

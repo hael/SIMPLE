@@ -97,7 +97,7 @@ contains
 
     subroutine read_mic( micname, mic_out )
         character(len=*), intent(in)    :: micname !< micrograph file name
-        class(image),     intent(inout) :: mic_out
+        type(image),      intent(inout) :: mic_out
         integer :: nframes, ldim(3)
         real    :: smpd
         call find_ldim_nptcls(micname, ldim, nframes, smpd=smpd)
@@ -109,7 +109,7 @@ contains
     subroutine cascade_filter_biomol( mic_shrink, mic4viz )
         class(image),           intent(inout) :: mic_shrink
         class(image), optional, intent(inout) :: mic4viz
-        real,    parameter :: SMPD_SHRINK1  = 4.0, LP_UB = 15., LAM_ICM = 100., DAMP = 10., FRAC_FG = 0.17, LAM_TV = 7.
+        real,    parameter :: LP_UB = 15., LAM_ICM = 100., DAMP = 10., LAM_TV = 7.
         integer, parameter :: WINSZ_MED = 3
         call cascade_filter(mic_shrink, DAMP, LP_UB, LAM_TV, LAM_ICM, WINSZ_MED, mic4viz)
     end subroutine cascade_filter_biomol
@@ -139,6 +139,29 @@ contains
         call mic_shrink%real_space_filter(winsz_med, 'median')
     end subroutine cascade_filter
 
+    subroutine tv_filter_biomol( mic_shrink )
+        class(image), intent(inout) :: mic_shrink
+        real,    parameter :: LP_UB = 15., DAMP = 10., LAM_TV = 7.
+        integer, parameter :: WINSZ_MED = 3
+        call tv_filter(mic_shrink, DAMP, LP_UB, LAM_TV)
+    end subroutine tv_filter_biomol
+
+    subroutine tv_filter( mic_shrink, damp_below_zero, lp, lam_tv )
+        use simple_tvfilter, only: tvfilter
+        class(image), intent(inout) :: mic_shrink
+        real,         intent(in)    :: damp_below_zero, lp, lam_tv
+        type(tvfilter) :: tvf
+        call mic_shrink%zero_edgeavg
+        ! dampens below zero
+        call mic_shrink%div_below(0.,damp_below_zero)
+        ! low-pass filter
+        call mic_shrink%bp(0.,lp) 
+        ! TV denoising
+        call tvf%new()
+        call tvf%apply_filter(mic_shrink, lam_tv)
+        call tvf%kill
+    end subroutine tv_filter
+
     subroutine binarize_mic_den( mic_den, frac_fg, mic_bin )
         class(image),    intent(in)  :: mic_den
         real,            intent(in)  :: frac_fg
@@ -153,41 +176,6 @@ contains
         call mic_bin%set_largestcc2background
         call mic_bin%inv_bimg()
     end subroutine binarize_mic_den
-
-    subroutine identify_masscens( mic_bin, masscens )
-        use simple_segmentation
-        class(binimage),   intent(inout) :: mic_bin
-        real, allocatable, intent(inout) :: masscens(:,:)
-        type(binimage) :: img_cc
-        integer        :: i, nccs
-        real           :: px(3)
-        ! identify connected components
-        call mic_bin%find_ccs(img_cc)
-        call img_cc%get_nccs(nccs)
-        if( allocated(masscens) ) deallocate(masscens)
-        allocate(masscens(nccs,2), source=0.)
-        do i = 1, nccs
-            px = center_mass_cc(i)
-            masscens(i,:2) = px(:2)
-        enddo
-        call img_cc%kill_bimg
-    contains
-
-        function center_mass_cc( i_cc ) result( px )
-            integer, intent(in) :: i_cc
-            real :: px(3)
-            integer, allocatable :: pos(:,:)
-            integer, allocatable :: imat_cc(:,:,:)
-            call img_cc%get_imat(imat_cc)
-            where( imat_cc .ne. i_cc ) imat_cc = 0
-            call get_pixel_pos(imat_cc,pos)
-            px(1) = sum(pos(1,:))/real(size(pos,dim = 2))
-            px(2) = sum(pos(2,:))/real(size(pos,dim = 2))
-            px(3) = 1.
-            if( allocated(imat_cc) ) deallocate(imat_cc)
-        end function center_mass_cc
-
-    end subroutine identify_masscens
 
     subroutine flag_amorphous_carbon( micrograph, picking_mask )
         use simple_histogram, only: histogram

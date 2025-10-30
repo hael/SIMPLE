@@ -25,13 +25,13 @@ end type picker_iter
 
 contains
 
-    subroutine iterate( self, cline, smpd, moviename_intg, dir_out, boxfile, nptcls_out, moldiam_opt )
+    subroutine iterate( self, cline, smpd, moviename_intg, dir_out, boxfile, thumb_den, nptcls_out, moldiam_opt )
         class(picker_iter),        intent(inout) :: self
         class(cmdline),            intent(in)    :: cline
         real,                      intent(in)    :: smpd
         character(len=*),          intent(in)    :: moviename_intg
         character(len=*),          intent(in)    :: dir_out
-        character(len=LONGSTRLEN), intent(out)   :: boxfile
+        character(len=LONGSTRLEN), intent(out)   :: boxfile, thumb_den
         integer,                   intent(out)   :: nptcls_out
         real, optional,            intent(out)   :: moldiam_opt
         logical                                  :: l_append
@@ -56,9 +56,9 @@ contains
                 if( cline%defined('pickrefs') )then 
                     call self%read_pickrefs(params_glob%pickrefs)
                     if( cline%defined('nboxes_max') )then
-                        call exec_refpick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out, nboxes_max=params_glob%nboxes_max)
+                        call exec_refpick(moviename_intg, boxfile, thumb_den, smpd, nptcls_out, self%pickrefs, dir_out=dir_out, nboxes_max=params_glob%nboxes_max)
                     else
-                        call exec_refpick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
+                        call exec_refpick(moviename_intg, boxfile, thumb_den, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
                     endif
                 else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams')  )then
                     ! at least moldiam is required

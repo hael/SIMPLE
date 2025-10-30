@@ -1317,7 +1317,7 @@ contains
         type(commander_make_pickrefs)          :: xmakepickrefs
         type(commander_stream_sieve_cavgs)     :: xsieve_cavgs
         type(sp_project)                       :: spproj
-        character(len=LONGSTRLEN) :: boxfile
+        character(len=LONGSTRLEN) :: boxfile, thumb_den
         integer                   :: nmics,nboxes,imic,nptcls,nselmics,jmic,to,iproj,np
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',           'yes')
         ! CTF
@@ -1395,9 +1395,10 @@ contains
                 ! CTFres/icefrac selection goes here
                 if( os_mic%get_state(jmic)==0 ) cycle
                 ! Picking
-                call exec_refpick( micnames(jmic), boxfile, params%smpd, np, pickrefs, DIR_PICKER )
+                call exec_refpick( micnames(jmic), boxfile, thumb_den, params%smpd, np, pickrefs, DIR_PICKER )
                 if( np > 0 )then
-                    call os_mic%set(jmic, 'boxfile', simple_abspath(boxfile))
+                    call os_mic%set(jmic, 'boxfile',   simple_abspath(boxfile))
+                    call os_mic%set(jmic, 'thumb_den', simple_abspath(thumb_den))
                     nboxes   = nboxes   + np
                     nselmics = nselmics + 1
                 else
