@@ -6008,10 +6008,10 @@ contains
     subroutine new_check_refpick
         ! PROGRAM SPECIFICATION
         call check_refpick%new(&
-        &'check_refpick',&                                        ! name
+        &'check_refpick',&                                           ! name
         &'validation of reference-based picking',&                   ! descr_short
         &'is a program for validation of reference-based picking',&  ! descr_long
-        &'simple_stream',&                                           ! executable
+        &'simple_exec',&                                             ! executable
         &2, 5, 0, 4, 0, 0, 1, .false.)                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output

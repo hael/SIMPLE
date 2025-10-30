@@ -4,6 +4,7 @@ module simple_pickref
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
 use simple_image,      only: image
+use simple_segmentation
 implicit none
 
 public :: read_mic_raw_pickref, pickref
@@ -357,7 +358,7 @@ contains
             self%npeaks = 0
             return
         endif
-        call detect_peak_thres_sortmeans(n, tmp, self%t)
+        call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
         where( self%box_scores >= self%t )
             ! there's a peak
         elsewhere

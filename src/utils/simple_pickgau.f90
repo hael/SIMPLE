@@ -4,6 +4,7 @@ module simple_pickgau
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
 use simple_image,      only: image
+use simple_segmentation
 implicit none
 
 public :: read_mic_raw_pickgau, pickgau, gaupick_multi
@@ -656,7 +657,7 @@ contains
             self%npeaks = 0
             return
         endif
-        call detect_peak_thres_sortmeans(n, self%peak_thres_level, self%nboxes_ub, tmp, self%t)       
+        call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)       
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )
             ! there's a peak
