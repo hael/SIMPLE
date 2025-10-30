@@ -2130,18 +2130,18 @@ contains
         type(commander_abinitio2D)             :: xabinitio2D
         type(commander_shape_rank_cavgs)       :: xshape_rank
         type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
-        type(nrtxtfile)                        :: boxsize_file, mskdiam_file
+        type(nrtxtfile)                        :: boxsize_file
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=:),          allocatable :: final_selection_source
+        character(len=:),          allocatable :: final_selection_source, cavgsstk
         integer,                   allocatable :: cavg_inds(:)
         character(len=*),          parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                      parameter   :: LPSTOP = 8.
-        integer,                   allocatable :: final_selection(:), final_boxsize(:), final_mskdiam(:)
+        integer,                   allocatable :: final_selection(:), final_boxsize(:)
         integer                                :: nprojects, iori, i, j, imap, nptcls, ncls, nthr2D, box_in_pix
-        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, user_selected_mskdiam
+        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk
         logical                                :: found
-        real                                   :: mskdiam_estimate
+        real                                   :: mskdiam_estimate, smpd_stk
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',     200)
@@ -2240,6 +2240,9 @@ contains
         call xshape_rank%execute_safe(cline_shape_rank)
         call spproj%read(PROJFILE_GEN_PICKREFS)
         call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
+        
+        call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
+        
         ! send generate pickrefs display info to gui
         xtile = 0
         ytile = 0
@@ -2250,12 +2253,13 @@ contains
         if(allocated(cavg_inds)) then
             do i=0, size(cavg_inds) - 1
                 call communicator_add_cls2D(trim(cwd_glob) // '/' // SHAPE_RANKED_CAVGS_JPGNAME,&
-                    trim(cwd_glob) // '/' // SHAPE_RANKED_CAVGS_MRCNAME,&
+                    cavgsstk,&
                     cavg_inds(i + 1),&
                     xtile * (100.0 / (xtiles - 1)),&
                     ytile * (100.0 / (ytiles - 1)),&
                     100 * ytiles,&
                     100 * xtiles,&
+                    scale=box_in_pix * spproj%get_smpd(),&
                     pop=spproj%os_cls2D%get_int(cavg_inds(i + 1), 'pop'),&
                     res=spproj%os_cls2D%get(cavg_inds(i + 1), 'res')&
                 )
@@ -2306,18 +2310,6 @@ contains
             call boxsize_file%write(final_boxsize)
             call boxsize_file%kill()
             deallocate(final_boxsize)
-        endif
-        ! write user selected mskdiam to file for reference picking to use
-        call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_mskdiam', user_selected_mskdiam, found)
-        if(found) then
-            ! update json for gui
-            call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "selected_mskdiam", user_selected_mskdiam, found)
-            allocate(final_mskdiam(1))
-            final_mskdiam(1) = user_selected_mskdiam
-            call mskdiam_file%new(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // BOX_EXT, 2, 1)
-            call mskdiam_file%write(final_mskdiam)
-            call mskdiam_file%kill()
-            deallocate(final_mskdiam)
         endif
         call send_jobstats()
         ! termination
@@ -2453,23 +2445,24 @@ contains
                 call http_communicator%json%add(latest_picked_micrographs, micrograph)
             end subroutine communicator_add_micrograph
             
-            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop)
+            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop, scale)
                  character(*),      intent(in) :: path, mrcpath
                  real,              intent(in) :: spritex, spritey
                  integer,           intent(in) :: spriteh, spritew, mrc_idx
                  integer, optional, intent(in) :: pop
-                 real,    optional, intent(in) :: res
+                 real,    optional, intent(in) :: res, scale
                  type(json_value),  pointer    :: template
                  call http_gen_pickrefs_communicator%json%create_object(template, "")
-                 call http_gen_pickrefs_communicator%json%add(template, "path",    path)
-                 call http_gen_pickrefs_communicator%json%add(template, "mrcpath", mrcpath)
-                 call http_gen_pickrefs_communicator%json%add(template, "mrcidx",  mrc_idx)
-                 call http_gen_pickrefs_communicator%json%add(template, "spritex", dble(spritex))
-                 call http_gen_pickrefs_communicator%json%add(template, "spritey", dble(spritey))
-                 call http_gen_pickrefs_communicator%json%add(template, "spriteh", spriteh)
-                 call http_gen_pickrefs_communicator%json%add(template, "spritew", spritew)
-                 if(present(res)) call http_gen_pickrefs_communicator%json%add(template, "res",     dble(res))
-                 if(present(pop)) call http_gen_pickrefs_communicator%json%add(template, "pop",     pop)
+                 call http_gen_pickrefs_communicator%json%add(template, "path",     path)
+                 call http_gen_pickrefs_communicator%json%add(template, "mrcpath",  mrcpath)
+                 call http_gen_pickrefs_communicator%json%add(template, "mrcidx",   mrc_idx)
+                 call http_gen_pickrefs_communicator%json%add(template, "spritex",  dble(spritex))
+                 call http_gen_pickrefs_communicator%json%add(template, "spritey",  dble(spritey))
+                 call http_gen_pickrefs_communicator%json%add(template, "spriteh",  spriteh)
+                 call http_gen_pickrefs_communicator%json%add(template, "spritew",  spritew)
+                 if(present(scale)) call http_gen_pickrefs_communicator%json%add(template, "mskscale", dble(scale))
+                 if(present(res))   call http_gen_pickrefs_communicator%json%add(template, "res",      dble(res))
+                 if(present(pop))   call http_gen_pickrefs_communicator%json%add(template, "pop",      pop)
                  call http_gen_pickrefs_communicator%json%add(latest_cls2D, template)
              end subroutine communicator_add_cls2D
 

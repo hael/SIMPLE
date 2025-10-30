@@ -165,8 +165,8 @@ class StreamViewInitialPick:
     template        = "nice_stream/panelinitialpick.html"
     templatezoom    = "nice_stream/zoominitialpick.html"
     checksum_cookie = "panel_initialpick_checksum"
-    logfile         = "initial_picking.log"
-    errfile         = "initial_picking.error"
+    logfile         = "opening_2D.log"
+    errfile         = "opening_2D.error"
     zoom            = False
     jobdir          = ""
 
@@ -228,8 +228,8 @@ class StreamViewGeneratePickrefs:
     template        = "nice_stream/panelgeneratepickrefs.html"
     templatezoom    = "nice_stream/zoomgeneratepickrefs.html"
     checksum_cookie = "panel_pickrefs_checksum"
-    logfile         = "generate_picking_refs.log"
-    errfile         = "generate_picking_refs.error"
+    logfile         = "opening_2D.log"
+    errfile         = "opening_2D.error"
     zoom            = False
     jobdir          = ""
 

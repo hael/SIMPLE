@@ -185,12 +185,10 @@ updateMskdiam = (element) => {
 
 drawMask = () => {
   const selected_mskdiam = document.getElementById("final_selection_mskdiam")
-  console.log("DRAWMASK",selected_mskdiam,  selected_mskdiam.value)
   if(selected_mskdiam.value == "") return
   for(const picktemplate of document.getElementsByClassName("picktemplate")){
     const canvas   = picktemplate.getElementsByClassName("mskcanvas")[0]
-    //const mskscale = Number(canvas.dataset.mskscale)
-    const mskscale = 1
+    const mskscale = Number(canvas.dataset.mskscale)
     const ctx = canvas.getContext("2d")
     ctx.strokeStyle = "yellow";
     ctx.clearRect(0, 0, canvas.width, canvas.height)

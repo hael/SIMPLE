@@ -62,7 +62,7 @@
                     <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_refs_stream_generate_pickrefs' jobid %}>
                         {% csrf_token %}
                         <input type="hidden" id="final_selection" name="final_selection" value=""/>
-                        <input type="hidden" id="final_selection_source" name="final_selection_source" value=""/>
+                        <input type="hidden" id="final_selection_source"  name="final_selection_source" value=""/>
                         <input type="hidden" id="final_selection_boxsize" name="final_selection_boxsize" value=""/>
                         <input type="hidden" id="final_selection_mskdiam" name="final_selection_mskdiam" value=""/>
                         <button class="userbutton animate-bounce !text-[14px]" onclick="selectRefs(this.form)">use selection</button>
@@ -114,9 +114,9 @@
                                             </div>
                                         </div>
                                         <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                            <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[100px] w-[100px]">
+                                            <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[100px] w-[100px] relative">
                                                 <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ template.mskscale }}" data-mskdiam="{{ template.mskdiam }}"></canvas>
-                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center top-[0px] absolute">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                     </svg>
