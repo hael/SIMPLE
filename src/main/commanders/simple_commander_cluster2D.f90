@@ -14,7 +14,6 @@ use simple_stack_io,          only: stack_io
 use simple_starproject,       only: starproject
 use simple_commanders_imgproc, only: commander_scale
 use simple_exec_helpers,      only: set_shmem_flag, set_master_num_threads
-use simple_pspecs,            only: pspecs
 use simple_strategy2D_utils
 use simple_commanders_cavgs
 use simple_classaverager

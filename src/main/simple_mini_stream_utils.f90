@@ -23,7 +23,7 @@ contains
         logical, parameter :: DEBUG = .true.
         real,    parameter :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
         integer, parameter :: BOXFAC = 3, NQ_DIAMS = 10
-        character(len=LONGSTRLEN)              :: boxfile, boxfile_out
+        character(len=LONGSTRLEN)              :: boxfile
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_topo_names(:), mic_bin_names(:)
         character(len=:),          allocatable :: fbody_here, ext, fname_thumb_den
         integer,                   allocatable :: labels(:), diam_labels(:)
@@ -122,13 +122,11 @@ contains
         do imic = 1, mic_to
             boxfile = basename(fname_new_ext(trim(micnames(imic)),'box'))
             call picker%pick(ldim_raw, smpd, mic_bin_names(imic), [diam_stats%minv,diam_stats%maxv])
-            call picker%write_pos_and_diams(boxfile, nptcls, box_in_pix)
-            if( nptcls == 0 )then
-                boxfile_out = ''
-            else
-                boxfile_out = simple_abspath(boxfile)
+            nptcls = picker%get_nboxes()
+            if( nptcls > 0 )then
+                call picker%write_pos_and_diams(boxfile, nptcls, box_in_pix)
+                call spproj%set_boxfile(imic, simple_abspath(boxfile), nptcls=nptcls)
             endif
-            call spproj%set_boxfile(imic, boxfile_out, nptcls=nptcls)
             if( file_exists(mic_den_names(imic)) )then
                 fbody_here      = basename(trim(micnames(imic)))
                 ext             = fname2ext(trim(fbody_here))
@@ -137,8 +135,6 @@ contains
                 call read_mic(trim(mic_den_names(imic)), mic_den)
                 call mic2thumb(mic_den, fname_thumb_den, l_neg=.true.) ! particles black
                 call spproj%os_mic%set(imic, 'thumb_den', simple_abspath(fname_thumb_den))
-            else
-                call spproj%os_mic%set(imic, 'thumb_den', '')
             endif
         end do
         ! write output to disk

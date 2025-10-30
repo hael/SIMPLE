@@ -14,5 +14,4 @@ character(len=*), parameter :: SIMPLE_STREAM_POOL_PARTITION    = 'SIMPLE_STREAM_
 character(len=*), parameter :: SIMPLE_STREAM_POOL_NTHR         = 'SIMPLE_STREAM_POOL_NTHR'
 character(len=*), parameter :: SIMPLE_STREAM_REFGEN_PARTITION  = 'SIMPLE_STREAM_REFGEN_PARTITION'
 character(len=*), parameter :: SIMPLE_STREAM_REFGEN_NTHR       = 'SIMPLE_STREAM_REFGEN_NTHR'
-
 end module simple_defs_environment

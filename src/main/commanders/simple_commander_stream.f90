@@ -2177,10 +2177,10 @@ contains
         call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_GEN_PICKREFS USER STOP ****')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
-        ! import at least 90 micrographs
-        call micimporter( 90 )
+        ! import at least 20 micrographs
+        call micimporter( 20 )
         ! segmentation-based picking
-        call segdiampick_mics(spproj, params%pcontrast, 90, params%moldiam_max, box_in_pix, mskdiam_estimate)
+        call segdiampick_mics(spproj, params%pcontrast, 20, params%moldiam_max, box_in_pix, mskdiam_estimate)
         ! send initial picking display info to gui
         if(spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
         .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile')) then

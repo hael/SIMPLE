@@ -313,9 +313,9 @@ contains
     end subroutine flag_non_junk_cavgs
 
     function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
-        use simple_corrmat,          only: calc_inpl_invariant_fm
-        use simple_histogram,        only: histogram
-        use simple_pspecs,           only: pspecs
+        use simple_corrmat,   only: calc_inpl_invariant_fm
+        use simple_histogram, only: histogram
+        use simple_pspecs,    only: pspecs
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
         character(len=*),     intent(in)    :: which
