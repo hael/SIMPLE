@@ -161,44 +161,6 @@ const box_sizes = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88, 100, 104,
     1008, 1014, 1020, 1024,1296, 1536, 1728, 1944,2048, 2304, 2592, 3072, 3200, 3456, 3888, 4096, 4608, 5000, 5184, 6144,
     6250, 6400, 6912, 7776, 8192, 9216, 10240, 12288, 12500]
 
-updateBoxSize = () => {
-    const box_size_selector       = document.getElementById("box_size_selector")
-    const current_box_size        = document.getElementById("current_box_size")
-    const final_selection_boxsize = document.getElementById("final_selection_boxsize")
-    current_box_size.innerHTML = box_sizes[box_size_selector.value] + "px"
-    final_selection_boxsize.value = box_sizes[box_size_selector.value]
-    const scale = Number(box_size_selector.dataset.boxsize) / Number(box_sizes[box_size_selector.value])
-    for(const picktemplateimg of document.getElementsByClassName("picktemplateimg")){
-        picktemplateimg.style.transform = "scale(" + scale + ")"
-    }
-    lastinteraction = Date.now();
-}
-
-updateMskdiam = (element) => {
-  const current_mskdiam          = document.getElementById("current_mskdiam")
-  const final_selection_mskdiam  = document.getElementById("final_selection_mskdiam")
-  const mskdiam                  = element.value * 2 // multiply by 2 to ensure even
-  current_mskdiam.innerHTML      = mskdiam + "Å" 
-  final_selection_mskdiam.value  = mskdiam
-  drawMask()
-}
-
-drawMask = () => {
-  const selected_mskdiam = document.getElementById("final_selection_mskdiam")
-  if(selected_mskdiam.value == "") return
-  for(const picktemplate of document.getElementsByClassName("picktemplate")){
-    const canvas   = picktemplate.getElementsByClassName("mskcanvas")[0]
-    const mskscale = Number(canvas.dataset.mskscale)
-    const ctx = canvas.getContext("2d")
-    ctx.strokeStyle = "yellow";
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, Number(selected_mskdiam.value) * canvas.width / (mskscale * 2), 0, 2 * Math.PI);
-    ctx.stroke();
-    lastinteraction = Date.now();
-  }
-}
-
 updateBrightness = (element) => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--genpickrefs-brightness', element.value / 100);
@@ -279,25 +241,6 @@ window.addEventListener("load", () =>{
 },false);
 
 window.addEventListener("load", () =>{
-    const box_size_selector = document.getElementById("box_size_selector")
-    const current_box_size  = document.getElementById("current_box_size")
-    if(box_size_selector == undefined || current_box_size == undefined) return
-    const box_size = Number(box_size_selector.dataset.boxsize)
-    box_size_selector.max = box_sizes.length - 1
-    box_size_selector.step = 1
-    box_size_selector.value = box_sizes.indexOf(box_size)
-    updateBoxSize()
-},false);
-
-window.addEventListener("load", () =>{
-    const mskdiam_selector = document.getElementById("mskdiam_selector")
-    if(mskdiam_selector == undefined) return
-    const mskdiam = Number(box_size_selector.dataset.mskdiam) / 2
-    mskdiam_selector.value = mskdiam
-    updateMskdiam(mskdiam_selector)
-},false);
-
-window.addEventListener("load", () =>{
   document.getElementById("loadinggauze").style.opacity = "0";
   setTimeout(function () {
    document.getElementById("loadinggauze").style.display = "none";
@@ -310,9 +253,9 @@ window.addEventListener("visibilitychange", (event) => {
   }
 })
 
-setInterval(function () {
+/*setInterval(function () {
   if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();
     location.reload();
   }
-}, 1000);
+}, 1000);*/

@@ -21,11 +21,11 @@
     <div class="w-full flex flex-row p-[10px]">
         <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <div class="flex flex-row">
-                {% if "micrographs_imported" in jobstats and "micrographs_processed" in jobstats and "micrographs_rejected" in jobstats and jobstats.micrographs_imported > 0 %}
+                {% if "micrographs_imported" in jobstats and "micrographs_accepted" in jobstats and "micrographs_rejected" in jobstats and jobstats.micrographs_imported > 0 %}
                     <div class="flex flex-col">
                         <div class="font-bold text-[12px] pl-[10px]">micrographs</div>
                         <div class="h-[50px] w-[240px] ml-[15px]">
-                            <canvas class="micrographs_pie_chart" data-imported={{ jobstats.micrographs_imported }} data-processed={{ jobstats.micrographs_processed }} data-rejected={{ jobstats.micrographs_rejected }}></canvas>
+                            <canvas class="micrographs_pie_chart" data-imported={{ jobstats.micrographs_imported }} data-processed={{ jobstats.micrographs_accepted }} data-rejected={{ jobstats.micrographs_rejected }}></canvas>
                         </div>
                     </div>
                 {% endif %}
@@ -103,11 +103,11 @@
                             </svg>
                         </div>
                         <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[512] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden relative">
-                            <canvas id="boxes_overlay" class="absolute hover:animate-pulse z-1" height="512" width="512"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
-                                <div class="snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
-                                    <div class="miccontainer w-[512px] h-[512px] m-auto">
-                                        <img style="filter:contrast(var(--inipick-contrast)) brightness(var(--inipick-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[512px] w-[512px] rounded"></img>
+                                <div class="miccontainer snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                    <canvas class="boxes-overlay absolute hover:animate-pulse z-1" height="512" width="512"></canvas>
+                                    <div class=" w-[512px] h-[512px] m-auto">
+                                        <img src={% url 'nice_lite:image' micrograph.path %} style="filter:contrast(var(--inipick-contrast)) brightness(var(--inipick-brightness));" class="h-[512px] w-[512px] rounded"></img>
                                     </div>
                                 </div>
                             {% endfor %}

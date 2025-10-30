@@ -104,36 +104,6 @@
                         </div>
                     </div>
                 {% endif %}
-                {% if "picking_templates" in jobstats and jobstats.picking_templates|length > 0 %}
-                    <div class="flex flex-col flex-1">
-                        <div class="font-bold text-[10px] pl-[10px]">picking templates</div>
-                        <div class="flex flex-row items-center m-auto">
-                            <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft(this, event)">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                                    <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
-                            <div id="picking_references" class="flex flex-row w-[84px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                                <div class="flex flex-row snap-center">
-                                    {% for template in jobstats.picking_templates %}
-                                        {% if forloop.counter != 0 and forloop.counter0|divisibleby:2 %}
-                                            </div>
-                                            <div class="flex flex-row snap-center">
-                                        {% endif %}
-                                        <div class="w-[40px] h-[40px] m-[1px]">
-                                            <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew}}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="h-[40px] w-[40px] rounded m-auto"></div>
-                                        </div>
-                                    {% endfor %}
-                                </div>        
-                            </div>
-                            <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight(this, event)">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                                    <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
-                        </div> 
-                    </div>    
-                {% endif %}
             </div>
             <div class="grid grid-cols-2 gap-1 text-[10px] pl-[10px]">
                 {% if "particles_extracted" in jobstats and jobstats.particles_extracted > 0 %}
@@ -151,11 +121,11 @@
                             </svg>
                         </div>
                         <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[235px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-1" height="235" width="235"></canvas>
                             {% for micrograph in jobstats.latest_picked_micrographs %}
-                                <div class="snap-center slider_micrograph" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                <div class="miccontainer snap-center slider_micrograph relative" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                    <canvas class="boxes-overlay absolute hover:animate-pulse z-1" height="235" width="235"></canvas>
                                     <div class="w-[235px] h-[235px] m-auto">
-                                        <img style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:{{ micrograph.spritew }}% {{ micrograph.spriteh }}%; background-position:{{ micrograph.spritex }}% {{ micrograph.spritey }}%" class="h-[235px] w-[235px] rounded m-auto"></img>
+                                        <img src={% url 'nice_lite:image' micrograph.path %} style="filter:contrast(var(--refpick-contrast)) brightness(var(--refpick-brightness));" class="h-[235px] w-[235px] rounded m-auto"></img>
                                     </div>
                                 </div>
                             {% endfor %}
