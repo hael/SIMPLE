@@ -2129,16 +2129,17 @@ contains
         type(commander_extract_distr)          :: xextract
         type(commander_abinitio2D)             :: xabinitio2D
         type(commander_shape_rank_cavgs)       :: xshape_rank
-        type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references      
+        type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
+        type(nrtxtfile)                        :: boxsize_file, mskdiam_file
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: final_selection_source
         integer,                   allocatable :: cavg_inds(:)
         character(len=*),          parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                      parameter   :: LPSTOP = 8.
-        integer,                   allocatable :: final_selection(:)
+        integer,                   allocatable :: final_selection(:), final_boxsize(:), final_mskdiam(:)
         integer                                :: nprojects, iori, i, j, imap, nptcls, ncls, nthr2D, box_in_pix
-        integer                                :: ithumb, xtiles, ytiles, xtile, ytile
+        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, user_selected_mskdiam
         logical                                :: found
         real                                   :: mskdiam_estimate
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
@@ -2174,8 +2175,7 @@ contains
         call http_gen_pickrefs_communicator%create(params%niceprocid, params%niceserver, "generate_picking_refs")
         call communicator_init_initial_picking()
         call communicator_gen_pickrefs_init()
-        call http_communicator%send_jobstats()
-        call http_gen_pickrefs_communicator%send_jobstats()
+        call send_jobstats()
         ! master project file
         call spproj%read( params%projfile )
         if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(1, .false.) !!!!!!!?????
@@ -2203,8 +2203,7 @@ contains
                     trim(adjustl(spproj%os_mic%get_static(spproj%os_mic%get_noris() - ithumb, "boxfile")))&
                 )
             end do
-            call http_communicator%send_jobstats()
-            call http_gen_pickrefs_communicator%send_jobstats()
+            call send_jobstats()
         endif       
         ! extract
         call cline_extract%set('prg',                    'extract')
@@ -2218,7 +2217,7 @@ contains
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_extracted",     dble(spproj%os_ptcl2D%get_noris()))
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",               dble(mskdiam_estimate))
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",                box_in_pix)
-        call http_gen_pickrefs_communicator%send_jobstats()
+        call send_jobstats()
         ! 2D analysis
         nptcls = spproj%os_ptcl2D%get_noris()
         ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
@@ -2269,8 +2268,7 @@ contains
         endif
         ! wait for user interaction
         do 
-            call http_communicator%send_jobstats()
-            call http_gen_pickrefs_communicator%send_jobstats()
+            call send_jobstats()
             call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection', final_selection, found)
             if(found) then
                 call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
@@ -2297,11 +2295,35 @@ contains
             endif
             call sleep(WAITTIME) ! may want to increase as 3s default
         enddo
+        ! write user selected boxsize to file for reference picking to use
+        call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_boxsize', user_selected_boxsize, found)
+        if(found) then
+            ! update json for gui
+            call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "selected_boxsize", user_selected_boxsize, found)
+            allocate(final_boxsize(1))
+            final_boxsize(1) = user_selected_boxsize
+            call boxsize_file%new(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // TXT_EXT, 2, 1)
+            call boxsize_file%write(final_boxsize)
+            call boxsize_file%kill()
+            deallocate(final_boxsize)
+        endif
+        ! write user selected mskdiam to file for reference picking to use
+        call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_mskdiam', user_selected_mskdiam, found)
+        if(found) then
+            ! update json for gui
+            call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "selected_mskdiam", user_selected_mskdiam, found)
+            allocate(final_mskdiam(1))
+            final_mskdiam(1) = user_selected_mskdiam
+            call mskdiam_file%new(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // BOX_EXT, 2, 1)
+            call mskdiam_file%write(final_mskdiam)
+            call mskdiam_file%kill()
+            deallocate(final_mskdiam)
+        endif
+        call send_jobstats()
         ! termination
         call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
         call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "stage", "terminating", found)
-        call http_communicator%send_jobstats()
-        call http_gen_pickrefs_communicator%send_jobstats()
+        call send_jobstats()
         if( allocated(projects)  ) deallocate(projects)
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
         ! cleanup
@@ -2313,6 +2335,11 @@ contains
         call simple_end('**** SIMPLE_GEN_PICKREFS NORMAL STOP ****')
 
         contains
+
+            subroutine send_jobstats()
+                call http_communicator%send_jobstats()
+                call http_gen_pickrefs_communicator%send_jobstats()
+            end subroutine send_jobstats
 
             subroutine micimporter( nmics )
                 integer, intent(in) :: nmics

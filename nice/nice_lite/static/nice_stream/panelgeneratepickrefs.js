@@ -174,6 +174,33 @@ updateBoxSize = () => {
     lastinteraction = Date.now();
 }
 
+updateMskdiam = (element) => {
+  const current_mskdiam          = document.getElementById("current_mskdiam")
+  const final_selection_mskdiam  = document.getElementById("final_selection_mskdiam")
+  const mskdiam                  = element.value * 2 // multiply by 2 to ensure even
+  current_mskdiam.innerHTML      = mskdiam + "Å" 
+  final_selection_mskdiam.value  = mskdiam
+  drawMask()
+}
+
+drawMask = () => {
+  const selected_mskdiam = document.getElementById("final_selection_mskdiam")
+  console.log("DRAWMASK",selected_mskdiam,  selected_mskdiam.value)
+  if(selected_mskdiam.value == "") return
+  for(const picktemplate of document.getElementsByClassName("picktemplate")){
+    const canvas   = picktemplate.getElementsByClassName("mskcanvas")[0]
+    //const mskscale = Number(canvas.dataset.mskscale)
+    const mskscale = 1
+    const ctx = canvas.getContext("2d")
+    ctx.strokeStyle = "yellow";
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, Number(selected_mskdiam.value) * canvas.width / (mskscale * 2), 0, 2 * Math.PI);
+    ctx.stroke();
+    lastinteraction = Date.now();
+  }
+}
+
 updateBrightness = (element) => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--genpickrefs-brightness', element.value / 100);
@@ -262,6 +289,14 @@ window.addEventListener("load", () =>{
     box_size_selector.step = 1
     box_size_selector.value = box_sizes.indexOf(box_size)
     updateBoxSize()
+},false);
+
+window.addEventListener("load", () =>{
+    const mskdiam_selector = document.getElementById("mskdiam_selector")
+    if(mskdiam_selector == undefined) return
+    const mskdiam = Number(box_size_selector.dataset.mskdiam) / 2
+    mskdiam_selector.value = mskdiam
+    updateMskdiam(mskdiam_selector)
 },false);
 
 window.addEventListener("load", () =>{

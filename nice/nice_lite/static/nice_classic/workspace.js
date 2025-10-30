@@ -1,5 +1,11 @@
 let lastinteraction = Date.now();
 
+submitUpdate = (element, event) => {
+  if(event.key === 'Enter') {
+    element.form.submit()       
+  }
+}
+
 enableWorkspaceRename = () => {
     const workspacerename = document.querySelector("#workspacerename")
     workspacerename.disabled = false

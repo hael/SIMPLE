@@ -6938,9 +6938,16 @@ contains
         call json%add(process_inputs, '', 'dir_target=preprocessing')
         call json%add(process_inputs, '', 'outdir=optics_assignment') !important - directory names and name must match between processes
         !! opening 2D
-
-        ! 2 be implemented
-        
+        call json%create_object(process, 'process')
+        call json%add(processes, process)
+        call json%add(process, 'name',        'opening_2D') !important - directory names and name must match between processes
+        call json%add(process, 'prg',         'gen_pickrefs')
+        call json%add(process, 'nthr_master', 32)
+        call json%create_array(process_inputs, 'static_inputs')
+        call json%add(process, process_inputs)
+        call json%add(process_inputs, '', 'dir_target=preprocessing')
+        call json%add(process_inputs, '', 'outdir=opening_2D') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nthr=32')
         !! reference_based_picking
         call json%create_object(process, 'process')
         call json%add(processes, process)
