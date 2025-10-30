@@ -3,25 +3,26 @@ include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
+use simple_default_clines, only: set_automask2D_defaults
 use simple_image,          only: image
-use simple_parameters,     only: params_glob
+use simple_masker,         only: automask2D
+use simple_parameters,     only: parameters, params_glob
 use simple_procimgstk,     only: scale_imgfile
 use simple_qsys_env,       only: qsys_env
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
-use simple_commanders_cluster2D
-use simple_gui_utils
-use simple_nice
-use simple_progress
 use simple_qsys_funs
-
+use simple_progress
+use simple_nice
+use simple_gui_utils
+use simple_commanders_cluster2D
 implicit none
 
 public :: stream_chunk, merge_chunks, update_user_params
 public :: projs_list
 public :: projrecord, projrecords2proj, kill_projrecords, class_rejection
 public :: procrecord, append_procrecord, kill_procrecords, stream_datestr
-public :: write_selected_references
+public :: process_selected_references
 public :: wait_for_folder
 private
 #include "simple_local_flags.inc"
@@ -1299,32 +1300,58 @@ contains
         write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
     end function stream_datestr
 
-    subroutine write_selected_references(imgfile, selection, nxtiles, nytiles, smpd)
-        integer, allocatable, intent(in)    :: selection(:)
-        character(*),         intent(in)    :: imgfile
-        real,                 intent(in)    :: smpd
-        integer,              intent(inout) :: nxtiles, nytiles
-        type(image)                         :: img
-        type(stack_io)                      :: stkio_r, stkio_w
-        integer                             :: ldim(3) = [0,0,0]
-        integer                             :: icls, stat, ncls
+    subroutine process_selected_references(imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles)
+        character(*), intent(in)    :: imgfile
+        real,         intent(in)    :: smpd
+        integer,      intent(in)    :: selection(:)
+        real,         intent(out)   :: mskdiam
+        integer,      intent(out)   :: box_for_pick, box_for_extract
+        integer,      intent(inout) :: nxtiles, nytiles
+        type(parameters)            :: params
+        type(cmdline)               :: cline
+        type(image)                 :: img
+        type(stack_io)              :: stkio_r, stkio_w
+        type(image), allocatable    :: cavgs(:)
+        real,        allocatable    :: diams(:), shifts(:,:)
+        real,        parameter      :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
+        real    :: diam_max, maxdiam, mskrad_in_pix
+        integer :: ldim(3), ncavgs, icavg, icls, stat, ncls
         if(size(selection) == 0) return
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', size(selection),' clusters'
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
+        call cline%set('pickrefs', trim(imgfile))
+        call cline%set('smpd',     smpd)
+        ! set defaults
+        call set_automask2D_defaults(cline)
+        ! parse parameters
+        call params%new(cline)
         call find_ldim_nptcls(imgfile, ldim, ncls)
-        call img%new([ldim(1), ldim(2), 1], smpd)
-        call stkio_r%open(imgfile, smpd, 'read', bufsz=ncls)
+        params%msk = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
+        call img%new([ldim(1), ldim(2), 1], params%smpd)
+        allocate( cavgs(ncavgs) )
+        call stkio_r%open(imgfile, params%smpd, 'read', bufsz=ncls)
         call stkio_r%read_whole
-        call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=ldim(1), bufsz=size(selection))
         do icls=1, size(selection)
-            call stkio_r%get_image(selection(icls), img)
-            call stkio_w%write(icls, img)
+            call stkio_r%get_image(selection(icls), cavgs(icls))
         end do
-        call stkio_r%close
+        call automask2D(cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+        box_for_pick    = min(round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH), ldim(1))
+        mskdiam         = params%smpd * box_for_pick
+        mskrad_in_pix   = real(box_for_pick) / 2
+        maxdiam         = mskdiam + mskdiam * BOX_EXP_FAC
+        box_for_extract = find_larger_magic_box(round2even(maxdiam / params%smpd))
+        call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, params%smpd, 'write', box=box_for_extract, bufsz=size(selection))
+        do icls=1, size(selection)
+            call stkio_r%get_image(selection(icls), cavgs(icls))
+            call cavgs(icls)%pad_inplace([box_for_extract,box_for_extract,1])
+            call cavgs(icls)%mask(mskrad_in_pix, 'softavg')
+            call stkio_w%write(icls, cavgs(icls))
+         end do
         call stkio_w%close
+        call stkio_r%close
         ! write jpeg
         call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
         call img%kill
-    end subroutine write_selected_references
+    end subroutine process_selected_references
 
 end module simple_stream_utils
