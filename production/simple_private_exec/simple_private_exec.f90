@@ -2,7 +2,7 @@
 program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_ui_latex, print_stream_ui_json
+use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_stream_ui_json
 use simple_private_prgs,   only: make_private_user_interface
 use simple_symanalyzer,    only: print_subgroups
 use simple_commanders_project
@@ -101,6 +101,7 @@ type(cmdline)           :: cline
 integer                 :: cmdstat, cmdlen, pos
 integer(timer_int_kind) :: t0
 real(timer_int_kind)    :: rt_exec
+logical                 :: l_silent
 
 ! start timer
 t0 = tic()
@@ -115,20 +116,21 @@ call make_private_user_interface
 ! this parses all key=value pairs on the command line
 call cline%parse_private
 call print_slurm_env
-
+l_silent = .false.
 select case(prg)
 
     ! PRIVATE UTILITY PROGRAMS
     case( 'print_ui_json' )
         call print_ui_json
+        l_silent = .true.
     case( 'write_ui_json' )
         call write_ui_json
-    case( 'print_ui_latex' )
-        call print_ui_latex
     case( 'print_sym_subgroups' )
         call print_subgroups
+        l_silent = .true.
     case( 'print_ui_stream' )
         call print_stream_ui_json
+        l_silent = .true.
 
     ! PRE-PROCESSING PROGRAMS
     case( 'preprocess' )
@@ -229,6 +231,7 @@ select case(prg)
         call xrotmats2oris%execute(cline)
     case( 'print_project_vals' )
         call xprint_project_vals%execute(cline)
+        l_silent = .true.
 
     ! DATA MANAGEMENT PROGRAMS
     case( 'prune_project' )
@@ -251,7 +254,7 @@ select case(prg)
 end select
 ! end timer and print
 rt_exec = toc(t0)
-call simple_print_timer(rt_exec)
+if( .not. l_silent ) call simple_print_timer(rt_exec)
 ! cleanup
 call cline%kill
 end program simple_private_exec

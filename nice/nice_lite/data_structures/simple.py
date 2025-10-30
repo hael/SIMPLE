@@ -37,9 +37,7 @@ class SIMPLEStream:
                 check          = True,
                 text           = True
             )
-            # remove last line from stdout else not valid json
-            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-1])
-            ui_json = json.loads(ui_str)
+            ui_json = json.loads(ui_str.stdout)
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             ui_json = {}
@@ -176,9 +174,7 @@ class SIMPLE:
                 check          = True,
                 text           = True
             )
-            # remove last line from stdout else not valid json
-            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-1])
-            ui_json = json.loads(ui_str)
+            ui_json = json.loads(ui_str.stdout)
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             ui_json = {}
@@ -305,9 +301,7 @@ class SIMPLEProjFile:
                 check          = True,
                 text           = True
             )
-            # remove last 2 lines from stdout else not valid json
-            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-2])
-            ui_json = json.loads(ui_str)
+            ui_json = json.loads(ui_str.stdout)
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             ui_json = {}
@@ -351,9 +345,7 @@ class SIMPLEProjFile:
                 check          = True,
                 text           = True
             )
-            # remove last 2 lines from stdout else not valid json
-            ui_str  = ''.join(ui_str.stdout.splitlines(keepends = True)[:-2])
-            ui_json = json.loads(ui_str)
+            ui_json = json.loads(ui_str.stdout)
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             ui_json = {}

@@ -69,11 +69,12 @@ type(commander_tseries_core_atoms_analysis)   :: xtseries_core_atoms_analysis
 type(tseries_make_projavgs_commander)         :: xtseries_make_projavgs
 
 ! OTHER DECLARATIONS
-character(len=STDLEN) :: args, prg, entire_line
-type(cmdline)         :: cline
-integer               :: cmdstat, cmdlen, pos
-integer(timer_int_kind)                     :: t0
-real(timer_int_kind)                        :: rt_exec
+character(len=STDLEN)   :: args, prg, entire_line
+type(cmdline)           :: cline
+integer                 :: cmdstat, cmdlen, pos
+integer(timer_int_kind) :: t0
+real(timer_int_kind)    :: rt_exec
+logical                 :: l_silent
 
 ! start timer
 t0 = tic()
@@ -105,8 +106,10 @@ select case(prg)
         call xupdate_project%execute(cline)
     case( 'print_project_info' )
         call xprint_project_info%execute(cline)
+        l_silent = .true.
     case( 'print_project_field' )
         call xprint_project_field%execute(cline)
+        l_silent = .true.
     case( 'tseries_import' )
         call xtseries_import%execute(cline)
     case( 'import_particles')
@@ -215,9 +218,11 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('c2431c5b')
-! end timer and print
-rt_exec = toc(t0)
-call simple_print_timer(rt_exec)
+if( .not. l_silent )then
+    call simple_print_git_version('796fdac9')
+    ! end timer and print
+    rt_exec = toc(t0)
+    call simple_print_timer(rt_exec)
+endif
 end program single_exec
 
