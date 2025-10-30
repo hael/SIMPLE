@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
-public :: print_ui_json, write_ui_json, print_ui_latex, list_single_prgs_in_ui, list_stream_prgs_in_ui
+public :: print_ui_json, write_ui_json, list_single_prgs_in_ui, list_stream_prgs_in_ui
 public :: print_stream_ui_json
 private
 #include "simple_local_flags.inc"
@@ -60,7 +60,6 @@ type :: simple_program
     generic,   private :: set_input => set_input_1, set_input_2, set_input_3
     procedure          :: print_ui
     procedure          :: print_cmdline
-    procedure          :: print_cmdline_latex
     procedure          :: print_prg_descr_long
     procedure          :: write2json
     procedure          :: get_name
@@ -6497,19 +6496,6 @@ contains
 
     end subroutine print_ui
 
-    subroutine print_ui_latex
-        integer :: i
-        type(simple_program), pointer :: ptr => null()
-        do i=1,n_prg_ptrs
-            ptr => prg_ptr_array(i)%ptr2prg
-            write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
-            write(logfhandle, '(a)') '\label{'      // ptr%name // '}'
-            write(logfhandle, '(a)') '\prgname{' // str2latex(ptr%name) // '} ' // str2latex(ptr%descr_long // '. Executed by ' // ptr%executable)
-            call ptr%print_cmdline_latex
-            write(logfhandle, '(a)') ''
-        end do
-    end subroutine print_ui_latex
-
     subroutine print_cmdline( self )
         class(simple_program), intent(in) :: self
         write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
@@ -6531,39 +6517,9 @@ contains
         call print_param_hash(self%comp_ctrls)
     end subroutine print_cmdline
 
-    subroutine print_cmdline_latex( self )
-        class(simple_program), intent(in) :: self
-        logical     :: l_distr_exec
-        l_distr_exec = self%executable .eq. 'simple_exec'
-        write(logfhandle,'(a)') '\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]'
-        write(logfhandle,'(a)') '+underline[USAGE]'
-        if( l_distr_exec )then
-            write(logfhandle,'(a)') '+textit[bash-3.2$ simple_exec prg=' // self%name // ' key1=val1 key2=val2 ...]'
-        else
-            write(logfhandle,'(a)') '+textit[bash-3.2$ simple_exec prg='       // self%name // ' key1=val1 key2=val2 ...]'
-        endif
-        write(logfhandle,'(a)') 'Required input parameters in ' // '+textbf[bold]' // ' (ensure terminal support)'
-        if( allocated(self%img_ios) )    write(logfhandle,'(a)') '+underline[IMAGE INPUT/OUTPUT]'
-        call print_param_hash(self%img_ios,   latex=.true.)
-        if( allocated(self%parm_ios) )   write(logfhandle,'(a)') '+underline[PARAMETER INPUT/OUTPUT]'
-        call print_param_hash(self%parm_ios,  latex=.true.)
-        if( allocated(self%alt_ios) )    write(logfhandle,'(a)') '+underline[ALTERNATIVE INPUTS]'
-        call print_param_hash(self%alt_ios,   latex=.true.)
-        if( allocated(self%srch_ctrls) ) write(logfhandle,'(a)') '+underline[SEARCH CONTROLS]'
-        call print_param_hash(self%srch_ctrls, latex=.true.)
-        if( allocated(self%filt_ctrls) ) write(logfhandle,'(a)') '+underline[FILTER CONTROLS]'
-        call print_param_hash(self%filt_ctrls, latex=.true.)
-        if( allocated(self%mask_ctrls) ) write(logfhandle,'(a)') '+underline[MASK CONTROLS]'
-        call print_param_hash(self%mask_ctrls, latex=.true.)
-        if( allocated(self%comp_ctrls) ) write(logfhandle,'(a)') '+underline[COMPUTER CONTROLS]'
-        call print_param_hash(self%comp_ctrls, latex=.true.)
-        write(logfhandle,'(a)') '\end{Verbatim}'
-    end subroutine print_cmdline_latex
-
     ! supporting the print_cmdline routines (above)
-    subroutine print_param_hash( arr, latex )
+    subroutine print_param_hash( arr )
         type(simple_input_param), allocatable, intent(in) :: arr(:)
-        logical, optional,                     intent(in) :: latex
         character(len=KEYLEN),    allocatable :: sorted_keys(:), rearranged_keys(:)
         logical,                  allocatable :: required(:)
         integer,                  allocatable :: inds(:)
@@ -6603,7 +6559,7 @@ contains
                 required(:nreq)     = .true.
                 required(nreq + 1:) = .false.
             endif
-            call ch%print_key_val_pairs(logfhandle, sorted_keys, mask=required, latex=latex)
+            call ch%print_key_val_pairs(logfhandle, sorted_keys, mask=required)
             call ch%kill
             deallocate(sorted_keys, required)
         endif

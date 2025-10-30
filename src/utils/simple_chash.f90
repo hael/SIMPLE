@@ -437,23 +437,21 @@ contains
     ! PRINTERS
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_1( self, key, maxlen, fhandle, ansi_flag, latex_bold )
+    subroutine print_key_val_pair_1( self, key, maxlen, fhandle, ansi_flag )
         class(chash),               intent(in) :: self
         character(len=*),           intent(in) :: key
         integer,                    intent(in) :: maxlen
         integer,                    intent(in) :: fhandle
         character(len=*), optional, intent(in) :: ansi_flag
-        logical,          optional, intent(in) :: latex_bold
         character(len=:), allocatable :: aansi_flag, str2print
         character(len=maxlen) :: key_padded
         integer               :: which
-        logical               :: latex_format
         if( present(ansi_flag) )then
             allocate(aansi_flag, source=trim(ansi_flag))
         else
             allocate(aansi_flag, source=C_WHITE)
         endif
-        latex_format = present(latex_bold)
+
         which = self%lookup(key)
         if( which > 0 )then
             ! print table (for easy to read instructions)
@@ -461,15 +459,7 @@ contains
             do while(len(key_padded) < maxlen)
                 key_padded = trim(key_padded)//' '
             end do
-            if( latex_format )then
-                if( latex_bold )then
-                    allocate(str2print, source='+textbf['//key_padded//' = '//trim(self%values(which)%str)//']')
-                else
-                    allocate(str2print, source=key_padded//' = '//trim(self%values(which)%str))
-                endif
-            else
-                allocate(str2print, source=format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag))
-            endif
+            allocate(str2print, source=format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag))
             write(fhandle, '(a,1x,a)') str2print
         else
             THROW_HARD('key: '//trim(key)//' does not exist in the chash; print_key_val_pair_1')
@@ -477,55 +467,42 @@ contains
     end subroutine print_key_val_pair_1
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle, ansi_flag, latex_bold )
+    subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle, ansi_flag )
         class(chash), intent(in)      :: self
         integer,                    intent(in) :: ikey
         integer,                    intent(in) :: maxlen
         integer,                    intent(in) :: fhandle
         character(len=*), optional, intent(in) :: ansi_flag
-        logical,          optional, intent(in) :: latex_bold
         character(len=maxlen)         :: key_padded
         character(len=:), allocatable :: aansi_flag, str2print
-        logical :: latex_format
         if( present(ansi_flag) )then
             allocate(aansi_flag, source=trim(ansi_flag))
         else
             allocate(aansi_flag, source=C_WHITE)
         endif
-        latex_format = present(latex_bold)
         key_padded   = trim(self%keys(ikey)%str)
         do while(len(key_padded) < maxlen)
             key_padded = trim(key_padded)//' '
         end do
-        if( latex_format )then
-            if( latex_bold )then
-                allocate(str2print, source='+textbf['//key_padded//' = '//trim(self%values(ikey)%str)//']')
-            else
-                allocate(str2print, source=key_padded//' = '//trim(self%values(ikey)%str))
-            endif
-        else
-            allocate(str2print, source=format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag))
-        endif
+        allocate(str2print, source=format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag))
         write(fhandle, '(a,1x,a)') str2print
     end subroutine print_key_val_pair_2
 
     !>  \brief  pretty printing of all key-value  pairs
-    subroutine print_key_val_pairs( self, fhandle, keys2print, mask, latex )
+    subroutine print_key_val_pairs( self, fhandle, keys2print, mask )
         class(chash),               intent(in) :: self
         integer,                    intent(in) :: fhandle
         character(len=*), optional, intent(in) :: keys2print(:)
         logical,          optional, intent(in) :: mask(:) ! mask true -> C_BOLD
-        logical,          optional, intent(in) :: latex
         logical, allocatable :: mmask(:)
-        logical :: present_mask, llatex
+        logical :: present_mask
         integer :: maxlen, ikey, sz, keylen
         maxlen  = 0
         ikey    = 0
         sz      = 0
         keylen  = 0
         present_mask = present(mask)
-        llatex  = .false.
-        if( present(latex) ) llatex = latex
+
         if( present(keys2print) )then
             sz = size(keys2print)
             if( present_mask )then
@@ -542,14 +519,10 @@ contains
             end do
             ! print selected key-value pairs
             do ikey=1,sz
-                if( llatex )then
-                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, latex_bold=mmask(ikey))
+                if( mmask(ikey) )then
+                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, ansi_flag=C_BOLD)
                 else
-                    if( mmask(ikey) )then
-                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, ansi_flag=C_BOLD)
-                    else
-                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle)
-                    endif
+                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle)
                 endif
             end do
         else
@@ -568,14 +541,10 @@ contains
                 end do
                 ! print all key-value pairs
                 do ikey=1,self%chash_index
-                    if( llatex )then
-                        call self%print_key_val_pair_2(ikey, maxlen, fhandle, latex_bold=mmask(ikey))
+                    if( mmask(ikey) )then
+                        call self%print_key_val_pair_2(ikey, maxlen, fhandle, ansi_flag=C_BOLD)
                     else
-                        if( mmask(ikey) )then
-                            call self%print_key_val_pair_2(ikey, maxlen, fhandle, ansi_flag=C_BOLD)
-                        else
-                            call self%print_key_val_pair_2(ikey, maxlen, fhandle)
-                        endif
+                        call self%print_key_val_pair_2(ikey, maxlen, fhandle)
                     endif
                 end do
             endif

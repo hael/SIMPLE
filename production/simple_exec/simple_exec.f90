@@ -179,6 +179,7 @@ type(cmdline)                               :: cline
 integer                                     :: cmdstat, cmdlen, pos
 integer(timer_int_kind)                     :: t0
 real(timer_int_kind)                        :: rt_exec
+logical                                     :: l_silent
 
 ! start timer
 t0 = tic()
@@ -198,7 +199,7 @@ endif
 call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, trim(prg), 'simple_exec')
-
+l_silent = .false.
 select case(trim(prg))
 
     ! PROJECT MANAGEMENT PROGRAMS
@@ -208,8 +209,10 @@ select case(trim(prg))
         call xupdate_project%execute(cline)
     case( 'print_project_info' )
         call xprint_project_info%execute(cline)
+        l_silent = .true.
     case( 'print_project_field' )
         call xprint_project_field%execute(cline)
+         l_silent = .true.
     case( 'zero_project_shifts' )
         call xzero_project_shifts%execute(cline)
     case( 'import_movies' )
@@ -438,10 +441,13 @@ select case(trim(prg))
         call xinfo_stktab%execute(cline)
     case( 'print_fsc' )
         call xprint_fsc%execute(cline)
+        l_silent = .true.
     case( 'print_magic_boxes' )
         call xprint_magic_boxes%execute(cline)
+        l_silent = .true.
     case( 'print_dose_weights' )
         call xprint_dose_weights%execute(cline)
+        l_silent = .true.
 
     ! SIMULATOR PROGRAMS
     case( 'simulate_noise' )
@@ -493,8 +499,10 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('c2431c5b')
-! end timer and print
-rt_exec = toc(t0)
-call simple_print_timer(rt_exec)
+if( .not. l_silent )then
+    call simple_print_git_version('796fdac9')
+    ! end timer and print
+    rt_exec = toc(t0)
+    call simple_print_timer(rt_exec)
+endif
 end program simple_exec
