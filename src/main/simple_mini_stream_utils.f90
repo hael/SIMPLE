@@ -48,9 +48,9 @@ contains
         ! set logical dimensions
         ldim_raw = mic_raw%get_ldim()
         ldim     = mic_shrink%get_ldim()
-        allocate(mic_den_names(nmics), mic_topo_names(nmics), mic_bin_names(nmics))
+        allocate(mic_den_names(mic_to), mic_topo_names(mic_to), mic_bin_names(mic_to))
         ! diameter estimation
-        do imic = 1, nmics
+        do imic = 1, mic_to
             ! Segmentation & picking
             mic_den_names(imic)  = append2basename(micnames(imic), DEN_SUFFIX)
             mic_topo_names(imic) = append2basename(micnames(imic), TOPO_SUFFIX)
@@ -119,7 +119,7 @@ contains
         mskdiam = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, mskdiam)
         print *, 'msk diam: ', mskdiam
         ! re-pick with diameter constraints applied
-        do imic = 1, nmics
+        do imic = 1, mic_to
             boxfile = basename(fname_new_ext(trim(micnames(imic)),'box'))
             call picker%pick(ldim_raw, smpd, mic_bin_names(imic), [diam_stats%minv,diam_stats%maxv])
             call picker%write_pos_and_diams(boxfile, nptcls, box_in_pix)
