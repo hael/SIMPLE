@@ -117,24 +117,30 @@ contains
         endif
     end subroutine exec_gaupick
 
-    subroutine exec_refpick( micname, boxfile_out, smpd, nptcls, pickrefs, dir_out, nboxes_max )
+    subroutine exec_refpick( micname, boxfile_out, thumb_den_out, smpd, nptcls, pickrefs, dir_out, nboxes_max )
         use simple_strings, only: str2real, parsestr
         character(len=*),           intent(in)    :: micname
-        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
+        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out, thumb_den_out
         real,                       intent(in)    :: smpd    !< sampling distance in A
         integer,                    intent(out)   :: nptcls
         class(image),     optional, intent(inout) :: pickrefs(:)
         character(len=*), optional, intent(in)    :: dir_out
         integer,          optional, intent(in)    :: nboxes_max
-        type(pickref)             :: refp, refp_refine
-        character(len=LONGSTRLEN) :: boxfile
+        type(pickref)                  :: refp, refp_refine
+        character(len=LONGSTRLEN)      :: boxfile
+        character(len=:),  allocatable :: fbody_here, ext, fname_thumb_den
         real    :: maxdiam
         integer :: box
         logical :: l_roi, l_backgr_subtr
-        boxfile = basename(fname_new_ext(trim(micname),'box'))
-        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
-        l_roi          = trim(params_glob%pick_roi).eq.'yes'
-        l_backgr_subtr = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
+        fbody_here      = basename(trim(micname))
+        ext             = fname2ext(trim(fbody_here))
+        fbody_here      = get_fbody(trim(fbody_here), trim(ext))
+        fname_thumb_den = trim(adjustl(fbody_here))//DEN_SUFFIX//trim(JPG_EXT)
+        boxfile         = basename(fname_new_ext(trim(micname),'box'))
+        if( present(dir_out) ) boxfile         = trim(dir_out)//'/'//trim(boxfile)
+        if( present(dir_out) ) fname_thumb_den = trim(dir_out)//'/'//trim(fname_thumb_den)
+        l_roi           = trim(params_glob%pick_roi).eq.'yes'
+        l_backgr_subtr  = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
         call read_mic_raw_pickref(micname, smpd, subtr_backgr=l_backgr_subtr)
         if( present(nboxes_max) )then
             call refp%new(params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params_glob%nboxes_max)
@@ -147,10 +153,13 @@ contains
         maxdiam = refp%get_maxdiam() + refp%get_maxdiam() * BOX_EXP_FAC
         box     = find_larger_magic_box(round2even(maxdiam / smpd))
         call refp_refine%report_boxfile(box, smpd, boxfile, nptcls)
+        call refp%report_thumb_den(fname_thumb_den)
         if( nptcls == 0 )then
-            boxfile_out = ''
+            boxfile_out   = ''
+            thumb_den_out = ''
         else
-            boxfile_out = simple_abspath(boxfile)
+            boxfile_out   = simple_abspath(boxfile)
+            thumb_den_out = simple_abspath(fname_thumb_den)
         endif
         call refp%kill
         call refp_refine%kill

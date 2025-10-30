@@ -917,7 +917,7 @@ contains
         type(picker_iter)             :: piter
         type(ori)                     :: o
         character(len=:), allocatable :: output_dir, intg_name, imgkind
-        character(len=LONGSTRLEN)     :: boxfile
+        character(len=LONGSTRLEN)     :: boxfile, thumb_den
         integer                       :: fromto(2), imic, ntot, nptcls_out, cnt, state
         real                          :: moldiam_opt
         call cline%set('oritype', 'mic')
@@ -954,11 +954,12 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
-                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, nptcls_out, moldiam_opt=moldiam_opt)
+                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, thumb_den, nptcls_out, moldiam_opt=moldiam_opt)
                 if( params_glob%nmoldiams > 1 )then
                     call spproj%os_mic%set(imic, 'moldiam', moldiam_opt)
                 else
                     call spproj%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                    call spproj%os_mic%set(imic, 'thumb_den', thumb_den)
                 endif
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
@@ -2079,7 +2080,7 @@ contains
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
-        character(len=LONGSTRLEN)     :: boxfile
+        character(len=LONGSTRLEN)     :: boxfile, thumb_den
         real    :: moldiam_opt
         integer :: fromto(2), imic, ntot, state, nvalid, i, nptcls
         logical :: l_extract, l_multipick
@@ -2161,10 +2162,11 @@ contains
             if( .not.file_exists(micname)) cycle
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
-            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, nptcls, moldiam_opt=moldiam_opt)
+            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, thumb_den, nptcls, moldiam_opt=moldiam_opt)
             call o_mic%set('nptcls', nptcls)
             if( nptcls > 0 )then
                 call o_mic%set('boxfile', trim(boxfile))
+                call o_mic%set('thumb_den', thumb_den)
                 if( l_multipick ) call o_mic%set('moldiam', moldiam_opt)
             else
                 call o_mic%set_state(0)

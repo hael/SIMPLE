@@ -30,7 +30,7 @@ type pickgau
     real                     :: dist_thres  = 0., refine_dist_thres = 0.
     integer                  :: ldim(3), ldim_box(3), ldim_raw_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
-    integer                  :: peak_thres_level = 2, nboxes_max = 0
+    integer                  :: peak_thres_level = 2
     character(len=STDLEN)    :: kind='none'
     ! peak stats
     real                     :: smd_corr = 0., ksstat_corr = 0., prob_corr = 0.
@@ -745,11 +745,6 @@ contains
             self%box_scores = -1.
         end where
         !$omp end parallel workshare
-        if( self%nboxes_max > 0 .and. count(self%box_scores >= self%t) > self%nboxes_max )then
-            tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
-            call detect_peak_thres_for_npeaks(size(tmp), self%nboxes_max, tmp, self%t)
-            deallocate(tmp)
-        endif
         self%npeaks = count(self%box_scores >= self%t)
         if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
     end subroutine remove_outliers
