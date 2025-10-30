@@ -1,5 +1,11 @@
 let lastinteraction = Date.now();
 
+submitUpdate = (element, event) => {
+  if(event.key === 'Enter') {
+    element.form.submit()       
+  }
+}
+
 enableDatasetRename = () => {
     const datasetrename = document.querySelector("#datasetrename")
     datasetrename.disabled = false

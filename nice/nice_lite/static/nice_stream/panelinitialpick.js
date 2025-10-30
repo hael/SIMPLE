@@ -118,12 +118,12 @@ hideMenu = () => {
 
 updateBrightness = (element) => {
   var cssroot = document.querySelector(':root');
-  cssroot.style.setProperty('--preprocess-brightness', element.value / 100);
+  cssroot.style.setProperty('--inipick-brightness', element.value / 100);
 }
 
 updateContrast = (element) => {
   var cssroot = document.querySelector(':root');
-  cssroot.style.setProperty('--preprocess-contrast', element.value / 100);
+  cssroot.style.setProperty('--inipick-contrast', element.value / 100);
 }
 
 updateScale = (element) => {
@@ -148,8 +148,8 @@ updateScale = (element) => {
 
 window.addEventListener("load", () => {
   var cssroot = document.querySelector(':root');
-  cssroot.style.setProperty('--preprocess-contrast',   1.0);
-  cssroot.style.setProperty('--preprocess-brightness', 1.0);
+  cssroot.style.setProperty('--inipick-contrast',   1.0);
+  cssroot.style.setProperty('--inipick-brightness', 0.5);
 })
 
 /* draw boxes on load */

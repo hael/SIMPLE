@@ -36,7 +36,7 @@
                 <div class="flex">
                     <form method="POST" action={% url 'nice_lite:update_workspace_name' %} target="_parent">
                         {% csrf_token %}
-                        <input id="workspacerename" name="new_workspace_name" value="{{ current_workspace_name }}" onblur="this.form.submit()" disabled></input>
+                        <input id="workspacerename" name="new_workspace_name" value="{{ current_workspace_name }}" onblur="this.form.submit()" onkeydown="submitUpdate(this, event)" disabled></input>
                     </form>
                     <div class="scale-80" onclick="enableWorkspaceRename()">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">

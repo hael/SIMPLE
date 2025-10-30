@@ -246,8 +246,8 @@ class StreamViewGeneratePickrefs:
         
     def render(self):
         # sort cls2D on pop
-        if "latest_cls2D" in self.job.generate_pickrefs_stats:
-            self.job.generate_pickrefs_stats["latest_cls2D"] = sorted(self.job.generate_pickrefs_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
+     #   if "latest_cls2D" in self.job.generate_pickrefs_stats:
+     #       self.job.generate_pickrefs_stats["latest_cls2D"] = sorted(self.job.generate_pickrefs_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
         context = {
             "jobid"     : self.job.id,
             "displayid" : self.job.disp,

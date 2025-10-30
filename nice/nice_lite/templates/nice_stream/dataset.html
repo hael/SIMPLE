@@ -199,7 +199,7 @@
                 <div class="flex">
                     <form method="POST" action={% url 'nice_lite:update_dataset_name' %} target="_parent">
                         {% csrf_token %}
-                        <input id="datasetrename" name="new_dataset_name" value="{{ current_dataset_name }}" onblur="this.form.submit()" disabled></input>
+                        <input id="datasetrename" name="new_dataset_name" value="{{ current_dataset_name }}" onblur="this.form.submit()" onkeydown="submitUpdate(this, event)" disabled></input>
                     </form>
                     <div class="scale-80" onclick="enableDatasetRename()">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -213,7 +213,7 @@
                 <div class="font-bold">modified</div>
                 <div>{{ modified }}</div>
                 <div class="font-bold">created by</div>
-                <div>{{user}}</div>
+                <div>{{ user }}</div>
                 <div class="font-bold">location</div>
                 <div>{{ folder }}</div>
                 <div class="font-bold">description</div>

@@ -214,9 +214,11 @@ window.addEventListener("load", () =>{
                                 value: savedidx,
                                 z : 10,
                                 enter(element){
+                                    ctfres_histogram.style.cursor = 'grab'; 
                                     return true;
                                 },
                                 leave(element){
+                                    ctfres_histogram.style.cursor = 'default'; 
                                     return true;
                                 }
                             },
@@ -336,9 +338,11 @@ window.addEventListener("load", () =>{
                                 value: savedidx,
                                 z : 10,
                                 enter(element){
+                                    astig_histogram.style.cursor = 'grab'; 
                                     return true;
                                 },
                                 leave(element){
+                                    astig_histogram.style.cursor = 'default'; 
                                     return true;
                                 }
                             },
@@ -458,9 +462,11 @@ window.addEventListener("load", () =>{
                                 value: savedidx,
                                 z : 10,
                                 enter(element){
+                                    icescore_histogram.style.cursor = 'grab'; 
                                     return true;
                                 },
                                 leave(element){
+                                    icescore_histogram.style.cursor = 'default'; 
                                     return true;
                                 }
                             },
