@@ -2138,7 +2138,7 @@ contains
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                      parameter   :: LPSTOP = 8.
         integer,                   allocatable :: final_selection(:), final_boxsize(:)
-        integer                                :: nprojects, iori, i, j, imap, nptcls, ncls, nthr2D, box_in_pix
+        integer                                :: nprojects, iori, i, j, imap, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
         integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk
         logical                                :: found
         real                                   :: mskdiam_estimate, smpd_stk
@@ -2240,9 +2240,7 @@ contains
         call xshape_rank%execute_safe(cline_shape_rank)
         call spproj%read(PROJFILE_GEN_PICKREFS)
         call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
-        
         call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
-        
         ! send generate pickrefs display info to gui
         xtile = 0
         ytile = 0
@@ -2277,7 +2275,7 @@ contains
             if(found) then
                 call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
                 if(found) then
-                    call write_selected_references(final_selection_source, final_selection, xtiles, ytiles, params%smpd)
+                    call process_selected_references(final_selection_source, params%smpd, final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
                     xtile = 0
                     ytile = 0
                     do i=0, size(final_selection) - 1

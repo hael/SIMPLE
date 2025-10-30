@@ -1,12 +1,7 @@
 ! stack image processing routines for SPIDER/MRC files and other useful img jiffys
 module simple_imgproc
 include 'simple_lib.f08'
-use simple_cmdline,        only: cmdline
-use simple_default_clines, only: set_automask2D_defaults
-use simple_image,          only: image
-use simple_masker,         only: automask2D
-use simple_parameters,     only: parameters
-use simple_stack_io,       only: stack_io
+use simple_image, only: image
 implicit none
 #include "simple_local_flags.inc"
 
@@ -103,44 +98,5 @@ contains
             pcavec(:,i) = pcavec(:,i) - avg
         enddo
     end subroutine make_pcavol
-
-    subroutine mrc2mskdiam( mrcfile, smpd, mskdiam, box_for_pick, box_for_extract )
-        character(len=*), intent(in)  :: mrcfile
-        real,             intent(in)  :: smpd
-        real,             intent(out) :: mskdiam
-        integer,          intent(out) :: box_for_pick, box_for_extract
-        type(parameters)         :: params
-        type(stack_io)           :: stkio_r
-        type(image)              :: ref2D, ref2D_clip
-        type(cmdline)            :: cline
-        type(image), allocatable :: masks(:)
-        real,        allocatable :: diams(:), shifts(:,:)
-        real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
-        integer, parameter :: NREFS=100
-        real    :: diam_max, maxdiam
-        integer :: ldim(3), ncavgs, icavg
-        call cline%set('pickrefs', trim(mrcfile))
-        call cline%set('smpd',     smpd)
-        ! set defaults
-        call set_automask2D_defaults(cline)
-        ! parse parameters
-        call params%new(cline)
-        ! read selected cavgs
-        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs)
-        ldim(3) = 1
-        params%msk = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
-        ! read
-        allocate( masks(ncavgs) )
-        call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
-        do icavg = 1, ncavgs
-            call stkio_r%read(icavg, masks(icavg))
-        end do
-        call stkio_r%close
-        call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
-        box_for_pick    = min(round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH), ldim(1))
-        mskdiam         = params%smpd * box_for_pick
-        maxdiam         = mskdiam + mskdiam * BOX_EXP_FAC
-        box_for_extract = find_larger_magic_box(round2even(maxdiam / params%smpd))
-    end subroutine mrc2mskdiam
 
 end module simple_imgproc
