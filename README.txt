@@ -203,6 +203,22 @@ $cat add2.bashrc >> ~/.zshrc
 $source add2.bashrc
 $nice_local
 
+--------------------------------
+TO UPDATE THE CODE
+
+	1.	Go to the SIMPLE directory and clear out local changes
+$cd ~/SIMPLE
+$git stash
+$git stash clear
+	2.	Pull new code
+$git pull
+	3.	Install new code
+$cd build
+$make -j install
+	4.	Start the SERVER again – username and password are in the log to window
+$source add2.bashrc
+$nice_local
+
 *********************************************************************************
 
 
