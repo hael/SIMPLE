@@ -161,3 +161,49 @@ $ ./bootstrap.sh --prefix=/usr/local --enable-single
 $ make -j
 $ sudo make install
 $ make distclean
+
+************************************************************************
+INSTALLING ON A MAC THAT HASN'T HAD ANY SOFTWARE INSTALLED ON IT BEFORE
+
+
+	1.	Install homebrew
+$/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+Add brew to your path
+	2.	Install fftw and libraries
+$curl -o fftw-3.3.8.tar.gz http://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
+$tar zxvf fftw-3.3.8.tar.gz
+build double precision and threaded libraries:
+$cd fftw-3.8.8
+$./bootstrap.sh –prefix=/usr/local 
+$make -j
+$sudo make install
+$make distclean
+Now build-single precision libraries:
+$./bootstrap.sh –prefix=/usr/local –enable-single
+$make -j
+$sudo make install
+$make distclean
+$cd ..
+	3.	Install git, gcc, libtiff, jbigkit and cmake – make sure you have a python version higher than 3.10 
+$brew install git
+$brew install cmake
+$brew install gcc
+$brew install libtiff
+$brew install jbigkit
+$brew install python@3.10
+	4.	Pull and install SIMPLE
+$git clone https://github.com/hael/SIMPLE.git
+$cd SIMPLE
+$mkdir build
+$cd build
+$cmake -D NICE=yes ..
+$make -j install
+$cat add2.bashrc >> ~/.zshrc
+	5.	Start the SERVER – username and password are in the log to window
+$source add2.bashrc
+$nice_local
+
+*********************************************************************************
+
+
+
