@@ -12,7 +12,7 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
+real,    parameter :: GAUSIG = 2.5, NDEV_DEFAULT = 2.5
 real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
 logical, parameter :: L_WRITE  = .false.
@@ -367,7 +367,7 @@ contains
             self%ldim_box(1)     = round2even(self%maxdiam / self%smpd_shrink)
             self%ldim_box(2)     = self%ldim_box(1)
             self%ldim_box(3)     = 1
-            maxdiam_max          = moldiam_max + moldiam_max * BOX_EXP_FAC    ! iteration bounds based on maximum box size
+            maxdiam_max          = moldiam_max + moldiam_max * BOX_EXP_FAC ! iteration bounds based on maximum box size
             box_max              = round2even(maxdiam_max / self%smpd_shrink) ! iteration bounds based on maximum box size
         endif
         self%nx = self%ldim(1) - box_max
@@ -1120,7 +1120,7 @@ contains
                 src = 2.0
             endif
             ! to account for tight box
-            box = find_larger_magic_box( nint(params_glob%box_exp_factor*real(box_raw)) )
+            box = find_larger_magic_box( nint(BOX_EXP_FAC*real(box_raw)) )
             if( box /= box_raw ) pos = nint(real(pos) - real(box-box_raw)/2.)
             ! write
             do j = 1,npos

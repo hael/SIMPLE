@@ -9,19 +9,6 @@ use simple_nanoparticle,   only: nanoparticle
 use simple_nanoparticle_utils
 use simple_atoms,          only: atoms
 implicit none
-
-public :: commander_atoms_stats
-public :: commander_atoms_register
-public :: commander_conv_atom_denoise
-public :: commander_detect_atoms
-public :: commander_map2model_fsc
-public :: commander_map_validation
-public :: commander_model_validation
-public :: commander_model_validation_eo
-public :: commander_pdb2mrc
-public :: commander_tseries_atoms_rmsd
-public :: commander_tseries_core_atoms_analysis
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_atoms_stats

@@ -17,27 +17,6 @@ use simple_qsys_funs
 use simple_progress
 implicit none
 #include "simple_local_flags.inc"
-! public :: commander_preprocess_distr
-! public :: commander_preprocess
-! public :: commander_motion_correct_distr
-! public :: commander_motion_correct
-! public :: commander_gen_pspecs_and_thumbs_distr
-! public :: commander_gen_pspecs_and_thumbs
-! public :: commander_ctf_estimate_distr
-! public :: commander_ctf_estimate
-! public :: commander_map_cavgs_selection
-! public :: commander_map_cavgs_states
-! public :: commander_pick_distr
-! public :: commander_pick
-! public :: commander_extract_distr
-! public :: commander_extract
-! public :: commander_extract_distr
-! public :: commander_reextract
-! public :: commander_pick_extract
-! public :: commander_make_pickrefs
-! public :: commander_shape_rank_cavgs
-! private
-
 
 type, extends(commander_base) :: commander_preprocess_distr
   contains

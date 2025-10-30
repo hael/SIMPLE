@@ -132,7 +132,6 @@ type(commander_uniform_filter2D)            :: xuniform_filter2D
 type(commander_uniform_filter3D)            :: xuniform_filter3D
 type(commander_icm2D)                       :: xicm2D
 type(commander_icm3D)                       :: xicm3D
-type(commander_make_pickrefs)               :: xmake_pickrefs
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(commander_check_states)                :: xcheck_states
@@ -417,8 +416,6 @@ select case(trim(prg))
         call xicm2D%execute(cline)
     case( 'icm3D' )
         call xicm3D%execute(cline)
-    case( 'make_pickrefs' )
-        call xmake_pickrefs%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
     case( 'check_states' )
@@ -500,7 +497,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('60c7c486')
+    call simple_print_git_version('9ed7b392')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

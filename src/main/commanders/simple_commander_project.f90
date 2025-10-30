@@ -13,31 +13,7 @@ use simple_qsys_env,       only: qsys_env
 use simple_stream_communicator
 use simple_nice
 use simple_qsys_funs
-
 implicit none
-
-public :: commander_new_project
-public :: commander_print_project_info
-public :: commander_print_project_vals
-public :: commander_print_project_field
-public :: commander_update_project
-public :: commander_zero_project_shifts
-public :: commander_import_movies
-public :: commander_import_boxes
-public :: commander_import_particles
-public :: commander_import_cavgs
-public :: commander_export_cavgs
-public :: commander_sample_classes
-public :: commander_selection
-public :: commander_replace_project_field
-public :: commander_scale_project_distr
-public :: commander_projops
-public :: commander_prune_project_distr
-public :: commander_prune_project
-public :: commander_merge_projects
-public :: split_commander_stack
-public :: commander_write_mic_filetab
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_new_project

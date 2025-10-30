@@ -13,21 +13,6 @@ use simple_masker,         only: masker
 use simple_projector,      only: projector
 use simple_dock_vols,      only: dock_vols
 implicit none
-
-public :: commander_centervol
-public :: commander_dock_volpair
-public :: commander_noisevol
-public :: commander_postprocess
-public :: commander_ppca_volvar
-public :: commander_reproject
-public :: commander_sharpvol
-public :: commander_symaxis_search
-public :: commander_symmetrize_map
-public :: commander_symmetry_test
-public :: commander_volanalyze
-public :: commander_volops
-
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_centervol

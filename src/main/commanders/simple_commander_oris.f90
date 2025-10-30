@@ -8,15 +8,6 @@ use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 implicit none
-
-public :: commander_check_states
-public :: commander_make_oris
-public :: commander_orisops
-public :: commander_oristats
-public :: commander_oriconsensus
-public :: commander_rotmats2oris
-public :: commander_vizoris
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_make_oris

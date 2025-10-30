@@ -6,16 +6,14 @@ use simple_sp_project,     only: sp_project
 use simple_relion,         only: relion_project
 use simple_parameters,     only: parameters, params_glob
 implicit none
-
-public :: commander_export_relion
-private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_export_relion
 contains
     procedure :: execute      => exec_export_relion
 end type commander_export_relion
 
-#include "simple_local_flags.inc"
+
 contains
 
     subroutine exec_export_relion( self, cline )

@@ -190,7 +190,7 @@ contains
         if( present(box) )then
             box_here = box
         else
-            box_here = round2even(BOX_EXP_FACTOR_DEFAULT*self%moldiam_max)
+            box_here = round2even(BOX_EXP_FAC*self%moldiam_max)
         endif
         allocate(diams(nptcls),source=0.)
         call self%get_diameters(diams)

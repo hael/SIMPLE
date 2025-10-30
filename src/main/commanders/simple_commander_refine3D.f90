@@ -17,16 +17,6 @@ use simple_exec_helpers,     only: set_master_num_threads
 use simple_commanders_euclid
 use simple_qsys_funs
 implicit none
-
-public :: nspace_commander
-public :: commander_refine3D_auto
-public :: commander_refine3D_distr
-public :: commander_refine3D
-public :: estimate_first_sigmas_commander
-public :: commander_check_3Dconv
-public :: commander_prob_tab
-public :: commander_prob_align
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: nspace_commander

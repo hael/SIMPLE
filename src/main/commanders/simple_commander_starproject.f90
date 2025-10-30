@@ -9,11 +9,6 @@ use simple_parameters,     only: parameters, params_glob
 use simple_jiffys,         only: simple_end
 use simple_nice
 implicit none
-
-public :: commander_import_starproject
-public :: commander_export_starproject
-public :: commander_assign_optics_groups
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_import_starproject

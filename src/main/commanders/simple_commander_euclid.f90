@@ -10,12 +10,6 @@ use simple_euclid_sigma2,    only: write_groups_starfile
 use simple_image,            only: image
 use simple_qsys_funs
 implicit none
-
-public :: commander_calc_pspec_distr
-public :: commander_calc_pspec
-public :: commander_calc_pspec_assemble
-public :: commander_calc_group_sigmas
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_calc_pspec_distr
@@ -42,8 +36,6 @@ type :: sigma_array
     character(len=:), allocatable :: fname
     real,             allocatable :: sigma2(:,:)
 end type sigma_array
-
-character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
 
 contains
 

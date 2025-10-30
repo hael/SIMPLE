@@ -11,22 +11,6 @@ use simple_stack_io,       only: stack_io
 use simple_strategy2D_utils
 use simple_nice
 implicit none
-
-public :: commander_binarize
-public :: commander_edge_detect
-public :: commander_convert
-public :: commander_ctfops
-public :: commander_ctf_phaseflip
-public :: commander_filter
-public :: commander_ppca_denoise
-public :: commander_normalize
-public :: commander_scale
-public :: commander_stack
-public :: commander_stackops
-public :: commander_cluster_stack
-public :: commander_match_stacks
-public :: estimate_diam_commander
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_binarize

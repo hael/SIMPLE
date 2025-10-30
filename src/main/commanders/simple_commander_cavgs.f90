@@ -11,13 +11,6 @@ use simple_image,          only: image
 use simple_stack_io,       only: stack_io
 use simple_strategy2D_utils
 implicit none
-
-public :: commander_rank_cavgs
-public :: commander_cluster_cavgs
-public :: commander_select_clusters
-public :: commander_match_cavgs
-public :: commander_match_cavgs2afm
-private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_rank_cavgs

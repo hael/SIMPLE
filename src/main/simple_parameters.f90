@@ -410,7 +410,6 @@ type :: parameters
     real    :: athres=10.          !< angular threshold(in degrees)
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
-    real    :: box_exp_factor=BOX_EXP_FACTOR_DEFAULT !< multiplication factor to image size as determined by multi-diameter picking{1.2}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
@@ -956,7 +955,6 @@ contains
         call check_rarg('athres',         self%athres)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
-        call check_rarg('box_exp_factor', self%box_exp_factor)
         call check_rarg('bw_ratio',       self%bw_ratio)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
