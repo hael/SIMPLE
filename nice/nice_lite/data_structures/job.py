@@ -456,14 +456,12 @@ class Job:
             jobmodel.initial_picking_stats = self.initial_picking_stats
             jobmodel.save()
 
-    def select_refs_generate_pickrefs(self, final_selection, final_selection_source, final_selection_boxsize, final_selection_mskdiam):
+    def select_refs_generate_pickrefs(self, final_selection, final_selection_source):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:
             updated = jobmodel.generate_pickrefs_update
             updated["final_selection"]         = final_selection
             updated["final_selection_source"]  = final_selection_source
-            updated["final_selection_boxsize"] = final_selection_boxsize
-            updated["final_selection_mskdiam"] = final_selection_mskdiam
             updated["terminate"]               = True
             jobmodel.generate_pickrefs_update  = updated
             self.generate_pickrefs_stats["user_input"] = False

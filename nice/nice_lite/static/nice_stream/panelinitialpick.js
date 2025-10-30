@@ -172,6 +172,32 @@ window.addEventListener("load", () =>{
     }
 },false);
 
+/* draw boxes on load */
+window.addEventListener("load", () =>{
+    for(const miccontainer of document.getElementsByClassName("miccontainer")){
+      const box_overlay = miccontainer.querySelector('.boxes-overlay')
+      const xdim = Number(miccontainer.dataset.xdim)
+      const ydim = Number(miccontainer.dataset.ydim)
+      let scale  = 1
+      if(xdim > ydim){
+        scale = box_overlay.width  / Number(miccontainer.dataset.xdim)
+      }else{
+        scale = box_overlay.height  / Number(miccontainer.dataset.ydim)
+      }
+      // account for rectangular images
+      var yoffset = (box_overlay.height - (scale * Number(miccontainer.dataset.ydim))) / 2
+      var xoffset = (box_overlay.width  - (scale * Number(miccontainer.dataset.xdim))) / 2
+      const boxes = JSON.parse(miccontainer.dataset.boxes.replaceAll("'", '"'))
+      const ctx = box_overlay.getContext("2d");
+      for(const box of boxes){
+        ctx.strokeStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc((box["x"] * scale) + xoffset, (box["y"] * scale) + yoffset, 1, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+},false);
+
 window.addEventListener("load", () =>{
     for(const micrographs_pie_chart of document.getElementsByClassName("micrographs_pie_chart")){
         const ctx = micrographs_pie_chart.getContext("2d");

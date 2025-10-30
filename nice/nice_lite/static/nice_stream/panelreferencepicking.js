@@ -14,20 +14,6 @@ stopProcess = (element) => {
   }
 }
 
-scrlRight = () => {
-  const micrograph_slider = document.getElementById("picking_references")
-  const rect = micrograph_slider.getBoundingClientRect();
-  micrograph_slider.scrollLeft += rect.width;
-  lastinteraction = Date.now();
-}
-
-scrlLeft = () => {
-  const micrograph_slider = document.getElementById("picking_references")
-  const rect = micrograph_slider.getBoundingClientRect();
-  micrograph_slider.scrollLeft -= rect.width;
-  lastinteraction = Date.now();
-}
-
 scrlMicRight = () => {
   const micrograph_slider = document.getElementById("micrographs_slider")
   const rect = micrograph_slider.getBoundingClientRect();
@@ -97,12 +83,12 @@ hideMenu = () => {
 
 updateBrightness = (element) => {
   var cssroot = document.querySelector(':root');
-  cssroot.style.setProperty('--preprocess-brightness', element.value / 100);
+  cssroot.style.setProperty('--refpick-brightness', element.value / 100);
 }
 
 updateContrast = (element) => {
   var cssroot = document.querySelector(':root');
-  cssroot.style.setProperty('--preprocess-contrast', element.value / 100);
+  cssroot.style.setProperty('--refpick-contrast', element.value / 100);
 }
 
 updateScale = (element) => {
@@ -130,22 +116,31 @@ updateScale = (element) => {
 
 window.addEventListener("load", () => {
   var cssroot = document.querySelector(':root');
-  cssroot.style.setProperty('--preprocess-contrast',   1.0);
-  cssroot.style.setProperty('--preprocess-brightness', 1.0);
+  cssroot.style.setProperty('--refpick-contrast',   1.0);
+  cssroot.style.setProperty('--refpick-brightness', 0.5);
 })
 
 /* draw boxes on load */
 window.addEventListener("load", () =>{
-    for(const box_overlay of document.getElementsByClassName("boxes_overlay")){
-      const scale = box_overlay.width  / Number(box_overlay.dataset.xdim)
+    for(const miccontainer of document.getElementsByClassName("miccontainer")){
+      const box_overlay = miccontainer.querySelector('.boxes-overlay')
+      const xdim = Number(miccontainer.dataset.xdim)
+      const ydim = Number(miccontainer.dataset.ydim)
+      let scale  = 1
+      if(xdim > ydim){
+        scale = box_overlay.width  / Number(miccontainer.dataset.xdim)
+      }else{
+        scale = box_overlay.height  / Number(miccontainer.dataset.ydim)
+      }
       // account for rectangular images
-      var yoffset = (box_overlay.height - (scale * Number(box_overlay.dataset.ydim))) / 2
-      const boxes = JSON.parse(box_overlay.dataset.boxes.replaceAll("'", '"'))
+      var yoffset = (box_overlay.height - (scale * Number(miccontainer.dataset.ydim))) / 2
+      var xoffset = (box_overlay.width  - (scale * Number(miccontainer.dataset.xdim))) / 2
+      const boxes = JSON.parse(miccontainer.dataset.boxes.replaceAll("'", '"'))
       const ctx = box_overlay.getContext("2d");
       for(const box of boxes){
         ctx.strokeStyle = "yellow";
         ctx.beginPath();
-        ctx.arc(box["x"] * scale, (box["y"] * scale) + yoffset, 0.5, 0, 2 * Math.PI);
+        ctx.arc((box["x"] * scale) + xoffset, (box["y"] * scale) + yoffset, 1, 0, 2 * Math.PI);
         ctx.stroke();
       }
     }

@@ -953,14 +953,6 @@ contains
                   !      THROW_HARD('Could not find: '//trim(params%pickrefs))
                   !  end if
                 endif
-                if(file_exists(swap_suffix(trim(params%pickrefs), TXT_EXT, STK_EXT))) then
-                    call boxsize_file%new(swap_suffix(trim(params%pickrefs), TXT_EXT, STK_EXT), 1, 1)
-                    allocate(saved_boxsize(1))
-                    call boxsize_file%readNextDataLine(saved_boxsize)
-                    call cline%set('box', int(saved_boxsize(1)))
-                    write(logfhandle,'(A)')'>>> USING SAVED BOXSIZE OF ' // int2str(int(saved_boxsize(1)))
-                    deallocate(saved_boxsize)
-                endif
                 write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
                 if( cline%defined('moldiam') )then
                     call cline%delete('moldiam')
@@ -1392,7 +1384,7 @@ contains
                     call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                  found)
                     call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,         found)
                     if(histogram_moldiams%get_nbins() .gt. 0) call http_communicator%json%update(http_communicator%job_json, "best_diam",             dble(histogram_moldiams%mean()),             found)
-                    if(spproj_glob%os_mic%isthere('thumb') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
+                    if(spproj_glob%os_mic%isthere('thumb_den') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
                     .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                         i_max = 10
                         if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
@@ -1401,7 +1393,7 @@ contains
                         call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
                         call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
                         do i_thumb=0, i_max - 1
-                            call communicator_add_micrograph(trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb"))),\
+                            call communicator_add_micrograph(trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb_den"))),\
                             100, 0, 100, 200,\
                             nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "xdim")),\
                             nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ydim")),\
@@ -2297,18 +2289,6 @@ contains
             endif
             call sleep(WAITTIME) ! may want to increase as 3s default
         enddo
-        ! write user selected boxsize to file for reference picking to use
-        call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_boxsize', user_selected_boxsize, found)
-        if(found) then
-            ! update json for gui
-            call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "selected_boxsize", user_selected_boxsize, found)
-            allocate(final_boxsize(1))
-            final_boxsize(1) = user_selected_boxsize
-            call boxsize_file%new(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // TXT_EXT, 2, 1)
-            call boxsize_file%write(final_boxsize)
-            call boxsize_file%kill()
-            deallocate(final_boxsize)
-        endif
         call send_jobstats()
         ! termination
         call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
