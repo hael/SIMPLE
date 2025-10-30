@@ -54,11 +54,14 @@ contains
         ! Prep segmentation
         call flag_amorphous_carbon(mic_shrink, picking_mask)
         nmasked = count(.not.picking_mask)
+        write(logfhandle,'(a,f5.1)')  '>>> % AMORPHOUS CARBON IDENTIFIED: ', 100. * (real(nmasked) / real(product(ldim)))
         if( real(nmasked) > 0.98 * real(product(ldim)) ) return
         call cascade_filter_biomol( mic_shrink, mic_den )
         if( present(denfname) ) call mic_den%write(denfname)
+        write(logfhandle,'(a)')  '>>> DENOISED MICROGAPH: '//trim(denfname)
         if( present(topofname) ) call mic_shrink%write(topofname)
         call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
+        write(logfhandle,'(a)')  '>>> BINARIZATION, CONNECTED COMPONENT IDENTIFICATION, DIAMETER ESTIMATION'
         if( nmasked > 0 ) call mic_bin%apply_mask(picking_mask)
         ! identify connected components
         call mic_bin%find_ccs(img_cc)
@@ -95,6 +98,7 @@ contains
         call mic_bin%kill_bimg
         call img_cc%kill_bimg
         deallocate(cc_imat, cc_imat_copy)
+        write(logfhandle,'(a)')  ''
     end subroutine pick_1
 
     subroutine pick_2( self, ldim_raw, smpd_raw, binmicname, diam_fromto )
@@ -123,6 +127,7 @@ contains
         ! gather size info
         call img_cc%get_imat(cc_imat)
         call img_cc%get_imat(cc_imat_copy)
+        write(logfhandle,'(a)')  '>>> RE-ESTIMATION OF CONNECTED COMPONENT MASS CENTERS & SIZE EXCLUSION'
         do icc = 1, nccs
             call img_cc%diameter_cc(icc, diam)
             diam_adj = diam + 2. * SMPD_SHRINK1 ! becasue of the 2X erosion
