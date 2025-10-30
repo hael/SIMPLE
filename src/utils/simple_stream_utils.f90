@@ -1309,13 +1309,12 @@ contains
         integer,      intent(inout) :: nxtiles, nytiles
         type(parameters)            :: params
         type(cmdline)               :: cline
-        type(image)                 :: img
         type(stack_io)              :: stkio_r, stkio_w
         type(image), allocatable    :: cavgs(:)
         real,        allocatable    :: diams(:), shifts(:,:)
         real,        parameter      :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
-        real    :: diam_max, maxdiam, mskrad_in_pix
-        integer :: ldim(3), ncavgs, icavg, icls, stat, ncls
+        real    :: maxdiam, mskrad_in_pix
+        integer :: ldim(3), icavg, icls, stat, ncls
         if(size(selection) == 0) return
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', size(selection),' clusters'
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
@@ -1327,17 +1326,17 @@ contains
         call params%new(cline)
         call find_ldim_nptcls(imgfile, ldim, ncls)
         params%msk = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
-        call img%new([ldim(1), ldim(2), 1], params%smpd)
-        allocate( cavgs(ncavgs) )
+        allocate( cavgs(size(selection)) )
         call stkio_r%open(imgfile, params%smpd, 'read', bufsz=ncls)
         call stkio_r%read_whole
         do icls=1, size(selection)
+            call cavgs(icls)%new([ldim(1),ldim(2),1], params%smpd)
             call stkio_r%get_image(selection(icls), cavgs(icls))
         end do
         call automask2D(cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
-        box_for_pick    = min(round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH), ldim(1))
+        box_for_pick    = min(round2even(maxval(diams) / params%smpd + 2. * COSMSKHALFWIDTH), ldim(1))
         mskdiam         = params%smpd * box_for_pick
-        mskrad_in_pix   = real(box_for_pick) / 2
+        mskrad_in_pix   = real(box_for_pick) / 2.
         maxdiam         = mskdiam + mskdiam * BOX_EXP_FAC
         box_for_extract = find_larger_magic_box(round2even(maxdiam / params%smpd))
         call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, params%smpd, 'write', box=box_for_extract, bufsz=size(selection))
@@ -1351,7 +1350,6 @@ contains
         call stkio_r%close
         ! write jpeg
         call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
-        call img%kill
     end subroutine process_selected_references
 
 end module simple_stream_utils
