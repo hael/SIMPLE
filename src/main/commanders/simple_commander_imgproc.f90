@@ -110,7 +110,7 @@ contains
         type(binimage)   :: img_or_vol
         type(image)      :: img_sdevs
         integer :: iptcl
-        logical :: is2D, otsu, fill_holes, l_sauvola
+        logical :: is2D, fill_holes, l_sauvola
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! stk or vol1 needs to be present; binarize')
@@ -133,19 +133,17 @@ contains
             call img_or_vol%new_bimg([params%box,params%box,1], params%smpd)
             do iptcl=1,params%nptcls
                 call img_or_vol%read(params%stk, iptcl)
-                call doit( otsu )
+                call doit
                 if( fill_holes ) call img_or_vol%set_edgecc2background
                 if( l_sauvola  ) call img_sdevs%write('local_sdevs.mrc', iptcl)
                 call img_or_vol%write(params%outstk, iptcl)
             end do
-            if(otsu) write(logfhandle,*) 'Method applied for binarisation: OTSU algorithm'
         else if( cline%defined('vol1') )then
             is2D = .false.
             call img_or_vol%new_bimg([params%box,params%box,params%box], params%smpd)
             call img_or_vol%read(params%vols(1))
-            call doit( otsu )
+            call doit
             call img_or_vol%write(params%outvol)
-            if(otsu) write(logfhandle,*) 'Method applied for binarisation: OTSU algorithm'
         endif
         call img_or_vol%kill
         ! end gracefully
@@ -153,11 +151,9 @@ contains
 
         contains
 
-            subroutine doit(otsu)
+            subroutine doit
                 type(binimage) :: cos_img
                 real :: ave, sdev, maxv, minv
-                logical, optional, intent(inout) :: otsu
-                otsu =  .false.
                 if( cline%defined('thres') )then
                     call img_or_vol%binarize(params%thres)
                 else if( cline%defined('npix') )then
@@ -174,7 +170,6 @@ contains
                         else
                             call otsu_img(img_or_vol)
                         endif
-                        otsu = .true.
                     endif
                 endif
                 write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()

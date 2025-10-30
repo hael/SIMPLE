@@ -6,14 +6,130 @@ use simple_image,    only: image
 use simple_binimage, only: binimage
 use simple_neighs
 implicit none
-
-public :: sobel, automatic_thresh_sobel, canny, hough_line, otsu_img, otsu_robust_fast, sauvola
-private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DOPRINT = .false.
+interface detect_peak_thres
+    module procedure detect_peak_thres_1, detect_peak_thres_2
+end interface detect_peak_thres
 
 contains
+
+    subroutine detect_peak_thres_1( n, n_ub, level, x, t )
+        integer, intent(in)    :: n, n_ub, level
+        real,    intent(in)    :: x(n)
+        real,    intent(inout) :: t
+        real,    allocatable   :: arr(:)
+        integer, allocatable   :: locn(:)
+        real    :: ts(2)
+        if( level < 0 .or. level > 2 )then
+            call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
+        endif
+        locn  = maxnloc(x, n_ub)
+        ts(1) = minval(x(locn))
+        t     = ts(1)
+        if( level == 0 ) return
+        arr   = pack(x, mask=x >= ts(1))
+        call otsu(size(arr), arr, ts(2))
+        t     = ts(2)
+        if( level == 1 ) return
+        ts(1) = ts(2)
+        arr   = pack(x, mask=x >= ts(1))
+        call otsu(size(arr), arr, ts(2))
+        t     = ts(2)
+    end subroutine detect_peak_thres_1
+
+    subroutine detect_peak_thres_2( n, level, x, t )
+        integer, intent(in)    :: n, level
+        real,    intent(in)    :: x(n)
+        real,    intent(inout) :: t
+        real,    allocatable   :: arr(:)
+        real    :: ts(2)
+        if( level < 1 .or. level > 2 )then
+            call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
+        endif
+        arr   = pack(x, mask=.true.)
+        call otsu(size(arr), arr, ts(1))
+        t     = ts(1)
+        if( level == 1 ) return
+        arr   = pack(x, mask=x >= ts(1))
+        call otsu(size(arr), arr, ts(2))
+        t     = ts(2)
+    end subroutine detect_peak_thres_2
+
+    subroutine detect_peak_thres_for_npeaks( n, npeaks, x, t )
+        integer, intent(in)    :: n, npeaks
+        real,    intent(in)    :: x(n)
+        real,    intent(inout) :: t 
+        real, allocatable :: tmp(:)
+        integer :: ind
+        allocate(tmp(n), source=x)
+        call hpsort(tmp)
+        ind = max(1,n - npeaks + 1)
+        t   = tmp(ind)
+    end subroutine detect_peak_thres_for_npeaks
+
+    subroutine detect_peak_thres_sortmeans( n, level, x, t_out )
+        integer, intent(in)  :: n, level
+        real,    intent(in)  :: x(n)
+        real,    intent(out) :: t_out
+        integer, parameter   :: NQUANTA = 10
+        real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), arr1(:), arr2(:)
+        integer, allocatable :: labels(:)
+        integer :: iq, n_fg, n_bg, nvals, cnt, iq_min, ind
+        real    :: d, avg1, avg2, diff, diff_min, med1, med2
+        ! quantize with sortmeans
+        allocate( means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA) )
+        means  = 0.
+        labels = 0
+        arr    = pack(x, mask=.true.)
+        nvals  = size(arr)
+        call sortmeans(arr, NQUANTA, means, labels)
+        cnt    = 0
+        do iq = 1, NQUANTA
+            if( count(labels == iq) == 0 )cycle
+            cnt          = cnt + 1
+            peak_ts(cnt) = minval(arr, mask=labels == iq)
+            n_fg         = count(arr >= peak_ts(cnt))
+            if( n_fg == nvals )then
+                frac_peaks(cnt) = 1.
+            else if( n_fg == 0 )then
+                frac_peaks(cnt) = 0.
+            else
+                frac_peaks(cnt) = real(n_fg) / real(nvals)
+            endif
+        end do
+        ! binary clustering for dynamic threshold determination
+        diff_min = huge(d)
+        do iq = 1, cnt
+            n_fg = count(arr >= peak_ts(iq))
+            n_bg = nvals - n_fg
+            ! avg1 = sum(arr, mask=arr >= peak_ts(iq)) / real(n_fg)
+            ! avg2 = sum(arr, mask=arr <  peak_ts(iq)) / real(n_bg)
+            arr1 = pack(arr, mask=arr >= peak_ts(iq))
+            arr2 = pack(arr, mask=arr <  peak_ts(iq))
+            med1 = median_nocopy(arr1)
+            med2 = median_nocopy(arr2)
+            ! diff = sum(abs(arr - avg1), mask=arr >= peak_ts(iq)) + sum(abs(arr - avg2), mask=arr < peak_ts(iq))
+            diff = sum(abs(arr - med1), mask=arr >= peak_ts(iq)) + sum(abs(arr - med2), mask=arr < peak_ts(iq))
+            if( diff < diff_min )then
+                diff_min = diff
+                iq_min   = iq
+            endif
+            deallocate(arr1,arr2)
+        end do
+        ! apply particle crowding level adjustement
+        select case(level)
+            case(1)
+                ind = min(cnt,iq_min + 1) ! fewer peaks
+            case(2)
+                ind = iq_min
+            case(3)
+                ind = max(1,  iq_min - 1) ! more peaks
+            case DEFAULT
+                ind = iq_min
+        end select
+        t_out = peak_ts(ind)
+    end subroutine detect_peak_thres_sortmeans
 
     ! classic Sobel edge detection routine
     subroutine sobel( img_in, thresh )
@@ -142,7 +258,6 @@ contains
             !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
             tthresh(1) = max(minval(grad), (1.-sigma)*m) !lower
             tthresh(2) = min(maxval(grad), (1.+sigma)*m) !upper
-            if(DOPRINT) write(logfhandle,*) 'Selected thresholds: ', tthresh
             if( present(lp) ) then
                 call canny_edge(img_out, tthresh, lp)
             else

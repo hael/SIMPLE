@@ -13,6 +13,7 @@ use simple_linalg
 use simple_nanoparticle_utils
 use simple_defs_atoms
 use simple_stat
+use simple_segmentation
 #include "simple_local_flags.inc"
 
     implicit none

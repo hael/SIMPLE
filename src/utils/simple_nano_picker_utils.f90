@@ -1,11 +1,12 @@
 module simple_nano_picker_utils
 include 'simple_lib.f08'
-use simple_image
-use simple_atoms
-use simple_parameters
-use simple_defs_atoms
-use simple_nanoparticle_utils
 use simple_srch_sort_loc, only : hpsort
+use simple_atoms
+use simple_defs_atoms
+use simple_image
+use simple_nanoparticle_utils
+use simple_parameters
+use simple_segmentation
 implicit none
 #include "simple_local_flags.inc"
     
