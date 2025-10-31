@@ -6,8 +6,8 @@ use simple_commanders_project,    only: commander_new_project
 use simple_commanders_validate,   only: commander_mini_stream
 use simple_commanders_preprocess, only: commander_preprocess
 implicit none
-character(len=LONGSTRLEN), allocatable :: dataset_commands(:)
-type(cmdline)               :: cline, cline_dataset, cline_new_project, cline_preprocess, cline_mini_stream
+character(len=LONGSTRLEN), allocatable :: dataset_cmds(:)
+type(cmdline)               :: cline, cline_dataset, cline_new_project, cline_preprocess, cline_quick_look
 type(parameters)            :: params
 type(commander_new_project) :: xnew_project
 type(commander_preprocess)  :: xpreprocess
@@ -22,15 +22,13 @@ else
 endif
 call cline%checkvar('fname',        1)
 call cline%check()
-call cline%printline
+!call cline%printline
 call params%new(cline)
-print *, params%fname
-call read_filetable(params%fname, dataset_commands)
-ndata_sets=size(dataset_commands)
+call read_filetable(params%fname, dataset_cmds)
+ndata_sets=size(dataset_cmds)
 ! projname=name_system smpd=1.3 cs=2.7 fraca=0.1 total_dose=53 dir_movies=filetab.txt gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200
 do i = 1, ndata_sets
-    print *, trim(dataset_commands(i))
-    call cline_dataset%parse_oldschool
+    call cline_dataset%read(dataset_cmds(i))
     call cline_dataset%checkvar('projname',        1)
     call cline_dataset%checkvar('smpd',            2)
     call cline_dataset%checkvar('cs',              3)
