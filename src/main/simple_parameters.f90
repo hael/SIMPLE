@@ -891,6 +891,7 @@ contains
         call check_iarg('ngrow',          self%ngrow)
         call check_iarg('niceprocid',     self%niceprocid)
         call check_iarg('ninit',          self%ninit)
+        call check_iarg('nmics',          self%nmics)
         call check_iarg('nmoldiams',      self%nmoldiams)
         call check_iarg('nsearch',        self%nsearch)
         call check_iarg('noris',          self%noris)
