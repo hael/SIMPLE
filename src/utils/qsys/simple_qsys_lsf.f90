@@ -72,7 +72,7 @@ contains
                 bsub_val = q_descr%get(i)
                 select case(trim(key))
                     case('job_name')
-                        tmpstr = '"'//trim(adjustl(bsub_val))//'"'
+                        tmpstr = '#BSUB -J "'//trim(adjustl(bsub_val))//'"'
                     case('job_ntasks_per_socket')
                         tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val))//']"'
                     case('job_ntasks')
