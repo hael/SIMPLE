@@ -73,7 +73,7 @@ WSGI_APPLICATION = 'nice_project.wsgi.application'
 
 # replace sqlite with pysqlite
 import platform
-if platform.system() is 'Linux':
+if platform.system() == 'Linux':
         __import__('pysqlite3')
         import sys
         sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
