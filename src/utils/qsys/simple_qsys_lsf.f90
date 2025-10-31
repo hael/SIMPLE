@@ -53,7 +53,7 @@ contains
         class(qsys_lsf),   intent(in) :: self
         class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
-        character(len=:), allocatable :: key, bsub_cmd, bsub_val
+        character(len=:), allocatable :: key, bsub_cmd, bsub_val, tmpstr
         integer :: i, which
         logical :: write2file
         write2file = .false.
@@ -64,6 +64,14 @@ contains
             if( which > 0 )then
                 bsub_cmd = self%env%get(which)
                 bsub_val = q_descr%get(i)
+                if( trim(key) == 'job_name' ) then
+                    tmpstr   = '"'//trim(bsub_val)//'"'
+                    bsub_val = tmpstr
+                end if
+                if( trim(key) == 'job_ntasks_per_socket' .or. trim(key) == 'job_memory_per_task' ) then
+                    tmpstr   = trim(bsub_val)//']"'
+                    bsub_val = tmpstr
+                endif
                 if( write2file )then
                     write(fhandle,'(a)') bsub_cmd//'='//bsub_val
                 else
@@ -88,7 +96,7 @@ contains
         class(chash),      intent(in) :: q_descr
         integer,           intent(in) :: parts_fromto(2)
         integer, optional, intent(in) :: fhandle, nactive
-        character(len=:), allocatable :: key, bsub_cmd, bsub_val, jobname
+        character(len=:), allocatable :: key, bsub_cmd, bsub_val, jobname, tmpstr
         integer  :: i, which
         logical  :: write2file
          write2file = .false.
@@ -99,10 +107,18 @@ contains
             if( which > 0 )then
                 bsub_cmd = self%env%get(which)
                 bsub_val = q_descr%get(i)
+                if( trim(key) == 'job_name' ) then
+                    tmpstr   = '"'//trim(bsub_val)//'"'
+                    bsub_val = tmpstr
+                end if
+                if( trim(key) == 'job_ntasks_per_socket' .or. trim(key) == 'job_memory_per_task' ) then
+                    tmpstr   = trim(bsub_val)//']"'
+                    bsub_val = tmpstr
+                endif
                 if( write2file )then
-                    write(fhandle,'(a)') bsub_cmd//'='//bsub_val
+                    write(fhandle,'(a)') bsub_cmd//' '//bsub_val
                 else
-                    write(logfhandle,'(a)') bsub_cmd//'='//bsub_val
+                    write(logfhandle,'(a)') bsub_cmd//' '//bsub_val
                 endif
                 deallocate(bsub_cmd,bsub_val)
             endif
