@@ -7,7 +7,7 @@ use simple_commanders_validate,   only: commander_mini_stream
 use simple_commanders_preprocess, only: commander_preprocess
 implicit none
 character(len=LONGSTRLEN), allocatable :: dataset_cmds(:)
-type(cmdline)               :: cline, cline_dataset, cline_new_project, cline_preprocess, cline_quick_look
+type(cmdline)               :: cline, cline_dataset, cline_new_project, cline_preprocess, cline_mini_stream
 type(parameters)            :: params
 type(commander_new_project) :: xnew_project
 type(commander_preprocess)  :: xpreprocess
