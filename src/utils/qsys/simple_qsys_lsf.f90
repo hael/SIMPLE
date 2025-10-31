@@ -33,8 +33,6 @@ contains
         ! ### JOB PARAMETERS
         call self%env%push('job_name',              '#BSUB -J')
         call self%env%push('job_cpus_per_task',     '#BSUB -n')
-        call self%env%push('job_ntasks_per_socket', '#BSUB -R "span[hosts=')
-        call self%env%push('job_ntasks',            '#BSUB -R "span[hosts=')
         call self%env%push('job_memory_per_task',   '#BSUB -R "rusage[mem=')
         call self%env%push('job_time',              '#BSUB -W')
         ! standard error & output folder
@@ -61,8 +59,10 @@ contains
         if( present(fhandle) ) write2file = .true.
         if( write2file )then
             write(fhandle,'(a)') '#BSUB -q cryoem'
+            write(fhandle,'(a)') '#BSUB -R "span[hosts=1]"'
         else
             write(logfhandle,'(a)') '#BSUB -q cryoem'
+            write(logfhandle,'(a)') '#BSUB -R "span[hosts=1]"'
         endif
         do i=1,q_descr%size_of()
             key   = q_descr%get_key(i)
@@ -73,10 +73,6 @@ contains
                 select case(trim(key))
                     case('job_name')
                         tmpstr = '#BSUB -J "'//trim(adjustl(bsub_val))//'"'
-                    case('job_ntasks_per_socket')
-                        tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val))//']"'
-                    case('job_ntasks')
-                        tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val))//']"'
                     case('job_memory_per_task')
                         tmpstr = '#BSUB -R "rusage[mem='//trim(adjustl(bsub_val))//']"'
                     case DEFAULT
