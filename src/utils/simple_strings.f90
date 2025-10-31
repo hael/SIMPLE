@@ -170,7 +170,7 @@ contains
     !> \brief  parses the string 'str' into arguments args(1), ..., args(nargs) based on
     !!         the delimiters contained in the string 'delim'. The integer output variable
     !!         nargs contains the number of arguments found.
-    subroutine parsestr(str,delim,args,nargs)
+    subroutine parsestr( str, delim, args, nargs )
         character(len=*), intent(inout) :: str
         character(len=*), intent(in)    :: delim
         character(len=*)                :: args(:)
@@ -189,7 +189,7 @@ contains
         do
             if(len_trim(str) == 0) exit
             nargs=nargs+1
-            call split(str,delim,args(nargs))
+            call split(str, delim, args(nargs))
         end do
         str=strsav
     end subroutine parsestr
@@ -229,7 +229,7 @@ contains
     !!         the string 'str'. The characters before the found delimiter are
     !!         output in 'before'. The characters after the found delimiter are
     !!         output in 'str'.
-    subroutine split_str(str, delim, before)
+    subroutine split_str( str, delim, before )
         character(len=*), intent(inout) :: str
         character(len=1), intent(in)    :: delim
         character(len=*), intent(out)   :: before
@@ -244,7 +244,7 @@ contains
     !!         the string 'str'. The characters before the found delimiter are
     !!         output in 'before'. The characters after the found delimiter are
     !!         output in 'str'.
-    subroutine split(str,delim,before)
+    subroutine split( str, delim, before )
         character(len=*), intent(inout) :: str
         character(len=*), intent(in)    :: delim
         character(len=*), intent(out)   :: before
@@ -325,7 +325,7 @@ contains
     end function listofints2arr
 
     !> \brief  removes punctuation (except comma) characters in string str
-    subroutine removepunct(str)
+    subroutine removepunct( str )
         character(len=*), intent(inout) :: str
         character(len=1):: ch
         character(len=len_trim(str))::outstr
@@ -357,7 +357,7 @@ contains
     end subroutine removepunct
 
     !> \brief  removes spaces, tabs, and control characters in string str
-    pure subroutine removesp(str)
+    pure subroutine removesp( str )
         character(len=*), intent(inout) :: str
         character(len=1):: ch
         character(len=len_trim(str))::outstr
@@ -381,7 +381,7 @@ contains
     end subroutine removesp
 
     !> \brief  converts number string to a single precision real number
-    function str2real(str) result(rval)
+    function str2real( str ) result( rval )
         character(len=*), intent(in) :: str
         real    :: rval
         integer :: io_stat
@@ -401,7 +401,7 @@ contains
     end function realsp2str
 
     !> \brief  converts a real number to a string
-    pure function realdp2str(rval) result(str)
+    pure function realdp2str( rval ) result( str )
         real(kind=dp), intent(in) :: rval
         character(len=32)         :: str
         write(str,*) rval
@@ -410,7 +410,7 @@ contains
 
     !>  \brief  turn integer variable into character variable
     !! - now supports negative values
-    pure function int2str(intg) result(string)
+    pure function int2str( intg ) result( string )
         integer, intent(in)           :: intg
         character(len=:), allocatable :: string
         integer :: ndigs_int, intg_this
@@ -437,7 +437,7 @@ contains
 
     !>  \brief  turn integer variable into character variable with commas
     !! - now supports negative values
-    pure function int2commastr(intg) result(string)
+    pure function int2commastr( intg ) result( string )
         integer, intent(in)           :: intg
         character(len=:), allocatable :: string
         integer :: ndigs_int, intg_this
@@ -550,7 +550,7 @@ contains
     end function map_str_nrs
 
     !> \brief copies the trimmed and justified version of the instr into outstr
-    subroutine cpStr(instr, outstr)
+    subroutine cpStr( instr, outstr )
         character(len=*),              intent(in)    :: instr
         character(len=:), allocatable, intent(inout) :: outstr
         outstr = trim(adjustl(instr))
@@ -563,7 +563,7 @@ contains
     end function str_has_substr
 
     !>  \brief  removes occurrences of substr in str into str_out
-    subroutine void_substr( str, substr, str_out)
+    subroutine void_substr( str, substr, str_out )
         character(len=*), intent(in)                 :: str, substr
         character(len=:), allocatable, intent(inout) :: str_out
         integer :: l, lout, pos
@@ -600,7 +600,7 @@ contains
         iback      = index(str, substr, back=.true.)
         ls         = len(substr)
         back_occur = len(str) - ls + 1 == iback
-        call parsestr(str,substr,args,nargs)
+        call parsestr(str, substr, args, nargs)
         if( nargs == 0 )then
             allocate(str_out, source=str)
             return
@@ -657,7 +657,7 @@ contains
     end function strIsComment
 
     !>  \brief works out whether a character string is blank
-    pure logical function strIsEmpty(line)
+    pure logical function strIsEmpty( line )
         character(len=*),   intent(in)  ::  line
         if( len_trim(line) == 0 )then
              strIsEmpty = .true.
@@ -667,7 +667,7 @@ contains
     end function strIsEmpty
 
     !>  \brief works out whether a character string is blank
-    pure logical function strIsBlank(line)
+    pure logical function strIsBlank( line )
         character(len=*),   intent(in)  ::  line
         if( trim(line) .eq. '' )then
              strIsBlank = .true.
@@ -690,7 +690,7 @@ contains
     end function firstNonBlank
 
     !>  \brief  find the first blank character in a string and return its position.
-    pure integer function firstBlank(string, back)
+    pure integer function firstBlank( string, back )
         character(len=*), intent(in)  :: string !< input string
         logical, optional, intent(in) :: back !<  if .true., we'll look for the last blank character in the string
         logical ::  bback
@@ -704,7 +704,7 @@ contains
     end function firstBlank
 
     !>  \brief  test whether two strings are equal, ignoring blank characters
-    logical function stringsAreEqual(instr1, instr2, case_sensitive)
+    logical function stringsAreEqual( instr1, instr2, case_sensitive )
         character(len=*), intent(in)  :: instr1 !< input string
         character(len=*), intent(in)  :: instr2 !< input string
         logical, optional, intent(in) :: case_sensitive  !< is the comparison case-sensitive
@@ -785,7 +785,7 @@ contains
     end function cntRecsPerLine
 
     !! reverse string
-    recursive function strflip (string) result (res)
+    recursive function strflip( string ) result ( res )
         implicit none
         character (*), intent (in) :: string
         character (len (string)) :: res

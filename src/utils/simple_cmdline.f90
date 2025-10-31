@@ -41,6 +41,7 @@ type cmdline
     procedure          :: checkvar
     procedure          :: check
     procedure          :: printline
+    procedure          :: read
     procedure          :: readline
     procedure          :: writeline
     procedure          :: defined
@@ -230,7 +231,7 @@ contains
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse_oldschool( self, keys_required, keys_optional )
-        use simple_args, only: args
+        !use simple_args, only: args
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN)     :: exec_name
@@ -500,6 +501,25 @@ contains
             end do
         endif
     end subroutine printline
+
+    subroutine read( self, cmd_line )
+        class(cmdline),   intent(inout) :: self
+        character(len=*), intent(in)    :: cmd_line
+        !character(len=:), allocatable   :: arg(:)
+        character(len=STDLEN)         :: arg(32)
+        integer                       :: i
+        type(args)                    :: allowed_args
+        call self%kill
+        self%entire_line=adjustl(trim(cmd_line))
+        call parsestr( self%entire_line, ' ', arg, self%argcnt )
+        allowed_args = args()
+        do i = 1, self%argcnt
+            !allowed_args = arg(i)
+            !print *, "number of arguments", narg
+            print *, "argument.  ", arg(i)
+            call self%parse_command_line_value(i, arg(i), allowed_args)
+        enddo
+    end subroutine read
 
     !> \brief  for reading the command line from file
     subroutine readline( self, filename )
