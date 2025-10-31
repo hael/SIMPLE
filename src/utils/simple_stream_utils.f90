@@ -1313,7 +1313,6 @@ contains
         type(image),       allocatable :: cavgs(:)
         class(parameters), pointer     :: params_ptr
         real,              allocatable :: diams(:), shifts(:,:)
-        real,              parameter   :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         logical,           parameter   :: DEBUG = .false.
         real    :: maxdiam, mskrad_in_pix, moldiam
         integer :: ldim(3), icavg, icls, stat, ncls, nsel
