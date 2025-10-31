@@ -167,7 +167,7 @@ contains
             class is(qsys_slurm)
                 ! keep aarray value
             class is(qsys_lsf)
-                ! keep aarray value
+                aarray = .false.
             class is(qsys_sge)
                 aarray = .false.
             class is(qsys_pbs)
