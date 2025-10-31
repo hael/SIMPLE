@@ -227,6 +227,7 @@ contains
                     cluster_inds = pack(inds, mask=labels == iclust)
                     cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
                     dmat         = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
+                    ! dmat         = calc_cluster_cavgs_dmat_dev(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
                     call medoid_from_dmat(dmat, ind)
                     clustscores(iclust) = sum(dmat(ind,:)) / real(pop)
                     i_medoids(iclust) = cluster_inds(ind)
@@ -238,6 +239,7 @@ contains
         else
             ! calculate distance matrix
             dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
+            ! dmat = calc_cluster_cavgs_dmat_dev(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
             ! cluster
             if( cline%defined('ncls') )then
                 nclust = params%ncls

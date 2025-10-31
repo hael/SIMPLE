@@ -1,10 +1,23 @@
 module simple_strategy2D_utils
 include 'simple_lib.f08'
-use simple_image,      only: image
-use simple_masker,     only: density_inoutside_mask
-use simple_stack_io,   only: stack_io
-use simple_sp_project, only: sp_project
-use simple_parameters, only: parameters
+use simple_binimage,          only: binimage
+use simple_class_frcs,        only: class_frcs
+use simple_clustering_utils,  only: cluster_dmat
+use simple_cmdline,           only: cmdline
+use simple_corrmat,           only: calc_inpl_invariant_fm
+use simple_default_clines,    only: set_automask2D_defaults
+use simple_histogram,         only: histogram
+use simple_image,             only: image
+use simple_masker,            only: automask2D
+use simple_masker,            only: density_inoutside_mask
+use simple_parameters,        only: parameters, params_glob
+use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_polarizer,         only: polarizer
+use simple_pspecs,            only: pspecs
+use simple_segmentation,      only: otsu_img
+use simple_sp_project,        only: sp_project
+use simple_stack_io,          only: stack_io
 implicit none
 #include "simple_local_flags.inc"
 
@@ -20,7 +33,8 @@ interface write_cavgs
 end interface
 
 ! objective function weights
-real, private, parameter :: W_HIST=0.2, W_POW=0.4, W_FM=0.4
+real, private, parameter :: W_HIST=0.2,     W_POW=0.4,     W_FM=0.4
+real, private, parameter :: W_HIST_DEV=0.2, W_POW_DEV=0.2, W_FM_DEV=0.4, W_INTG_PIX_DEV=0.2
 
 contains
 
@@ -94,7 +108,6 @@ contains
     end function read_cavgs_into_imgarr_2
 
     subroutine prep_cavgs4clustering( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm )
-        use simple_class_frcs, only: class_frcs
         class(sp_project),        intent(inout) :: spproj
         type(image), allocatable, intent(inout) :: cavg_imgs(:)
         real,                     intent(in)    :: mskdiam
@@ -223,6 +236,19 @@ contains
         !$omp end parallel do
     end subroutine alloc_imgarr
 
+    function copy_imgarr( imgarr_in ) result( imgarr_copy )
+        class(image), intent(in) :: imgarr_in(:)
+        type(image), allocatable :: imgarr_copy(:)
+        integer :: n, i 
+        n = size(imgarr_in)
+        allocate(imgarr_copy(n))
+        !$omp parallel do schedule(static) proc_bind(close) private(i) default(shared)
+        do i = 1, n
+            call imgarr_copy(i)%copy(imgarr_in(i))
+        end do
+        !$omp end parallel do
+    end function copy_imgarr
+
     subroutine dealloc_imgarr( imgs )
         type(image), allocatable, intent(inout) :: imgs(:)
         integer :: n , i
@@ -313,9 +339,6 @@ contains
     end subroutine flag_non_junk_cavgs
 
     function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
-        use simple_corrmat,   only: calc_inpl_invariant_fm
-        use simple_histogram, only: histogram
-        use simple_pspecs,    only: pspecs
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
         character(len=*),     intent(in)    :: which
@@ -382,14 +405,119 @@ contains
         end do
     end function calc_cluster_cavgs_dmat
 
-    ! function calc_int_pix_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
+    function calc_cluster_cavgs_dmat_dev( params, cavg_imgs, oa_minmax, which ) result( dmat )
+        class(parameters),    intent(in)    :: params
+        class(image),         intent(inout) :: cavg_imgs(:)
+        character(len=*),     intent(in)    :: which
+        real,                 intent(in)    :: oa_minmax(2)
+        integer,              parameter     :: NHISTBINS = 128
+        real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
+        type(histogram),      allocatable   :: hists(:)
+        real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
+        real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
+        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:), dmat_intg_pix(:,:)
+        logical,              allocatable   :: l_msk(:,:,:)
+        type(pspecs) :: pows
+        type(image)  :: img_msk 
+        integer      :: ncls_sel, i, j, nclust, iclust
+        ncls_sel = size(cavg_imgs)
+        ! generate histograms
+        allocate(hists(ncls_sel))
+        do i = 1, ncls_sel
+            call hists(i)%new(cavg_imgs(i), NHISTBINS, minmax=oa_minmax, radius=params%msk)
+        end do
+        ! generate power spectra and associated distance/similarity matrix
+        ! create pspecs object
+        call pows%new(cavg_imgs, params%msk, HP_SPEC, LP_SPEC)
+        ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
+        dmat_pow = pows%calc_distmat()
+        call normalize_minmax(dmat_pow)
+        smat_pow = dmat2smat(dmat_pow)
+        ! generate within-envelope-mask-integrated pixel intensities distance matrix
+        dmat_intg_pix = calc_int_pix_dmat(cavg_imgs, params%msk)
+        call normalize_minmax(dmat_intg_pix)
+        ! calculate inpl_invariant_fm corrmat
+        ! pairwise correlation through Fourier-Mellin + shift search
+        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
+        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+        dmat_fm = smat2dmat(corrmat)
+        ! calculate histogram-based distance matrices
+        allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
+        !$omp parallel do default(shared) private(i,j)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do i = 1, ncls_sel - 1
+            do j = i + 1, ncls_sel
+                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
+                dmat_tvd(j,i) = dmat_tvd(i,j)
+                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
+                dmat_jsd(j,i) = dmat_jsd(i,j)
+                dmat_hd(i,j)  = hists(i)%HD(hists(j))
+                dmat_hd(j,i)  = dmat_hd(i,j)
+            end do
+        end do
+        !$omp end parallel do
+        call hists(:)%kill
+        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
+        select case(trim(which))    
+            case('hist')
+                dmat = dmat_hist
+            case('pow')
+                dmat = dmat_pow
+            case('fm')
+                dmat = dmat_fm
+            case('intg_pix')
+                dmat = dmat_intg_pix
+            case DEFAULT
+                dmat = W_HIST_DEV * dmat_hist + W_POW_DEV * dmat_pow + W_FM_DEV * dmat_fm + W_INTG_PIX_DEV * dmat_intg_pix
+        end select
+        ! destruct
+        call pows%kill
+        do i = 1, ncls_sel
+            call hists(i)%kill
+        end do
+    end function calc_cluster_cavgs_dmat_dev
 
-        
+    function calc_int_pix_dmat( cavg_imgs, mskrad_in_pix  ) result( dmat )
+        class(image), intent(inout) :: cavg_imgs(:)
+        real,         intent(in)    :: mskrad_in_pix
+        type(parameters)            :: params
+        type(cmdline)               :: cline
+        class(parameters), pointer  :: params_ptr => null()
+        real,           allocatable :: diams(:), shifts(:,:), dmat(:,:), ints(:)
+        type(image),    allocatable :: masked_imgs(:)
+        integer :: i, j, icls
+        call cline%set('msk',     mskrad_in_pix)
+        call cline%set('smpd',    cavg_imgs(1)%get_smpd())
+        call cline%set('mskdiam', 2 * mskrad_in_pix * cavg_imgs(1)%get_smpd())
+        call cline%set('ncls',    size(cavg_imgs))
+        params_ptr => params_glob ! for safe call to automask2D
+        nullify(params_glob)
+        call set_automask2D_defaults(cline)
+        call params%new(cline)
+        masked_imgs = copy_imgarr(cavg_imgs)
+        call automask2D(masked_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
+        ! calc integrated intesities
+        allocate(ints(params%ncls), dmat(params%ncls,params%ncls), source=0.)
+        do icls = 1, params%ncls
+            call masked_imgs(icls)%mul(masked_imgs(icls))
+            ints(icls) = masked_imgs(icls)%get_sum_int()
+        end do
+        !$omp parallel do default(shared) private(i,j)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do i = 1, params%ncls - 1
+            do j = i + 1, params%ncls
+                dmat(i,j) = abs(ints(i) - ints(j))
+                dmat(j,i) = dmat(i,j)
+            end do
+        end do
+        !$omp end parallel do
+        call dealloc_imgarr(masked_imgs)
+        ! put back pointer to params_glob
+        params_glob => params_ptr
+        nullify(params_ptr)
+    end function calc_int_pix_dmat
 
     function calc_match_cavgs_dmat( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, which ) result( dmat )
-        use simple_corrmat,   only: calc_inpl_invariant_fm
-        use simple_histogram, only: histogram
-        use simple_pspecs,    only: pspecs
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs_ref(:), cavg_imgs_match(:)
         real,                 intent(in)    :: oa_minmax(2)
@@ -459,7 +587,6 @@ contains
     end function calc_match_cavgs_dmat
 
     function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, clustscores ) result( clust_info_arr )
-        use simple_clustering_utils, only: cluster_dmat
         class(parameters),    intent(in)    :: params
         real,                 intent(in)    :: dmat(:,:)
         class(image),         intent(inout) :: cavg_imgs(:)
@@ -812,9 +939,6 @@ contains
     end subroutine write_aligned_cavgs
 
     function match_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
-        use simple_polarizer,         only: polarizer
-        use simple_polarft_corrcalc,  only: polarft_corrcalc
-        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         integer,                  intent(in)    :: n
         real,                     intent(in)    :: hp, lp, trs
         class(image),             intent(inout) :: imgs(n), img_ref
@@ -951,8 +1075,6 @@ contains
     end subroutine rtsq_imgs
 
     subroutine calc_cavg_offset( cavg, lp, msk, offset, ind )
-        use simple_segmentation, only: otsu_img
-        use simple_binimage,     only: binimage
         class(image),   intent(in)    :: cavg
         real,           intent(in)    :: lp, msk
         real,           intent(inout) :: offset(2)
