@@ -28,14 +28,14 @@ contains
         class(qsys_lsf), intent(inout) :: self
         call self%env%new(MAXENVITEMS)
         ! ### QSYS PARAMETERS
-        call self%env%push('qsys_partition',        '#BSUB -q')   ! queue name
+        call self%env%push('qsys_partition',        '#BSUB -q')
         call self%env%push('qsys_submit_cmd',       'bsub <')
         ! ### JOB PARAMETERS
         call self%env%push('job_name',              '#BSUB -J')
         call self%env%push('job_cpus_per_task',     '#BSUB -n')
-        call self%env%push('job_ntasks_per_socket', '#BSUB -R "span[hosts=') ! completed in write_* (see below)
-        call self%env%push('job_ntasks',            '#BSUB -R "span[hosts=') ! completed in write_* (see below)
-        call self%env%push('job_memory_per_task',   '#BSUB -R "rusage[mem=') ! completed in write_* (see below)
+        call self%env%push('job_ntasks_per_socket', '#BSUB -R "span[hosts=')
+        call self%env%push('job_ntasks',            '#BSUB -R "span[hosts=')
+        call self%env%push('job_memory_per_task',   '#BSUB -R "rusage[mem=')
         call self%env%push('job_time',              '#BSUB -W')
         ! standard error & output folder
         stderrout = PATH_HERE//trim(STDERROUT_DIR)
@@ -70,18 +70,14 @@ contains
             if( which > 0 )then
                 bsub_cmd = self%env%get(which)
                 bsub_val = q_descr%get(i)
-                if( trim(key) == 'job_name' ) then
-                    tmpstr   = '"'//trim(adjustl(bsub_val))//'"'
-                    bsub_val = tmpstr
-                end if
-                if( trim(key) == 'job_ntasks_per_socket' .or. trim(key) == 'job_memory_per_task' ) then
-                    tmpstr   = trim(adjustl(bsub_val))//']"'
-                    bsub_val = tmpstr
-                endif
+                if( trim(key) == 'job_name'              ) tmpstr = '"'//trim(adjustl(bsub_val))//'"';                bsub_val = tmpstr
+                if( trim(key) == 'job_ntasks_per_socket' ) tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val)); bsub_val = tmpstr
+                if( trim(key) == 'job_ntasks'            ) tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val)); bsub_val = tmpstr
+                if( trim(key) == 'job_memory_per_task'   ) tmpstr = '#BSUB -R "rusage[mem='//trim(adjustl(bsub_val)); bsub_val = tmpstr
                 if( write2file )then
-                    write(fhandle,'(a)') bsub_cmd//' '//bsub_val
+                    write(fhandle,'(a)') bsub_cmd//' '//trim(adjustl(bsub_val))
                 else
-                    write(logfhandle,'(a)') bsub_cmd//' '//bsub_val
+                    write(logfhandle,'(a)') bsub_cmd//' '//trim(adjustl(bsub_val))
                 endif
                 deallocate(bsub_cmd,bsub_val)
             endif
