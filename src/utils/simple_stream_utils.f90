@@ -1301,55 +1301,83 @@ contains
     end function stream_datestr
 
     subroutine process_selected_references(imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles)
-        character(*), intent(in)    :: imgfile
-        real,         intent(in)    :: smpd
-        integer,      intent(in)    :: selection(:)
-        real,         intent(out)   :: mskdiam
-        integer,      intent(out)   :: box_for_pick, box_for_extract
-        integer,      intent(inout) :: nxtiles, nytiles
-        type(parameters)            :: params
-        type(cmdline)               :: cline
-        type(stack_io)              :: stkio_r, stkio_w
-        type(image), allocatable    :: cavgs(:)
-        real,        allocatable    :: diams(:), shifts(:,:)
-        real,        parameter      :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
-        real    :: maxdiam, mskrad_in_pix
-        integer :: ldim(3), icavg, icls, stat, ncls
-        if(size(selection) == 0) return
-        write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', size(selection),' clusters'
+        character(*),    intent(in)    :: imgfile
+        real,            intent(in)    :: smpd
+        integer,         intent(in)    :: selection(:)
+        real,            intent(out)   :: mskdiam
+        integer,         intent(out)   :: box_for_pick, box_for_extract
+        integer,         intent(inout) :: nxtiles, nytiles
+        type(parameters)               :: params
+        type(cmdline)                  :: cline
+        type(stack_io)                 :: stkio_r, stkio_w
+        type(image),       allocatable :: cavgs(:)
+        class(parameters), pointer     :: params_ptr
+        real,              allocatable :: diams(:), shifts(:,:)
+        real,              parameter   :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
+        logical,           parameter   :: DEBUG = .false.
+        real    :: maxdiam, mskrad_in_pix, moldiam
+        integer :: ldim(3), icavg, icls, stat, ncls, nsel
+        nsel = size(selection)
+        if( nsel == 0 ) return
+        params_ptr => params_glob ! for safe call to automask2D
+        nullify(params_glob)
+        write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', nsel,' clusters'
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
-        call cline%set('pickrefs', trim(imgfile))
-        call cline%set('smpd',     smpd)
         ! set defaults
         call set_automask2D_defaults(cline)
         ! parse parameters
         call params%new(cline)
         call find_ldim_nptcls(imgfile, ldim, ncls)
-        params%msk = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
-        allocate( cavgs(size(selection)) )
-        call stkio_r%open(imgfile, params%smpd, 'read', bufsz=ncls)
-        call stkio_r%read_whole
-        do icls=1, size(selection)
-            call cavgs(icls)%new([ldim(1),ldim(2),1], params%smpd)
-            call stkio_r%get_image(selection(icls), cavgs(icls))
+        ldim(3) = 1
+        params%msk  = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
+        params%smpd = smpd                              ! for automasking
+        if( DEBUG )then
+            print *, 'imgfile:              ', trim(imgfile)
+            print *, 'file_exists(imgfile): ', file_exists(imgfile)
+            print *, 'ldim:                 ', ldim(1), ldim(2), ldim(3)
+            print *, 'ncls:                 ', ncls
+            print *, 'params%msk:           ', params%msk
+            print *, 'params%smpd:          ', params%smpd
+            print *, 'nsel:                 ', nsel
+        endif
+        allocate( cavgs(nsel) )
+        do icls = 1, nsel
+            call cavgs(icls)%new([ldim(1),ldim(2),1], smpd)
         end do
-        call automask2D(cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
-        box_for_pick    = min(round2even(maxval(diams) / params%smpd + 2. * COSMSKHALFWIDTH), ldim(1))
-        mskdiam         = params%smpd * box_for_pick
-        mskrad_in_pix   = real(box_for_pick) / 2.
-        maxdiam         = mskdiam + mskdiam * BOX_EXP_FAC
-        box_for_extract = find_larger_magic_box(round2even(maxdiam / params%smpd))
-        call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, params%smpd, 'write', box=box_for_extract, bufsz=size(selection))
-        do icls=1, size(selection)
+        call stkio_r%open(imgfile, smpd, 'read', bufsz=ncls)
+        call stkio_r%read_whole
+        do icls = 1, nsel
+            call stkio_r%get_image(selection(icls), cavgs(icls))
+        end do       
+        call automask2D(cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
+        box_for_pick    = min(round2even(maxval(diams) / smpd + 2. * COSMSKHALFWIDTH), ldim(1))
+        moldiam         = smpd * box_for_pick
+        mskdiam         = moldiam * MSK_EXP_FAC
+        mskrad_in_pix   = (mskdiam / smpd) /2.
+        maxdiam         = moldiam + moldiam * BOX_EXP_FAC
+        box_for_extract = find_larger_magic_box(round2even(maxdiam / smpd))
+        if( DEBUG )then
+            print *, 'box_for_pick:    ', box_for_pick
+            print *, 'mskdiam (in A):  ', mskdiam
+            print *, 'mskrad_in_pix:   ', mskrad_in_pix
+            print *, 'box_for_extract: ', box_for_extract
+        endif
+        call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=nsel)
+        do icls=1, nsel
             call stkio_r%get_image(selection(icls), cavgs(icls))
             call cavgs(icls)%pad_inplace([box_for_extract,box_for_extract,1])
             call cavgs(icls)%mask(mskrad_in_pix, 'softavg')
             call stkio_w%write(icls, cavgs(icls))
-         end do
+            call cavgs(icls)%kill
+        end do
+        deallocate(cavgs)
         call stkio_w%close
         call stkio_r%close
         ! write jpeg
         call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
+        ! put back pointer to params_glob
+        params_glob => params_ptr
+        nullify(params_ptr)
     end subroutine process_selected_references
 
 end module simple_stream_utils

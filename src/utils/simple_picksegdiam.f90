@@ -58,7 +58,7 @@ contains
         if( real(nmasked) > 0.98 * real(product(ldim)) ) return
         call cascade_filter_biomol( mic_shrink, mic_den )
         if( present(denfname) ) call mic_den%write(denfname)
-        write(logfhandle,'(a)')  '>>> DENOISED MICROGAPH: '//trim(denfname)
+        write(logfhandle,'(a)')  '>>> DENOISED MICROGRAPH: '//trim(denfname)
         if( present(topofname) ) call mic_shrink%write(topofname)
         call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
         write(logfhandle,'(a)')  '>>> BINARIZATION, CONNECTED COMPONENT IDENTIFICATION, DIAMETER ESTIMATION'

@@ -2325,7 +2325,7 @@ contains
         new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
         new_box = min(new_box, ldim(1)) ! fail safe: new dimensions cannot be larger than required
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
-        call cline%set('mskdiam', real(new_box) * params%smpd)
+        call cline%set('mskdiam', real(new_box) * params%smpd * MSK_EXP_FAC)
         ldim_clip = [new_box, new_box, 1]
         do icavg=1,ncavgs
             call projs(icavg)%bp(0.,lp)
