@@ -5866,7 +5866,7 @@ contains
         &'Do a mini stream to create the opening 2D for generation of picking references',&  ! descr_short
         &'is a program to do a mini stream to create the opening 2D',&   ! descr long
         &'simple_stream',&                                               ! executable
-        &0, 1, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
