@@ -382,6 +382,10 @@ contains
         end do
     end function calc_cluster_cavgs_dmat
 
+    ! function calc_int_pix_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
+
+        
+
     function calc_match_cavgs_dmat( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, which ) result( dmat )
         use simple_corrmat,   only: calc_inpl_invariant_fm
         use simple_histogram, only: histogram
