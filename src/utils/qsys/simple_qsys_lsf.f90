@@ -70,16 +70,25 @@ contains
             if( which > 0 )then
                 bsub_cmd = self%env%get(which)
                 bsub_val = q_descr%get(i)
-                if( trim(key) == 'job_name'              ) tmpstr = '"'//trim(adjustl(bsub_val))//'"';                bsub_val = tmpstr
-                if( trim(key) == 'job_ntasks_per_socket' ) tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val)); bsub_val = tmpstr
-                if( trim(key) == 'job_ntasks'            ) tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val)); bsub_val = tmpstr
-                if( trim(key) == 'job_memory_per_task'   ) tmpstr = '#BSUB -R "rusage[mem='//trim(adjustl(bsub_val)); bsub_val = tmpstr
+                select case(trim(key))
+                    case('job_name')
+                        tmpstr = '"'//trim(adjustl(bsub_val))//'"'
+                    case('job_ntasks_per_socket')
+                        tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val))//']"'
+                    case('job_ntasks')
+                        tmpstr = '#BSUB -R "span[hosts='//trim(adjustl(bsub_val))//']"'
+                    case('job_memory_per_task')
+                        tmpstr = '#BSUB -R "rusage[mem='//trim(adjustl(bsub_val))//']"'
+                    case DEFAULT
+                        tmpstr = bsub_cmd//' '//trim(adjustl(bsub_val))
+                end select
                 if( write2file )then
-                    write(fhandle,'(a)') bsub_cmd//' '//trim(adjustl(bsub_val))
+                    write(fhandle,'(a)') tmpstr
                 else
-                    write(logfhandle,'(a)') bsub_cmd//' '//trim(adjustl(bsub_val))
+                    write(logfhandle,'(a)') tmpstr
                 endif
                 deallocate(bsub_cmd,bsub_val)
+                if(allocated(tmpstr))deallocate(tmpstr)
             endif
             deallocate(key)
         end do
