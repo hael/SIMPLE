@@ -2780,6 +2780,9 @@ contains
         &'(snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
         call abinitio2D%set_input('srch_ctrls', 5, sigma_est, gui_submenu="search")
         call abinitio2D%set_input('srch_ctrls', 6, cls_init, gui_submenu="search")
+        abinitio2D%srch_ctrls(6)%descr_long        = 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){rand}'
+        abinitio2D%srch_ctrls(6)%descr_placeholder = '(ptcl|randcls|rand){rand}'
+        abinitio2D%srch_ctrls(6)%cval_default      = 'rand'
         call abinitio2D%set_input('srch_ctrls', 7, autosample, gui_submenu="search")
         call abinitio2D%set_input('srch_ctrls', 8, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
         &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
