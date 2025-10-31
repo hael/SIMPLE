@@ -74,7 +74,7 @@ contains
         character(len=:),          allocatable :: selection_jpeg
         integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
         real,                      allocatable :: cls_res(:), cls_pop(:)
-        real             :: moldiam
+        real             :: mskdiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
         integer          :: n_imported, n_imported_prev, nptcls_glob, n_failed_jobs
@@ -99,6 +99,7 @@ contains
         if( .not.cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not.cline%defined('center')       ) call cline%set('center',       'yes')
         if( .not.cline%defined('algorithm')    ) call cline%set('algorithm',    'abinitio2D')
+        if( .not.cline%defined('nmics')        ) call cline%set('nmics',        100)
         ! restart
         call cleanup4restart
         ! generate own project file if projfile isnt set
@@ -145,12 +146,12 @@ contains
             ! read mskdiam from file
             call moldiamori%new(1, .false.)
             call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
-            if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
-            moldiam = moldiamori%get(1, "moldiam")
-            ! write acopy for stream 3d
+            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD( 'mskdiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            mskdiam = moldiamori%get(1, "mskdiam")
+            ! write acopy for stream 2D
             call moldiamori%write(1, trim(STREAM_MOLDIAM))
             call moldiamori%kill
-            params%mskdiam = moldiam * 1.2
+            params%mskdiam = mskdiam
             call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
         endif
@@ -164,7 +165,7 @@ contains
         ! Resolution based class rejection
         call set_lpthres_type("off")
         ! Number of particles per class
-        if(params%nptcls_per_cls == 0) write(logfhandle,'(A)')'>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER 100 IMPORTED MICROGRAPHS'
+        if(params%nptcls_per_cls == 0) write(logfhandle, '(A,I6,A)')'>>> # PARTICLES PER CLASS WILL BE AUTO DETERMINED AFTER', params%nmics ,'IMPORTED MICROGRAPHS'
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -480,13 +481,15 @@ contains
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
                 ! Updates global parameters once and init 2D
                 if(params%nptcls_per_cls == 0) then
-                    if(size(projrecords) .gt. 100) then
+                    if(size(projrecords) .gt. params%nmics) then
                         avgmicptcls = nptcls_glob / size(projrecords)
                         avgmicptcls = ceiling(avgmicptcls / 10) * 10.0
+                        ! set nptcls_per_cls based on number particles in 1st 100 micrographs
+                        nptcls_per_cls = avgmicptcls * 100
                         ! these parameters may need tweaking
-                        nptcls_per_cls = 1000 * (20 + (0.15 * avgmicptcls))
-                        nptcls_per_cls = nptcls_per_cls / real(params%ncls)
-                        nptcls_per_cls = ceiling(nptcls_per_cls / 100) * 100.0
+                        !nptcls_per_cls = 1000 * (20 + (0.15 * avgmicptcls))
+                        !nptcls_per_cls = nptcls_per_cls / real(params%ncls)
+                        !nptcls_per_cls = ceiling(nptcls_per_cls / 100) * 100.0
                         write(logfhandle,'(A,I6)')   '>>> AVERAGE # PARTICLES PER MICROGRAPH : ', int(avgmicptcls)
                         write(logfhandle,'(A,I6,A)') '>>> USING ', int(nptcls_per_cls), ' PARTICLES PER CLASS'
                         params%nptcls_per_cls = int(nptcls_per_cls)
@@ -895,12 +898,14 @@ contains
         type(projs_list)                       :: setslist
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
+        type(oris)                             :: moldiamori             
         character(kind=CK,len=:),  allocatable :: snapshot_filename
         character(len=LONGSTRLEN), allocatable :: projects(:)
         integer(kind=dp) :: time_last_import, time_last_iter
         integer :: i, iter, nprojects, nimported, nptcls_glob, nsets_imported, pool_iter, iter_last_import
         integer :: xtile, ytile, mskdiam_update, extra_pause_iters
         logical :: l_pause, l_params_updated, found
+        real    :: mskdiam
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
@@ -943,6 +948,31 @@ contains
         ! wait if dir_target doesn't exist yet
         call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
         call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
+        ! wait for and retrieve mskdiam from sieving
+        if( .not. cline%defined('mskdiam') )then
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 5 MINUTES FOR '//trim(STREAM_MOLDIAM)
+            do i=1, 30
+                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
+                call sleep(10)
+                call http_communicator%send_jobstats()
+                if( http_communicator%exit )then
+                    ! termination
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call http_communicator%term()
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                    call EXIT(0)
+                endif
+            end do
+            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
+            ! read mskdiam from file
+            call moldiamori%new(1, .false.)
+            call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD( 'mskdiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            mskdiam = moldiamori%get(1, "mskdiam")
+            params%mskdiam = mskdiam
+            call cline%set('mskdiam', params%mskdiam)
+            write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+        endif
         ! initialise progress monitor
         call progressfile_init()
         ! master project file

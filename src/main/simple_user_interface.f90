@@ -5872,6 +5872,8 @@ contains
         ! parameter input/output
         call gen_pickrefs%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        call gen_pickrefs%set_input('parm_ios', 2, 'nmics', 'num', 'Number of micrographs to import',&
+        &'Number of micrographs to import for opening 2D', 'Number micrographs', .false., 100.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -6949,7 +6951,6 @@ contains
         call json%add(process_inputs, '', 'ncls=100')
         call json%add(process_inputs, '', 'nptcls_per_cls=0')
         call json%add(process_inputs, '', 'interactive=yes')
-        call json%add(process_inputs, '', 'mskdiam=0')
         call json%add(process_inputs, '', 'nchunks=2')
         call json%add(process_inputs, '', 'nparts=8')
         call json%add(process_inputs, '', 'nthr=8')
