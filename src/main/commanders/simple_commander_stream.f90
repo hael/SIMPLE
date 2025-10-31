@@ -2267,7 +2267,7 @@ contains
             if(found) then
                 call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
                 if(found) then
-                    call process_selected_references(final_selection_source, params%smpd, final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
+                    call process_selected_references(final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
                     call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam", dble(mskdiam_estimate))
                     xtile = 0
                     ytile = 0
