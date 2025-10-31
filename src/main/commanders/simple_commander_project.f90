@@ -111,6 +111,11 @@ type, extends(commander_base) :: commander_merge_projects
     procedure :: execute      => exec_merge_projects
 end type commander_merge_projects
 
+type, extends(commander_base) :: commander_concatenate_projects
+  contains
+    procedure :: execute      => exec_concatenate_projects
+end type commander_concatenate_projects
+
 type, extends(commander_base) :: split_commander_stack
   contains
     procedure :: execute      => exec_split_stack
@@ -1765,6 +1770,27 @@ contains
         call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')
     end subroutine exec_merge_projects
 
+    subroutine exec_concatenate_projects( self, cline )
+        class(commander_concatenate_projects), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        character(len=LONGSTRLEN), allocatable :: fnames(:)
+        character(len=:),          allocatable :: fname
+        type(sp_project) :: spproj_read, spproj
+        type(parameters) :: params   
+        integer :: n_spprojs, iproj
+        call params%new(cline)
+        call read_filetable(params%filetab, fnames)
+        n_spprojs = size(fnames)
+        call spproj%read(trim(fnames(1)))
+        do iproj = 2,n_spprojs
+            call spproj_read%read(trim(fnames(iproj)))
+            call spproj%append_project(spproj_read)
+        enddo
+        call spproj%write(params%projfile)
+        call spproj%kill
+        call simple_end('**** SIMPLE_CONCATENATE_PROJECTS NORMAL STOP ****')
+    end subroutine exec_concatenate_projects
+              
     subroutine exec_split_stack( self, cline )
         class(split_commander_stack), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
