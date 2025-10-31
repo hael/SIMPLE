@@ -73,9 +73,9 @@ contains
                     bsub_val = tmpstr
                 endif
                 if( write2file )then
-                    write(fhandle,'(a)') bsub_cmd//'='//bsub_val
+                    write(fhandle,'(a)') bsub_cmd//' '//bsub_val
                 else
-                    write(logfhandle,'(a)') bsub_cmd//'='//bsub_val
+                    write(logfhandle,'(a)') bsub_cmd//' '//bsub_val
                 endif
                 deallocate(bsub_cmd,bsub_val)
             endif
@@ -83,11 +83,11 @@ contains
         end do
         ! write default instructions
         if( write2file )then
-            write(fhandle,'(a)') '#BSUB -oo ' // trim(stderrout)//'outfile.%J'
-            write(fhandle,'(a)') '#BSUB -eo ' // trim(stderrout)//'errfile.%J'
+            write(fhandle,'(a)') '#BSUB -oo ' //trim(stderrout)//'outfile.%J'
+            write(fhandle,'(a)') '#BSUB -eo ' //trim(stderrout)//'errfile.%J'
         else
-            write(logfhandle,'(a)') '#BSUB -oo ' // trim(stderrout)//'outfile.%J'
-            write(logfhandle,'(a)') '#BSUB -eo ' // trim(stderrout)//'errfile.%J'
+            write(logfhandle,'(a)') '#BSUB -oo ' //trim(stderrout)//'outfile.%J'
+            write(logfhandle,'(a)') '#BSUB -eo ' //trim(stderrout)//'errfile.%J'
         endif
     end subroutine write_lsf_header
 
