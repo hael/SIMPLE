@@ -75,8 +75,8 @@ contains
         integer, parameter   :: NQUANTA = 10
         real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), arr1(:), arr2(:)
         integer, allocatable :: labels(:)
-        integer :: iq, n_fg, n_bg, nvals, cnt, iq_min, ind
-        real    :: d, avg1, avg2, diff, diff_min, med1, med2
+        integer :: iq, n_fg, nvals, cnt, iq_min, ind
+        real    :: diff, diff_min, med1, med2
         ! quantize with sortmeans
         allocate( means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA) )
         means  = 0.
@@ -99,17 +99,15 @@ contains
             endif
         end do
         ! binary clustering for dynamic threshold determination
-        diff_min = huge(d)
-        do iq = 1, cnt
-            n_fg = count(arr >= peak_ts(iq))
-            n_bg = nvals - n_fg
-            ! avg1 = sum(arr, mask=arr >= peak_ts(iq)) / real(n_fg)
-            ! avg2 = sum(arr, mask=arr <  peak_ts(iq)) / real(n_bg)
+        ! init: for iq=1, arr1=arr & arr2 is empty
+        iq_min   = 1
+        med1     = median_nocopy(arr)
+        diff_min = sum(abs(arr - med1))
+        do iq = 2, cnt
             arr1 = pack(arr, mask=arr >= peak_ts(iq))
             arr2 = pack(arr, mask=arr <  peak_ts(iq))
             med1 = median_nocopy(arr1)
             med2 = median_nocopy(arr2)
-            ! diff = sum(abs(arr - avg1), mask=arr >= peak_ts(iq)) + sum(abs(arr - avg2), mask=arr < peak_ts(iq))
             diff = sum(abs(arr - med1), mask=arr >= peak_ts(iq)) + sum(abs(arr - med2), mask=arr < peak_ts(iq))
             if( diff < diff_min )then
                 diff_min = diff
