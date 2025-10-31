@@ -70,10 +70,18 @@ class SIMPLEStream:
                 if shutil.which(dispatchmodel.scmd) is None: return False
                 submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
                 try:
-                    subprocess.Popen(submit_cmd,
-                        cwd=self.base_dir,
-                        start_new_session=True
-                    )
+                    if dispatchmodel.scmd == 'bsub':
+                        subprocess.Popen(['bsub', '-L', '/bin/sh'],
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE,
+                            cwd=self.base_dir,
+                            stdin=open(dispatch_script_path, 'r')
+                        )
+                    else:
+                        subprocess.Popen(submit_cmd,
+                            cwd=self.base_dir,
+                            start_new_session=True
+                        )
                 except subprocess.CalledProcessError as cpe:
                     print(cpe.stderr, end="")
                     return False
@@ -85,7 +93,7 @@ class SIMPLEStream:
         if self.tplt_simple_motif not in dispatchmodel.tplt: return False
         if "name" not in process:                            return False
         if "prg"  not in process:                            return False
-        if self.skip_refgen and (process["name"] == "generate_picking_refs" or process["name"] == "initial_picking"): 
+        if self.skip_refgen and (process["name"] == "opening_2D"): 
             jobmodel = JobModel.objects.filter(id=self.jobid).first()
             jobmodel.initial_picking_stats    = {"state":"skipped"}
             jobmodel.generate_pickrefs_stats  = {"state":"skipped"}
@@ -95,7 +103,7 @@ class SIMPLEStream:
             return True
         # set path to pickrefs for reference based picking
         if not self.skip_refgen and process["name"] == "reference_based_picking":
-            self.args["pickrefs"] = "../generate_picking_refs/selected_references.mrcs"
+            self.args["pickrefs"] = "../opening_2D/selected_references.mrcs"
         if "nthr_master" in process:
             nthr_master = process["nthr_master"]
         else:
@@ -131,10 +139,18 @@ class SIMPLEStream:
         if shutil.which(dispatchmodel.scmd) is None: return False
         submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
         try:
-            subprocess.Popen(submit_cmd,
-                cwd=self.base_dir,
-                start_new_session=True
-            )
+            if dispatchmodel.scmd == 'bsub':
+                subprocess.Popen(['bsub', '-L', '/bin/sh'],
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    cwd=self.base_dir,
+                    stdin=open(dispatch_script_path, 'r')
+                )
+            else:
+                subprocess.Popen(submit_cmd,
+                    cwd=self.base_dir,
+                    start_new_session=True
+                )
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             return False
@@ -234,10 +250,18 @@ class SIMPLE:
         if shutil.which(dispatchmodel.scmd) is None: return False
         submit_cmd =[dispatchmodel.scmd, dispatch_script_path, '&']
         try:
-            subprocess.Popen(submit_cmd,
-                cwd=self.base_dir,
-                start_new_session=True
-            )
+            if dispatchmodel.scmd == 'bsub':
+                subprocess.Popen(['bsub', '-L', '/bin/sh'],
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    cwd=self.base_dir,
+                    stdin=open(dispatch_script_path, 'r')
+                )
+            else:
+                subprocess.Popen(submit_cmd,
+                    cwd=self.base_dir,
+                    start_new_session=True
+                )
         except subprocess.CalledProcessError as cpe:
             print(cpe.stderr, end="")
             return False
