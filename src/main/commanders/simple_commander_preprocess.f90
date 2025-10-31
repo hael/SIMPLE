@@ -2286,9 +2286,9 @@ contains
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
-        real    :: ang, rot, lp, diam_max, sc
+        real    :: ang, rot, lp, diam_max, sc, maxdiam, moldiam, mskdiam
         integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
-        integer :: cnt, norefs, b, new_box
+        integer :: cnt, norefs, b, box_for_pick, box_for_extract
         ! error check
         if( cline%defined('vol1')          ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
@@ -2320,23 +2320,31 @@ contains
             call projs(icavg)%shift([shifts(icavg,1),shifts(icavg,2),0.])
         end do
         ! estimate new box size and clip
-        diam_max = maxval(diams)
-        lp      = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
-        new_box = round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH)
-        new_box = min(new_box, ldim(1)) ! fail safe: new dimensions cannot be larger than required
-        write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', new_box
-        call cline%set('mskdiam', real(new_box) * params%smpd * MSK_EXP_FAC)
-        ldim_clip = [new_box, new_box, 1]
-        do icavg=1,ncavgs
-            call projs(icavg)%bp(0.,lp)
-        end do
-        ! write diam_max to file
-        call moldiamori%new(1, .false.)
-        call moldiamori%set(1, "moldiam", real(round2even(diam_max)))
-        call cline%set('moldiam', real(round2even(diam_max)))
+        diam_max        = maxval(diams)
+        lp              = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
+        box_for_pick    = min(round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH), ldim(1))
+        moldiam         = params%smpd * box_for_pick
+        mskdiam         = moldiam * MSK_EXP_FAC
+        maxdiam         = moldiam + moldiam * BOX_EXP_FAC
+        box_for_extract = find_larger_magic_box(round2even(maxdiam / params%smpd))
+        write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', box_for_pick
+        ! set mskdiam in cline
+        call cline%set('mskdiam', mskdiam)
+        ! write info to file
+        call moldiamori%new(1,                    .false.)
+        call moldiamori%set(1, 'diam_max',        diam_max)
+        call moldiamori%set(1, 'lp',              lp)
+        call moldiamori%set(1, 'box_for_pick',    box_for_pick)
+        call moldiamori%set(1, 'moldiam',         moldiam)
+        call moldiamori%set(1, 'mskdiam',         mskdiam)
+        call moldiamori%set(1, 'box_for_extract', box_for_extract)
         call moldiamori%write(1, trim(STREAM_MOLDIAM))
         call moldiamori%kill
         ! expand in in-plane rotation, clip and write to file
+        ldim_clip = [box_for_pick, box_for_pick, 1]
+        do icavg=1,ncavgs
+            call projs(icavg)%bp(0.,lp)
+        end do
         nrots  = nint( real(NREFS)/real(ncavgs) )
         norefs = ncavgs
         call ref2D_clip%new([ldim_clip(1),ldim_clip(2),1], params%smpd)
