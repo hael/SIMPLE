@@ -14,6 +14,10 @@ end interface detect_peak_thres
 
 contains
 
+
+    ! 0 => upper bound
+    ! 1 => upper bound + Otsu
+    ! 2 => upper bound + twice Otsu
     subroutine detect_peak_thres_1( n, n_ub, level, x, t )
         integer, intent(in)    :: n, n_ub, level
         real,    intent(in)    :: x(n)
@@ -38,6 +42,8 @@ contains
         t     = ts(2)
     end subroutine detect_peak_thres_1
 
+    ! 1 => Otsu
+    ! 2 => twice Otsu
     subroutine detect_peak_thres_2( n, level, x, t )
         integer, intent(in)    :: n, level
         real,    intent(in)    :: x(n)
@@ -100,15 +106,27 @@ contains
         end do
         ! binary clustering for dynamic threshold determination
         ! init: for iq=1, arr1=arr & arr2 is empty
+        ! iq_min   = 1
+        ! med1     = median_nocopy(arr)
+        ! diff_min = sum(abs(arr - med1))
+        ! do iq = 2, cnt
+        !     arr1 = pack(arr, mask=arr >= peak_ts(iq))
+        !     arr2 = pack(arr, mask=arr <  peak_ts(iq))
+        !     med1 = median_nocopy(arr1)
+        !     med2 = median_nocopy(arr2)
+        !     diff = sum(abs(arr - med1), mask=arr >= peak_ts(iq)) + sum(abs(arr - med2), mask=arr < peak_ts(iq))
+        !     if( diff < diff_min )then
+        !         diff_min = diff
+        !         iq_min   = iq
+        !     endif
+        !     deallocate(arr1,arr2)
+        ! end do
         iq_min   = 1
-        med1     = median_nocopy(arr)
-        diff_min = sum(abs(arr - med1))
+        diff_min = huge(x)
         do iq = 2, cnt
             arr1 = pack(arr, mask=arr >= peak_ts(iq))
             arr2 = pack(arr, mask=arr <  peak_ts(iq))
-            med1 = median_nocopy(arr1)
-            med2 = median_nocopy(arr2)
-            diff = sum(abs(arr - med1), mask=arr >= peak_ts(iq)) + sum(abs(arr - med2), mask=arr < peak_ts(iq))
+            diff = dist_btw_nearest(arr1) + dist_btw_nearest(arr2)
             if( diff < diff_min )then
                 diff_min = diff
                 iq_min   = iq
@@ -127,6 +145,59 @@ contains
                 ind = iq_min
         end select
         t_out = peak_ts(ind)
+
+        contains
+
+            ! single linkage
+            function dist_btw_nearest( arr ) result( dist_min )
+                real, intent(in) :: arr(:)
+                integer :: i, j, n
+                real    :: dist, dist_min
+                n = size(arr)
+                dist_min = huge(x)
+                if( n < 2 ) return
+                do i = 1, n-1
+                    do j = i+1, n
+                        dist = abs(arr(i) - arr(j))
+                        if( dist < dist_min ) dist_min = dist
+                    end do
+                end do
+            end function dist_btw_nearest
+
+            ! complete linkage
+            function dist_btw_farthest( arr ) result( dist_max )
+                real, intent(in) :: arr(:)
+                integer :: i, j, n
+                real    :: dist, dist_max
+                n = size(arr)
+                dist_max = huge(x)
+                if( n < 2 ) return
+                do i = 1, n-1
+                    do j = i+1, n
+                        dist = abs(arr(i) - arr(j))
+                        if( dist > dist_max ) dist_max = dist
+                    end do
+                end do
+            end function dist_btw_farthest
+
+            ! average linkage
+            function dist_avg( arr ) result( adist )
+                real, intent(in) :: arr(:)
+                integer :: i, j, n, cnt
+                real    :: dist, adist
+                n = size(arr)
+                adist = huge(x)
+                if( n < 2 ) return
+                adist = 0.
+                do i = 1, n-1
+                    do j = i+1, n
+                        adist = adist + abs(arr(i) - arr(j))
+                        cnt = cnt + 1
+                    end do
+                end do
+                adist = adist / real(cnt)
+            end function dist_avg
+
     end subroutine detect_peak_thres_sortmeans
 
     ! classic Sobel edge detection routine
