@@ -340,8 +340,8 @@ contains
             self%npeaks = 0
             return
         endif
-        ! detect peaks with level 1 otsu
-        call detect_peak_thres(n, 1, tmp, self%t)
+        ! upper bound thresholding
+        call detect_peak_thres(n, self%nboxes_ub, 1, tmp, self%t)
         where( self%box_scores >= self%t )
             ! there's a peak
         elsewhere
@@ -349,7 +349,7 @@ contains
         end where
         ! apply distance filter
         call self%distance_filter
-        ! 2nd peak detection
+        ! peak detection
         deallocate(tmp)
         tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
         n   = 0
@@ -369,6 +369,48 @@ contains
         write(logfhandle,'(a,1x,I5)'  ) '# peaks detected:                      ', self%npeaks
         deallocate(tmp)
     end subroutine detect_peaks
+
+    ! subroutine detect_peaks( self )
+    !     class(pickref), intent(inout) :: self
+    !     real, allocatable :: tmp(:)
+    !     integer :: n
+    !     ! select peak targests > 0
+    !     tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
+    !     n   = 0
+    !     if( allocated(tmp) ) n = size(tmp)
+    !     if( n == 0 )then
+    !         self%npeaks = 0
+    !         return
+    !     endif
+    !     ! detect peaks with level 1 otsu
+    !     call detect_peak_thres(n, 1, tmp, self%t)
+    !     where( self%box_scores >= self%t )
+    !         ! there's a peak
+    !     elsewhere
+    !         self%box_scores = -1.
+    !     end where
+    !     ! apply distance filter
+    !     call self%distance_filter
+    !     ! 2nd peak detection
+    !     deallocate(tmp)
+    !     tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
+    !     n   = 0
+    !     if( allocated(tmp) ) n = size(tmp)
+    !     if( n == 0 )then
+    !         self%npeaks = 0
+    !         return
+    !     endif
+    !     call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
+    !     where( self%box_scores >= self%t )
+    !         ! there's a peak
+    !     elsewhere
+    !         self%box_scores = -1.
+    !     end where
+    !     self%npeaks = count(self%box_scores >= self%t)
+    !     write(logfhandle,'(a,1x,f5.2)') 'peak threshold identified:             ', self%t
+    !     write(logfhandle,'(a,1x,I5)'  ) '# peaks detected:                      ', self%npeaks
+    !     deallocate(tmp)
+    ! end subroutine detect_peaks
 
     subroutine distance_filter( self )
         class(pickref), intent(inout) :: self
