@@ -111,23 +111,38 @@ contains
         ! binary clustering for dynamic threshold determination
         iq_min   = 1
         diff_min = huge(x)
-        do iq = 2, cnt - 1
-            arr1 = pack(arr, mask=arr >= peak_ts(iq))
-            arr2 = pack(arr, mask=arr <  peak_ts(iq))
-            diff = dist_avg( arr1, arr2 )
-            if( diff < diff_min )then
-                diff_min = diff
-                iq_min   = iq
-            endif
-            deallocate(arr1,arr2)
-        end do
+        if( level == 1 )then
+            ! use single linkage distance
+            do iq = 2, cnt - 1
+                arr1 = pack(arr, mask=arr >= peak_ts(iq))
+                arr2 = pack(arr, mask=arr <  peak_ts(iq))
+                diff = dist_btw_nearest( arr1, arr2 )
+                if( diff < diff_min )then
+                    diff_min = diff
+                    iq_min   = iq
+                endif
+                deallocate(arr1,arr2)
+            end do
+        else
+            ! use average linkage distance
+            do iq = 2, cnt - 1
+                arr1 = pack(arr, mask=arr >= peak_ts(iq))
+                arr2 = pack(arr, mask=arr <  peak_ts(iq))
+                diff = dist_avg( arr1, arr2 )
+                if( diff < diff_min )then
+                    diff_min = diff
+                    iq_min   = iq
+                endif
+                deallocate(arr1,arr2)
+            end do
+        endif
         select case(level)
             case(1)
-                 ind = iq_min                  ! fewer peaks
+                 ind = iq_min              ! fewer peaks
             case(2)
-                ind = max(2,   iq_min - 1)     ! optimal # peaks
+                ind = max(2,   iq_min - 1) ! optimal # peaks
             case(3)
-                ind = max(2,   iq_min - 2)     ! more # peaks
+                ind = max(2,   iq_min - 2) ! more # peaks
             case DEFAULT
                 ind = iq_min
         end select       
