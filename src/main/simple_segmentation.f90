@@ -83,7 +83,7 @@ contains
         integer, intent(in)  :: n, level
         real,    intent(in)  :: x(n)
         real,    intent(out) :: t_out
-        integer, parameter   :: NQUANTA = 16
+        integer, parameter   :: NQUANTA = 10
         real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), arr1(:), arr2(:)
         integer, allocatable :: labels(:)
         integer :: iq, n_fg, nvals, cnt, iq_min, ind
@@ -112,10 +112,10 @@ contains
         ! binary clustering for dynamic threshold determination
         iq_min   = 1
         diff_min = huge(x)
-        do iq = 2, NQUANTA / 2
+        do iq = 2, cnt - 1
             arr1 = pack(arr, mask=arr >= peak_ts(iq))
             arr2 = pack(arr, mask=arr <  peak_ts(iq))
-            diff = dist_btw_farthest(arr1) + dist_btw_farthest(arr2)
+            diff = dist_avg( arr1, arr2 )
             if( diff < diff_min )then
                 diff_min = diff
                 iq_min   = iq
@@ -128,11 +128,11 @@ contains
         ! apply particle crowding level adjustement
         select case(level)
             case(1)
-                ind = min(cnt, iq_min + 1) ! fewer # peaks
+                ind = min(cnt - 1, iq_min + 1) ! fewer # peaks
             case(2)
-                ind = iq_min               ! optimal # peaks
+                ind = iq_min                   ! optimal # peaks
             case(3)
-                ind = max(1,   iq_min - 1) ! more # peaks
+                ind = max(2,   iq_min - 1)     ! more # peaks
             case DEFAULT
                 ind = iq_min
         end select
@@ -143,54 +143,54 @@ contains
 
         contains
 
-            ! single linkage, too few peaks
-            function dist_btw_nearest( arr ) result( dist_min ) ! fewest # peaks
-                real, intent(in) :: arr(:)
-                integer :: i, j, n
+            ! single linkage, 3482 ptcls bgal, ind = iq_min
+            ! this is generating too few peaks
+            function dist_btw_nearest( arr1, arr2 ) result( dist_min )
+                real, intent(in) :: arr1(:), arr2(:)
+                integer :: i, j, ni, nj
                 real    :: dist, dist_min
-                n = size(arr)
+                ni       = size(arr1)
+                nj       = size(arr2)
                 dist_min = huge(x)
-                if( n < 2 ) return
-                do i = 1, n-1
-                    do j = i+1, n
-                        dist = abs(arr(i) - arr(j))
+                do i = 1, ni
+                    do j = 1, nj
+                        dist = abs(arr1(i) - arr2(j))
                         if( dist < dist_min ) dist_min = dist
                     end do
                 end do
             end function dist_btw_nearest
 
-            ! complete linkage, works
-            function dist_btw_farthest( arr ) result( dist_max ) ! most # peaks
-                real, intent(in) :: arr(:)
-                integer :: i, j, n
+            ! complete linkage, 6637 ptcls bgal, ind = iq_min
+            ! this is pointless for the way this problem is setup. Guaranteed to always give iq_min = 2
+            function dist_btw_farthest( arr1, arr2 ) result( dist_max )
+                real, intent(in) :: arr1(:), arr2(:)
+                integer :: i, j, ni, nj
                 real    :: dist, dist_max
-                n = size(arr)
+                ni       = size(arr1)
+                nj       = size(arr2)
                 dist_max = 0.
-                if( n < 2 ) return
-                do i = 1, n-1
-                    do j = i+1, n
+                do i = 1, ni
+                    do j = 1, nj
                         dist = abs(arr(i) - arr(j))
                         if( dist > dist_max ) dist_max = dist
                     end do
                 end do
             end function dist_btw_farthest
 
-            ! average linkage, too few peaks
-            function dist_avg( arr ) result( adist )            ! average # peaks
-                real, intent(in) :: arr(:)
-                integer :: i, j, n, cnt
+            ! average linkage, 4969 ptcls bgal, ind = iq_min
+            function dist_avg( arr1, arr2 ) result( adist )
+                real, intent(in) :: arr1(:), arr2(:)
+                integer :: i, j, ni, nj
                 real    :: dist, adist
-                n = size(arr)
-                adist = huge(x)
-                if( n < 2 ) return
+                ni    = size(arr1)
+                nj    = size(arr2)
                 adist = 0.
-                do i = 1, n-1
-                    do j = i+1, n
+                do i = 1, ni
+                    do j = 1, nj
                         adist = adist + abs(arr(i) - arr(j))
-                        cnt = cnt + 1
                     end do
                 end do
-                adist = adist / real(cnt)
+                adist = adist / real(ni * nj)
             end function dist_avg
 
     end subroutine detect_peak_thres_sortmeans
