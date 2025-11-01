@@ -485,7 +485,7 @@ contains
                         avgmicptcls = nptcls_glob / size(projrecords)
                         avgmicptcls = ceiling(avgmicptcls / 10) * 10.0
                         ! set nptcls_per_cls based on number particles in 1st 100 micrographs
-                        nptcls_per_cls = avgmicptcls * 100
+                        nptcls_per_cls = avgmicptcls ! kludge for now
                         ! these parameters may need tweaking
                         !nptcls_per_cls = 1000 * (20 + (0.15 * avgmicptcls))
                         !nptcls_per_cls = nptcls_per_cls / real(params%ncls)
