@@ -14,7 +14,6 @@ end interface detect_peak_thres
 
 contains
 
-
     ! 0 => upper bound
     ! 1 => upper bound + Otsu
     ! 2 => upper bound + twice Otsu
@@ -122,23 +121,16 @@ contains
             endif
             deallocate(arr1,arr2)
         end do
-
-        print *, 'optimal quanta found: ', iq_min
-
-        ! apply particle crowding level adjustement
         select case(level)
             case(1)
-                ind = min(cnt - 1, iq_min + 1) ! fewer # peaks
+                 ind = iq_min                  ! fewer peaks
             case(2)
-                ind = iq_min                   ! optimal # peaks
+                ind = max(2,   iq_min - 1)     ! optimal # peaks
             case(3)
-                ind = max(2,   iq_min - 1)     ! more # peaks
+                ind = max(2,   iq_min - 2)     ! more # peaks
             case DEFAULT
                 ind = iq_min
-        end select
-
-        print *, 'optimal quanta, adjusted : ', ind
-       
+        end select       
         t_out = peak_ts(ind)
 
         contains
@@ -178,6 +170,7 @@ contains
             end function dist_btw_farthest
 
             ! average linkage, 4969 ptcls bgal, ind = iq_min
+            ! 5457 ptcls with ind = max(2,iq_min - 1) -> makes more sense
             function dist_avg( arr1, arr2 ) result( adist )
                 real, intent(in) :: arr1(:), arr2(:)
                 integer :: i, j, ni, nj
