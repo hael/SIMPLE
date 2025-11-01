@@ -109,9 +109,14 @@ contains
             endif
         end do
         ! binary clustering for dynamic threshold determination
+
+        print *, 'peak threshold level: ', level
         iq_min   = 1
         diff_min = huge(x)
         if( level == 1 )then
+
+            print *, 'single linkage distance'
+
             ! use single linkage distance
             do iq = 2, cnt - 1
                 arr1 = pack(arr, mask=arr >= peak_ts(iq))
@@ -124,6 +129,9 @@ contains
                 deallocate(arr1,arr2)
             end do
         else
+
+            print *, 'average linkage distance'
+
             ! use average linkage distance
             do iq = 2, cnt - 1
                 arr1 = pack(arr, mask=arr >= peak_ts(iq))
@@ -136,6 +144,9 @@ contains
                 deallocate(arr1,arr2)
             end do
         endif
+
+        print *, 'iq_min: ', iq_min
+
         select case(level)
             case(1)
                  ind = iq_min              ! fewer peaks
@@ -145,7 +156,10 @@ contains
                 ind = max(2,   iq_min - 2) ! more # peaks
             case DEFAULT
                 ind = iq_min
-        end select       
+        end select
+
+        print *, 'iq_min, modified: ', ind
+        
         t_out = peak_ts(ind)
 
         contains
