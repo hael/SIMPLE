@@ -112,7 +112,8 @@ contains
             if( present(self_refine) ) self_refine%npeaks = 0
             return
         endif
-        call self%remove_outliers
+        ! disabled for now. This needs to be done in a more global fashion, not per-micrograph
+        ! call self%remove_outliers
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
@@ -332,16 +333,16 @@ contains
         class(pickref), intent(inout) :: self
         real, allocatable :: tmp(:)
         integer :: n
-        ! select peak targests > 0
-        tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
-        n   = 0
-        if( allocated(tmp) ) n = size(tmp)
+        n = count(self%box_scores > 0.)
         if( n == 0 )then
             self%npeaks = 0
             return
         endif
+        ! select peak targets > 0
+        tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
         ! upper bound thresholding
-        call detect_peak_thres(n, self%nboxes_ub, 1, tmp, self%t)
+        call detect_peak_thres(n, self%nboxes_ub, 0, tmp, self%t)
+        ! modify box_scores accordingly
         where( self%box_scores >= self%t )
             ! there's a peak
         elsewhere
@@ -350,14 +351,13 @@ contains
         ! apply distance filter
         call self%distance_filter
         ! peak detection
-        deallocate(tmp)
-        tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
-        n   = 0
-        if( allocated(tmp) ) n = size(tmp)
+        n = count(self%box_scores > 0.)
         if( n == 0 )then
             self%npeaks = 0
             return
         endif
+        deallocate(tmp)
+        tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
         call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
         where( self%box_scores >= self%t )
             ! there's a peak

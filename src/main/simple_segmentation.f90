@@ -28,9 +28,14 @@ contains
         if( level < 0 .or. level > 2 )then
             call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
         endif
-        locn  = maxnloc(x, n_ub)
-        ts(1) = minval(x(locn))
-        t     = ts(1)
+        if( n > n_ub )then
+            locn  = maxnloc(x, n_ub)
+            ts(1) = minval(x(locn))
+            t     = ts(1)
+        else
+            ts(1) = minval(x)
+            t     = ts(1)
+        endif
         if( level == 0 ) return
         arr   = pack(x, mask=x >= ts(1))
         call otsu(size(arr), arr, ts(2))
