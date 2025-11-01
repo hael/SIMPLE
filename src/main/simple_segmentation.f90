@@ -83,7 +83,7 @@ contains
         integer, intent(in)  :: n, level
         real,    intent(in)  :: x(n)
         real,    intent(out) :: t_out
-        integer, parameter   :: NQUANTA = 10
+        integer, parameter   :: NQUANTA = 16
         real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), arr1(:), arr2(:)
         integer, allocatable :: labels(:)
         integer :: iq, n_fg, nvals, cnt, iq_min, ind
@@ -110,51 +110,41 @@ contains
             endif
         end do
         ! binary clustering for dynamic threshold determination
-        ! init: for iq=1, arr1=arr & arr2 is empty
-        ! iq_min   = 1
-        ! med1     = median_nocopy(arr)
-        ! diff_min = sum(abs(arr - med1))
-        ! do iq = 2, cnt
-        !     arr1 = pack(arr, mask=arr >= peak_ts(iq))
-        !     arr2 = pack(arr, mask=arr <  peak_ts(iq))
-        !     med1 = median_nocopy(arr1)
-        !     med2 = median_nocopy(arr2)
-        !     diff = sum(abs(arr - med1), mask=arr >= peak_ts(iq)) + sum(abs(arr - med2), mask=arr < peak_ts(iq))
-        !     if( diff < diff_min )then
-        !         diff_min = diff
-        !         iq_min   = iq
-        !     endif
-        !     deallocate(arr1,arr2)
-        ! end do
         iq_min   = 1
         diff_min = huge(x)
-        do iq = 2, cnt
+        do iq = 2, NQUANTA / 2
             arr1 = pack(arr, mask=arr >= peak_ts(iq))
             arr2 = pack(arr, mask=arr <  peak_ts(iq))
-            diff = dist_btw_nearest(arr1) + dist_btw_nearest(arr2)
+            diff = dist_btw_farthest(arr1) + dist_btw_farthest(arr2)
             if( diff < diff_min )then
                 diff_min = diff
                 iq_min   = iq
             endif
             deallocate(arr1,arr2)
         end do
+
+        print *, 'optimal quanta found: ', iq_min
+
         ! apply particle crowding level adjustement
         select case(level)
             case(1)
-                ind = iq_min              ! fewer peaks
+                ind = min(cnt, iq_min + 1) ! fewer # peaks
             case(2)
-                ind = max(1,  iq_min - 1) ! optimal # peaks
+                ind = iq_min               ! optimal # peaks
             case(3)
-                ind = max(1,  iq_min - 2) ! more peaks
+                ind = max(1,   iq_min - 1) ! more # peaks
             case DEFAULT
                 ind = iq_min
         end select
+
+        print *, 'optimal quanta, adjusted : ', ind
+       
         t_out = peak_ts(ind)
 
         contains
 
-            ! single linkage
-            function dist_btw_nearest( arr ) result( dist_min )
+            ! single linkage, too few peaks
+            function dist_btw_nearest( arr ) result( dist_min ) ! fewest # peaks
                 real, intent(in) :: arr(:)
                 integer :: i, j, n
                 real    :: dist, dist_min
@@ -169,13 +159,13 @@ contains
                 end do
             end function dist_btw_nearest
 
-            ! complete linkage
-            function dist_btw_farthest( arr ) result( dist_max )
+            ! complete linkage, works
+            function dist_btw_farthest( arr ) result( dist_max ) ! most # peaks
                 real, intent(in) :: arr(:)
                 integer :: i, j, n
                 real    :: dist, dist_max
                 n = size(arr)
-                dist_max = huge(x)
+                dist_max = 0.
                 if( n < 2 ) return
                 do i = 1, n-1
                     do j = i+1, n
@@ -185,8 +175,8 @@ contains
                 end do
             end function dist_btw_farthest
 
-            ! average linkage
-            function dist_avg( arr ) result( adist )
+            ! average linkage, too few peaks
+            function dist_avg( arr ) result( adist )            ! average # peaks
                 real, intent(in) :: arr(:)
                 integer :: i, j, n, cnt
                 real    :: dist, adist
