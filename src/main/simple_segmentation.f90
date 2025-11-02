@@ -78,6 +78,50 @@ contains
         t   = tmp(ind)
     end subroutine detect_peak_thres_for_npeaks
 
+    subroutine refine_peak_thres_sortmeans( n, level, x, t )
+        integer, intent(in)    :: n, level
+        real,    intent(in)    :: x(n)
+        real,    intent(inout) :: t
+        integer, parameter     :: NQUANTA = 5
+        real,    allocatable   :: arr(:), means(:), peak_ts(:), frac_peaks(:)
+        integer, allocatable :: labels(:)
+        integer :: iq, n_fg, nvals, ind, loc(1), cnt
+        ! quantize with sortmeans
+        allocate(means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA))
+        means  = 0.
+        labels = 0
+        arr    = pack(x, mask=.true.)
+        nvals  = size(arr)
+        call sortmeans(arr, NQUANTA, means, labels)
+        cnt    = 0
+        do iq = 1, NQUANTA
+            if( count(labels == iq) == 0 )cycle
+            cnt          = cnt + 1
+            peak_ts(cnt) = minval(arr, mask=labels == iq)
+            n_fg         = count(arr >= peak_ts(cnt))
+            if( n_fg == nvals )then
+                frac_peaks(cnt) = 1.
+            else if( n_fg == 0 )then
+                frac_peaks(cnt) = 0.
+            else
+                frac_peaks(cnt) = real(n_fg) / real(nvals)
+            endif
+        end do
+        loc = minloc(abs(peak_ts(:cnt) - t))
+        select case(level)
+            case(1)
+                ind = loc(1)            ! fewer # peaks
+            case(2)
+                ind = max(loc(1) - 1,1) ! optimal # peaks
+            case(3)
+                ind = max(loc(1) - 2,1) ! more # peaks
+        end select
+        t = peak_ts(ind)
+    end subroutine refine_peak_thres_sortmeans
+
+    ! should probably do ind=8 for particle_density=low,  level=1
+    ! should do the dynamic stuff for everything else
+    ! should probably do ind=2 for particle_density=high, level=3
     subroutine detect_peak_thres_sortmeans( n, level, x, t_out )
         integer, intent(in)  :: n, level
         real,    intent(in)  :: x(n)
@@ -111,6 +155,7 @@ contains
         ! binary clustering for dynamic threshold determination
 
         print *, 'peak threshold level: ', level
+        
         iq_min   = 1
         diff_min = huge(x)
         if( level == 1 )then
@@ -149,17 +194,17 @@ contains
 
         select case(level)
             case(1)
-                 ind = iq_min              ! fewer peaks
+                ind = min(cnt - 1, iq_min + 1) ! fewer peaks
             case(2)
-                ind = max(2,   iq_min - 1) ! optimal # peaks
+                ind = max(2,       iq_min - 1) ! optimal # peaks
             case(3)
-                ind = max(2,   iq_min - 2) ! more # peaks
+                ind = max(2,       iq_min - 2) ! more # peaks
             case DEFAULT
                 ind = iq_min
         end select
 
         print *, 'iq_min, modified: ', ind
-        
+
         t_out = peak_ts(ind)
 
         contains
