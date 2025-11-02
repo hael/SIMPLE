@@ -358,7 +358,10 @@ contains
         endif
         deallocate(tmp)
         tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
-        call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
+        ! Otsu thres (level=1)
+        call detect_peak_thres(n, 1, tmp, self%t)
+        call refine_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
+        ! call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
         where( self%box_scores >= self%t )
             ! there's a peak
         elsewhere
@@ -434,21 +437,23 @@ contains
         deallocate(tmp)
         do i = nbox, 1, -1 ! because highest peaks are last
             ibox = order(i)
-            mask = .false.
-            !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
-            do jbox = 1,nbox
-                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
-                if( dist <= self%dist_thres ) mask(jbox) = .true.
-            end do
-            !$omp end parallel do
-            ! find best match in the neigh
-            loc = maxloc(pos_scores, mask=mask, dim=1)
-            ! eliminate all but the best
-            mask(loc) = .false.
-            where( mask ) selected_pos = .false.
+            if( selected_pos(ibox) )then
+                mask = .false.
+                !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
+                do jbox = 1,nbox
+                    dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
+                    if( dist <= self%dist_thres ) mask(jbox) = .true.
+                end do
+                !$omp end parallel do
+                ! find best match in the neigh
+                loc = maxloc(pos_scores, mask=mask, dim=1)
+                ! eliminate all but the best
+                mask(loc) = .false.
+                where( mask ) selected_pos = .false.
+            endif
         end do
         npeaks = count(selected_pos)
-        if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', nbox
+        write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', nbox
         write(logfhandle,'(a,1x,I5)') '# positions after  distance filtering: ', npeaks
         ! update packed arrays
         pos_inds   = pack(pos_inds,   mask=selected_pos)
