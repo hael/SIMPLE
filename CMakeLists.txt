@@ -3,8 +3,6 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
 
-project(SIMPLE LANGUAGES Fortran C CXX)
-
 project(SIMPLE
         VERSION 3.0.0
         DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://github.com/hael/SIMPLE)"
