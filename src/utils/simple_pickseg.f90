@@ -275,7 +275,7 @@ contains
         if( nptcls == 0 ) return
         call self%get_positions(pos, box)
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
-        call fileiochk('simple_pickgau; write_boxfile ', iostat)
+        call fileiochk('simple_pickseg; write_boxfile ', iostat)
         do ibox = 1,size(pos,dim=1)
             write(funit,'(I7,I7,I7,I7,I7)') pos(ibox,1), pos(ibox,2), self%box_raw, self%box_raw, -3
         enddo

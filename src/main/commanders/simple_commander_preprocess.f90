@@ -772,16 +772,14 @@ contains
     subroutine exec_pick_distr( self, cline )
         class(commander_pick_distr), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(cmdline)    :: cline_make_pickrefs
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        type(commander_make_pickrefs) :: xmake_pickrefs
+        type(cmdline)                 :: cline_make_pickrefs
+        type(qsys_env)                :: qenv
+        type(chash)                   :: job_descr
         character(len=:), allocatable :: which_picker
-        real,             allocatable :: moldiams(:), dists(:), moldiams_prob(:), moldiams_ref(:)
-        logical,          allocatable :: mask(:)
-        real    :: moldiam_est
-        integer :: nmics, loc, i, j, n
+        integer :: nmics
         logical :: templates_provided
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast')   ) call cline%set('pcontrast', 'black')
@@ -850,7 +848,7 @@ contains
             call cline_make_pickrefs%set('smpd', params%smpd)
             call cline_make_pickrefs%set('mkdir','no')
             if( trim(params%picker).eq.'old' ) call cline_make_pickrefs%set('neg','yes')
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+            call xmake_pickrefs%execute_safe(cline_make_pickrefs)
             call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         endif
@@ -861,26 +859,6 @@ contains
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
-        if( cline%defined('nmoldiams') )then
-            n            = spproj%os_mic%get_noris()
-            mask         = spproj%os_mic%get_all('state') > 0.5
-            moldiams     = spproj%os_mic%get_all('moldiam')
-            moldiams_ref = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
-            allocate(dists(params%nmoldiams), moldiams_prob(params%nmoldiams), source=0.)
-            do i = 1, n
-                if( .not.mask(i) ) cycle
-                dists = abs(moldiams(i) - moldiams_ref)
-                loc   = minloc(dists, dim=1)
-                moldiams_prob(loc) = moldiams_prob(loc) + 1.
-            end do
-            moldiams_prob = moldiams_prob / real(count(mask))
-            moldiam_est   = sum(moldiams_ref * moldiams_prob)
-            do j = 1, params%nmoldiams
-                write(logfhandle,'(a,1x,f6.1,1x,a,1x,f7.2)') 'Molecular diameter:', moldiams_ref(j), 'probability:', moldiams_prob(j)
-            end do
-            write(logfhandle,'(a,1x,f7.2)') 'Suggested single molecular diameter:', moldiam_est
-            call cline%set('moldiam', moldiam_est)
-        endif
         ! cleanup
         call qsys_cleanup
         ! graceful exit
@@ -898,7 +876,6 @@ contains
         character(len=:), allocatable :: output_dir, intg_name, imgkind
         character(len=LONGSTRLEN)     :: boxfile, thumb_den
         integer                       :: fromto(2), imic, ntot, nptcls_out, cnt, state
-        real                          :: moldiam_opt
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
@@ -933,13 +910,9 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
-                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, thumb_den, nptcls_out, moldiam_opt=moldiam_opt)
-                if( params_glob%nmoldiams > 1 )then
-                    call spproj%os_mic%set(imic, 'moldiam', moldiam_opt)
-                else
-                    call spproj%set_boxfile(imic, boxfile, nptcls=nptcls_out)
-                    call spproj%os_mic%set(imic, 'thumb_den', thumb_den)
-                endif
+                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, thumb_den, nptcls_out)
+                call spproj%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                if( params_glob%nmoldiams == 1 ) call spproj%os_mic%set(imic, 'thumb_den', thumb_den)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
@@ -2060,16 +2033,14 @@ contains
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile, thumb_den
-        real    :: moldiam_opt
         integer :: fromto(2), imic, ntot, state, nvalid, i, nptcls
-        logical :: l_extract, l_multipick
+        logical :: l_extract
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters
         call params%new(cline)
         ! if( params%stream.ne.'yes' ) THROW_HARD('new streaming only application')
         l_extract   = trim(params%extract).eq.'yes'
-        l_multipick = params%nmoldiams > 1
         ! read in movies
         call spproj%read( params%projfile )
         if( spproj%get_nintgs() == 0 ) THROW_HARD('no micrograph to process!')
@@ -2085,27 +2056,23 @@ contains
         call simple_mkdir(output_dir_picker, errmsg="commander_pick_extract; ")
         if( l_extract ) call simple_mkdir(output_dir_extract,errmsg="commander_pick_extract; ")
         ! picker specs
-        if( l_multipick )then
-            ! nothing to do
-        else
-            select case(trim(params%picker))
-                case('old')
-                    if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
-                case('new')
-                    if(cline%defined('pickrefs'))then
-                    else
-                        if( .not.cline%defined('moldiam') )then
-                            THROW_HARD('MOLDIAM required for picker=new')
-                        endif
-                    endif
-                case('segdiam')
-                    if( .not.cline%defined('moldiam_max') )then
-                        THROW_WARN('MOLDIAM_MAX not set on command line, falling back on default value: '//int2str(int(params%moldiam_max))//' A')
-                    endif
-                case DEFAULT
-                    THROW_HARD('Unsupported PICKER: '//trim(params%picker))
-            end select
-        endif
+        select case(trim(params%picker))
+        case('old')
+            if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+        case('new')
+            if(cline%defined('pickrefs'))then
+            else
+                if( .not.cline%defined('moldiam') )then
+                    THROW_HARD('MOLDIAM required for picker=new')
+                endif
+            endif
+        case('segdiam')
+            if( .not.cline%defined('moldiam_max') )then
+                THROW_WARN('MOLDIAM_MAX not set on command line, falling back on default value: '//int2str(int(params%moldiam_max))//' A')
+            endif
+        case DEFAULT
+            THROW_HARD('Unsupported PICKER: '//trim(params%picker))
+        end select
         ! command lines
         if( l_extract )then
             cline_extract = cline
@@ -2141,12 +2108,11 @@ contains
             if( .not.file_exists(micname)) cycle
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
-            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, thumb_den, nptcls, moldiam_opt=moldiam_opt)
+            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, thumb_den, nptcls)
             call o_mic%set('nptcls', nptcls)
             if( nptcls > 0 )then
                 call o_mic%set('boxfile', trim(boxfile))
                 call o_mic%set('thumb_den', thumb_den)
-                if( l_multipick ) call o_mic%set('moldiam', moldiam_opt)
             else
                 call o_mic%set_state(0)
             endif
