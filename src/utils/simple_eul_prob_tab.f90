@@ -340,6 +340,10 @@ contains
                 !$omp end parallel do
             endif
         endif
+        do ithr = 1,nthr_glob
+            call grad_shsrch_obj(ithr)%kill
+        end do
+        call o_prev%kill
     end subroutine fill_tab
 
     subroutine fill_tab_state_only( self, pftcc )
@@ -415,6 +419,10 @@ contains
             enddo
             !$omp end parallel do
         endif
+        do ithr = 1,nthr_glob
+            call grad_shsrch_obj(ithr)%kill
+        end do
+        call o_prev%kill
     end subroutine fill_tab_state_only
 
     ! reference normalization (same energy) of the loc_tab
@@ -626,6 +634,7 @@ contains
             end do
         end do
         !$omp end parallel do
+        deallocate(mat_loc)
     end subroutine read_tab_to_glob
 
     subroutine write_state_tab( self, binfname )
@@ -665,6 +674,7 @@ contains
             end do
         end do
         !$omp end parallel do
+        deallocate(state_tab_glob)
     end subroutine read_state_tab
 
     ! write a global assignment map to binary file

@@ -930,7 +930,7 @@ contains
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
         if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 
         if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1) ! this is an empirically determined regularization parameter
-        call xrefine3D_distr%execute(cline)
+        call xrefine3D_distr%execute_safe(cline)
     end subroutine exec_refine3D_nano
 
     subroutine exec_extract_substk( self, cline )

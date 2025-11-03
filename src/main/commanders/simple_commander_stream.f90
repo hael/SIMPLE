@@ -2430,8 +2430,6 @@ contains
                     if(get_pool_iter() > pool_iter) nice_communicator%stat_root%user_input = .true.
                 endif
                 call analyze2D_new_chunks(projrecords)
-                ! Optionally generates snapshot project for abinitio3D
-                call generate_snapshot_for_abinitio
             endif
             call sleep(WAITTIME)
             ! guistats

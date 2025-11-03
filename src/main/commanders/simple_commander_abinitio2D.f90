@@ -62,7 +62,8 @@ contains
         class(oris),             pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages
         logical :: l_shmem, l_inpl
-        call cline%set('oritype', 'ptcl2D')
+        call cline%set('oritype',   'ptcl2D')
+        call cline%set('sigma_est', 'global')
         if( .not. cline%defined('autoscale')  ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('center')     ) call cline%set('center',     'yes')
@@ -75,7 +76,6 @@ contains
         if( .not. cline%defined('lambda')     ) call cline%set('lambda',     ICM_LAMBDA)
         if( .not. cline%defined('extr_lim')   ) call cline%set('extr_lim',   EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs') ) call cline%set('rank_cavgs', 'yes')
-        if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est',  'global')
         if( .not. cline%defined('stats')      ) call cline%set('stats',      'no')
         if( .not. cline%defined('refine')     ) call cline%set('refine',     'snhc_smpl')
         if( .not. cline%defined('ref_type')   ) call cline%set('ref_type',   'cavg')

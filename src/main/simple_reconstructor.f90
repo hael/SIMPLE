@@ -766,9 +766,9 @@ contains
         complex(kind=c_float_complex), pointer :: ptr_self_in(:,:,:) => null()
         call self%get_cmat_ptr(ptr_self)
         call self_in%get_cmat_ptr(ptr_self_in)
-        !$omp parallel workshare proc_bind(close)
-        ptr_self = ptr_self + ptr_self_in
-        self%rho = self%rho + self_in%rho
+        !$omp parallel workshare proc_bind(close) default(shared)
+        ptr_self(:,:,:) = ptr_self + ptr_self_in
+        self%rho(:,:,:) = self%rho + self_in%rho
         !$omp end parallel workshare
     end subroutine sum_reduce
 
