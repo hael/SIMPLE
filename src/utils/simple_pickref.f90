@@ -7,7 +7,7 @@ use simple_image,      only: image
 use simple_segmentation
 implicit none
 
-public :: read_mic_raw_pickref, pickref
+public :: read_mic_raw_pickref, pickref, multiref_merge
 private
 #include "simple_local_flags.inc"
 
@@ -133,7 +133,7 @@ contains
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         logical, optional, intent(in)    :: roi
         integer, optional, intent(in)    :: nboxes_max
-        real    :: scale, lp, sig, ang, r
+        real    :: scale, lp, ang, r
         integer :: iref, box
         if( self%exists ) call self%kill
         self%l_roi = .false.
@@ -798,5 +798,53 @@ contains
             self%exists = .false.
         endif
     end subroutine kill
+
+    ! PUBLIC UTILITY
+
+
+    ! Competitive reference picking
+    ! the first picker contains the positions
+    subroutine multiref_merge( np, pickers, pickind )
+        integer,        intent(in)    :: np
+        class(pickref), intent(inout) :: pickers(np)
+        integer,        intent(inout) :: pickind
+        integer              :: nx,ny,ioff,joff,ipick,c,cmax, ind
+        real,    allocatable :: scores(:,:)
+        integer, allocatable :: map(:,:)
+        nx = pickers(1)%nx_offset
+        ny = pickers(1)%ny_offset
+        allocate(map(nx,ny),    source=0)
+        allocate(scores(nx,ny), source=-1.0)
+        do ioff = 1,nx
+            do joff = 1,ny
+                do ipick = 1,np
+                    if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
+                        if( pickers(ipick)%box_scores(ioff,joff) > scores(ioff,joff) )then
+                            scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
+                            map(ioff,joff)    = ipick
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        ! output is first in the vector
+        pickers(1)%box_scores(:,:) = scores
+        pickers(1)%t = minval(scores, mask=scores >= 0.)
+        ! apply distance filter to merged
+        call pickers(1)%distance_filter
+        ! vote for reference
+        where( pickers(1)%box_scores(:,:) < pickers(1)%t ) map = 0
+        pickind = 0
+        cmax    = -1
+        do ipick = 1,np
+            c = count(map==ipick)
+            if( c > cmax )then
+                cmax    = c
+                pickind = ipick
+            endif
+        enddo
+        ! cleanup
+        deallocate(scores,map)
+    end subroutine multiref_merge
 
 end module simple_pickref
