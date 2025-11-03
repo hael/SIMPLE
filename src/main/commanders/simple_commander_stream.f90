@@ -1796,8 +1796,8 @@ contains
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                      parameter   :: LPSTOP = 8.
         integer,                   allocatable :: final_selection(:), final_boxsize(:)
-        integer                                :: nprojects, iori, i, j, imap, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
-        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk
+        integer                                :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
+        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt
         logical                                :: found
         real                                   :: mskdiam_estimate, smpd_stk
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
@@ -1845,7 +1845,7 @@ contains
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         ! import at least params%nmics micrographs - default 100
-        write(logfhandle, '(A,I6,A)') ">>> IMPORTING AT LEAST", params%nmics, "MICROGRAPHS"
+        write(logfhandle, '(A,I6,A)') '>>> IMPORTING AT LEAST', params%nmics, ' MICROGRAPHS'
         call micimporter( params%nmics )
         ! segmentation-based picking
         call segdiampick_mics(spproj, params%pcontrast, params%nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
@@ -1856,12 +1856,15 @@ contains
             call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
             call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
             call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
-            do ithumb=0, NTHUMB_MAX - 1
-                call communicator_add_micrograph(trim(adjustl(spproj%os_mic%get_static(spproj%os_mic%get_noris() - ithumb, "thumb_den"))),&
-                    nint(spproj%os_mic%get(spproj%os_mic%get_noris() - ithumb, "xdim")),&
-                    nint(spproj%os_mic%get(spproj%os_mic%get_noris() - ithumb, "ydim")),&
-                    trim(adjustl(spproj%os_mic%get_static(spproj%os_mic%get_noris() - ithumb, "boxfile")))&
-                )
+            cnt = 0
+            do ithumb = spproj%os_mic%get_noris(),1,-1 ! only params%nmics are picked
+                if( cnt > NTHUMB_MAX ) exit
+                if( .not.spproj%os_mic%isthere(ithumb, 'thumb_den') ) cycle
+                if( .not.spproj%os_mic%isthere(ithumb, 'boxfile') )   cycle
+                call communicator_add_micrograph(trim(spproj%os_mic%get_static(ithumb, 'thumb_den')),&
+                    spproj%os_mic%get_int(ithumb, 'xdim'), spproj%os_mic%get_int(ithumb, 'ydim'),&
+                    trim(spproj%os_mic%get_static(ithumb, 'boxfile')) )
+                cnt = cnt+1
             end do
             call send_jobstats()
         endif       
