@@ -809,39 +809,33 @@ contains
     end subroutine exec_stream_preprocess
 
     subroutine exec_stream_pick_extract( self, cline )
-        use simple_histogram,    only: histogram
         class(commander_stream_pick_extract), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(commander_make_pickrefs)          :: xmake_pickrefs
         type(parameters)                       :: params
         integer,                   parameter   :: INACTIVE_TIME = 900  ! inactive time triggers writing of project file
         logical,                   parameter   :: DEBUG_HERE    = .false.
-        logical,                   allocatable :: jobs_done(:), jobs_submitted(:)
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(projrecord),          allocatable :: projrecords(:), projrecords_main(:)
         type(qsys_env),            pointer     :: qenv
+        type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates!, picking_diameters
         type(qsys_env),            target      :: qenv_main, qenv_interactive
         type(cmdline)                          :: cline_make_pickrefs, cline_pick_extract
         type(moviewatcher)                     :: project_buff
-        type(sp_project)                       :: spproj_glob, stream_spproj, spproj_tmp, interactive_spproj
+        type(sp_project)                       :: spproj_glob, stream_spproj
         type(starproject_stream)               :: starproj_stream
         type(stream_http_communicator)         :: http_communicator
-        type(histogram)                        :: histogram_moldiams
-        type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates, picking_diameters, refinement_diameters
-        type(nrtxtfile)                        :: boxsize_file
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: odir, odir_extract, odir_picker, odir_completed
         character(len=:),          allocatable :: odir_interactive, odir_interactive_picker, odir_interactive_completed
         character(len=LONGSTRLEN)              :: cwd_job
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
-        real,                      allocatable :: moldiams(:), saved_boxsize(:)
         real                                   :: pickrefs_thumbnail_scale
-        integer,                   allocatable :: complete_search_diameters(:), active_search_diameters(:), refined_search_diameters(:)
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
-        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen, imic
+        integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
         integer                                :: n_pickrefs, thumbcount, xtile, ytile, xtiles, ytiles
-        logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract, l_once
+        logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_extract, l_once
         logical                                :: pause_import, l_interactive, interactive_waiting, found, l_restart
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
@@ -898,7 +892,6 @@ contains
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         ! picking
-        l_multipick   = cline%defined('nmoldiams')
         l_interactive = params%interactive == 'yes'
         ! http communicator init
         if(l_interactive) then
@@ -912,57 +905,38 @@ contains
         call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
         call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
         call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-        if( l_multipick )then
-            interactive_waiting  = .false.
-            l_extract            = .false.
-            l_templates_provided = .false.
-            write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
-            moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
-            call histogram_moldiams%new(moldiams)
-            deallocate(moldiams)
-            ! store diameters
-            if(.not. allocated(active_search_diameters)) allocate(active_search_diameters(0))
-            do i=1, histogram_moldiams%get_nbins()
-                active_search_diameters = [active_search_diameters, int(histogram_moldiams%get_x(i))]
-            end do
-            ! remove existing files (restart)
-            if(file_exists("micrographs.star"))      call del_file("micrographs.star")
-            if(file_exists("micrographs_init.star")) call del_file("micrographs_init.star")
-            if(file_exists("pick.star"))             call del_file("pick.star")
-            if(file_exists("pick_init.star"))        call del_file("pick_init.star")
-        else
-            l_extract            = .true.
-            l_templates_provided = cline%defined('pickrefs')
-            if( l_templates_provided )then
-                if( .not.file_exists(params%pickrefs) ) then
-                   ! if(params%clear .eq. "yes") then
-                        write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 120 MINUTES FOR '//trim(params%pickrefs)
-                        do i=1, 720
-                            if(file_exists(trim(params%pickrefs))) exit
-                            call sleep(10)
-                            call http_communicator%send_jobstats()
-                            if( http_communicator%exit )then
-                                ! termination
-                                write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                                call http_communicator%term()
-                                call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                                call EXIT(0)
-                            endif
-                        end do
-                  !  else
-                  !      THROW_HARD('Could not find: '//trim(params%pickrefs))
-                  !  end if
-                endif
-                write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
-                if( cline%defined('moldiam') )then
-                    call cline%delete('moldiam')
-                    write(logfhandle,'(A)')'>>> MOLDIAM IGNORED'
-                endif
-            else if( .not.cline%defined('moldiam') )then
-                THROW_HARD('MOLDIAM required for picker=new reference-free picking')
-                write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
+        l_extract            = .true.
+        l_templates_provided = cline%defined('pickrefs')
+        if( l_templates_provided )then
+            if( .not.file_exists(params%pickrefs) ) then
+                ! if(params%clear .eq. "yes") then
+                    write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 120 MINUTES FOR '//trim(params%pickrefs)
+                    do i=1, 720
+                        if(file_exists(trim(params%pickrefs))) exit
+                        call sleep(10)
+                        call http_communicator%send_jobstats()
+                        if( http_communicator%exit )then
+                            ! termination
+                            write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                            call http_communicator%term()
+                            call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                            call EXIT(0)
+                        endif
+                    end do
+                !  else
+                !      THROW_HARD('Could not find: '//trim(params%pickrefs))
+                !  end if
             endif
+            write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
+            if( cline%defined('moldiam') )then
+                call cline%delete('moldiam')
+                write(logfhandle,'(A)')'>>> MOLDIAM IGNORED'
+            endif
+        else if( .not.cline%defined('moldiam') )then
+            THROW_HARD('MOLDIAM required for picker=new reference-free picking')
+            write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
         endif
+        ! endif
         ! master project file
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
@@ -986,7 +960,7 @@ contains
             call del_file(TERM_STREAM)
             if(cline%defined('dir_exec')) call cline%delete('dir_exec')
             call simple_rmdir(odir)
-            if( l_multipick .or. params%clear .eq. "yes")then
+            if( params%clear .eq. "yes")then
                 ! removes directory structure
                 call simple_rmdir(odir_completed)
                 call simple_rmdir(odir_picker)
@@ -1016,11 +990,6 @@ contains
         call simple_mkdir(trim(odir)//trim(STDERROUT_DIR))
         call simple_mkdir(odir_completed)
         call simple_mkdir(odir_picker)
-        if( l_multipick ) then
-            call simple_mkdir(odir_interactive)
-            call simple_mkdir(odir_interactive_picker)
-            call simple_mkdir(odir_interactive_completed)
-        endif
         if( l_extract ) call simple_mkdir(odir_extract)
         ! initialise progress monitor
         call progressfile_init()
@@ -1041,14 +1010,7 @@ contains
         ! command line for execution
         cline_pick_extract = cline
         call cline_pick_extract%set('prg','pick_extract')
-        if( l_multipick .and. l_interactive ) then
-            odir           = odir_interactive
-            odir_completed = odir_interactive_completed
-            odir_picker    = odir_interactive_picker
-            call cline_pick_extract%set('dir', PATH_PARENT)
-        else
-            call cline_pick_extract%set('dir', PATH_PARENT)
-        endif
+        call cline_pick_extract%set('dir', PATH_PARENT)
         if( l_extract )then
             call cline_pick_extract%set('extract','yes')
         else
@@ -1080,207 +1042,6 @@ contains
                 call EXIT(0)
             endif
             iter = iter + 1
-            ! go back to interactive multipick
-            if(l_multipick .and. .not. l_interactive .and. params%interactive == 'yes') then
-                call qenv%qscripts%clear_stack()
-                call qenv%qscripts%get_jobs_status(jobs_done, jobs_submitted)
-                if(count(jobs_done) < params%nparts) then
-                    if(.not. pause_import) write(logfhandle, *) ">>>  WAITING FOR ALL PARTS TO COMPLETE"
-                    pause_import = .true.
-                else
-                    write(logfhandle, *) ">>>  RE-ENTERING INTERACTIVE MODE"
-                    if(allocated(projrecords)) then
-                        do iproj=1, size(projrecords)
-                            if(file_exists(trim(projrecords(iproj)%projname))) then
-                                call simple_rename(trim(projrecords(iproj)%projname), filepath(odir, basename(trim(projrecords(iproj)%projname))))
-                                ! update for execution
-                                call spproj_tmp%read(filepath(odir, basename(trim(projrecords(iproj)%projname))))
-                                do imic=1, spproj_tmp%os_mic%get_noris()
-                                    if(file_exists(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))) call del_file(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))
-                                end do
-                              
-                                call spproj_tmp%kill
-                            end if
-                        end do
-                    end if
-                    odir           = odir_interactive
-                    odir_completed = odir_interactive_completed
-                    odir_picker    = odir_interactive_picker
-                    l_interactive  = .true.
-                    params%updated        = 'no'
-                    params%moldiam_refine = 0.0
-                !    params%moldiam        = moldiam_interactive
-                !    params%nmoldiams      = nmoldiams_interactive
-                    pause_import   = .true.
-                    interactive_waiting = .true.
-                    call kill_projrecords(projrecords_main)
-                    allocate(projrecords_main(size(projrecords)))
-                    projrecords_main(:) = projrecords(:)
-                    call kill_projrecords(projrecords)
-                    call spproj_glob%os_mic%kill()
-                    call spproj_glob%os_mic%copy(interactive_spproj%os_mic, is_ptcl=.false.)
-                    call import_previous_mics( projrecords )
-                    if( allocated(projrecords) )then
-                        nptcls_glob = sum(projrecords(:)%nptcls)
-                        nmic_star   = spproj_glob%os_mic%get_noris()
-                    endif
-                    qenv => qenv_interactive
-                    n_imported = 0
-                    n_failed_jobs = size(projrecords) - n_imported
-                end if
-            end if
-            if(l_interactive .and. l_multipick) then
-                ! pause import if more that ninit mics imported
-                if(n_added >= params%ninit .and. .not. pause_import ) then
-                    write(logfhandle,'(A,A,A)') '>>> NEW MICROGRAPH IMPORT PAUSED AFTER ', int2str(params%ninit), ' MICROGRAPHS WHILE INITIAL PICKING IS PERFORMED';
-                    ! http
-                    call http_communicator%json%update(http_communicator%job_json, "stage", "initial search on " // int2str(project_buff%n_history * STREAM_NMOVS_SET) // " micrographs", found)
-                    pause_import = .true.
-                end if
-                ! restart pick if moldiam_refine updated in append mode
-                if(interactive_waiting .and. params%updated .eq. 'yes' .and. (params%moldiam_refine .gt. 0.0 .or. params%moldiam_refine .lt. 0.0 )) then
-                    if(params%moldiam_refine .gt. 0.0 ) then
-                        write(logfhandle,'(A,I3)') '>>> REFINING MOLECULAR DIAMETER        : ', int(params%moldiam_refine)
-                        call http_communicator%json%update(http_communicator%job_json, "stage", "refining pick diameter", found)
-                    else if (params%moldiam_refine .eq. -1.0 ) then
-                        write(logfhandle,'(A)') '>>> INCREASING SEARCH RANGE'
-                        call http_communicator%json%update(http_communicator%job_json, "stage", "increasing search range", found)
-                    else if (params%moldiam_refine .eq. -2.0 ) then
-                        write(logfhandle,'(A)') '>>> DECREASING SEARCH RANGE'
-                        call http_communicator%json%update(http_communicator%job_json, "stage", "decreasing search range", found)
-                    end if
-                     ! http
-                    call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
-                    ! empty latest_picked_micrographs json array
-                    call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
-                    call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                    call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
-                    ! update params
-                    if(params%moldiam_refine .eq. -2.0) then
-                        !decrease search range
-                        params%moldiam_max = minval(complete_search_diameters) - 20
-                        params%moldiam     = 20
-                        params%nmoldiams   = 4
-                    else if(params%moldiam_refine .eq. -1.0) then
-                        !increase search range
-                        params%moldiam     = maxval(complete_search_diameters) + 100
-                        params%moldiam_max = params%moldiam + 100
-                        params%nmoldiams   = 2
-                    else
-                        params%moldiam     = params%moldiam_refine - 40.0
-                        params%moldiam_max = params%moldiam_refine + 40.0
-                        params%nmoldiams   = 5
-                    end if
-                    !reset
-                    params%updated        = 'no'
-                    params%moldiam_refine = 0.0
-                    ! update cline for picker
-                    call cline_pick_extract%set('moldiam',     params%moldiam)
-                    call cline_pick_extract%set('moldiam_max', params%moldiam_max)
-                    call cline_pick_extract%set('nmoldiams',   params%nmoldiams)
-                    !call cline_pick_extract%set('dir','../')
-                    call cline_pick_extract%set('append','yes')
-                    ! undo already processed micrographs
-                    call spproj_glob%os_mic%kill()
-                    if(allocated(projrecords)) then
-                        do iproj=1, size(projrecords)
-                            if(file_exists(trim(projrecords(iproj)%projname))) then
-                                call simple_rename(trim(projrecords(iproj)%projname), filepath(odir, basename(trim(projrecords(iproj)%projname))))
-                                ! update for execution
-                                call spproj_tmp%read(filepath(odir, basename(trim(projrecords(iproj)%projname))))
-                                call cline_pick_extract%set('projname', trim(spproj_tmp%projinfo%get_static(1, 'projname')))
-                                call cline_pick_extract%set('projfile', basename(trim(projrecords(iproj)%projname)))
-                                call cline_pick_extract%set('fromp',    1)
-                                call cline_pick_extract%set('top',      spproj_tmp%os_mic%get_noris())
-                                call spproj_tmp%kill
-                                call qenv%qscripts%add_to_streaming(cline_pick_extract)
-                                call qenv%qscripts%schedule_streaming( qenv%qdescr, path=odir )
-                            end if
-                        end do
-                        deallocate(projrecords)
-                    end if
-                    n_imported = 0
-                    ! reset histogram
-                    moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
-                    call histogram_moldiams%kill
-                    call histogram_moldiams%new(moldiams)
-                    deallocate(moldiams)
-                    ! store search diameters
-                    if(allocated(active_search_diameters))  deallocate(active_search_diameters)
-                    if(allocated(refined_search_diameters)) deallocate(refined_search_diameters)
-                    allocate(active_search_diameters(0))
-                    do i=1, histogram_moldiams%get_nbins()
-                        active_search_diameters = [active_search_diameters, int(histogram_moldiams%get_x(i))]
-                    end do
-                    ! keep import paused
-                    pause_import = .true.
-                    interactive_waiting = .false.
-                    thumbid_offset = 100
-                end if
-                ! exit interactive mode
-                if(params%updated .eq. 'yes' .and. params%interactive == 'no') then
-                    ! undo already processed micrographs
-                    write(logfhandle, '(A)') ">>> EXITING INTERACTIVE MODE"
-                    write(logfhandle, '(A)') ">>> PICKING USING :"
-                    call interactive_spproj%os_mic%copy(spproj_glob%os_mic, is_ptcl=.false.)
-                    call spproj_glob%os_mic%kill()
-                    call project_buff%clear_history()
-                    qenv => qenv_main
-                    !reset
-                    params%updated        = 'no'
-                    n_imported = 0
-                    ! reset paths
-                    odir            = trim(DIR_STREAM)
-                    odir_completed  = trim(DIR_STREAM_COMPLETED)
-                    odir_picker     = trim(PATH_HERE)//trim(DIR_PICKER)
-                    l_interactive = .false.
-                    pause_import  = .false.
-                    interactive_waiting = .false.
-                    params%nmoldiams = 1.0
-                    if(params%moldiam .gt. 0.0)then
-                        write(logfhandle, '(A,F12.2)') "        GAUSSIAN DIAMETER : ", params%moldiam
-                        call cline_pick_extract%set('moldiam',    params%moldiam)
-                    else
-                        call cline_pick_extract%set('moldiam',    0.0)
-                    end if
-                    if(params%ring == 'yes')then
-                        write(logfhandle, '(A,F12.2)') "        RING DIAMETER : ", params%moldiam_ring
-                        call cline_pick_extract%set('moldiam_ring',    params%moldiam_ring)
-                    else
-                        call cline_pick_extract%delete('moldiam_ring')
-                    end if
-                    call cline_pick_extract%set('nmoldiams',  params%nmoldiams)
-                    call cline_pick_extract%set('ring',       params%ring)
-                    call cline_pick_extract%delete('moldiam_max')
-                    ! http
-                    call http_communicator%json%update(http_communicator%job_json, "stage", "picking with selected parameters", found)
-                    call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
-                    call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
-                    call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                    call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
-                    call kill_projrecords(projrecords)
-                    if(allocated(projrecords_main)) then
-                        allocate(projrecords(size(projrecords_main)))
-                        projrecords(:) = projrecords_main(:)
-                    end if
-                    call qenv%qscripts%clear_stack()
-                    if(allocated(projrecords)) then
-                        do iproj=1, size(projrecords)
-                            if(file_exists(trim(projrecords(iproj)%projname))) then
-                                call simple_rename(trim(projrecords(iproj)%projname), filepath(odir, basename(trim(projrecords(iproj)%projname))))
-                                ! update for execution
-                                call spproj_tmp%read(filepath(odir, basename(trim(projrecords(iproj)%projname))))
-                                do imic=1, spproj_tmp%os_mic%get_noris()
-                                    if(file_exists(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))) call del_file(trim(spproj_tmp%os_mic%get_static(imic, 'boxfile')))
-                                end do
-                                call spproj_tmp%kill
-                            end if
-                        end do
-                        call kill_projrecords(projrecords)
-                    end if
-                    thumbid_offset = 0
-                end if
-            end if
             ! detection of new projects
             call project_buff%watch( nprojects, projects, max_nmovies=params%nparts )
             ! append projects to processing stack
@@ -1367,15 +1128,8 @@ contains
                 n_imported = spproj_glob%os_mic%get_noris()
                 write(logfhandle,'(A,I8)')                '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
                 if( l_extract ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED               : ',nptcls_glob
-                if( l_multipick )then
-                    call histogram_moldiams%plot('moldiams', 'Diameters')
-                    if( l_multipick .and. l_interactive)       call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams, filename="pick_init.star")
-                    if( l_multipick .and. .not. l_interactive) call starproj_stream%stream_export_pick_diameters(params%outdir, histogram_moldiams)
-                    write(logfhandle,'(A,F8.2)') '>>> ESTIMATED MOLECULAR DIAMETER        : ',histogram_moldiams%mean()
-                endif
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
-            !    if(.not. l_multipick .and. .not. l_interactive) then
                 if(.not. l_interactive) then
                     ! http stats   
                     call http_communicator%json%update(http_communicator%job_json, "stage",               "finding, picking and extracting micrographs", found)  
@@ -1383,7 +1137,6 @@ contains
                     call http_communicator%json%update(http_communicator%job_json, "particles_extracted",   nptcls_glob,                                 found)
                     call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                  found)
                     call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,         found)
-                    if(histogram_moldiams%get_nbins() .gt. 0) call http_communicator%json%update(http_communicator%job_json, "best_diam",             dble(histogram_moldiams%mean()),             found)
                     if(spproj_glob%os_mic%isthere('thumb_den') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
                     .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                         i_max = 10
@@ -1427,63 +1180,6 @@ contains
                     endif
                 endif
             endif
-           ! if(l_multipick .and. l_interactive .and. pause_import .and. n_imported + n_failed_jobs >= params%ninit) then
-            if(l_multipick .and. l_interactive .and. pause_import .and. spproj_glob%os_mic%get_noris() >= params%ninit) then
-                call qenv%qscripts%clear_stack()
-                call qenv%qscripts%get_jobs_status(jobs_done, jobs_submitted)
-                if(count(jobs_done) < params%nparts) then
-                    if(.not. interactive_waiting) write(logfhandle, *) ">>>  WAITING FOR ALL PARTS TO COMPLETE"
-                else
-                    if(.not. interactive_waiting) write(logfhandle,'(A)')'>>> WAITING FOR USER INPUT'
-                    ! search diameters
-                    if(allocated(active_search_diameters)) then
-                        if(.not. allocated(complete_search_diameters)) allocate(complete_search_diameters(0))
-                        if(allocated(refined_search_diameters))        deallocate(refined_search_diameters)
-                        complete_search_diameters = [complete_search_diameters, active_search_diameters]
-                        allocate(refined_search_diameters(size(active_search_diameters)))
-                        refined_search_diameters(:) = active_search_diameters(:)
-                        deallocate(active_search_diameters)
-                    end if
-                    ! http stats 
-                    call http_communicator%json%update(http_communicator%job_json, "stage",                 "waiting for user input",            found)
-                    call http_communicator%json%update(http_communicator%job_json, "user_input",            .true.,                              found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                          found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob, found)
-                    if(histogram_moldiams%get_nbins() .gt. 0) call http_communicator%json%update(http_communicator%job_json, "best_diam", dble(histogram_moldiams%mean()),     found)
-                    ! create an empty picking_diameters json array
-                    call http_communicator%json%remove(picking_diameters, destroy=.true.)
-                    call http_communicator%json%create_array(picking_diameters, "picking_diameters")
-                    call http_communicator%json%add(http_communicator%job_json, picking_diameters)
-                    call hpsort(complete_search_diameters)
-                    do i=1, size(complete_search_diameters)
-                        call http_communicator%json%add(picking_diameters, "", int(complete_search_diameters(i)))
-                    enddo
-                    call http_communicator%json%remove(refinement_diameters, destroy=.true.)
-                    call http_communicator%json%create_array(refinement_diameters, "refinement_diameters")
-                    call http_communicator%json%add(http_communicator%job_json, refinement_diameters)
-                    call hpsort(refined_search_diameters)
-                    do i=1, size(refined_search_diameters)
-                        call http_communicator%json%add(refinement_diameters, "", int(refined_search_diameters(i)))
-                    enddo
-                    if(spproj_glob%os_mic%isthere('thumb') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
-                        .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
-                        i_max = 10
-                        if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
-                        ! create an empty latest_picked_micrographs json array
-                        call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
-                        call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                        call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
-                        do i_thumb=0, i_max - 1
-                            call communicator_add_micrograph(trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb"))),\
-                            100, 0, 100, 200,\
-                            nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "xdim")),\
-                            nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ydim")),\
-                            trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "boxfile"))))
-                        end do
-                    endif
-                    interactive_waiting = .true.
-                endif
-            endif
             if(interactive_waiting) then
                 call sleep(1)
             else
@@ -1522,11 +1218,7 @@ contains
                 if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    if(l_multipick .and. l_interactive) then
-                        call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set, filename="micrographs_init.star")
-                    else
-                        call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
-                    endif
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=l_optics_set)
                     if( DEBUG_HERE )then
                         ms_export = toc(ms0)
                         print *,'ms_export  : ', ms_export; call flush(6)
@@ -1660,24 +1352,12 @@ contains
                             j = j + 1
                             projrecords(j)%projname = trim(abs_fname)
                             projrecords(j)%micind   = imic
-                            if( l_multipick )then
-                                projrecords(j)%nptcls = 0
-                            else
-                                nptcls      = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
-                                nptcls_glob = nptcls_glob + nptcls ! global update
-                                projrecords(j)%nptcls = nptcls
-                            endif
+                            nptcls                  = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
+                            nptcls_glob             = nptcls_glob + nptcls ! global update
+                            projrecords(j)%nptcls   = nptcls
                             call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
                         enddo
                     enddo
-                    if( l_multipick )then
-                        ! update molecular diameters
-                        do j = n_old+1,spproj_glob%os_mic%get_noris()
-                            if( spproj_glob%os_mic%isthere(j, 'moldiam') )then
-                                call histogram_moldiams%update(spproj_glob%os_mic%get(j, 'moldiam'))
-                            endif
-                        enddo
-                    endif
                 endif
                 ! cleanup
                 do iproj = 1,n_spprojs
@@ -1740,7 +1420,6 @@ contains
                 call spproj_here%projinfo%set(1,'projname', trim(projname))
                 call spproj_here%projinfo%set(1,'projfile', trim(projfile))
                 call spproj_here%projinfo%set(1,'cwd',      trim(path))
-                if(l_multipick .and. l_interactive) call spproj_here%projinfo%set(1,'init', 1.0)
                 ! from current global project
                 spproj_here%compenv = spproj_glob%compenv
                 spproj_here%jobproc = spproj_glob%jobproc
@@ -1864,7 +1543,7 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_rejected",     0)
                 call http_communicator%json%add(http_communicator%job_json, "particles_extracted",      dble(0.0))
                 call http_communicator%json%add(http_communicator%job_json, "box_size",                 dble(0.0))
-                call http_communicator%json%add(http_communicator%job_json, "best_diam",                dble(0.0))
+                ! call http_communicator%json%add(http_communicator%job_json, "best_diam",                dble(0.0))
                 call http_communicator%json%add(http_communicator%job_json, "user_input",               .false.)
                 call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
                 call http_communicator%json%create_array(latest_extracted_particles, "latest_extracted_particles")
@@ -1873,10 +1552,10 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
                 call http_communicator%json%create_array(picking_templates, "picking_templates")
                 call http_communicator%json%add(http_communicator%job_json, picking_templates)
-                call http_communicator%json%create_array(picking_diameters, "picking_diameters")
-                call http_communicator%json%add(http_communicator%job_json, picking_diameters)
-                call http_communicator%json%create_array(refinement_diameters, "refinement_diameters")
-                call http_communicator%json%add(http_communicator%job_json, refinement_diameters)
+                ! call http_communicator%json%create_array(picking_diameters, "picking_diameters")
+                ! call http_communicator%json%add(http_communicator%job_json, picking_diameters)
+                ! call http_communicator%json%create_array(refinement_diameters, "refinement_diameters")
+                ! call http_communicator%json%add(http_communicator%job_json, refinement_diameters)
             end subroutine communicator_init
 
             subroutine communicator_add_micrograph(path, spritex, spritey, spriteh, spritew, xdim, ydim, boxfile_path)
@@ -1885,7 +1564,7 @@ contains
                 type(nrtxtfile)               :: boxfile
                 type(json_value), pointer     :: micrograph, boxes, box
                 real,             allocatable :: boxdata(:,:)
-                integer                       :: i, x, y, diameter, type
+                integer                       :: i, x, y
                 call http_communicator%json%create_object(micrograph, "")
                 call http_communicator%json%add(micrograph, "path",    path)
                 call http_communicator%json%add(micrograph, "spritex", spritex)
@@ -1909,20 +1588,7 @@ contains
                         call http_communicator%json%add(boxes, box)
                     enddo
                 else if(boxfile%get_nrecs_per_line() == 6) then
-                    ! multipick boxfile
-                    do i=1, boxfile%get_ndatalines()
-                        call boxfile%readNextDataLine(boxdata(:,i))
-                        call http_communicator%json%create_object(box, "")
-                        x = nint(boxdata(1,i) + boxdata(3,i)/2)
-                        y = nint(boxdata(2,i) + boxdata(3,i)/2)
-                        diameter = floor(boxdata(4,i))
-                        type     = nint(boxdata(6,i))
-                        call http_communicator%json%add(box, "x",        x)
-                        call http_communicator%json%add(box, "y",        y)
-                        call http_communicator%json%add(box, "diameter", diameter)
-                        call http_communicator%json%add(box, "type",     type)
-                        call http_communicator%json%add(boxes, box)
-                    enddo
+                    THROW_HARD('Invalid boxfile format!')
                 endif
                 call boxfile%kill()
                 deallocate(boxdata)
