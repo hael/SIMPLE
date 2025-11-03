@@ -2761,7 +2761,7 @@ contains
         &'ab initio 2D analysis from particles',&                                      ! descr_short
         &'is a distributed workflow for generating 2D class averages from particles',& ! descr_long                                                           ! descr_long
         &'simple_exec',&                                                               ! executable
-        &0, 0, 0, 9, 5, 1, 2, .true.,&                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 8, 5, 1, 2, .true.,&                                                 ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )       ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2778,15 +2778,14 @@ contains
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
         call abinitio2D%set_input('srch_ctrls', 4, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob|prob_smpl){snhc_smpl}',&
         &'(snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
-        call abinitio2D%set_input('srch_ctrls', 5, sigma_est, gui_submenu="search")
-        call abinitio2D%set_input('srch_ctrls', 6, cls_init, gui_submenu="search")
-        abinitio2D%srch_ctrls(6)%descr_long        = 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){rand}'
-        abinitio2D%srch_ctrls(6)%descr_placeholder = '(ptcl|randcls|rand){rand}'
-        abinitio2D%srch_ctrls(6)%cval_default      = 'rand'
-        call abinitio2D%set_input('srch_ctrls', 7, autosample, gui_submenu="search")
-        call abinitio2D%set_input('srch_ctrls', 8, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
+        call abinitio2D%set_input('srch_ctrls', 5, cls_init, gui_submenu="search")
+        abinitio2D%srch_ctrls(5)%descr_long        = 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){rand}'
+        abinitio2D%srch_ctrls(5)%descr_placeholder = '(ptcl|randcls|rand){rand}'
+        abinitio2D%srch_ctrls(5)%cval_default      = 'rand'
+        call abinitio2D%set_input('srch_ctrls', 6, autosample, gui_submenu="search")
+        call abinitio2D%set_input('srch_ctrls', 7, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
         &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio2D%set_input('srch_ctrls', 9, 'nsample_stop',  'num', 'Maximum # of particles per class to sample',&
+        call abinitio2D%set_input('srch_ctrls', 8, 'nsample_stop',  'num', 'Maximum # of particles per class to sample',&
         &'Dynamic particle sampling upper bound to sample', 'max # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call abinitio2D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
@@ -6759,7 +6758,7 @@ contains
         ! this is ugly at the moment but paves the way ....
         use json_module
         type(json_core)           :: json
-        type(json_value), pointer :: input, user_inputs, ui, options, option
+        type(json_value), pointer :: input, user_inputs, ui
         type(json_value), pointer :: processes, process, process_inputs
         ! JSON init
         call json%initialize()

@@ -247,7 +247,7 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         type(masker)     :: mskvol
-        type(image)      :: vol_e, vol_o    
+        type(image)      :: vol_e, vol_o
         character(len=:),          allocatable :: prev_refine_path, target_name, fname_vol, fname_even, fname_odd
         character(len=LONGSTRLEN), allocatable :: list(:)
         integer,                   allocatable :: state_pops(:)
@@ -717,7 +717,7 @@ contains
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
         ! end gracefully
-        call build%spproj_field%kill
+        call build%kill_general_tbox
         call pftcc%kill
         call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D_distr

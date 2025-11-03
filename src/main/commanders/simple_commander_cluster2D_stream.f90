@@ -26,9 +26,8 @@ implicit none
 
 public :: init_cluster2D_stream, update_user_params2D, terminate_stream2D
 ! Pool
-public :: import_records_into_pool, analyze2D_pool, iterate_pool, iterate_pool_all, update_pool_status, update_pool
-public :: reject_from_pool, reject_from_pool_user
-public :: generate_pool_stats, read_pool_xml_beamtilts, assign_pool_optics
+public :: import_records_into_pool, analyze2D_pool, iterate_pool, update_pool_status, update_pool
+public :: reject_from_pool, reject_from_pool_user, generate_pool_stats
 public :: is_pool_available, get_pool_iter, get_pool_assigned, get_pool_rejected, get_pool_ptr
 public :: get_pool_n_classes, get_pool_n_classes_rejected, get_pool_iter_time, get_pool_cavgs_jpeg, get_pool_cavgs_mrc
 public :: get_pool_res, get_pool_cavgs_pop, get_pool_cavgs_res, get_pool_cavgs_res_at
@@ -44,8 +43,6 @@ public :: update_chunks, analyze2D_new_chunks, import_chunks_into_pool
 public :: flush_remaining_particles, all_chunks_available
 ! New implementation
 public :: memoize_chunks
-! Abinitio3D
-public :: generate_snapshot_for_abinitio
 ! Utilities
 public :: cleanup_root_folder, write_project_stream2D, test_repick, write_repick_refs
 ! Cluster2D subsets
@@ -2015,181 +2012,6 @@ contains
 
     end subroutine iterate_pool
 
-    ! Performs one iteration of all particles in the pool
-    ! updates to command-line, particles sampling, temporary project & execution
-    subroutine iterate_pool_all
-        real,    parameter :: LAMBDA_REFGEN    = 2.0
-        integer, parameter :: ITERLIM_REFGEN   = 20
-        integer, parameter :: ITERSHIFT_REFGEN = 5
-        logical, parameter :: L_BENCH          = .false.
-        type(cmdline),    allocatable :: clines(:)
-        type(sp_project)              :: spproj
-        integer(timer_int_kind)       :: t_tot
-        integer,          allocatable :: clspops(:)
-        real    :: gamma, lambda, lp_refgen
-        integer :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
-        integer :: icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
-        if( .not. stream2D_active ) return
-        if( .not. pool_available )  return
-        if( .not. l_no_chunks ) THROW_HARD('Only designed for raw particles input (no pre-clustering/matching)!')
-        if( L_BENCH ) t_tot  = tic()
-        nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
-        nptcls_glob          = nptcls_tot
-        nptcls_rejected_glob = 0
-        if( nptcls_tot == 0 ) return
-        pool_iter = pool_iter + 1 ! Global iteration counter update
-        call cline_cluster2D_pool%set('ncls',    ncls_glob)
-        call cline_cluster2D_pool%set('startit', pool_iter)
-        call cline_cluster2D_pool%set('maxits',  pool_iter)
-        call cline_cluster2D_pool%set('frcs',    FRCS_FILE)
-        call cline_cluster2D_pool%set('refs', refs_glob)
-        if( pool_iter==1 )then
-            if( cline_cluster2D_pool%defined('cls_init') )then
-                ! references taken care of by cluster2D_distr
-                call cline_cluster2D_pool%delete('frcs')
-                call cline_cluster2D_pool%delete('refs')
-            endif
-        else
-            call cline_cluster2D_pool%delete('cls_init')
-        endif
-        call cline_cluster2D_pool%set('center',    'no')
-        call cline_cluster2D_pool%set('cc_iters',  0)
-        call cline_cluster2D_pool%set('sigma_est', 'global')
-        call cline_cluster2D_pool%set('ml_reg',    'no')
-        call cline_cluster2D_pool%set('lpstop',    params_glob%lpstop)
-        call cline_cluster2D_pool%set('extr_lim',  ITERLIM_REFGEN)
-        call cline_cluster2D_pool%delete('lpstart')
-        call cline_cluster2D_pool%delete('update_frac')
-        ! First iteration
-        if( pool_iter == 1 )then
-            call cline_cluster2D_pool%delete('frcs')
-            call cline_cluster2D_pool%delete('refs')
-            lambda    = LAMBDA_REFGEN
-            lp_refgen = lpstart
-            call cline_cluster2D_pool%set('extr_iter', 1)
-            call cline_cluster2D_pool%set('lp',        lp_refgen)
-            call cline_cluster2D_pool%set('icm',       'yes')
-            call cline_cluster2D_pool%set('lambda',    lambda)
-            ! sigmas2 are calculated first thing
-            allocate(clines(2))
-            call clines(1)%set('prg',        'calc_pspec_distr')
-            call clines(1)%set('oritype',    'ptcl2D')
-            call clines(1)%set('projfile',   PROJFILE_POOL)
-            call clines(1)%set('nthr',       cline_cluster2D_pool%get_iarg('nthr'))
-            call clines(1)%set('which_iter', pool_iter)
-            call clines(1)%set('mkdir',      'yes')
-            call clines(1)%set('sigma_est',  'global')
-            call clines(1)%set('nparts',     params_glob%nparts_pool)
-            clines(2) = cline_cluster2D_pool
-        else
-            if( pool_iter < ITERLIM_REFGEN )then
-                gamma = min(1.0, max(0.0, real(ITERLIM_REFGEN-pool_iter)/real(ITERLIM_REFGEN-1)))
-                ! resolution limit
-                lp_refgen = gamma * lpstart + (1.0-gamma) * lpstop
-                call cline_cluster2D_pool%set('lp',        lp_refgen)
-                ! Extremal iteration
-                call cline_cluster2D_pool%set('extr_iter', pool_iter+1)
-                call cline_cluster2D_pool%set('extr_lim',  ITERLIM_REFGEN)
-                ! ICM
-                lambda = LAMBDA_REFGEN * gamma
-                call cline_cluster2D_pool%set('icm',       'yes')
-                call cline_cluster2D_pool%set('lambda',    lambda)
-            else
-                lambda = 0.0
-                call cline_cluster2D_pool%set('lpstop',    lpstop)
-                call cline_cluster2D_pool%set('icm',       'no')
-                call cline_cluster2D_pool%delete('lp')
-                call cline_cluster2D_pool%delete('extr_iter')
-                call cline_cluster2D_pool%delete('lambda')
-            endif
-            ! remove previous particle files
-            do i = 1,params_glob%nparts_pool
-                call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
-            enddo
-        endif
-        ! offset
-        if( pool_iter < ITERSHIFT_REFGEN )then
-            call cline_cluster2D_pool%set('trs', 0.)
-        else
-            call cline_cluster2D_pool%set('trs', MINSHIFT)
-        endif
-        ! Project metadata update
-        spproj%projinfo = pool_proj%projinfo
-        spproj%compenv  = pool_proj%compenv
-        call spproj%projinfo%delete_entry('projname')
-        call spproj%projinfo%delete_entry('projfile')
-        call spproj%update_projinfo( cline_cluster2D_pool )
-        ! All stacks and particles are used
-        nstks_tot = pool_proj%os_stk%get_noris()
-        if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
-        allocate(pool_stacks_mask(nstks_tot), source=.true.)
-        nstks2update         = count(pool_stacks_mask)
-        nptcls2update        = pool_proj%os_ptcl2D%get_noris()
-        nptcls_old           = pool_proj%os_ptcl2D%get_noris(consider_state=.true.)
-        nptcls_rejected_glob = nptcls_glob - nptcls_old
-        ! Transfer all stacks & particles
-        call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
-        call spproj%os_ptcl2D%new(nptcls2update, is_ptcl=.true.)
-        i     = 0
-        jptcl = 0
-        do istk = 1,nstks_tot
-            fromp = pool_proj%os_stk%get_fromp(istk)
-            top   = pool_proj%os_stk%get_top(istk)
-            ! transfer alignement parameters for selected particles
-            i = i + 1 ! stack index in spproj
-            call spproj%os_stk%transfer_ori(i, pool_proj%os_stk, istk)
-            call spproj%os_stk%set(i, 'fromp', jptcl+1)
-            !$omp parallel do private(iptcl,jjptcl) proc_bind(close) default(shared)
-            do iptcl = fromp,top
-                jjptcl = jptcl+iptcl-fromp+1
-                call spproj%os_ptcl2D%transfer_ori(jjptcl, pool_proj%os_ptcl2D, iptcl)
-                call spproj%os_ptcl2D%set_stkind(jjptcl, i)
-            enddo
-            !$omp end parallel do
-            jptcl = jptcl + (top-fromp+1)
-            call spproj%os_stk%set(i, 'top', jptcl)
-        enddo
-        call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
-        spproj%os_cls2D = pool_proj%os_cls2D
-        ! making sure the new particles are asigned a populated class
-        if( pool_iter >= 2 )then
-            clspops = spproj%os_cls2D%get_all_asint('pop')
-            !$omp parallel do private(iptcl,icls) proc_bind(close) default(shared) schedule(static)
-            do iptcl = 1,nptcls2update
-                if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-                if( spproj%os_ptcl2D%get_updatecnt(iptcl) == 0 )then
-                    icls = irnd_uni(ncls_glob)
-                    do while( clspops(icls) == 0 )
-                        icls = irnd_uni(ncls_glob)
-                    enddo
-                    call spproj%os_ptcl2D%set_class(iptcl, icls)
-                endif
-            enddo
-            !$omp end parallel do
-        endif
-        ! Consolidate sigmas doc
-        call consolidate_sigmas(spproj, nstks2update)
-        ! write project
-        call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
-        call spproj%kill
-        ! pool stats
-        call generate_pool_stats
-        ! execution
-        if( pool_iter == 1 )then
-            call qenv_pool%exec_simple_prgs_in_queue_async(clines, DISTR_EXEC_FNAME, LOGFILE)
-            call clines(:)%kill
-            deallocate(clines)
-        else
-            call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, LOGFILE)
-        endif
-        pool_available = .false.
-        write(logfhandle,'(A,I6,A,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_tot,' PARTICLES'
-        if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
-        ! cleanup
-        if( allocated(clspops) )deallocate(clspops)
-        call tidy_2Dstream_iter
-    end subroutine iterate_pool_all
-
     ! Private utility to aggregate sigma2
     subroutine consolidate_sigmas( project, nstks )
         use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
@@ -2671,56 +2493,6 @@ contains
         end subroutine set_iteration_time
 
     end subroutine generate_pool_stats
-
-    !> Sets xml beamtilts in pool
-    subroutine read_pool_xml_beamtilts()
-        type(Node), pointer     :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
-        integer                 :: i, iread
-        integer(timer_int_kind) :: bt0
-        real(timer_int_kind)    :: bt_read
-        if( DEBUG_HERE ) bt0 = tic()
-        iread = 0
-        do i = 1, pool_proj%os_mic%get_noris()
-            if ( pool_proj%os_mic%get(i, "tiltx") == 0.0 .and. pool_proj%os_mic%get(i, "tilty") == 0.0) then
-                if(file_exists(pool_proj%os_mic%get_static(i, "meta"))) then
-                    xmldoc        => parseFile(trim(adjustl(pool_proj%os_mic%get_static(i,"meta"))))
-                    beamtiltnode  => item(getElementsByTagname(xmldoc, "BeamShift"),0)
-                    beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
-                    beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
-                    call pool_proj%os_mic%set(i, "tiltx", str2real(getTextContent(beamtiltnodex)))
-                    call pool_proj%os_mic%set(i, "tilty", str2real(getTextContent(beamtiltnodey)))
-                    call destroy(xmldoc)
-                    iread = iread + 1
-                endif
-            endif
-        end do
-        if(iread > 0) write(logfhandle,'(A,A,A)') '>>> READ POOL METADATA FOR ', int2str(iread), ' MOVIES'
-        if( DEBUG_HERE )then
-            bt_read = toc(bt0)
-            print *,'bt_read  : ', bt_read; call flush(6)
-        endif
-    end subroutine read_pool_xml_beamtilts
-    
-    ! Sets optics groups in pool
-    subroutine assign_pool_optics(cline_here, propagate)
-        type(cmdline), intent(inout) :: cline_here
-        logical, optional            :: propagate
-        logical                      :: l_propagate
-        integer(timer_int_kind)      :: ot0
-        real(timer_int_kind)         :: ot_assign
-        if( DEBUG_HERE ) ot0 = tic()
-        l_propagate = .false.
-        if(present(propagate)) l_propagate = propagate
-        if(pool_proj%os_mic%get_noris() > nmics_last) then
-            nmics_last = pool_proj%os_mic%get_noris()
-            call starproj%assign_optics(cline_here, pool_proj, propagate=l_propagate)
-            write(logfhandle,'(A,A,A)') '>>> ASSIGNED POOL OPTICS INTO ', int2str(pool_proj%os_optics%get_noris()), ' GROUPS'
-        end if
-        if( DEBUG_HERE )then
-            ot_assign = toc(ot0)
-            print *,'ot_assign  : ', ot_assign; call flush(6)
-        endif
-    end subroutine assign_pool_optics
 
     !> Updates the project watched by the gui for display
     subroutine update_pool_for_gui
@@ -3502,70 +3274,6 @@ contains
             all_chunks_available = all(chunks(:)%available)
         endif
     end function all_chunks_available
-
-    ! ABINITIO3D
-
-    ! writes down a requested number of particles from current pool
-    ! to process in abinitio3D
-    subroutine generate_snapshot_for_abinitio()
-        type(oris)                    :: os
-        type(sp_project)              :: project
-        integer,          allocatable :: pinds(:)
-        character(len=:), allocatable :: filename, tag, tmp1,tmp2
-        integer, allocatable :: states(:)
-        integer :: nrequested,n,nl
-        if( .not.stream2D_active )return
-        if( pool_iter < 2 )       return
-        if( .not.file_exists(SNAPSHOT_REQUEST) )return
-        nl = nlines(SNAPSHOT_REQUEST)
-        if( nl /= 1)then
-            THROW_WARN('Invalid format in: '//trim(SNAPSHOT_REQUEST))
-            return
-        endif
-        call os%new(1, is_ptcl=.false.)
-        call os%read(SNAPSHOT_REQUEST)
-        if( os%isthere(1,'nptcls') )then
-            nrequested = os%get_int(1,'nptcls')
-            if( nrequested <= (nptcls_glob-nptcls_rejected_glob) )then
-                ! delete file only if request fulfilled
-                call del_file(SNAPSHOT_REQUEST)
-                ! selection of particles to be used
-                n = pool_proj%os_ptcl2D%get_noris()
-                call pool_proj%os_ptcl2D%select_particles_set(nrequested, pinds)
-                allocate(states(n),source=0)
-                states(pinds(:)) = 1
-                ! reject unwanted particles
-                call project%copy(pool_proj)
-                call project%os_mic%kill ! not necessary
-                call project%os_ptcl2D%set_all('state',states)
-                project%os_ptcl3D = project%os_ptcl2D
-                deallocate(states)
-                call project%prune_particles
-                ! write
-                nabinitioprojs_glob = nabinitioprojs_glob + 1
-                tag      = trim(int2str_pad(nabinitioprojs_glob,params_glob%numlen))
-                filename = trim(DIR_SNAPSHOT)//'snap_'//tag//trim(METADATA_EXT)
-                call project%write(filename)
-                call project%kill
-                ! copy frcs, will have to be padded to original dimensions
-                filename = trim(DIR_SNAPSHOT)//'snap_'//tag//'_'//trim(FRCS_FILE)
-                call simple_copy_file(FRCS_FILE, filename)
-                ! copy classes, will have to be padded to original dimensions
-                filename = trim(DIR_SNAPSHOT)//'snap_'//tag//'_'//trim(refs_glob)
-                call simple_copy_file(refs_glob, filename)
-                tmp1 = add2fbody(refs_glob, params_glob%ext, '_even')
-                tmp2 = add2fbody(filename,  params_glob%ext, '_even')
-                call simple_copy_file(tmp1, tmp2)
-                tmp1 = add2fbody(refs_glob, params_glob%ext, '_odd')
-                tmp2 = add2fbody(filename,  params_glob%ext, '_odd')
-                call simple_copy_file(tmp1, tmp2)
-                write(logfhandle,'(A,I8,A)')'>>> GENERATED SNAPSHOT FOR ABINITIO3D WITH ',nrequested,' PTCLS'
-            else
-                ! insufficient number of particles, do not remove request
-            endif
-        endif
-        call os%kill
-    end subroutine generate_snapshot_for_abinitio
 
     ! UTILITIES
 
