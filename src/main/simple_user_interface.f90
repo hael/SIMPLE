@@ -5865,7 +5865,7 @@ contains
         &'Do a mini stream to create the opening 2D for generation of picking references',&  ! descr_short
         &'is a program to do a mini stream to create the opening 2D',&   ! descr long
         &'simple_stream',&                                               ! executable
-        &0, 2, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -5873,6 +5873,8 @@ contains
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
         call gen_pickrefs%set_input('parm_ios', 2, 'nmics', 'num', 'Number of micrographs to import',&
         &'Number of micrographs to import for opening 2D', 'Number micrographs', .false., 100.)
+        call gen_pickrefs%set_input('parm_ios', 3, 'optics_dir', 'dir', 'Target directory for optics import',&
+        &'Directory where assign_optics application is running', 'e.g. optics_assignment', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls

@@ -22,7 +22,7 @@ public :: stream_chunk, merge_chunks, update_user_params
 public :: projs_list
 public :: projrecord, projrecords2proj, kill_projrecords, class_rejection
 public :: procrecord, append_procrecord, kill_procrecords, stream_datestr
-public :: process_selected_references
+public :: process_selected_references, get_latest_optics_map_id
 public :: wait_for_folder
 private
 #include "simple_local_flags.inc"
@@ -1378,5 +1378,26 @@ contains
         params_glob => params_ptr
         nullify(params_ptr)
     end subroutine process_selected_references
+    
+    function get_latest_optics_map_id(optics_dir) result (lastmap)
+        character(len=*), optional, intent(in)   :: optics_dir
+    
+        character(len=LONGSTRLEN), allocatable   :: map_list(:)
+        character(len=:),          allocatable   :: map_i_str
+        integer                                  :: imap, prefix_len, testmap, lastmap
+        lastmap = 0
+        if(optics_dir .ne. "") then
+            if(dir_exists(optics_dir)) call simple_list_files(optics_dir // '/' // OPTICS_MAP_PREFIX //'*' // TXT_EXT, map_list)
+        endif
+        if(allocated(map_list)) then
+            prefix_len = len(optics_dir // '/' // OPTICS_MAP_PREFIX) + 1
+            do imap=1, size(map_list)
+                map_i_str = swap_suffix(map_list(imap)(prefix_len:), "", TXT_EXT)
+                testmap = str2int(map_i_str)
+                if(testmap > lastmap) lastmap = testmap
+            enddo
+            deallocate(map_list)
+        endif
+    end function get_latest_optics_map_id
 
 end module simple_stream_utils
