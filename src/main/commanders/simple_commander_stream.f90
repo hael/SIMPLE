@@ -1988,13 +1988,10 @@ contains
                     if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
                         ! termination
                         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
-                        exit
-                    endif
-                    if( http_communicator%stop )then
-                        ! termination
-                        write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                         call spproj%kill
                         call qsys_cleanup
+                        call http_communicator%term()
+                        call http_gen_pickrefs_communicator%term()
                         call simple_end('**** SIMPLE_GEN_PICKREFS USER STOP ****')
                         call EXIT(0)
                     endif
@@ -2031,8 +2028,7 @@ contains
                         call sleep(WAITTIME) ! may want to increase as 3s default
                     endif
                     ! http stats send
-                    call http_communicator%send_jobstats() ! needs to be called so the gui doesn't think the process is dead, "fancy heartbeat"
-                    call http_gen_pickrefs_communicator%send_jobstats()
+                    call send_jobstats() ! needs to be called so the gui doesn't think the process is dead, "fancy heartbeat"
                     if( spproj%os_mic%get_noris() >= nmics ) return
                 end do
             end subroutine micimporter

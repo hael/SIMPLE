@@ -632,7 +632,7 @@ class Job:
             jobmodel.initial_picking_stats     = {}
             jobmodel.initial_picking_update    = {}
             simplestream = SIMPLEStream()
-            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "initial_picking"):
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "opening_2D"):
                 return
             jobmodel.save()
     
@@ -644,7 +644,7 @@ class Job:
             jobmodel.generate_pickrefs_stats     = {}
             jobmodel.generate_pickrefs_update    = {}
             simplestream = SIMPLEStream()
-            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "generate_picking_refs"):
+            if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "opening_2D"):
                 return
             jobmodel.save()    
             
