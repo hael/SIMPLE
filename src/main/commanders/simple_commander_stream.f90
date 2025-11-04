@@ -1943,14 +1943,15 @@ contains
                     call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam", dble(mskdiam_estimate))
                     xtile = 0
                     ytile = 0
-                    do i=0, size(final_selection) - 1
+                    do i=1, size(final_selection)
                         call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
                             &xtile * (100.0 / (xtiles - 1)),&
                             &ytile * (100.0 / (ytiles - 1)),&
                             &100 * ytiles,&
                             &100 * xtiles,&
-                            &pop=1,&
-                            &res=1.1)
+                            &pop=spproj%os_cls2D%get_int(final_selection(i), 'pop'),&
+                            &res=spproj%os_cls2D%get(final_selection(i), 'res')&
+                            )
                         xtile = xtile + 1
                         if(xtile .eq. xtiles) then
                             xtile = 0
