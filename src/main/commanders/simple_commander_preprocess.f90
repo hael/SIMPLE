@@ -2304,6 +2304,7 @@ contains
         call moldiamori%set(1, 'moldiam',         moldiam)
         call moldiamori%set(1, 'mskdiam',         mskdiam)
         call moldiamori%set(1, 'box_for_extract', box_for_extract)
+        if(file_exists(trim(STREAM_MOLDIAM))) call del_file(trim(STREAM_MOLDIAM))
         call moldiamori%write(1, trim(STREAM_MOLDIAM))
         call moldiamori%kill
         ! expand in in-plane rotation, clip and write to file

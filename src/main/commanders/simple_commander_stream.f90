@@ -1189,14 +1189,12 @@ contains
             call update_user_params(cline, http_communicator%update_arguments)
         end do
         ! termination
+        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
+        call http_communicator%send_jobstats()
         call write_project
-       ! call update_user_params(cline)
-        call starproj_stream%copy_micrographs_optics(spproj_glob, write=.true., verbose=DEBUG_HERE)
-        call write_micrographs_starfile(optics_set=.true.)
-        call starproj_stream%stream_export_particles_2D(spproj_glob, params%outdir, optics_set=.true., verbose=.true.)
-        ! kill ptcls now starfiles written
-        call spproj_glob%os_stk%kill
-        call spproj_glob%os_ptcl2D%kill
+        ! write star files (just in case you want ot import these particles/micrographs elsewhere)
+        call spproj_glob%write_mics_star("micrographs.star")
+        call spproj_glob%write_ptcl2D_star("particles.star")
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
@@ -1226,9 +1224,9 @@ contains
             end subroutine write_micrographs_starfile
 
             subroutine write_project()
-                integer, allocatable :: fromps(:)
-                integer              :: nptcls,fromp,top,i,iptcl,nmics,imic,micind
-                character(len=:), allocatable :: prev_projname
+                integer,          allocatable :: fromps(:)
+                integer                       :: nptcls,fromp,top,i,iptcl,nmics,imic,micind,optics_map_id
+                character(len=:), allocatable :: prev_projname, mapfileprefix
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
                 if( DEBUG_HERE ) t0 = tic()
                 ! micrographs
@@ -1283,6 +1281,16 @@ contains
                     call spproj_glob%os_ptcl3D%delete_2Dclustering
                     call spproj_glob%write_segment_inside('ptcl3D', params%projfile)
                     call spproj_glob%os_ptcl3D%kill
+                endif
+                ! add optics
+                if(cline%defined('optics_dir')) then
+                    optics_map_id = get_latest_optics_map_id(trim(params%optics_dir))
+                    if(optics_map_id .gt. 0) then
+                        mapfileprefix = trim(params%optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
+                        write(logfhandle,'(A,I8)')'>>> IMPORTING OPTICS FROM : ' // mapfileprefix
+                        call spproj_glob%import_optics_map(mapfileprefix)
+                        call spproj_glob%write_segment_inside('optics', params%projfile)
+                    endif
                 endif
                 call spproj_glob%write_non_data_segments(params%projfile)
                 ! benchmark
@@ -1787,14 +1795,14 @@ contains
         type(commander_shape_rank_cavgs)       :: xshape_rank
         type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
         character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=:),          allocatable :: final_selection_source, cavgsstk
+        character(len=:),          allocatable :: final_selection_source, cavgsstk, mapfileprefix
         integer,                   allocatable :: cavg_inds(:)
         character(len=*),          parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                      parameter   :: LPSTOP = 8.
         integer,                   allocatable :: final_selection(:), final_boxsize(:)
         integer                                :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
-        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt
+        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt, optics_map_id
         logical                                :: found
         real                                   :: mskdiam_estimate, smpd_stk
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
@@ -1965,8 +1973,19 @@ contains
         call send_jobstats()
         if( allocated(projects)  ) deallocate(projects)
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
+        ! add optics
+        if(cline%defined('optics_dir')) then
+            optics_map_id = get_latest_optics_map_id(trim(params%optics_dir))
+            if(optics_map_id .gt. 0) then
+                mapfileprefix = trim(params%optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
+                call spproj%import_optics_map(mapfileprefix)
+            endif
+        endif
+        ! write project and star files (just in case you want ot import these particles/micrographs elsewhere)
+        call spproj%write
+        call spproj%write_mics_star("micrographs.star")
+        call spproj%write_ptcl2D_star("particles.star")
         ! cleanup
-        !call spproj%write
         call spproj%kill
         ! end gracefully
         call http_communicator%term()

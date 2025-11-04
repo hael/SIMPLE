@@ -4801,8 +4801,14 @@ contains
         real                                         :: min_importind, max_importind
         integer                                      :: il, nl, imic, iptcl, importind, stkind
         if(self%os_mic%get_noris() .eq. 0)                return
-        if(.not.file_exists(mapfileprefix//METADATA_EXT)) return
-        if(.not.file_exists(mapfileprefix//TXT_EXT))      return
+        if(.not.file_exists(mapfileprefix//METADATA_EXT)) then
+            write(logfhandle, '(A)') mapfileprefix//METADATA_EXT // " does not exist"
+            return
+        endif
+        if(.not.file_exists(mapfileprefix//TXT_EXT)) then
+            write(logfhandle, '(A)') mapfileprefix//TXT_EXT // " does not exist"
+            return
+        endif
         call mapfile%new(mapfileprefix//TXT_EXT, 1)
         if( mapfile%get_nrecs_per_line() /= 2 )then
             THROW_WARN('INVALID FORMAT FOR: '//trim(mapfileprefix//TXT_EXT))
