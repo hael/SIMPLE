@@ -908,23 +908,19 @@ contains
         l_templates_provided = cline%defined('pickrefs')
         if( l_templates_provided )then
             if( .not.file_exists(params%pickrefs) ) then
-                ! if(params%clear .eq. "yes") then
-                    write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 120 MINUTES FOR '//trim(params%pickrefs)
-                    do i=1, 720
-                        if(file_exists(trim(params%pickrefs))) exit
-                        call sleep(10)
-                        call http_communicator%send_jobstats()
-                        if( http_communicator%exit )then
-                            ! termination
-                            write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
-                            call http_communicator%term()
-                            call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-                            call EXIT(0)
-                        endif
-                    end do
-                !  else
-                !      THROW_HARD('Could not find: '//trim(params%pickrefs))
-                !  end if
+                write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//trim(params%pickrefs)
+                do i=1, 8640
+                    if(file_exists(trim(params%pickrefs))) exit
+                    call sleep(10)
+                    call http_communicator%send_jobstats()
+                    if( http_communicator%exit )then
+                        ! termination
+                        write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                        call http_communicator%term()
+                        call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+                        call EXIT(0)
+                    endif
+                end do
             endif
             write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
             if( cline%defined('moldiam') )then
@@ -2241,8 +2237,8 @@ contains
             ! nice communicator status
             nice_communicator%stat_root%stage = "waiting for mask diameter"
             call nice_communicator%cycle()
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 60 MINUTES FOR '//trim(STREAM_MOLDIAM)
-            do i=1, 360
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//trim(STREAM_MOLDIAM)
+            do i=1, 8640
                 if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
                 call sleep(10)
             end do
@@ -2252,8 +2248,8 @@ contains
             call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             if( .not. moldiamori%isthere(1, "moldiam") ) THROW_HARD( 'moldiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
             moldiam = moldiamori%get(1, "moldiam")
-           
             ! write acopy for stream 3d
+            if(file_exists(trim(STREAM_MOLDIAM))) call del_file(trim(STREAM_MOLDIAM))
             call moldiamori%write(1, trim(STREAM_MOLDIAM))
             call moldiamori%kill
             params%mskdiam = moldiam * 1.2

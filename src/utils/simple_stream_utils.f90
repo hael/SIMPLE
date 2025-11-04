@@ -1175,7 +1175,8 @@ contains
         integer :: i
         if(.not. dir_exists(trim(folder))) then
             write(logfhandle, *) ">>> WAITING FOR ", trim(folder), " TO BE GENERATED"
-            do i = 1,360
+            ! wait up to 24 hours
+            do i = 1, 8640
                 if(dir_exists(trim(folder))) then
                     write(logfhandle, *) ">>> ", trim(folder), " FOUND"
                     exit
