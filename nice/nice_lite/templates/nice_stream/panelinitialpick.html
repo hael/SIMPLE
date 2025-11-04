@@ -83,6 +83,16 @@
                     </div>
                 {% endif %}
             </div>
+            <div class="grid grid-cols-[auto_auto] gap-0 text-[10px] pl-[10px] w-full">
+                {% if "particles_extracted" in jobstats and jobstats.particles_extracted > 0 %}
+                    <div class="font-bold">particles extracted</div>
+                    <div>{{ jobstats.particles_extracted|intcomma }}</div>
+                {% endif %}
+                {% if "particles_per_mic" in jobstats and jobstats.particles_per_mic > 0 %}
+                    <div class="font-bold">average particles per micrograph</div>
+                    <div>{{ jobstats.particles_per_mic|intcomma }}</div>
+                {% endif %}
+            </div>
             {% if "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %}
                 <div class="flex flex-col">
                     <div class="font-bold text-[10px] pl-[10px]">pick locations</div>
