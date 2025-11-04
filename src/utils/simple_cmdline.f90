@@ -514,9 +514,6 @@ contains
         call parsestr( self%entire_line, ' ', arg, self%argcnt )
         allowed_args = args()
         do i = 1, self%argcnt
-            !allowed_args = arg(i)
-            !print *, "number of arguments", narg
-            print *, "argument.  ", arg(i)
             call self%parse_command_line_value(i, arg(i), allowed_args)
         enddo
     end subroutine read
