@@ -839,6 +839,10 @@ contains
         integer  :: icls, find, pop, filtsz
         filtsz = fdim(params_glob%box_crop) - 1
         allocate(frc(filtsz),source=0.)
+        ! In case nspace/ncls has changed
+        if( build_glob%clsfrcs%get_ncls() /= ncls )then
+            call build_glob%clsfrcs%new(ncls, params_glob%box_crop, params_glob%smpd_crop, params_glob%nstates)
+        endif
         !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
         do icls = 1,ncls
             if( l_comlin )then

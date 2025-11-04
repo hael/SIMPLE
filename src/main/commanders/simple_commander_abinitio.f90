@@ -59,11 +59,10 @@ real,             parameter :: UPDATE_FRAC_MIN       = 0.1               !< 10% 
 integer,          parameter :: NSTAGES               = 8
 integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX     = 7
-integer,          parameter :: PHASES(3)             = [2,6,8]
+integer,          parameter :: PHASES(3)             = [2,6,NSTAGES]
 integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
 integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))  ! the last 30 iterations are not included in this estimate since the sampling method changes
 integer,          parameter :: NSPACE(3)             = [500,1000,2500]
-integer,          parameter :: NSPACE_POLAR          = 1000
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: PROBREFINE_STAGE      = 5
 integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE     ! we switch from ML regularization when prob is switched on
@@ -79,6 +78,8 @@ integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! wh
 integer,          parameter :: GAUREF_LAST_STAGE     = 6                    ! When to stop using a gaussian filtering of the references with polar=yes
 integer,          parameter :: SWITCH_REFTYPE_STAGE  = 7                    ! When to switch from ref_type=clin to ref_type=vol polar=yes
 integer,          parameter :: FRCREF_START_STAGE    = GAUREF_LAST_STAGE+1  ! When to start using the FRC drived optimal filter of references with polar=yes
+integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, TRAILREC_STAGE_SINGLE, NSTAGES]
+integer,          parameter :: NSPACE_POLAR(3)       = [500,                  1000,    2000]
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -741,7 +742,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! calc recs
-            call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=start_stage)
+            call calc_start_rec(params%projfile, xreconstruct3D_distr, start_stage)
         else if( .not. l_ini3D )then
             ! the ptcl3D field should be clean of updates at this stage
             call spproj%os_ptcl3D%clean_entry('updatecnt')
@@ -777,7 +778,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! create starting volume(s)
-            call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=start_stage)
+            call calc_start_rec(params%projfile, xreconstruct3D_distr, start_stage)
         endif
         ! Frequency marching
         maxits_dyn = 0
@@ -814,11 +815,13 @@ contains
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 call randomize_states(spproj, params%projfile, xreconstruct3D_distr, istage=split_stage)
             else if( istage >= RECALC_STARTREC_STAGE )then
-                if( .not.l_polar ) call calc_start_rec(params%projfile, xreconstruct3D_distr, istage=istage)
+                if( .not.l_polar ) call calc_start_rec(params%projfile, xreconstruct3D_distr, istage)
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
+            ! Reconstruction for polar representation
+            if( l_polar ) call calc_rec4polar( xreconstruct3D_distr, istage )
             ! Executing the refinement with the above settings
             call exec_refine3D(istage, xrefine3D)
             ! Symmetrization
@@ -1049,7 +1052,7 @@ contains
         logical,          intent(in)  :: l_cavgs
         character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin, cavgw, ref_type, frcref
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
-        integer :: iphase, iter, inspace, imaxits, nsample_dyn
+        integer :: iphase, iter, inspace, imaxits, nsample_dyn, nspace_phase
         real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg, gaufreq
         ! iteration number bookkeeping
         iter = 0
@@ -1161,6 +1164,7 @@ contains
             endif
         endif
         ! phase logics
+        iphase = 0
         if(      istage <= PHASES(1) )then
             iphase = 1
         else if( istage <= PHASES(2) )then
@@ -1221,8 +1225,13 @@ contains
         if( trim(icm).eq.'yes' ) ml_reg = 'no'
         ! Specific options for polar representation
         if( l_polar )then
-            inspace  = NSPACE_POLAR
-            if( cline_refine3D%defined('nspace') ) inspace = params_glob%nspace
+            nspace_phase = 3
+            if( istage <= NSPACE_PHASE_POLAR(1) )then
+                nspace_phase = 1
+            else if( istage <= NSPACE_PHASE_POLAR(2) )then
+                nspace_phase = 2
+            endif
+            inspace  = NSPACE_POLAR(nspace_phase)
             ml_reg   = 'no'
             icm      = 'no'
             ref_type = trim(params_glob%ref_type)
@@ -1454,6 +1463,66 @@ contains
         endif
         call cline_startrec%kill
     end subroutine calc_start_rec
+
+    ! Performs reconstruction at some set stages when polar=yes
+    subroutine calc_rec4polar( xreconstruct3D, istage )
+        use simple_class_frcs, only: class_frcs
+        class(commander_base), intent(inout) :: xreconstruct3D
+        integer,               intent(in)    :: istage
+        type(cmdline)                 :: cline_rec
+        type(class_frcs)              :: frcs
+        character(len=:), allocatable :: src, dest, sstate, sstage, ext, pgrp
+        real,             allocatable :: fsc(:)
+        integer :: i, inspace
+        if( trim(params_glob%polar) /= 'yes' ) return
+        if( (istage /= NSPACE_PHASE_POLAR(1)+1) .and. (istage /= NSPACE_PHASE_POLAR(2)+1) ) return
+        ! Reconstruction
+        pgrp = trim(params_glob%pgrp)
+        if( istage <= SYMSRCH_STAGE ) pgrp = trim(params_glob%pgrp_start)
+        cline_rec = cline_refine3D
+        call cline_rec%set('prg',       'reconstruct3D')
+        call cline_rec%set('mkdir',     'no')
+        call cline_rec%set('projfile',  params_glob%projfile)
+        call cline_rec%set('pgrp',      pgrp)
+        call cline_rec%set('objfun',    'cc')
+        call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
+        call cline_rec%set('projrec',   'yes')
+        call cline_rec%set('trail_rec', 'no')
+        call cline_rec%delete('update_frac')
+        call cline_rec%delete('which_iter')
+        call cline_rec%delete('endit')
+        call cline_rec%delete('needs_sigma')
+        call cline_rec%delete('sigma_est')
+        call cline_rec%delete('automsk')
+        call cline_rec%delete('mskfile')
+        call xreconstruct3D%execute_safe(cline_rec)
+        sstate = int2str_pad(1,2)
+        sstage = int2str_pad(istage-1,2)
+        ext    = trim(params_glob%ext)
+        src    = trim(VOL_FBODY)//sstate//'_even'//ext
+        dest   = trim(VOL_FBODY)//sstate//'_even_stage_'//sstage//ext
+        call simple_rename(src, dest)
+        src    = trim(VOL_FBODY)//sstate//'_odd'//ext
+        dest   = trim(VOL_FBODY)//sstate//'_odd_stage_'//sstage//ext
+        call simple_rename(src, dest)
+        src    = trim(VOL_FBODY)//sstate//ext
+        dest   = trim(VOL_FBODY)//sstate//'_stage_'//sstage//ext
+        call simple_rename(src, dest)
+        ! Update refine3D command line
+        call cline_refine3D%set('vol1', dest)
+        ! Update FRCS
+        fsc     = file2rarr(FSC_FBODY//int2str_pad(1,2)//trim(BIN_EXT))
+        inspace = cline_refine3D%get_iarg('nspace')
+        call frcs%new(inspace, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, 1)
+        do i = 1,inspace
+            call frcs%set_frc(i,fsc)
+        enddo
+        call frcs%write(FRCS_FILE)
+        ! cleanup
+        deallocate(fsc)
+        call frcs%kill
+        call cline_rec%kill
+    end subroutine calc_rec4polar
 
     subroutine randomize_states( spproj, projfile, xreconstruct3D, istage )
         class(sp_project),     intent(inout) :: spproj
