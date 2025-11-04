@@ -135,6 +135,7 @@ contains
         class(commander_cluster_cavgs), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         logical,          parameter   :: DEBUG = .true.
+        logical,          parameter   :: USE_DEV_CODE = .false.
         real,             parameter   :: SCORE_THRES_INCL = 75.
         integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
@@ -226,8 +227,11 @@ contains
                 if( pop > 0 )then
                     cluster_inds = pack(inds, mask=labels == iclust)
                     cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-                    dmat         = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
-                    ! dmat         = calc_cluster_cavgs_dmat_dev(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
+                    if( USE_DEV_CODE )then
+                        dmat = calc_cluster_cavgs_dmat_dev(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
+                    else
+                        dmat = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
+                    endif
                     call medoid_from_dmat(dmat, ind)
                     clustscores(iclust) = sum(dmat(ind,:)) / real(pop)
                     i_medoids(iclust) = cluster_inds(ind)
@@ -238,8 +242,11 @@ contains
             clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, clustscores )
         else
             ! calculate distance matrix
-            dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
-            ! dmat = calc_cluster_cavgs_dmat_dev(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
+            if( USE_DEV_CODE )then
+                dmat = calc_cluster_cavgs_dmat_dev(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
+            else
+                dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
+            endif
             ! cluster
             if( cline%defined('ncls') )then
                 nclust = params%ncls
