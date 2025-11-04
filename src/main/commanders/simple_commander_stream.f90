@@ -1903,7 +1903,7 @@ contains
         call cline_shape_rank%set('projfile', PROJFILE_GEN_PICKREFS)
         call xshape_rank%execute_safe(cline_shape_rank)
         call spproj%read(PROJFILE_GEN_PICKREFS)
-        call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
+        call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
         call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
         ! send generate pickrefs display info to gui
         xtile = 0

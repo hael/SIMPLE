@@ -40,11 +40,12 @@ contains
     end subroutine mic2thumb
 
     ! write tiled jpeg of mrc file
-    subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles)
+    subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles, mskdiam_px)
         character(len=*),               intent(in)  :: mrcfile, outfile
         real,    optional,              intent(out) :: scale
         integer, optional,              intent(out) :: ntiles, n_xtiles, n_ytiles
         logical, optional, allocatable, intent(in)  :: msk(:)
+        integer, optional,              intent(in)  :: mskdiam_px
         type(image)    :: img, img_pad, img_jpeg
         type(stack_io) :: stkio_r
         integer        :: ldim_stk(3)
@@ -69,6 +70,7 @@ contains
             end if
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
+            if(present(mskdiam_px)) call img%mask(mskdiam_px / 2.0, 'softavg')
             call img%fft
             if(ldim_stk(1) > JPEG_DIM) then
                 call img%clip(img_pad)
