@@ -449,7 +449,7 @@ contains
     end subroutine simple_chdir
 
     !> \brief  Make directory
-    subroutine simple_mkdir( dir, errmsg, verbose)
+    subroutine simple_mkdir( dir, errmsg, verbose )
         character(len=*),           intent(in) :: dir
         character(len=*), optional, intent(in) :: errmsg
         logical,          optional, intent(in) :: verbose
@@ -490,7 +490,7 @@ contains
     !> \brief  Remove directory
     !! return status 0=success for directory exists or directory created
     !! return error status for other removedir results
-    subroutine simple_rmdir( d , status, errmsg)
+    subroutine simple_rmdir( d , status, errmsg )
         character(len=*),intent(in)              :: d
         integer,         intent(out), optional   :: status
         character(len=*),intent(in),  optional   :: errmsg
@@ -517,7 +517,7 @@ contains
     end subroutine simple_rmdir
 
     !> ensure C-strings get converted to fortran-style strings
-    subroutine syslib_c2fortran_string(str, len)
+    subroutine syslib_c2fortran_string( str, len )
         character(len=*), intent(inout) :: str
         integer, intent(out), optional :: len
         integer :: l
@@ -568,7 +568,7 @@ contains
         endif
     end function find_next_int_dir_prefix
 
-    function simple_list_dirs(path, status) result(list)
+    function simple_list_dirs( path, status ) result( list )
         use simple_strings, only: int2str
         character(len=*),           intent(in)  :: path
         integer,          optional, intent(out) :: status
@@ -629,7 +629,7 @@ contains
         endif
     end subroutine simple_list_files
 
-    subroutine simple_list_files_regexp( dir, regexp, list, chronological)
+    subroutine simple_list_files_regexp( dir, regexp, list, chronological )
         use simple_strings, only: int2str
         character(len=*),                       intent(in)    :: dir
         character(len=*),                       intent(in)    :: regexp
@@ -691,7 +691,7 @@ contains
     end subroutine del_file
 
     !> simple_timestamp prints time stamp (based on John Burkardt's website code)
-    subroutine simple_timestamp ( )
+    subroutine simple_timestamp( )
         character(len= 8) :: ampm
         integer (kind=sp) :: d
         integer (kind=sp) :: h
@@ -734,7 +734,7 @@ contains
             d, trim ( month(m) ), y, h, ':', n, ':', s, '.', mm, trim ( ampm )
     end subroutine simple_timestamp
 
-    function cpu_usage ()
+    function cpu_usage()
         real    :: cpu_usage
         integer :: ios, i
         integer :: unit,oldidle, oldsum, sumtimes
@@ -773,7 +773,7 @@ contains
         get_login_id = getuid()
     end function get_login_id
 
-    subroutine print_compiler_info(file_unit)
+    subroutine print_compiler_info( file_unit )
         integer, intent (in), optional :: file_unit
         integer  :: file_unit_op
         character(len=:), allocatable :: compilation_cmd, compiler_ver
@@ -796,7 +796,7 @@ contains
         endif
     end subroutine print_compiler_info
 
-    subroutine simple_sysinfo_usage(valueRSS,valuePeak,valueSize,valueHWM)
+    subroutine simple_sysinfo_usage( valueRSS, valuePeak, valueSize, valueHWM)
         integer(kind=8), intent(out) :: valueRSS
         integer(kind=8), intent(out) :: valuePeak
         integer(kind=8), intent(out) :: valueSize
@@ -812,7 +812,7 @@ contains
     end subroutine simple_sysinfo_usage
 
     ! Suggestion from https://stackoverflow.com/a/30241280
-    subroutine simple_mem_usage(valueRSS,valuePeak,valueSize,valueHWM)
+    subroutine simple_mem_usage( valueRSS, valuePeak, valueSize, valueHWM )
         implicit none
         integer(kind=8), intent(out) :: valueRSS
         integer(kind=8), intent(out), optional :: valuePeak
@@ -881,7 +881,7 @@ contains
         return
     end subroutine simple_mem_usage
 
-    subroutine simple_dump_mem_usage(dump_file)
+    subroutine simple_dump_mem_usage( dump_file )
         character(len=*), intent(inout), optional :: dump_file
         character(len=200)    :: filename=' '
         character(len=8)      :: pid_char=' '
@@ -899,7 +899,7 @@ contains
         call exec_cmdline(trim(command))
     end subroutine simple_dump_mem_usage
 
-    function simple_abspath(infile,errmsg,status,check_exists) result(absolute_name)
+    function simple_abspath( infile, errmsg, status, check_exists ) result( absolute_name )
         character(len=*),              intent(in)    :: infile
         integer,          optional,    intent(out)   :: status
         character(len=*), optional,    intent(in)    :: errmsg
@@ -934,7 +934,7 @@ contains
         if(present(status))status = status_here
     end function simple_abspath
 
-    integer function RE_match(source, regex)
+    integer function RE_match( source, regex )
         character(len=*),              intent(in)  :: source,regex
         integer(c_int) :: res
         character(kind=c_char,len=STDLEN)  :: source_c  !> input string
