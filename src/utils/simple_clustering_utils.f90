@@ -5,7 +5,7 @@ use simple_aff_prop, only: aff_prop
 include 'simple_lib.f08'
 implicit none
 
-public :: cluster_dmat, extract_dmat, aggregate, silhouette_score, DBIndex, DunnIndex
+public :: cluster_dmat, labels2smat, aggregate, silhouette_score, DBIndex, DunnIndex ! extract_dmat
 private
 #include "simple_local_flags.inc"
 
@@ -93,29 +93,52 @@ contains
 
     end subroutine cluster_dmat
 
-    subroutine extract_dmat( dmat, mask, inds, dmat_sub ) 
-        real,                 intent(in)    :: dmat(:,:)
-        logical,              intent(in)    :: mask(:) 
-        integer, allocatable, intent(inout) :: inds(:)
-        real,    allocatable, intent(inout) :: dmat_sub(:,:)
-        integer, allocatable :: itmp(:)
-        integer :: n, i, j, nsub
-        n = size(dmat, dim=1)
-        if( n /= size(mask) ) THROW_HARD('Incongrouent array dimensions, labels must have same dimension as symmetric dmat')
-        nsub = count(mask)
-        if( allocated(dmat_sub) ) deallocate(dmat_sub)
-        allocate(dmat_sub(nsub,nsub), source=0.)
-        if( allocated(inds) ) deallocate(inds)
-        allocate(itmp(n), source=(/(i,i=1,n)/))
-        inds = pack(itmp, mask=mask)    
-        do i = 1, nsub - 1
-            do j = i + 1, nsub
-                dmat_sub(i,j) = dmat(inds(i),inds(j))
-                dmat_sub(j,i) = dmat_sub(i,j)
-            end do
-        end do
-        call normalize_minmax(dmat_sub)
-    end subroutine extract_dmat
+    function labels2smat( labels ) result( smat )
+        integer, intent(in) :: labels(:)
+        real, allocatable   :: smat(:,:)
+        integer :: n, minlab, maxlab, i, j
+        n = size(labels)
+        if( n < 2 ) THROW_HARD('# labels, ie dim of simmat cannot be < 2')
+        minlab = minval(labels)
+        if( minlab < 1 ) THROW_HARD('Clustering labels < 1 not allowed!')
+        maxlab = maxval(labels)
+        allocate(smat(n,n), source= 0.)
+        ! loop over all pairs
+        do i = 1, n - 1
+            do j = i + 1, n
+                if( labels(i) == labels(j) )then
+                    smat(i,j) = 1.
+                    smat(j,i) = 1. ! symmetric
+                endif
+            enddo
+        enddo
+        ! set the diagonal elements to one
+        forall( i = 1:n ) smat(i,i) = 1.
+    end function labels2smat
+
+    ! subroutine extract_dmat( dmat, mask, inds, dmat_sub ) 
+    !     real,                 intent(in)    :: dmat(:,:)
+    !     logical,              intent(in)    :: mask(:) 
+    !     integer, allocatable, intent(inout) :: inds(:)
+    !     real,    allocatable, intent(inout) :: dmat_sub(:,:)
+    !     integer, allocatable :: itmp(:)
+    !     integer :: n, i, j, nsub
+    !     n = size(dmat, dim=1)
+    !     if( n /= size(mask) ) THROW_HARD('Incongrouent array dimensions, labels must have same dimension as symmetric dmat')
+    !     nsub = count(mask)
+    !     if( allocated(dmat_sub) ) deallocate(dmat_sub)
+    !     allocate(dmat_sub(nsub,nsub), source=0.)
+    !     if( allocated(inds) ) deallocate(inds)
+    !     allocate(itmp(n), source=(/(i,i=1,n)/))
+    !     inds = pack(itmp, mask=mask)    
+    !     do i = 1, nsub - 1
+    !         do j = i + 1, nsub
+    !             dmat_sub(i,j) = dmat(inds(i),inds(j))
+    !             dmat_sub(j,i) = dmat_sub(i,j)
+    !         end do
+    !     end do
+    !     call normalize_minmax(dmat_sub)
+    ! end subroutine extract_dmat
 
     !>  \brief Given labelling into k partitions and corresponding distance matrix iteratively
     !          combines the pair of clusters with lowest average inter-cluster distance,
