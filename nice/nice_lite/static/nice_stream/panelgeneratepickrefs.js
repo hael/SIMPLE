@@ -17,14 +17,18 @@ stopProcess = (element) => {
 scrlRight = (element, event) => {
   event.preventDefault()
   const picking_references = document.getElementById("picking_references")
-  picking_references.parentElement.scrollLeft += 72;
+  const rect = picking_references.getBoundingClientRect();
+  picking_references.scrollLeft += rect.width / 3;
+  //picking_references.parentElement.scrollLeft += 72;
   lastinteraction = Date.now();
 }
 
 scrlLeft = (element, event) => {
   event.preventDefault()
   const picking_references = document.getElementById("picking_references")
-  picking_references.parentElement.scrollLeft -= 72;
+  const rect = picking_references.getBoundingClientRect();
+  picking_references.scrollLeft -= rect.width / 3;
+  //picking_references.parentElement.scrollLeft -= 72;
   lastinteraction = Date.now();
 }
 
@@ -36,7 +40,7 @@ toggleTemplate = (templ) => {
     }else{
       xmark.classList.add("hidden")
     }
-    lastinteraction = Date.now();
+    lastinteraction = Date.now() + 90000; // dont update for 2 minutes
 }
 
 selectRefs = (form) => {
@@ -191,6 +195,23 @@ updateScale = (element) => {
   }
 }
 
+drawMask = () => {
+  for(const mskcanvas of document.getElementsByClassName("mskcanvas")){
+    const mskscale = Number(mskcanvas.dataset.mskscale)
+    const mskdiam  = Number(mskcanvas.dataset.mskdiam)
+    const ctx      = mskcanvas.getContext("2d")
+    ctx.strokeStyle = "yellow";
+    ctx.clearRect(0, 0, mskcanvas.width, mskcanvas.height)
+    ctx.beginPath();
+    ctx.arc(mskcanvas.width / 2, mskcanvas.height / 2, mskdiam * mskcanvas.width / (mskscale * 2), 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+}
+
+window.addEventListener("load", () => {
+  drawMask()
+})
+
 window.addEventListener("load", () => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--genpickrefs-contrast',   1.0);
@@ -253,9 +274,9 @@ window.addEventListener("visibilitychange", (event) => {
   }
 })
 
-/*setInterval(function () {
+setInterval(function () {
   if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();
     location.reload();
   }
-}, 1000);*/
+}, 1000);

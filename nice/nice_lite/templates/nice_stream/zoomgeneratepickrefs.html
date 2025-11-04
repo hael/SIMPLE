@@ -22,20 +22,24 @@
     <div class="w-full flex flex-row p-[10px]">
         <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
             <div class="flex flex-row">
-                {% if "particles_extracted" in jobstats and "particles_processed" in jobstats and "particles_rejected" in jobstats and jobstats.particles_extracted > 0 %}
+                {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
                     <div class="flex flex-col">
                         <div class="font-bold text-[12px] pl-[10px]">particles</div>
                         <div class="h-[50px] w-[240px] ml-[15px]">
-                            <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_extracted }} data-processed={{ jobstats.particles_processed }} data-rejected={{ jobstats.particles_rejected }}></canvas>
+                            <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-processed={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
                         </div>
                     </div>
                 {% endif %}
             </div>
             <div class="flex flex-row">
-                 <div class="grid grid-cols-2 gap-1 text-[12px] pl-[10px] mt-[10px]">
-                    {% if "selected_boxsize" in jobstats and jobstats.selected_boxsize > 0 %}
-                        <div class="font-bold">selected boxsize</div>
-                        <div>{{ jobstats.selected_boxsize }}px</div>
+                <div class="grid grid-cols-2 gap-1 text-[12px] pl-[10px] mt-[10px]">
+                    {% if "box_size" in jobstats and jobstats.box_size > 0 %}
+                        <div class="font-bold">box size</div>
+                        <div>{{ jobstats.box_size|intcomma }} px</div>
+                    {% endif %}
+                    {% if "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
+                        <div class="font-bold">mask diameter</div>
+                        <div>{{ jobstats.mask_diam|intcomma }} Å</div>
                     {% endif %}
                 </div>
             </div>
@@ -94,10 +98,10 @@
                                                 {{ template.res|floatformat:1 }}Å
                                             </div>
                                         </div>
-                                        <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate disabledbutton bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
                                             <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[100px] w-[100px] relative">
-                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center top-[0px] absolute">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                                <div class="xmark h-[30px] w-[30px] text-nice4alert flex items-center justify-center top-[0px] absolute">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                     </svg>
                                                 </div>
@@ -157,7 +161,10 @@
                                             {{ template.res|floatformat:1 }}Å
                                         </div>
                                     </div>
-                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto relative">
+                                        {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
+                                            <canvas class="mskcanvas z-1 absolute" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mask_diam }}"></canvas>
+                                        {% endif %}
                                         <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[100px] w-[100px]">
                                             <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">

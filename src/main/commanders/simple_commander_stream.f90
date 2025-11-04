@@ -1127,11 +1127,12 @@ contains
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 if(.not. l_interactive) then
                     ! http stats   
-                    call http_communicator%json%update(http_communicator%job_json, "stage",               "finding, picking and extracting micrographs", found)  
-                    call http_communicator%json%update(http_communicator%job_json, "box_size",              params%box,                                  found)
-                    call http_communicator%json%update(http_communicator%job_json, "particles_extracted",   nptcls_glob,                                 found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                  found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,         found)
+                    call http_communicator%json%update(http_communicator%job_json, "stage",               "finding, picking and extracting micrographs",  found)  
+                    call http_communicator%json%update(http_communicator%job_json, "box_size",              params%box,                                   found)
+                    call http_communicator%json%update(http_communicator%job_json, "particles_extracted",   nptcls_glob,                                  found)
+                    call http_communicator%json%update(http_communicator%job_json, "particles_per_mic",     nint(float(nptcls_glob) / float(n_imported)), found)
+                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                   found)
+                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,          found)
                     if(spproj_glob%os_mic%isthere('thumb_den') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
                     .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                         i_max = 10
@@ -1544,6 +1545,7 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_imported",     0)
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_processed",    0)
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_rejected",     0)
+                call http_communicator%json%add(http_communicator%job_json, "particles_per_mic",        0)
                 call http_communicator%json%add(http_communicator%job_json, "particles_extracted",      dble(0.0))
                 call http_communicator%json%add(http_communicator%job_json, "box_size",                 dble(0.0))
                 ! call http_communicator%json%add(http_communicator%job_json, "best_diam",                dble(0.0))
@@ -1799,6 +1801,7 @@ contains
         integer,                   allocatable :: final_selection(:), final_boxsize(:)
         integer                                :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
         integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt, optics_map_id
+        integer                                :: n_non_zero
         logical                                :: found
         real                                   :: mskdiam_estimate, smpd_stk
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
@@ -1878,9 +1881,11 @@ contains
         call xextract%execute_safe(cline_extract)
         call spproj%read(PROJFILE_GEN_PICKREFS)
         ! send generate pickrefs display info to gui
-        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_extracted",     dble(spproj%os_ptcl2D%get_noris()))
-        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",               dble(mskdiam_estimate))
-        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",                box_in_pix)
+        call http_communicator%json%add(http_communicator%job_json, "particles_extracted", spproj%os_ptcl2D%get_noris())
+        call http_communicator%json%add(http_communicator%job_json, "particles_per_mic",   nint(float(spproj%os_ptcl2D%get_noris()) / float(spproj%os_mic%get_noris())))
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_imported",  spproj%os_ptcl2D%get_noris())
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",           nint(mskdiam_estimate))
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",            box_in_pix)
         call send_jobstats()
         ! 2D analysis
         nptcls = spproj%os_ptcl2D%get_noris()
@@ -1908,6 +1913,9 @@ contains
         ! send generate pickrefs display info to gui
         xtile = 0
         ytile = 0
+        n_non_zero = spproj%os_ptcl2D%count_state_gt_zero()
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_accepted",  n_non_zero)
+        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_rejected",  spproj%os_ptcl2D%get_noris() - n_non_zero)
         call http_gen_pickrefs_communicator%json%remove(latest_cls2D, destroy=.true.)
         call http_gen_pickrefs_communicator%json%create_array(latest_cls2D, "latest_cls2D")
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, latest_cls2D)
@@ -1940,9 +1948,12 @@ contains
                 call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
                 if(found) then
                     call process_selected_references(final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
-                    call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam", dble(mskdiam_estimate))
+                    call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam", nint(mskdiam_estimate))
+                    call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mskscale",  dble(box_for_extract * spproj%get_smpd()))
+                    call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",  box_for_extract)
                     xtile = 0
                     ytile = 0
+                    n_non_zero = 0
                     do i=1, size(final_selection)
                         call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
                             &xtile * (100.0 / (xtiles - 1)),&
@@ -1951,13 +1962,16 @@ contains
                             &100 * xtiles,&
                             &pop=spproj%os_cls2D%get_int(final_selection(i), 'pop'),&
                             &res=spproj%os_cls2D%get(final_selection(i), 'res')&
-                            )
+                        )
+                        n_non_zero = n_non_zero + spproj%os_cls2D%get_int(final_selection(i), 'pop')
                         xtile = xtile + 1
                         if(xtile .eq. xtiles) then
                             xtile = 0
                             ytile = ytile + 1
                         endif
                     end do
+                    call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_accepted",  n_non_zero)
+                    call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_rejected",  spproj%os_ptcl2D%get_noris() - n_non_zero)
                 endif
                 exit
             endif
@@ -2054,6 +2068,8 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_imported",     0)
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_accepted",     0)
                 call http_communicator%json%add(http_communicator%job_json, "micrographs_rejected",     0)
+                call http_communicator%json%add(http_communicator%job_json, "particles_extracted",      0)
+                call http_communicator%json%add(http_communicator%job_json, "particles_per_mic",        0)
                 call http_communicator%json%add(http_communicator%job_json, "user_input",               .false.)
                 call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
                 call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
@@ -2061,12 +2077,14 @@ contains
             end subroutine communicator_init_initial_picking
 
             subroutine communicator_gen_pickrefs_init()
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "stage",                   "initialising")
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_extracted",     dble(0.0))
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",               dble(0.0))
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",                0)
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "selected_boxsize",        0)
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input",              .false.)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "stage",              "initialising")
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_imported", 0)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_accepted", 0)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_rejected", 0)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",          0)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",           0)
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mskscale",           dble(0.0))
+                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input",         .false.)
                 call http_gen_pickrefs_communicator%json%create_array(latest_cls2D, "latest_cls2D")
                 call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, latest_cls2D)
                 call http_gen_pickrefs_communicator%json%create_array(selected_references, "selected_references")
