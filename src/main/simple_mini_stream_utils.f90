@@ -57,6 +57,7 @@ contains
             mic_bin_names(imic)  = append2basename(micnames(imic), BIN_SUFFIX)
             call picker%pick(micnames(imic), smpd, moldiam_max, pcontrast, denfname=mic_den_names(imic),&
                 topofname=mic_topo_names(imic), binfname=mic_bin_names(imic) )
+            if( picker%get_nboxes() == 0 ) cycle
             call picker%get_diameters(tmp)
             if( allocated(diams_arr) )then
                 diams_arr = [diams_arr(:), tmp(:)]

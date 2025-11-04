@@ -66,38 +66,41 @@ contains
         ! identify connected components
         call mic_bin%find_ccs(img_cc)
         call img_cc%get_nccs(nccs)
-        ! gather size info
-        call img_cc%get_imat(cc_imat)
-        call img_cc%get_imat(cc_imat_copy)
-        do icc = 1, nccs
-            call img_cc%diameter_cc(icc, diam)
-            if( diam + 2. * SMPD_SHRINK1 > self%moldiam_max .or. diam < SMPD_SHRINK1 * 3. ) then
-                ! remove connected component
-                where ( cc_imat == icc ) cc_imat_copy = 0
-            else
-                ! stash diameter & box coordinate
-                call self%diameters%push_back(diam)
-                call img_cc%masscen_cc(icc, rpos)
-                pos = nint(rpos/scale) + ldim_raw(1:2)/2 ! base 0
-                call self%xpos%push_back(pos(1))
-                call self%ypos%push_back(pos(2))
-            endif
-        end do
-        ! binarize back
-        cc_imat = cc_imat_copy
-        where( cc_imat_copy > 0 )
-            cc_imat = 1
-        elsewhere
-            cc_imat = 0
-        endwhere
-        call mic_bin%set_imat(cc_imat)
+        if( nccs > 0 )then
+            ! gather size info
+            call img_cc%get_imat(cc_imat)
+            call img_cc%get_imat(cc_imat_copy)
+            do icc = 1, nccs
+                call img_cc%diameter_cc(icc, diam)
+                if( diam + 2. * SMPD_SHRINK1 > self%moldiam_max .or. diam < SMPD_SHRINK1 * 3. ) then
+                    ! remove connected component
+                    where ( cc_imat == icc ) cc_imat_copy = 0
+                else
+                    ! stash diameter & box coordinate
+                    call self%diameters%push_back(diam)
+                    call img_cc%masscen_cc(icc, rpos)
+                    pos = nint(rpos/scale) + ldim_raw(1:2)/2 ! base 0
+                    call self%xpos%push_back(pos(1))
+                    call self%ypos%push_back(pos(2))
+                endif
+            end do
+            ! binarize back
+            cc_imat = cc_imat_copy
+            where( cc_imat_copy > 0 )
+                cc_imat = 1
+            elsewhere
+                cc_imat = 0
+            endwhere
+            call mic_bin%set_imat(cc_imat)
+        endif
         if( present(binfname) ) call mic_bin%write(binfname)
         ! destruct
         call mic_shrink%kill
         call mic_den%kill
         call mic_bin%kill_bimg
         call img_cc%kill_bimg
-        deallocate(cc_imat, cc_imat_copy)
+        if( allocated(cc_imat)      ) deallocate(cc_imat)
+        if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
         write(logfhandle,'(a)')  ''
     end subroutine pick_1
 
@@ -124,29 +127,32 @@ contains
         ! identify connected components
         call mic_bin%find_ccs(img_cc, update_imat=.true.)
         call img_cc%get_nccs(nccs)
-        ! gather size info
-        call img_cc%get_imat(cc_imat)
-        call img_cc%get_imat(cc_imat_copy)
-        write(logfhandle,'(a)')  '>>> RE-ESTIMATION OF CONNECTED COMPONENT MASS CENTERS & SIZE EXCLUSION'
-        do icc = 1, nccs
-            call img_cc%diameter_cc(icc, diam)
-            diam_adj = diam + 2. * SMPD_SHRINK1 ! becasue of the 2X erosion
-            if( diam_adj >= diam_fromto(1) .and. diam_adj <= diam_fromto(2) ) then
-                ! stash diameter & box coordinate
-                call self%diameters%push_back(diam)
-                call img_cc%masscen_cc(icc, rpos)
-                pos = nint(rpos/scale) + ldim_raw(1:2)/2 ! base 0
-                call self%xpos%push_back(pos(1))
-                call self%ypos%push_back(pos(2))
-            else
-                ! remove connected component
-                where ( cc_imat == icc ) cc_imat_copy = 0
-            endif
-        end do
+        if( nccs > 0 )then
+            ! gather size info
+            call img_cc%get_imat(cc_imat)
+            call img_cc%get_imat(cc_imat_copy)
+            write(logfhandle,'(a)')  '>>> RE-ESTIMATION OF CONNECTED COMPONENT MASS CENTERS & SIZE EXCLUSION'
+            do icc = 1, nccs
+                call img_cc%diameter_cc(icc, diam)
+                diam_adj = diam + 2. * SMPD_SHRINK1 ! becasue of the 2X erosion
+                if( diam_adj >= diam_fromto(1) .and. diam_adj <= diam_fromto(2) ) then
+                    ! stash diameter & box coordinate
+                    call self%diameters%push_back(diam)
+                    call img_cc%masscen_cc(icc, rpos)
+                    pos = nint(rpos/scale) + ldim_raw(1:2)/2 ! base 0
+                    call self%xpos%push_back(pos(1))
+                    call self%ypos%push_back(pos(2))
+                else
+                    ! remove connected component
+                    where ( cc_imat == icc ) cc_imat_copy = 0
+                endif
+            end do
+        endif
         ! destruct
         call mic_bin%kill_bimg
         call img_cc%kill_bimg
-        deallocate(cc_imat, cc_imat_copy)
+        if( allocated(cc_imat)      ) deallocate(cc_imat)
+        if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
     end subroutine pick_2
 
     ! Getters
