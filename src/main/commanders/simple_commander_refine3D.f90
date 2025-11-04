@@ -1032,7 +1032,7 @@ contains
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
         call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, tmp_imgs, nptcls, params%which_iter,&
-                                        do_polar=(trim(params%polar).eq.'yes' .and. params%which_iter>1) )
+                                        do_polar=((trim(params%polar).eq.'yes') .and. (.not.cline%defined('vol1'))) )
         ! Build polar particle images
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
         ! Filling prob table in eul_prob_tab
