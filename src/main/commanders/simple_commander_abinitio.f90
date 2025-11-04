@@ -76,7 +76,6 @@ integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! st
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
 integer,          parameter :: GAUREF_LAST_STAGE     = 6                    ! When to stop using a gaussian filtering of the references with polar=yes
-integer,          parameter :: SWITCH_REFTYPE_STAGE  = 7                    ! When to switch from ref_type=clin to ref_type=vol polar=yes
 integer,          parameter :: FRCREF_START_STAGE    = GAUREF_LAST_STAGE+1  ! When to start using the FRC drived optimal filter of references with polar=yes
 integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, TRAILREC_STAGE_SINGLE, NSTAGES]
 integer,          parameter :: NSPACE_POLAR(3)       = [500,                  1000,    2000]
@@ -542,8 +541,8 @@ contains
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                          'clin')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
         if( .not. cline%defined('frcref')              ) call cline%set('frcref',                              'no')
+        if( .not. cline%defined('frcref_start_stage')  ) call cline%set('frcref_start_stage',    FRCREF_START_STAGE)
         if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
-        if( .not. cline%defined('switch_reftype_stage')) call cline%set('switch_reftype_stage',SWITCH_REFTYPE_STAGE)
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
@@ -1235,7 +1234,10 @@ contains
             ml_reg   = 'no'
             icm      = 'no'
             ref_type = trim(params_glob%ref_type)
-            if( istage >= params_glob%switch_reftype_stage ) ref_type = 'vol'
+            if( (istage >= params_glob%switch_reftype_stage) .and.&
+            &(params_glob%switch_reftype_stage > 0 ))then
+                ref_type = 'vol'
+            endif
         endif
         ! projection directions
         if( cline_refine3D%defined('nspace_max') )then
