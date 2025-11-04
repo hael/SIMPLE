@@ -66,17 +66,20 @@ integer,          parameter :: NSPACE(3)             = [500,1000,2500]
 integer,          parameter :: NSPACE_POLAR          = 1000
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: PROBREFINE_STAGE      = 5
-integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE  ! we switch from ML regularization when prob is switched on
-integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE  ! we switch from greedy to stochastic blanced class sampling when prob is switched on
-integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE ! we start trailing when we start sampling particles randomly
-integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES           ! we start trailing in the last stage
-integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1       ! cannot be switched on too early
-integer,          parameter :: RECALC_STARTREC_STAGE = LPAUTO_STAGE      ! re-estimate starting volume for optimal LP and AUTOMSK
-integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE      ! swith on automasking when lpauto is switched on
-integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES           ! stage at which state splitting is done when multivol_mode==docked
-integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                 ! when streaming on some analysis will be performed
-integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                 ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
-integer,          parameter :: GAUREF_END_STAGE      = 6                 ! When to stop using a gaussian filtering of the references with polar=yes
+integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE     ! we switch from ML regularization when prob is switched on
+integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE     ! we switch from greedy to stochastic blanced class sampling when prob is switched on
+integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE    ! we start trailing when we start sampling particles randomly
+integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES              ! we start trailing in the last stage
+integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1          ! cannot be switched on too early
+integer,          parameter :: RECALC_STARTREC_STAGE = LPAUTO_STAGE         ! re-estimate starting volume for optimal LP and AUTOMSK
+integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE         ! swith on automasking when lpauto is switched on
+integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
+integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
+integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
+integer,          parameter :: GAUREF_LAST_STAGE     = 6                    ! When to stop using a gaussian filtering of the references with polar=yes
+integer,          parameter :: SWITCH_REFTYPE_STAGE  = 7                    ! When to switch from ref_type=clin to ref_type=vol polar=yes
+integer,          parameter :: FRCREF_START_STAGE    = GAUREF_LAST_STAGE+1  ! When to start using the FRC drived optimal filter of references with polar=yes
+
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis=.false., l_symran=.false., l_sym=.false., l_update_frac_dyn=.false., l_polar=.false.
@@ -512,7 +515,6 @@ contains
         type(commander_refine3D_distr)         :: xrefine3D
         type(commander_reconstruct3D_distr)    :: xreconstruct3D_distr
         ! other
-        character(len=:),   allocatable :: vol_name
         real,               allocatable :: rstates(:)
         integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)
         type(class_sample), allocatable :: clssmp(:)
@@ -524,20 +526,24 @@ contains
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',         'yes')
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap',        0.95)
-        if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',     10.)
-        if( .not. cline%defined('center')      ) call cline%set('center',         'no')
-        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
-        if( .not. cline%defined('oritype')     ) call cline%set('oritype',    'ptcl3D')
-        if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',           'c1')
-        if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',     'c1')
-        if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',          'no')
-        if( .not. cline%defined('projrec')     ) call cline%set('projrec',       'yes')
-        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'yes')
-        if( .not. cline%defined('ref_type')    ) call cline%set('ref_type',     'clin')
-        if( .not. cline%defined('gauref')      ) call cline%set('gauref',        'yes')
-        if( .not. cline%defined('first_sigmas')) call cline%set('first_sigmas',  'yes')
+        if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                              'yes')
+        if( .not. cline%defined('overlap')             ) call cline%set('overlap',                             0.95)
+        if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                          10.)
+        if( .not. cline%defined('center')              ) call cline%set('center',                              'no')
+        if( .not. cline%defined('cenlp')               ) call cline%set('cenlp',                      CENLP_DEFAULT)
+        if( .not. cline%defined('oritype')             ) call cline%set('oritype',                         'ptcl3D')
+        if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                                'c1')
+        if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                          'c1')
+        if( .not. cline%defined('ptclw')               ) call cline%set('ptclw',                               'no')
+        if( .not. cline%defined('projrec')             ) call cline%set('projrec',                            'yes')
+        if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                            'yes')
+        if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                        'no')
+        if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                          'clin')
+        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
+        if( .not. cline%defined('frcref')              ) call cline%set('frcref',                              'no')
+        if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
+        if( .not. cline%defined('switch_reftype_stage')) call cline%set('switch_reftype_stage',SWITCH_REFTYPE_STAGE)
+        if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -554,6 +560,7 @@ contains
         call cline%delete('stream')
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        ! Multiple states
         nstates_glob = params%nstates
         select case(trim(params%multivol_mode))
             case('single')
@@ -567,6 +574,7 @@ contains
             params%nstates = 1
             call cline%delete('nstates')
         endif
+        ! Polar representation
         if( trim(params%polar).eq.'yes' )then
             if( trim(params%multivol_mode).ne.'single' )then
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
@@ -1039,7 +1047,7 @@ contains
     subroutine set_cline_refine3D( istage, l_cavgs )
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
-        character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin, cavgw
+        character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin, cavgw, ref_type, frcref
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn
         real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg, gaufreq
@@ -1091,10 +1099,21 @@ contains
         if( istage >= ICM_STAGE ) icm = 'yes'
         ! balance
         balance = 'yes'
-        ! Gaussian filtering of polar references
+        ! Filtering of polar references
         gaufreq = -1.
-        if( l_polar .and. (istage <= GAUREF_END_STAGE) )then
-            if( trim(params_glob%gauref).ne.'no' ) gaufreq = lpinfo(istage)%lp
+        frcref  = 'no'
+        if( l_polar )then
+            ! Gaussian filtering
+            if( istage <= params_glob%gauref_last_stage )then
+                if( trim(params_glob%gauref).ne.'no' ) gaufreq = lpinfo(istage)%lp
+            endif
+            ! FRC-based filtering
+            if( istage >= params_glob%frcref_start_stage )then
+                if( trim(params_glob%frcref).ne.'no' )then
+                    gaufreq = -1.   ! overrides gaussian filtering
+                    frcref  = 'yes'
+                endif
+            endif
         endif
         ! trailing reconstruction
         trail_rec = 'no'
@@ -1202,9 +1221,12 @@ contains
         if( trim(icm).eq.'yes' ) ml_reg = 'no'
         ! Specific options for polar representation
         if( l_polar )then
-            inspace = NSPACE_POLAR
-            ml_reg  = 'no'
-            icm     = 'no'
+            inspace  = NSPACE_POLAR
+            if( cline_refine3D%defined('nspace') ) inspace = params_glob%nspace
+            ml_reg   = 'no'
+            icm      = 'no'
+            ref_type = trim(params_glob%ref_type)
+            if( istage >= params_glob%switch_reftype_stage ) ref_type = 'vol'
         endif
         ! projection directions
         if( cline_refine3D%defined('nspace_max') )then
@@ -1255,19 +1277,23 @@ contains
         call cline_refine3D%set('overlap',                    overlap)
         call cline_refine3D%set('fracsrch',                  fracsrch)
         if( l_cavgs )then
-        call cline_refine3D%set('snr_noise_reg',    snr_noise_reg)
+        call cline_refine3D%set('snr_noise_reg',        snr_noise_reg)
         call cline_refine3D%delete('update_frac') ! never on cavgs
         else
         call cline_refine3D%delete('snr_noise_reg')
         endif
+        if( l_polar )then
+        call cline_refine3D%set('center_type',               'params')
+        call cline_refine3D%set('ref_type',                  ref_type)
         if( gaufreq > 0.)then
-        call cline_refine3D%set('gauref',  'yes')
-        call cline_refine3D%set('gaufreq', gaufreq)
+            call cline_refine3D%set('gauref',                   'yes')
+            call cline_refine3D%set('gaufreq',                gaufreq)
         else
-        call cline_refine3D%delete('gauref')
-        call cline_refine3D%delete('gaufreq')
+            call cline_refine3D%delete('gauref')
+            call cline_refine3D%delete('gaufreq')
         endif
-        if( l_polar ) call cline_refine3D%set('center_type', 'params')
+        call cline_refine3D%set('frcref',                      frcref)
+        endif
     end subroutine set_cline_refine3D
 
     subroutine exec_refine3D( istage, xrefine3D )
@@ -1520,7 +1546,7 @@ contains
         enddo
     end subroutine postprocess_final_rec
 
-    ! create noise starting volume(s)
+    ! create starting noise volume(s)
     subroutine generate_random_volumes( box, smpd, cline )
         integer,        intent(in)    :: box
         real,           intent(in)    :: smpd
