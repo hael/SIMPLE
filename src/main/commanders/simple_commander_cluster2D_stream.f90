@@ -2411,6 +2411,7 @@ contains
             pool_jpeg_res = [pool_jpeg_res, pool_proj%os_cls2D%get(icls,'res')]
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
+            call img%mask(params_glob%mskdiam / (2 * pool_dims%smpd), 'softavg')
             call img%fft
             if(ldim_stk(1) > JPEG_DIM) then
                 call img%clip(img_pad)

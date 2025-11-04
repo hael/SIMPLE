@@ -1871,7 +1871,7 @@ contains
         if( ind > 0 ) isthere_in_osout = .true.
     end function isthere_in_osout
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath, out_ind)
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath, out_ind, box)
         class(sp_project),                       intent(inout) :: self
         character(len=:), allocatable,           intent(inout) :: stkname
         integer,                                 intent(out)   :: ncls
@@ -1880,6 +1880,7 @@ contains
         character(len=*), optional,              intent(in)    :: imgkind
         logical,          optional,              intent(in)    :: fail
         integer,          optional,              intent(inout) :: out_ind
+        real,             optional,              intent(inout) :: box
         character(len=:), allocatable                          :: ikind, iimgkind
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
@@ -1933,6 +1934,7 @@ contains
             if(self%os_out%isthere(ind, 'stkpath')) stkpath = trim(self%os_out%get_static(ind,'stkpath'))
         endif
         if(present(out_ind)) out_ind = ind
+        if(present(box)) box = self%os_out%get(ind, 'box')
     end subroutine get_cavgs_stk
 
     subroutine get_vol( self, imgkind, state, vol_fname, smpd, box)
@@ -4992,11 +4994,12 @@ contains
         call jpegimg%kill
     end subroutine cavgs2jpg
 
-    subroutine shape_ranked_cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles )
+    subroutine shape_ranked_cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, mskdiam_px )
         class(sp_project),    intent(inout) :: self
         integer, allocatable, intent(inout) :: cavg_inds(:)
         character(len=*),     intent(in)    :: jpgname
         integer,              intent(out)   :: xtiles, ytiles
+        integer, optional,    intent(in)    :: mskdiam_px
         integer,          allocatable :: shape_ranks(:)
         character(len=:), allocatable :: cavgsstk, stkpath
         type(image)    :: img, jpegimg
@@ -5033,6 +5036,7 @@ contains
         do icls = 1,ncls_sel
             call img%new(ldim_read, smpd)
             call stkio_r%get_image(cavg_inds(icls), img)
+            if(present(mskdiam_px)) call img%mask(mskdiam_px / 2.0, 'softavg')
             call img%fft
             if(ldim_read(1) > JPEG_DIM) then
                 call img%clip_inplace([JPEG_DIM,JPEG_DIM,1])

@@ -493,7 +493,7 @@ contains
                         params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                         call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                        if(params%mskdiam .eq. 0.0) then
+                        if(params%mskdiam == 0.0) then
                             params%mskdiam = 0.9 * ceiling(params%box * spprojs(first)%os_stk%get(1,'smpd'))
                             call cline%set('mskdiam', params%mskdiam)
                             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
@@ -510,7 +510,7 @@ contains
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                     call spprojs(first)%read_segment('stk', trim(projectnames(first)))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                    if(params%mskdiam .eq. 0.0) then
+                    if(params%mskdiam == 0.0) then
                         params%mskdiam = 0.9 * ceiling(params%box * spprojs(first)%os_stk%get(1,'smpd'))
                         call cline%set('mskdiam', params%mskdiam)
                         write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
@@ -767,11 +767,12 @@ contains
             subroutine generate_selection_jpeg()
                 type(sp_project)              :: set1_proj
                 integer                       :: ncls, icls
-                real                          :: smpd
+                real                          :: smpd, stkbox
                 call set1_proj%read_segment('cls2D', setslist%projfiles(1))
                 call set1_proj%read_segment('out',   setslist%projfiles(1))
-                call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd)
-                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
+                call set1_proj%read_segment('stk',   setslist%projfiles(1))
+                call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd, box=stkbox)
+                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set1_proj%get_box())))
                 if(allocated(cls_res))     deallocate(cls_res)
                 if(allocated(cls_pop))     deallocate(cls_pop)
                 if(allocated(jpg_cls_map)) deallocate(jpg_cls_map)
@@ -798,11 +799,12 @@ contains
             subroutine generate_set_jpeg()
                 type(sp_project)              :: set_proj
                 integer                       :: ncls, icls
-                real                          :: smpd
+                real                          :: smpd, stkbox
                 call set_proj%read_segment('cls2D', setslist%projfiles(latest_processed_set))
                 call set_proj%read_segment('out',   setslist%projfiles(latest_processed_set))
-                call set_proj%get_cavgs_stk(selection_jpeg, ncls, smpd)
-                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles)
+                call set_proj%read_segment('stk',   setslist%projfiles(latest_processed_set))
+                call set_proj%get_cavgs_stk(selection_jpeg, ncls, smpd, box=stkbox)
+                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set_proj%get_box())))
                 if(allocated(accepted_cls_ids)) deallocate(accepted_cls_ids)
                 if(allocated(rejected_cls_ids)) deallocate(rejected_cls_ids)
                 if(allocated(cls_res))          deallocate(cls_res)
@@ -1000,7 +1002,7 @@ contains
                     call setslist%append(projects(i), setslist%n+1, .true.)
                 enddo
             endif
-            ! check on progress, updates particles & alignement parameters
+            ! check on progress, updates particles & alignment parameters
             ! TODO: class remapping
             if( l_pause )then
                 call generate_pool_stats
