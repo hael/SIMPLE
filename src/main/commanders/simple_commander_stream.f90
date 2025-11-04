@@ -14,7 +14,6 @@ use simple_commanders_cluster2D_stream
 use simple_commanders_preprocess
 use simple_gui_utils
 use simple_nice
-use simple_nrtxtfile
 use simple_progress
 use simple_qsys_funs
 use simple_starfile
@@ -1782,13 +1781,11 @@ contains
         type(stream_http_communicator)         :: http_communicator, http_gen_pickrefs_communicator
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj, spproj_part
-        type(starproject_stream)               :: starproj_stream
         type(cmdline)                          :: cline_extract, cline_abinitio2D, cline_shape_rank
         type(commander_extract_distr)          :: xextract
         type(commander_abinitio2D)             :: xabinitio2D
         type(commander_shape_rank_cavgs)       :: xshape_rank
         type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
-        type(nrtxtfile)                        :: boxsize_file
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: final_selection_source, cavgsstk
         integer,                   allocatable :: cavg_inds(:)

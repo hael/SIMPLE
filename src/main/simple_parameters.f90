@@ -229,7 +229,7 @@ type :: parameters
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
-    character(len=STDLEN)     :: inivol='rand'        !< Different schemes for random volume generation(rand|rand_scaled|sphere)
+    character(len=STDLEN)     :: inivol='sphere'      !< Different schemes for random volume generation(rand|rand_scaled|sphere){sphere}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -306,6 +306,8 @@ type :: parameters
     integer :: extr_iter=1
     integer :: extr_lim=MAX_EXTRLIM2D
     integer :: find=1              !< Fourier index
+    integer :: frcref_start_stage=0!< When to switch on FRC-based filtering{0}
+    integer :: gauref_last_stage=0 !< When to switch off gaussian filtering{0}
     integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromp=1             !< start ptcl index
     integer :: fromf=1             !< frame start index
@@ -383,6 +385,7 @@ type :: parameters
     integer :: reliongroups=0
     integer :: shift_stage=0
     integer :: split_stage=7       !< splitting stage when multivol_mode==docked
+    integer :: switch_reftype_stage=0   !< When to switch from ref_type=clin to ref_type=vol polar=yes{0}
     integer :: startit=1           !< start iterating from here
     integer :: stage=0
     integer :: state=1             !< state to extract
@@ -660,14 +663,14 @@ contains
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
-        call check_carg('have_clustering', self%have_clustering)
+        call check_carg('have_clustering',self%have_clustering)
         call check_carg('have_selection', self%have_selection)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('inivol',         self%inivol)
-        call check_carg('input_is_movies', self%input_is_movies)
+        call check_carg('input_is_movies',self%input_is_movies)
         call check_carg('interactive',    self%interactive)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)
@@ -862,6 +865,8 @@ contains
         call check_iarg('extr_iter',      self%extr_iter)
         call check_iarg('extr_lim',       self%extr_lim)
         call check_iarg('find',           self%find)
+        call check_iarg('frcref_start_stage', self%frcref_start_stage)
+        call check_iarg('gauref_last_stage',  self%gauref_last_stage)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromp',          self%fromp)
         call check_iarg('fromf',          self%fromf)
@@ -909,7 +914,7 @@ contains
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
-        call check_iarg('nparts_per_part', self%nparts_per_part)
+        call check_iarg('nparts_per_part',self%nparts_per_part)
         call check_iarg('nparts_chunk',   self%nparts_chunk)
         call check_iarg('nparts_pool',    self%nparts_pool)
         call check_iarg('npeaks',         self%npeaks)
@@ -917,7 +922,7 @@ contains
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
-        call check_iarg('nptcls_per_part', self%nptcls_per_part)
+        call check_iarg('nptcls_per_part',self%nptcls_per_part)
         call check_iarg('nquanta',        self%nquanta)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('nthr2D',         self%nthr2D)
@@ -931,6 +936,7 @@ contains
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('shift_stage',    self%shift_stage)
         call check_iarg('split_stage',    self%split_stage)
+        call check_iarg('switch_reftype_stage', self%switch_reftype_stage)
         call check_iarg('startit',        self%startit)
         call check_iarg('stage',          self%stage)
         call check_iarg('state',          self%state)
