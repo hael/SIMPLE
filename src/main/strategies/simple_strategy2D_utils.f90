@@ -33,8 +33,9 @@ interface write_cavgs
 end interface
 
 ! objective function weights
-real, private, parameter :: W_HIST=0.2,     W_POW=0.4,     W_FM=0.4
-real, private, parameter :: W_HIST_DEV=0.2, W_POW_DEV=0.2, W_FM_DEV=0.4, W_INTG_PIX_DEV=0.2
+real,    private, parameter :: W_HIST=0.2,     W_POW=0.4,     W_FM=0.4
+! this seems to be a general strategy
+real,    private, parameter :: W_HIST_DEV=0.5, W_POW_DEV=0.5, W_FM_DEV=0.0, W_DIAM_DEV=0.
 
 contains
 
@@ -415,7 +416,7 @@ contains
         type(histogram),      allocatable   :: hists(:)
         real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
         real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:), dmat_intg_pix(:,:)
+        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:), dmat_diam(:,:)
         logical,              allocatable   :: l_msk(:,:,:)
         type(pspecs) :: pows
         type(image)  :: img_msk 
@@ -434,8 +435,8 @@ contains
         call normalize_minmax(dmat_pow)
         smat_pow = dmat2smat(dmat_pow)
         ! generate within-envelope-mask-integrated pixel intensities distance matrix
-        dmat_intg_pix = calc_int_pix_dmat(cavg_imgs, params%msk)
-        call normalize_minmax(dmat_intg_pix)
+        dmat_diam = calc_diam_dmat(cavg_imgs, params%msk)
+        call normalize_minmax(dmat_diam)
         ! calculate inpl_invariant_fm corrmat
         ! pairwise correlation through Fourier-Mellin + shift search
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
@@ -465,10 +466,10 @@ contains
                 dmat = dmat_pow
             case('fm')
                 dmat = dmat_fm
-            case('intg_pix')
-                dmat = dmat_intg_pix
+            case('diams')
+                dmat = dmat_diam
             case DEFAULT
-                dmat = W_HIST_DEV * dmat_hist + W_POW_DEV * dmat_pow + W_FM_DEV * dmat_fm + W_INTG_PIX_DEV * dmat_intg_pix
+                dmat = W_HIST_DEV * dmat_hist + W_POW_DEV * dmat_pow + W_FM_DEV * dmat_fm + W_DIAM_DEV * dmat_diam
         end select
         ! destruct
         call pows%kill
@@ -477,16 +478,15 @@ contains
         end do
     end function calc_cluster_cavgs_dmat_dev
 
-    function calc_int_pix_dmat( cavg_imgs, mskrad_in_pix  ) result( dmat )
+    function calc_diam_dmat( cavg_imgs, mskrad_in_pix  ) result( dmat )
         class(image), intent(inout) :: cavg_imgs(:)
         real,         intent(in)    :: mskrad_in_pix
         type(parameters)            :: params
         type(cmdline)               :: cline
         class(parameters), pointer  :: params_ptr => null()
-        real,           allocatable :: diams(:), shifts(:,:), dmat(:,:), ints(:)
+        real,           allocatable :: diams(:), shifts(:,:), dmat(:,:)
         type(image),    allocatable :: masked_imgs(:)
         integer :: i, j, icls
-        call cline%set('msk',     mskrad_in_pix)
         call cline%set('smpd',    cavg_imgs(1)%get_smpd())
         call cline%set('mskdiam', 2 * mskrad_in_pix * cavg_imgs(1)%get_smpd())
         call cline%set('ncls',    size(cavg_imgs))
@@ -497,16 +497,12 @@ contains
         masked_imgs = copy_imgarr(cavg_imgs)
         call automask2D(masked_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
         ! calc integrated intesities
-        allocate(ints(params%ncls), dmat(params%ncls,params%ncls), source=0.)
-        do icls = 1, params%ncls
-            call masked_imgs(icls)%mul(masked_imgs(icls))
-            ints(icls) = masked_imgs(icls)%get_sum_int()
-        end do
+        allocate(dmat(params%ncls,params%ncls), source=0.)
         !$omp parallel do default(shared) private(i,j)&
         !$omp schedule(dynamic) proc_bind(close)
         do i = 1, params%ncls - 1
             do j = i + 1, params%ncls
-                dmat(i,j) = abs(ints(i) - ints(j))
+                dmat(i,j) = abs(diams(i) - diams(j))
                 dmat(j,i) = dmat(i,j)
             end do
         end do
@@ -515,7 +511,7 @@ contains
         ! put back pointer to params_glob
         params_glob => params_ptr
         nullify(params_ptr)
-    end function calc_int_pix_dmat
+    end function calc_diam_dmat
 
     function calc_match_cavgs_dmat( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, which ) result( dmat )
         class(parameters),    intent(in)    :: params
