@@ -339,6 +339,70 @@ contains
         call dealloc_imgarr(cavg_threads)
     end subroutine flag_non_junk_cavgs
 
+    function calc_sigstats_cavgs_dmat( params, cavg_imgs, oa_minmax ) result( dmat )
+        use simple_clustering_utils, only: cluster_dmat, labels2smat
+        class(parameters),    intent(in)    :: params
+        class(image),         intent(inout) :: cavg_imgs(:)
+        real,                 intent(in)    :: oa_minmax(2)
+        integer,              parameter     :: NHISTBINS = 128
+        real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
+        integer,              parameter     :: NCLS_SIG = 5 ! this small number of of clusters is sufficient
+                                                            ! the clustering obtained will be transformed into a distance matrix that
+                                                            ! expresses the grouping so that it can be merged with other distance matrices
+        real,                 parameter     :: W_HIST_SIG=0.5, W_POW_SIG=(1. - W_HIST_SIG)
+        type(histogram), allocatable   :: hists(:)
+        real,            allocatable   :: dmat_pow(:,:), dmat_tvd(:,:), dmat_jsd(:,:), smat_sig(:,:)
+        real,            allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_sig(:,:), dmat(:,:)
+        integer,         allocatable   :: labels(:), i_medoids(:)
+        type(pspecs) :: pows
+        integer      :: ncls_sel, i, j, nclust, iclust
+        ncls_sel = size(cavg_imgs)
+        ! generate histograms
+        allocate(hists(ncls_sel))
+        do i = 1, ncls_sel
+            call hists(i)%new(cavg_imgs(i), NHISTBINS, minmax=oa_minmax, radius=params%msk)
+        end do
+        ! generate power spectra and associated distance/similarity matrix
+        ! create pspecs object
+        call pows%new(cavg_imgs, params%msk, HP_SPEC, LP_SPEC)
+        ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
+        dmat_pow = pows%calc_distmat()
+        call normalize_minmax(dmat_pow)
+        ! calculate histogram-based distance matrices
+        allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
+        !$omp parallel do default(shared) private(i,j)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do i = 1, ncls_sel - 1
+            do j = i + 1, ncls_sel
+                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
+                dmat_tvd(j,i) = dmat_tvd(i,j)
+                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
+                dmat_jsd(j,i) = dmat_jsd(i,j)
+                dmat_hd(i,j)  = hists(i)%HD(hists(j))
+                dmat_hd(j,i)  = dmat_hd(i,j)
+            end do
+        end do
+        !$omp end parallel do
+        call hists(:)%kill
+        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd)      ! the different histogram distances are given equal weight
+        dmat_sig  = W_HIST_SIG * dmat_hist + W_POW_SIG * dmat_pow ! this is the joint signal distance matrix
+        ! cluster dmat_sig into NCLS_SIG groups with k-medoids
+        nclust = NCLS_SIG
+        call cluster_dmat(dmat_sig, 'kmed', nclust, i_medoids, labels)
+        ! obtain a similarity matrix from the clustering
+        smat_sig = labels2smat(labels)
+        dmat     = smat2dmat(smat_sig)
+        ! destruct
+        call pows%kill
+        do i = 1, ncls_sel
+            call hists(i)%kill
+        end do
+        if( allocated(dmat_pow)  ) deallocate(dmat_pow)
+        if( allocated(dmat_hist) ) deallocate(dmat_hist)
+        if( allocated(dmat_sig)  ) deallocate(dmat_sig)
+        if( allocated(smat_sig)  ) deallocate(smat_sig)
+    end function calc_sigstats_cavgs_dmat
+
     function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
@@ -406,76 +470,12 @@ contains
         end do
     end function calc_cluster_cavgs_dmat
 
-    function calc_cluster_cavgs_dmat_dev( params, cavg_imgs, oa_minmax, which ) result( dmat )
+    function calc_cluster_cavgs_dmat_dev( params, cavg_imgs, oa_minmax ) result( dmat )
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
-        character(len=*),     intent(in)    :: which
         real,                 intent(in)    :: oa_minmax(2)
-        integer,              parameter     :: NHISTBINS = 128
-        real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
-        type(histogram),      allocatable   :: hists(:)
-        real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
-        real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:), dmat_diam(:,:)
-        logical,              allocatable   :: l_msk(:,:,:)
-        type(pspecs) :: pows
-        type(image)  :: img_msk 
-        integer      :: ncls_sel, i, j, nclust, iclust
-        ncls_sel = size(cavg_imgs)
-        ! generate histograms
-        allocate(hists(ncls_sel))
-        do i = 1, ncls_sel
-            call hists(i)%new(cavg_imgs(i), NHISTBINS, minmax=oa_minmax, radius=params%msk)
-        end do
-        ! generate power spectra and associated distance/similarity matrix
-        ! create pspecs object
-        call pows%new(cavg_imgs, params%msk, HP_SPEC, LP_SPEC)
-        ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
-        dmat_pow = pows%calc_distmat()
-        call normalize_minmax(dmat_pow)
-        smat_pow = dmat2smat(dmat_pow)
-        ! generate within-envelope-mask-integrated pixel intensities distance matrix
-        dmat_diam = calc_diam_dmat(cavg_imgs, params%msk)
-        call normalize_minmax(dmat_diam)
-        ! calculate inpl_invariant_fm corrmat
-        ! pairwise correlation through Fourier-Mellin + shift search
-        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
-        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
-        dmat_fm = smat2dmat(corrmat)
-        ! calculate histogram-based distance matrices
-        allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
-        !$omp parallel do default(shared) private(i,j)&
-        !$omp schedule(dynamic) proc_bind(close)
-        do i = 1, ncls_sel - 1
-            do j = i + 1, ncls_sel
-                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
-                dmat_tvd(j,i) = dmat_tvd(i,j)
-                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
-                dmat_jsd(j,i) = dmat_jsd(i,j)
-                dmat_hd(i,j)  = hists(i)%HD(hists(j))
-                dmat_hd(j,i)  = dmat_hd(i,j)
-            end do
-        end do
-        !$omp end parallel do
-        call hists(:)%kill
-        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
-        select case(trim(which))    
-            case('hist')
-                dmat = dmat_hist
-            case('pow')
-                dmat = dmat_pow
-            case('fm')
-                dmat = dmat_fm
-            case('diams')
-                dmat = dmat_diam
-            case DEFAULT
-                dmat = W_HIST_DEV * dmat_hist + W_POW_DEV * dmat_pow + W_FM_DEV * dmat_fm + W_DIAM_DEV * dmat_diam
-        end select
-        ! destruct
-        call pows%kill
-        do i = 1, ncls_sel
-            call hists(i)%kill
-        end do
+        real,                 allocatable   :: dmat(:,:)
+        dmat = calc_sigstats_cavgs_dmat( params, cavg_imgs, oa_minmax )
     end function calc_cluster_cavgs_dmat_dev
 
     function calc_diam_dmat( cavg_imgs, mskrad_in_pix  ) result( dmat )

@@ -228,7 +228,7 @@ contains
                     cluster_inds = pack(inds, mask=labels == iclust)
                     cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
                     if( USE_DEV_CODE )then
-                        dmat = calc_cluster_cavgs_dmat_dev(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
+                        dmat = calc_cluster_cavgs_dmat_dev(params, cluster_imgs, [oa_min,oa_max])
                     else
                         dmat = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
                     endif
@@ -243,7 +243,7 @@ contains
         else
             ! calculate distance matrix
             if( USE_DEV_CODE )then
-                dmat = calc_cluster_cavgs_dmat_dev(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
+                dmat = calc_cluster_cavgs_dmat_dev(params, cavg_imgs, [oa_min,oa_max])
             else
                 dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
             endif
@@ -253,11 +253,11 @@ contains
                 call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
             else
                 call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
-                if( nclust > 5 .and. nclust < 20 )then
-                    nclust = 20
-                    deallocate(i_medoids, labels)
-                    call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
-                endif
+                ! if( nclust > 5 .and. nclust < 20 )then
+                !     nclust = 20
+                !     deallocate(i_medoids, labels)
+                !     call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+                ! endif
             endif
             clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
         endif
