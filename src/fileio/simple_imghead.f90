@@ -1414,7 +1414,6 @@ contains
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
         character(len=1) :: form
         type(c_ptr)      :: fhandle = c_null_ptr
-        integer          :: success
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
@@ -1427,13 +1426,8 @@ contains
         ldim(1) = TIFFGetWidth(fhandle)
         ldim(2) = TIFFGetLength(fhandle)
         ldim(3) = 1 ! by convention
-        do
-            if (TIFFLastDirectory(fhandle) .ne. 0) exit
-            success = TIFFReadDirectory(fhandle)
-            if (success .ne. 1)THROW_HARD('Error setting TIFF directory, or already at last directory; get_tiffile_info')
-        enddo
+        nptcls  = TIFFNumDirectories(fhandle)
         if( form == 'L' ) call TIFFUnMuteWarnings
-        nptcls = TIFFCurrentDirectory(fhandle) + 1
         if( doprint ) call TIFFPrintInfo(fhandle)
         call TIFFClose(fhandle)
 #endif
