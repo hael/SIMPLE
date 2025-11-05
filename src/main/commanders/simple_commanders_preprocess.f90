@@ -215,7 +215,7 @@ contains
                 output_dir_ctf_estimate   = filepath(params%dir,output_dir_ctf_estimate)//'/'
                 output_dir_motion_correct = filepath(params%dir,output_dir_motion_correct)//'/'
             endif
-            call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_preprocess :: preprocess; ")
+            call simple_mkdir(output_dir_ctf_estimate, errmsg="commander_preprocess :: preprocess; ")
             call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
         endif
         if( cline%defined('fbody') )then
