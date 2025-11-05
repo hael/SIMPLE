@@ -1848,6 +1848,7 @@ contains
         ! segmentation-based picking
         call segdiampick_mics(spproj, params%pcontrast, params%nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
         ! send initial picking display info to gui
+        call http_communicator%json%update(http_communicator%job_json, "micrographs_accepted", spproj%os_mic%count_state_gt_zero(), found)
         if(spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
         .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile')) then
             ! create an empty latest_picked_micrographs json array
@@ -2006,7 +2007,7 @@ contains
 
             subroutine micimporter( nmics )
                 integer, intent(in) :: nmics
-                integer :: n_imported, n_new_oris, iproj, iori
+                integer :: n_imported, n_new_oris, iproj, iori, imic
                 n_imported= 0
                 do
                     if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
@@ -2037,7 +2038,6 @@ contains
                             call project_buff%add2history(projects(iproj)) ! I got this one, so please don't give it to me again
                             call spproj_part%read(trim(projects(iproj)))
                             do iori = 1, STREAM_NMOVS_SET
-                                ! reject 
                                 n_imported = n_imported + 1
                                 call spproj%os_mic%transfer_ori(n_imported, spproj_part%os_mic, iori)
                             end do
@@ -2045,16 +2045,31 @@ contains
                         enddo
                         write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
                         ! http stats
-                        call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     spproj%os_mic%get_noris(),    found)
-                        call http_communicator%json%update(http_communicator%job_json, "micrographs_accepted",     spproj%os_mic%get_noris(),    found)
-                        call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",                             0,    found)
-                        call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),             found)
+                        call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     spproj%os_mic%get_noris(),                                       found)
+                        call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),                                                found)
                     else
                         call sleep(WAITTIME) ! may want to increase as 3s default
                     endif
+                    ! micrograph rejection
+                    call spproj%os_mic%set_all2single('state', 1)
+                    do imic = 1,spproj%os_mic%get_noris()
+                        if( spproj%os_mic%isthere(imic, 'ctfres') ) then
+                            if( spproj%os_mic%get(imic,'ctfres') > (params%ctfresthreshold-0.001) ) call spproj%os_mic%set(imic, 'state', 0)
+                        end if
+                        if( spproj%os_mic%isthere(imic, 'icefrac') ) then
+                            if( spproj%os_mic%get(imic,'icefrac') > (params%icefracthreshold-0.001) ) call spproj%os_mic%set(imic, 'state', 0)
+                        end if
+                        if( spproj%os_mic%isthere(imic, 'astig') ) then
+                            if( spproj%os_mic%get(imic,'astig') > (params%astigthreshold-0.001) ) call spproj%os_mic%set(imic, 'state', 0)
+                        end if
+                    enddo
+                    ! http stats
+                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected", spproj%os_mic%get_noris() - spproj%os_mic%count_state_gt_zero(), found)
                     ! http stats send
                     call send_jobstats() ! needs to be called so the gui doesn't think the process is dead, "fancy heartbeat"
-                    if( spproj%os_mic%get_noris() >= nmics ) return
+                    ! update thresholds if sent from gui
+                    call update_user_params(cline, http_communicator%update_arguments)
+                    if( spproj%os_mic%count_state_gt_zero() >= nmics ) return
                 end do
             end subroutine micimporter
 

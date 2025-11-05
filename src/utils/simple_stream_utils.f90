@@ -13,6 +13,7 @@ use simple_qsys_funs
 use simple_nice
 use simple_gui_utils
 use simple_commanders_cluster2D
+use simple_masker
 implicit none
 
 public :: stream_chunk, merge_chunks, update_user_params
@@ -1344,7 +1345,7 @@ contains
         call stkio_r%read_whole
         do icls = 1, nsel
             call stkio_r%get_image(selection(icls), cavgs(icls))
-        end do       
+        end do
         call automask2D(cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
         box_for_pick    = min(round2even(maxval(diams) / smpd + 2. * COSMSKHALFWIDTH), ldim(1))
         moldiam         = smpd * box_for_pick
