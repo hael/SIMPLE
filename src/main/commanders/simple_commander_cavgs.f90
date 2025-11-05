@@ -137,7 +137,7 @@ contains
         logical,          parameter   :: DEBUG = .true.
         logical,          parameter   :: USE_DEV_CODE = .false.
         real,             parameter   :: SCORE_THRES_INCL = 75.
-        integer,          parameter   :: NCLUST_MAX = 65
+        integer,          parameter   :: NCLUST_MAX = 20
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
         type(image)                   :: img_msk
         real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:), dmat_sel(:,:)
@@ -253,11 +253,10 @@ contains
                 call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
             else
                 call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
-                ! if( nclust > 5 .and. nclust < 20 )then
-                !     nclust = 20
-                !     deallocate(i_medoids, labels)
-                !     call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
-                ! endif
+                if( nclust < 3 )then
+                    nclust = 3
+                    call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+                endif
             endif
             clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
         endif
@@ -267,7 +266,7 @@ contains
         ! write aligned clusters
         call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', trim(params%ext))
         ! write un-aligned clusters
-        call write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )
+        call write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )        
         ! update project
         call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
         do iclust = 1, nclust

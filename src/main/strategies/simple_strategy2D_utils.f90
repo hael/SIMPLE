@@ -5,10 +5,8 @@ use simple_class_frcs,        only: class_frcs
 use simple_clustering_utils,  only: cluster_dmat
 use simple_cmdline,           only: cmdline
 use simple_corrmat,           only: calc_inpl_invariant_fm
-use simple_default_clines,    only: set_automask2D_defaults
 use simple_histogram,         only: histogram
 use simple_image,             only: image
-use simple_masker,            only: automask2D
 use simple_masker,            only: density_inoutside_mask
 use simple_parameters,        only: parameters, params_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
@@ -33,9 +31,8 @@ interface write_cavgs
 end interface
 
 ! objective function weights
-real,    private, parameter :: W_HIST=0.2,     W_POW=0.4,     W_FM=0.4
-! this seems to be a general strategy
-real,    private, parameter :: W_HIST_DEV=0.5, W_POW_DEV=0.5, W_FM_DEV=0.0, W_DIAM_DEV=0.
+real,    private, parameter :: W_HIST=0.2, W_POW=0.4, W_FM=0.4
+real,    private, parameter :: W_SIG_DEV=0.3, W_SIG_CLUST_DEV=0.3, W_FM_DEV=0.4
 
 contains
 
@@ -339,11 +336,12 @@ contains
         call dealloc_imgarr(cavg_threads)
     end subroutine flag_non_junk_cavgs
 
-    function calc_sigstats_cavgs_dmat( params, cavg_imgs, oa_minmax ) result( dmat )
+    subroutine calc_sigstats_cavgs_dmats( params, cavg_imgs, oa_minmax, dmat_sig, dmat_sig_clust )
         use simple_clustering_utils, only: cluster_dmat, labels2smat
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
         real,                 intent(in)    :: oa_minmax(2)
+        real, allocatable,    intent(inout) :: dmat_sig(:,:), dmat_sig_clust(:,:)
         integer,              parameter     :: NHISTBINS = 128
         real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
         integer,              parameter     :: NCLS_SIG = 5 ! this small number of of clusters is sufficient
@@ -352,11 +350,13 @@ contains
         real,                 parameter     :: W_HIST_SIG=0.5, W_POW_SIG=(1. - W_HIST_SIG)
         type(histogram), allocatable   :: hists(:)
         real,            allocatable   :: dmat_pow(:,:), dmat_tvd(:,:), dmat_jsd(:,:), smat_sig(:,:)
-        real,            allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_sig(:,:), dmat(:,:)
+        real,            allocatable   :: dmat_hd(:,:), dmat_hist(:,:), smat_tmp(:,:)
         integer,         allocatable   :: labels(:), i_medoids(:)
         type(pspecs) :: pows
         integer      :: ncls_sel, i, j, nclust, iclust
         ncls_sel = size(cavg_imgs)
+        if( allocated(dmat_sig)       ) deallocate(dmat_sig)
+        if( allocated(dmat_sig_clust) ) deallocate(dmat_sig_clust)
         ! generate histograms
         allocate(hists(ncls_sel))
         do i = 1, ncls_sel
@@ -384,14 +384,15 @@ contains
         end do
         !$omp end parallel do
         call hists(:)%kill
-        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd)      ! the different histogram distances are given equal weight
-        dmat_sig  = W_HIST_SIG * dmat_hist + W_POW_SIG * dmat_pow ! this is the joint signal distance matrix
+        dmat_hist      = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd)      ! the different histogram distances are given equal weight
+        dmat_sig       = W_HIST_SIG * dmat_hist + W_POW_SIG * dmat_pow ! this is the joint signal distance matrix
         ! cluster dmat_sig into NCLS_SIG groups with k-medoids
-        nclust = NCLS_SIG
+        nclust         = NCLS_SIG
         call cluster_dmat(dmat_sig, 'kmed', nclust, i_medoids, labels)
         ! obtain a similarity matrix from the clustering
-        smat_sig = labels2smat(labels)
-        dmat     = smat2dmat(smat_sig)
+        smat_tmp       = dmat2smat(dmat_sig)
+        smat_sig       = labels2smat(labels, smat_tmp)
+        dmat_sig_clust = smat2dmat(smat_sig)
         ! destruct
         call pows%kill
         do i = 1, ncls_sel
@@ -399,9 +400,9 @@ contains
         end do
         if( allocated(dmat_pow)  ) deallocate(dmat_pow)
         if( allocated(dmat_hist) ) deallocate(dmat_hist)
-        if( allocated(dmat_sig)  ) deallocate(dmat_sig)
         if( allocated(smat_sig)  ) deallocate(smat_sig)
-    end function calc_sigstats_cavgs_dmat
+        if( allocated(smat_tmp)  ) deallocate(smat_tmp)
+    end subroutine calc_sigstats_cavgs_dmats
 
     function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
         class(parameters),    intent(in)    :: params
@@ -463,6 +464,7 @@ contains
             case DEFAULT
                 dmat = W_HIST * dmat_hist + W_POW * dmat_pow + W_FM * dmat_fm
         end select
+        call normalize_minmax(dmat)
         ! destruct
         call pows%kill
         do i = 1, ncls_sel
@@ -474,44 +476,15 @@ contains
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
         real,                 intent(in)    :: oa_minmax(2)
-        real,                 allocatable   :: dmat(:,:)
-        dmat = calc_sigstats_cavgs_dmat( params, cavg_imgs, oa_minmax )
+        real,                 allocatable   :: corrmat(:,:), dmat_sig(:,:), dmat_sig_clust(:,:), dmat_fm(:,:), dmat(:,:)
+        write(logfhandle,'(A)') '>>> PRE-CLUSTERING BASED ON SIGNAL STATISTICS'
+        call calc_sigstats_cavgs_dmats(params, cavg_imgs, oa_minmax, dmat_sig, dmat_sig_clust)
+        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
+        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
+        dmat_fm   = smat2dmat(corrmat)
+        dmat      = W_SIG_DEV * dmat_sig +  W_SIG_CLUST_DEV * dmat_sig_clust + W_FM_DEV * dmat_fm
+        call normalize_minmax(dmat)
     end function calc_cluster_cavgs_dmat_dev
-
-    function calc_diam_dmat( cavg_imgs, mskrad_in_pix  ) result( dmat )
-        class(image), intent(inout) :: cavg_imgs(:)
-        real,         intent(in)    :: mskrad_in_pix
-        type(parameters)            :: params
-        type(cmdline)               :: cline
-        class(parameters), pointer  :: params_ptr => null()
-        real,           allocatable :: diams(:), shifts(:,:), dmat(:,:)
-        type(image),    allocatable :: masked_imgs(:)
-        integer :: i, j, icls
-        call cline%set('smpd',    cavg_imgs(1)%get_smpd())
-        call cline%set('mskdiam', 2 * mskrad_in_pix * cavg_imgs(1)%get_smpd())
-        call cline%set('ncls',    size(cavg_imgs))
-        params_ptr => params_glob ! for safe call to automask2D
-        nullify(params_glob)
-        call set_automask2D_defaults(cline)
-        call params%new(cline)
-        masked_imgs = copy_imgarr(cavg_imgs)
-        call automask2D(masked_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
-        ! calc integrated intesities
-        allocate(dmat(params%ncls,params%ncls), source=0.)
-        !$omp parallel do default(shared) private(i,j)&
-        !$omp schedule(dynamic) proc_bind(close)
-        do i = 1, params%ncls - 1
-            do j = i + 1, params%ncls
-                dmat(i,j) = abs(diams(i) - diams(j))
-                dmat(j,i) = dmat(i,j)
-            end do
-        end do
-        !$omp end parallel do
-        call dealloc_imgarr(masked_imgs)
-        ! put back pointer to params_glob
-        params_glob => params_ptr
-        nullify(params_ptr)
-    end function calc_diam_dmat
 
     function calc_match_cavgs_dmat( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, which ) result( dmat )
         class(parameters),    intent(in)    :: params
@@ -574,7 +547,8 @@ contains
                 dmat = dmat_fm
             case DEFAULT
                 dmat = W_HIST * dmat_hist + W_POW * dmat_pow + W_FM * dmat_fm
-        end select    
+        end select
+        call normalize_minmax(dmat)
         ! destruct
         call pows_ref%kill
         call pows_match%kill
