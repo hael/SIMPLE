@@ -21,37 +21,37 @@ add_custom_target(simple_git
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/main
   USES_TERMINAL
 )
-file(GLOB DEFS_src   "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]"   PARENT_SCOPE)
-file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCOPE)
+file(GLOB DEFS_src      "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.[Ff][90][08]"           PARENT_SCOPE)
+file(GLOB CPLOT2D_src   "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/CPlot2D/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/CPlot2D/*.[Ff][90][08]" PARENT_SCOPE)
+file(GLOB GNUFOR_src    "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/gnufor/*.[Ff][90][08]" PARENT_SCOPE)
+file(GLOB JPG_src       "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/jpg/*.[Ff][90][08]"    PARENT_SCOPE)
+list(APPEND JPG_src
+  "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/jpg/stb_image_write.c")
+if(USE_LIBTIFF)
+    list(APPEND JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/tiff/libtiff_funs.c")
+endif()
+
+file(GLOB SIMPLE_src    "${CMAKE_CURRENT_SOURCE_DIR}/main/*.[Ff][90][08]"  "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*.[Ff][90][08]"  PARENT_SCOPE)
+file(GLOB UTILS_src     "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.[Ff][90][08]" "${CMAKE_CURRENT_SOURCE_DIR}/utils/*/*.[Ff][90][08]" PARENT_SCOPE)
+file(GLOB JSON_src      "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/json/*.[Ff][90][08]"     PARENT_SCOPE)
+file(GLOB NETLIB_src    "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/netlib/*.[Ff][90][08]"   PARENT_SCOPE)
+file(GLOB UNIX_src      "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/unix/src/*.[Ff][90][08]" PARENT_SCOPE)
+file(GLOB XML_src       "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/xml/*/*.[Ff][90][08]"    PARENT_SCOPE)
+file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.[Ff][90][08]"              PARENT_SCOPE)
 list(APPEND FILEIO_src
   "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_posix.c"
   )
-file(GLOB OPERATORS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
 list(APPEND OPERATORS_src
-  "${CMAKE_CURRENT_SOURCE_DIR}/ops/simple_kbinterpol_memo.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/main/interp/simple_kbinterpol_memo.c"
   )
-file(GLOB UTILS_src    "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" "${CMAKE_CURRENT_SOURCE_DIR}/utils/*/*.f90" PARENT_SCOPE)
-file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/starfile/*.cpp"       PARENT_SCOPE)
-file(GLOB CPLOT2D_src  "${CMAKE_CURRENT_SOURCE_DIR}/CPlot2D/*.cpp"        PARENT_SCOPE)
-file(GLOB F90_src      "${CMAKE_CURRENT_SOURCE_DIR}/f90/*.f90"            PARENT_SCOPE)
-file(GLOB XML_src      "${CMAKE_CURRENT_SOURCE_DIR}/xml/*/*.[Ff]90"       PARENT_SCOPE)
-file(GLOB OPS_src      "${CMAKE_CURRENT_SOURCE_DIR}/ops/*/*.[Ff]90"       PARENT_SCOPE)
-file(GLOB UNIX_src     "${CMAKE_CURRENT_SOURCE_DIR}/unix/src/*.[Ff][90][08]" PARENT_SCOPE)
-file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*(^commander)*.f[90][08]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
-file(GLOB JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/jpg/*.f[90][08]" PARENT_SCOPE)
-list(APPEND JPG_src
-  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c")
-if(USE_LIBTIFF)
-    list(APPEND JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/tiff/libtiff_funs.c")
-endif()
-file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*.f[09][0-9]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
-
+file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/starfile/*.cpp" PARENT_SCOPE)
+file(GLOB MAIN_src     "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*(^commander)*.[Ff][90][08]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.[Ff][90][08]" PARENT_SCOPE)
 # add the simple_args module to SIMPLE_src
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
   "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   )
-  list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${CPLOT2D_src} ${F90_src} ${XML_src} ${UNIX_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
+  list(APPEND SIMPLECORELIB ${DEFS_src} ${GNUFOR_src} ${JSON_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${CPLOT2D_src} ${NETLIB_src} ${XML_src} ${UNIX_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
 
 add_custom_target(simple_modules
   COMMAND  echo Creating simple_module \; ( echo module simple_modules\; for file in ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${JPG_src} ${OPERATORS_src} ${MAIN_src}\; do if \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;fi\;done\;echo contains\;echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90

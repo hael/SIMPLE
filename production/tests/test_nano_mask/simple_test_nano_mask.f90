@@ -1,7 +1,7 @@
 program simple_test_nano_mask
 include 'simple_lib.f08'
 use simple_image
-use simple_masker, only: automask2D
+use simple_image_msk, only: automask2D
 implicit none
 ! constants
 character(len=*), parameter :: STK='selected.spi'

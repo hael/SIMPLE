@@ -1,13 +1,13 @@
 module simple_strategy2D_utils
 include 'simple_lib.f08'
-use simple_binimage,          only: binimage
+use simple_image_bin,         only: image_bin
 use simple_class_frcs,        only: class_frcs
 use simple_clustering_utils,  only: cluster_dmat
 use simple_cmdline,           only: cmdline
 use simple_corrmat,           only: calc_inpl_invariant_fm
 use simple_histogram,         only: histogram
 use simple_image,             only: image
-use simple_masker,            only: density_inoutside_mask
+use simple_image_msk,         only: density_inoutside_mask
 use simple_parameters,        only: parameters, params_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_polarft_corrcalc,  only: polarft_corrcalc
@@ -1049,7 +1049,7 @@ contains
         real,           intent(in)    :: lp, msk
         real,           intent(inout) :: offset(2)
         integer, optional, intent(in) :: ind
-        type(binimage)    :: bincavg, bincc
+        type(image_bin)    :: bincavg, bincc
         integer, allocatable :: ccsz(:)
         real    :: hp
         integer :: loc

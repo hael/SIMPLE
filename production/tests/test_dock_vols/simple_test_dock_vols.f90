@@ -4,7 +4,7 @@ use simple_dock_vols,       only: dock_vols
 use simple_parameters,      only: parameters
 use simple_cmdline,         only: cmdline
 use simple_image,           only: image
-use simple_projector_hlev,  only: rotvol
+use simple_simple_volinterp,  only: rotvol
 use simple_ori,             only: ori
 implicit none
 

@@ -4,7 +4,7 @@ include 'simple_lib.f08'
     use simple_optimizer
     use simple_segmentation
     use simple_aff_prop
-    use simple_afm_image
+    use simple_image_afm
     use simple_gauss2Dfit
     use simple_math
     use simple_motion_patched
