@@ -1,7 +1,6 @@
 program ptcl_seg
 include 'simple_lib.f08'
     use simple_image
-    use simple_spectral_clustering
     use simple_optimizer
     use simple_segmentation
     use simple_aff_prop
@@ -12,7 +11,6 @@ include 'simple_lib.f08'
     implicit none 
     type(image)         :: ini_conf, fin_conf, gau2D_test, gau2D_sum
     type(image), allocatable    :: gau2D_stk(:), clus_stk(:), defm_stack(:)
-    type(spec_clust)    :: spc_ptcl
     type(aff_prop)      :: aff_prop_ptcl
     character(len = 255)    :: im_directory = '/Users/atifao/Downloads/test_for_ptcl_seg.mrc'
     character(len = 255)    :: stk_directory = '/Users/atifao/Downloads/ordered_picks.mrc'

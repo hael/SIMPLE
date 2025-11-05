@@ -13,7 +13,6 @@ use simple_polarizer,           only: polarizer
 use simple_class_frcs,          only: class_frcs
 use simple_polarft_corrcalc,    only: polarft_corrcalc
 use simple_aff_prop,            only: aff_prop
-use simple_spectral_clustering, only: spec_clust
 use simple_pftcc_shsrch_fm,     only: pftcc_shsrch_fm
 use simple_corrmat
 use simple_cmdline,             only: cmdline
