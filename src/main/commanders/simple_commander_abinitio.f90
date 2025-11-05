@@ -77,8 +77,8 @@ integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! wh
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
 integer,          parameter :: GAUREF_LAST_STAGE     = 6                    ! When to stop using a gaussian filtering of the references with polar=yes
 integer,          parameter :: FRCREF_START_STAGE    = GAUREF_LAST_STAGE+1  ! When to start using the FRC drived optimal filter of references with polar=yes
-integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, TRAILREC_STAGE_SINGLE, NSTAGES]
-integer,          parameter :: NSPACE_POLAR(3)       = [500,                  1000,    2000]
+integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2,    6, NSTAGES]
+integer,          parameter :: NSPACE_POLAR(3)       = [500, 1000,    1500]
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -1224,6 +1224,7 @@ contains
         if( trim(icm).eq.'yes' ) ml_reg = 'no'
         ! Specific options for polar representation
         if( l_polar )then
+            ! # of projection directions
             nspace_phase = 3
             if( istage <= NSPACE_PHASE_POLAR(1) )then
                 nspace_phase = 1
@@ -1231,8 +1232,10 @@ contains
                 nspace_phase = 2
             endif
             inspace  = NSPACE_POLAR(nspace_phase)
+            ! volume filtering
             ml_reg   = 'no'
             icm      = 'no'
+            ! CL-based approach
             ref_type = trim(params_glob%ref_type)
             if( (istage >= params_glob%switch_reftype_stage) .and.&
             &(params_glob%switch_reftype_stage > 0 ))then
@@ -1498,15 +1501,10 @@ contains
         call cline_rec%delete('automsk')
         call cline_rec%delete('mskfile')
         call xreconstruct3D%execute_safe(cline_rec)
+        ! preserve volume (e/o will be overwritten in next iteration)
         sstate = int2str_pad(1,2)
         sstage = int2str_pad(istage-1,2)
         ext    = trim(params_glob%ext)
-        src    = trim(VOL_FBODY)//sstate//'_even'//ext
-        dest   = trim(VOL_FBODY)//sstate//'_even_stage_'//sstage//ext
-        call simple_rename(src, dest)
-        src    = trim(VOL_FBODY)//sstate//'_odd'//ext
-        dest   = trim(VOL_FBODY)//sstate//'_odd_stage_'//sstage//ext
-        call simple_rename(src, dest)
         src    = trim(VOL_FBODY)//sstate//ext
         dest   = trim(VOL_FBODY)//sstate//'_stage_'//sstage//ext
         call simple_rename(src, dest)
