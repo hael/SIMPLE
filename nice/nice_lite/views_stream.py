@@ -383,11 +383,14 @@ def restart_stream_sieve_particles(request, jobid):
     response = redirect('nice_lite:view_stream_sieve_particles', jobid=jobid)
     return response
 
-@login_required(login_url="/login/")
+# @login_required(login_url="/login/")
 def select_stream_sieve_particles(request, jobid):
     job = Job(id=jobid)
     accepted_cls2D = [int(numeric_string) for numeric_string in request.POST["accepted_cls2D"].split(',')]
-    rejected_cls2D = [int(numeric_string) for numeric_string in request.POST["rejected_cls2D"].split(',')]
+    if len(request.POST["rejected_cls2D"]) > 0:
+        rejected_cls2D = [int(numeric_string) for numeric_string in request.POST["rejected_cls2D"].split(',')]
+    else:
+        rejected_cls2D = ['0']
     job.select_sieve_particles(accepted_cls2D, rejected_cls2D)
     response = redirect('nice_lite:view_stream', jobid=jobid)
     return response

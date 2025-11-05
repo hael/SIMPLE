@@ -640,23 +640,36 @@ contains
                 integer, allocatable, intent(in) :: cls2reject(:)
                 integer, allocatable             :: states(:)
                 type(sp_project)                 :: spproj
-                integer                          :: ncls2reject, i
-                if( .not.allocated(cls2reject) ) return
-                ncls2reject = size(cls2reject)
+                integer :: i, n
+                logical :: l_class_selection
+                if( .not.allocated(cls2reject) )then
+                    return  ! gui must return an non empty vector
+                endif
                 ! read all fields
                 call spproj%read(setslist%projfiles(1))
+                n = spproj%os_cls2D%get_noris()
+                ! undo the default particles cluster_cavgs selection
+                call spproj%os_ptcl2D%set_all2single('state', 1)
+                call spproj%os_ptcl3D%set_all2single('state', 1)
                 ! selection
-                allocate(states(spproj%os_cls2D%get_noris()),source=1)
-                ! state=0 for all rejected
-                do i=1, ncls2reject
-                    states(cls2reject(i)) = 0
+                allocate(states(n),source=1)
+                l_class_selection = .true.
+                if( size(cls2reject) == 1 )then
+                    ! no rejection applied, all classes are to be selected
+                    l_class_selection = cls2reject(1) /= 0
+                endif
+                if( l_class_selection )then
+                    ! >= 1 class rejected, state=0 for all rejected
+                    states(cls2reject(:)) = 0
+                endif
+                ! maintain state=0 for junk
+                do i = 1, n
+                    if(.not. spproj%os_cls2D%isthere(i, 'cluster')) states(i) = 0
                 enddo
-                ! maintain state=0 for junk 
-                do i=1, spproj%os_cls2D%get_noris()
-                    if(.not. spproj%os_cls2D%isthere(i, 'cluster'))  states(i) = 0
-                enddo
+                ! report selection to particles
                 call spproj%map_cavgs_selection(states)
                 call spproj%write(setslist%projfiles(1))
+                ! cleanup
                 call spproj%kill
                 deallocate(states)
             end subroutine report_interactive_selection
