@@ -40,6 +40,7 @@ toggleTemplate = (templ) => {
     }else{
       xmark.classList.add("hidden")
     }
+    updateCounts()
     lastinteraction = Date.now() + 90000; // dont update for 2 minutes
 }
 
@@ -134,6 +135,7 @@ selectAbove = (element) => {
     }
   }
   hideMenu()
+  updateCounts()
 }
 
 selectBelow = (element) => {
@@ -156,6 +158,30 @@ selectBelow = (element) => {
     }
   }
   hideMenu()
+  updateCounts()
+}
+
+updateCounts = () => {
+  const clustercount  = document.querySelector("#clustercount")
+  const particlecount = document.querySelector("#particlecount")
+  if(updateCounts  == undefined) return
+  if(particlecount == undefined) return
+  ncls       = 0
+  ncls_tot   = 0
+  nptcls     = 0
+  nptcls_tot = 0
+  for(const pick_template of document.getElementsByClassName("picktemplate")){
+    const pop  = Number(pick_template.dataset.pop)
+    const idx  = Number(pick_template.dataset.idx)
+    nptcls_tot = nptcls_tot + pop
+    ncls_tot   = ncls_tot + 1
+    if(!pick_template.classList.contains("disabledbutton")){
+      nptcls = nptcls + pop
+      ncls   = ncls + 1
+    }
+  }
+  clustercount.innerHTML = ncls.toLocaleString() + " / " + ncls_tot.toLocaleString() 
+  particlecount.innerHTML = nptcls.toLocaleString() + " / " + nptcls_tot.toLocaleString()
 }
 
 const box_sizes = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88, 100, 104, 108, 112, 120, 128, 130, 132,
@@ -210,6 +236,7 @@ drawMask = () => {
 
 window.addEventListener("load", () => {
   drawMask()
+  updateCounts()
 })
 
 window.addEventListener("load", () => {
