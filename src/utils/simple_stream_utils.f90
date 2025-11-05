@@ -5,14 +5,11 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_default_clines, only: set_automask2D_defaults
 use simple_image,          only: image
-use simple_masker,         only: automask2D
 use simple_parameters,     only: parameters, params_glob
-use simple_procimgstk,     only: scale_imgfile
 use simple_qsys_env,       only: qsys_env
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
 use simple_qsys_funs
-use simple_progress
 use simple_nice
 use simple_gui_utils
 use simple_commanders_cluster2D
@@ -811,7 +808,6 @@ contains
 
     !> To deal with dynamic user input diring streaming
     subroutine update_user_params( cline_here, update_arguments )
-        use simple_parameters, only: params_glob
         type(cmdline),                       intent(inout) :: cline_here
         type(json_value), pointer, optional, intent(inout) :: update_arguments
         type(oris) :: os

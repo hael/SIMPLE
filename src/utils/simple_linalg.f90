@@ -97,10 +97,6 @@ interface eigh
         end subroutine ssyevr
 end interface eigh
 
-interface qr
-    module procedure qr_sp
-end interface qr
-
 contains
 
     !>   calculates the argument of a vector
@@ -1574,26 +1570,5 @@ contains
         call random_number(A)
         call eigh( n, A, n_eigs, eigvals, eigvecs )
     end subroutine test_eigh
-
-    ! QR factorization, single precision
-    subroutine qr_sp(m, n, A, lda, JPVT, TAU )
-        integer,           intent(in)    :: m, n, lda
-        real,              intent(inout) :: a(lda,n)
-        integer,           intent(inout) :: JPVT(n)
-        real, allocatable, intent(inout) :: TAU(:)
-        real, allocatable :: work(:)
-        integer           :: lwork, info
-        if( allocated(TAU) ) deallocate(TAU)
-        allocate(TAU(min(m,n)),work(1))
-        JPVT = 0
-        ! query dimenions
-        lwork=-1
-        call SGEQP3( m, n, A, lda, JPVT, TAU, work, lwork, info )
-        lwork = work(1)
-        deallocate(work)
-        allocate(work(lwork))
-        ! perform factorization
-        call SGEQP3( m, n, A, lda, JPVT, TAU, work, lwork, info )
-    end subroutine qr_sp
 
 end module simple_linalg

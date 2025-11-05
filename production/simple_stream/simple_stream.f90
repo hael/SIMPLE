@@ -16,7 +16,6 @@ type(commander_stream_preprocess)       :: xpreprocess
 type(commander_stream_pick_extract)     :: xpick_extract
 type(commander_stream_assign_optics)    :: xassign_optics
 type(commander_stream_sieve_cavgs)      :: xsieve_cavgs
-type(commander_stream_cluster2D)        :: xcluster2D_stream
 type(commander_stream_abinitio2D)       :: xabinitio2D_stream
 
 ! OTHER DECLARATIONS
@@ -55,8 +54,6 @@ select case(trim(prg))
         call xassign_optics%execute(cline)
     case( 'sieve_cavgs' )
         call xsieve_cavgs%execute(cline)
-    case( 'cluster2D_stream' )
-        call xcluster2D_stream%execute(cline)
     case( 'abinitio2D_stream' )
         call xabinitio2D_stream%execute(cline)
     case DEFAULT
@@ -67,7 +64,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('03ef2570')
+call simple_print_git_version('0b4fee5c')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
