@@ -167,7 +167,7 @@
                                             {{ template.res|floatformat:1 }}Å
                                         </div>
                                     </div>
-                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto relative">
+                                    <div oncontextmenu="showMenu(this, event)" data-pop="{{ template.pop }}" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto relative">
                                         {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
                                             <canvas class="mskcanvas z-1 absolute" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mask_diam }}"></canvas>
                                         {% endif %}
