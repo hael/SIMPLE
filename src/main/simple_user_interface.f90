@@ -6898,6 +6898,7 @@ contains
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=preprocessing')
+        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
         call json%add(process_inputs, '', 'outdir=opening_2D') !important - directory names and name must match between processes
         call json%add(process_inputs, '', 'nthr=32')
         !! reference_based_picking
@@ -6912,6 +6913,7 @@ contains
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=preprocessing')
+        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
         call json%add(process_inputs, '', 'outdir=reference_based_picking') !important - directory names and name must match between processes
         ! call json%add(process_inputs, '', 'pick_roi=yes')
         call json%add(process_inputs, '', 'nparts=10')
@@ -6925,6 +6927,7 @@ contains
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=reference_based_picking')
+        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
         call json%add(process_inputs, '', 'outdir=particle_sieving') !important - directory names and name must match between processes
         call json%add(process_inputs, '', 'ncls=100')
         call json%add(process_inputs, '', 'nptcls_per_cls=0')

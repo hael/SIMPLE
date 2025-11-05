@@ -1010,12 +1010,13 @@ contains
     end subroutine update_user_params
 
     ! To merge a list of chunks and write the resulting project into a dedicated folder
-    subroutine merge_chunks( chunk_fnames, folder, merged_proj, projname_out )
+    subroutine merge_chunks( chunk_fnames, folder, merged_proj, projname_out, write_proj )
         use simple_class_frcs
         character(len=*),           intent(in)    :: chunk_fnames(:) ! List of projects
         character(len=*),           intent(in)    :: folder          ! output folder
         class(sp_project),          intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
         character(len=*), optional, intent(in)    :: projname_out    ! name for output project file
+        logical,          optional, intent(in)    :: write_proj      ! write project file
         type(sp_project), allocatable :: chunks(:)
         type(class_frcs)              :: frcs, frcs_chunk
         type(image)                   :: img
@@ -1026,6 +1027,9 @@ contains
         real    :: smpd
         integer :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
+        logical :: l_write_proj
+        l_write_proj = .true.
+        if(present(write_proj)) l_write_proj = write_proj
         nchunks = size(chunk_fnames)
         allocate(chunks(nchunks))
         dir = trim(folder)//'/'
@@ -1159,7 +1163,7 @@ contains
         merged_proj%os_ptcl3D = merged_proj%os_ptcl2D
         call merged_proj%os_ptcl3D%delete_2Dclustering
         ! write
-        call merged_proj%write(projfile_out)
+        if(l_write_proj) call merged_proj%write(projfile_out)
         ! cleanup
         call frcs%kill
         call frcs_chunk%kill

@@ -70,8 +70,9 @@ contains
         type(sp_project)                       :: spproj_glob
         type(json_value),          pointer     :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
         character(len=LONGSTRLEN), allocatable :: projects(:)
+        character(len=XLONGSTRLEN),allocatable :: completed_projfiles(:) 
         character(len=STDLEN)                  :: chunk_part_env
-        character(len=:),          allocatable :: selection_jpeg
+        character(len=:),          allocatable :: selection_jpeg, mapfileprefix
         integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
         real,                      allocatable :: cls_res(:), cls_pop(:)
         real             :: mskdiam
@@ -79,7 +80,7 @@ contains
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
         integer          :: n_imported, n_imported_prev, nptcls_glob, n_failed_jobs
         integer          :: n_accepted, n_rejected, jpg_ntiles, jpg_nxtiles, jpg_nytiles, xtile, ytile
-        integer          :: latest_processed_set, latest_displayed_set
+        integer          :: latest_processed_set, latest_displayed_set, optics_map_id
         logical          :: l_params_updated, l_wait_for_user, selection_jpeg_created, found
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -415,6 +416,34 @@ contains
         ! termination
         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
         call terminate_chunks
+        ! merge sets and write project
+        do i=1, setslist%n
+            if(.not. setslist%busy(i) .and. setslist%processed(i) .and. setslist%imported(i)) then
+                if(.not. allocated(completed_projfiles))then
+                    allocate(completed_projfiles(1))
+                    completed_projfiles(1) = trim(setslist%projfiles(i))
+                else
+                    completed_projfiles = [completed_projfiles, trim(setslist%projfiles(i))]
+                endif
+            endif
+        enddo
+        if(allocated(completed_projfiles)) then
+            call merge_chunks(completed_projfiles, './', spproj_glob, projname_out="tmp", write_proj=.false.)
+            call spproj_glob%update_projinfo(trim(cline%get_carg('projfile'))) ! update projinfo with projfile name as modified by merge_chunks
+            deallocate(completed_projfiles)
+        endif
+        ! add optics
+        if(cline%defined('optics_dir')) then
+            optics_map_id = get_latest_optics_map_id(trim(params%optics_dir))
+            if(optics_map_id .gt. 0) then
+                mapfileprefix = trim(params%optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
+                call spproj_glob%import_optics_map(mapfileprefix)
+            endif
+        endif
+        ! write project and star files (just in case you want ot import these particles/micrographs elsewhere)
+        call spproj_glob%write
+        call spproj_glob%write_mics_star("micrographs.star")
+        call spproj_glob%write_ptcl2D_star("particles.star")
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
