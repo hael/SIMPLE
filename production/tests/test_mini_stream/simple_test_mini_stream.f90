@@ -4,15 +4,15 @@ use simple_cmdline,               only: cmdline
 use simple_parameters,            only: parameters
 use simple_commanders_project,    only: commander_new_project, commander_import_movies
 use simple_commanders_validate,   only: commander_mini_stream
-use simple_commanders_preprocess, only: commander_preprocess
+use simple_commanders_preprocess
 implicit none
 character(len=LONGSTRLEN), allocatable :: dataset_cmds(:)
-type(cmdline)                 :: cline, cline_dataset, cline_new_project, cline_import_movies, cline_preprocess, cline_mini_stream
-type(parameters)              :: params
-type(commander_new_project)   :: xnew_project
-type(commander_preprocess)    :: xpreprocess
-type(commander_import_movies) :: ximport_movies
-type(commander_mini_stream)   :: xmini_stream
+type(cmdline)                    :: cline, cline_dataset, cline_new_project, cline_import_movies, cline_preprocess, cline_mini_stream
+type(parameters)                 :: params
+type(commander_new_project)      :: xnew_project
+type(commander_preprocess_distr) :: xpreprocess
+type(commander_import_movies)    :: ximport_movies
+type(commander_mini_stream)      :: xmini_stream
 integer                       :: i, ndata_sets, status
 character(len=LONGSTRLEN)     :: abspath
 character(len=:), allocatable :: output_dir
@@ -53,38 +53,42 @@ do i = 1, ndata_sets
     call xnew_project%execute_safe(cline_new_project)
     call cline_new_project%kill()
     ! movie import
-    call cline_import_movies%set('prg',                                  'import_movies')
-    call cline_import_movies%set('mkdir',                                           'yes')
-    call cline_import_movies%set('cs',                                         params%cs)
-    call cline_import_movies%set('fraca',                                   params%fraca)
-    call cline_import_movies%set('kv',                                         params%kv)
-    call cline_import_movies%set('smpd',                                     params%smpd)
-    call cline_import_movies%set('dir_movies',                         params%dir_movies)
-    call cline_import_movies%set('ctf',                                            'yes')
-    call cline_import_movies%set('projfile',   trim(adjustl(params%projname))//'.simple')
+    call cline_import_movies%set('prg',          'import_movies')
+    call cline_import_movies%set('mkdir',                  'yes')
+    call cline_import_movies%set('cs',                 params%cs)
+    call cline_import_movies%set('fraca',           params%fraca)
+    call cline_import_movies%set('kv',                 params%kv)
+    call cline_import_movies%set('smpd',             params%smpd)
+    call cline_import_movies%set('dir_movies', params%dir_movies)
+    call cline_import_movies%set('ctf',                    'yes')
     call ximport_movies%execute_safe(cline_import_movies)
     call cline_import_movies%kill()
     ! preprocess
-    ! call cline_preprocess%set('prg',        'preprocess')
-    ! call cline_preprocess%set('dir',        PATH_HERE//'/'//params%projname)
-    ! call cline_preprocess%set('gainref',    params%gainref)
-    ! call cline_preprocess%set('total_dose', params%total_dose)
-    ! call cline_preprocess%set('ctf_patch',  'no')
-    ! call cline_preprocess%set('mcpatch',    'no')
-    ! call cline_preprocess%set('nparts',     params%nparts)
-    ! call cline_preprocess%set('nthr',       params%nthr)
-    ! call cline_preprocess%set('projfile',   trim(adjustl(params%projname))//'.simple')
-    ! call cline_preprocess%check()
-    ! call xpreprocess%execute_safe(cline_preprocess)
-    ! call cline_preprocess%kill()
-    ! ! mini_stream 
-    ! call cline_mini_stream%set('filetab', params%filetab)
+    call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
+    call cline_preprocess%set('prg',                'preprocess')
+    call cline_preprocess%set('mkdir',                     'yes')
+    call cline_preprocess%set('gainref',          params%gainref)
+    call cline_preprocess%set('total_dose',    params%total_dose)
+    call cline_preprocess%set('dfmin',             DFMIN_DEFAULT)
+    call cline_preprocess%set('dfmax',             DFMAX_DEFAULT)
+    call cline_preprocess%set('hp',                          30.)
+    call cline_preprocess%set('lp',                           2.)
+    call cline_preprocess%set('mcpatch',                    'no')
+    call cline_preprocess%set('nparts',            params%nparts)
+    call cline_preprocess%set('nthr',                params%nthr)
+    call cline_preprocess%check()
+    call xpreprocess%execute_safe(cline_preprocess)
+    call cline_preprocess%kill()
+    ! mini stream 
+    ! call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
+    ! call cline_mini_stream%set('filetab',     params%filetab)
     ! call cline_mini_stream%set('moldiam_max', params%moldiam_max)
-    ! call xmini_stream%execute(cline_mini_stream)
-    ! call cline_dataset%kill
-    ! call cline_new_project%kill
-    ! call cline_preprocess%kill
-    ! call cline_dataset%kill
+    ! call xmini_stream%execute_safe(cline_mini_stream)
+    call cline_dataset%kill()
+    call cline_new_project%kill()
+    call cline_import_movies%kill()
+    call cline_preprocess%kill()
+    call cline_dataset%kill()
     call simple_chdir(trim(adjustl(output_dir)))
 enddo
 ! copy movies to local storage?

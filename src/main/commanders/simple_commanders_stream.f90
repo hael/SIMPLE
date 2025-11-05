@@ -199,8 +199,8 @@ contains
         call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
         output_dir_ctf_estimate   = filepath(trim(PATH_HERE), trim(DIR_CTF_ESTIMATE))
         output_dir_motion_correct = filepath(trim(PATH_HERE), trim(DIR_MOTION_CORRECT))
-        call simple_mkdir(output_dir_ctf_estimate,  errmsg="commander_stream :: exec_preprocess_stream;  ")
-        call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream :: exec_preprocess_stream;  ")
+        call simple_mkdir(output_dir_ctf_estimate,   errmsg="commander_stream :: exec_preprocess_stream;  ")
+        call simple_mkdir(output_dir_motion_correct, errmsg="commander_stream :: exec_preprocess_stream;  ")
         call cline%set('dir','../')
         ! initialise progress monitor
         call progressfile_init()
@@ -239,7 +239,7 @@ contains
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
                 call qsys_cleanup
-             !   call http_communicator%terminate(stop=.true.)
+                !call http_communicator%terminate(stop=.true.)
                 call simple_end('**** SIMPLE_STREAM_PREPROC USER STOP ****')
                 call EXIT(0)
             endif
@@ -691,7 +691,7 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, timeplots)
             end subroutine communicator_init
 
-            subroutine communicator_add_micrograph(path, dfx, dfy, ctfres)
+            subroutine communicator_add_micrograph( path, dfx, dfy, ctfres )
                 character(*),     intent(in) :: path
                 real, optional,   intent(in) :: dfx, dfy, ctfres
                 type(json_value), pointer    :: micrograph
@@ -709,7 +709,7 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, histograms)
             end subroutine communicator_clear_histograms
 
-            subroutine communicator_add_histogram(key)
+            subroutine communicator_add_histogram( key )
                 character(*),     intent(in) :: key
                 type(json_value), pointer    :: new_histogram, histogram_labels, histogram_data
                 type(histogram)              :: key_histogram
@@ -752,7 +752,7 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, timeplots)
             end subroutine communicator_clear_timeplots
 
-            subroutine communicator_add_timeplot(key)
+            subroutine communicator_add_timeplot( key )
                 character(*),     intent(in) :: key
                 type(json_value), pointer    :: new_timeplot, timeplot_labels, timeplot_data, timeplot_data2
                 integer                      :: fromto(2)
@@ -1557,7 +1557,7 @@ contains
                 ! call http_communicator%json%add(http_communicator%job_json, refinement_diameters)
             end subroutine communicator_init
 
-            subroutine communicator_add_micrograph(path, spritex, spritey, spriteh, spritew, xdim, ydim, boxfile_path)
+            subroutine communicator_add_micrograph( path, spritex, spritey, spriteh, spritew, xdim, ydim, boxfile_path )
                 character(*),     intent(in)  :: path, boxfile_path
                 integer,          intent(in)  :: spritex, spritey, spriteh, spritew, xdim, ydim
                 type(nrtxtfile)               :: boxfile
@@ -1595,7 +1595,7 @@ contains
                 call http_communicator%json%add(latest_picked_micrographs, micrograph)
             end subroutine communicator_add_micrograph
 
-            subroutine communicator_add_picking_template(path, spritex, spritey, spriteh, spritew)
+            subroutine communicator_add_picking_template( path, spritex, spritey, spriteh, spritew )
                 character(*),     intent(in)  :: path
                 integer,          intent(in)  :: spritex, spritey, spriteh, spritew
                 type(json_value), pointer     :: template
@@ -2101,7 +2101,7 @@ contains
                 call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, selected_references)
             end subroutine communicator_gen_pickrefs_init
 
-            subroutine communicator_add_micrograph(path, xdim, ydim, boxfile_path)
+            subroutine communicator_add_micrograph( path, xdim, ydim, boxfile_path )
                 character(*),     intent(in)  :: path, boxfile_path
                 integer,          intent(in)  :: xdim, ydim
                 type(nrtxtfile)               :: boxfile
@@ -2132,7 +2132,7 @@ contains
                 call http_communicator%json%add(latest_picked_micrographs, micrograph)
             end subroutine communicator_add_micrograph
             
-            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop, scale)
+            subroutine communicator_add_cls2D( path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop, scale )
                  character(*),      intent(in) :: path, mrcpath
                  real,              intent(in) :: spritex, spritey
                  integer,           intent(in) :: spriteh, spritew, mrc_idx
@@ -2153,7 +2153,7 @@ contains
                  call http_gen_pickrefs_communicator%json%add(latest_cls2D, template)
              end subroutine communicator_add_cls2D
 
-             subroutine communicator_add_selected_reference(path, spritex, spritey, spriteh, spritew, res, pop)
+             subroutine communicator_add_selected_reference( path, spritex, spritey, spriteh, spritew, res, pop )
                 character(*),      intent(in) :: path
                 real,              intent(in) :: spritex, spritey
                 integer,           intent(in) :: spriteh, spritew
