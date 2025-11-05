@@ -2037,7 +2037,8 @@ contains
                             call project_buff%add2history(projects(iproj)) ! I got this one, so please don't give it to me again
                             call spproj_part%read(trim(projects(iproj)))
                             do iori = 1, STREAM_NMOVS_SET
-                                n_imported= n_imported+ 1
+                                ! reject 
+                                n_imported = n_imported + 1
                                 call spproj%os_mic%transfer_ori(n_imported, spproj_part%os_mic, iori)
                             end do
                             call spproj_part%kill()
