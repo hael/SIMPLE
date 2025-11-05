@@ -825,6 +825,39 @@ contains
         end do
     end subroutine write_selected_cavgs
 
+    function calc_res_dmat( cavg_imgs, hp, lp, trs ) result(dmat)
+        class(image), intent(inout) :: cavg_imgs(:)
+        real,         intent(in)    :: hp, lp, trs
+        real,         allocatable   :: frc(:), dmat(:,:)
+        type(image),  allocatable   :: img_heap(:)
+        integer :: ncavgs, i, j, k, filtsz, ithr
+        ncavgs = size(cavg_imgs)
+        filtsz = cavg_imgs(1)%get_filtsz()
+        allocate(img_heap(nthr_glob), frc(filtsz), dmat(ncavgs,ncavgs))
+        do i = 1, ncavgs - 1
+            do j = i + 1, ncavgs
+                ithr = omp_get_thread_num() + 1
+                img_heap(ithr) = align_imgj2imgi(ncavgs, i, j, hp, lp, trs, cavg_imgs)
+                call cavg_imgs(i)%fsc(img_heap(ithr), frc)
+                dmat(i,j) = 1.
+                do k = 2,filtsz
+                    if( frc(k) >= 0.5 )then
+                        dmat(i,j) = 1./real(k)
+                    else
+                        exit
+                    endif
+                end do
+                dmat(j,i) = dmat(i,j) ! symmetrize
+            enddo
+        enddo
+        ! set the diagonal elements
+        forall(i=1:ncavgs) dmat(i,i) = 0.
+        ! normalize
+        call normalize_minmax(dmat)
+        ! destruct
+        call dealloc_imgarr(img_heap)
+    end function calc_res_dmat
+
     function align_clusters2medoids( i_medoids, labels, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
         integer,          intent(in)    :: i_medoids(:), labels(:)
         class(image),     intent(inout) :: cavg_imgs(:)
@@ -907,6 +940,24 @@ contains
             call dealloc_imgarr(cluster_imgs)
         end do
     end subroutine write_aligned_cavgs
+
+    function align_imgj2imgi( n, i, j, hp, lp, trs, imgs ) result( imgj )
+        integer,            intent(in)    :: n, i, j
+        real,               intent(in)    :: hp, lp, trs
+        class(image),       intent(inout) :: imgs(n)
+        type(inpl_struct),  allocatable   :: algninfo(:)
+        real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
+        type(image) :: imgj
+        algninfo = match_imgs2ref_serial(1, hp, lp, trs, imgs(i), imgs(j:j))
+        call imgj%copy(imgs(j))
+        if( algninfo(1)%l_mirr ) call imgj%mirror('x')                
+        call imgj%fft
+        call imgj%shift2Dserial([-algninfo(1)%x,-algninfo(1)%y])
+        call imgj%ifft
+        call imgj%rtsq_serial(algninfo(1)%e3, 0., 0., rmat_rot)
+        call imgj%set_rmat(rmat_rot, .false.)
+        deallocate(algninfo)
+    end function align_imgj2imgi
 
     function match_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
         integer,                  intent(in)    :: n
@@ -1021,6 +1072,109 @@ contains
         call pftcc%kill
         call polartransform%kill
     end function match_imgs2ref
+
+    function match_imgs2ref_serial( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
+        integer,                  intent(in)    :: n
+        real,                     intent(in)    :: hp, lp, trs
+        class(image),             intent(inout) :: imgs(n), img_ref
+        integer,     parameter          :: MAXITS_SH = 60
+        real,        allocatable        :: inpl_corrs(:)
+        type(image), allocatable        :: imgs_mirr(:)
+        type(pftcc_shsrch_grad)         :: grad_shsrch_obj
+        type(polarizer)                 :: polartransform
+        type(polarft_corrcalc)          :: pftcc
+        type(inpl_struct)               :: algninfo_mirr(n)
+        type(inpl_struct), allocatable  :: algninfo(:)
+        integer :: ldim(3), ldim_ref(3), box, kfromto(2), i, loc(1), nrots, irot
+        real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
+        logical :: didft
+        ldim       = imgs(1)%get_ldim()
+        ldim_ref   = img_ref%get_ldim()
+        if( .not. all(ldim == ldim_ref) )then
+            print *, 'ldim     ', ldim
+            print *, 'ldim_ref ', ldim_ref
+            THROW_HARD('Incongruent logical image dimensions (imgs & img_ref)')
+        endif
+        box        = ldim(1)
+        smpd       = imgs(1)%get_smpd()
+        kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
+        kfromto(2) =        calc_fourier_index(lp, box, smpd)
+        ! create mirrored versions of the images
+        call alloc_imgarr(n, ldim, smpd, imgs_mirr)
+        do i = 1, n
+            call imgs_mirr(i)%copy(imgs(i))
+            call imgs_mirr(i)%mirror('x')
+        end do
+        ! initialize pftcc, polarizer
+        call pftcc%new(1, [1,2*n], kfromto) ! 2*n because of mirroring
+        call polartransform%new([box,box,1], smpd)
+        call polartransform%init_polarizer(pftcc, KBALPHA)
+        ! in-plane search object objects for parallel execution
+        lims(:,1)      = -trs
+        lims(:,2)      =  trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        call grad_shsrch_obj%new(lims, lims_init=lims_init, shbarrier='yes',&
+        &maxits=MAXITS_SH, opt_angle=.true.)
+        ! set the reference transform
+        didft = .false.
+        if( .not. img_ref%is_ft() )then
+            call img_ref%fft
+            didft = .true.
+        endif
+        call polartransform%polarize(pftcc, img_ref, 1, isptcl=.false., iseven=.true.)
+        if( didft ) call img_ref%ifft
+        ! set the particle transforms
+        do i = 1, 2 * n
+            if( i <= n )then
+                call imgs(i)%fft()
+                call polartransform%polarize(pftcc, imgs(i),        i, isptcl=.true., iseven=.true.)
+                call imgs(i)%ifft
+            else
+                call imgs_mirr(i-n)%fft()
+                call polartransform%polarize(pftcc, imgs_mirr(i-n), i, isptcl=.true., iseven=.true.)
+                call imgs_mirr(i-n)%ifft()
+            endif
+        end do
+        call pftcc%memoize_refs
+        call pftcc%memoize_ptcls
+        ! register imgs to img_ref
+        nrots = pftcc%get_nrots()
+        allocate(inpl_corrs(nrots), algninfo(n))
+        do i = 1, 2 * n
+            call pftcc%gencorrs(1, i, inpl_corrs)
+            loc  = maxloc(inpl_corrs)
+            irot = loc(1)
+            call grad_shsrch_obj%set_indices(1, i)
+            cxy = grad_shsrch_obj%minimize(irot=irot)
+            if( irot == 0 )then ! no improved solution found, put back the old one
+                cxy(1) = inpl_corrs(loc(1))
+                cxy(2) = 0.
+                cxy(3) = 0.
+                irot   = loc(1)
+            endif
+            if( i <= n )then
+                algninfo(i)%e3            = pftcc%get_rot(irot)
+                algninfo(i)%corr          = cxy(1)
+                algninfo(i)%x             = cxy(2)
+                algninfo(i)%y             = cxy(3)
+                algninfo(i)%l_mirr        = .false.
+            else
+                algninfo_mirr(i-n)%e3     = pftcc%get_rot(irot)
+                algninfo_mirr(i-n)%corr   = cxy(1)
+                algninfo_mirr(i-n)%x      = cxy(2)
+                algninfo_mirr(i-n)%y      = cxy(3)
+                algninfo_mirr(i-n)%l_mirr = .true.
+            endif
+        end do
+        ! select for mirroring
+        where( algninfo_mirr(:)%corr > algninfo(:)%corr ) algninfo = algninfo_mirr
+        ! destruct
+        call dealloc_imgarr(imgs_mirr)
+        call grad_shsrch_obj%kill
+        call pftcc%kill
+        call polartransform%kill
+    end function match_imgs2ref_serial
 
     subroutine rtsq_imgs( n, algninfo, imgs )
         integer,            intent(in)    :: n
