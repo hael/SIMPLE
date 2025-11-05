@@ -1,12 +1,12 @@
 program simple_test_mask
 include 'simple_lib.f08'
 use simple_image,    only: image
-use simple_binimage, only: binimage
+use simple_image_bin, only: image_bin
 implicit none
 real,    parameter :: SMPD=0.356, MSK=56.
 integer, parameter :: EDGE=6, BOX=160
 type(image)        :: spher_msk
-type(binimage)     :: spher_msk_bin
+type(image_bin)     :: spher_msk_bin
 integer            :: npix
 ! make a spherical mask
 call spher_msk%disc([BOX,BOX,BOX], SMPD, MSK, npix)

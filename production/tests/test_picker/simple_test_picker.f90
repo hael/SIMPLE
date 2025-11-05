@@ -4,11 +4,11 @@ use simple_parameters
 use simple_pickseg
 use simple_segmentation
 use simple_image,    only: image
-use simple_binimage, only: binimage
+use simple_image_bin, only: image_bin
 use simple_tvfilter, only: tvfilter
 implicit none
 #include "simple_local_flags.inc"
-type(binimage)           :: microg, img_sdevs, img_cc, micraw
+type(image_bin)           :: microg, img_sdevs, img_cc, micraw
 type(image)              :: img_win, img_edge
 type(tvfilter)           :: tvf
 type(parameters), target :: params
