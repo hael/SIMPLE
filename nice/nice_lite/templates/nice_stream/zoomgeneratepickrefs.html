@@ -41,6 +41,12 @@
                         <div class="font-bold">mask diameter</div>
                         <div>{{ jobstats.mask_diam|intcomma }} Å</div>
                     {% endif %}
+                    {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                        <div class="font-bold mr-[5px]">clusters</div>
+                        <div id="clustercount"></div>
+                        <div class="font-bold mr-[5px]">particles</div>
+                        <div id="particlecount"></div>
+                    {% endif %}
                 </div>
             </div>
             {% if status == "running" and jobstats.user_input is True %}
@@ -98,7 +104,7 @@
                                                 {{ template.res|floatformat:1 }}Å
                                             </div>
                                         </div>
-                                        <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate disabledbutton bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-pop="{{ template.pop }}" data-idx="{{ template.mrcidx }}" data-path="{{ template.mrcpath }}" class="picktemplate disabledbutton bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
                                             <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[100px] w-[100px] relative">
                                                 <div class="xmark h-[30px] w-[30px] text-nice4alert flex items-center justify-center top-[0px] absolute">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
