@@ -948,15 +948,18 @@ contains
         type(inpl_struct),  allocatable   :: algninfo(:)
         real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
         type(image) :: imgj
+        integer :: ldim(3)
+        ldim = imgs(1)%get_ldim()
         algninfo = match_imgs2ref_serial(1, hp, lp, trs, imgs(i), imgs(j:j))
         call imgj%copy(imgs(j))
         if( algninfo(1)%l_mirr ) call imgj%mirror('x')                
         call imgj%fft
         call imgj%shift2Dserial([-algninfo(1)%x,-algninfo(1)%y])
         call imgj%ifft
+        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
         call imgj%rtsq_serial(algninfo(1)%e3, 0., 0., rmat_rot)
         call imgj%set_rmat(rmat_rot, .false.)
-        deallocate(algninfo)
+        deallocate(algninfo, rmat_rot)
     end function align_imgj2imgi
 
     function match_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
