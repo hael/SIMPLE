@@ -57,7 +57,7 @@ module unix_fcntl
 
     interface
         ! int fcntl(int fd, int cmd, ...)
-        function c_fcntl(fd, cmd, arg) bind(c, name='c_fcntl')
+        function c_fcntl(fd, cmd, arg) bind(c, name='fcntl')
             import :: c_int, c_ptr
             implicit none
             integer(kind=c_int), intent(in), value :: fd
