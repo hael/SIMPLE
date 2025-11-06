@@ -1813,15 +1813,17 @@ contains
         class(commander_write_mic_filetab), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: micstab(:)
+        integer,                   allocatable :: orimap(:)
         type(parameters) :: params
         type(sp_project) :: spproj
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         call params%new(cline)
         call spproj%read(trim(params%projfile))
-        call spproj%get_mics_table(micstab)
+        call spproj%get_mics_table(micstab, orimap)
         call write_filetable(params%fname, micstab)
         call spproj%kill
         if( allocated(micstab) ) deallocate(micstab)
+        if( allocated(orimap)  ) deallocate(orimap)
         call simple_end('**** WRITE_MIC_FILETAB NORMAL STOP ****')
     end subroutine exec_write_mic_filetab
 

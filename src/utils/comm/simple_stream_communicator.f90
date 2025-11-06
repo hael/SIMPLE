@@ -256,6 +256,7 @@ module simple_stream_communicator
             class(stream_http_communicator), intent(inout) :: self
             character,                       target        :: rcv, snd
             integer                                        :: pid, rc
+            if(.not. self%active) return ! this process isn't communicating with nice
             snd = 'T'
             ! send child T to terminate
             rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
