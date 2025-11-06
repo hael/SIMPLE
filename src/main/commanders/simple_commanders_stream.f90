@@ -1845,8 +1845,12 @@ contains
         ! import at least params%nmics micrographs - default 100
         write(logfhandle, '(A,I6,A)') '>>> IMPORTING AT LEAST', params%nmics, ' MICROGRAPHS'
         call micimporter( params%nmics )
+        ! background http heartbeats
+        call background_heartbeats()
         ! segmentation-based picking
         call segdiampick_mics(spproj, params%pcontrast, params%nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
+        ! join background http heartbeats
+        call join_background_heartbeats()
         ! send initial picking display info to gui
         call http_communicator%json%update(http_communicator%job_json, "micrographs_accepted", spproj%os_mic%count_state_gt_zero(), found)
         if(spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
@@ -1866,7 +1870,9 @@ contains
                 cnt = cnt+1
             end do
             call send_jobstats()
-        endif       
+        endif    
+        ! background http heartbeats
+        call background_heartbeats()   
         ! extract
         call cline_extract%set('prg',                    'extract')
         call cline_extract%set('mkdir',                       'no')
@@ -1875,6 +1881,8 @@ contains
         call cline_extract%set('projfile',   PROJFILE_GEN_PICKREFS)
         call xextract%execute_safe(cline_extract)
         call spproj%read(PROJFILE_GEN_PICKREFS)
+        ! join background http heartbeats
+        call join_background_heartbeats()
         ! send generate pickrefs display info to gui
         call http_communicator%json%add(http_communicator%job_json, "particles_extracted", spproj%os_ptcl2D%get_noris())
         call http_communicator%json%add(http_communicator%job_json, "particles_per_mic",   nint(float(spproj%os_ptcl2D%get_noris()) / float(spproj%os_mic%get_noris())))
@@ -1882,6 +1890,8 @@ contains
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",           nint(mskdiam_estimate))
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",            box_in_pix)
         call send_jobstats()
+        ! background http heartbeats
+        call background_heartbeats()   
         ! 2D analysis
         nptcls = spproj%os_ptcl2D%get_noris()
         ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
@@ -1898,6 +1908,10 @@ contains
         call cline_abinitio2D%set('nparts',                NPARTS2D)
         call cline_abinitio2D%set('projfile', PROJFILE_GEN_PICKREFS)
         call xabinitio2D%execute_safe(cline_abinitio2D)
+        ! join background http heartbeats
+        call join_background_heartbeats()
+        ! background http heartbeats
+        call background_heartbeats()  
         ! shape rank cavgs
         call cline_shape_rank%set('nthr',               params%nthr)
         call cline_shape_rank%set('projfile', PROJFILE_GEN_PICKREFS)
@@ -1905,6 +1919,8 @@ contains
         call spproj%read(PROJFILE_GEN_PICKREFS)
         call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
         call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
+        ! join background http heartbeats
+        call join_background_heartbeats()
         ! send generate pickrefs display info to gui
         xtile = 0
         ytile = 0
@@ -2004,6 +2020,24 @@ contains
                 call http_communicator%send_jobstats()
                 call http_gen_pickrefs_communicator%send_jobstats()
             end subroutine send_jobstats
+
+            subroutine background_heartbeats()
+                call http_communicator%background_heartbeat()
+                call http_gen_pickrefs_communicator%background_heartbeat()
+            end subroutine background_heartbeats
+
+            subroutine join_background_heartbeats()
+                call http_communicator%join_background_heartbeat()
+                call http_gen_pickrefs_communicator%join_background_heartbeat()
+                if(http_communicator%exit .or. http_gen_pickrefs_communicator%exit) then
+                    write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
+                    call spproj%kill
+                    call http_communicator%term()
+                    call http_gen_pickrefs_communicator%term()
+                    call simple_end('**** SIMPLE_GEN_PICKREFS USER STOP ****')
+                    call EXIT(0)
+                endif
+            end subroutine join_background_heartbeats
 
             subroutine micimporter( nmics )
                 integer, intent(in) :: nmics

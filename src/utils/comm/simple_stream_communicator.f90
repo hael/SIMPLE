@@ -4,27 +4,33 @@ module simple_stream_communicator
     use json_kinds
     use json_module
     use simple_fileio
-
+    use unix
     implicit none
+    
+    public :: stream_http_communicator
 
-    type, public :: stream_http_communicator
+    type :: stream_http_communicator
 
         character(len=XLONGSTRLEN),          private :: url       = ""
         character(len=XLONGSTRLEN),          private :: checksum  = ""
         character(len=LONGSTRLEN),           private :: tmp_recv  = "__stream_comm_recv__"
         character(len=LONGSTRLEN),           private :: tmp_send  = "__stream_comm_send__"
         integer,                             private :: id        = 0
+        integer,                             private :: bg_pid    = 0
+        integer,                             private :: bg_pipe(2)
         logical,                             private :: active    = .false.
         logical,                             public  :: exit      = .false.
         logical,                             public  :: stop      = .false.
         type(json_core),                     public  :: json
         type(json_value),           pointer, public  :: job_json, heartbeat_json, update_arguments
-
+        
         contains
             procedure, public   :: create
             procedure, public   :: term
             procedure, public   :: send_heartbeat
             procedure, public   :: send_jobstats
+            procedure, public   :: background_heartbeat
+            procedure, public   :: join_background_heartbeat
             procedure, private  :: evaluate_checksum
             procedure, private  :: curl_request
 
@@ -66,7 +72,7 @@ module simple_stream_communicator
             if(file_exists(trim(self%tmp_send))) call del_file(trim(self%tmp_send))
             call fopen(action='write', file=trim(self%tmp_send), iostat=stat, funit=file_unit, status='new')
             if (stat /= 0) then
-                print '("Error: opening file ", a, " failed: ", i0)', trim(self%tmp_send), stat
+                call simple_exception("Error opening file "//trim(self%tmp_send), __FILENAME__ , __LINE__,  l_stop=.false.)
                 return
             end if
             call self%json%print(jobstats_json, file_unit)
@@ -104,7 +110,7 @@ module simple_stream_communicator
                 if(file_exists(trim(self%tmp_send))) call del_file(trim(self%tmp_send))
                 call fopen(action='readwrite', file=self%tmp_send, iostat=stat, funit=file_unit, status='new')
                 if (stat /= 0) then
-                    print '("Error: opening file ", a, " failed: ", i0)', trim(self%tmp_send), stat
+                    call simple_exception("Error opening file "//trim(self%tmp_send), __FILENAME__ , __LINE__,  l_stop=.false.)
                     return
                 end if
                 call self%json%print(jobstats_json, file_unit)
@@ -134,20 +140,20 @@ module simple_stream_communicator
             ! Run cURL from command-line.
             call execute_command_line(cmd, exitstat=stat)
             if (stat /= 0) then
-                print '("Error: HTTP request failed: ", i0)', stat
+                call simple_exception("Error HTTP request failed", __FILENAME__ , __LINE__,  l_stop=.false.)
                 return
             end if
             ! Open the temporary file.
             call fopen(action='readwrite', file=self%tmp_recv, iostat=stat, funit=file_unit, status='old')
             if (stat /= 0) then
-                print '("Error: reading file ", a, " failed: ", i0)', tmp_file, stat
+                call simple_exception("Error reading file "//tmp_file, __FILENAME__ , __LINE__,  l_stop=.false.)
                 return
             end if
             ! Read and output contents of file.
             do
                 read (file_unit, '(a)', iostat=stat) buf
                 if (stat /= 0) exit
-                print '(a)', trim(buf)
+            !    print '(a)', trim(buf) ! uncomment to view raw json responses
             end do
             ! Close and delete file.
             if( is_open(file_unit) ) close (file_unit, status='delete')
@@ -172,14 +178,14 @@ module simple_stream_communicator
             cmd = 'md5sum ' // trim(self%tmp_send) // ' >> ' // trim(self%tmp_recv)
             call execute_command_line(cmd, exitstat=stat)
             if (stat /= 0) then
-                print '("Error: MD5 sum failed: ", i0)', stat
+                call simple_exception("Error calculating MD5 sum", __FILENAME__ , __LINE__,  l_stop=.false.)
                 evaluate_checksum = .false.
                 return
             end if
             ! Open the temporary file.
             call fopen(action='readwrite', file=trim(self%tmp_recv), iostat=stat, funit=file_unit, status='old')
             if (stat /= 0) then
-                print '("Error: reading file ", a, " failed: ", i0)', trim(self%tmp_recv), stat
+                call simple_exception("Error reading file "//trim(self%tmp_recv), __FILENAME__ , __LINE__,  l_stop=.false.)
                 evaluate_checksum = .false.
             end if
             ! Read and output contents of file.
@@ -196,5 +202,76 @@ module simple_stream_communicator
                 evaluate_checksum = .false.
             endif
         end function evaluate_checksum
+
+        subroutine background_heartbeat(self)
+            class(stream_http_communicator), intent(inout) :: self
+            character,                       target        :: rcv, snd
+            integer                                        :: pid, rc, i
+            if(.not. self%active) return ! this process isn't communicating with nice
+            ! create pipe
+            rc = c_pipe(self%bg_pipe)
+            if (rc < 0) call simple_exception("Creating background heartbeat pipe failed", __FILENAME__ , __LINE__)
+            ! set pipe reads to non-blocking
+            rc = c_fcntl(self%bg_pipe(1), F_SETFL, O_NONBLOCK); 
+            if (rc < 0) call simple_exception("Updating background heartbeat pipe failed", __FILENAME__ , __LINE__)
+            ! fork process
+            self%bg_pid = c_fork()
+            if (self%bg_pid < 0) then
+                ! Fork failed.
+                call simple_exception("Background heartbeat fork failed", __FILENAME__ , __LINE__)
+            else if (self%bg_pid == 0) then
+                ! Child process infinite do loop until term signal recieved
+                i = 0
+                do
+                    ! Send heartbeat every 10 seconds
+                    if(i == 10) then
+                        call self%send_heartbeat()
+                        i = 0
+                    endif
+                    ! Read character from pipe. If present and T => terminate
+                    if(c_read(self%bg_pipe(1), c_loc(rcv), 1_c_size_t) > 0) then
+                        if(rcv == 'T') exit
+                    endif
+                    ! Sleep 1 second
+                    call sleep(1)
+                    i = i + 1
+                end do
+                ! send parent X if self%exit is false, else Y
+                snd = 'Y'
+                if(self%exit) snd = 'X'
+                rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
+                if (rc < 0) call simple_exception("Child write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
+                ! close pipes and exit
+                rc = c_close(self%bg_pipe(1))
+                if (rc < 0) call simple_exception("Child close background heartbeat pipe failed 1", __FILENAME__ , __LINE__)
+                rc = c_close(self%bg_pipe(2))
+                if (rc < 0) call simple_exception("Child close background heartbeat pipe failed 2", __FILENAME__ , __LINE__)
+                call c_exit(0)
+            else
+                ! Parent process. continue as normal
+            end if
+        end subroutine background_heartbeat
+
+        subroutine join_background_heartbeat(self)
+            class(stream_http_communicator), intent(inout) :: self
+            character,                       target        :: rcv, snd
+            integer                                        :: pid, rc
+            snd = 'T'
+            ! send child T to terminate
+            rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
+            if (rc < 0) call simple_exception("Parent write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
+            ! wait for child to terminate
+            pid = c_waitpid(self%bg_pid, rc, 0)
+            if (rc < 0) call simple_exception("Parent wait for background heartbeat termination failed", __FILENAME__ , __LINE__)
+            ! Read character from pipe. If present and X => set self%exit to true
+            if(c_read(self%bg_pipe(1), c_loc(rcv), 1_c_size_t) > 0) then
+                if(rcv == 'X') self%exit = .true.
+            endif
+            ! close pipes
+            rc = c_close(self%bg_pipe(1))
+            if (rc < 0) call simple_exception("Parent close background heartbeat pipe failed 1", __FILENAME__ , __LINE__)
+            rc = c_close(self%bg_pipe(2))
+            if (rc < 0) call simple_exception("Parent close background heartbeat pipe failed 2", __FILENAME__ , __LINE__)
+        end subroutine join_background_heartbeat
 
 end module simple_stream_communicator
