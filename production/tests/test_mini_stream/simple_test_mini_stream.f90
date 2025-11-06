@@ -5,6 +5,7 @@ use simple_parameters,            only: parameters
 use simple_commanders_project,    only: commander_new_project, commander_import_movies
 use simple_commanders_validate,   only: commander_mini_stream
 use simple_commanders_preprocess
+use simple_sp_project
 implicit none
 character(len=LONGSTRLEN), allocatable :: dataset_cmds(:)
 type(cmdline)                    :: cline, cline_dataset, cline_new_project, cline_import_movies, cline_preprocess, cline_mini_stream
@@ -13,8 +14,10 @@ type(commander_new_project)      :: xnew_project
 type(commander_preprocess_distr) :: xpreprocess
 type(commander_import_movies)    :: ximport_movies
 type(commander_mini_stream)      :: xmini_stream
+type(sp_project)                 :: spproj       
 integer                       :: i, ndata_sets, status
-character(len=LONGSTRLEN)     :: abspath
+character(len=LONGSTRLEN)     :: abspath, projfile
+character(len=LONGSTRLEN), allocatable :: micstab(:)
 character(len=:), allocatable :: output_dir
 ! Parsing
 if( command_argument_count() < 1 )then
@@ -43,8 +46,8 @@ do i = 1, ndata_sets
     call cline_dataset%checkvar('dir_movies',      7)
     call cline_dataset%checkvar('gainref',         8)
     call cline_dataset%checkvar('nparts',          9)
-    call cline_dataset%checkvar('nthr',            9)
-    call cline_dataset%checkvar('moldiam_max',    10)
+    call cline_dataset%checkvar('nthr',           10)
+    call cline_dataset%checkvar('moldiam_max',    11)
     call cline_dataset%check()
     call params%new(cline_dataset)
     call cline_dataset%kill()
@@ -79,17 +82,29 @@ do i = 1, ndata_sets
     call cline_preprocess%check()
     call xpreprocess%execute_safe(cline_preprocess)
     call cline_preprocess%kill()
+    projfile = trim(params%projname)//'.simple'
+    call spproj%read(projfile)
+    call spproj%get_mics_table(micstab)
+    call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
+    call write_filetable('intgs.txt',micstab)
     ! mini stream 
-    ! call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
-    ! call cline_mini_stream%set('filetab',     params%filetab)
-    ! call cline_mini_stream%set('moldiam_max', params%moldiam_max)
-    ! call xmini_stream%execute_safe(cline_mini_stream)
+    call cline_mini_stream%set('prg',               'mini_stream')
+    call cline_mini_stream%set('mkdir',                     'yes')
+    call cline_mini_stream%set('filetab',             'intgs.txt')
+    call cline_mini_stream%set('smpd',                params%smpd)
+    call cline_mini_stream%set('fraca',              params%fraca)
+    call cline_mini_stream%set('kv',                    params%kv)
+    call cline_mini_stream%set('cs',                    params%cs)
+    call cline_mini_stream%set('moldiam_max',  params%moldiam_max)
+    call cline_mini_stream%set('nparts',            params%nparts)
+    call cline_mini_stream%set('nthr',                params%nthr)
+    call xmini_stream%execute_safe(cline_mini_stream)
     call cline_dataset%kill()
     call cline_new_project%kill()
     call cline_import_movies%kill()
     call cline_preprocess%kill()
+    call cline_mini_stream%kill()
     call cline_dataset%kill()
     call simple_chdir(trim(adjustl(output_dir)))
 enddo
-! copy movies to local storage?
 end program simple_test_mini_stream
