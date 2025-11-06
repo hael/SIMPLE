@@ -14,7 +14,8 @@ type(commander_new_project)      :: xnew_project
 type(commander_preprocess_distr) :: xpreprocess
 type(commander_import_movies)    :: ximport_movies
 type(commander_mini_stream)      :: xmini_stream
-type(sp_project)                 :: spproj       
+type(sp_project)                 :: spproj
+integer,          allocatable :: orimap(:)
 integer                       :: i, ndata_sets, status
 character(len=LONGSTRLEN)     :: abspath, projfile
 character(len=LONGSTRLEN), allocatable :: micstab(:)
@@ -84,7 +85,7 @@ do i = 1, ndata_sets
     call cline_preprocess%kill()
     projfile = trim(params%projname)//'.simple'
     call spproj%read(projfile)
-    call spproj%get_mics_table(micstab)
+    call spproj%get_mics_table(micstab, orimap)
     call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
     call write_filetable('intgs.txt',micstab)
     ! mini stream 
