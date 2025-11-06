@@ -26,7 +26,7 @@ contains
         character(len=LONGSTRLEN)              :: boxfile
         character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_topo_names(:), mic_bin_names(:)
         character(len=:),          allocatable :: fbody_here, ext, fname_thumb_den
-        integer,                   allocatable :: labels(:), diam_labels(:)
+        integer,                   allocatable :: labels(:), diam_labels(:), orimap(:)
         real,                      allocatable :: diams_arr(:), diams_arr_ts(:), tmp(:)
         real,                      allocatable :: diam_means(:), abs_z_scores(:)
         type(picksegdiam)  :: picker
@@ -39,7 +39,7 @@ contains
         logical :: l_empty
         ! parse project
         smpd = spproj%get_smpd()
-        call spproj%get_mics_table(micnames)
+        call spproj%get_mics_table(micnames, orimap)
         nmics = size(micnames)
         if( mic_to > nmics ) THROW_HARD('mic_to out of range')
         ! read the first micrograph
@@ -126,7 +126,7 @@ contains
             nptcls = picker%get_nboxes()
             if( nptcls > 0 )then
                 call picker%write_pos_and_diams(boxfile, nptcls, box_in_pix)
-                call spproj%set_boxfile(imic, simple_abspath(boxfile), nptcls=nptcls)
+                call spproj%set_boxfile(orimap(imic), simple_abspath(boxfile), nptcls=nptcls)
             endif
             if( file_exists(mic_den_names(imic)) )then
                 fbody_here      = basename(trim(micnames(imic)))
@@ -135,11 +135,12 @@ contains
                 fname_thumb_den = trim(adjustl(fbody_here))//DEN_SUFFIX//trim(JPG_EXT)
                 call read_mic(trim(mic_den_names(imic)), mic_den)
                 call mic2thumb(mic_den, fname_thumb_den, l_neg=.true.) ! particles black
-                call spproj%os_mic%set(imic, 'thumb_den', simple_abspath(fname_thumb_den))
+                call spproj%os_mic%set(orimap(imic), 'thumb_den', simple_abspath(fname_thumb_den))
             endif
         end do
         ! write output to disk
         call spproj%write_segment_inside('mic')
+        if( allocated(orimap) ) deallocate(orimap)
     end subroutine segdiampick_mics
 
 end module simple_mini_stream_utils

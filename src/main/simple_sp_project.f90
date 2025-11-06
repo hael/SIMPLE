@@ -913,12 +913,14 @@ contains
         enddo
     end subroutine get_movies_table
 
-    subroutine get_mics_table( self, micstab )
+    subroutine get_mics_table( self, micstab, orimap)
         class(sp_project),                      intent(inout) :: self
         character(len=LONGSTRLEN), allocatable, intent(out)   :: micstab(:)
+        integer,                   allocatable, intent(out)   :: orimap(:)
         character(len=:), allocatable :: imgkind, mic
         integer :: i,n,cnt
-        if(allocated(micstab))deallocate(micstab)
+        if(allocated(micstab)) deallocate(micstab)
+        if(allocated(orimap))  deallocate(orimap)
         n = 0
         do i=1,self%os_mic%get_noris()
             if(self%os_mic%isthere(i,'intg'))then
@@ -927,6 +929,7 @@ contains
         enddo
         if( n==0 )return
         allocate(micstab(n))
+        allocate(orimap(n))
         cnt = 0
         do i=1,self%os_mic%get_noris()
             if(self%os_mic%isthere(i,'intg'))then
@@ -934,6 +937,7 @@ contains
                     cnt = cnt + 1
                     call self%os_mic%getter(i,'intg',mic)
                     micstab(cnt) = trim(mic)
+                    orimap(cnt)  = i
                 endif
             endif
         enddo
