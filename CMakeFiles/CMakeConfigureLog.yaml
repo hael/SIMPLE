@@ -1,0 +1,844 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineSystem.cmake:205 (message)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      The system is: Linux - 4.18.0-553.78.1.el8_10.x86_64 - x86_64
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineFortranCompiler.cmake:190 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Compiling the Fortran compiler identification source file "CMakeFortranCompilerId.F" succeeded.
+      Compiler: /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran 
+      Build flags: 
+      Id flags: -v 
+      
+      The output was:
+      0
+      Driving: /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran -v CMakeFortranCompilerId.F -l gfortran -l m -shared-libgcc
+      Using built-in specs.
+      COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran
+      COLLECT_LTO_WRAPPER=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper
+      Target: x86_64-pc-linux-gnu
+      Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c,c++,fortran,go,objc,obj-c++
+      Thread model: posix
+      Supported LTO compression algorithms: zlib zstd
+      gcc version 15.2.0 (GCC) 
+      COLLECT_GCC_OPTIONS='-v' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'a-'
+       /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/f951 CMakeFortranCompilerId.F -ffixed-form -cpp=/tmp/ccSdyFL6.fi -quiet -v CMakeFortranCompilerId.F -quiet -dumpdir a- -dumpbase CMakeFortranCompilerId.F -dumpbase-ext .F -mtune=generic -march=x86-64 -version -fintrinsic-modules-path /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude -fpre-include=/usr/include/finclude/math-vector-fortran.h -o /tmp/ccwUk2XS.s
+      GNU Fortran (GCC) version 15.2.0 (x86_64-pc-linux-gnu)
+      	compiled by GNU C version 15.2.0, GMP version 6.2.1, MPFR version 4.1.0, MPC version 1.2.1, isl version isl-0.24-GMP
+      
+      GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+      ignoring nonexistent directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../x86_64-pc-linux-gnu/include"
+      ignoring duplicate directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include"
+        as it is a non-system directory that duplicates a system directory
+      #include "..." search starts here:
+      #include <...> search starts here:
+       /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude
+       /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include
+       /usr/local/include
+       /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include
+       /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed
+       /usr/include
+      End of search list.
+      COLLECT_GCC_OPTIONS='-v' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'a-'
+       as -v --64 -o /tmp/ccMM16OP.o /tmp/ccwUk2XS.s
+      GNU assembler version 2.30 (x86_64-redhat-linux) using BFD version version 2.30-127.0.1.el8_10
+      Reading specs from /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/libgfortran.spec
+      rename spec lib to liborig
+      COLLECT_GCC_OPTIONS='-v' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'a-'
+      COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/
+      LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+      COLLECT_GCC_OPTIONS='-v' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'a.'
+       /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2 -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cc485JTf.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lquadmath -plugin-opt=-pass-through=-lm -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib /tmp/ccMM16OP.o -lgfortran -lm -lgcc_s -lgcc --as-needed -lquadmath --no-as-needed -lm -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o
+      COLLECT_GCC_OPTIONS='-v' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'a.'
+      
+      
+      Compilation of the Fortran compiler identification source "CMakeFortranCompilerId.F" produced "a.out"
+      
+      The Fortran compiler identification is GNU, found in:
+        /home/meanapanedar2/programming/SIMPLE/CMakeFiles/4.0.1/CompilerIdFortran/a.out
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCCompiler.cmake:123 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+      Compiler: /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.out"
+      
+      The C compiler identification is GNU, found in:
+        /home/meanapanedar2/programming/SIMPLE/CMakeFiles/4.0.1/CompilerIdC/a.out
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCXXCompiler.cmake:126 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++ 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
+      
+      The CXX compiler identification is GNU, found in:
+        /home/meanapanedar2/programming/SIMPLE/CMakeFiles/4.0.1/CompilerIdCXX/a.out
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestFortranCompiler.cmake:20 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    checks:
+      - "Detecting Fortran compiler ABI info"
+    directories:
+      source: "/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-geHPmY"
+      binary: "/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-geHPmY"
+    cmakeVariables:
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_Fortran_FLAGS: ""
+      CMAKE_Fortran_FLAGS_DEBUG: "-g"
+    buildResult:
+      variable: "CMAKE_Fortran_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-geHPmY'
+        
+        Run Build Command(s): /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_2de39/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_2de39.dir/build.make CMakeFiles/cmTC_2de39.dir/build
+        gmake[1]: Entering directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-geHPmY'
+        Building Fortran object CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o
+        /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran   -v -c /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeFortranCompilerABI.F90 -o CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o
+        Using built-in specs.
+        COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran
+        Target: x86_64-pc-linux-gnu
+        Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c,c++,fortran,go,objc,obj-c++
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        COLLECT_GCC_OPTIONS='-v' '-c' '-o' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2de39.dir/'
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/f951 /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeFortranCompilerABI.F90 -cpp=/tmp/cc7614ab.fii -quiet -v /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeFortranCompilerABI.F90 -quiet -dumpdir CMakeFiles/cmTC_2de39.dir/ -dumpbase CMakeFortranCompilerABI.F90.F90 -dumpbase-ext .F90 -mtune=generic -march=x86-64 -version -fintrinsic-modules-path /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude -fpre-include=/usr/include/finclude/math-vector-fortran.h -o /tmp/ccpm0ExT.s
+        GNU Fortran (GCC) version 15.2.0 (x86_64-pc-linux-gnu)
+        	compiled by GNU C version 15.2.0, GMP version 6.2.1, MPFR version 4.1.0, MPC version 1.2.1, isl version isl-0.24-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring nonexistent directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../x86_64-pc-linux-gnu/include"
+        ignoring duplicate directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include"
+          as it is a non-system directory that duplicates a system directory
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include
+         /usr/local/include
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed
+         /usr/include
+        End of search list.
+        COLLECT_GCC_OPTIONS='-v' '-c' '-o' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2de39.dir/'
+         as -v --64 -o CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o /tmp/ccpm0ExT.s
+        GNU assembler version 2.30 (x86_64-redhat-linux) using BFD version version 2.30-127.0.1.el8_10
+        COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/
+        LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-c' '-o' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.'
+        Linking Fortran executable cmTC_2de39
+        /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E cmake_link_script CMakeFiles/cmTC_2de39.dir/link.txt --verbose=1
+        Driving: /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran -v -Wl,-v CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o -o cmTC_2de39 -l gfortran -l m -shared-libgcc
+        Using built-in specs.
+        COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran
+        COLLECT_LTO_WRAPPER=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper
+        Target: x86_64-pc-linux-gnu
+        Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c,c++,fortran,go,objc,obj-c++
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        Reading specs from /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/libgfortran.spec
+        rename spec lib to liborig
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2de39' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2de39-'
+        COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/
+        LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2de39' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2de39.'
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2 -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cclhxtJR.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lquadmath -plugin-opt=-pass-through=-lm -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_2de39 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o -lgfortran -lm -lgcc_s -lgcc --as-needed -lquadmath --no-as-needed -lm -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o
+        collect2 version 15.2.0
+        /usr/bin/ld -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cclhxtJR.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lquadmath -plugin-opt=-pass-through=-lm -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_2de39 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o -lgfortran -lm -lgcc_s -lgcc --as-needed -lquadmath --no-as-needed -lm -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o
+        GNU ld version 2.30-127.0.1.el8_10
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2de39' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2de39.'
+        /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran -v -Wl,-v CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o -o cmTC_2de39
+        gmake[1]: Leaving directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-geHPmY'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:191 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestFortranCompiler.cmake:20 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Parsed Fortran implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+          add: [/usr/local/include]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+        collapse include dir [/usr/local/include] ==> [/usr/local/include]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include;/usr/local/include;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:227 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestFortranCompiler.cmake:20 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Parsed Fortran implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-geHPmY']
+        ignore line: []
+        ignore line: [Run Build Command(s): /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_2de39/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_2de39.dir/build.make CMakeFiles/cmTC_2de39.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-geHPmY']
+        ignore line: [Building Fortran object CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o]
+        ignore line: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran   -v -c /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeFortranCompilerABI.F90 -o CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran]
+        ignore line: [Target: x86_64-pc-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c c++ fortran go objc obj-c++]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-c' '-o' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2de39.dir/']
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/f951 /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeFortranCompilerABI.F90 -cpp=/tmp/cc7614ab.fii -quiet -v /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeFortranCompilerABI.F90 -quiet -dumpdir CMakeFiles/cmTC_2de39.dir/ -dumpbase CMakeFortranCompilerABI.F90.F90 -dumpbase-ext .F90 -mtune=generic -march=x86-64 -version -fintrinsic-modules-path /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude -fpre-include=/usr/include/finclude/math-vector-fortran.h -o /tmp/ccpm0ExT.s]
+        ignore line: [GNU Fortran (GCC) version 15.2.0 (x86_64-pc-linux-gnu)]
+        ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.2.1  MPFR version 4.1.0  MPC version 1.2.1  isl version isl-0.24-GMP]
+        ignore line: []
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring nonexistent directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../x86_64-pc-linux-gnu/include"]
+        ignore line: [ignoring duplicate directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include"]
+        ignore line: [  as it is a non-system directory that duplicates a system directory]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/finclude]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+        ignore line: [ /usr/local/include]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-c' '-o' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2de39.dir/']
+        ignore line: [ as -v --64 -o CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o /tmp/ccpm0ExT.s]
+        ignore line: [GNU assembler version 2.30 (x86_64-redhat-linux) using BFD version version 2.30-127.0.1.el8_10]
+        ignore line: [COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-c' '-o' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.']
+        ignore line: [Linking Fortran executable cmTC_2de39]
+        ignore line: [/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E cmake_link_script CMakeFiles/cmTC_2de39.dir/link.txt --verbose=1]
+        ignore line: [Driving: /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran -v -Wl -v CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o -o cmTC_2de39 -l gfortran -l m -shared-libgcc]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gfortran]
+        ignore line: [COLLECT_LTO_WRAPPER=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper]
+        ignore line: [Target: x86_64-pc-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c c++ fortran go objc obj-c++]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [Reading specs from /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/libgfortran.spec]
+        ignore line: [rename spec lib to liborig]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2de39' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2de39-']
+        ignore line: [COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2de39' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2de39.']
+        link line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2 -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cclhxtJR.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lquadmath -plugin-opt=-pass-through=-lm -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_2de39 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o -lgfortran -lm -lgcc_s -lgcc --as-needed -lquadmath --no-as-needed -lm -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2] ==> ignore
+          arg [-plugin] ==> ignore
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so] ==> ignore
+          arg [-plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/cclhxtJR.res] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lquadmath] ==> ignore
+          arg [-plugin-opt=-pass-through=-lm] ==> ignore
+          arg [-plugin-opt=-pass-through=-lc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [elf_x86_64] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_2de39] ==> ignore
+          arg [/lib/../lib64/crt1.o] ==> obj [/lib/../lib64/crt1.o]
+          arg [/lib/../lib64/crti.o] ==> obj [/lib/../lib64/crti.o]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o] ==> obj [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64]
+          arg [-L/lib/../lib64] ==> dir [/lib/../lib64]
+          arg [-L/usr/lib/../lib64] ==> dir [/usr/lib/../lib64]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..]
+          arg [-L/lib] ==> dir [/lib]
+          arg [-L/usr/lib] ==> dir [/usr/lib]
+          arg [-v] ==> ignore
+          arg [CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o] ==> ignore
+          arg [-lgfortran] ==> lib [gfortran]
+          arg [-lm] ==> lib [m]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [--as-needed] ==> ignore
+          arg [-lquadmath] ==> lib [quadmath]
+          arg [--no-as-needed] ==> ignore
+          arg [-lm] ==> lib [m]
+          arg [-lc] ==> lib [c]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o] ==> obj [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o]
+          arg [/lib/../lib64/crtn.o] ==> obj [/lib/../lib64/crtn.o]
+        ignore line: [collect2 version 15.2.0]
+        ignore line: [/usr/bin/ld -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cclhxtJR.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lquadmath -plugin-opt=-pass-through=-lm -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_2de39 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2de39.dir/CMakeFortranCompilerABI.F90.o -lgfortran -lm -lgcc_s -lgcc --as-needed -lquadmath --no-as-needed -lm -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o]
+        linker tool for 'Fortran': /usr/bin/ld
+        collapse obj [/lib/../lib64/crt1.o] ==> [/lib64/crt1.o]
+        collapse obj [/lib/../lib64/crti.o] ==> [/lib64/crti.o]
+        collapse obj [/lib/../lib64/crtn.o] ==> [/lib64/crtn.o]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib64]
+        collapse library dir [/lib/../lib64] ==> [/lib64]
+        collapse library dir [/usr/lib/../lib64] ==> [/usr/lib64]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib]
+        collapse library dir [/lib] ==> [/lib]
+        collapse library dir [/usr/lib] ==> [/usr/lib]
+        implicit libs: [gfortran;m;gcc_s;gcc;quadmath;m;c;gcc_s;gcc]
+        implicit objs: [/lib64/crt1.o;/lib64/crti.o;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o;/lib64/crtn.o]
+        implicit dirs: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib64;/lib64;/usr/lib64;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib;/lib;/usr/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/Internal/CMakeDetermineLinkerId.cmake:36 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:264 (cmake_determine_linker_id)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestFortranCompiler.cmake:20 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Running the Fortran compiler's linker: "/usr/bin/ld" "-v"
+      GNU ld version 2.30-127.0.1.el8_10
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    checks:
+      - "Detecting C compiler ABI info"
+    directories:
+      source: "/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-vWkbWK"
+      binary: "/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-vWkbWK"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_C_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-vWkbWK'
+        
+        Run Build Command(s): /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_26cc5/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_26cc5.dir/build.make CMakeFiles/cmTC_26cc5.dir/build
+        gmake[1]: Entering directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-vWkbWK'
+        Building C object CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o
+        /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc   -v -o CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o -c /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCCompilerABI.c
+        Using built-in specs.
+        COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc
+        Target: x86_64-pc-linux-gnu
+        Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c,c++,fortran,go,objc,obj-c++
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_26cc5.dir/'
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/cc1 -quiet -v /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_26cc5.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -o /tmp/ccgP8EOm.s
+        GNU C23 (GCC) version 15.2.0 (x86_64-pc-linux-gnu)
+        	compiled by GNU C version 15.2.0, GMP version 6.2.1, MPFR version 4.1.0, MPC version 1.2.1, isl version isl-0.24-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring nonexistent directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../x86_64-pc-linux-gnu/include"
+        ignoring duplicate directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include"
+          as it is a non-system directory that duplicates a system directory
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include
+         /usr/local/include
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed
+         /usr/include
+        End of search list.
+        Compiler executable checksum: c612da4432dd78dc81f44a7e06d9b013
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_26cc5.dir/'
+         as -v --64 -o CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o /tmp/ccgP8EOm.s
+        GNU assembler version 2.30 (x86_64-redhat-linux) using BFD version version 2.30-127.0.1.el8_10
+        COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/
+        LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.'
+        Linking C executable cmTC_26cc5
+        /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E cmake_link_script CMakeFiles/cmTC_26cc5.dir/link.txt --verbose=1
+        Using built-in specs.
+        COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc
+        COLLECT_LTO_WRAPPER=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper
+        Target: x86_64-pc-linux-gnu
+        Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c,c++,fortran,go,objc,obj-c++
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/
+        LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_26cc5' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_26cc5.'
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2 -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccfbLtLq.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_26cc5 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o
+        collect2 version 15.2.0
+        /usr/bin/ld -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccfbLtLq.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_26cc5 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o
+        GNU ld version 2.30-127.0.1.el8_10
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_26cc5' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_26cc5.'
+        /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc -v -Wl,-v CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o -o cmTC_26cc5
+        gmake[1]: Leaving directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-vWkbWK'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:191 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Parsed C implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+          add: [/usr/local/include]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+        collapse include dir [/usr/local/include] ==> [/usr/local/include]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include;/usr/local/include;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:227 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Parsed C implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-vWkbWK']
+        ignore line: []
+        ignore line: [Run Build Command(s): /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_26cc5/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_26cc5.dir/build.make CMakeFiles/cmTC_26cc5.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-vWkbWK']
+        ignore line: [Building C object CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o]
+        ignore line: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc   -v -o CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o -c /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCCompilerABI.c]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc]
+        ignore line: [Target: x86_64-pc-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c c++ fortran go objc obj-c++]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_26cc5.dir/']
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/cc1 -quiet -v /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_26cc5.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -o /tmp/ccgP8EOm.s]
+        ignore line: [GNU C23 (GCC) version 15.2.0 (x86_64-pc-linux-gnu)]
+        ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.2.1  MPFR version 4.1.0  MPC version 1.2.1  isl version isl-0.24-GMP]
+        ignore line: []
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring nonexistent directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../x86_64-pc-linux-gnu/include"]
+        ignore line: [ignoring duplicate directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include"]
+        ignore line: [  as it is a non-system directory that duplicates a system directory]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+        ignore line: [ /usr/local/include]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Compiler executable checksum: c612da4432dd78dc81f44a7e06d9b013]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_26cc5.dir/']
+        ignore line: [ as -v --64 -o CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o /tmp/ccgP8EOm.s]
+        ignore line: [GNU assembler version 2.30 (x86_64-redhat-linux) using BFD version version 2.30-127.0.1.el8_10]
+        ignore line: [COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.']
+        ignore line: [Linking C executable cmTC_26cc5]
+        ignore line: [/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E cmake_link_script CMakeFiles/cmTC_26cc5.dir/link.txt --verbose=1]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/gcc]
+        ignore line: [COLLECT_LTO_WRAPPER=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper]
+        ignore line: [Target: x86_64-pc-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c c++ fortran go objc obj-c++]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_26cc5' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_26cc5.']
+        link line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2 -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccfbLtLq.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_26cc5 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2] ==> ignore
+          arg [-plugin] ==> ignore
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so] ==> ignore
+          arg [-plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccfbLtLq.res] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [elf_x86_64] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_26cc5] ==> ignore
+          arg [/lib/../lib64/crt1.o] ==> obj [/lib/../lib64/crt1.o]
+          arg [/lib/../lib64/crti.o] ==> obj [/lib/../lib64/crti.o]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o] ==> obj [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64]
+          arg [-L/lib/../lib64] ==> dir [/lib/../lib64]
+          arg [-L/usr/lib/../lib64] ==> dir [/usr/lib/../lib64]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..]
+          arg [-L/lib] ==> dir [/lib]
+          arg [-L/usr/lib] ==> dir [/usr/lib]
+          arg [-v] ==> ignore
+          arg [CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o] ==> ignore
+          arg [-lgcc] ==> lib [gcc]
+          arg [--push-state] ==> ignore
+          arg [--as-needed] ==> ignore
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [--pop-state] ==> ignore
+          arg [-lc] ==> lib [c]
+          arg [-lgcc] ==> lib [gcc]
+          arg [--push-state] ==> ignore
+          arg [--as-needed] ==> ignore
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [--pop-state] ==> ignore
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o] ==> obj [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o]
+          arg [/lib/../lib64/crtn.o] ==> obj [/lib/../lib64/crtn.o]
+        ignore line: [collect2 version 15.2.0]
+        ignore line: [/usr/bin/ld -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccfbLtLq.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_26cc5 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_26cc5.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o]
+        linker tool for 'C': /usr/bin/ld
+        collapse obj [/lib/../lib64/crt1.o] ==> [/lib64/crt1.o]
+        collapse obj [/lib/../lib64/crti.o] ==> [/lib64/crti.o]
+        collapse obj [/lib/../lib64/crtn.o] ==> [/lib64/crtn.o]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib64]
+        collapse library dir [/lib/../lib64] ==> [/lib64]
+        collapse library dir [/usr/lib/../lib64] ==> [/usr/lib64]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib]
+        collapse library dir [/lib] ==> [/lib]
+        collapse library dir [/usr/lib] ==> [/usr/lib]
+        implicit libs: [gcc;gcc_s;c;gcc;gcc_s]
+        implicit objs: [/lib64/crt1.o;/lib64/crti.o;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o;/lib64/crtn.o]
+        implicit dirs: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib64;/lib64;/usr/lib64;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib;/lib;/usr/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/Internal/CMakeDetermineLinkerId.cmake:36 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:264 (cmake_determine_linker_id)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Running the C compiler's linker: "/usr/bin/ld" "-v"
+      GNU ld version 2.30-127.0.1.el8_10
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-XOoKbC"
+      binary: "/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-XOoKbC"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-XOoKbC'
+        
+        Run Build Command(s): /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_04bb2/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_04bb2.dir/build.make CMakeFiles/cmTC_04bb2.dir/build
+        gmake[1]: Entering directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-XOoKbC'
+        Building CXX object CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o
+        /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++   -v -o CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o -c /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp
+        Using built-in specs.
+        COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++
+        Target: x86_64-pc-linux-gnu
+        Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c,c++,fortran,go,objc,obj-c++
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_04bb2.dir/'
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/cc1plus -quiet -v -D_GNU_SOURCE /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_04bb2.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/ccROjpC7.s
+        GNU C++17 (GCC) version 15.2.0 (x86_64-pc-linux-gnu)
+        	compiled by GNU C version 15.2.0, GMP version 6.2.1, MPFR version 4.1.0, MPC version 1.2.1, isl version isl-0.24-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring nonexistent directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../x86_64-pc-linux-gnu/include"
+        ignoring duplicate directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include"
+          as it is a non-system directory that duplicates a system directory
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-pc-linux-gnu
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include
+         /usr/local/include
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed
+         /usr/include
+        End of search list.
+        Compiler executable checksum: 8ca23c402e558a9e642c66bb35d512c2
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_04bb2.dir/'
+         as -v --64 -o CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccROjpC7.s
+        GNU assembler version 2.30 (x86_64-redhat-linux) using BFD version version 2.30-127.0.1.el8_10
+        COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/
+        LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.'
+        Linking CXX executable cmTC_04bb2
+        /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E cmake_link_script CMakeFiles/cmTC_04bb2.dir/link.txt --verbose=1
+        Using built-in specs.
+        COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++
+        COLLECT_LTO_WRAPPER=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper
+        Target: x86_64-pc-linux-gnu
+        Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c,c++,fortran,go,objc,obj-c++
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/
+        LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_04bb2' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_04bb2.'
+         /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2 -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccaCxzWi.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_04bb2 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o
+        collect2 version 15.2.0
+        /usr/bin/ld -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccaCxzWi.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_04bb2 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o
+        GNU ld version 2.30-127.0.1.el8_10
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_04bb2' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_04bb2.'
+        /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++ -v -Wl,-v CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_04bb2
+        gmake[1]: Leaving directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-XOoKbC'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:191 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Parsed CXX implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-pc-linux-gnu]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+          add: [/usr/local/include]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+          add: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include/c++/15.2.0]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-pc-linux-gnu] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include/c++/15.2.0/x86_64-pc-linux-gnu]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include/c++/15.2.0/backward]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+        collapse include dir [/usr/local/include] ==> [/usr/local/include]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+        collapse include dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include/c++/15.2.0;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include/c++/15.2.0/x86_64-pc-linux-gnu;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include/c++/15.2.0/backward;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include;/usr/local/include;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:227 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Parsed CXX implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-XOoKbC']
+        ignore line: []
+        ignore line: [Run Build Command(s): /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_04bb2/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_04bb2.dir/build.make CMakeFiles/cmTC_04bb2.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/meanapanedar2/programming/SIMPLE/CMakeFiles/CMakeScratch/TryCompile-XOoKbC']
+        ignore line: [Building CXX object CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++   -v -o CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o -c /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++]
+        ignore line: [Target: x86_64-pc-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c c++ fortran go objc obj-c++]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_04bb2.dir/']
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/cc1plus -quiet -v -D_GNU_SOURCE /mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_04bb2.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/ccROjpC7.s]
+        ignore line: [GNU C++17 (GCC) version 15.2.0 (x86_64-pc-linux-gnu)]
+        ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.2.1  MPFR version 4.1.0  MPC version 1.2.1  isl version isl-0.24-GMP]
+        ignore line: []
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring nonexistent directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../x86_64-pc-linux-gnu/include"]
+        ignore line: [ignoring duplicate directory "/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include"]
+        ignore line: [  as it is a non-system directory that duplicates a system directory]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-pc-linux-gnu]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include]
+        ignore line: [ /usr/local/include]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/include]
+        ignore line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/include-fixed]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Compiler executable checksum: 8ca23c402e558a9e642c66bb35d512c2]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_04bb2.dir/']
+        ignore line: [ as -v --64 -o CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccROjpC7.s]
+        ignore line: [GNU assembler version 2.30 (x86_64-redhat-linux) using BFD version version 2.30-127.0.1.el8_10]
+        ignore line: [COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [Linking CXX executable cmTC_04bb2]
+        ignore line: [/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/bin/cmake -E cmake_link_script CMakeFiles/cmTC_04bb2.dir/link.txt --verbose=1]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/bin/c++]
+        ignore line: [COLLECT_LTO_WRAPPER=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper]
+        ignore line: [Target: x86_64-pc-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0 --disable-multilib --with-system-zlib --enable-languages=c c++ fortran go objc obj-c++]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [COMPILER_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64/:/lib/../lib64/:/usr/lib/../lib64/:/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_04bb2' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_04bb2.']
+        link line: [ /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2 -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccaCxzWi.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_04bb2 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/collect2] ==> ignore
+          arg [-plugin] ==> ignore
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so] ==> ignore
+          arg [-plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccaCxzWi.res] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [elf_x86_64] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_04bb2] ==> ignore
+          arg [/lib/../lib64/crt1.o] ==> obj [/lib/../lib64/crt1.o]
+          arg [/lib/../lib64/crti.o] ==> obj [/lib/../lib64/crti.o]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o] ==> obj [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64]
+          arg [-L/lib/../lib64] ==> dir [/lib/../lib64]
+          arg [-L/usr/lib/../lib64] ==> dir [/usr/lib/../lib64]
+          arg [-L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..] ==> dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..]
+          arg [-L/lib] ==> dir [/lib]
+          arg [-L/usr/lib] ==> dir [/usr/lib]
+          arg [-v] ==> ignore
+          arg [CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [-lstdc++] ==> lib [stdc++]
+          arg [-lm] ==> lib [m]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [-lc] ==> lib [c]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o] ==> obj [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o]
+          arg [/lib/../lib64/crtn.o] ==> obj [/lib/../lib64/crtn.o]
+        ignore line: [collect2 version 15.2.0]
+        ignore line: [/usr/bin/ld -plugin /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/libexec/gcc/x86_64-pc-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccaCxzWi.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_04bb2 /lib/../lib64/crt1.o /lib/../lib64/crti.o /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_04bb2.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o /lib/../lib64/crtn.o]
+        linker tool for 'CXX': /usr/bin/ld
+        collapse obj [/lib/../lib64/crt1.o] ==> [/lib64/crt1.o]
+        collapse obj [/lib/../lib64/crti.o] ==> [/lib64/crti.o]
+        collapse obj [/lib/../lib64/crtn.o] ==> [/lib64/crtn.o]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../../../lib64] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib64]
+        collapse library dir [/lib/../lib64] ==> [/lib64]
+        collapse library dir [/usr/lib/../lib64] ==> [/usr/lib64]
+        collapse library dir [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/../../..] ==> [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib]
+        collapse library dir [/lib] ==> [/lib]
+        collapse library dir [/usr/lib] ==> [/usr/lib]
+        implicit libs: [stdc++;m;gcc_s;gcc;c;gcc_s;gcc]
+        implicit objs: [/lib64/crt1.o;/lib64/crti.o;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtbegin.o;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0/crtend.o;/lib64/crtn.o]
+        implicit dirs: [/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib/gcc/x86_64-pc-linux-gnu/15.2.0;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib64;/lib64;/usr/lib64;/mnt/nasapps/development/modules_elmlund/gcc/15.2.0/lib;/lib;/usr/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/Internal/CMakeDetermineLinkerId.cmake:36 (message)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeDetermineCompilerABI.cmake:264 (cmake_determine_linker_id)"
+      - "/mnt/nasapps/development/modules_elmlund/cmake/4.0.1/share/cmake-4.0/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:7 (project)"
+    message: |
+      Running the CXX compiler's linker: "/usr/bin/ld" "-v"
+      GNU ld version 2.30-127.0.1.el8_10
+...

@@ -1,8 +1,4 @@
 #!/bin/bash
 rm -rf build
-mkdir build
-cd build
-cmake .. -DGUI=off -DUSE_LIBTIFF=off -DUSE_AFM=ON
-make -j install
-#exit
-
+cmake -G "Unix Makefiles" -D USE_LIBTIFF:BOOL=ON -D USE_LIBTIFF:BOOL=OFF -D USE_AFM:BOOL=ON -B build
+cmake --build build --config Release --target clean
