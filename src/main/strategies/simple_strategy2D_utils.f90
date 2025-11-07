@@ -1,12 +1,12 @@
 module simple_strategy2D_utils
 include 'simple_lib.f08'
-use simple_image_bin,         only: image_bin
 use simple_class_frcs,        only: class_frcs
 use simple_clustering_utils,  only: cluster_dmat
 use simple_cmdline,           only: cmdline
 use simple_corrmat,           only: calc_inpl_invariant_fm
 use simple_histogram,         only: histogram
 use simple_image,             only: image
+use simple_image_bin,         only: image_bin
 use simple_image_msk,         only: density_inoutside_mask
 use simple_parameters,        only: parameters, params_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
@@ -16,94 +16,17 @@ use simple_pspecs,            only: pspecs
 use simple_segmentation,      only: otsu_img
 use simple_sp_project,        only: sp_project
 use simple_stack_io,          only: stack_io
+use simple_imgarr_utils
 implicit none
 #include "simple_local_flags.inc"
 
-interface read_cavgs_into_imgarr
-    module procedure read_cavgs_into_imgarr_1
-    module procedure read_cavgs_into_imgarr_2
-end interface
-
-interface write_cavgs
-    module procedure write_cavgs_1
-    module procedure write_cavgs_2
-    module procedure write_cavgs_3
-end interface
-
 ! objective function weights
-real,    private, parameter :: W_HIST=0.2, W_POW=0.4, W_FM=0.4
-real,    private, parameter :: W_SIG_DEV=0.3, W_SIG_CLUST_DEV=0.3, W_FM_DEV=0.4
+! real,    private, parameter :: W_HIST=0.2, W_POW=0.4, W_FM=0.4
+! real,    private, parameter :: W_SIG_DEV=0.3, W_SIG_CLUST_DEV=0.3, W_FM_DEV=0.4
+real,    private, parameter :: W_SIG=0.0, W_SIG_CLUST=0.5, W_CC=0.25, W_RES=0.25
+real,    private, parameter :: W_SCORE_HOMO=0.35, W_SCORE_RES=0.5, W_SCORE_CLUST=0.15
 
 contains
-
-    function read_cavgs_into_imgarr_1( spproj, mask ) result( imgs )
-        class(sp_project), intent(inout) :: spproj
-        logical, optional, intent(in)    :: mask(:)
-        type(image),       allocatable   :: imgs(:)
-        character(len=:),  allocatable   :: cavgsstk, stkpath
-        type(stack_io) :: stkio_r
-        integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
-        real    :: smpd
-        call spproj%get_cavgs_stk(cavgsstk, ncls, smpd, imgkind='cavg', stkpath=stkpath)
-        if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
-        if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=min(1024,ncls))
-        ldim_read    = stkio_r%get_ldim()
-        ldim_read(3) = 1
-        if( present(mask) )then
-            if( size(mask) /= ncls ) THROW_HARD('Nonconforming mask size')
-            ncls_sel = count(mask)
-            allocate(imgs(ncls_sel))
-            cnt = 0
-            do icls = 1,ncls
-                if( mask(icls) )then
-                    cnt = cnt + 1
-                    call imgs(cnt)%new(ldim_read,smpd,wthreads=.false.)
-                    call stkio_r%read(icls, imgs(cnt))
-                endif
-            end do
-        else
-            allocate(imgs(ncls))
-            do icls = 1,ncls
-                call imgs(icls)%new(ldim_read,smpd,wthreads=.false.)
-                call stkio_r%read(icls, imgs(icls))
-            end do
-        endif
-        call stkio_r%close
-    end function read_cavgs_into_imgarr_1
-
-    function read_cavgs_into_imgarr_2( cavgsstk, mask ) result( imgs )
-        character(len=*),  intent(in)  :: cavgsstk
-        logical, optional, intent(in)  :: mask(:)
-        type(image),       allocatable :: imgs(:)
-        type(stack_io) :: stkio_r
-        integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
-        real    :: smpd
-        if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
-        call find_ldim_nptcls(cavgsstk, ldim_read, ncls, smpd)
-        ldim_read(3) = 1
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=min(1024,ncls))
-        if( present(mask) )then
-            if( size(mask) /= ncls ) THROW_HARD('Nonconforming mask size')
-            ncls_sel = count(mask)
-            allocate(imgs(ncls_sel))
-            cnt = 0
-            do icls = 1,ncls
-                if( mask(icls) )then
-                    cnt = cnt + 1
-                    call imgs(cnt)%new(ldim_read,smpd,wthreads=.false.)
-                    call stkio_r%read(icls, imgs(cnt))
-                endif
-            end do
-        else
-            allocate(imgs(ncls))
-            do icls = 1,ncls
-                call imgs(icls)%new(ldim_read,smpd,wthreads=.false.)
-                call stkio_r%read(icls, imgs(icls))
-            end do
-        endif
-        call stkio_r%close
-    end function read_cavgs_into_imgarr_2
 
     subroutine prep_cavgs4clustering( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm )
         class(sp_project),        intent(inout) :: spproj
@@ -197,70 +120,6 @@ contains
         call clsfrcs%kill
     end subroutine prep_cavgs4clustering
 
-    function pack_imgarr( imgs, mask ) result( imgs_packed )
-        class(image), intent(in) :: imgs(:)
-        logical,      intent(in) :: mask(:)
-        type(image), allocatable :: imgs_packed(:)
-        integer :: n, cnt, n_pack, i
-        n = size(imgs)
-        if( n /= size(mask) ) THROW_HARD('Incongruent mask')
-        n_pack = count(mask)
-        if( n_pack == 0 ) return
-        allocate(imgs_packed(n_pack))
-        cnt = 0
-        do i = 1, n
-            if( mask(i) )then
-                cnt = cnt + 1
-                call imgs_packed(cnt)%copy(imgs(i))
-            endif
-        end do
-    end function pack_imgarr
-
-    subroutine alloc_imgarr( n, ldim, smpd, imgs, wthreads )
-        integer,                  intent(in)    :: n, ldim(3)
-        real,                     intent(in)    :: smpd
-        type(image), allocatable, intent(inout) :: imgs(:)
-        logical,        optional, intent(in)    :: wthreads
-        integer :: i
-        logical :: with_threads
-        with_threads = .false.
-        if( present(wthreads) ) with_threads = wthreads
-        if( allocated(imgs) ) call dealloc_imgarr(imgs)
-        allocate(imgs(n))
-        !$omp parallel do schedule(static) proc_bind(close) private(i) default(shared)
-        do i = 1, n
-            call imgs(i)%new(ldim, smpd, wthreads=with_threads)
-        end do
-        !$omp end parallel do
-    end subroutine alloc_imgarr
-
-    function copy_imgarr( imgarr_in ) result( imgarr_copy )
-        class(image), intent(in) :: imgarr_in(:)
-        type(image), allocatable :: imgarr_copy(:)
-        integer :: n, i 
-        n = size(imgarr_in)
-        allocate(imgarr_copy(n))
-        !$omp parallel do schedule(static) proc_bind(close) private(i) default(shared)
-        do i = 1, n
-            call imgarr_copy(i)%copy(imgarr_in(i))
-        end do
-        !$omp end parallel do
-    end function copy_imgarr
-
-    subroutine dealloc_imgarr( imgs )
-        type(image), allocatable, intent(inout) :: imgs(:)
-        integer :: n , i
-        if( allocated(imgs) )then
-            n = size(imgs)
-            !$omp parallel do schedule(static) proc_bind(close) private(i) default(shared)
-            do i = 1, n
-                call imgs(i)%kill
-            end do
-            !$omp end parallel do
-            deallocate(imgs)
-        endif
-    end subroutine dealloc_imgarr
-
     subroutine flag_non_junk_cavgs( cavgs, lp_bin, msk, l_non_junk, os_cls2D )
         class(image),          intent(inout) :: cavgs(:)
         real,                  intent(in)    :: lp_bin, msk
@@ -336,7 +195,7 @@ contains
         call dealloc_imgarr(cavg_threads)
     end subroutine flag_non_junk_cavgs
 
-    subroutine calc_sigstats_cavgs_dmats( params, cavg_imgs, oa_minmax, dmat_sig, dmat_sig_clust )
+    subroutine calc_sigstats_dmats( params, cavg_imgs, oa_minmax, dmat_sig, dmat_sig_clust )
         use simple_clustering_utils, only: cluster_dmat, labels2smat
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
@@ -344,9 +203,6 @@ contains
         real, allocatable,    intent(inout) :: dmat_sig(:,:), dmat_sig_clust(:,:)
         integer,              parameter     :: NHISTBINS = 128
         real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
-        integer,              parameter     :: NCLS_SIG = 5 ! this small number of of clusters is sufficient
-                                                            ! the clustering obtained will be transformed into a distance matrix that
-                                                            ! expresses the grouping so that it can be merged with other distance matrices
         real,                 parameter     :: W_HIST_SIG=0.5, W_POW_SIG=(1. - W_HIST_SIG)
         type(histogram), allocatable   :: hists(:)
         real,            allocatable   :: dmat_pow(:,:), dmat_tvd(:,:), dmat_jsd(:,:), smat_sig(:,:)
@@ -386,9 +242,8 @@ contains
         call hists(:)%kill
         dmat_hist      = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd)      ! the different histogram distances are given equal weight
         dmat_sig       = W_HIST_SIG * dmat_hist + W_POW_SIG * dmat_pow ! this is the joint signal distance matrix
-        ! cluster dmat_sig into NCLS_SIG groups with k-medoids
-        nclust         = NCLS_SIG
-        call cluster_dmat(dmat_sig, 'kmed', nclust, i_medoids, labels)
+        ! cluster dmat_sig
+        call cluster_dmat(dmat_sig, 'aprop', nclust, i_medoids, labels)
         ! obtain a similarity matrix from the clustering
         smat_tmp       = dmat2smat(dmat_sig)
         smat_sig       = labels2smat(labels, smat_tmp)
@@ -402,89 +257,64 @@ contains
         if( allocated(dmat_hist) ) deallocate(dmat_hist)
         if( allocated(smat_sig)  ) deallocate(smat_sig)
         if( allocated(smat_tmp)  ) deallocate(smat_tmp)
-    end subroutine calc_sigstats_cavgs_dmats
+    end subroutine calc_sigstats_dmats
 
-    function calc_cluster_cavgs_dmat( params, cavg_imgs, oa_minmax, which ) result( dmat )
+    subroutine calc_cc_and_res_dmats( cavg_imgs, hp, lp, trs, dmat_cc, dmat_res )
+        class(image),      intent(inout) :: cavg_imgs(:)
+        real,              intent(in)    :: hp, lp, trs
+        real,allocatable,  intent(inout) :: dmat_cc(:,:), dmat_res(:,:)
+        type(inpl_struct), allocatable   :: algninfo(:,:)
+        real,              allocatable   :: ccmat(:,:)
+        integer :: ncavgs, i, j
+        real    :: diag_elem
+        ncavgs   = size(cavg_imgs)
+        algninfo = match_imgs(ncavgs, hp, lp, trs, cavg_imgs)
+        if( allocated(dmat_res) ) deallocate(dmat_res)
+        if( allocated(dmat_cc)  ) deallocate(dmat_cc)
+        allocate(dmat_res(ncavgs,ncavgs), ccmat(ncavgs,ncavgs), source=0.)
+        !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
+        do i = 1, ncavgs - 1
+            do j = i + 1, ncavgs
+                dmat_res(i,j) = 1./real(algninfo(i,j)%find_fsc05)
+                dmat_res(j,i) = dmat_res(i,j)
+                ccmat(i,j)    = algninfo(i,j)%corr
+                ccmat(j,i)    = ccmat(i,j)
+            enddo 
+        enddo
+        !$omp end parallel do
+        forall( i = 1:ncavgs ) dmat_res(i,i) = 0.
+        call normalize_minmax(dmat_res)
+        dmat_cc = smat2dmat(ccmat)
+        deallocate(algninfo, ccmat)
+    end subroutine calc_cc_and_res_dmats
+
+    subroutine calc_cluster_cavgs_dmats( params, cavg_imgs, oa_minmax, which, dmat )
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs(:)
-        character(len=*),     intent(in)    :: which
         real,                 intent(in)    :: oa_minmax(2)
-        integer,              parameter     :: NHISTBINS = 128
-        real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
-        type(histogram),      allocatable   :: hists(:)
-        real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
-        real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
-        real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:), dmat_fm(:,:), smat(:,:)
-        logical,              allocatable   :: l_msk(:,:,:)
-        type(pspecs) :: pows
-        type(image)  :: img_msk 
-        integer      :: ncls_sel, i, j, nclust, iclust
-        ncls_sel = size(cavg_imgs)
-        ! generate histograms
-        allocate(hists(ncls_sel))
-        do i = 1, ncls_sel
-            call hists(i)%new(cavg_imgs(i), NHISTBINS, minmax=oa_minmax, radius=params%msk)
-        end do
-        ! generate power spectra and associated distance/similarity matrix
-        ! create pspecs object
-        call pows%new(cavg_imgs, params%msk, HP_SPEC, LP_SPEC)
-        ! create a joint similarity matrix for clustering based on spectral profile and in-plane invariant correlation
-        dmat_pow = pows%calc_distmat()
-        call normalize_minmax(dmat_pow)
-        smat_pow = dmat2smat(dmat_pow)
-        ! calculate inpl_invariant_fm corrmat
-        ! pairwise correlation through Fourier-Mellin + shift search
-        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
-        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
-        dmat_fm = smat2dmat(corrmat)
-        ! calculate histogram-based distance matrices
-        allocate(dmat_tvd(ncls_sel,ncls_sel), dmat_jsd(ncls_sel,ncls_sel), dmat_hd(ncls_sel,ncls_sel), source=0.)
-        !$omp parallel do default(shared) private(i,j)&
-        !$omp schedule(dynamic) proc_bind(close)
-        do i = 1, ncls_sel - 1
-            do j = i + 1, ncls_sel
-                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
-                dmat_tvd(j,i) = dmat_tvd(i,j)
-                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
-                dmat_jsd(j,i) = dmat_jsd(i,j)
-                dmat_hd(i,j)  = hists(i)%HD(hists(j))
-                dmat_hd(j,i)  = dmat_hd(i,j)
-            end do
-        end do
-        !$omp end parallel do
-        call hists(:)%kill
-        dmat_hist = merge_dmats(dmat_tvd, dmat_jsd, dmat_hd) ! the different histogram distances are given equal weight
+        character(len=*),     intent(in)    :: which
+        real, allocatable,    intent(inout) :: dmat(:,:)
+        real,                 allocatable   :: corrmat(:,:), dmat_sig(:,:), dmat_sig_clust(:,:), dmat_cc(:,:), dmat_res(:,:)
+        if( allocated(dmat)     ) deallocate(dmat)
+        if( allocated(dmat_res) ) deallocate(dmat_res)
+        write(logfhandle,'(A)') '>>> PRE-CLUSTERING BASED ON SIGNAL STATISTICS'
+        call calc_sigstats_dmats(params, cavg_imgs, oa_minmax, dmat_sig, dmat_sig_clust)
+        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS & FRC:S THROUGH FULL IN-PLANE SEARCH'
+        call calc_cc_and_res_dmats(cavg_imgs, params%hp, params%lp, params%trs, dmat_cc, dmat_res)
         select case(trim(which))    
-            case('hist')
-                dmat = dmat_hist
-            case('pow')
-                dmat = dmat_pow
-            case('fm')
-                dmat = dmat_fm
+            case('sig')
+                dmat = dmat_sig
+            case('sig_clust')
+                dmat = dmat_sig_clust
+            case('cc')
+                dmat = dmat_cc
+            case('res')
+                dmat = dmat_res
             case DEFAULT
-                dmat = W_HIST * dmat_hist + W_POW * dmat_pow + W_FM * dmat_fm
+                dmat = W_SIG * dmat_sig +  W_SIG_CLUST * dmat_sig_clust + W_CC * dmat_cc + W_RES * dmat_res
         end select
         call normalize_minmax(dmat)
-        ! destruct
-        call pows%kill
-        do i = 1, ncls_sel
-            call hists(i)%kill
-        end do
-    end function calc_cluster_cavgs_dmat
-
-    function calc_cluster_cavgs_dmat_dev( params, cavg_imgs, oa_minmax ) result( dmat )
-        class(parameters),    intent(in)    :: params
-        class(image),         intent(inout) :: cavg_imgs(:)
-        real,                 intent(in)    :: oa_minmax(2)
-        real,                 allocatable   :: corrmat(:,:), dmat_sig(:,:), dmat_sig_clust(:,:), dmat_fm(:,:), dmat(:,:)
-        write(logfhandle,'(A)') '>>> PRE-CLUSTERING BASED ON SIGNAL STATISTICS'
-        call calc_sigstats_cavgs_dmats(params, cavg_imgs, oa_minmax, dmat_sig, dmat_sig_clust)
-        write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS THROUGH FOURIER-MELLIN & SHIFT SEARCH'
-        call calc_inpl_invariant_fm(cavg_imgs, params%hp, params%lp, params%trs, corrmat)
-        dmat_fm   = smat2dmat(corrmat)
-        dmat      = W_SIG_DEV * dmat_sig +  W_SIG_CLUST_DEV * dmat_sig_clust + W_FM_DEV * dmat_fm
-        call normalize_minmax(dmat)
-    end function calc_cluster_cavgs_dmat_dev
+    end subroutine calc_cluster_cavgs_dmats
 
     function calc_match_cavgs_dmat( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, which ) result( dmat )
         class(parameters),    intent(in)    :: params
@@ -492,7 +322,7 @@ contains
         real,                 intent(in)    :: oa_minmax(2)
         character(len=*),     intent(in)    :: which
         integer,              parameter     :: NHISTBINS = 128
-        real,                 parameter     :: HP_SPEC=20., LP_SPEC=6.
+        real,                 parameter     :: HP_SPEC=20., LP_SPEC=6., W_HIST=0.2, W_POW=0.4, W_FM=0.4
         type(histogram),      allocatable   :: hists_ref(:), hists_match(:)
         real,                 allocatable   :: corrmat(:,:), dmat_pow(:,:), smat_pow(:,:), dmat_tvd(:,:), smat_tvd(:,:)
         real,                 allocatable   :: dmat_joint(:,:), smat_joint(:,:), dmat(:,:), dmat_jsd(:,:), smat_jsd(:,:)
@@ -556,13 +386,12 @@ contains
         call hists_match(:)%kill
     end function calc_match_cavgs_dmat
 
-    function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, clustscores ) result( clust_info_arr )
+    function align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels) result( clust_info_arr ) ! , clustscores )
         class(parameters),    intent(in)    :: params
         real,                 intent(in)    :: dmat(:,:)
         class(image),         intent(inout) :: cavg_imgs(:)
         integer,              intent(in)    :: clspops(:)
         integer,              intent(inout) :: i_medoids(:), labels(:)
-        real, optional,       intent(in)    :: clustscores(:)
         real,                 parameter     :: RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
         type(clust_info),     allocatable   :: clust_info_arr(:)
         logical,              allocatable   :: l_msk(:,:,:)
@@ -609,30 +438,24 @@ contains
             where( clust_info_arr(:)%pop < 2 ) clust_info_arr(:)%resscore = res_max
             call dists2scores_percen(clust_info_arr(:)%resscore)
             ! CLUSTSCORE
-            if( present(clustscores) )then
-                do iclust = 1, nclust
-                    clust_info_arr(iclust)%clustscore = clustscores(iclust)
-                end do
-            else
-                do iclust = 1, nclust
-                    clust_info_arr(iclust)%clustscore  = 0.
-                    cnt = 0
-                    do icls = 1, ncls_sel 
-                        if( labels(icls) == iclust )then
-                            clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
-                            cnt = cnt + 1
-                        endif
-                    enddo
-                    clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
-                end do
-            endif
+            do iclust = 1, nclust
+                clust_info_arr(iclust)%clustscore  = 0.
+                cnt = 0
+                do icls = 1, ncls_sel 
+                    if( labels(icls) == iclust )then
+                        clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  +      dmat(icls,i_medoids(iclust))
+                        cnt = cnt + 1
+                    endif
+                enddo
+                clust_info_arr(iclust)%clustscore  = clust_info_arr(iclust)%clustscore  / real(cnt)
+            end do
             clustscore_min  = minval(clust_info_arr(:)%clustscore)
             where( clust_info_arr(:)%pop < 2 )
                 clust_info_arr(:)%clustscore  = clustscore_min
             endwhere
             call dists2scores_percen(clust_info_arr(:)%clustscore)
             ! JOINT SCORE
-            clust_info_arr(:)%jointscore = 0.35 * clust_info_arr(:)%homogeneity + 0.5 * clust_info_arr(:)%resscore + 0.15 * clust_info_arr(:)%clustscore
+            clust_info_arr(:)%jointscore = W_SCORE_HOMO * clust_info_arr(:)%homogeneity + W_SCORE_RES * clust_info_arr(:)%resscore + W_SCORE_CLUST * clust_info_arr(:)%clustscore
             call scores2scores_percen(clust_info_arr(:)%jointscore)
         end subroutine calc_scores
 
@@ -656,7 +479,7 @@ contains
         end subroutine rank_clusters
 
         subroutine identify_good_bad_clusters
-            real, allocatable :: jointscores(:), resvals(:), homogeneity(:), clustscores(:)
+            real, allocatable :: jointscores(:), resscores(:), homogeneity(:), clustscores(:)
             integer           :: nscoreclust, i, cnt_incl
             real              :: avgjscore
             logical           :: l_incl
@@ -672,11 +495,10 @@ contains
                 do i = 1, nscoreclust
                     jointscores = pack(clust_info_arr(:)%jointscore,  mask=clust_info_arr(:)%scoreclust == i)
                     homogeneity = pack(clust_info_arr(:)%homogeneity, mask=clust_info_arr(:)%scoreclust == i)
+                    resscores   = pack(clust_info_arr(:)%resscore,    mask=clust_info_arr(:)%scoreclust == i)
                     clustscores = pack(clust_info_arr(:)%clustscore,  mask=clust_info_arr(:)%scoreclust == i)
-                    resvals     = pack(clust_info_arr(:)%res,         mask=clust_info_arr(:)%scoreclust == i)
                     avgjscore   = sum(jointscores) / real(count(clust_info_arr(:)%scoreclust == i))
                     l_incl = .false. 
-                    if( any(resvals <= RES_THRES) ) l_incl = .true.
                     if( avgjscore >= SCORE_THRES  ) l_incl = .true.
                     if( any(homogeneity >= SCORE_THRES_INCL .and. clustscores >= SCORE_THRES_INCL) ) l_incl = .true.
                     if( l_incl )then
@@ -735,128 +557,6 @@ contains
         end subroutine calc_jointscore
 
     end function align_and_score_cavg_clusters
-
-    subroutine write_cavgs_1( n, imgs, labels, fbody, ext )
-        integer,          intent(in)    :: n
-        class(image),     intent(inout) :: imgs(n)
-        integer,          intent(in)    :: labels(n)
-        character(len=*), intent(in)    :: fbody, ext
-        character(len=:), allocatable   :: fname
-        integer,          allocatable   :: cnts(:)
-        integer :: i, maxlab, pad_len
-        maxlab = maxval(labels)
-        allocate(cnts(maxlab), source=0)
-        pad_len = 2
-        if( maxlab > 99 ) pad_len = 3
-        do i = 1, n
-            if( labels(i) > 0 )then
-                fname = trim(fbody)//int2str_pad(labels(i),pad_len)//'_cavgs'//trim(ext)
-                cnts(labels(i)) = cnts(labels(i)) + 1
-                call imgs(i)%write(fname, cnts(labels(i)))
-            endif
-        end do
-        deallocate(cnts)
-    end subroutine write_cavgs_1
-
-    subroutine write_cavgs_2( imgs, fname )
-        class(image),     intent(inout) :: imgs(:)
-        character(len=*), intent(in)    :: fname
-        integer :: n, i
-        n = size(imgs)
-        do i = 1, n
-            call imgs(i)%write(fname, i)
-        end do
-    end subroutine write_cavgs_2
-
-    subroutine write_cavgs_3( imgs, fname, inds )
-        class(image),     intent(inout) :: imgs(:)
-        character(len=*), intent(in)    :: fname
-        integer,          intent(in)    :: inds(:)
-        integer :: n, i, ni, cnt, ind
-        n   = size(imgs)
-        ni  = size(inds)
-        cnt = 0
-        do i = 1, ni
-            ind = inds(i)
-            if( ind < 0 .or. ind > n ) THROW_HARD('fetched index ind out of range')
-            cnt = cnt + 1
-            call imgs(ind)%write(fname, cnt)
-        end do
-    end subroutine write_cavgs_3
-
-    subroutine write_junk_cavgs( n, imgs, labels, ext )
-        integer,          intent(in)    :: n
-        class(image),     intent(inout) :: imgs(n)
-        integer,          intent(in)    :: labels(n)
-        character(len=*), intent(in)    :: ext
-        character(len=:), allocatable   :: fname
-        integer :: i, cnt
-        cnt = 0
-        do i = 1, n
-            if( labels(i) == 0 )then
-                fname = 'junk_cavgs'//trim(ext)
-                cnt = cnt + 1
-                call imgs(i)%write(fname, cnt)
-            endif
-        end do
-    end subroutine write_junk_cavgs
-
-    subroutine write_selected_cavgs( n, imgs, labels, ext )
-        integer,           intent(in)    :: n
-        class(image),      intent(inout) :: imgs(n)
-        integer,           intent(in)    :: labels(n)
-        character(len=*),  intent(in)    :: ext
-        character(len=:), allocatable    :: fname
-        integer,          allocatable    :: cnt(:)
-        integer :: i, maxlab
-        maxlab = maxval(labels)
-        allocate(cnt(0:maxlab), source=0)
-        cnt = 0
-        do i = 1, n
-            if( labels(i) == 0 )then
-                fname = 'unselected_cavgs'//trim(ext)
-                cnt(0) = cnt(0) + 1
-                call imgs(i)%write(fname, cnt(0))
-            else
-                fname  = 'rank'//int2str_pad(labels(i),2)//'_cavgs'//trim(ext)
-                cnt(labels(i)) = cnt(labels(i)) + 1
-                call imgs(i)%write(fname, cnt(labels(i)))
-            endif
-        end do
-    end subroutine write_selected_cavgs
-
-    function calc_res_dmat( cavg_imgs, hp, lp, trs ) result(dmat)
-        class(image), intent(inout) :: cavg_imgs(:)
-        real,         intent(in)    :: hp, lp, trs
-        real,         allocatable   :: frc(:), dmat(:,:)
-        type(image),  allocatable   :: img_heap(:)
-        integer :: ncavgs, i, j, k, filtsz, ithr
-        ncavgs = size(cavg_imgs)
-        filtsz = cavg_imgs(1)%get_filtsz()
-        allocate(img_heap(nthr_glob), frc(filtsz), dmat(ncavgs,ncavgs))
-        do i = 1, ncavgs - 1
-            do j = i + 1, ncavgs
-                ithr = omp_get_thread_num() + 1
-                img_heap(ithr) = align_imgj2imgi(ncavgs, i, j, hp, lp, trs, cavg_imgs)
-                call cavg_imgs(i)%fsc(img_heap(ithr), frc)
-                dmat(i,j) = 1.
-                do k = 2,filtsz
-                    if( frc(k) >= 0.5 )then
-                        dmat(i,j) = 1./real(k)
-                    else
-                        exit
-                    endif
-                end do
-                dmat(j,i) = dmat(i,j) ! symmetrize
-            enddo
-        enddo
-        ! set the diagonal elements
-        forall(i=1:ncavgs) dmat(i,i) = 0.
-        ! normalize
-        call normalize_minmax(dmat)
-        ! destruct
-        call dealloc_imgarr(img_heap)
-    end function calc_res_dmat
 
     function align_clusters2medoids( i_medoids, labels, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
         integer,          intent(in)    :: i_medoids(:), labels(:)
@@ -936,31 +636,10 @@ contains
         do iclust = 1, nclust
             cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
             call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
-            call write_cavgs(cluster_imgs, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
+            call write_imgarr(cluster_imgs, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
             call dealloc_imgarr(cluster_imgs)
         end do
     end subroutine write_aligned_cavgs
-
-    function align_imgj2imgi( n, i, j, hp, lp, trs, imgs ) result( imgj )
-        integer,            intent(in)    :: n, i, j
-        real,               intent(in)    :: hp, lp, trs
-        class(image),       intent(inout) :: imgs(n)
-        type(inpl_struct),  allocatable   :: algninfo(:)
-        real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
-        type(image) :: imgj
-        integer :: ldim(3)
-        ldim = imgs(1)%get_ldim()
-        algninfo = match_imgs2ref_serial(1, hp, lp, trs, imgs(i), imgs(j:j))
-        call imgj%copy(imgs(j))
-        if( algninfo(1)%l_mirr ) call imgj%mirror('x')                
-        call imgj%fft
-        call imgj%shift2Dserial([-algninfo(1)%x,-algninfo(1)%y])
-        call imgj%ifft
-        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
-        call imgj%rtsq_serial(algninfo(1)%e3, 0., 0., rmat_rot)
-        call imgj%set_rmat(rmat_rot, .false.)
-        deallocate(algninfo, rmat_rot)
-    end function align_imgj2imgi
 
     function match_imgs2ref( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
         integer,                  intent(in)    :: n
@@ -1076,40 +755,37 @@ contains
         call polartransform%kill
     end function match_imgs2ref
 
-    function match_imgs2ref_serial( n, hp, lp, trs, img_ref, imgs ) result( algninfo )
-        integer,                  intent(in)    :: n
-        real,                     intent(in)    :: hp, lp, trs
-        class(image),             intent(inout) :: imgs(n), img_ref
-        integer,     parameter          :: MAXITS_SH = 60
-        real,        allocatable        :: inpl_corrs(:)
-        type(image), allocatable        :: imgs_mirr(:)
-        type(pftcc_shsrch_grad)         :: grad_shsrch_obj
+    function match_imgs( n, hp, lp, trs, imgs ) result( algninfo )
+        integer,      intent(in)        :: n
+        real,         intent(in)        :: hp, lp, trs
+        class(image), intent(inout)     :: imgs(n)
+        integer,      parameter         :: MAXITS_SH = 60
+        real,         parameter         :: FRC_CRIT = 0.5
+        real,         allocatable       :: inpl_corrs(:), frc(:)
+        type(image),  allocatable       :: imgs_mirr(:)
+        type(pftcc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
         type(polarizer)                 :: polartransform
         type(polarft_corrcalc)          :: pftcc
-        type(inpl_struct)               :: algninfo_mirr(n)
-        type(inpl_struct), allocatable  :: algninfo(:)
-        integer :: ldim(3), ldim_ref(3), box, kfromto(2), i, loc(1), nrots, irot
-        real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
-        logical :: didft
+        type(inpl_struct)               :: algninfo_mirr(n,n)
+        type(inpl_struct), allocatable  :: algninfo(:,:)
+        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, loc(1), nrots, irot
+        real    :: smpd, lims(2,2), lims_init(2,2), cxy(3), rotmat(2,2)
+        logical :: didft, l_rot_shvec
         ldim       = imgs(1)%get_ldim()
-        ldim_ref   = img_ref%get_ldim()
-        if( .not. all(ldim == ldim_ref) )then
-            print *, 'ldim     ', ldim
-            print *, 'ldim_ref ', ldim_ref
-            THROW_HARD('Incongruent logical image dimensions (imgs & img_ref)')
-        endif
         box        = ldim(1)
         smpd       = imgs(1)%get_smpd()
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! create mirrored versions of the images
         call alloc_imgarr(n, ldim, smpd, imgs_mirr)
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, n
             call imgs_mirr(i)%copy(imgs(i))
             call imgs_mirr(i)%mirror('x')
         end do
+        !$omp end parallel do
         ! initialize pftcc, polarizer
-        call pftcc%new(1, [1,2*n], kfromto) ! 2*n because of mirroring
+        call pftcc%new(n, [1,2*n], kfromto) ! 2*n because of mirroring
         call polartransform%new([box,box,1], smpd)
         call polartransform%init_polarizer(pftcc, KBALPHA)
         ! in-plane search object objects for parallel execution
@@ -1117,21 +793,17 @@ contains
         lims(:,2)      =  trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        call grad_shsrch_obj%new(lims, lims_init=lims_init, shbarrier='yes',&
-        &maxits=MAXITS_SH, opt_angle=.true.)
-        ! set the reference transform
-        didft = .false.
-        if( .not. img_ref%is_ft() )then
-            call img_ref%fft
-            didft = .true.
-        endif
-        call polartransform%polarize(pftcc, img_ref, 1, isptcl=.false., iseven=.true.)
-        if( didft ) call img_ref%ifft
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
+            &maxits=MAXITS_SH, opt_angle=.true.)
+        end do
         ! set the particle transforms
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, 2 * n
             if( i <= n )then
                 call imgs(i)%fft()
-                call polartransform%polarize(pftcc, imgs(i),        i, isptcl=.true., iseven=.true.)
+                call polartransform%polarize(pftcc, imgs(i),        i, isptcl=.false., iseven=.true.) ! ref
+                call polartransform%polarize(pftcc, imgs(i),        i, isptcl=.true.,  iseven=.true.) ! ptcl
                 call imgs(i)%ifft
             else
                 call imgs_mirr(i-n)%fft()
@@ -1139,45 +811,82 @@ contains
                 call imgs_mirr(i-n)%ifft()
             endif
         end do
+        !$omp end parallel do
         call pftcc%memoize_refs
         call pftcc%memoize_ptcls
-        ! register imgs to img_ref
+        ! register imgs
         nrots = pftcc%get_nrots()
-        allocate(inpl_corrs(nrots), algninfo(n))
-        do i = 1, 2 * n
-            call pftcc%gencorrs(1, i, inpl_corrs)
-            loc  = maxloc(inpl_corrs)
-            irot = loc(1)
-            call grad_shsrch_obj%set_indices(1, i)
-            cxy = grad_shsrch_obj%minimize(irot=irot)
-            if( irot == 0 )then ! no improved solution found, put back the old one
-                cxy(1) = inpl_corrs(loc(1))
-                cxy(2) = 0.
-                cxy(3) = 0.
-                irot   = loc(1)
-            endif
-            if( i <= n )then
-                algninfo(i)%e3            = pftcc%get_rot(irot)
-                algninfo(i)%corr          = cxy(1)
-                algninfo(i)%x             = cxy(2)
-                algninfo(i)%y             = cxy(3)
-                algninfo(i)%l_mirr        = .false.
-            else
-                algninfo_mirr(i-n)%e3     = pftcc%get_rot(irot)
-                algninfo_mirr(i-n)%corr   = cxy(1)
-                algninfo_mirr(i-n)%x      = cxy(2)
-                algninfo_mirr(i-n)%y      = cxy(3)
-                algninfo_mirr(i-n)%l_mirr = .true.
-            endif
+        allocate(inpl_corrs(nrots), algninfo(n,n), frc(kfromto(1):kfromto(2)))
+        !$omp parallel do default(shared) private(i,j,k,ithr,inpl_corrs,loc,irot,cxy,frc) collapse(2) schedule(static) proc_bind(close)
+        do i = 1, 2 * n ! ptcls
+            do j = 1, n ! refs
+                ithr = omp_get_thread_num() + 1
+                call pftcc%gencorrs(j, i, inpl_corrs)
+                loc  = maxloc(inpl_corrs)
+                irot = loc(1)
+                call grad_shsrch_obj(ithr)%set_indices(j, i)
+                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.) ! sh_rot=.false. becasue we are using it for FRC calc
+                l_rot_shvec = .true.
+                if( irot == 0 )then ! no improved solution found, put back the old one
+                    cxy(1)      = inpl_corrs(loc(1))
+                    cxy(2)      = 0.
+                    cxy(3)      = 0.
+                    irot        = loc(1)
+                    l_rot_shvec = .false.
+                endif
+                call pftcc%calc_frc(j, i, irot, cxy(2:3), frc)
+                if( i <= n )then
+                    algninfo(j,i)%e3     = pftcc%get_rot(irot)
+                    algninfo(j,i)%corr   = cxy(1)
+                    algninfo(j,i)%l_mirr = .false.
+                    algninfo(j,i)%find_fsc05 = 1
+                    do k = kfromto(1),kfromto(2)
+                        if( frc(k) >= FRC_CRIT )then
+                            algninfo(j,i)%find_fsc05 = k
+                        else
+                            exit
+                        endif
+                    end do
+                    ! rotate the shift vector to the frame of reference
+                    if( l_rot_shvec )then
+                        call rotmat2d(pftcc%get_rot(irot), rotmat)
+                        cxy(2:) = matmul(cxy(2:), rotmat)
+                    endif
+                    algninfo(j,i)%x = cxy(2)
+                    algninfo(j,i)%y = cxy(3)
+                else
+                    algninfo_mirr(j,i-n)%e3     = pftcc%get_rot(irot)
+                    algninfo_mirr(j,i-n)%corr   = cxy(1)
+                    algninfo_mirr(j,i-n)%l_mirr = .true.
+                    algninfo_mirr(j,i-n)%find_fsc05 = 1
+                    do k = kfromto(1),kfromto(2)
+                        if( frc(k) >= FRC_CRIT )then
+                            algninfo_mirr(j,i-n)%find_fsc05 = k
+                        else
+                            exit
+                        endif
+                    end do
+                    ! rotate the shift vector to the frame of reference
+                    if( l_rot_shvec )then
+                        call rotmat2d(pftcc%get_rot(irot), rotmat)
+                        cxy(2:) = matmul(cxy(2:), rotmat)
+                    endif
+                    algninfo_mirr(j,i-n)%x = cxy(2)
+                    algninfo_mirr(j,i-n)%y = cxy(3)
+                endif
+            end do
         end do
+        !$omp end parallel do
         ! select for mirroring
-        where( algninfo_mirr(:)%corr > algninfo(:)%corr ) algninfo = algninfo_mirr
+        where( algninfo_mirr(:,:)%corr > algninfo(:,:)%corr ) algninfo = algninfo_mirr
         ! destruct
         call dealloc_imgarr(imgs_mirr)
-        call grad_shsrch_obj%kill
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%kill
+        end do
         call pftcc%kill
         call polartransform%kill
-    end function match_imgs2ref_serial
+    end function match_imgs
 
     subroutine rtsq_imgs( n, algninfo, imgs )
         integer,            intent(in)    :: n

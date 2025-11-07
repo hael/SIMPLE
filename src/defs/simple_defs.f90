@@ -106,6 +106,8 @@ end type stats_struct
 type inpl_struct
     real    :: e3 = 0., x = 0., y = 0., corr = 0.
     logical :: l_mirr = .false.
+    real    :: specscore = 0.
+    integer :: find_fsc05 = 0
 end type inpl_struct
 
 type clust_inpl

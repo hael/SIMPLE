@@ -59,7 +59,6 @@ type :: parameters
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: gridding='no'        !< to test gridding correction
-    character(len=3)          :: have_clustering='no' !< to flag that clustering solution exists in field os_cls2D (cluster_cavgs)
     character(len=3)          :: have_selection='no'  !< to flag that selection exists in field os_cls2D (cluster_cavgs)
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
@@ -139,7 +138,7 @@ type :: parameters
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
-    character(len=3)          :: write_cavgs='no'     !< write out cavgs
+    character(len=3)          :: write_imgarr='no'     !< write out cavgs
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
@@ -663,7 +662,6 @@ contains
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
-        call check_carg('have_clustering',self%have_clustering)
         call check_carg('have_selection', self%have_selection)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
@@ -792,7 +790,7 @@ contains
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
         call check_carg('wiener',         self%wiener)
-        call check_carg('write_cavgs',    self%write_cavgs)
+        call check_carg('write_imgarr',    self%write_imgarr)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')

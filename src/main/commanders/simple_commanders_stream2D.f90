@@ -1418,7 +1418,7 @@ contains
         call cline_make_pickrefs%set('smpd',     params%smpd)
         call xmakepickrefs%execute_safe(cline_make_pickrefs)
         params%pickrefs = trim(PICKREFS_FBODY)//params%ext
-        pickrefs        = read_cavgs_into_imgarr(params%pickrefs)
+        pickrefs        = read_stk_into_imgarr(params%pickrefs)
         write(*,*) 'Prepared picking references'
         ! Prep for CTF estimation, picking & extraction
         call simple_mkdir(DIR_CTF)

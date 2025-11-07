@@ -2,14 +2,15 @@
 module simple_commanders_imgproc
 include 'simple_lib.f08'
 use simple_builder,        only: builder
-use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
-use simple_image_bin,       only: image_bin
+use simple_image_bin,      only: image_bin
+use simple_parameters,     only: parameters
 use simple_stack_io,       only: stack_io
-use simple_strategy2D_utils
+use simple_imgarr_utils
 use simple_nice
+use simple_strategy2D_utils
 implicit none
 #include "simple_local_flags.inc"
 
@@ -1174,7 +1175,7 @@ contains
         type(parameters)              :: params
         type(image),      allocatable :: stk_imgs(:), cluster_imgs(:)
         integer,          allocatable :: labels(:), i_medoids(:)
-        real,             allocatable :: mm(:,:), dmat(:,:)
+        real,             allocatable :: mm(:,:), dmat(:,:), dmat_res(:,:)
         real    :: smpd, mskrad, oa_min, oa_max
         integer :: i, ldim(3), box, nimgs, nclust
         ! defaults
@@ -1192,7 +1193,7 @@ contains
         ! master parameters
         call params%new(cline)
         ! prep
-        stk_imgs = read_cavgs_into_imgarr(params%stk)
+        stk_imgs = read_stk_into_imgarr(params%stk)
         nimgs    = size(stk_imgs)
         smpd     = stk_imgs(1)%get_smpd()
         ldim     = stk_imgs(1)%get_ldim()
@@ -1218,23 +1219,18 @@ contains
         params%box  = ldim(1)
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! calculate distance matrix
-        dmat = calc_cluster_cavgs_dmat(params, stk_imgs, [oa_min,oa_max], params%clust_crit)
+        call calc_cluster_cavgs_dmats(params, stk_imgs, [oa_min,oa_max], params%clust_crit, dmat)
         ! cluster
         if( cline%defined('ncls') )then
             nclust = params%ncls
             call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
         else
             call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels)
-            if( nclust > 5 .and. nclust < 20 )then
-                nclust = 20
-                deallocate(i_medoids, labels)
-                call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
-            endif
         endif
         call arr2file(real(i_medoids), CLUST_MEDIODS_FNAME)
         call dealloc_imgarr(stk_imgs)
-        stk_imgs = read_cavgs_into_imgarr(params%stk)
-        call write_cavgs( nimgs, stk_imgs, labels, 'cluster', '.mrcs' )
+        stk_imgs = read_stk_into_imgarr(params%stk)
+        call write_imgarr( nimgs, stk_imgs, labels, 'cluster', '.mrcs' )
     end subroutine exec_cluster_stack
 
     subroutine exec_match_stacks( self, cline )
@@ -1261,8 +1257,8 @@ contains
         ! master parameters
         call params%new(cline)
         ! prep
-        stk_imgs_ref   = read_cavgs_into_imgarr(params%stk)
-        stk_imgs_match = read_cavgs_into_imgarr(params%stk2)
+        stk_imgs_ref   = read_stk_into_imgarr(params%stk)
+        stk_imgs_match = read_stk_into_imgarr(params%stk2)
         nrefs          = size(stk_imgs_ref)
         nclust         = nrefs
         nmatch         = size(stk_imgs_match)

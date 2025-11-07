@@ -261,6 +261,7 @@ contains
     procedure          :: opt_filter_costfun
     procedure          :: opt_filter_costfun_workshare
     procedure          :: fsc, fsc_scaled
+    procedure          :: frc_serial
     procedure          :: get_res
     procedure, private :: oshift_1, oshift_2
     generic            :: oshift => oshift_1, oshift_2
@@ -6151,6 +6152,45 @@ contains
         ! return single-precision corrs
         corrs = real(corrs_8)
     end subroutine fsc
+
+    subroutine frc_serial( self1, self2, corrs )
+        class(image), intent(inout) :: self1, self2
+        real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
+        real(dp)    :: corrs_8(fdim(self1%ldim(1))-1)
+        real(dp)    :: sumasq(fdim(self1%ldim(1))-1), sumbsq(fdim(self1%ldim(1))-1)
+        complex(dp) :: comp1, comp2
+        integer     :: n, lims(3,2), phys(3), sh, h, k
+        corrs_8 = 0.d0
+        sumasq  = 0.d0
+        sumbsq  = 0.d0
+        lims    = self1%fit%loop_lims(2)
+        n       = self1%get_filtsz()
+        do h=lims(2,1),lims(2,2)
+            do k=lims(1,1),lims(1,2)
+                ! compute physical address
+                phys = self1%fit%comp_addr_phys(h,k,1)
+                ! find shell
+                sh = nint(hyp(h,k,1))
+                if( sh == 0 .or. sh > n ) cycle
+                ! real part of the complex mult btw self1 and targ*
+                comp1 = self1%cmat(phys(1),phys(2),phys(3))
+                comp2 = self2%cmat(phys(1),phys(2),phys(3))
+                corrs_8(sh) = corrs_8(sh)+ real(comp1 * conjg(comp2), kind=dp)
+                sumasq(sh) = sumasq(sh) + csq(comp1)
+                sumbsq(sh) = sumbsq(sh) + csq(comp2)
+            end do
+        end do
+        ! normalize correlations and compute resolutions
+        do k=1,n
+            if( sumasq(k) > 0.d0 .and. sumbsq(k) > 0.d0 )then
+                corrs_8(k) = corrs_8(k)/sqrt(sumasq(k) * sumbsq(k))
+            else
+                corrs_8(k) = 0.
+            endif
+        end do
+        ! return single-precision corrs
+        corrs = real(corrs_8)
+    end subroutine frc_serial
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation in double precision
     subroutine fsc_scaled( self1, self2, sz, corrs )

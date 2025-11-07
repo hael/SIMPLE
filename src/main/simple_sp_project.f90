@@ -924,12 +924,11 @@ contains
         n = 0
         do i=1,self%os_mic%get_noris()
             if(self%os_mic%isthere(i,'intg'))then
-                if( self%os_mic%get_state(i) > 0 ) n = n+1
+                if( self%os_mic%get_state(i) > 0 ) n = n + 1
             endif
         enddo
         if( n==0 )return
-        allocate(micstab(n))
-        allocate(orimap(n))
+        allocate(micstab(n), orimap(n))
         cnt = 0
         do i=1,self%os_mic%get_noris()
             if(self%os_mic%isthere(i,'intg'))then

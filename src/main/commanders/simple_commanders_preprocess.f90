@@ -2212,7 +2212,7 @@ contains
         ! write ranks to project file
         call spproj%write_segment_inside('cls2D')
         ! write class averages
-        call write_cavgs(cavg_imgs, SHAPE_RANKED_CAVGS_MRCNAME, order)
+        call write_imgarr(cavg_imgs, SHAPE_RANKED_CAVGS_MRCNAME, order)
         call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
         ! kill
         call spproj%kill

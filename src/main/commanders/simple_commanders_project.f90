@@ -1154,7 +1154,7 @@ contains
                     ! map states to ptcl2D/3D & cls3D segments
                     call spproj%map2ptcls_state(append=l_append)
                 endif
-                if(params%write_cavgs .eq. 'yes') then
+                if(params%write_imgarr .eq. 'yes') then
                     call spproj%set_cavgs_thumb(trim(params%projfile))
                 end if
             case(CLS3D_SEG)
