@@ -1,9 +1,4 @@
 #!/bin/bash
 rm -rf build
-mkdir build
-cd build
-cmake .. -DGUI=off -DCMAKE_BUILD_TYPE=debug -DUSE_LIBTIFF=on
-make -j install
-#cmake --build . --config Debug
-#exit
-
+cmake -G "Unix Makefiles" -DGUI:BOOL=off -DCMAKE_BUILD_TYPE:BOOL=debug -DUSE_LIBTIFF:BOOL=on -B build
+cmake --build build --config Debug --target clean

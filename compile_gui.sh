@@ -1,8 +1,4 @@
 #!/bin/bash
 rm -rf build
-mkdir build
-cd build
-cmake .. -DNICE=YES -DUSE_LIBTIFF=on
-make -j install
-#exit
-
+cmake -G "Unix Makefiles" -D GUI:BOOL=on -D USE_LIBTIFF:BOOL=on -B build
+cmake --build build --config Release --target clean
