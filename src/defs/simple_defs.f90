@@ -125,6 +125,7 @@ end type clust_inpl
     real             :: resscore    = 0.
     real             :: clustscore  = 0.
     real             :: jointscore  = 0.
+    real             :: icescore    = 0.
 end type clust_info
 
 ! type for particle reference relation in eul_prob_tab
