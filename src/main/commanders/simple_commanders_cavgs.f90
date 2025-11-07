@@ -136,7 +136,7 @@ contains
         class(cmdline),                 intent(inout) :: cline
         logical,          parameter   :: DEBUG = .true.
         real,             parameter   :: SCORE_THRES_INCL = 75.
-        integer,          parameter   :: NCLUST_MAX = 20
+        integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
         type(image)                   :: img_msk
         real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:)
@@ -158,51 +158,18 @@ contains
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
         call cline%set('sh_inv',    'yes') ! shift invariant search
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('trs')        ) call cline%set('trs',       10.)
-        if( .not. cline%defined('kweight')    ) call cline%set('kweight', 'all')
-        if( .not. cline%defined('lp')         ) call cline%set('lp',         6.)
-        if( .not. cline%defined('prune')      ) call cline%set('prune',    'no')
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
+        if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
+        if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
+        if( .not. cline%defined('prune')   ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
         ! read project file
         call spproj%read(params%projfile)
         ncls        = spproj%os_cls2D%get_noris()
         ! prep class average stack
-        if( trim(params%have_selection).eq.'yes' )then
-            states = spproj%os_cls2D%get_all_asint('state')
-            allocate(l_non_junk(size(states)), source=states > 0)
-            ncls_sel  = count(l_non_junk)
-            cavg_imgs = read_cavgs_into_imgarr(spproj, l_non_junk)
-            smpd      = cavg_imgs(1)%get_smpd()
-            ldim      = cavg_imgs(1)%get_ldim()
-            box       = ldim(1)
-            mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
-            clspops   = spproj%os_cls2D%get_all_asint('pop')
-            clspops   = pack(clspops, mask=l_non_junk)
-            clsinds   = pack((/(i,i=1,ncls)/), mask=l_non_junk)
-            ! create the stuff needed in the loop
-            allocate(mm(ncls_sel,2), source=0.)
-            ! prep mask
-            call img_msk%new([box,box,1], smpd)
-            img_msk = 1.
-            call img_msk%mask(mskrad, 'hard')
-            l_msk = img_msk%bin2logical()
-            call img_msk%kill
-            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-            do i = 1, ncls_sel
-                ! normalization
-                call cavg_imgs(i)%norm_within(l_msk)
-                ! mask
-                call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
-                ! stash minmax
-                mm(i,:) = cavg_imgs(i)%minmax(mskrad)
-            end do
-            !$omp end parallel do
-            deallocate(states)
-        else
-            call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
-        endif
+        call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
         ncls_sel    = size(cavg_imgs)
         smpd        = cavg_imgs(1)%get_smpd()
         ldim        = cavg_imgs(1)%get_ldim()

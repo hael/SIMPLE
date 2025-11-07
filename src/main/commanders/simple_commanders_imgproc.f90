@@ -1253,7 +1253,7 @@ contains
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('trs')        ) call cline%set('trs',         10.)
         if( .not. cline%defined('kweight')    ) call cline%set('kweight',   'all')
-        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'fm')
+        if( .not. cline%defined('clust_crit') ) call cline%set('clust_crit', 'cc')
         ! master parameters
         call params%new(cline)
         ! prep
