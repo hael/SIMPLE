@@ -1062,10 +1062,10 @@ contains
         select case(trim(which))
         case('even','odd')
             call polar_cavger_refs2cartesian( pftcc, imgs, trim(which) )
-            call write_cavgs(imgs, trim(tmpl_fname)//'_'//trim(which)//params_glob%ext)
+            call write_imgarr(imgs, trim(tmpl_fname)//'_'//trim(which)//params_glob%ext)
         case('merged')
             call polar_cavger_refs2cartesian( pftcc, imgs, 'merged' )
-            call write_cavgs(imgs, trim(tmpl_fname)//params_glob%ext)
+            call write_imgarr(imgs, trim(tmpl_fname)//params_glob%ext)
         end select
         call dealloc_imgarr(imgs)
     end subroutine polar_cavger_write_cartrefs
@@ -1077,11 +1077,11 @@ contains
         type(image), allocatable :: imgs(:)
         call alloc_imgarr(ncls, [params_glob%box_crop, params_glob%box_crop,1], smpd, imgs)
         call polar_cavger_refs2cartesian( pftcc, imgs, 'even' )
-        call write_cavgs(imgs, trim(tmpl_fname)//'_even'//params_glob%ext)
+        call write_imgarr(imgs, trim(tmpl_fname)//'_even'//params_glob%ext)
         call polar_cavger_refs2cartesian( pftcc, imgs, 'odd' )
-        call write_cavgs(imgs, trim(tmpl_fname)//'_odd'//params_glob%ext)
+        call write_imgarr(imgs, trim(tmpl_fname)//'_odd'//params_glob%ext)
         call polar_cavger_refs2cartesian( pftcc, imgs, 'merged' )
-        call write_cavgs(imgs, trim(tmpl_fname)//params_glob%ext)
+        call write_imgarr(imgs, trim(tmpl_fname)//params_glob%ext)
         call dealloc_imgarr(imgs)
     end subroutine polar_cavger_writeall_cartrefs
 
@@ -1702,11 +1702,11 @@ contains
         call polar_cavger_write('cavgs_odd.bin',  'odd')
         call polar_cavger_write('cavgs.bin',      'merged')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
-        call write_cavgs(cavgs, 'cavgs_even.mrc')
+        call write_imgarr(cavgs, 'cavgs_even.mrc')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
-        call write_cavgs(cavgs, 'cavgs_odd.mrc')
+        call write_imgarr(cavgs, 'cavgs_odd.mrc')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
-        call write_cavgs(cavgs, 'cavgs_merged.mrc')
+        call write_imgarr(cavgs, 'cavgs_merged.mrc')
         call polar_cavger_kill
         ! read & write again
         call polar_cavger_new(pftcc,.false.)
@@ -1714,11 +1714,11 @@ contains
         call polar_cavger_read('cavgs_odd.bin',  'odd')
         call polar_cavger_read('cavgs.bin',      'merged')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
-        call write_cavgs(cavgs, 'cavgs2_even.mrc')
+        call write_imgarr(cavgs, 'cavgs2_even.mrc')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
-        call write_cavgs(cavgs, 'cavgs2_odd.mrc')
+        call write_imgarr(cavgs, 'cavgs2_odd.mrc')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
-        call write_cavgs(cavgs, 'cavgs2_merged.mrc')
+        call write_imgarr(cavgs, 'cavgs2_merged.mrc')
         call polar_cavger_kill
     end subroutine test_polarops
 

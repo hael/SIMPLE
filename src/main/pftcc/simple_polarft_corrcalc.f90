@@ -172,7 +172,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cont_grad_euclid_for_rot_8
     procedure          :: gencorr_cont_shift_grad_euclid_for_rot_8
     procedure          :: gencorr_sigma_contrib
-    procedure, private :: calc_frc
+    procedure          :: calc_frc
     procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
     generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
     procedure, private :: rotate_iref_1, rotate_iref_2

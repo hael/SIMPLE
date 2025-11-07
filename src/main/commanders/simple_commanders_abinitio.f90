@@ -472,7 +472,8 @@ contains
       contains
 
         subroutine prune_junk_classes
-            use simple_strategy2D_utils, only: flag_non_junk_cavgs, read_cavgs_into_imgarr
+            use simple_strategy2D_utils, only: flag_non_junk_cavgs
+            use simple_imgarr_utils,     only: read_cavgs_into_imgarr
             type(sp_project)              :: spproj
             type(image),      allocatable :: cavg_imgs(:)
             logical,          allocatable :: l_non_junk(:)

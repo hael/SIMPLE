@@ -120,7 +120,7 @@ contains
         use simple_strategy2D3D_common
         use simple_polarops
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_strategy2D_utils, only: write_cavgs
+        use simple_strategy2D_utils, only: write_imgarr
         class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
@@ -155,11 +155,11 @@ contains
         call polar_cavger_write('cavgs_odd.bin',  'odd')
         call polar_cavger_write('cavgs.bin',      'merged')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
-        call write_cavgs(cavgs, 'cavgs_even.mrc')
+        call write_imgarr(cavgs, 'cavgs_even.mrc')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
-        call write_cavgs(cavgs, 'cavgs_odd.mrc')
+        call write_imgarr(cavgs, 'cavgs_odd.mrc')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
-        call write_cavgs(cavgs, 'cavgs_merged.mrc')
+        call write_imgarr(cavgs, 'cavgs_merged.mrc')
         call polar_cavger_kill
         call killimgbatch
         call pftcc%kill

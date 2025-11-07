@@ -135,12 +135,11 @@ contains
         class(commander_cluster_cavgs), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         logical,          parameter   :: DEBUG = .true.
-        logical,          parameter   :: USE_DEV_CODE = .false.
         real,             parameter   :: SCORE_THRES_INCL = 75.
         integer,          parameter   :: NCLUST_MAX = 20
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
         type(image)                   :: img_msk
-        real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:), dmat_sel(:,:)
+        real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:)
         real,             allocatable :: resvals(:), res_bad(:), res_good(:), res_maybe(:), clustscores(:)
         logical,          allocatable :: l_non_junk(:), good_mask(:), l_msk(:,:,:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), cluster_inds(:)
@@ -214,59 +213,27 @@ contains
         ! calculate overall minmax
         oa_min      = minval(mm(:,1))
         oa_max      = maxval(mm(:,2))
-        if( trim(params%have_clustering).eq.'yes' )then
-            labels  = spproj%os_cls2D%get_all_asint('cluster')
-            labels  = pack(labels, mask=l_non_junk)
-            if( all(labels == 0) ) THROW_HARD('Invalid clustering solution in cls2D field')
-            nclust  = maxval(labels)
-            allocate(i_medoids(nclust),   source=0)
-            allocate(clustscores(nclust), source=0.)
-            allocate(inds(ncls_sel), source=(/(i,i=1,ncls_sel)/))
-            do iclust = 1, nclust
-                pop = count(labels == iclust)
-                if( pop > 0 )then
-                    cluster_inds = pack(inds, mask=labels == iclust)
-                    cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-                    if( USE_DEV_CODE )then
-                        dmat = calc_cluster_cavgs_dmat_dev(params, cluster_imgs, [oa_min,oa_max])
-                    else
-                        dmat = calc_cluster_cavgs_dmat(params, cluster_imgs, [oa_min,oa_max], params%clust_crit)
-                    endif
-                    call medoid_from_dmat(dmat, ind)
-                    clustscores(iclust) = sum(dmat(ind,:)) / real(pop)
-                    i_medoids(iclust) = cluster_inds(ind)
-                    deallocate(cluster_inds, dmat)
-                    call dealloc_imgarr(cluster_imgs)
-                endif
-            end do
-            clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels, clustscores )
+        ! calculate distance matrix
+        call calc_cluster_cavgs_dmats(params, cavg_imgs, [oa_min,oa_max], params%clust_crit, dmat)
+        ! cluster
+        if( cline%defined('ncls') )then
+            nclust = params%ncls
+            call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
         else
-            ! calculate distance matrix
-            if( USE_DEV_CODE )then
-                dmat = calc_cluster_cavgs_dmat_dev(params, cavg_imgs, [oa_min,oa_max])
-            else
-                dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
-            endif
-            ! cluster
-            if( cline%defined('ncls') )then
-                nclust = params%ncls
+            call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
+            if( nclust < 3 )then
+                nclust = 3
                 call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
-            else
-                call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
-                if( nclust < 3 )then
-                    nclust = 3
-                    call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
-                endif
             endif
-            clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
         endif
+        clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
         ! re-create cavg_imgs
         call dealloc_imgarr(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
         ! write aligned clusters
         call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', trim(params%ext))
         ! write un-aligned clusters
-        call write_cavgs(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )        
+        call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )        
         ! update project
         call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
         do iclust = 1, nclust
@@ -296,43 +263,6 @@ contains
         nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
         frac_good   = real(nptcls_good)  / real(nptcls)
         write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
-        ! calculate resolution statistics for good/bad classes
-        res_good    = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 1)
-        res_bad     = pack(clust_info_arr(:)%res, mask=clust_info_arr(:)%good_bad == 0)
-        pop_good    = count(clust_info_arr(:)%good_bad == 1)
-        pop_bad     = count(clust_info_arr(:)%good_bad == 0)
-        if( pop_good > 1 )then
-            write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
-            call calc_stats(res_good, res_stats)
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-        else if( pop_good == 1 )then
-            write(logfhandle,'(A)') 'RESOLUTION STATS FOR GOOD PARTITION'
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_good(1)
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_good(1)
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_good(1)
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_good(1)
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-        endif
-        if( pop_bad > 1 )then
-            write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
-            call calc_stats(res_bad, res_stats)
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_stats%minv
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_stats%maxv
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_stats%avg
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_stats%med
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', res_stats%sdev
-        else if( pop_bad == 1 )then
-            write(logfhandle,'(A)') 'RESOLUTION STATS FOR BAD  PARTITION'
-            write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RES: ', res_bad(1)
-            write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RES: ', res_bad(1)
-            write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RES: ', res_bad(1)
-            write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RES: ', res_bad(1)
-            write(logfhandle,'(a,1x,f8.2)') 'SDEV    RES: ', 0.
-        endif
         ! translate to state array
         allocate(states(ncls), source=0)
         do icls = 1, ncls_sel
@@ -480,7 +410,7 @@ contains
         end do
         allocate(labels_match(nmatch), source=0)
         labels_match = minloc(dmat_clust, dim=1)
-        call  write_cavgs(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext)
+        call  write_imgarr(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext)
         ! update project
         call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)
         do iclust = 1, nclust
