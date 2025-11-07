@@ -393,7 +393,7 @@ contains
                         clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
                         call polar_cavger_merge_eos_and_norm(build_glob%eulspace, clinw)
                     else
-                        call polar_cavger_merge_eos_and_norm
+                        call polar_cavger_merge_eos_and_norm2D
                     endif
                     call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
                     call polar_cavger_writeall(POLAR_REFS_FBODY)

@@ -15,7 +15,7 @@ public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, gaussian_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
-public :: lpstages, lpstages_fast
+public :: lpstages, lpstages_fast, edit_lpstages4polar
 private
 #include "simple_local_flags.inc"
 
@@ -232,23 +232,22 @@ contains
         endif 
     end subroutine get_resolution_at_fsc
 
-    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs, constant_scale )
+    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs, verbose )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical,           intent(in)  :: l_cavgs
-        logical, optional, intent(in)  :: constant_scale
+        logical, optional, intent(in)  :: verbose
         real,    parameter :: FRCLIMS_PTCLS(2) = [0.65,0.03]
         real,    parameter :: FRCLIMS_CAVGS(2) = [0.80,0.05]
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
-        logical, parameter :: L_VERBOSE        = .true. 
         integer :: findlims(2), istage, box_trial
         real    :: frclims(2), frc_stepsz, rbox_stepsz
-        logical :: l_constant_scale
-        l_constant_scale = .false.
-        if( present(constant_scale) ) l_constant_scale = constant_scale
+        logical :: l_verbose
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         ! (1) calculate FRC values at the inputted boundaries
         findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
         findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
@@ -268,7 +267,7 @@ contains
         end do
         lpinfo(nstages)%lp      = lpfinal
         lpinfo(nstages)%l_lpset = .true.
-        if( L_VERBOSE )then
+        if( l_verbose )then
             print *, '########## 1st pass'
             call print_lpinfo
         endif
@@ -276,7 +275,7 @@ contains
         if( all(lpinfo(:)%l_lpset) )then
             ! nothing to do
         else
-            print *, 'reverting to linear scheme'
+            if( l_verbose ) print *, 'reverting to linear scheme'
             ! revert to linear scheme
             lpinfo(1)%lp      = lpstart_default
             lpinfo(1)%l_lpset = .true.
@@ -284,7 +283,7 @@ contains
                 lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - lpfinal) / 2.
                 lpinfo(istage)%l_lpset = .true.
             end do
-            if( L_VERBOSE )then
+            if( l_verbose )then
                 print *, '########## 2nd pass'
                 call print_lpinfo
             endif
@@ -301,14 +300,7 @@ contains
             lpinfo(istage)%smpd_crop = smpd / lpinfo(istage)%scale
             lpinfo(istage)%trslim    = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
         end do
-        if( l_constant_scale )then
-            ! downscaling is constant throughout, resolution & translation limits are untouched
-            lpinfo(:)%scale       = lpinfo(nstages)%scale
-            lpinfo(:)%box_crop    = lpinfo(nstages)%box_crop
-            lpinfo(:)%smpd_crop   = lpinfo(nstages)%smpd_crop
-            lpinfo(:)%l_autoscale = lpinfo(nstages)%l_autoscale
-        endif
-        if( L_VERBOSE )then
+        if( l_verbose )then
             print *, '########## scale info'
             call print_scaleinfo
         endif
@@ -378,5 +370,31 @@ contains
             end subroutine calc_scaleinfo
 
     end subroutine lpstages_fast
+
+    subroutine edit_lpstages4polar( steps, nstages, lpinfo )
+        integer,           intent(in)    :: steps(3), nstages
+        type(lp_crop_inf), intent(inout) :: lpinfo(nstages)
+        integer :: i
+        lpinfo(         1:steps(1)-1)%smpd_crop = lpinfo(steps(1))%smpd_crop
+        lpinfo(steps(1)+1:steps(2)-1)%smpd_crop = lpinfo(steps(2))%smpd_crop
+        lpinfo(steps(2)+1:steps(3)-1)%smpd_crop = lpinfo(steps(3))%smpd_crop
+        lpinfo(         1:steps(1)-1)%box_crop  = lpinfo(steps(1))%box_crop
+        lpinfo(steps(1)+1:steps(2)-1)%box_crop  = lpinfo(steps(2))%box_crop
+        lpinfo(steps(2)+1:steps(3)-1)%box_crop  = lpinfo(steps(3))%box_crop
+        lpinfo(         1:steps(1)-1)%scale     = lpinfo(steps(1))%scale
+        lpinfo(steps(1)+1:steps(2)-1)%scale     = lpinfo(steps(2))%scale
+        lpinfo(steps(2)+1:steps(3)-1)%scale     = lpinfo(steps(3))%scale
+        lpinfo(         1:steps(1)-1)%trslim    = lpinfo(steps(1))%trslim
+        lpinfo(steps(1)+1:steps(2)-1)%trslim    = lpinfo(steps(2))%trslim
+        lpinfo(steps(2)+1:steps(3)-1)%trslim    = lpinfo(steps(3))%trslim
+        print *, '########## res info'
+        do i = 1, nstages
+            print *, 'frc_crit/l_lpset/lp ', lpinfo(i)%frc_crit, lpinfo(i)%l_lpset, lpinfo(i)%lp
+        end do
+        print *, '########## scale info'
+        do i = 1, nstages
+            print *, 'scale/box_crop/smpd_crop/trslim ',lpinfo(i)%scale, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+        end do
+    end subroutine edit_lpstages4polar
 
 end module simple_estimate_ssnr

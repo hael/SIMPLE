@@ -12,7 +12,8 @@ implicit none
 
 ! Restoration
 public :: polar_cavger_new, polar_cavger_dims_from_header, polar_cavger_update_sums
-public :: polar_cavger_calc_and_write_frcs_and_eoavg, polar_cavger_merge_eos_and_norm
+public :: polar_cavger_calc_and_write_frcs_and_eoavg
+public :: polar_cavger_merge_eos_and_norm2D, polar_cavger_merge_eos_and_norm
 public :: polar_cavger_assemble_sums_from_parts, polar_cavger_set_ref_pftcc
 public :: polar_cavger_zero_pft_refs, polar_cavger_kill
 ! I/O
@@ -224,47 +225,89 @@ contains
         nullify(spproj_field,rptcl,rctf,pptcls,pctfmats)
     end subroutine polar_cavger_update_sums
 
-    !>  \brief  Restores 2D class-averages and/or 3D slices
-    subroutine polar_cavger_merge_eos_and_norm( reforis, cl_weight )
-        use simple_class_frcs
-        type(oris), optional, intent(in) :: reforis
-        real,       optional, intent(in) :: cl_weight
-        logical, parameter :: L_KB = .true.
-        type(class_frcs)   :: cavg2clin_frcs
-        real,  allocatable :: cavg_clin_frcs(:,:,:)
-        complex(dp)        :: pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls)
-        complex(dp)        :: pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
-        real(dp)           :: ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls), clw
-        real(dp)           :: ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
-        ! 3D Prep
+    !>  \brief  Restores 2D class-averages only
+    subroutine polar_cavger_merge_eos_and_norm2D
+        complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
+        real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
+        integer     :: icls, eo_pop(2), pop
         select case(trim(params_glob%ref_type))
         case('cavg')
-            ! 2D
+            ! all good
+        case DEFAULT
+            THROW_HARD('polar_cavger_merge_eos_and_norm2D only for 2D cavgs restoration')
+        end select
+        pfts_merg = DCMPLX_ZERO
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+        !$omp private(icls,eo_pop,pop,pft,ctf2)
+        do icls = 1,ncls
+            eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls)
+            pop    = sum(eo_pop)
+            if(pop == 0)then
+                pfts_even(:,:,icls) = DCMPLX_ZERO
+                pfts_odd(:,:,icls)  = DCMPLX_ZERO
+                ctf2_even(:,:,icls) = 0.d0
+                ctf2_odd(:,:,icls)  = 0.d0
+            else
+                if(pop > 1)then
+                    pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
+                    ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
+                    call safe_norm(pft, ctf2, pfts_merg(:,:,icls))
+                endif
+                if(eo_pop(1) > 1)then
+                    pft = pfts_even(:,:,icls)
+                    call safe_norm(pft, ctf2_even(:,:,icls), pfts_even(:,:,icls))
+                endif
+                if(eo_pop(2) > 1)then
+                    pft = pfts_odd(:,:,icls)
+                    call safe_norm(pft, ctf2_odd(:,:,icls), pfts_odd(:,:,icls))
+                endif
+            endif
+        end do
+        !$omp end parallel do
+    end subroutine polar_cavger_merge_eos_and_norm2D
+
+    !>  \brief  Restores 3D slices
+    subroutine polar_cavger_merge_eos_and_norm( reforis, cl_weight )
+        use simple_class_frcs
+        type(oris),           intent(in) :: reforis
+        real,       optional, intent(in) :: cl_weight
+        type(class_frcs)   :: cavg2clin_frcs
+        real,  allocatable :: cavg_clin_frcs(:,:,:)
+        complex(dp) :: pfts_clin_even(pftsz,kfromto(1):kfromto(2),ncls)
+        complex(dp) :: pfts_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
+        real(dp)    :: ctf2_clin_even(pftsz,kfromto(1):kfromto(2),ncls)
+        real(dp)    :: ctf2_clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
+        real(dp)    :: fsc(kfromto(1):kfromto(2)), clw
+        clw = 1.d0
+        select case(trim(params_glob%ref_type))
         case('cavgvol')
-            ! 2.5D
-            if(.not. present(reforis)) THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
+            ! 2.5D: cavgs + variable CLs contribution
             ! Common-line contribution weight
-            clw = 1.d0
             if( present(cl_weight) ) clw = min(max(0.d0,real(cl_weight,dp)),1.d0)
             if( clw > 1.d-6 )then
                 ! Mirroring slices
                 call mirror_slices(reforis, build_glob%pgrpsyms)
                 ! Common-lines conribution
-                call calc_comlin_contrib(reforis, build_glob%pgrpsyms)
+                call calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
+                &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             endif
-        case('clin','vol')
-            if(.not. present(reforis)) THROW_HARD('Reference orientations need be inputted in polar_cavger_merge_eos_and_norm')
+        case('clin', 'vol')
             ! Mirroring slices
             call mirror_slices(reforis, build_glob%pgrpsyms)
             ! Common-lines conribution
-            call calc_comlin_contrib(reforis, build_glob%pgrpsyms)
+            call calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
+            &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
+        case DEFAULT
+            THROW_HARD('Invalid REF_TYPE in polar_cavger_merge_eos_and_norm')
         end select
+        ! ML-regularization
+        if( params_glob%l_ml_reg ) call add_invtausq2rho
         ! Optional CL/CLS directional FRCs & filtering, part 1
         if( trim(params_glob%polar_frcs) .eq. 'yes' )then
-            allocate(cavg_clin_frcs(pftsz,kfromto(1):kfromto(2),ncls))
             select case(trim(params_glob%ref_type))
             case('clin', 'vol')
-                call nonuniform_frc_filtering
+                call nonuniform_frc_filtering(cavg_clin_frcs, pfts_clin_even, pfts_clin_odd,&
+                &ctf2_clin_even, ctf2_clin_odd)
             case DEFAULT
                 THROW_HARD('Invalid REF_TYPE with POLAR_FRCS=YES')
             end select
@@ -272,23 +315,21 @@ contains
         ! Restoration of references
         pfts_merg = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
-            case('cavg')
-                call restore_cavgs
             case('cavgvol')
                 if( clw > 1.d-6 )then
                     call calc_cavg_comlin_frcs(cavg2clin_frcs)
                     call restore_cavgs_comlins(clw)
                 else
                     call mirr_and_calc_cavg_comlin_frcs(cavg2clin_frcs)
-                    call restore_cavgs
+                    call polar_cavger_merge_eos_and_norm2D
                 endif
                 call cavg2clin_frcs%write('frcs_cavg2clin'//trim(BIN_EXT))
             case('clin')
                 call restore_comlins
             case('vol')
-                call calc_cavg_comlin_frcs(cavg2clin_frcs)
-                call cavg2clin_frcs%write('frcs_cavg2clin'//trim(BIN_EXT))
-                call restore_cavgs_comlins(1.d0)
+                call calc_cavg_comlin_frcs( cavg2clin_frcs )
+                call cavg2clin_frcs%write( 'frcs_cavg2clin'//trim(BIN_EXT) )
+                call restore_cavgs_comlins( 1.d0 )
         end select
         ! Optional CL/CLS directional FRCs & filtering, part 2
         if( trim(params_glob%polar_frcs) .eq. 'yes' ) pfts_merg = pfts_merg * cavg_clin_frcs
@@ -296,6 +337,146 @@ contains
         call cavg2clin_frcs%kill
         if( allocated(cavg_clin_frcs) ) deallocate(cavg_clin_frcs)
       contains
+
+        subroutine add_invtausq2rho
+            logical, parameter :: DEBUG = .false.
+            complex(dp) :: even(pftsz,kfromto(1):kfromto(2)), odd(pftsz,kfromto(1):kfromto(2))
+            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
+            real(dp)    :: vare(kfromto(1):kfromto(2)), varo(kfromto(1):kfromto(2))
+            real(dp)    :: sig2e(kfromto(1):kfromto(2)), sig2o(kfromto(1):kfromto(2))
+            real(dp)    :: ssnr(kfromto(1):kfromto(2)), tau2(kfromto(1):kfromto(2))
+            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)), cc, fudge, invtau2, s, a,b
+            integer     :: icls, k, kstart, p
+            ! FSC per slice contribution
+            fsc  = 0.d0
+            vare = 0.d0; varo = 0.d0
+            sig2e = 0.d0; sig2o = 0.d0
+            select case(trim(params_glob%ref_type))
+            case('cavgvol')
+                THROW_HARD('Not supported yet')
+            case('clin')
+                !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+                !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo,sig2e,sig2o)
+                do icls = 1,ncls/2
+                    ! e/o restoration
+                    pft  = pfts_clin_even(:,:,icls)
+                    ctf2 = ctf2_clin_even(:,:,icls)
+                    call safe_norm(pft, ctf2, even)
+                    pft  = pfts_clin_odd(:,:,icls)
+                    ctf2 = ctf2_clin_odd(:,:,icls)
+                    call safe_norm(pft, ctf2, odd)
+                    ! FSC contribution
+                    do k = kfromto(1),kfromto(2)
+                        fsc(k)   = fsc(k)   + sum(real(even(:,k) * conjg(odd(:,k)), dp))
+                        vare(k)  = vare(k)  + sum(real(even(:,k) * conjg(even(:,k)),dp))
+                        varo(k)  = varo(k)  + sum(real(odd(:,k)  * conjg(odd(:,k)), dp))
+                        sig2e(k) = sig2e(k) + sum(ctf2_clin_even(:,k,icls))
+                        sig2o(k) = sig2o(k) + sum(ctf2_clin_odd(:,k,icls))
+                    enddo
+                enddo
+                !$omp end parallel do
+            case('vol')
+                !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+                !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo,sig2e,sig2o)
+                do icls = 1,ncls/2
+                    ! e/o restoration
+                    pft  = pfts_even(:,:,icls) + pfts_clin_even(:,:,icls)
+                    ctf2 = ctf2_even(:,:,icls) + ctf2_clin_even(:,:,icls)
+                    call safe_norm(pft, ctf2, even)
+                    pft  = pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls)
+                    ctf2 = ctf2_odd(:,:,icls) + ctf2_clin_odd(:,:,icls)
+                    call safe_norm(pft, ctf2, even)
+                    ! FSC contribution
+                    do k = kfromto(1),kfromto(2)
+                        fsc(k)   = fsc(k)   + real(sum(even(:,k) * conjg(odd(:,k))) ,dp)
+                        vare(k)  = vare(k)  + real(sum(even(:,k) * conjg(even(:,k))),dp)
+                        varo(k)  = varo(k)  + real(sum(odd(:,k)  * conjg(odd(:,k))) ,dp)
+                        sig2e(k) = sig2e(k) + sum(ctf2_clin_even(:,k,icls))
+                        sig2o(k) = sig2o(k) + sum(ctf2_clin_odd(:,k,icls))
+                    enddo
+                enddo
+                !$omp end parallel do
+            end select
+            ! Variances
+            vare = vare * varo
+            ! FSC
+            where( vare > DTINY )
+                fsc = fsc / sqrt(vare)
+            elsewhere
+                fsc = 0.d0
+            end where
+            ! SSNR
+            fudge = real(params_glob%tau,dp)
+            do k = kfromto(1),kfromto(2)
+                cc = max(0.001d0,min(0.999d0,fsc(k)))
+                ssnr(k) = fudge * cc / (1.d0 - cc)
+            enddo
+            ! Add Tau2 inverse to denominators
+            ! because signal assumed infinite at very low resolution there is no addition
+            kstart = max(6, calc_fourier_index(params_glob%hp, params_glob%box_crop, params_glob%smpd_crop))
+            ! Even
+            where( sig2e > DTINY )
+                sig2e = real(ncls*pftsz,dp) / sig2e
+            elsewhere
+                sig2e = 0.d0
+            end where
+            tau2 = ssnr * sig2e
+            if( DEBUG )then
+                do k = kfromto(1),kfromto(2)
+                    cc = max(0.001d0,min(0.999d0,fsc(k)))
+                    s = cc / (1.d0 - cc)
+                    print *, k, real(s), real(fsc(k)),&
+                    &real(fudge**2*s/(fudge**2*s+1.d0)), tau2(k), 1.d0 / (fudge * tau2(k))
+                enddo
+                do k = kfromto(1),kfromto(2)
+                    if( tau2(k) > DTINY )then
+                        invtau2 = 1.d0 / (fudge * tau2(k))
+
+                        a = sum(sqrt(real(pfts_clin_even(:,k,:)*conjg(pfts_clin_even(:,k,:))))) / real(pftsz*ncls,dp)
+                        b =      sum(ctf2_clin_even(:,k,:))                                     / real(pftsz*ncls,dp)
+                        print *,k,(a/(b+invtau2)) / (a/b)
+                    endif
+                enddo
+            endif
+            !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
+            do k = kstart,kfromto(2)
+                if( tau2(k) > DTINY )then
+                    ! CTF2 <- CTF2 + avgCTF2/(tau*SSNR)
+                    invtau2 = 1.d0 / (fudge * tau2(k))
+                    ctf2_clin_even(:,k,:) = ctf2_clin_even(:,k,:) + invtau2
+                else
+                    do icls = 1,ncls
+                        do p = 1,pftsz
+                            invtau2 = min(1.d3, 1.d3 * ctf2_clin_even(p,k,icls))
+                            ctf2_clin_even(p,k,icls) = ctf2_clin_even(p,k,icls) + invtau2
+                        enddo
+                    enddo
+                endif
+            enddo
+            !$omp end parallel do
+            ! Odd
+            where( sig2o > DTINY )
+                sig2o = real(ncls*pftsz,dp) / sig2o
+            elsewhere
+                sig2o = 0.d0
+            end where
+            tau2 = ssnr * sig2o
+            !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
+            do k = kstart,kfromto(2)
+                if( tau2(k) > DTINY )then
+                    invtau2 = 1.d0 / (fudge * tau2(k))
+                    ctf2_clin_odd(:,k,:) = ctf2_clin_odd(:,k,:) + invtau2
+                else
+                    do icls = 1,ncls
+                        do p = 1,pftsz
+                            invtau2 = min(1.d3, 1.d3 * ctf2_clin_odd(p,k,icls))
+                            ctf2_clin_odd(p,k,icls) = ctf2_clin_odd(p,k,icls) + invtau2
+                        enddo
+                    enddo
+                endif
+            enddo
+            !$omp end parallel do
+        end subroutine add_invtausq2rho
 
         ! Mirror 2D classes, calculate CL contibution & FRCS
         ! Module arrays are untouched on exit
@@ -311,7 +492,8 @@ contains
             ! mirror classes belonging to the same slice
             call mirror_slices(reforis, build_glob%pgrpsyms)
             ! calculate the per slice CLs
-            call calc_comlin_contrib(reforis, build_glob%pgrpsyms)
+            call calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
+            &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             ! CLs vs. CLS FRCs
             call calc_cavg_comlin_frcs(frcs)
             ! restores classes
@@ -354,88 +536,6 @@ contains
             !$omp end parallel do
             deallocate(frc)
         end subroutine calc_cavg_comlin_frcs
-
-        subroutine nonuniform_frc_filtering
-            complex(dp) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls), pfts_clin(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp) :: clin_odd(pftsz,kfromto(1):kfromto(2),ncls), clin_even(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
-            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
-            integer     :: icls, eo_pop(2), pop, k, pops(ncls)
-            pfts_cavg = DCMPLX_ZERO
-            pfts_clin = DCMPLX_ZERO
-            clin_odd  = DCMPLX_ZERO
-            clin_even = DCMPLX_ZERO
-            ! CL Contribution
-            call get_cavg_clin(pfts_cavg, pfts_clin, clin_odd, clin_even)
-            ! Restoration of 2D classes
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,eo_pop,pop,pft,ctf2)
-            do icls = 1,ncls
-                eo_pop     = prev_eo_pops(:,icls) + eo_pops(:,icls)
-                pop        = sum(eo_pop)
-                pops(icls) = pop
-                if(pop > 1)then
-                    pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
-                    ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
-                    call safe_norm(pft, ctf2, pfts_cavg(:,:,icls))
-                endif
-            end do
-            !$omp end parallel do
-            ! Restoration of CL classes
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,pft,ctf2)
-            do icls = 1,ncls
-                call safe_norm(pfts_clin_even(:,:,icls), ctf2_clin_even(:,:,icls), clin_even(:,:,icls))
-                call safe_norm(pfts_clin_odd( :,:,icls), ctf2_clin_odd( :,:,icls), clin_odd( :,:,icls))
-                pft  = pfts_clin_even(:,:,icls) + pfts_clin_odd(:,:,icls)
-                ctf2 = ctf2_clin_even(:,:,icls) + ctf2_clin_odd(:,:,icls)
-                call safe_norm(pft, ctf2, pfts_clin(:,:,icls))
-            enddo
-            !$omp end parallel do
-            ! FRCs & filtering
-            cavg_clin_frcs = 1.
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,k)
-            do icls = 1, ncls
-                if( pops(icls) < 2 )cycle
-                do k = kfromto(1), kfromto(2)
-                    call nonuni_frc(pfts_clin(:,k,icls), pfts_cavg(:,k,icls), cavg_clin_frcs(:,k,icls))
-                enddo
-            enddo
-            !$omp end parallel do
-        end subroutine nonuniform_frc_filtering
-
-        ! Directional FRC filter
-        subroutine nonuni_frc(pft1, pft2, pfrc)
-            complex(dp), intent(in)    :: pft1(pftsz), pft2(pftsz)
-            real,        intent(inout) :: pfrc(pftsz)
-            integer,     parameter     :: NKER = 3, HALF = NKER/2, MID = HALF + 1
-            integer  :: i
-            real(dp) :: numer, denom1, denom2
-            do i = MID, pftsz - HALF
-                pfrc(i) = 1._dp
-                numer   = real(sum(         pft1(i-HALF:i+HALF) * conjg(pft2(i-HALF:i+HALF))),dp)
-                denom1  =      sum(csq_fast(pft1(i-HALF:i+HALF)))
-                denom2  =      sum(csq_fast(pft2(i-HALF:i+HALF)))
-                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
-            enddo
-            do i = 1, MID-1
-                pfrc(i) = 1._dp
-                numer   = real(sum(         pft1(           1:i+HALF) * conjg(pft2(           1:i+HALF))),dp)
-                numer   = real(sum(         pft1(pftsz-HALF+i:pftsz ) * conjg(pft2(pftsz-HALF+i:pftsz ))),dp) + numer
-                denom1  =      sum(csq_fast(pft1(1:i+HALF))) + sum(csq_fast(pft1(pftsz-HALF+i:pftsz)))
-                denom2  =      sum(csq_fast(pft2(1:i+HALF))) + sum(csq_fast(pft2(pftsz-HALF+i:pftsz)))
-                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
-            enddo
-            do i = pftsz-HALF+1, pftsz
-                pfrc(i) = 1._dp
-                numer   = real(sum(         pft1(     1:HALF-(pftsz-i)) * conjg(pft2(     1:HALF-(pftsz-i)))),dp)
-                numer   = real(sum(         pft1(i-HALF:pftsz         ) * conjg(pft2(i-HALF:pftsz         ))),dp) + numer
-                denom1  =      sum(csq_fast(pft1(1:HALF-(pftsz-i)))) + sum(csq_fast(pft1(i-HALF:pftsz)))
-                denom2  =      sum(csq_fast(pft2(1:HALF-(pftsz-i)))) + sum(csq_fast(pft2(i-HALF:pftsz)))
-                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
-            enddo
-        end subroutine nonuni_frc
 
         ! Deals with summing slices and their mirror
         subroutine mirror_slices( ref_space, symop )
@@ -480,77 +580,6 @@ contains
             enddo
             !$omp end parallel do
         end subroutine mirror_slices
-
-        subroutine get_cavg_clin( pfts_cavg, pfts_clin, clin_odd, clin_even )
-            complex(dp), intent(inout) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp), intent(inout) :: pfts_clin(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp), intent(inout) :: clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp), intent(inout) :: clin_even(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
-            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
-            integer     :: icls, eo_pop(2), pop, pops(ncls)
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,eo_pop,pop,pft,ctf2)
-            do icls = 1,ncls
-                eo_pop     = prev_eo_pops(:,icls) + eo_pops(:,icls)
-                pop        = sum(eo_pop)
-                pops(icls) = pop
-                if(pop == 0)then
-                    pfts_cavg(:,:,icls) = DCMPLX_ZERO
-                else
-                    if(pop > 1)then
-                        pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
-                        ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
-                        call safe_norm(pft, ctf2, pfts_cavg(:,:,icls))
-                    endif
-                endif
-            end do
-            !$omp end parallel do
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,pft,ctf2)
-            do icls = 1,ncls
-                call safe_norm(pfts_clin_even(:,:,icls), ctf2_clin_even(:,:,icls), clin_even(:,:,icls))
-                call safe_norm(pfts_clin_odd( :,:,icls), ctf2_clin_odd( :,:,icls), clin_odd( :,:,icls))
-                pft  = pfts_clin_even(:,:,icls) + pfts_clin_odd(:,:,icls)
-                ctf2 = ctf2_clin_even(:,:,icls) + ctf2_clin_odd(:,:,icls)
-                call safe_norm(pft, ctf2, pfts_clin(:,:,icls))
-            enddo
-            !$omp end parallel do
-        end subroutine get_cavg_clin
-
-        ! Restores whole plane classes
-        subroutine restore_cavgs
-            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
-            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
-            integer     :: icls, eo_pop(2), pop
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,eo_pop,pop,pft,ctf2)
-            do icls = 1,ncls
-                eo_pop = prev_eo_pops(:,icls) + eo_pops(:,icls)
-                pop    = sum(eo_pop)
-                if(pop == 0)then
-                    pfts_even(:,:,icls) = DCMPLX_ZERO
-                    pfts_odd(:,:,icls)  = DCMPLX_ZERO
-                    ctf2_even(:,:,icls) = 0.d0
-                    ctf2_odd(:,:,icls)  = 0.d0
-                else
-                    if(pop > 1)then
-                        pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
-                        ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
-                        call safe_norm(pft, ctf2, pfts_merg(:,:,icls))
-                    endif
-                    if(eo_pop(1) > 1)then
-                        pft = pfts_even(:,:,icls)
-                        call safe_norm(pft, ctf2_even(:,:,icls), pfts_even(:,:,icls))
-                    endif
-                    if(eo_pop(2) > 1)then
-                        pft = pfts_odd(:,:,icls)
-                        call safe_norm(pft, ctf2_odd(:,:,icls), pfts_odd(:,:,icls))
-                    endif
-                endif
-            end do
-            !$omp end parallel do
-        end subroutine restore_cavgs
 
         ! Restore common lines contributions only
         subroutine restore_comlins
@@ -630,203 +659,335 @@ contains
             !$omp end parallel do
         end subroutine restore_cavgs_comlins
 
+    end subroutine polar_cavger_merge_eos_and_norm
+
+    subroutine nonuniform_frc_filtering( cavg_clin_frcs, pfts_cl_even, pfts_cl_odd, ctf2_cl_even, ctf2_cl_odd )
+        real,             allocatable, intent(inout) :: cavg_clin_frcs(:,:,:)
+        complex(kind=dp),              intent(inout) :: pfts_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
+        complex(kind=dp),              intent(inout) :: pfts_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
+        real(kind=dp),                 intent(inout) :: ctf2_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
+        real(kind=dp),                 intent(inout) :: ctf2_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
+        complex(dp) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls), pfts_clin(pftsz,kfromto(1):kfromto(2),ncls)
+        complex(dp) :: clin_odd(pftsz,kfromto(1):kfromto(2),ncls), clin_even(pftsz,kfromto(1):kfromto(2),ncls)
+        complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
+        real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
+        integer     :: icls, eo_pop(2), pop, k, pops(ncls)
+        if( allocated(cavg_clin_frcs) ) deallocate(cavg_clin_frcs)
+        allocate(cavg_clin_frcs(pftsz,kfromto(1):kfromto(2),ncls), source=1.0)
+        pfts_cavg = DCMPLX_ZERO
+        pfts_clin = DCMPLX_ZERO
+        clin_odd  = DCMPLX_ZERO
+        clin_even = DCMPLX_ZERO
+        ! CL Contribution
+        call get_cavg_clin(pfts_cavg, pfts_clin, clin_odd, clin_even)
+        ! Restoration of 2D classes
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+        !$omp private(icls,eo_pop,pop,pft,ctf2)
+        do icls = 1,ncls
+            eo_pop     = prev_eo_pops(:,icls) + eo_pops(:,icls)
+            pop        = sum(eo_pop)
+            pops(icls) = pop
+            if(pop > 1)then
+                pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
+                ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
+                call safe_norm(pft, ctf2, pfts_cavg(:,:,icls))
+            endif
+        end do
+        !$omp end parallel do
+        ! Restoration of CL classes
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+        !$omp private(icls,pft,ctf2)
+        do icls = 1,ncls
+            call safe_norm(pfts_cl_even(:,:,icls), ctf2_cl_even(:,:,icls), clin_even(:,:,icls))
+            call safe_norm(pfts_cl_odd( :,:,icls), ctf2_cl_odd( :,:,icls), clin_odd( :,:,icls))
+            pft  = pfts_cl_even(:,:,icls) + pfts_cl_odd(:,:,icls)
+            ctf2 = ctf2_cl_even(:,:,icls) + ctf2_cl_odd(:,:,icls)
+            call safe_norm(pft, ctf2, pfts_clin(:,:,icls))
+        enddo
+        !$omp end parallel do
+        ! FRCs & filtering
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+        !$omp private(icls,k)
+        do icls = 1, ncls
+            if( pops(icls) < 2 )cycle
+            do k = kfromto(1), kfromto(2)
+                call nonuni_frc(pfts_clin(:,k,icls), pfts_cavg(:,k,icls), cavg_clin_frcs(:,k,icls))
+            enddo
+        enddo
+        !$omp end parallel do
+
+    contains
+
+        subroutine get_cavg_clin( pfts_cavg, pfts_clin, clin_odd, clin_even )
+            complex(dp), intent(inout) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls)
+            complex(dp), intent(inout) :: pfts_clin(pftsz,kfromto(1):kfromto(2),ncls)
+            complex(dp), intent(inout) :: clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
+            complex(dp), intent(inout) :: clin_even(pftsz,kfromto(1):kfromto(2),ncls)
+            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
+            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
+            integer     :: icls, eo_pop(2), pop, pops(ncls)
+            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+            !$omp private(icls,eo_pop,pop,pft,ctf2)
+            do icls = 1,ncls
+                eo_pop     = prev_eo_pops(:,icls) + eo_pops(:,icls)
+                pop        = sum(eo_pop)
+                pops(icls) = pop
+                if(pop == 0)then
+                    pfts_cavg(:,:,icls) = DCMPLX_ZERO
+                else
+                    if(pop > 1)then
+                        pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
+                        ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
+                        call safe_norm(pft, ctf2, pfts_cavg(:,:,icls))
+                    endif
+                endif
+            end do
+            !$omp end parallel do
+            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+            !$omp private(icls,pft,ctf2)
+            do icls = 1,ncls
+                call safe_norm(pfts_cl_even(:,:,icls), ctf2_cl_even(:,:,icls), clin_even(:,:,icls))
+                call safe_norm(pfts_cl_odd( :,:,icls), ctf2_cl_odd( :,:,icls), clin_odd( :,:,icls))
+                pft  = pfts_cl_even(:,:,icls) + pfts_cl_odd(:,:,icls)
+                ctf2 = ctf2_cl_even(:,:,icls) + ctf2_cl_odd(:,:,icls)
+                call safe_norm(pft, ctf2, pfts_clin(:,:,icls))
+            enddo
+            !$omp end parallel do
+        end subroutine get_cavg_clin
+
+        ! Directional FRC filter
+        subroutine nonuni_frc(pft1, pft2, pfrc)
+            complex(dp), intent(in)    :: pft1(pftsz), pft2(pftsz)
+            real,        intent(inout) :: pfrc(pftsz)
+            integer,     parameter     :: NKER = 3, HALF = NKER/2, MID = HALF + 1
+            integer  :: i
+            real(dp) :: numer, denom1, denom2
+            do i = MID, pftsz - HALF
+                pfrc(i) = 1._dp
+                numer   = real(sum(         pft1(i-HALF:i+HALF) * conjg(pft2(i-HALF:i+HALF))),dp)
+                denom1  =      sum(csq_fast(pft1(i-HALF:i+HALF)))
+                denom2  =      sum(csq_fast(pft2(i-HALF:i+HALF)))
+                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
+            enddo
+            do i = 1, MID-1
+                pfrc(i) = 1._dp
+                numer   = real(sum(         pft1(           1:i+HALF) * conjg(pft2(           1:i+HALF))),dp)
+                numer   = real(sum(         pft1(pftsz-HALF+i:pftsz ) * conjg(pft2(pftsz-HALF+i:pftsz ))),dp) + numer
+                denom1  =      sum(csq_fast(pft1(1:i+HALF))) + sum(csq_fast(pft1(pftsz-HALF+i:pftsz)))
+                denom2  =      sum(csq_fast(pft2(1:i+HALF))) + sum(csq_fast(pft2(pftsz-HALF+i:pftsz)))
+                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
+            enddo
+            do i = pftsz-HALF+1, pftsz
+                pfrc(i) = 1._dp
+                numer   = real(sum(         pft1(     1:HALF-(pftsz-i)) * conjg(pft2(     1:HALF-(pftsz-i)))),dp)
+                numer   = real(sum(         pft1(i-HALF:pftsz         ) * conjg(pft2(i-HALF:pftsz         ))),dp) + numer
+                denom1  =      sum(csq_fast(pft1(1:HALF-(pftsz-i)))) + sum(csq_fast(pft1(i-HALF:pftsz)))
+                denom2  =      sum(csq_fast(pft2(1:HALF-(pftsz-i)))) + sum(csq_fast(pft2(i-HALF:pftsz)))
+                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
+            enddo
+        end subroutine nonuni_frc
+
+    end subroutine nonuniform_frc_filtering
+
+    ! Calculate common-lines contributions from all the slices
+    subroutine calc_comlin_contrib( ref_space, symop, pfts_cl_even, pfts_cl_odd, ctf2_cl_even, ctf2_cl_odd )
+        logical, parameter :: L_KB = .true.
+        type(oris),       intent(in)    :: ref_space
+        type(sym),        intent(in)    :: symop
+        complex(kind=dp), intent(inout) :: pfts_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
+        complex(kind=dp), intent(inout) :: pfts_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
+        real(kind=dp),    intent(inout) :: ctf2_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
+        real(kind=dp),    intent(inout) :: ctf2_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
+        type(kbinterpol)  :: kbwin
+        real, allocatable :: Rsym(:,:,:)
+        complex(dp) :: cl_l(kfromto(1):kfromto(2)), cl_r(kfromto(1):kfromto(2)), cl_e(kfromto(1):kfromto(2))
+        complex(dp) :: cl_o(kfromto(1):kfromto(2)), pft(pftsz,kfromto(1):kfromto(2))
+        real(dp)    :: rl_l(kfromto(1):kfromto(2)), rl_r(kfromto(1):kfromto(2)), rl_e(kfromto(1):kfromto(2))
+        real(dp)    :: rl_o(kfromto(1):kfromto(2)), ctf2(pftsz,kfromto(1):kfromto(2)), dd, w, wl, wr, sumw
+        real        :: eulers(3),R(3,3,ncls),Rj(3,3),tRi(3,3),psi,drot,d,targ_w,self_w
+        integer     :: rotl,rotr, iref, jref, m, self_irot, targ_irot, isym, nsym
+        logical     :: l_rotm
+        if( .not.ref_space%isthere('mirr') )then
+            THROW_HARD('Mirror index missing in reference search space')
+        endif
+        drot = pftcc_glob%get_dang()
+        if( L_KB ) kbwin = kbinterpol(1.5, KBALPHA)
+        pfts_cl_even = DCMPLX_ZERO; pfts_cl_odd = DCMPLX_ZERO
+        ctf2_cl_even = 0.d0; ctf2_cl_odd  = 0.d0
+        ! Symmetry rotation matrices
+        nsym = symop%get_nsym()
+        allocate(Rsym(3,3,nsym),source=0.)
+        !$omp parallel default(shared) proc_bind(close)&
+        !$omp private(iref,jref,m,tRi,Rj,eulers,targ_irot,self_irot,targ_w,self_w)&
+        !$omp& private(d,dd,w,wl,wr,sumw,psi,l_rotm,cl_l,cl_r,cl_e,cl_o)&
+        !$omp& private(rl_l,rl_r,rl_e,rl_o,pft,ctf2,rotl,rotr,isym)
+        ! Caching rotation matrices
+        !$omp do schedule(static)
+        do iref = 1,ncls
+            R(:,:,iref) = ref_space%get_mat(iref)
+        enddo
+        !$omp end do nowait
+        !$omp do schedule(static)
+        do isym = 1,nsym
+            call symop%get_sym_rmat(isym, Rsym(:,:,isym))
+        end do
+        !$omp end do
+        ! Common lines contribution
+        !$omp do schedule(static)
+        do iref = 1,ncls/2
+            tRi = transpose(R(:,:,iref))
+            m   = ref_space%get_int(iref,'mirr')
+            do jref = 1,ncls/2
+                do isym = 1,nsym
+                    if( isym == 1 )then
+                        if( jref == iref ) cycle    ! self   exclusion
+                        if( jref == m )    cycle    ! mirror exclusion
+                        ! Rotation of both planes by transpose of Ri (tRixRi=I & Rsym=I)
+                        Rj = matmul(R(:,:,jref), tRi)
+                    else
+                        ! Symmetry operator
+                        Rj = matmul(R(:,:,jref), Rsym(:,:,isym))
+                        ! Rotation of both planes by transpose of Ri (tRixRi -> I)
+                        Rj = matmul(Rj, tRi)
+                    endif
+                    ! Euler angles identification
+                    eulers = m2euler_fast(Rj)
+                    ! Interpolation
+                    if( L_KB )then
+                        ! KB
+                        ! in plane rotation index of jref slice intersecting iref
+                        psi       = 360.0 - eulers(3)
+                        targ_irot = pftcc_glob%get_roind_fast(psi)
+                        d         = psi - pftcc_glob%get_rot(targ_irot)
+                        if( d > drot ) d = d - 360.0
+                        targ_w    = d / drot
+                        ! in plane rotation index of iref slice
+                        psi       = eulers(1)
+                        self_irot = pftcc_glob%get_roind_fast(psi)
+                        d         = psi - pftcc_glob%get_rot(self_irot)
+                        if( d > drot ) d = d - 360.0
+                        self_w    = d / drot
+                        ! intepolate common line in jref-th slice
+                        rotl = targ_irot - 1; rotr = targ_irot + 1
+                        dd   = real(targ_w,dp)
+                        w    = kbwin%apod_dp(dd); wl = kbwin%apod_dp(dd-1.d0); wr = kbwin%apod_dp(dd+1.d0)
+                        sumw = wl + w + wr
+                        w    = w / sumw; wl = wl / sumw; wr = wr / sumw
+                        call get_line(jref, targ_irot, .true., cl_e, rl_e)
+                        call get_line(jref, rotl,      .true., cl_l, rl_l)
+                        call get_line(jref, rotr,      .true., cl_r, rl_r)
+                        cl_e = wl*cl_l + w*cl_e + wr*cl_r
+                        rl_e = wl*rl_l + w*rl_e + wr*rl_r
+                        call get_line(jref, targ_irot, .false., cl_o, rl_o)
+                        call get_line(jref, rotl,      .false., cl_l, rl_l)
+                        call get_line(jref, rotr,      .false., cl_r, rl_r)
+                        cl_o = wl*cl_l + w*cl_o + wr*cl_r
+                        rl_o = wl*rl_l + w*rl_o + wr*rl_r
+                        ! extrapolate the common line to iref-th slice
+                        rotl = self_irot - 1; rotr = self_irot + 1
+                        if( rotr > nrots ) rotr = rotr - nrots
+                        dd   = real(self_w,dp)
+                        w    = kbwin%apod_dp(dd); wl = kbwin%apod_dp(dd-1.d0); wr = kbwin%apod_dp(dd+1.d0)
+                        sumw = wl + w + wr
+                        w    = w / sumw; wl = wl / sumw; wr = wr / sumw
+                        ! leftmost line
+                        call extrapolate_line(iref, rotl,      wl, cl_e, cl_o, rl_e, rl_o)
+                        ! nearest line
+                        call extrapolate_line(iref, self_irot, w,  cl_e, cl_o, rl_e, rl_o)
+                        ! rightmost line
+                        call extrapolate_line(iref, rotr,      wr, cl_e, cl_o, rl_e, rl_o)
+                    else
+                        ! Linear interpolation
+                        ! in plane rotation index of jref slice intersecting iref
+                        psi       = 360.0 - eulers(3)
+                        targ_irot = pftcc_glob%get_roind_fast(psi)
+                        d         = psi - pftcc_glob%get_rot(targ_irot)
+                        if( d > drot ) d = d - 360.0
+                        if( d < 0. )then
+                            targ_irot = targ_irot - 1
+                            if( targ_irot < 1 ) targ_irot = targ_irot + nrots
+                            d = d + drot
+                        endif
+                        targ_w = d / drot
+                        ! in plane rotation index of iref slice
+                        psi       = eulers(1)
+                        self_irot = pftcc_glob%get_roind_fast(psi)
+                        d         = psi - pftcc_glob%get_rot(self_irot)
+                        if( d > drot ) d = d - 360.0
+                        if( d < 0. )then
+                            self_irot = self_irot - 1
+                            if( self_irot < 1 ) self_irot = self_irot + nrots
+                            d = d + drot
+                        endif
+                        self_w = d / drot
+                        ! intepolate common line in jref-th slice
+                        rotl = targ_irot; rotr = rotl+1
+                        wl   = real(targ_w,dp); wr = 1.d0 - wl
+                        call get_line(jref, rotl, .true., cl_e, rl_e)
+                        call get_line(jref, rotr, .true., cl_r, rl_r)
+                        cl_e = wr*cl_e + wl*cl_r
+                        rl_e = wr*rl_e + wl*rl_r
+                        call get_line(jref, rotl, .false., cl_o, rl_o)
+                        call get_line(jref, rotr, .false., cl_r, rl_r)
+                        cl_o = wr*cl_o + wl*cl_r
+                        rl_o = wr*rl_o + wl*rl_r
+                        ! extrapolate the common line to iref-th slice
+                        rotl = self_irot; rotr = rotl + 1
+                        if( rotr > nrots ) rotr = rotr - nrots
+                        w  = real(self_w,dp)
+                        call extrapolate_line(iref, rotl, 1.d0-w, cl_e, cl_o, rl_e, rl_o)
+                        call extrapolate_line(iref, rotr,      w, cl_e, cl_o, rl_e, rl_o)
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end do
+        ! Mirroring contributions
+        !$omp do schedule(static)
+        do iref = 1,ncls/2
+            m      = ref_space%get_int(iref,'mirr')
+            psi    = abs(ref_space%get(m, 'psi'))
+            l_rotm = (psi>0.1) .and. (psi<359.9)
+            if( l_rotm )then
+                call mirror_pft(conjg(pfts_cl_even(:,:,iref)), pfts_cl_even(:,:,m))
+                call mirror_pft(conjg(pfts_cl_odd(:,:,iref)),  pfts_cl_odd(:,:,m))
+            else
+                call mirror_pft(pfts_cl_even(:,:,iref), pfts_cl_even(:,:,m))
+                call mirror_pft(pfts_cl_odd(:,:,iref),  pfts_cl_odd(:,:,m))
+            endif
+            call mirror_ctf2(ctf2_cl_even(:,:,iref), ctf2_cl_even(:,:,m))
+            call mirror_ctf2(ctf2_cl_odd(:,:,iref),  ctf2_cl_odd(:,:,m))
+        enddo
+        !$omp end do
+        !$omp end parallel
+
+    contains
+
         ! Extrapolate cline, rline to pfts_clin and ctf2_clin
-        subroutine extrapolate_line(ref, rot, w, cline_e, cline_o, rline_e, rline_o)
+        subroutine extrapolate_line(ref, rot, weight, cle, clo, rle, rlo)
             integer,     intent(in) :: ref, rot
-            real(dp),    intent(in) :: w
-            complex(dp), intent(in) :: cline_e(kfromto(1):kfromto(2))
-            complex(dp), intent(in) :: cline_o(kfromto(1):kfromto(2))
-            real(dp),    intent(in) :: rline_e(kfromto(1):kfromto(2))
-            real(dp),    intent(in) :: rline_o(kfromto(1):kfromto(2))
+            real(dp),    intent(in) :: weight
+            complex(dp), intent(in) :: cle(kfromto(1):kfromto(2)), clo(kfromto(1):kfromto(2))
+            real(dp),    intent(in) :: rle(kfromto(1):kfromto(2)), rlo(kfromto(1):kfromto(2))
             integer :: irot
             irot = rot
             if( irot < 1 )then
                 irot = irot + pftsz
-                pfts_clin_even(irot,:,ref) = pfts_clin_even(irot,:,ref) + w * conjg(cline_e)
-                pfts_clin_odd( irot,:,ref) = pfts_clin_odd( irot,:,ref) + w * conjg(cline_o)
+                pfts_cl_even(irot,:,ref) = pfts_cl_even(irot,:,ref) + weight * conjg(cle)
+                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + weight * conjg(clo)
             elseif( irot > pftsz )then
                 irot = irot - pftsz
-                pfts_clin_even(irot,:,ref) = pfts_clin_even(irot,:,ref) + w * conjg(cline_e)
-                pfts_clin_odd( irot,:,ref) = pfts_clin_odd( irot,:,ref) + w * conjg(cline_o)
+                pfts_cl_even(irot,:,ref) = pfts_cl_even(irot,:,ref) + weight * conjg(cle)
+                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + weight * conjg(clo)
             else
-                pfts_clin_even(irot,:,ref) = pfts_clin_even(irot,:,ref) + w * cline_e
-                pfts_clin_odd( irot,:,ref) = pfts_clin_odd( irot,:,ref) + w * cline_o
+                pfts_cl_even(irot,:,ref) = pfts_cl_even(irot,:,ref) + weight * cle
+                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + w * clo
             endif
-            ctf2_clin_even(irot,:,ref) = ctf2_clin_even(irot,:,ref) + w * rline_e
-            ctf2_clin_odd( irot,:,ref) = ctf2_clin_odd( irot,:,ref) + w * rline_o
+            ctf2_cl_even(irot,:,ref) = ctf2_cl_even(irot,:,ref) + weight * rle
+            ctf2_cl_odd( irot,:,ref) = ctf2_cl_odd( irot,:,ref) + weight * rlo
         end subroutine extrapolate_line
 
-        ! Calculate common-lines contributions from the classes
-        subroutine calc_comlin_contrib( ref_space, symop )
-            type(oris), intent(in) :: ref_space
-            type(sym),  intent(in) :: symop
-            type(kbinterpol)  :: kbwin
-            real, allocatable :: Rsym(:,:,:)
-            complex(dp) :: cline_l(kfromto(1):kfromto(2)), cline_r(kfromto(1):kfromto(2))
-            complex(dp) :: cline_e(kfromto(1):kfromto(2)), cline_o(kfromto(1):kfromto(2))
-            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
-            real(dp)    :: rline_l(kfromto(1):kfromto(2)), rline_r(kfromto(1):kfromto(2))
-            real(dp)    :: rline_e(kfromto(1):kfromto(2)), rline_o(kfromto(1):kfromto(2))
-            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)), dd, w, wl, wr, sumw
-            real        :: eulers(3),R(3,3,ncls),Rj(3,3),tRi(3,3),psi,drot,d,targ_w,self_w
-            integer     :: rotl,rotr, iref, jref, m, self_irot, targ_irot, isym, nsym
-            logical     :: l_rotm
-            if( .not.ref_space%isthere('mirr') )then
-                THROW_HARD('Mirror index missing in reference search space')
-            endif
-            drot = pftcc_glob%get_dang()
-            if( L_KB ) kbwin = kbinterpol(1.5, KBALPHA)
-            pfts_clin_even = DCMPLX_ZERO; pfts_clin_odd = DCMPLX_ZERO
-            ctf2_clin_even = 0.d0; ctf2_clin_odd  = 0.d0
-            ! Symmetry rotation matrices
-            nsym = symop%get_nsym()
-            allocate(Rsym(3,3,nsym),source=0.)
-            !$omp parallel default(shared) proc_bind(close)&
-            !$omp private(iref,jref,m,tRi,Rj,eulers,targ_irot,self_irot,targ_w,self_w)&
-            !$omp& private(d,dd,w,wl,wr,sumw,psi,l_rotm,cline_l,cline_r,cline_e,cline_o)&
-            !$omp& private(rline_l,rline_r,rline_e,rline_o,pft,ctf2,rotl,rotr,isym)
-            ! Caching rotation matrices
-            !$omp do schedule(static)
-            do iref = 1,ncls
-                R(:,:,iref) = ref_space%get_mat(iref)
-            enddo
-            !$omp end do nowait
-            !$omp do schedule(static)
-            do isym = 1,nsym
-                call symop%get_sym_rmat(isym, Rsym(:,:,isym))
-            end do
-            !$omp end do
-            ! Common lines contribution
-            !$omp do schedule(static)
-            do iref = 1,ncls/2
-                tRi = transpose(R(:,:,iref))
-                m   = ref_space%get_int(iref,'mirr')
-                do jref = 1,ncls/2
-                    do isym = 1,nsym
-                        if( isym == 1 )then
-                            if( jref == iref ) cycle    ! self   exclusion
-                            if( jref == m )    cycle    ! mirror exclusion
-                            ! Rotation of both planes by transpose of Ri (tRixRi=I & Rsym=I)
-                            Rj = matmul(R(:,:,jref), tRi)
-                        else
-                            ! Symmetry operator
-                            Rj = matmul(R(:,:,jref), Rsym(:,:,isym))
-                            ! Rotation of both planes by transpose of Ri (tRixRi -> I)
-                            Rj = matmul(Rj, tRi)
-                        endif
-                        ! Euler angles identification
-                        eulers = m2euler_fast(Rj)
-                        ! Interpolation
-                        if( L_KB )then
-                            ! KB
-                            ! in plane rotation index of jref slice intersecting iref
-                            psi       = 360.0 - eulers(3)
-                            targ_irot = pftcc_glob%get_roind_fast(psi)
-                            d         = psi - pftcc_glob%get_rot(targ_irot)
-                            if( d > drot ) d = d - 360.0
-                            targ_w    = d / drot
-                            ! in plane rotation index of iref slice
-                            psi       = eulers(1)
-                            self_irot = pftcc_glob%get_roind_fast(psi)
-                            d         = psi - pftcc_glob%get_rot(self_irot)
-                            if( d > drot ) d = d - 360.0
-                            self_w    = d / drot
-                            ! intepolate common line in jref-th slice
-                            rotl = targ_irot - 1; rotr = targ_irot + 1
-                            dd   = real(targ_w,dp)
-                            w    = kbwin%apod_dp(dd); wl = kbwin%apod_dp(dd-1.d0); wr = kbwin%apod_dp(dd+1.d0)
-                            sumw = wl + w + wr
-                            w    = w / sumw; wl = wl / sumw; wr = wr / sumw
-                            call get_line(jref, targ_irot, .true., cline_e, rline_e)
-                            call get_line(jref, rotl,      .true., cline_l, rline_l)
-                            call get_line(jref, rotr,      .true., cline_r, rline_r)
-                            cline_e = wl*cline_l + w*cline_e + wr*cline_r
-                            rline_e = wl*rline_l + w*rline_e + wr*rline_r
-                            call get_line(jref, targ_irot, .false., cline_o, rline_o)
-                            call get_line(jref, rotl,      .false., cline_l, rline_l)
-                            call get_line(jref, rotr,      .false., cline_r, rline_r)
-                            cline_o = wl*cline_l + w*cline_o + wr*cline_r
-                            rline_o = wl*rline_l + w*rline_o + wr*rline_r
-                            ! extrapolate the common line to iref-th slice
-                            rotl = self_irot - 1; rotr = self_irot + 1
-                            if( rotr > nrots ) rotr = rotr - nrots
-                            dd   = real(self_w,dp)
-                            w    = kbwin%apod_dp(dd); wl = kbwin%apod_dp(dd-1.d0); wr = kbwin%apod_dp(dd+1.d0)
-                            sumw = wl + w + wr
-                            w    = w / sumw; wl = wl / sumw; wr = wr / sumw
-                            ! leftmost line
-                            call extrapolate_line(iref, rotl,      wl, cline_e, cline_o, rline_e, rline_o)
-                            ! nearest line
-                            call extrapolate_line(iref, self_irot, w,  cline_e, cline_o, rline_e, rline_o)
-                            ! rightmost line
-                            call extrapolate_line(iref, rotr,      wr, cline_e, cline_o, rline_e, rline_o)
-                        else
-                            ! Linear interpolation
-                            ! in plane rotation index of jref slice intersecting iref
-                            psi       = 360.0 - eulers(3)
-                            targ_irot = pftcc_glob%get_roind_fast(psi)
-                            d         = psi - pftcc_glob%get_rot(targ_irot)
-                            if( d > drot ) d = d - 360.0
-                            if( d < 0. )then
-                                targ_irot = targ_irot - 1
-                                if( targ_irot < 1 ) targ_irot = targ_irot + nrots
-                                d = d + drot
-                            endif
-                            targ_w = d / drot
-                            ! in plane rotation index of iref slice
-                            psi       = eulers(1)
-                            self_irot = pftcc_glob%get_roind_fast(psi)
-                            d         = psi - pftcc_glob%get_rot(self_irot)
-                            if( d > drot ) d = d - 360.0
-                            if( d < 0. )then
-                                self_irot = self_irot - 1
-                                if( self_irot < 1 ) self_irot = self_irot + nrots
-                                d = d + drot
-                            endif
-                            self_w = d / drot
-                            ! intepolate common line in jref-th slice
-                            rotl = targ_irot; rotr = rotl+1
-                            wl   = real(targ_w,dp); wr = 1.d0 - wl
-                            call get_line(jref, rotl, .true., cline_e, rline_e)
-                            call get_line(jref, rotr, .true., cline_r, rline_r)
-                            cline_e = wr*cline_e + wl*cline_r
-                            rline_e = wr*rline_e + wl*rline_r
-                            call get_line(jref, rotl, .false., cline_o, rline_o)
-                            call get_line(jref, rotr, .false., cline_r, rline_r)
-                            cline_o = wr*cline_o + wl*cline_r
-                            rline_o = wr*rline_o + wl*rline_r
-                            ! extrapolate the common line to iref-th slice
-                            rotl = self_irot; rotr = rotl + 1
-                            if( rotr > nrots ) rotr = rotr - nrots
-                            w  = real(self_w,dp)
-                            call extrapolate_line(iref, rotl, 1.d0-w, cline_e, cline_o, rline_e, rline_o)
-                            call extrapolate_line(iref, rotr,      w, cline_e, cline_o, rline_e, rline_o)
-                        endif
-                    enddo
-                enddo
-            enddo
-            !$omp end do
-            ! Mirroring contributions
-            !$omp do schedule(static)
-            do iref = 1,ncls/2
-                m      = ref_space%get_int(iref,'mirr')
-                psi    = abs(ref_space%get(m, 'psi'))
-                l_rotm = (psi>0.1) .and. (psi<359.9)
-                if( l_rotm )then
-                    call mirror_pft(conjg(pfts_clin_even(:,:,iref)), pfts_clin_even(:,:,m))
-                    call mirror_pft(conjg(pfts_clin_odd(:,:,iref)),  pfts_clin_odd(:,:,m))
-                else
-                    call mirror_pft(pfts_clin_even(:,:,iref), pfts_clin_even(:,:,m))
-                    call mirror_pft(pfts_clin_odd(:,:,iref),  pfts_clin_odd(:,:,m))
-                endif
-                call mirror_ctf2(ctf2_clin_even(:,:,iref), ctf2_clin_even(:,:,m))
-                call mirror_ctf2(ctf2_clin_odd(:,:,iref),  ctf2_clin_odd(:,:,m))
-            enddo
-            !$omp end do
-            !$omp end parallel
-        end subroutine calc_comlin_contrib
-
-    end subroutine polar_cavger_merge_eos_and_norm
+    end subroutine calc_comlin_contrib
 
     !>  \brief  calculates Fourier ring correlations
     subroutine polar_cavger_calc_and_write_frcs_and_eoavg( fname, cline )
@@ -1303,30 +1464,40 @@ contains
     subroutine polar_prep3Dref( icls )
         integer, intent(in) :: icls
         real, allocatable   :: frc(:), filter(:), gaufilter(:)
-        integer :: filtsz, k
+        integer :: filtsz
+        logical :: l_filter
         ! Filtering
+        l_filter = .false.
+        filtsz   = build_glob%clsfrcs%get_filtsz()
         if( params_glob%l_ml_reg )then
-            ! no filtering, not supported yet
+            ! filtering upon restoration
         else
-            filtsz = build_glob%clsfrcs%get_filtsz()
-            allocate(filter(filtsz),source=1.)
             ! FRC-based optimal filter
             if(trim(params_glob%frcref).eq.'yes')then
-                allocate(frc(filtsz),source=0.)
+                allocate(filter(filtsz),frc(filtsz))
+                filter = 1.0
+                frc    = 0.0
                 call build_glob%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
                     call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
                 endif
                 deallocate(frc)
+                l_filter = .true.
             endif
-            ! optional gaussian filter
-            if(trim(params_glob%gauref).eq.'yes')then
-                allocate(gaufilter(filtsz),source=0.)
-                call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
-                ! take the minimum of FRC-based & gaussian filters: relevant in 2.5D?
-                forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
-                deallocate(gaufilter)
+        endif
+        if(trim(params_glob%gauref).eq.'yes')then
+            ! Gaussian filter
+            allocate(gaufilter(filtsz),source=0.)
+            call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
+            if( allocated(filter) )then
+                filter = filter * gaufilter
+            else
+                filter = gaufilter
             endif
+            deallocate(gaufilter)
+            l_filter = .true.
+        endif
+        if( l_filter )then
             call filterrefs(icls, filter)
             deallocate(filter)
         endif
@@ -1695,7 +1866,7 @@ contains
         enddo
         call polar_cavger_new(pftcc,.false.)
         call polar_cavger_update_sums(NIMGS, pinds, b%spproj, pftcc, shifts)
-        call polar_cavger_merge_eos_and_norm
+        call polar_cavger_merge_eos_and_norm2D
         call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
         ! write
         call polar_cavger_write('cavgs_even.bin', 'even')

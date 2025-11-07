@@ -77,8 +77,8 @@ integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! wh
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
 integer,          parameter :: GAUREF_LAST_STAGE     = 6                    ! When to stop using a gaussian filtering of the references with polar=yes
 integer,          parameter :: FRCREF_START_STAGE    = GAUREF_LAST_STAGE+1  ! When to start using the FRC drived optimal filter of references with polar=yes
-integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2,    6, NSTAGES]
-integer,          parameter :: NSPACE_POLAR(3)       = [500, 1000,    1500]
+integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, PROBREFINE_STAGE, NSTAGES]
+integer,          parameter :: NSPACE_POLAR(3)       = [500,             1000,    1500]
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -96,7 +96,7 @@ contains
         use simple_estimate_ssnr, only: lpstages_fast
         class(commander_abinitio3D_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        character(len=*),      parameter :: work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
+        character(len=*),   parameter :: work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! shared-mem commanders
         type(commander_refine3D)      :: xrefine3D
         type(commander_reconstruct3D) :: xreconstruct3D
@@ -976,11 +976,14 @@ contains
         if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
         if( present(lpstart) )then
             call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
-            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, constant_scale=l_polar)
+            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, verbose=.not.l_polar)
         else
             call lpstages(params_glob%box, NSTAGES, frcs_avg, params_glob%smpd,&
-            &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs, constant_scale=l_polar)
+            &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs, verbose=.not.l_polar)
         endif
+        ! Stepped increase of dimensions with polar representation
+        call edit_lpstages4polar( NSPACE_PHASE_POLAR, NSTAGES, lpinfo )
+        ! cleanup
         call clsfrcs%kill
         contains
 
@@ -1221,8 +1224,6 @@ contains
                 endif
                 snr_noise_reg = 6.0
         end select
-        ! turn off ML-regularization when icm is on
-        if( trim(icm).eq.'yes' ) ml_reg = 'no'
         ! Specific options for polar representation
         if( l_polar )then
             ! # of projection directions
@@ -1234,15 +1235,16 @@ contains
             endif
             inspace  = NSPACE_POLAR(nspace_phase)
             ! volume filtering
-            ml_reg   = 'no'
-            icm      = 'no'
+            icm = 'no'
+            if( trim(params_glob%gauref).eq.'no' ) gaufreq = -1.
+            if( ml_reg.eq.'yes' )                  gaufreq = -1.
             ! CL-based approach
             ref_type = trim(params_glob%ref_type)
             if( (istage >= params_glob%switch_reftype_stage) .and.&
-            &(params_glob%switch_reftype_stage > 0 ))then
-                ref_type = 'vol'
-            endif
+            &(params_glob%switch_reftype_stage > 0 )) ref_type = 'vol'
         endif
+        ! turn off ML-regularization when icm is on
+        if( icm.eq.'yes' ) ml_reg = 'no'
         ! projection directions
         if( cline_refine3D%defined('nspace_max') )then
             inspace = min(inspace, params_glob%nspace_max)
@@ -1298,16 +1300,16 @@ contains
         call cline_refine3D%delete('snr_noise_reg')
         endif
         if( l_polar )then
-        call cline_refine3D%set('center_type',               'params')
-        call cline_refine3D%set('ref_type',                  ref_type)
-        if( gaufreq > 0.)then
-            call cline_refine3D%set('gauref',                   'yes')
-            call cline_refine3D%set('gaufreq',                gaufreq)
-        else
-            call cline_refine3D%delete('gauref')
-            call cline_refine3D%delete('gaufreq')
-        endif
-        call cline_refine3D%set('frcref',                      frcref)
+            call cline_refine3D%set('center_type',           'params')
+            call cline_refine3D%set('ref_type',              ref_type)
+            if( gaufreq > 0.)then
+                call cline_refine3D%set('gauref',               'yes')
+                call cline_refine3D%set('gaufreq',            gaufreq)
+            else
+                call cline_refine3D%delete('gauref')
+                call cline_refine3D%delete('gaufreq')
+            endif
+            call cline_refine3D%set('frcref',                  frcref)
         endif
     end subroutine set_cline_refine3D
 
