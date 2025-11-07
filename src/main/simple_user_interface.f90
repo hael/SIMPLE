@@ -2099,7 +2099,7 @@ contains
         &'Analysis of class averages with k-medoids',&                ! descr_short
         &'is a program for analyzing class averages with k-medoids',& ! descr_long
         &'simple_exec',&                                              ! executable
-        &0, 2, 0, 2, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 2, 0, 1, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2109,10 +2109,8 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster_cavgs%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(fm|pow|hist|hybrid){hybrid}',&
-        &'(fm|pow|hist|hybrid){hybrid}', .false., 'hybrid')
-        call cluster_cavgs%set_input('srch_ctrls', 2, 'have_selection', 'binary', 'Use selection in cls2D field', 'Use selection in cls2D field(yes|no){yes}',&
-        &'(yes|no){no}', .false., 'no')
+        call cluster_cavgs%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}',&
+        &'(sig|sig_clust|cc|res|hybrid){hybrid}', .false., 'hybrid')
         ! filter controls
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
@@ -3386,8 +3384,8 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call match_stacks%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(fm|pow|hist|hybrid){hybrid}',&
-        &'(fm|pow|hist|hybrid){fm}', .false., 'fm')
+        call match_stacks%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}',&
+        &'(sig|sig_clust|cc|res|hybrid){hybrid}', .false., 'cc')
         ! filter controls
         call match_stacks%set_input('filt_ctrls', 1, hp)
         match_stacks%filt_ctrls(1)%required = .true.
