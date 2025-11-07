@@ -300,44 +300,6 @@ message(STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 
 ## GNU
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-<<<<<<< HEAD
-  message(STATUS " GNU Compiler settings: default USE_CUDA=ON")
-  # gfortran
-  set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                   # preprocessor flags
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none  -fno-second-underscore")    # language style
-  set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wreal-q-constant ")
-  #-Wconversion, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow -Wtarget-lifetime
-  #-Wcompare-reals, -Wunused-parameter and -Wdo-subscript
-  set(checks   "-frange-check -fstack-protector -fstack-check -fbounds-check -fcheck=all -fcheck=array-temps ")                # checks
-  set(forspeed "-O3 -ffrontend-optimize -fno-stack-protector -fno-lifetime-dse")                   # optimization
-  set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                      # parallel flags
-  set(target   "${GNUNATIVE} -fPIC ")                                                              # target platform
-  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
-      if( USE_AFM )
-          set(target "${target} -std=gnu -fall-intrinsics -Wintrinsics-std")
-      else()
-          set(target "${target} -std=f2008 -fall-intrinsics -Wintrinsics-std")
-      endif()
-      message(STATUS "${target}")
-  else()
-      if( USE_AFM )
-          set(target "${target} -std=gnu -fall-intrinsics -Wintrinsics-std")
-      else()
-          set(target "${target} -std=f2003 -fall-intrinsics -Wintrinsics-std")
-      endif()
-      message(STATUS "${target}")
-  endif()
-  set(common   "${preproc} ${dialect} ${target} ${warn}")
-  set(warnDebug "-Wall -Wcompare-reals -Wtype-limits -Wuninitialized -Wunused-but-set-parameter -Wimplicit-interface -Wno-unused-dummy-argument -Wno-unused-value -Wno-surprising")     # extra warning flag
-  set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ${checks}") # debug flags
-  # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
-  # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
-  #
-  set(cstd   "-std=${C_DIALECT}11" )
-  set(cppstd "-std=${C_DIALECT}++14" )
-  option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
-
-=======
     #message(STATUS " GNU Compiler settings: default USE_CUDA=ON")
     message(STATUS " GNU Compiler settings")
     # gfortran
@@ -364,85 +326,6 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(cstd   "-std=${C_DIALECT}11" )
     set(cppstd "-std=${C_DIALECT}++14" )
     option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
-  
->>>>>>> 28a0da21 (more work formatting and cleaning cmake)
-## PGI
-#elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-#  # pgfortran
-#  message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
-#  set(USE_CUDA ON)
-#  set(preproc  "-Mpreprocess ")
-#  set(dialect  "-Mfreeform  -Mextend -Mnosecond_underscore -Mlarge_arrays ") #-Mstandard -Mallocatable=03
-#  set(checks   "-Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign")
-#  set(warn     "-Minform=warn -Minfo=all,ftn ") # ${checks}")
-#  # bounds checking cannot be done in CUDA fortran or OpenACC GPU
-#  set(fordebug "-g ${warn}  -traceback -gopt -Mcuda=debug -Mneginfo=all,ftn -Mpgicoff -traceback -Mprof  ")
-#  set(forspeed "-O3 -fast " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
-#  set(forpar   "-mp -acc ")   # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
-#  set(target   "-m64 ")  #
-#  set(common   "${preproc} ${dialect} ${target}")
-#  # further PGI options
-#  option(PGI_EXTRACT_ALL  "PGI --Extract subprograms for inlining (-Mextract)" OFF)
-#  option(PGI_LARGE_FILE_SUPPORT  "PGI -- Link with library directory for large file support (-Mlfs)" OFF)
-#  option(PGI_CUDA_MANAGED_MEMORY "Use CUDA Managed Memory" OFF)
-#  option(PGI_CUDA_IOMUTEX "Use mutex for IO calls (-Miomutex)" ON)
-#  option(PGI_CHECKING "Use extra checks in commandline " OFF)
-#  option(PGI_EXTRA_FAST "Use extra compile options to speed up code e.g. -Munroll -Mvect" OFF)
-#  option(USE_OPENACC_ONLY "Enable OpenACC without OpenMP (OpenMP on by default)" OFF)
-#  message(STATUS "In PGI: FFTW should be set with one of the following environment variables: FFTWDIR,FFTW_DIR, or FFTW_ROOT ")
-#  if(NOT "$ENV{FFTW_DIR}" STREQUAL "")
-#      set(FFTWDIR "$ENV{FFTW_DIR}")
-#  elseif (NOT "$ENV{FFTWDIR}" STREQUAL "")
-#      set(FFTWDIR "$ENV{FFTWDIR}")
-#  elseif (NOT "$ENV{FFTW_ROOT}" STREQUAL "")
-#      set(FFTWDIR "$ENV{FFTW_ROOT}")
-#  else()
-#      set(FFTWDIR "/usr/local/pgi/src/fftw/")
-#  endif()
-#  set(cstd   "-c1x" )
-#  set(cppstd "--c++14")
-elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
-    # ifort
-    # set(FC "ifx" CACHE PATH "IntelLLVM Fortran compiler")
-    set(preproc  "-fpp -D IFX")
-    set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 5268 -diag-disable 6477 -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
-    set(checks   "-check bounds -check uninit")
-    set(warn     "-warn all")
-    set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence -traceback")
-    #set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port")
-    set(forspeed "-O3 -fp-model fast=2 -inline all")
-    set(forpar   " ")
-    set(target   "-no-prec-div -fPIC -xHost -traceback ")
-    if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
-        set(target "${target} -std08")
-    else()
-        set(target "${target} -std03")
-    endif()
-    set(common   "${preproc} ${dialect} ${checks} ${target}")
-    # else()
-    #   message(" Fortran compiler not supported. Set FC environment variable")
-    if(NOT "$ENV{MKLROOT}" STREQUAL "")
-        set(MKLROOT $ENV{MKLROOT})
-    else()
-        message( "MKLROOT must be set using INTEL mklvars ")
-    endif()
-    if(NOT "$ENV{INTEL_DIR}" STREQUAL "")
-        set(INTEL_DIR $ENV{INTEL_DIR})
-        set(INTEL_TARGET_ARCH $ENV{INTEL_TARGET_ARCH})
-        set(INTEL_TARGET_PLATFORM $ENV{INTEL_TARGET_PLATFORM})
-    else()
-        message( "INTEL_DIR must be set using INTEL compilervars ")
-    endif()
-    if(CMAKE_Fortran_COMPILER STREQUAL "mpiif*")
-        if(NOT "$ENV{I_MPI_ROOT}" STREQUAL "")
-            set(I_MPI_ROOT $ENV{I_MPI_ROOT})
-        else()
-            message( "I_MPI_ROOT must be set using INTEL mpivars ")
-        endif()
-    endif()
-    option(INTEL_OMP_OVERRIDE "Allow intel compiler to override limits when compiling OpenMP" OFF)
-    set(cstd "-std=c11" )
-    set(cppstd "-std=c++14" )
 endif()
 
 #option(LARGE_FILE_SUPPORT  "GNU -- Link with library directory for large file support (-mcmodel=large)" ON)
@@ -468,9 +351,9 @@ message(STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_
 message(STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
 #
 # Make recent cmake not spam about stuff
-if(POLICY CMP0077)
-    cmake_policy(SET CMP0077 OLD)
-endif()
+#if(POLICY CMP0077)
+#    cmake_policy(SET CMP0077 OLD)
+#endif()
 # if(POLICY CMP0004)
 #   cmake_policy(SET CMP0004 OLD)
 # endif()
@@ -490,17 +373,10 @@ set(ENV{PATH} "${TMPPATH}")
 #message(STATUS " FortranOverride After TO_CMAKE_PATH: $ENV{PATH} ")
 
 if(NOT "$ENV{LD_LIBRARY_PATH}" STREQUAL "")
-<<<<<<< HEAD
-  file(TO_CMAKE_PATH  "$ENV{LD_LIBRARY_PATH}" TMPPATH)
-  string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
-  file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
-  set(ENV{LD_LIBRARY_PATH} "${TMPPATH}")
-=======
     file(TO_CMAKE_PATH  "$ENV{LD_LIBRARY_PATH}" TMPPATH)
     string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
     file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
     set(ENV{LD_LIBRARY_PATH} ${TMPPATH})
->>>>>>> 28a0da21 (more work formatting and cleaning cmake)
 elseif(NOT "$ENV{DYLD_LIBRARY_PATH}" STREQUAL "")
     file(TO_CMAKE_PATH "$ENV{DYLD_LIBRARY_PATH}" TMPPATH)
     string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")

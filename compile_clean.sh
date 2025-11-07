@@ -1,8 +1,5 @@
 #!/bin/bash
 rm -rf build
-mkdir build
-cd build
-cmake .. -DGUI=off -DUSE_LIBTIFF=on
-make -j install
-#exit
-
+cmake -G "Unix Makefiles" -D CMAKE_BUILD_TYPE:BOOL=Release -D GUI:BOOL=off -D USE_LIBTIFF:BOOL=on -B build
+cmake --build build --config Release --target SIMPLE
+cmake --install ./build --prefix /path/to/somewhere
