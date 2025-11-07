@@ -21,10 +21,8 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! objective function weights
-! real,    private, parameter :: W_HIST=0.2, W_POW=0.4, W_FM=0.4
-! real,    private, parameter :: W_SIG_DEV=0.3, W_SIG_CLUST_DEV=0.3, W_FM_DEV=0.4
-real,    private, parameter :: W_SIG=0.0, W_SIG_CLUST=0.5, W_CC=0.25, W_RES=0.25
-real,    private, parameter :: W_SCORE_HOMO=0.35, W_SCORE_RES=0.5, W_SCORE_CLUST=0.15
+real, private, parameter :: W_SIG=0.5, W_SIG_CLUST=0.0, W_CC=0.2, W_RES=0.3
+real, private, parameter :: W_SCORE_HOMO=0.2, W_SCORE_RES=0.5, W_SCORE_CLUST=0.3
 
 contains
 
@@ -392,7 +390,7 @@ contains
         class(image),         intent(inout) :: cavg_imgs(:)
         integer,              intent(in)    :: clspops(:)
         integer,              intent(inout) :: i_medoids(:), labels(:)
-        real,                 parameter     :: RES_THRES=6., SCORE_THRES=65., SCORE_THRES_REJECT=50., SCORE_THRES_INCL=75.
+        real,                 parameter     :: SCORE_THRES=60.
         type(clust_info),     allocatable   :: clust_info_arr(:)
         logical,              allocatable   :: l_msk(:,:,:)
         type(image)  :: img_msk 
@@ -415,8 +413,6 @@ contains
         call calc_scores
         ! rank clusters
         call rank_clusters
-        ! calculate discretized joint score based on a second pass of AP clustering of score vecs
-        call calc_jointscore
         ! re-rank clusters
         call rank_clusters
         ! good/bad cluster identification through tresholding
@@ -466,7 +462,7 @@ contains
             integer, allocatable :: clust_order(:)
             clust_order = scores2order(clust_info_arr(:)%jointscore)
             do rank = 1, nclust
-                i_medoids_ranked(rank) = i_medoids(clust_order(rank))
+                i_medoids_ranked(rank)      = i_medoids(clust_order(rank))
                 clust_info_arr_ranked(rank) = clust_info_arr(clust_order(rank))
                 do icls = 1, ncls_sel
                     if( labels(icls) == clust_order(rank) ) rank_assign(icls) = rank
@@ -479,82 +475,15 @@ contains
         end subroutine rank_clusters
 
         subroutine identify_good_bad_clusters
-            real, allocatable :: jointscores(:), resscores(:), homogeneity(:), clustscores(:)
-            integer           :: nscoreclust, i, cnt_incl
-            real              :: avgjscore
-            logical           :: l_incl
+            integer :: ngood
             clust_info_arr(:)%good_bad = 0
-            if( nclust == 1 )then
-                clust_info_arr(:)%good_bad      = 1
-            else if( nclust <= 5 )then
-                clust_info_arr(:)%good_bad      = 1
-                clust_info_arr(nclust)%good_bad = 0
+            ngood = count(clust_info_arr(:)%jointscore > SCORE_THRES)
+            if( ngood < 2 )then
+                clust_info_arr(:2)%good_bad     = 1
             else
-                nscoreclust = maxval(clust_info_arr(:)%scoreclust)
-                cnt_incl = 0
-                do i = 1, nscoreclust
-                    jointscores = pack(clust_info_arr(:)%jointscore,  mask=clust_info_arr(:)%scoreclust == i)
-                    homogeneity = pack(clust_info_arr(:)%homogeneity, mask=clust_info_arr(:)%scoreclust == i)
-                    resscores   = pack(clust_info_arr(:)%resscore,    mask=clust_info_arr(:)%scoreclust == i)
-                    clustscores = pack(clust_info_arr(:)%clustscore,  mask=clust_info_arr(:)%scoreclust == i)
-                    avgjscore   = sum(jointscores) / real(count(clust_info_arr(:)%scoreclust == i))
-                    l_incl = .false. 
-                    if( avgjscore >= SCORE_THRES  ) l_incl = .true.
-                    if( any(homogeneity >= SCORE_THRES_INCL .and. clustscores >= SCORE_THRES_INCL) ) l_incl = .true.
-                    if( l_incl )then
-                        where( clust_info_arr(:)%scoreclust == i ) clust_info_arr(:)%good_bad = 1
-                        cnt_incl = cnt_incl + 1
-                    else
-                        where( clust_info_arr(:)%scoreclust == i ) clust_info_arr(:)%good_bad = 0
-                    endif
-                end do
-                if( .not. any(clust_info_arr(:)%good_bad == 1))then
-                    where(clust_info_arr(:)%scoreclust == clust_info_arr(1)%scoreclust) clust_info_arr(:)%good_bad = 1
-                    cnt_incl = cnt_incl + 1
-                endif
+                clust_info_arr(:ngood)%good_bad = 1
             endif
         end subroutine identify_good_bad_clusters
-
-        subroutine calc_jointscore
-            real,    allocatable :: score_vecs(:,:), dmat_scores(:,:), jointscores(:)
-            integer, allocatable :: i_medoids_score(:), labels_score(:)
-            integer :: iclust, jclust, nclust_score
-            if( nclust <= 3 ) return
-            ! extract feature vectors    
-            allocate(score_vecs(nclust,4))
-            do iclust = 1, nclust
-                score_vecs(iclust,1) = clust_info_arr(iclust)%homogeneity
-                score_vecs(iclust,2) = clust_info_arr(iclust)%resscore
-                score_vecs(iclust,3) = clust_info_arr(iclust)%clustscore
-                score_vecs(iclust,4) = clust_info_arr(iclust)%jointscore
-            end do
-            ! create distance matrix
-            allocate(dmat_scores(nclust,nclust), source=0.)
-            do iclust = 1, nclust - 1
-                do jclust = iclust + 1, nclust
-                    dmat_scores(iclust,jclust) = euclid(score_vecs(iclust,:3),score_vecs(jclust,:3))
-                    dmat_scores(jclust,iclust) = dmat_scores(iclust,jclust)
-                end do
-            end do
-            call normalize_minmax(dmat_scores)
-            ! cluster
-            call cluster_dmat(dmat_scores, 'aprop', nclust_score, i_medoids_score, labels_score)
-            if( nclust_score < 3 )then
-                nclust_score = 3
-                deallocate(i_medoids_score, labels_score)
-                call cluster_dmat(dmat_scores, 'kmed', nclust_score, i_medoids_score, labels_score)
-            endif
-            ! calculate discretized joint scores
-            allocate(jointscores(nclust_score), source=0.)
-            do iclust = 1, nclust_score
-                jointscores(iclust) = sum(score_vecs(:,4), mask=labels_score == iclust) / real(count(labels_score == iclust))
-            end do
-            ! set discretized score
-            do iclust = 1, nclust
-                clust_info_arr(iclust)%jointscore = jointscores(labels_score(iclust))
-                clust_info_arr(iclust)%scoreclust = labels_score(iclust)
-            end do
-        end subroutine calc_jointscore
 
     end function align_and_score_cavg_clusters
 
@@ -567,9 +496,9 @@ contains
         real,             allocatable   :: frc(:)
         type(image),      allocatable   :: cluster_imgs(:)
         real,             allocatable   :: resvals(:), resarr(:)
-        real,             parameter     :: FRAC_BEST_CAVGS=0.5
+        real,             parameter     :: FRAC_BEST_CAVGS=0.3
         integer :: cnt, i, filtsz, ldim(3), iclust, nclust
-        real    :: smpd, rfoo, best_res, worst_res
+        real    :: smpd, rfoo, best_res, worst_res, score_ice
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
         filtsz = cavg_imgs(1)%get_filtsz()
         smpd   = cavg_imgs(1)%get_smpd()
@@ -600,6 +529,7 @@ contains
                     call get_resolution(frc, resarr, rfoo, resvals(cnt))
                 endif
             end do
+            
             ! BWD FT
             !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static) 
             do i = 1, size(cavg_imgs)
