@@ -335,7 +335,7 @@ contains
         real    :: diag_elem
         ncls_ref   = size(cavg_imgs_ref)
         ncls_match = size(cavg_imgs_match)
-        algninfo = match_imgs(hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
+        algninfo   = match_imgs(hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
         if( allocated(dmat_res) ) deallocate(dmat_res)
         if( allocated(dmat_cc)  ) deallocate(dmat_cc)
         allocate(dmat_res(ncls_ref,ncls_match), ccmat(ncls_ref,ncls_match), source=0.)
@@ -358,7 +358,7 @@ contains
         real,                 intent(in)    :: oa_minmax(2)
         character(len=*),     intent(in)    :: which
         real,                 allocatable   :: dmat_sig(:,:), dmat_cc(:,:), dmat_res(:,:), dmat(:,:)
-        write(logfhandle,'(A)') '>>> GENERATING DISTANCE MATRIXCES FOR SIGNAL STATISTICS'
+        write(logfhandle,'(A)') '>>> GENERATING DISTANCE MATRICES FOR SIGNAL STATISTICS'
         call calc_sigstats_dmats(params, cavg_imgs, oa_minmax, dmat_sig)
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS & FRC:S THROUGH FULL IN-PLANE SEARCH'
         call calc_cc_and_res_dmats(cavg_imgs, params%hp, params%lp, params%trs, dmat_cc, dmat_res)
@@ -381,7 +381,7 @@ contains
         real,                 intent(in)    :: oa_minmax(2)
         character(len=*),     intent(in)    :: which
         real,                 allocatable   :: dmat_sig(:,:), dmat_cc(:,:), dmat_res(:,:), dmat(:,:)
-        write(logfhandle,'(A)') '>>> GENERATING DISTANCE MATRIXCES FOR SIGNAL STATISTICS'
+        write(logfhandle,'(A)') '>>> GENERATING DISTANCE MATRICES FOR SIGNAL STATISTICS'
         call calc_sigstats_dmats_ref(params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, dmat_sig)
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS & FRC:S THROUGH FULL IN-PLANE SEARCH'
         call calc_cc_and_res_dmats_ref(cavg_imgs_ref, cavg_imgs_match, params%hp, params%lp, params%trs, dmat_cc, dmat_res)
