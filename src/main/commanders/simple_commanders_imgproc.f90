@@ -1219,7 +1219,7 @@ contains
         params%box  = ldim(1)
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! calculate distance matrix
-        call calc_cluster_cavgs_dmats(params, stk_imgs, [oa_min,oa_max], params%clust_crit, dmat)
+        dmat = calc_cluster_cavgs_dmat(params, stk_imgs, [oa_min,oa_max], params%clust_crit)
         ! cluster
         if( cline%defined('ncls') )then
             nclust = params%ncls

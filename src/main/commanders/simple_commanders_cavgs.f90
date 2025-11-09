@@ -181,7 +181,7 @@ contains
         oa_min      = minval(mm(:,1))
         oa_max      = maxval(mm(:,2))
         ! calculate distance matrix
-        call calc_cluster_cavgs_dmats(params, cavg_imgs, [oa_min,oa_max], params%clust_crit, dmat)
+        dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
         ! cluster
         if( cline%defined('ncls') )then
             nclust = params%ncls
