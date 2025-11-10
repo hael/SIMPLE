@@ -127,7 +127,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! Sampling
-        ! Because this is always run prior to reconstruction/search, sampling is not always informed informed
+        ! Because this is always run prior to reconstruction/search, sampling is not always informed
         ! or may change with workflows. Instead of setting a sampling for the following oprations when
         ! l_update_frac, we sample uniformly AND do not write the corresponding field
         l_scale_update_frac = .false.

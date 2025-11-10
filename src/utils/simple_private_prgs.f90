@@ -261,7 +261,6 @@ contains
         call cmd_dict%push('ctfstats',      'calculate ctf statistics(yes|no){no}')
         call cmd_dict%push('projstats',     'calculate projection direction population statistics(yes|no){no}')
         call cmd_dict%push('cube',          'side size(in pixels){0}')
-        call cmd_dict%push('dcrit_rel',     'critical distance relative to box(0-1){0.5}')
         call cmd_dict%push('defocus',       'defocus(in microns){3.}')
         call cmd_dict%push('deftab',        'file with CTF info(.txt|.simple)')
         call cmd_dict%push('detector',      'edge detection algorithm (sobel|canny)')

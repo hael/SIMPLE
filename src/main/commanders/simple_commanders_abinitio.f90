@@ -1236,6 +1236,7 @@ contains
             inspace  = NSPACE_POLAR(nspace_phase)
             ! volume filtering
             icm = 'no'
+            if( frcref.eq.'yes' )                   ml_reg = 'no'
             if( trim(params_glob%gauref).eq.'no' ) gaufreq = -1.
             if( ml_reg.eq.'yes' )                  gaufreq = -1.
             ! CL-based approach
