@@ -427,8 +427,6 @@ contains
         call calc_scores
         ! rank clusters
         call rank_clusters
-        ! re-rank clusters
-        call rank_clusters
         ! good/bad cluster identification through tresholding
         call identify_good_bad_clusters
 

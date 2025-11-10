@@ -139,20 +139,19 @@ contains
         integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
         type(image)                   :: img_msk
-        real,             allocatable :: frc(:), mm(:,:), jointscores(:), dmat(:,:)
-        real,             allocatable :: resvals(:), res_bad(:), res_good(:), res_maybe(:), clustscores(:)
-        logical,          allocatable :: l_non_junk(:), good_mask(:), l_msk(:,:,:)
+        real,             allocatable :: mm(:,:), dmat(:,:), resvals_tmp(:), resvals(:)
+        logical,          allocatable :: l_non_junk(:), l_msk(:,:,:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), cluster_inds(:)
-        integer,          allocatable :: clspops(:), clspops_sel(:), states(:), labels4write(:)
+        integer,          allocatable :: clspops(:), clspops_sel(:), states(:), labels4write(:), inds_glob(:)
         type(clust_info), allocatable :: clust_info_arr(:)
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(stats_struct)            :: res_stats
-        integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, nptcls_good, loc(1)
-        integer                       :: i, j, ii, jj, nclust, iclust, pop_good, pop_bad, nclust_sel
+        integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, loc(1)
+        integer                       :: i, j, ii, jj, nclust, iclust, nclust_sel, nptcls_good
         integer                       :: ngood, minv_labels, ind, ldim(3), cnt_clust, pop, box
         real                          :: fsc_res, rfoo, frac_good, best_res, worst_res, res_max, mskrad
-        real                          :: oa_min, oa_max, dist_rank, dist_rank_best, smpd, simsum
+        real                          :: oa_min, oa_max, smpd, simsum
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -173,6 +172,10 @@ contains
         ncls_sel    = size(cavg_imgs)
         smpd        = cavg_imgs(1)%get_smpd()
         ldim        = cavg_imgs(1)%get_ldim()
+        allocate(resvals(ncls_sel), source=0.)
+        do i = 1, ncls_sel
+            resvals(i) = spproj%os_cls2D%get(clsinds(i), 'res')
+        enddo
         ! ensure correct smpd/box in params class
         params%smpd = smpd
         params%box  = ldim(1)
@@ -200,7 +203,7 @@ contains
         ! write aligned clusters
         call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', trim(params%ext))
         ! write un-aligned clusters
-        call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )        
+        call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )
         ! update project
         call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
         do iclust = 1, nclust
@@ -215,6 +218,23 @@ contains
                 endif
             enddo
         enddo
+        ! generate ranked class averages by ordering according to class resolution within clusters
+        allocate(inds_glob(ncls_sel), source=0)
+        cnt = 0
+        do iclust = 1, nclust
+            pop         = count(labels == iclust)
+            inds        = mask2inds(labels == iclust) 
+            resvals_tmp = pack(resvals, mask=labels == iclust)
+            call hpsort(resvals_tmp, inds)
+            do i = 1, pop
+                cnt = cnt + 1
+                inds_glob(cnt) = inds(i)
+            enddo
+            deallocate(inds, resvals_tmp)
+        enddo
+        ! write ranked_cavgs
+        call write_imgarr(cavg_imgs,'ranked_cavgs'//trim(params%ext), inds_glob)
+        deallocate(inds_glob)
         ! report cluster info
         do iclust = 1, nclust
             write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
