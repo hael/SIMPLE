@@ -4,19 +4,23 @@ use simple_cmdline,               only: cmdline
 use simple_parameters,            only: parameters
 use simple_commanders_project,    only: commander_new_project, commander_import_movies
 use simple_commanders_validate,   only: commander_mini_stream
+use simple_commanders_project,    only: commander_selection
 use simple_commanders_preprocess
 use simple_sp_project
 implicit none
+real, parameter :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, FRAC_REJECT_MAX = 0.2
 character(len=LONGSTRLEN), allocatable :: dataset_cmds(:)
-type(cmdline)                    :: cline, cline_dataset, cline_new_project, cline_import_movies, cline_preprocess, cline_mini_stream
+type(cmdline)                    :: cline, cline_dataset, cline_new_project, cline_import_movies, cline_preprocess
+type(cmdline)                    :: cline_select, cline_mini_stream
 type(parameters)                 :: params
 type(commander_new_project)      :: xnew_project
 type(commander_preprocess_distr) :: xpreprocess
 type(commander_import_movies)    :: ximport_movies
 type(commander_mini_stream)      :: xmini_stream
+type(commander_selection)        :: xsel
 type(sp_project)                 :: spproj
 integer,          allocatable :: orimap(:)
-integer                       :: i, ndata_sets, status
+integer                       :: i, ndata_sets, status, n_nonzero
 character(len=LONGSTRLEN)     :: abspath, projfile
 character(len=LONGSTRLEN), allocatable :: micstab(:)
 character(len=:), allocatable :: output_dir
@@ -49,6 +53,7 @@ do i = 1, ndata_sets
     call cline_dataset%checkvar('nparts',          9)
     call cline_dataset%checkvar('nthr',           10)
     call cline_dataset%checkvar('moldiam_max',    11)
+    call cline_dataset%checkvar('nran',           12)
     call cline_dataset%check()
     call params%new(cline_dataset)
     call cline_dataset%kill()
@@ -56,6 +61,7 @@ do i = 1, ndata_sets
     call cline_new_project%set('projname',  params%projname)
     call xnew_project%execute_safe(cline_new_project)
     call cline_new_project%kill()
+    projfile = trim(params%projname)//'.simple'
     ! movie import
     call cline_import_movies%set('prg',          'import_movies')
     call cline_import_movies%set('mkdir',                  'yes')
@@ -67,6 +73,10 @@ do i = 1, ndata_sets
     call cline_import_movies%set('ctf',                    'yes')
     call ximport_movies%execute_safe(cline_import_movies)
     call cline_import_movies%kill()
+    ! randomly select, overshoot with FRAC_REJECT_MAX
+    call cline_select%set('projfile',                   projfile)
+    call cline_select%set('nran', ceiling(real(params%nran)*FRAC_REJECT_MAX))
+    call xsel%execute_safe(cline_select)
     ! preprocess
     call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
     call cline_preprocess%set('prg',                'preprocess')
@@ -83,7 +93,22 @@ do i = 1, ndata_sets
     call cline_preprocess%check()
     call xpreprocess%execute_safe(cline_preprocess)
     call cline_preprocess%kill()
-    projfile = trim(params%projname)//'.simple'
+    ! reject based on CTF resolution and ice score
+    call cline_select%delete('nran')
+    call cline_select%set('ctfresthreshold',       CTFRES_THRES)
+    call cline_select%set('icefracthreshold',         ICE_THRES)
+    call xsel%execute_safe(cline_select)
+    ! state=0/1 should now be in project file on disk
+    ! re-run for random selection
+    call spproj%read(projfile)
+    n_nonzero = spproj%get_n_insegment_state('mic', 1)
+    if( n_nonzero > params%nran )then
+        ! make random selection
+        call cline_select%delete('ctfresthreshold')
+        call cline_select%delete('icefracthreshold')
+        call cline_select%set('nran', params%nran)
+        call xsel%execute_safe(cline_select)
+    endif
     call spproj%read(projfile)
     call spproj%get_mics_table(micstab, orimap)
     call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
