@@ -297,7 +297,7 @@ contains
         class(image),       intent(inout) :: gain
         type(image)   :: tmp
         real, pointer :: prmat(:,:,:)
-        real          :: avg, val
+        real          :: avg
         integer       :: ldim_gain(3), ifoo, i,j, ii,jj
         logical       :: dotgain
         dotgain = (fname2format(fname) == 'J') .or. (fname2format(fname) == 'L')

@@ -1443,7 +1443,11 @@ contains
             allocate(frc(filtsz),filter(filtsz),source=0.)
             call build_glob%clsfrcs%frc_getter(icls, frc)
             if( any(frc > 0.143) )then
-                call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                if( params_glob%beta > 0.001 )then
+                    call fsc2boostfilter(params_glob%beta, filtsz, frc, filter, merged=params_glob%l_lpset)
+                else
+                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                endif
             else
                 filter = 1.0
             endif
@@ -1479,7 +1483,11 @@ contains
                 frc    = 0.0
                 call build_glob%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                    if( params_glob%beta > 0.001 )then
+                        call fsc2boostfilter(params_glob%beta, filtsz, frc, filter, merged=params_glob%l_lpset)
+                    else
+                        call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
+                    endif
                 endif
                 deallocate(frc)
                 l_filter = .true.

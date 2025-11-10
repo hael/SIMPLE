@@ -52,7 +52,6 @@ type :: parameters
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: first_sigmas='yes'   !< Whether to estimate sigma2 from provided volume
-    character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: frcref='no'          !< Whether to apply a FRC filter to the 3D polar reference(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -62,7 +61,6 @@ type :: parameters
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
-    character(len=3)          :: input_is_movies='no' !< wheter filetab input is movies or not (yes|no){yes}
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
@@ -89,7 +87,6 @@ type :: parameters
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
     character(len=3)          :: partition='no'
-    character(len=3)          :: pca_fft='no'         !< fft image before pca(yes|no){no}
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
     character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
@@ -323,9 +320,7 @@ type :: parameters
     integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
     integer :: maxnchunks=0
     integer :: maxpop=0            !< max population of an optics group
-    integer :: maxnruns=0
     integer :: minits=0            !< minimum # iterations
-    integer :: mrcmode=2
     integer :: nboxes_max=0
     integer :: nchunks=0
     integer :: nchunksperset=0
@@ -409,6 +404,7 @@ type :: parameters
     real    :: astigthreshold=ASTIG_THRESHOLD !< ice fraction threshold{1.0}
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
     real    :: athres=10.          !< angular threshold(in degrees)
+    real    :: beta=0.0            !< Convenience parameter{0.0}
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
@@ -416,7 +412,6 @@ type :: parameters
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfresthreshold=CTFRES_THRESHOLD !< ctf resolution threshold{30A}
-    real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: defocus=2.          !< defocus(in microns){2.}
     real    :: dferr=1.            !< defocus error(in microns){1.0}
     real    :: dfmax=DFMAX_DEFAULT !< maximum expected defocus(in microns)
@@ -446,8 +441,6 @@ type :: parameters
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gaufreq=-1.0         ! Full width at half maximum frequency for the gaussian filter
-    real    :: motion_correctftol = 1e-6   !< tolerance (gradient) for motion_correct
-    real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
@@ -487,7 +480,6 @@ type :: parameters
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
-    real    :: pool_threshold_factor=POOL_THRESHOLD_FACTOR  !< stream pool class rejection adjustment
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
@@ -654,7 +646,6 @@ contains
         call check_carg('first_sigmas',   self%first_sigmas)
         call check_carg('flag',           self%flag)
         call check_carg('flipgain',       self%flipgain)
-        call check_carg('ft2img',         self%ft2img)
         call check_carg('frcref',         self%frcref)
         call check_carg('gauref',         self%gauref)
         call check_carg('guinier',        self%guinier)
@@ -666,7 +657,6 @@ contains
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('inivol',         self%inivol)
-        call check_carg('input_is_movies',self%input_is_movies)
         call check_carg('interactive',    self%interactive)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)
@@ -714,7 +704,6 @@ contains
         call check_carg('pickkind',       self%pickkind)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_start',     self%pgrp_start)
-        call check_carg('pca_fft',        self%pca_fft)
         call check_carg('pca_img_ori',    self%pca_img_ori)
         call check_carg('pca_ori_stk',    self%pca_ori_stk)
         call check_carg('phaseplate',     self%phaseplate)
@@ -788,7 +777,7 @@ contains
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
         call check_carg('wiener',         self%wiener)
-        call check_carg('write_imgarr',    self%write_imgarr)
+        call check_carg('write_imgarr',   self%write_imgarr)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
@@ -876,9 +865,7 @@ contains
         call check_iarg('maxits_sh',      self%maxits_sh)
         call check_iarg('maxnchunks',     self%maxnchunks)
         call check_iarg('maxpop',         self%maxpop)
-        call check_iarg('maxnruns',       self%maxnruns)
         call check_iarg('minits',         self%minits)
-        call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('nboxes_max',     self%nboxes_max)
         call check_iarg('nchunks',        self%nchunks)
         call check_iarg('nchunksperset',  self%nchunksperset)
@@ -956,6 +943,7 @@ contains
         call check_rarg('astigthreshold', self%astigthreshold)
         call check_rarg('astigtol',       self%astigtol)
         call check_rarg('athres',         self%athres)
+        call check_rarg('beta',           self%beta)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('bw_ratio',       self%bw_ratio)
@@ -963,7 +951,6 @@ contains
         call check_rarg('cs',             self%cs)
         call check_rarg('corr_thres',     self%corr_thres)
         call check_rarg('ctfresthreshold',self%ctfresthreshold)
-        call check_rarg('dcrit_rel',      self%dcrit_rel)
         call check_rarg('defocus',        self%defocus)
         call check_rarg('dferr',          self%dferr)
         call check_rarg('dfmax',          self%dfmax)
@@ -1021,7 +1008,6 @@ contains
         call check_rarg('osmpd',          self%osmpd)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
-        call check_rarg('pool_threshold_factor', self%pool_threshold_factor)
         call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('rec_athres',     self%rec_athres)
         call check_rarg('res_target',     self%res_target)
@@ -1046,8 +1032,6 @@ contains
         call check_rarg('thres',          self%thres)
         call check_rarg('total_dose',     self%total_dose)
         call check_rarg('trs',            self%trs)
-        call check_rarg('motion_correctftol', self%motion_correctftol)
-        call check_rarg('motion_correctgtol', self%motion_correctgtol)
         call check_rarg('update_frac',    self%update_frac)
         call check_rarg('ufrac_trec',     self%ufrac_trec)
         call check_rarg('width',          self%width)

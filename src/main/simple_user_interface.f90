@@ -241,7 +241,6 @@ type(simple_input_param) :: cc_iters
 type(simple_input_param) :: center_pdb
 type(simple_input_param) :: clip
 type(simple_input_param) :: cls_init
-type(simple_input_param) :: clustermode
 type(simple_input_param) :: cn
 type(simple_input_param) :: cn_max
 type(simple_input_param) :: cn_min
@@ -1114,7 +1113,6 @@ contains
         call set_param(center_pdb,     'center_pdb',      'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(clip,           'clip',            'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
         call set_param(cls_init,       'cls_init',        'multi',  'Scheme for initial class generation', 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
-        call set_param(clustermode,    'clustermode',     'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint|intint){ar}', '(ar|dist|ang|maxint|intint){ar}', .true., 'ar')
         call set_param(cn,             'cn',              'num',    'Fixed std coordination number', 'Minimum std cn to consider for dipole calc ', '8',  .false., 8.)
         call set_param(cn_max,         'cn_max',          'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
         call set_param(cn_min,         'cn_min',          'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '4',  .false., 4.)
