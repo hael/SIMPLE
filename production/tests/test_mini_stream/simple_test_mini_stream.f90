@@ -23,7 +23,7 @@ integer,          allocatable :: orimap(:)
 integer                       :: i, ndata_sets, status, n_nonzero
 character(len=LONGSTRLEN)     :: abspath, projfile
 character(len=LONGSTRLEN), allocatable :: micstab(:)
-character(len=:), allocatable :: output_dir
+character(len=:), allocatable :: output_dir, imgkind
 ! Parsing
 if( command_argument_count() < 1 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mini_stream fname=filetab.txt'
@@ -33,11 +33,10 @@ else
 endif
 call cline%checkvar('fname',        1)
 call cline%check()
-!call cline%printline
 call params%new(cline)
 call read_filetable(params%fname, dataset_cmds)
 ndata_sets=size(dataset_cmds)
-! projname=name_system smpd=1.3 cs=2.7 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200
+! projname=name_system smpd=1.3 cs=2.7 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200 nram=100
 call getcwd(abspath)
 output_dir=trim(adjustl(abspath))
 do i = 1, ndata_sets
@@ -77,22 +76,28 @@ do i = 1, ndata_sets
     call cline_select%set('projfile',                   projfile)
     call cline_select%set('nran', ceiling(real(params%nran)*FRAC_REJECT_MAX))
     call xsel%execute_safe(cline_select)
-    ! preprocess
-    call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
-    call cline_preprocess%set('prg',                'preprocess')
-    call cline_preprocess%set('mkdir',                     'yes')
-    call cline_preprocess%set('gainref',          params%gainref)
-    call cline_preprocess%set('total_dose',    params%total_dose)
-    call cline_preprocess%set('dfmin',             DFMIN_DEFAULT)
-    call cline_preprocess%set('dfmax',             DFMAX_DEFAULT)
-    call cline_preprocess%set('hp',                          30.)
-    call cline_preprocess%set('lp',                           2.)
-    call cline_preprocess%set('mcpatch',                    'no')
-    call cline_preprocess%set('nparts',            params%nparts)
-    call cline_preprocess%set('nthr',                params%nthr)
-    call cline_preprocess%check()
-    call xpreprocess%execute_safe(cline_preprocess)
-    call cline_preprocess%kill()
+    call spproj%read(projfile)
+    call spproj%os_out%getter(1,'imgkind',imgkind)
+    if(trim(imgkind).eq.'intg')then
+        continue
+    else
+        ! preprocess
+        call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
+        call cline_preprocess%set('prg',                'preprocess')
+        call cline_preprocess%set('mkdir',                     'yes')
+        call cline_preprocess%set('gainref',          params%gainref)
+        call cline_preprocess%set('total_dose',    params%total_dose)
+        call cline_preprocess%set('dfmin',             DFMIN_DEFAULT)
+        call cline_preprocess%set('dfmax',             DFMAX_DEFAULT)
+        call cline_preprocess%set('hp',                          30.)
+        call cline_preprocess%set('lp',                           2.)
+        call cline_preprocess%set('mcpatch',                    'no')
+        call cline_preprocess%set('nparts',            params%nparts)
+        call cline_preprocess%set('nthr',                params%nthr)
+        call cline_preprocess%check()
+        call xpreprocess%execute_safe(cline_preprocess)
+        call cline_preprocess%kill()
+    endif
     ! reject based on CTF resolution and ice score
     call cline_select%delete('nran')
     call cline_select%set('ctfresthreshold',       CTFRES_THRES)

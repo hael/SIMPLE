@@ -684,9 +684,9 @@ contains
         character(len=LONGSTRLEN)     :: abs_moviename
         integer                       :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
         logical                       :: is_movie, l_singleframe, l_verbose
-        l_verbose = .true.
+        l_verbose     = .true.
         if( present(verbose) ) l_verbose = verbose
-        is_movie = .true.
+        is_movie      = .true.
         l_singleframe = .false.
         if( present(singleframe) ) l_singleframe = singleframe
         ! oris object pointer
@@ -720,7 +720,7 @@ contains
                 if( ldim(1) /= ldim_orig(1) .or. ldim(2) /= ldim_orig(2) )then
                     write(logfhandle,*)'Inconsistent size for file: ',trim(movies_array(cnt))
                     write(logfhandle,*)'Dimensions: ', ldim(1),'x ',ldim(2), ' vs. previous dimensions: ', ldim_orig(1),'x ',ldim_orig(2)
-                    THROW_HARD('All files imported must have identical diemnsions!')
+                    THROW_HARD('All files imported must have identical dimensions!')
                 endif
             endif
             if( nframes <= 0 )then
