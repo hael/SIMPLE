@@ -1999,39 +1999,27 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 1, 0,10, 2, 1, 4, .true.,&                                                            ! # entries in each group, requires sp_project
+        &0, 0, 0, 4, 2, 1, 3, .true.,&                                                            ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call cluster2D_subsets%set_input('parm_ios', 1, nchunksperset, gui_submenu="cluster 2D", gui_advanced=.false.)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster2D_subsets%set_input('srch_ctrls', 1, ncls_start, gui_submenu="cluster 2D", gui_advanced=.false.)
-        call cluster2D_subsets%set_input('srch_ctrls', 2, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)    
-        cluster2D_subsets%srch_ctrls(2)%required = .true.
-        cluster2D_subsets%srch_ctrls(2)%rval_default = 300.
-        call cluster2D_subsets%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
-        &'(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        call cluster2D_subsets%set_input('srch_ctrls', 1, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
+        cluster2D_subsets%srch_ctrls(1)%rval_default = 200.
+        call cluster2D_subsets%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 5, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}',&
-            &'(snhc|snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'no', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 6, objfun, gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 8, 'algorithm', 'binary', '2D analysis algorithm',&
-        &'Algorithm for 2D analysis(cluster2D|abinitio2D){cluster2D}', '(cluster2D|abinitio2D){cluster2D}',&
-        &.false., 'cluster2D', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls',  9, 'nsample', 'num', 'Maximum # of particles restored per class', 'Maximum # of particles restored per class with autosampling scheme',&
-        &'max # of particles per class', .false., real(MAXPOP_CLS), gui_submenu="search", gui_advanced=.true.)
-        call cluster2D_subsets%set_input('srch_ctrls', 10, 'nsample_max', 'num', 'Maximum # of particles sampled', 'Maximum # of particles sampled with autosampling scheme',&
-        &'max # particles to sample', .false., real(MAXPOP_PTCLS), gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_subsets%set_input('srch_ctrls', 3, 'maxnptcls', 'num', 'Maximum # of particles clustered', 'Maximum # of particles clustered',&
+        &'max # of particles', .false., 100000., gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_subsets%set_input('srch_ctrls', 4, 'maxnmics', 'num', 'Maximum # of micrographs sampled', 'Maximum # of micrographs sampled',&
+        &'max # of micrographs', .false., 100., gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp, gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
         ! mask controls
@@ -2039,12 +2027,8 @@ contains
         ! computer controls
         call cluster2D_subsets%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
         cluster2D_subsets%comp_ctrls(1)%descr_short = 'Total number of computing nodes'
-        call cluster2D_subsets%set_input('comp_ctrls', 2, nparts_chunk, gui_submenu="compute", gui_advanced=.false.)
-        cluster2D_subsets%comp_ctrls(2)%required          = .true.
-        cluster2D_subsets%comp_ctrls(2)%descr_long        = 'Number of computing nodes allocated to 2D analysis of each particles subset'
-        cluster2D_subsets%comp_ctrls(2)%descr_placeholder = '# nodes per subset'
-        call cluster2D_subsets%set_input('comp_ctrls', 3, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_subsets%set_input('comp_ctrls', 4, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
+        call cluster2D_subsets%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call cluster2D_subsets%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_cluster2D_subsets
 
