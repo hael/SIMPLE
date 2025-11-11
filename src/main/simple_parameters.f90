@@ -319,6 +319,8 @@ type :: parameters
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
     integer :: maxnchunks=0
+    integer :: maxnmics=0
+    integer :: maxnptcls=0
     integer :: maxpop=0            !< max population of an optics group
     integer :: minits=0            !< minimum # iterations
     integer :: nboxes_max=0
@@ -864,6 +866,8 @@ contains
         call check_iarg('maxits_between', self%maxits_between)
         call check_iarg('maxits_sh',      self%maxits_sh)
         call check_iarg('maxnchunks',     self%maxnchunks)
+        call check_iarg('maxnmics',       self%maxnmics)
+        call check_iarg('maxnptcls',      self%maxnptcls)
         call check_iarg('maxpop',         self%maxpop)
         call check_iarg('minits',         self%minits)
         call check_iarg('nboxes_max',     self%nboxes_max)
