@@ -4,6 +4,7 @@ use simple_image,    only: image
 use simple_image_bin, only: image_bin
 use simple_micproc
 use simple_linked_list
+use simple_nrtxtfile
 use simple_syslib
 implicit none
 
@@ -24,6 +25,7 @@ contains
     procedure, private :: pick_1, pick_2
     procedure          :: get_nboxes
     procedure          :: get_diameters
+    procedure          :: write_diameters
     procedure          :: write_pos_and_diams
     procedure          :: kill
 end type picksegdiam
@@ -184,6 +186,35 @@ contains
             end select
         end do
     end subroutine get_diameters
+    
+    subroutine write_diameters( self, fname )
+        class(picksegdiam), intent(in) :: self
+        character(len=*),   intent(in) :: fname
+        type(list_iterator)   :: diams_iter
+        type(nrtxtfile)       :: diamsfile
+        class(*), allocatable :: any
+        real,     allocatable :: arr(:)
+        real    :: areal
+        integer :: i, n
+        n = self%diameters%size()
+        if( n == 0 ) return
+        allocate(arr(n))
+        i = 0
+        diams_iter = self%diameters%begin()
+        do while (diams_iter%has_next())
+            i = i + 1
+            call diams_iter%next(any)
+            select type(any)
+                type is (real(kind(areal)))
+                    arr(i) = any
+            end select
+        end do
+        call diamsfile%new(fname, 2, i)
+        call diamsfile%write(arr)
+        call diamsfile%kill()
+        if(allocated(any)) deallocate(any)
+        if(allocated(arr)) deallocate(arr)
+    end subroutine write_diameters
 
     ! for writing coordinates & diameters
     subroutine write_pos_and_diams( self, fname, nptcls, box )

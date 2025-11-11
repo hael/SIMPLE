@@ -1433,6 +1433,13 @@ contains
                 nrejected = tmp_proj%os_mic%get_noris() - nselected
                 ! Gather pixel size once
                 if( l_once ) params%smpd = spproj_here%os_mic%get(1,'smpd')
+                ! cleanup from inipick preprocessing
+                do imic = 1,spproj_here%os_mic%get_noris()
+                    if(spproj_here%os_mic%isthere(imic, 'mic_den'))  call spproj_here%os_mic%delete_entry(imic, 'mic_den')
+                    if(spproj_here%os_mic%isthere(imic, 'mic_topo')) call spproj_here%os_mic%delete_entry(imic, 'mic_topo')
+                    if(spproj_here%os_mic%isthere(imic, 'mic_bin'))  call spproj_here%os_mic%delete_entry(imic, 'mic_bin')
+                    if(spproj_here%os_mic%isthere(imic, 'mic_diam')) call spproj_here%os_mic%delete_entry(imic, 'mic_diam')
+                enddo
                 ! update for execution
                 pick_extract_set_counter = pick_extract_set_counter + 1
                 projname = int2str_pad(pick_extract_set_counter,params%numlen)
@@ -1952,6 +1959,7 @@ contains
             end do
         endif
         ! wait for user interaction
+        write(logfhandle, *) ">>> WAITING FOR USER TO SELECT REFERENCES"
         do 
             call send_jobstats()
             call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection', final_selection, found)
