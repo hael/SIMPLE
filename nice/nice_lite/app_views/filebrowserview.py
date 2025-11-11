@@ -23,6 +23,8 @@ class FileBrowserView:
         
     def testPath(self):
         self.path = self.path.replace('//', '/') # deal with multiple / in path
+        if self.path[0] != '/':
+            self.path = '/' + self.path # fix missing leading / when using proxy
         try:
             if not os.path.exists(self.path):
                 self.error     = True
