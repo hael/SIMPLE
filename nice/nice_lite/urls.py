@@ -8,14 +8,16 @@ from . import api
 app_name = 'nice_lite' # Define an app namespace
 urlpatterns = [
     ## Global URLs
-    path("",                        views.index,            name="index"),
-    path("login",                   views.user_login,       name="login"),
-    path("logout",                  views.user_logout,      name="logout"),
-    path("newproject/<str:caller>", views.new_project,      name="new_project"),
-    path("createproject",           views.create_project,   name="create_project"),
-    path("image <path:src>",        api.image,              name="image"),
-    path("api",                     api.index,              name="api"),
-    path("api_classic",             api.index_classic,      name="api_classic"),
+    path("",                                   views.index,            name="index"),
+    path("login",                              views.user_login,       name="login"),
+    path("logout",                             views.user_logout,      name="logout"),
+    path("newproject/<str:caller>",            views.new_project,      name="new_project"),
+    path("createproject",                      views.create_project,   name="create_project"),
+    path("filebrowser/<str:type>",             views.file_browser,     name="file_browser"),
+    path("filebrowser/<str:type>/<path:path>", views.file_browser,     name="file_browser"),
+    path("image <path:src>",                   api.image,              name="image"),
+    path("api",                                api.index,              name="api"),
+    path("api_classic",                        api.index_classic,      name="api_classic"),
 
     ## Classic specific URLs
     path("classic",                                              views_classic.classic,                        name="classic"),

@@ -335,6 +335,7 @@ type :: parameters
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: niceprocid=0        !< # id of process in nice database
+    integer :: ninipick=0          !< # number of micrographs to run inipick preprocessing on in preprocess
     integer :: ninit=3             !< # number of micrographs to use during diameter estimation global search
     integer :: nmics=0             !< # micrographs
     integer :: nmoldiams=1         !< # moldiams
@@ -882,6 +883,7 @@ contains
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
         call check_iarg('niceprocid',     self%niceprocid)
+        call check_iarg('ninipick',       self%ninipick)
         call check_iarg('ninit',          self%ninit)
         call check_iarg('nmics',          self%nmics)
         call check_iarg('nmoldiams',      self%nmoldiams)

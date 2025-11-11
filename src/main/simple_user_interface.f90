@@ -4960,7 +4960,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate'//&          ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                                  ! executable
-        &4, 10, 0, 4, 0, 0, 3, .true.,&                                                    ! # entries in each group, requires sp_project
+        &4, 11, 0, 4, 0, 0, 3, .true.,&                                                    ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "data,motion correction,CTF estimation")  ! GUI                 
         ! image input/output
         call preproc%set_input('img_ios', 1, dir_movies, gui_submenu="data", gui_advanced=.false.)
@@ -4984,6 +4984,8 @@ contains
         call preproc%set_input('parm_ios',9, smpd, gui_submenu="data", gui_advanced=.false.)
         preproc%parm_ios(9)%required = .true.
         call preproc%set_input('parm_ios',10, flipgain, gui_submenu="motion correction")
+        call preproc%set_input('parm_ios',11, 'ninipick', 'num', 'Number of micrographs to perform initial picking preprocessing on',&
+        & 'Number of micrographs to perform initial picking preprocessing on', 'e.g 500', .false., 0.0)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -6859,6 +6861,7 @@ contains
         call json%add(process_inputs, '', 'outdir=preprocessing') !important - directory names and name must match between processes
         call json%add(process_inputs, '', 'nparts=10')
         call json%add(process_inputs, '', 'nthr=4')
+        call json%add(process_inputs, '', 'ninipick=500')
         !! assign_optics
         call json%create_object(process, 'process')
         call json%add(processes, process)

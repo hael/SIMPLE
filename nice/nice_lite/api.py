@@ -14,6 +14,7 @@ def index(request):
     response = {}
     try:
         request_json = json.loads(request.body.decode('utf-8'))
+        print("REQUEST JSON", request_json)
     except:
         return JsonResponse(response)
     if "jobid" in request_json:

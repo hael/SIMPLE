@@ -11,6 +11,7 @@ from django.contrib.auth            import login, logout, authenticate
 # local imports
 from .app_views.coreview         import LoginView
 from .app_views.newprojectview   import NewProjectView
+from .app_views.filebrowserview  import FileBrowserView
 from .data_structures.project    import Project
 from .data_structures.dataset    import Dataset
 from .data_structures.workspace  import Workspace
@@ -60,6 +61,22 @@ def new_project(request, caller):
     '''
     newprojectview = NewProjectView(request, caller)
     return newprojectview.render()
+
+@login_required(login_url="/login/")
+def file_browser(request, type, path=None):
+    '''
+    returns file browser page
+    '''
+    if path is None:
+        if "selectedpath" in request.GET:
+            path = request.GET['selectedpath']
+        elif request.COOKIES.get('selected_project_id', 'none') != 'none' :
+            project = Project(request=request)
+            path = project.dirc
+        else:
+            path = "/"
+    filebrowserview = FileBrowserView(request, type, path)
+    return filebrowserview.render()
 
 @login_required(login_url="/login/")
 def create_project(request):

@@ -11,8 +11,9 @@ use simple_sp_project,           only: sp_project
 use simple_qsys_env,             only: qsys_env
 use simple_stack_io,             only: stack_io
 use simple_motion_correct_utils, only: flip_gain
-use simple_image_msk,               only: automask2D
+use simple_image_msk,            only: automask2D
 use simple_default_clines
+use simple_mini_stream_utils
 use simple_qsys_funs
 use simple_progress
 implicit none
@@ -192,7 +193,7 @@ contains
         type(Node), pointer           :: xmldoc, beamshiftnode, beamshiftnodex, beamshiftnodey
         character(len=:), allocatable :: imgkind, moviename, fbody
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
-        character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract, micname_intg
+        character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract, output_dir_inipick_preproc, micname_intg
         character(len=LONGSTRLEN)     :: boxfile, eputiltgroup
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
         logical :: l_del_forctf
@@ -208,15 +209,21 @@ contains
         ! output directories & naming
         output_dir_ctf_estimate        = PATH_HERE
         output_dir_motion_correct      = PATH_HERE
+        output_dir_inipick_preproc     = PATH_HERE
         if( params%stream.eq.'yes' )then
-            output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
-            output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
+            output_dir_ctf_estimate    = trim(DIR_CTF_ESTIMATE)
+            output_dir_motion_correct  = trim(DIR_MOTION_CORRECT)
+            output_dir_inipick_preproc = trim(DIR_INIPICK_PREPROC)
             if( cline%defined('dir') )then
-                output_dir_ctf_estimate   = filepath(params%dir,output_dir_ctf_estimate)//'/'
-                output_dir_motion_correct = filepath(params%dir,output_dir_motion_correct)//'/'
+                output_dir_ctf_estimate    = filepath(params%dir,output_dir_ctf_estimate)//'/'
+                output_dir_motion_correct  = filepath(params%dir,output_dir_motion_correct)//'/'
+                output_dir_inipick_preproc = filepath(params%dir,output_dir_inipick_preproc)//'/'
             endif
             call simple_mkdir(output_dir_ctf_estimate, errmsg="commander_preprocess :: preprocess; ")
             call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
+            if(params%ninipick > 0) then
+                call simple_mkdir(output_dir_inipick_preproc, errmsg="commander_preprocess :: preprocess;")
+            endif
         endif
         if( cline%defined('fbody') )then
             fbody = trim(params%fbody)
@@ -312,6 +319,12 @@ contains
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
         end do
+        ! do initial picking preprocessing
+        if(params%ninipick > 0 &
+        &.and. spproj%os_mic%isthere(1, 'importind') &
+        &.and. spproj%os_mic%get(1, 'importind') <= params%ninipick) then
+                call segdiampick_preprocess( spproj, params%pcontrast, params%moldiam_max, output_dir_inipick_preproc )
+        endif
         if( trim(params%stream).eq.'yes' )then
             call spproj%write_segment_inside(params%oritype)
         else

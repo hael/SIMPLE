@@ -8,10 +8,58 @@ use simple_image,       only: image
 use simple_picksegdiam, only: picksegdiam
 use simple_micproc
 use simple_gui_utils
+use simple_nrtxtfile
 implicit none
 #include "simple_local_flags.inc"
 
 contains
+
+    subroutine segdiampick_preprocess( spproj, pcontrast, moldiam_max, outdir )
+        class(sp_project), intent(inout) :: spproj
+        character(len=*),  intent(in)    :: pcontrast, outdir
+        real,              intent(in)    :: moldiam_max
+        real,              parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
+        integer,           parameter     :: BOXFAC = 3, NQ_DIAMS = 10
+        type(picksegdiam)                :: picker
+        type(image)                      :: mic_raw, mic_shrink, mic_den
+        type(image_bin)                  :: mic_bin
+        character(len=:),  allocatable   :: mic_name
+        character(len=LONGSTRLEN)        :: mic_den_name, mic_topo_name, mic_bin_name, mic_diam_name
+        integer :: ldim_raw(3), ldim(3), imic, nboxes
+        real    :: scale, smpd
+        logical :: l_empty
+        ! parse project
+        smpd = spproj%get_smpd()
+        scale = smpd / SMPD_SHRINK1
+        ! read the first micrograph
+        if( .not. spproj%os_mic%isthere(1, 'intg')) return
+        call read_mic_subtr_backgr_shrink(trim(spproj%os_mic%get_static(1, 'intg')), smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
+        ! set logical dimensions
+        ldim_raw = mic_raw%get_ldim()
+        ldim     = mic_shrink%get_ldim()
+        ! diameter estimation
+        do imic = 1, spproj%os_mic%get_noris()
+            if( .not. spproj%os_mic%isthere(imic, 'intg')) cycle
+            if( spproj%os_mic%get(imic, 'state') < 1.0 )   cycle
+            ! Segmentation & picking
+            call spproj%os_mic%getter(imic, 'intg', mic_name)
+            mic_den_name  = filepath(outdir, append2basename(mic_name, DEN_SUFFIX))
+            mic_topo_name = filepath(outdir, append2basename(mic_name, TOPO_SUFFIX))
+            mic_bin_name  = filepath(outdir, append2basename(mic_name, BIN_SUFFIX))
+            mic_diam_name = swap_suffix(mic_name, TXT_EXT, '.mrc')
+            mic_diam_name = filepath(outdir, append2basename(mic_diam_name, DIAMS_SUFFIX))
+            call picker%pick(mic_name, smpd, moldiam_max, pcontrast, denfname=mic_den_name,&
+                topofname=mic_topo_name, binfname=mic_bin_name )
+            if( picker%get_nboxes() == 0 ) cycle
+            call picker%write_diameters(mic_diam_name)
+            call spproj%os_mic%set(imic, 'mic_den',  mic_den_name)
+            call spproj%os_mic%set(imic, 'mic_topo', mic_topo_name)
+            call spproj%os_mic%set(imic, 'mic_bin',  mic_bin_name)
+            call spproj%os_mic%set(imic, 'mic_diam', mic_diam_name)
+        end do
+        call picker%kill()
+        if(allocated(mic_name)) deallocate(mic_name)
+    end subroutine segdiampick_preprocess
 
     subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam )
         class(sp_project), intent(inout) :: spproj
@@ -31,9 +79,10 @@ contains
         real,                      allocatable :: diam_means(:), abs_z_scores(:)
         type(picksegdiam)  :: picker
         type(image)        :: mic_raw, mic_shrink, mic_den
-        type(image_bin)     :: mic_bin
+        type(image_bin)    :: mic_bin
         type(stats_struct) :: diam_stats
         type(stats_struct) :: stats_nboxes
+        type(nrtxtfile)    :: diams_file
         integer :: nmics, ldim_raw(3), ldim(3), imic, loc(1), pop, nptcls, i, nboxes
         real    :: scale, mad, smpd
         logical :: l_empty
@@ -51,23 +100,46 @@ contains
         allocate(mic_den_names(mic_to), mic_topo_names(mic_to), mic_bin_names(mic_to))
         ! diameter estimation
         do imic = 1, mic_to
-            ! Segmentation & picking
-            mic_den_names(imic)  = append2basename(micnames(imic), DEN_SUFFIX)
-            mic_topo_names(imic) = append2basename(micnames(imic), TOPO_SUFFIX)
-            mic_bin_names(imic)  = append2basename(micnames(imic), BIN_SUFFIX)
-            call picker%pick(micnames(imic), smpd, moldiam_max, pcontrast, denfname=mic_den_names(imic),&
-                topofname=mic_topo_names(imic), binfname=mic_bin_names(imic) )
-            if( picker%get_nboxes() == 0 ) cycle
-            call picker%get_diameters(tmp)
-            if( allocated(diams_arr) )then
-                diams_arr = [diams_arr(:), tmp(:)]
-                deallocate(tmp)
+            ! skip picking if pre-picked in preproc
+            if(spproj%os_mic%isthere(orimap(imic), 'mic_den') &
+                &.and. spproj%os_mic%isthere(orimap(imic), 'mic_topo') &
+                &.and. spproj%os_mic%isthere(orimap(imic), 'mic_bin') &
+                &.and. spproj%os_mic%isthere(orimap(imic), 'mic_diam') ) then
+                    mic_den_names(imic)  = trim(spproj%os_mic%get_static(orimap(imic), 'mic_den'))
+                    mic_topo_names(imic) = trim(spproj%os_mic%get_static(orimap(imic), 'mic_topo'))
+                    mic_bin_names(imic)  = trim(spproj%os_mic%get_static(orimap(imic), 'mic_bin'))
+                    if (file_exists(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')))) then
+                        call diams_file%new(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')), 1)
+                        allocate(tmp(diams_file%get_nrecs_per_line()))
+                        call diams_file%readNextDataLine(tmp)
+                        write(logfhandle, *) ">>> FOUND PICK-PREPROCESSING FOR MICROGRAPH "// trim(spproj%os_mic%get_static(orimap(imic), 'intg'))&
+                        &//". IMPORTED "//int2str(size(tmp))// " DIAMETERS"
+                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_den')
+                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_topo')
+                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_bin')
+                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_diam')
+                    endif
             else
-                allocate(diams_arr(size(tmp)), source=tmp)
+                ! Segmentation & picking
+                mic_den_names(imic)  = append2basename(micnames(imic), DEN_SUFFIX)
+                mic_topo_names(imic) = append2basename(micnames(imic), TOPO_SUFFIX)
+                mic_bin_names(imic)  = append2basename(micnames(imic), BIN_SUFFIX)
+                call picker%pick(micnames(imic), smpd, moldiam_max, pcontrast, denfname=mic_den_names(imic),&
+                    topofname=mic_topo_names(imic), binfname=mic_bin_names(imic) )
+                if( picker%get_nboxes() == 0 ) cycle
+                call picker%get_diameters(tmp)
+            endif
+            if(allocated(tmp)) then
+                if( allocated(diams_arr) )then
+                    diams_arr = [diams_arr(:), tmp(:)]
+                else
+                    allocate(diams_arr(size(tmp)), source=tmp)
+                endif
                 deallocate(tmp)
             endif
         end do
         call picker%kill
+        call diams_file%kill
         ! diameter stats & box size estimation
         diams_arr = diams_arr + 2. * SMPD_SHRINK1 ! because of the 2X erosion in binarization
         call calc_stats(diams_arr, diam_stats)
