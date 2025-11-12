@@ -120,6 +120,11 @@ window.addEventListener("load", () => {
   cssroot.style.setProperty('--refpick-brightness', 0.5);
 })
 
+window.addEventListener("load", () => {
+  const logtext = document.querySelector(".logtext")
+  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
+})
+
 /* draw boxes on load */
 window.addEventListener("load", () =>{
     for(const miccontainer of document.getElementsByClassName("miccontainer")){

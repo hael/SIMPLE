@@ -65,6 +65,11 @@ window.addEventListener("load", () =>{
   }, 600);
 })
 
+window.addEventListener("load", () => {
+  const logtext = document.querySelector(".logtext")
+  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
+})
+
 window.addEventListener("visibilitychange", (event) => {
   if(document.visibilityState !== "hidden"){
     location.reload();

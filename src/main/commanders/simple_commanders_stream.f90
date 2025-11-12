@@ -2081,6 +2081,8 @@ contains
                             call spproj_part%read(trim(projects(iproj)))
                             do iori = 1, STREAM_NMOVS_SET
                                 n_imported = n_imported + 1
+                                ! set state=0 mics to state=-1
+                                if(spproj_part%os_mic%get(iori, 'state') < 1) call spproj_part%os_mic%set(iori, 'state', -1)
                                 call spproj%os_mic%transfer_ori(n_imported, spproj_part%os_mic, iori)
                             end do
                             call spproj_part%kill()
@@ -2093,8 +2095,10 @@ contains
                         call sleep(WAITTIME) ! may want to increase as 3s default
                     endif
                     ! micrograph rejection
-                    call spproj%os_mic%set_all2single('state', 1)
+                   ! call spproj%os_mic%set_all2single('state', 1)
                     do imic = 1,spproj%os_mic%get_noris()
+                        if( spproj%os_mic%get(imic, 'state') < 0 ) cycle
+                        call spproj%os_mic%set(imic, 'state', 1) ! set all to state 1 pre rejection
                         if( spproj%os_mic%isthere(imic, 'ctfres') ) then
                             if( spproj%os_mic%get(imic,'ctfres') > (params%ctfresthreshold-0.001) ) call spproj%os_mic%set(imic, 'state', 0)
                         end if
@@ -2111,7 +2115,13 @@ contains
                     call send_jobstats() ! needs to be called so the gui doesn't think the process is dead, "fancy heartbeat"
                     ! update thresholds if sent from gui
                     call update_user_params(cline, http_communicator%update_arguments)
-                    if( spproj%os_mic%count_state_gt_zero() >= nmics ) return
+                    if( spproj%os_mic%count_state_gt_zero() >= nmics ) then
+                        ! set state=-1 mics back to 1
+                        do imic = 1,spproj%os_mic%get_noris()
+                            if( spproj%os_mic%get(imic, 'state') < 0 ) call spproj%os_mic%set(imic, 'state', 0)
+                        enddo
+                        return
+                    endif
                 end do
             end subroutine micimporter
 

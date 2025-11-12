@@ -22,6 +22,7 @@ use simple_commanders_euclid
 use simple_qsys_funs
 use simple_procimgstk
 use simple_progress
+use simple_gui_utils
 use simple_default_clines
 use simple_nice
 implicit none
@@ -1085,6 +1086,9 @@ contains
                     &((rt_init+rt_scheduled+rt_merge_algndocs+rt_cavgassemble)/rt_tot) * 100.
                 call fclose(fnr)
             endif
+            ! write jpeg image - used in gui to display image in logfile
+            call mrc2jpeg_tiled(cwd_glob // '/' // trim(CAVGS_ITER_FBODY) // trim(str_iter) // params%ext, cwd_glob // '/' // trim(CAVGS_ITER_FBODY) // trim(str_iter) // JPG_EXT)
+            write(logfhandle,'(A,A)')'>>> JPEG ', cwd_glob // '/' // trim(CAVGS_ITER_FBODY) // trim(str_iter) // JPG_EXT
         end do
         nice_communicator%stat_root%stage = "terminating"
         call nice_communicator%cycle()
