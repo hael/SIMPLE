@@ -25,9 +25,9 @@ contains
         real    :: pref, simsum
         n = size(dmat, dim=1)
         if( allocated(i_medoids) ) deallocate(i_medoids)
-        if( allocated(labels)    ) deallocate(labels)
         select case(trim(algorithm))
             case('aprop')
+                if( allocated(labels) ) deallocate(labels)
                 write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
                 smat = dmat2smat(dmat)
                 pref = 0. ! assuming normalized distance matrix, pref=0. because this is the minimal score
@@ -39,6 +39,7 @@ contains
                 write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', nclust
                 call merge_if_necessary
             case('kmed')
+                if( allocated(labels) ) deallocate(labels)
                 write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH K-MEDOIDS'
                 if( nclust < 2 ) THROW_HARD('Invalid nclust input')
                 call kmed%new(n, dmat, nclust)
@@ -49,7 +50,8 @@ contains
                 call kmed%get_medoids(i_medoids)
                 call kmed%kill
             case('hybrid')
-                 write(logfhandle,'(A)') '>>> PRE-CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
+                if( allocated(labels) ) deallocate(labels)
+                write(logfhandle,'(A)') '>>> PRE-CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
                 smat = dmat2smat(dmat)
                 pref = 0. ! assuming normalized distance matrix, pref=0. because this is the minimal score
                 if( present(ap_pref) ) pref = ap_pref
@@ -71,6 +73,8 @@ contains
                 call kmed%get_labels(labels)
                 call kmed%get_medoids(i_medoids)
                 call kmed%kill
+            case DEFAULT
+                THROW_HARD('unsupported algorithm flag: '//trim(algorithm))
         end select
 
         contains

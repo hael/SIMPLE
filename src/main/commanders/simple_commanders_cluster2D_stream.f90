@@ -8,16 +8,17 @@ use simple_euclid_sigma2,      only: sigma2_star_from_iter
 use simple_guistats,           only: guistats
 use simple_image,              only: image
 use simple_parameters,         only: parameters, params_glob
+use simple_projfile_utils,     only: merge_chunk_projfiles
 use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project
 use simple_stack_io,           only: stack_io
 use simple_starproject,        only: starproject
 use simple_starproject_stream, only: starproject_stream
-use simple_commanders_cluster2D
-use simple_gui_utils
-use simple_nice
-use simple_qsys_funs
 use simple_stream_utils
+use simple_qsys_funs
+use simple_nice
+use simple_gui_utils
+use simple_commanders_cluster2D
 implicit none
 
 public :: update_user_params2D, terminate_stream2D
@@ -2882,7 +2883,7 @@ contains
             integer                       :: i,j,k
             ! combines all chunks
             fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-            call merge_chunks(chunkslist%projfiles(:), './', spproj_glob, projname_out=fname)
+            call merge_chunk_projfiles(chunkslist%projfiles(:), './', spproj_glob, projname_out=fname)
             ! optionally consolidate chunks into sets
             if( cline%defined('nchunksperset') )then
                 j = 0
@@ -2891,7 +2892,7 @@ contains
                     k    = min(i+params%nchunksperset-1,chunkslist%n)
                     tmpl = trim(DIR_SET)//int2str(j)
                     call simple_mkdir(tmpl)
-                    call merge_chunks(chunkslist%projfiles(i:k), tmpl, spproj_glob, projname_out=tmpl)
+                    call merge_chunk_projfiles(chunkslist%projfiles(i:k), tmpl, spproj_glob, projname_out=tmpl)
                     call setslist%append(tmpl//'/'//tmpl//METADATA_EXT, j, .false.)
                     write(*,'(A,I4,A,I8,A)')'>>> GENERATED SET',j,' WITH',spproj_glob%get_nptcls(),' PARTICLES'
                 enddo
@@ -2923,7 +2924,7 @@ contains
             if( setslist%n == 1 )then
                 ! update & write final project
                 fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-                call merge_chunks(setslist%projfiles(1:1), './', spproj_glob, projname_out=fname)
+                call merge_chunk_projfiles(setslist%projfiles(1:1), './', spproj_glob, projname_out=fname)
             else
                 ! run match_cavgs on all other with setslist%projfiles(1) as reference
                 projfile_ref      = simple_abspath(setslist%projfiles(1) ,"in cluster_and_match_sets")
@@ -2945,7 +2946,7 @@ contains
                 enddo
                 ! need to re-consolidate projects into final project
                 fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-                call merge_chunks(setslist%projfiles(:), './', spproj_glob, projname_out=fname)
+                call merge_chunk_projfiles(setslist%projfiles(:), './', spproj_glob, projname_out=fname)
             endif
             ! cleanup
             call cline_cluster_cavgs%kill
@@ -2989,7 +2990,7 @@ contains
         projfiles = pack(projfiles, mask=projfiles/=trim(NIL))
         ! consolidate all
         projname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-        call merge_chunks(projfiles, './', spproj, projname_out=projname)
+        call merge_chunk_projfiles(projfiles, './', spproj, projname_out=projname)
         ! optionally consolidate chunks into sets
         if( cline%defined('nchunksperset') )then
             j = 0
@@ -2998,7 +2999,7 @@ contains
                 k    = min(i+params%nchunksperset-1,nchunks)
                 tmpl = trim(DIR_SET)//int2str(j)
                 call simple_mkdir(tmpl)
-                call merge_chunks(projfiles(i:k), tmpl, spproj, projname_out=tmpl)
+                call merge_chunk_projfiles(projfiles(i:k), tmpl, spproj, projname_out=tmpl)
                 write(*,'(A,I4,A,I8,A)')'>>> GENERATED SET',j,' WITH',spproj%get_nptcls(),' PARTICLES'
             enddo
         endif
