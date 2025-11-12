@@ -49,7 +49,12 @@ contains
             mic_diam_name = swap_suffix(mic_name, TXT_EXT, '.mrc')
             mic_diam_name = filepath(outdir, append2basename(mic_diam_name, DIAMS_SUFFIX))
             call picker%pick(mic_name, smpd, moldiam_max, pcontrast, denfname=mic_den_name,&
-                topofname=mic_topo_name, binfname=mic_bin_name )
+                topofname=mic_topo_name, binfname=mic_bin_name, empty=l_empty )
+            if(l_empty) then
+                ! empty micrograph -> state=0
+                call spproj%os_mic%set(imic, 'state', 0)
+                cycle
+            endif
             call spproj%os_mic%set(imic, 'mic_den',  mic_den_name)
             call spproj%os_mic%set(imic, 'mic_topo', mic_topo_name)
             call spproj%os_mic%set(imic, 'mic_bin',  mic_bin_name)   

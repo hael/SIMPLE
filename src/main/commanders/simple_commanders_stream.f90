@@ -2095,7 +2095,6 @@ contains
                         call sleep(WAITTIME) ! may want to increase as 3s default
                     endif
                     ! micrograph rejection
-                   ! call spproj%os_mic%set_all2single('state', 1)
                     do imic = 1,spproj%os_mic%get_noris()
                         if( spproj%os_mic%get(imic, 'state') < 0 ) cycle
                         call spproj%os_mic%set(imic, 'state', 1) ! set all to state 1 pre rejection
