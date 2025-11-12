@@ -2564,22 +2564,24 @@ contains
         call cline%set('autoscale',    'yes')
         call cline%set('ml_reg_chunk', 'no')
         call cline%set('ml_reg_pool',  'no')
-        call cline%set('nthr2D',       cline%get_iarg('nthr'))
         call cline%set('remove_chunks','no')
         call cline%set('reject_cls',   'no')
         call cline%set('objfun',       'euclid')
         call cline%set('numlen',       5)
         call cline%set('sigma_est',    'global')
         call cline%set('refine',       'snhc_smpl')
+        call cline%set('algorithm',    'abinitio2D')
         call cline%set('nchunksperset',1)
+        call cline%set('nthr2D',       cline%get_iarg('nthr'))
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('center')         ) call cline%set('center',        'yes')
         if( .not. cline%defined('center_type')    ) call cline%set('center_type',   'seg')
         if( .not. cline%defined('walltime')       ) call cline%set('walltime',      29*60) ! 29 minutes
-        if( .not. cline%defined('rank_cavgs')     ) call cline%set('rank_cavgs',    'no') ! ???
-        if( .not. cline%defined('maxnmics')       ) call cline%set('maxnmics',      100)
+        if( .not. cline%defined('rank_cavgs')     ) call cline%set('rank_cavgs',    'no')
+        if( .not. cline%defined('nmics')          ) call cline%set('nmics',         100)
         if( .not. cline%defined('maxnptcls')      ) call cline%set('maxnptcls',     100000)
         if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',200)
+        if( .not. cline%defined('nparts')         ) call cline%set('nparts',        1)
         ! parse
         call params%new(cline)
         ! read strictly required fields
@@ -2799,7 +2801,7 @@ contains
                 if( stk_nptcls(istk) == 0 ) cycle
                 cnt_ptcls = cnt_ptcls + stk_nptcls(istk)
                 cnt_stk   = cnt_stk + 1
-                if( cnt_stk   >= params%maxnmics ) exit
+                if( cnt_stk   >= params%nmics )    exit
                 if( cnt_ptcls >= params%maxnptcls )exit
             enddo
             nptcls_tot = cnt_ptcls
@@ -2870,7 +2872,7 @@ contains
                 call spproj%write(projfile)
                 nptcls = sum(micproj_records(chunks_map(ichunk,1):chunks_map(ichunk,2))%nptcls_sel)
                 write(logfhandle,'(A,I8,A,I8,A,I8)')'>>> CHUNK ID; # OF MICS & PARTICLES  : ',  ichunk,&
-                    &' ; ',nstks,' & ',nstks
+                    &' ; ',nstks,' & ',nptcls_tot
             enddo
             call spproj%kill
         end subroutine generate_chunk_projects
