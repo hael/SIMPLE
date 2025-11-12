@@ -1493,15 +1493,15 @@ contains
         call cline_rec%set('mkdir',     'no')
         call cline_rec%set('projfile',  params_glob%projfile)
         call cline_rec%set('pgrp',      pgrp)
-        call cline_rec%set('objfun',    'cc')
         call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
         call cline_rec%set('projrec',   'yes')
         call cline_rec%set('trail_rec', 'no')
+        if( trim(cline_rec%get_carg('ml_reg')).ne.'yes' )then
+            call cline_rec%set('objfun',    'cc')
+        endif
         call cline_rec%delete('update_frac')
-        call cline_rec%delete('which_iter')
         call cline_rec%delete('endit')
         call cline_rec%delete('needs_sigma')
-        call cline_rec%delete('sigma_est')
         call cline_rec%delete('automsk')
         call cline_rec%delete('mskfile')
         call xreconstruct3D%execute_safe(cline_rec)

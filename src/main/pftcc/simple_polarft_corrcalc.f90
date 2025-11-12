@@ -121,7 +121,7 @@ type :: polarft_corrcalc
     procedure          :: get_nptcls
     procedure          :: get_pinds
     procedure          :: get_npix
-    procedure          :: get_work_pft_ptr, get_work_rpft_ptr
+    procedure          :: get_work_pft_ptr, get_work_rpft_ptr, get_work_rpft8_ptr
     procedure          :: get_ptcls_ptr
     procedure          :: get_ctfmats_ptr
     procedure          :: get_refs_ptr
@@ -613,6 +613,15 @@ contains
         ithr = omp_get_thread_num()+1
         ptr => self%heap_vars(ithr)%pft_r
     end subroutine get_work_rpft_ptr
+
+    ! returns pointer to temporary pft-sized double precision real matrix according to current thread
+    subroutine get_work_rpft8_ptr( self, ptr )
+        class(polarft_corrcalc), intent(in)  :: self
+        real(dp),      pointer,  intent(out) :: ptr(:,:)
+        integer :: ithr
+        ithr = omp_get_thread_num()+1
+        ptr => self%heap_vars(ithr)%pft_r1_8
+    end subroutine get_work_rpft8_ptr
 
     subroutine get_ptcls_ptr( self, ptr )
         class(polarft_corrcalc), target, intent(in)  :: self
