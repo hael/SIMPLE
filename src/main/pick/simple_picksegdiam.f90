@@ -32,12 +32,13 @@ end type picksegdiam
 
 contains
 
-    subroutine pick_1( self, micname, smpd, moldiam_max, pcontrast, denfname, topofname, binfname )
+    subroutine pick_1( self, micname, smpd, moldiam_max, pcontrast, denfname, topofname, binfname, empty )
         class(picksegdiam),         intent(inout) :: self
         character(len=*),           intent(in)    :: micname !< micrograph file name
         real,                       intent(in)    :: smpd, moldiam_max
         character(len=*),           intent(in)    :: pcontrast
         character(len=*), optional, intent(in)    :: denfname, topofname, binfname
+        logical,          optional, intent(out)   :: empty
         character(len=:), allocatable :: fname, output_dir
         integer,          allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
         logical,          allocatable :: picking_mask(:,:)
@@ -50,6 +51,7 @@ contains
         self%moldiam_max = moldiam_max
         scale = smpd / SMPD_SHRINK1
         call read_mic_subtr_backgr_shrink(micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
+        if(present(empty)) empty = l_empty
         if( l_empty ) return
         ldim_raw = mic_raw%get_ldim()
         ldim     = mic_shrink%get_ldim()
