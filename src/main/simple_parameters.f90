@@ -58,6 +58,7 @@ type :: parameters
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: gridding='no'        !< to test gridding correction
+    character(len=3)          :: have_clustering='no' !< to flag that project file has class average cluster labels assigned
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
@@ -181,6 +182,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: pickrefs=''          !< picking references
     character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
+    character(len=LONGSTRLEN) :: projfile_merged=''   !< merged SIMPLE *.simple project file output
     character(len=LONGSTRLEN) :: projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
     character(len=LONGSTRLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
     character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
@@ -654,6 +656,7 @@ contains
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
+        call check_carg('have_clustering', self%have_clustering)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
@@ -724,6 +727,7 @@ contains
         call check_carg('prob_inpl',      self%prob_inpl)
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('proj_is_class',  self%proj_is_class)
+        call check_carg('projfile_merged',self%projfile_merged)
         call check_carg('projfile_optics',self%projfile_optics)
         call check_carg('projname',       self%projname)
         call check_carg('projrec',        self%projrec)

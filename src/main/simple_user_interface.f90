@@ -241,6 +241,7 @@ type(simple_input_param) :: cc_iters
 type(simple_input_param) :: center_pdb
 type(simple_input_param) :: clip
 type(simple_input_param) :: cls_init
+type(simple_input_param) :: clust_crit
 type(simple_input_param) :: cn
 type(simple_input_param) :: cn_max
 type(simple_input_param) :: cn_min
@@ -343,6 +344,7 @@ type(simple_input_param) :: pick_roi
 type(simple_input_param) :: picker
 type(simple_input_param) :: pickrefs
 type(simple_input_param) :: projfile
+type(simple_input_param) :: projfile_merged
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
 type(simple_input_param) :: prune
@@ -1113,6 +1115,7 @@ contains
         call set_param(center_pdb,     'center_pdb',      'binary', 'Whether to move the PDB atomic center to the center of the box', 'Whether to move the PDB atomic center to the center of the box (yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(clip,           'clip',            'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
         call set_param(cls_init,       'cls_init',        'multi',  'Scheme for initial class generation', 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
+        call set_param(clust_crit,     'clust_crit',      'multi',   'Clustering criterion', 'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}', '(sig|sig_clust|cc|res|hybrid){hybrid}', .false., 'hybrid')
         call set_param(cn,             'cn',              'num',    'Fixed std coordination number', 'Minimum std cn to consider for dipole calc ', '8',  .false., 8.)
         call set_param(cn_max,         'cn_max',          'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
         call set_param(cn_min,         'cn_min',          'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '4',  .false., 4.)
@@ -1215,6 +1218,7 @@ contains
         call set_param(pickrefs,       'pickrefs',        'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call set_param(projfile,       'projfile',        'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., '')
         call set_param(projfile_target,'projfile_target', 'file',   'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., '')
+        call set_param(projfile_merged,'projfile_merged', 'file',   'Merged output project file', 'SIMPLE projectfile', 'e.g. merged.simple', .false., '')
         call set_param(projname,       'projname',        'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for', 'e.g. to create ./myproject/myproject.simple', .true., '')
         call set_param(prune,          'prune',           'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
         call set_param(pspecsz,        'pspecsz',         'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)
@@ -2093,8 +2097,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster_cavgs%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}',&
-        &'(sig|sig_clust|cc|res|hybrid){hybrid}', .false., 'hybrid')
+        call cluster_cavgs%set_input('srch_ctrls', 1, clust_crit)
         ! filter controls
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
@@ -2121,8 +2124,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster_stack%set_input('srch_ctrls', 1, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(fm|pow|hist|hybrid){hybrid}',&
-        &'(fm|pow|hist|hybrid){fm}', .false., 'fm')
+        call cluster_stack%set_input('srch_ctrls', 1, clust_crit)
         ! filter controls
         call cluster_stack%set_input('filt_ctrls', 1, hp)
         cluster_stack%filt_ctrls(1)%required = .false.
@@ -3304,16 +3306,18 @@ contains
         &'Analysis of class averages with k-medoids',&                ! descr_short
         &'is a program for analyzing class averages with k-medoids',& ! descr_long
         &'simple_exec',&                                              ! executable
-        &0, 1, 0, 0, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 3, 0, 1, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call match_cavgs%set_input('parm_ios', 1, projfile_target)
+        call match_cavgs%set_input('parm_ios', 2, projfile_merged)
+        call match_cavgs%set_input('parm_ios', 3, prune)
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call match_cavgs%set_input('srch_ctrls', 1, clust_crit)
         ! filter controls
         call match_cavgs%set_input('filt_ctrls', 1, hp)
         call match_cavgs%set_input('filt_ctrls', 2, lp)

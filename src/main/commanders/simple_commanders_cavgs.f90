@@ -168,7 +168,40 @@ contains
         call spproj%read(params%projfile)
         ncls        = spproj%os_cls2D%get_noris()
         ! prep class average stack
-        call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        if( trim(params%have_clustering).eq.'yes' )then
+            labels    = spproj%os_cls2D%get_all_asint('cluster')
+            allocate(l_non_junk(size(labels)), source=labels > 0)
+            ncls_sel  = count(l_non_junk)
+            cavg_imgs = read_cavgs_into_imgarr(spproj, l_non_junk)
+            smpd      = cavg_imgs(1)%get_smpd()
+            ldim      = cavg_imgs(1)%get_ldim()
+            box       = ldim(1)
+            mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
+            clspops   = spproj%os_cls2D%get_all_asint('pop')
+            clspops   = pack(clspops, mask=l_non_junk)
+            clsinds   = pack((/(i,i=1,ncls)/), mask=l_non_junk)
+            ! create the stuff needed in the loop
+            allocate(mm(ncls_sel,2), source=0.)
+            ! prep mask
+            call img_msk%new([box,box,1], smpd)
+            img_msk = 1.
+            call img_msk%mask(mskrad, 'hard')
+            l_msk = img_msk%bin2logical()
+            call img_msk%kill
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            do i = 1, ncls_sel
+                ! normalization
+                call cavg_imgs(i)%norm_within(l_msk)
+                ! mask
+                call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+                ! stash minmax
+                mm(i,:) = cavg_imgs(i)%minmax(mskrad)
+            end do
+            !$omp end parallel do
+            deallocate(l_msk)
+        else
+            call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        endif
         ncls_sel    = size(cavg_imgs)
         smpd        = cavg_imgs(1)%get_smpd()
         ldim        = cavg_imgs(1)%get_ldim()
@@ -186,7 +219,10 @@ contains
         ! calculate distance matrix
         dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
         ! cluster
-        if( cline%defined('ncls') )then
+        if( trim(params%have_clustering).eq.'yes' )then
+            nclust = maxval(labels)
+            call cluster_dmat(dmat, 'refine', nclust, i_medoids, labels)
+        else if( cline%defined('ncls') )then
             nclust = params%ncls
             call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
         else
@@ -206,6 +242,12 @@ contains
         call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )
         ! update project
         call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
+        call spproj%os_cls2D%set_all2single('cluster',  0)
+        call spproj%os_cls3D%set_all2single('cluster',  0)
+        call spproj%os_cls2D%set_all2single('accept',   0)
+        call spproj%os_cls3D%set_all2single('accept',   0)
+        call spproj%os_ptcl2D%set_all2single('cluster', 0)
+        call spproj%os_ptcl3D%set_all2single('cluster', 0)
         do iclust = 1, nclust
             do icls = 1, ncls_sel 
                 if( labels(icls) == iclust )then
@@ -338,10 +380,16 @@ contains
     end subroutine exec_select_clusters
 
     subroutine exec_match_cavgs( self, cline )
+        use simple_projfile_utils, only: merge_chunk_projfiles
         class(commander_match_cavgs), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
-        type(sp_project) :: spproj_ref, spproj_match
+        type(sp_project) :: spproj_ref, spproj_match, spproj_merged
+        type(cmdline)    :: cline_cluster_cavgs
+        type(commander_cluster_cavgs)  :: xcluster_cavgs
+        character(len=*),  parameter   :: TMPPROJFILE = 'tmp_projfile_match_cavgs.simple'
+        character(len=LONGSTRLEN)      :: chunk_fnames(2)
+        character(len=:),  allocatable :: folder
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
         integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
@@ -354,11 +402,11 @@ contains
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
         call cline%set('sh_inv',    'yes') ! shift invariant search
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('trs')        ) call cline%set('trs',       10.)
-        if( .not. cline%defined('kweight')    ) call cline%set('kweight', 'all')
-        if( .not. cline%defined('lp')         ) call cline%set('lp',         6.)
-        if( .not. cline%defined('prune')      ) call cline%set('prune',    'no')
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
+        if( .not. cline%defined('kweight') ) call cline%set('kweight', 'all')
+        if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
+        if( .not. cline%defined('prune')   ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
         ! read base project file
@@ -369,25 +417,25 @@ contains
         ! prepare class averages
         call prep_cavgs4clustering(spproj_ref,   cavg_imgs_ref,   params%mskdiam, clspops_ref,   clsinds_ref,   l_non_junk_ref,   mm_ref)
         call prep_cavgs4clustering(spproj_match, cavg_imgs_match, params%mskdiam, clspops_match, clsinds_match, l_non_junk_match, mm_match)
-        nrefs       = size(cavg_imgs_ref)
-        nmatch      = size(cavg_imgs_match)
-        smpd        = cavg_imgs_ref(1)%get_smpd()
-        ldim        = cavg_imgs_ref(1)%get_ldim()
+        nrefs        = size(cavg_imgs_ref)
+        nmatch       = size(cavg_imgs_match)
+        smpd         = cavg_imgs_ref(1)%get_smpd()
+        ldim         = cavg_imgs_ref(1)%get_ldim()
         ! ensure correct smpd/box in params class
-        params%smpd = smpd
-        params%box  = ldim(1)
-        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        params%smpd  = smpd
+        params%box   = ldim(1)
+        params%msk   = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! extract nonzero cluster labels
-        labels = spproj_ref%os_cls2D%get_all_asint('cluster')
-        labels = pack(labels, mask=l_non_junk_ref)
-        nclust = maxval(labels)
-        states = spproj_ref%os_cls2D%get_all_asint('state')
-        states = pack(states, mask=l_non_junk_ref)
+        labels       = spproj_ref%os_cls2D%get_all_asint('cluster')
+        labels       = pack(labels, mask=l_non_junk_ref)
+        nclust       = maxval(labels)
+        states       = spproj_ref%os_cls2D%get_all_asint('state')
+        states       = pack(states, mask=l_non_junk_ref)
         ! calculate overall minmax
         oa_minmax(1) = minval(mm_ref(:,1))
         oa_minmax(2) = maxval(mm_ref(:,2))
         ! generate matching distance matrix
-        dmat = calc_match_cavgs_dmat(params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, params%clust_crit)
+        dmat         = calc_match_cavgs_dmat(params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, params%clust_crit)
         ! genrate cluster distance matrix
         allocate(dmat_clust(nclust,nmatch), source=0.)
         do iclust = 1, nclust
@@ -400,37 +448,68 @@ contains
         call  write_imgarr(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext)
         ! update project
         call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)
+        call spproj_match%os_cls2D%set_all2single('cluster',  0)
+        call spproj_match%os_cls3D%set_all2single('cluster',  0)
+        call spproj_match%os_cls2D%set_all2single('accept',   0)
+        call spproj_match%os_cls3D%set_all2single('accept',   0)
+        call spproj_match%os_ptcl2D%set_all2single('cluster', 0)
+        call spproj_match%os_ptcl3D%set_all2single('cluster', 0)
         do iclust = 1, nclust
             do icls = 1, nmatch
                 if( labels_match(icls) == iclust )then
-                    call spproj_match%os_cls2D%set(clsinds_match(icls),'cluster',iclust)                          ! 2D class field
-                    call spproj_match%os_cls3D%set(clsinds_match(icls),'cluster',iclust)                          ! 3D class field
+                    call spproj_match%os_cls2D%set(clsinds_match(icls),'cluster',iclust)                               ! 2D class field
+                    call spproj_match%os_cls3D%set(clsinds_match(icls),'cluster',iclust)                               ! 3D class field
                     call spproj_match%os_cls2D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 2D class accepted field
                     call spproj_match%os_cls3D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 3D class accepted field
-                    call spproj_match%os_ptcl2D%set_field2single('class', clsinds_match(icls), 'cluster', iclust) ! 2D particle field
-                    call spproj_match%os_ptcl3D%set_field2single('class', clsinds_match(icls), 'cluster', iclust) ! 3D particle field
+                    call spproj_match%os_ptcl2D%set_field2single('class', clsinds_match(icls), 'cluster', iclust)      ! 2D particle field
+                    call spproj_match%os_ptcl3D%set_field2single('class', clsinds_match(icls), 'cluster', iclust)      ! 3D particle field
                 endif
             enddo
         enddo
-        ! translate to state array
-        ncls_match = spproj_match%os_cls2D%get_noris()
-        allocate(states_map(ncls_match), source=0)
-        do icls = 1, nmatch
-            states_map(clsinds_match(icls)) = find_label_state(labels_match(icls))
-        end do
-        ! map selection to project
-        call spproj_match%map_cavgs_selection(states_map)
-        ! optional pruning
-        if( trim(params%prune).eq.'yes') call spproj_match%prune_particles
-        ! this needs to be a full write as many segments are updated
-        call spproj_match%write(params%projfile_target)
+        if( cline%defined('projfile_merged') )then
+            ! merge spproj_ref & spproj_match projects
+            call spproj_match%write(TMPPROJFILE)
+            chunk_fnames(1) = params%projfile
+            chunk_fnames(2) = simple_abspath(TMPPROJFILE)
+            folder = PATH_HERE
+            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
+            call del_file(chunk_fnames(2))
+            call spproj_merged%write(params%projfile_merged)
+            ! refine joint solution
+            call cline_cluster_cavgs%set('mkdir',                      'no')
+            call cline_cluster_cavgs%set('have_clustering',           'yes')
+            call cline_cluster_cavgs%set('prune',              params%prune)
+            call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
+            call cline_cluster_cavgs%set('hp',                    params%hp)
+            call cline_cluster_cavgs%set('lp',                    params%lp)
+            call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
+            call cline_cluster_cavgs%set('nthr',                params%nthr)
+            call cline_cluster_cavgs%set('projfile', params%projfile_merged)
+            call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
+            call cline_cluster_cavgs%kill
+        else
+            ! translate to state array
+            ncls_match = spproj_match%os_cls2D%get_noris()
+            allocate(states_map(ncls_match), source=0)
+            do icls = 1, nmatch
+                states_map(clsinds_match(icls)) = find_label_state(labels_match(icls))
+            end do
+            ! map selection to project
+            call spproj_match%map_cavgs_selection(states_map)
+            ! optional pruning
+            if( trim(params%prune).eq.'yes') call spproj_match%prune_particles
+            ! this needs to be a full write as many segments are updated
+            call spproj_match%write(params%projfile_target)
+        endif
         ! cleanup
         call spproj_match%kill
         call spproj_ref%kill
+        call spproj_merged%kill
         call dealloc_imgarr(cavg_imgs_ref)
         call dealloc_imgarr(cavg_imgs_match)
         ! end gracefully
         call simple_end('**** SIMPLE_MATCH_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
+
     contains
         
         function find_label_state( label ) result( state )

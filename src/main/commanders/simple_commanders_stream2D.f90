@@ -1,32 +1,33 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commanders_stream2D
 include 'simple_lib.f08'
-use simple_image_bin,           only: image_bin
 use simple_cmdline,            only: cmdline
 use simple_commander_base,     only: commander_base
 use simple_ctf,                only: ctf
 use simple_ctf_estimate_iter,  only: ctf_estimate_iter
 use simple_guistats,           only: guistats
+use simple_image_bin,          only: image_bin
 use simple_parameters,         only: parameters
 use simple_particle_extractor, only: ptcl_extractor
+use simple_projfile_utils,     only: merge_chunk_projfiles
 use simple_sp_project,         only: sp_project
-use simple_commanders_abinitio2D
-use simple_commanders_cluster2D_stream
-use simple_commanders_imgproc
-use simple_commanders_preprocess
-use simple_commanders_project
-use simple_gui_utils
-use simple_micproc
-use simple_moviewatcher
-use simple_nice
-use simple_progress
-use simple_qsys_env
-use simple_qsys_funs
-use simple_segmentation
-use simple_stack_io
-use simple_strategy2D_utils
-use simple_stream_communicator
 use simple_stream_utils
+use simple_stream_communicator
+use simple_strategy2D_utils
+use simple_stack_io
+use simple_segmentation
+use simple_qsys_funs
+use simple_qsys_env
+use simple_progress
+use simple_nice
+use simple_moviewatcher
+use simple_micproc
+use simple_gui_utils
+use simple_commanders_project
+use simple_commanders_preprocess
+use simple_commanders_imgproc
+use simple_commanders_cluster2D_stream
+use simple_commanders_abinitio2D
 implicit none
 
 public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D, stream_test_sieve_cavgs
@@ -428,7 +429,7 @@ contains
             endif
         enddo
         if(allocated(completed_projfiles)) then
-            call merge_chunks(completed_projfiles, './', spproj_glob, projname_out="tmp", write_proj=.false.)
+            call merge_chunk_projfiles(completed_projfiles, './', spproj_glob, projname_out="tmp", write_proj=.false.)
             call spproj_glob%update_projinfo(trim(cline%get_carg('projfile'))) ! update projinfo with projfile name as modified by merge_chunks
             deallocate(completed_projfiles)
         endif
@@ -571,7 +572,7 @@ contains
                     ic_end   = ic_start + params%nchunksperset - 1
                     tmpl     = trim(DIR_SET)//int2str(sets%n+1)
                     call simple_mkdir(tmpl)
-                    call merge_chunks(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
+                    call merge_chunk_projfiles(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
                     ! average and stash sigma2
                     allocate(starfiles(params%nchunksperset))
                     do i = 1,params%nchunksperset
