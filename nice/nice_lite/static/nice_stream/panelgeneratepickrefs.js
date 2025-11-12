@@ -240,6 +240,11 @@ window.addEventListener("load", () => {
 })
 
 window.addEventListener("load", () => {
+  const logtext = document.querySelector(".logtext")
+  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
+})
+
+window.addEventListener("load", () => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--genpickrefs-contrast',   1.0);
   cssroot.style.setProperty('--genpickrefs-brightness', 1.0);

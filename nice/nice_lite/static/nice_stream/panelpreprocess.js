@@ -78,6 +78,11 @@ window.addEventListener("load", () => {
   cssroot.style.setProperty('--preprocess-brightness', 1.0);
 })
 
+window.addEventListener("load", () => {
+  const logtext = document.querySelector(".logtext")
+  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
+})
+
 window.addEventListener("load", () =>{
     for(const movies_pie_chart of document.getElementsByClassName("movies_pie_chart")){
         const ctx = movies_pie_chart.getContext("2d");

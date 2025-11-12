@@ -159,6 +159,11 @@ window.addEventListener("load", () =>{
     }
 },false);
 
+window.addEventListener("load", () => {
+  const logtext = document.querySelector(".logtext")
+  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
+})
+
 window.addEventListener("load", () =>{
 
     const closest = (arr, n) => arr.reduce((prev, curr) => Math.abs(curr - n) < Math.abs(prev - n) ? curr : prev);

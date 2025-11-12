@@ -84,8 +84,14 @@
         </div>
         <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
             <div class="font-bold text-[12px]">log</div>
-            <div class="h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
-                <pre class="text-[10px]">{{log}}</pre>
+            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+                {% for logpart in log %}
+                    {% if "text" in logpart %}
+                        <pre class="text-[10px]">{{ logpart.text }}</pre>
+                    {% elif "image" in logpart %}
+                        <img src="{% url 'nice_lite:image' logpart.image %}"/>
+                    {% endif %}
+                {% endfor %}
             </div>
             <div class="font-bold text-[12px]">errors</div>
             <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">

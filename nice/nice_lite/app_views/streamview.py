@@ -245,9 +245,6 @@ class StreamViewGeneratePickrefs:
             self.zoom            = True
         
     def render(self):
-        # sort cls2D on pop
-     #   if "latest_cls2D" in self.job.generate_pickrefs_stats:
-     #       self.job.generate_pickrefs_stats["latest_cls2D"] = sorted(self.job.generate_pickrefs_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
         context = {
             "jobid"     : self.job.id,
             "displayid" : self.job.disp,
@@ -255,14 +252,25 @@ class StreamViewGeneratePickrefs:
             "status"    : self.job.generate_pickrefs_status,    
         }
         if self.zoom:
-            context["log"]   = ""
-            context["error"] = ""
+            context["log"]       = []
+            context["error"]     = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    logtext_str = str(logtext, errors='replace')
+                    logpart_str = ""
+                    for line in logtext_str.splitlines():
+                        if ">>> JPEG " in line:
+                            context["log"].append({"text":logpart_str})
+                            split_line = line.split()
+                            context["log"].append({"image":split_line[2]})
+                            logpart_str = ""
+                        else:
+                            logpart_str += line + '\n'
+                    if logpart_str != "":
+                        context["log"].append({"text":logpart_str})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -364,14 +372,25 @@ class StreamViewSieveParticles:
             "status"   : self.job.particle_sieving_status, 
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    logtext_str = str(logtext, errors='replace')
+                    logpart_str = ""
+                    for line in logtext_str.splitlines():
+                        if ">>> JPEG " in line:
+                            context["log"].append({"text":logpart_str})
+                            split_line = line.split()
+                            context["log"].append({"image":split_line[2]})
+                            logpart_str = ""
+                        else:
+                            logpart_str += line + '\n'
+                    if logpart_str != "":
+                        context["log"].append({"text":logpart_str})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -417,14 +436,25 @@ class StreamViewClassification2D:
             "status"   : self.job.classification_2D_status,  
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    logtext_str = str(logtext, errors='replace')
+                    logpart_str = ""
+                    for line in logtext_str.splitlines():
+                        if ">>> JPEG " in line:
+                            context["log"].append({"text":logpart_str})
+                            split_line = line.split()
+                            context["log"].append({"image":split_line[2]})
+                            logpart_str = ""
+                        else:
+                            logpart_str += line + '\n'
+                    if logpart_str != "":
+                        context["log"].append({"text":logpart_str})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()

@@ -323,7 +323,7 @@ contains
         if(params%ninipick > 0 &
         &.and. spproj%os_mic%isthere(1, 'importind') &
         &.and. spproj%os_mic%get(1, 'importind') <= params%ninipick) then
-                call segdiampick_preprocess( spproj, params%pcontrast, params%moldiam_max, output_dir_inipick_preproc )
+            call segdiampick_preprocess( spproj, params%pcontrast, params%moldiam_max, output_dir_inipick_preproc )
         endif
         if( trim(params%stream).eq.'yes' )then
             call spproj%write_segment_inside(params%oritype)
