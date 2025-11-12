@@ -1999,7 +1999,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 4, 2, 1, 3, .true.,&                                                            ! # entries in each group, requires sp_project
+        &0, 0, 0, 4, 3, 1, 2, .true.,&                                                            ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2010,25 +2010,27 @@ contains
         ! <empty>
         ! search controls
         call cluster2D_subsets%set_input('srch_ctrls', 1, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
+        cluster2D_subsets%srch_ctrls(1)%descr_placeholder  = '# of particles per cluster{200}'
         cluster2D_subsets%srch_ctrls(1)%rval_default = 200.
         call cluster2D_subsets%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 3, 'maxnptcls', 'num', 'Maximum # of particles clustered', 'Maximum # of particles clustered',&
-        &'max # of particles', .false., 100000., gui_submenu="search", gui_advanced=.true.)
-        call cluster2D_subsets%set_input('srch_ctrls', 4, 'maxnmics', 'num', 'Maximum # of micrographs sampled', 'Maximum # of micrographs sampled',&
-        &'max # of micrographs', .false., 100., gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_subsets%set_input('srch_ctrls', 3, 'maxnptcls', 'num', 'Maximum # of particles clustered', 'Max # of particles clustered{100000}',&
+        &'max # of particles{100000}', .false., 100000., gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_subsets%set_input('srch_ctrls', 4, 'nmics', 'num', 'Maximum # of micrographs sampled', 'Max # of micrographs sampled{100}',&
+        &'max # of micrographs{100}', .false., 100., gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp, gui_submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls', 3, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
+        &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.,&
+        &gui_submenu="filter", gui_advanced=.true.)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
-        call cluster2D_subsets%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        cluster2D_subsets%comp_ctrls(1)%descr_short = 'Total number of computing nodes'
-        call cluster2D_subsets%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_subsets%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
+        call cluster2D_subsets%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call cluster2D_subsets%set_input('comp_ctrls', 2, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_cluster2D_subsets
 
