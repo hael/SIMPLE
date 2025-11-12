@@ -50,11 +50,11 @@ contains
             mic_diam_name = filepath(outdir, append2basename(mic_diam_name, DIAMS_SUFFIX))
             call picker%pick(mic_name, smpd, moldiam_max, pcontrast, denfname=mic_den_name,&
                 topofname=mic_topo_name, binfname=mic_bin_name )
-            if( picker%get_nboxes() == 0 ) cycle
-            call picker%write_diameters(mic_diam_name)
             call spproj%os_mic%set(imic, 'mic_den',  mic_den_name)
             call spproj%os_mic%set(imic, 'mic_topo', mic_topo_name)
-            call spproj%os_mic%set(imic, 'mic_bin',  mic_bin_name)
+            call spproj%os_mic%set(imic, 'mic_bin',  mic_bin_name)   
+            if( picker%get_nboxes() == 0 ) cycle
+            call picker%write_diameters(mic_diam_name)
             call spproj%os_mic%set(imic, 'mic_diam', mic_diam_name)
         end do
         call picker%kill()
@@ -103,22 +103,26 @@ contains
             ! skip picking if pre-picked in preproc
             if(spproj%os_mic%isthere(orimap(imic), 'mic_den') &
                 &.and. spproj%os_mic%isthere(orimap(imic), 'mic_topo') &
-                &.and. spproj%os_mic%isthere(orimap(imic), 'mic_bin') &
-                &.and. spproj%os_mic%isthere(orimap(imic), 'mic_diam') ) then
+                &.and. spproj%os_mic%isthere(orimap(imic), 'mic_bin') ) then
                     mic_den_names(imic)  = trim(spproj%os_mic%get_static(orimap(imic), 'mic_den'))
                     mic_topo_names(imic) = trim(spproj%os_mic%get_static(orimap(imic), 'mic_topo'))
                     mic_bin_names(imic)  = trim(spproj%os_mic%get_static(orimap(imic), 'mic_bin'))
-                    if (file_exists(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')))) then
-                        call diams_file%new(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')), 1)
-                        allocate(tmp(diams_file%get_nrecs_per_line()))
-                        call diams_file%readNextDataLine(tmp)
+                    if( spproj%os_mic%isthere(orimap(imic), 'mic_diam') ) then
+                        if (file_exists(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')))) then
+                            call diams_file%new(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')), 1)
+                            allocate(tmp(diams_file%get_nrecs_per_line()))
+                            call diams_file%readNextDataLine(tmp)
+                            write(logfhandle, *) ">>> FOUND PICK-PREPROCESSING FOR MICROGRAPH "// trim(spproj%os_mic%get_static(orimap(imic), 'intg'))&
+                            &//". IMPORTED "//int2str(size(tmp))// " DIAMETERS"
+                            call spproj%os_mic%delete_entry(orimap(imic), 'mic_diam')
+                        endif
+                    else
                         write(logfhandle, *) ">>> FOUND PICK-PREPROCESSING FOR MICROGRAPH "// trim(spproj%os_mic%get_static(orimap(imic), 'intg'))&
-                        &//". IMPORTED "//int2str(size(tmp))// " DIAMETERS"
-                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_den')
-                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_topo')
-                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_bin')
-                        call spproj%os_mic%delete_entry(orimap(imic), 'mic_diam')
+                            &//". IMPORTED 0 DIAMETERS"
                     endif
+                    call spproj%os_mic%delete_entry(orimap(imic), 'mic_den')
+                    call spproj%os_mic%delete_entry(orimap(imic), 'mic_topo')
+                    call spproj%os_mic%delete_entry(orimap(imic), 'mic_bin')
             else
                 ! Segmentation & picking
                 mic_den_names(imic)  = append2basename(micnames(imic), DEN_SUFFIX)
