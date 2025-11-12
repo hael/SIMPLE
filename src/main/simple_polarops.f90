@@ -139,6 +139,7 @@ contains
 
     !>  \brief  Updates Fourier components and normalization matrices with new particles
     subroutine polar_cavger_update_sums( nptcls, pinds, spproj, pftcc, incr_shifts, is3D )
+        use simple_euclid_sigma2, only: eucl_sigma2_glob
         integer,                         intent(in)    :: nptcls
         integer,                         intent(in)    :: pinds(nptcls)
         class(sp_project),               intent(inout) :: spproj
@@ -148,9 +149,10 @@ contains
         class(oris), pointer :: spproj_field
         complex(sp), pointer :: pptcls(:,:,:), rptcl(:,:)
         real(sp),    pointer :: pctfmats(:,:,:), rctf(:,:)
+        real(dp),    pointer :: rctf2(:,:)
         real(dp) :: w
-        real     :: incr_shift(2)
-        integer  :: eopops(2,ncls), i, icls, iptcl, irot
+        real     :: sigma2(kfromto(1):kfromto(2)), incr_shift(2)
+        integer  :: eopops(2,ncls), i, icls, iptcl, irot, k
         logical  :: l_ctf, l_even, l_3D, l_shift
         l_3D = .false.
         if( present(is3D) ) l_3D = is3D
@@ -164,7 +166,7 @@ contains
         ! update classes
         eopops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static) reduction(+:eopops)&
-        !$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf)
+        !$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf,rctf2,k,sigma2)
         do i = 1,nptcls
             ! particles parameters
             iptcl = pinds(i)
@@ -184,32 +186,72 @@ contains
                 if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
             endif
             call pftcc%get_work_pft_ptr(rptcl)
+            ! Particle rotation
             call pftcc%rotate_pft(pptcls(:,:,i), irot, rptcl)
+            ! Particle weight
+            rptcl = w * rptcl
+            ! Particle ML regularization
+            if( params_glob%l_ml_reg )then
+                sigma2 = eucl_sigma2_glob%sigma2_noise(kfromto(1):kfromto(2),iptcl)
+                do k = kfromto(1),kfromto(2)
+                    rptcl(:,k) = rptcl(:,k) / sigma2(k)
+                enddo
+            endif
+            ! Array updates
             if( l_ctf )then
                 call pftcc%get_work_rpft_ptr(rctf)
+                call pftcc%get_work_rpft8_ptr(rctf2)
+                ! weighted CTF2
                 call pftcc%rotate_pft(pctfmats(:,:,i), irot, rctf)
+                rctf2 = w * real(rctf,kind=dp)**2
+                rptcl = rptcl * rctf    ! PhFlip(X).|CTF|
+                ! CTF2 ML regularization
+                if( params_glob%l_ml_reg )then
+                    do k = kfromto(1),kfromto(2)
+                        rctf2(:,k) = rctf2(:,k) / real(sigma2(k),dp)
+                    enddo
+                endif
                 if( l_even )then
                     !$omp critical
-                    pfts_even(:,:,icls) = pfts_even(:,:,icls) + w * cmplx(rptcl,kind=dp) * real(rctf,kind=dp)
-                    ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + w * real(rctf,kind=dp)**2
+                    pfts_even(:,:,icls) = pfts_even(:,:,icls) + cmplx(rptcl,kind=dp)
+                    ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + rctf2
                     !$omp end critical
                 else
                     !$omp critical
-                    pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  + w * cmplx(rptcl,kind=dp) * real(rctf,kind=dp)
-                    ctf2_odd(:,:,icls)  = ctf2_odd(:,:,icls)  + w * real(rctf,kind=dp)**2
+                    pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  + cmplx(rptcl,kind=dp)
+                    ctf2_odd(:,:,icls)  = ctf2_odd(:,:,icls)  + rctf2
                     !$omp end critical
                 endif
             else
-                if( l_even )then
-                    !$omp critical
-                    pfts_even(:,:,icls) = pfts_even(:,:,icls) + w * cmplx(rptcl,kind=dp)
-                    ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + w
-                    !$omp end critical
+                if( params_glob%l_ml_reg )then
+                    ! CTF2=1 & ML regularization
+                    call pftcc%get_work_rpft8_ptr(rctf2)
+                    do k = kfromto(1),kfromto(2)
+                        rctf2(:,k) = w / real(sigma2(k),dp)
+                    enddo
+                    if( l_even )then
+                        !$omp critical
+                        pfts_even(:,:,icls) = pfts_even(:,:,icls) + cmplx(rptcl,kind=dp)
+                        ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + rctf2
+                        !$omp end critical
+                    else
+                        !$omp critical
+                        pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  + cmplx(rptcl,kind=dp)
+                        ctf2_odd(:,:,icls)  = ctf2_odd(:,:,icls)  + rctf2
+                        !$omp end critical
+                    endif
                 else
-                    !$omp critical
-                    pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  + w * cmplx(rptcl,kind=dp)
-                    ctf2_odd(:,:,icls)  = ctf2_odd(:,:,icls)  + w
-                    !$omp end critical
+                    if( l_even )then
+                        !$omp critical
+                        pfts_even(:,:,icls) = pfts_even(:,:,icls) + cmplx(rptcl,kind=dp)
+                        ctf2_even(:,:,icls) = ctf2_even(:,:,icls) + w
+                        !$omp end critical
+                    else
+                        !$omp critical
+                        pfts_odd(:,:,icls)  = pfts_odd(:,:,icls)  + cmplx(rptcl,kind=dp)
+                        ctf2_odd(:,:,icls)  = ctf2_odd(:,:,icls)  + w
+                        !$omp end critical
+                    endif
                 endif
             endif
             ! total population
@@ -431,7 +473,6 @@ contains
                 do k = kfromto(1),kfromto(2)
                     if( tau2(k) > DTINY )then
                         invtau2 = 1.d0 / (fudge * tau2(k))
-
                         a = sum(sqrt(real(pfts_clin_even(:,k,:)*conjg(pfts_clin_even(:,k,:))))) / real(pftsz*ncls,dp)
                         b =      sum(ctf2_clin_even(:,k,:))                                     / real(pftsz*ncls,dp)
                         print *,k,(a/(b+invtau2)) / (a/b)
@@ -981,7 +1022,7 @@ contains
                 pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + weight * conjg(clo)
             else
                 pfts_cl_even(irot,:,ref) = pfts_cl_even(irot,:,ref) + weight * cle
-                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + w * clo
+                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + weight * clo
             endif
             ctf2_cl_even(irot,:,ref) = ctf2_cl_even(irot,:,ref) + weight * rle
             ctf2_cl_odd( irot,:,ref) = ctf2_cl_odd( irot,:,ref) + weight * rlo

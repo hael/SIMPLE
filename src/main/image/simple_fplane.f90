@@ -4,7 +4,7 @@ module simple_fplane
 include 'simple_lib.f08'
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
-use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
+use simple_euclid_sigma2, only: eucl_sigma2_glob
 use simple_ctf,           only: ctf
 implicit none
 
@@ -117,19 +117,17 @@ contains
     end function does_exist
 
     !> Produces shifted, CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes( self, img, ctfvars, shift, iptcl, sigma2)
+    subroutine gen_planes( self, img, ctfvars, shift, iptcl )
         class(fplane),                  intent(inout) :: self
         class(image),                   intent(in)    :: img
         class(ctfparams),               intent(in)    :: ctfvars
         real,                           intent(in)    :: shift(2)
         integer,                        intent(in)    :: iptcl
-        class(euclid_sigma2), optional, intent(in)    :: sigma2
         type(ctf) :: tfun
         complex   :: c, s
         real(dp)  :: pshift(2), arg, kcos,ksin
         real      :: invldim(2),inv(2),tval,tvalsq,sqSpatFreq,add_phshift
         integer   :: sigma2_kfromto(2), h,k,sh
-        logical   :: use_sigmas
         if( ctfvars%ctfflag /= CTFFLAG_NO )then
             tfun = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
@@ -143,20 +141,10 @@ contains
             self%hcos(h) = dcos(arg)
             self%hsin(h) = dsin(arg)
         enddo
-        use_sigmas = params_glob%l_ml_reg
-        if( use_sigmas )then
-            if( present(sigma2) )then
-                if( sigma2_kfromto(2) > self%nyq_crop )then
-                    THROW_HARD('Frequency range error')
-                endif
-                sigma2_kfromto(1) = lbound(sigma2%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(sigma2%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = sigma2%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            else
-                sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            endif
+        if( params_glob%l_ml_reg )then
+            sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
+            sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
+            self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
         end if
         ! prep slice for k in [N/2;0]
         do k = self%frlims_crop(2,1),0
@@ -184,7 +172,7 @@ contains
                         tvalsq = 1.0
                     endif
                     ! sigma2 weighing
-                    if( use_sigmas) then
+                    if( params_glob%l_ml_reg ) then
                         if(sh >= sigma2_kfromto(1))then
                             c      = c      / self%sigma2_noise(sh)
                             tvalsq = tvalsq / self%sigma2_noise(sh)
@@ -214,14 +202,13 @@ contains
     end subroutine gen_planes
 
     !> Produces padded shifted, rotated, CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes_pad( self, img, ctfvars, shift, e3, iptcl, linear, sigma2)
+    subroutine gen_planes_pad( self, img, ctfvars, shift, e3, iptcl, linear )
         class(fplane),                  intent(inout) :: self
         class(image),                   intent(inout) :: img
         class(ctfparams),               intent(in)    :: ctfvars
         real,                           intent(in)    :: shift(2), e3
         integer,                        intent(in)    :: iptcl
         logical,                        intent(in)    :: linear
-        class(euclid_sigma2), optional, intent(in)    :: sigma2
         type(ctf) :: tfun
         complex   :: c, s
         real(dp)  :: pshift(2), arg, kcos,ksin
@@ -248,18 +235,9 @@ contains
         rmat = self%alpha * rmat
         ! sigma2
         if( params_glob%l_ml_reg )then
-            if( present(sigma2) )then
-                if( sigma2_kfromto(2) > self%nyq_crop )then
-                    THROW_HARD('Frequency range error')
-                endif
-                sigma2_kfromto(1) = lbound(sigma2%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(sigma2%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = sigma2%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            else
-                sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
-                sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
-                self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
-            endif
+            sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
+            sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
+            self%sigma2_noise(sigma2_kfromto(1):self%nyq_crop) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):self%nyq_crop,iptcl)
         end if
         ! Interpolation
         self%cmplx_plane = cmplx(0.,0.)
