@@ -261,7 +261,7 @@ window.addEventListener("load", () =>{
             data: {
               labels: [
                   'queued',
-                  'processed',
+                  'accepted',
                   'rejected'
               ],
               datasets: [{

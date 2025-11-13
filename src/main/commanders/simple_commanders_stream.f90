@@ -980,8 +980,6 @@ contains
         call simple_mkdir(odir_completed)
         call simple_mkdir(odir_picker)
         if( l_extract ) call simple_mkdir(odir_extract)
-        ! initialise progress monitor
-        call progressfile_init()
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
         if(envlen > 0) then

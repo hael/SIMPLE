@@ -90,8 +90,12 @@ class Job:
         self.classification_2D_status = "running"
         jobmodel.preprocessing_status     = "running"
         jobmodel.optics_assignment_status = "running"
-        jobmodel.initial_picking_status   = "running"
-        jobmodel.generate_pickrefs_status = "running"
+        if simplestream.skip_refgen:
+            jobmodel.initial_picking_status   = "skipped"
+            jobmodel.generate_pickrefs_status = "skipped"
+        else:
+            jobmodel.initial_picking_status   = "running"
+            jobmodel.generate_pickrefs_status = "running"
         jobmodel.reference_picking_status = "running"
         jobmodel.particle_sieving_status  = "running"
         jobmodel.classification_2D_status = "running"
@@ -127,13 +131,13 @@ class Job:
                     jobmodel.save()
             self.optics_assignment_status = jobmodel.optics_assignment_status 
             self.optics_assignment_stats  = jobmodel.optics_assignment_stats
-            if jobmodel.initial_picking_status != "finished" and jobmodel.initial_picking_status != "failed":
+            if jobmodel.initial_picking_status != "finished" and jobmodel.initial_picking_status != "failed" and jobmodel.initial_picking_status != "skipped":
                 if jobmodel.initial_picking_heartbeat + datetime.timedelta(minutes=1) < timezone.now():
                     jobmodel.initial_picking_status = "failed"
                     jobmodel.save()
             self.initial_picking_status   = jobmodel.initial_picking_status
             self.initial_picking_stats    = jobmodel.initial_picking_stats
-            if jobmodel.generate_pickrefs_status != "finished" and jobmodel.generate_pickrefs_status != "failed":
+            if jobmodel.generate_pickrefs_status != "finished" and jobmodel.generate_pickrefs_status != "failed" and jobmodel.initial_picking_status != "skipped":
                 if jobmodel.generate_pickrefs_heartbeat + datetime.timedelta(minutes=1) < timezone.now():
                     jobmodel.generate_pickrefs_status = "failed"
                     jobmodel.save()
@@ -176,12 +180,16 @@ class Job:
                 running = True   
             if jobmodel.initial_picking_status == "finished":
                 finished = True
+            elif jobmodel.initial_picking_status == "skipped":
+                finished = True
             elif jobmodel.initial_picking_status == "failed":
                 failed = True
             else:
                 running = True
             if jobmodel.generate_pickrefs_status == "finished":
                 finished = True
+            elif jobmodel.generate_pickrefs_status == "skipped":
+                finished = True  
             elif jobmodel.generate_pickrefs_status == "failed":
                 failed = True
             else:
@@ -565,7 +573,11 @@ class Job:
             jobmodel.initial_picking_update     = {"terminate":True}
             self.initial_picking_stats["stage"] = "terminating"
             jobmodel.initial_picking_stats = self.initial_picking_stats
-            jobmodel.save()      
+            jobmodel.generate_pickrefs_status     = "terminating"
+            jobmodel.generate_pickrefs_status     = {"terminate":True}
+            self.generate_pickrefs_status["stage"] = "terminating"
+            jobmodel.generate_pickrefs_stats = self.generate_pickrefs_stats
+            jobmodel.save()
     
     def terminate_generate_pickrefs(self):
         jobmodel = JobModel.objects.filter(id=self.id).first()
@@ -574,6 +586,10 @@ class Job:
             jobmodel.generate_pickrefs_update     = {"terminate":True}
             self.generate_pickrefs_stats["stage"] = "terminating"
             jobmodel.generate_pickrefs_stats = self.generate_pickrefs_stats
+            jobmodel.initial_picking_status     = "terminating"
+            jobmodel.initial_picking_update     = {"terminate":True}
+            self.initial_picking_stats["stage"] = "terminating"
+            jobmodel.initial_picking_stats = self.initial_picking_stats
             jobmodel.save()      
     
     def terminate_reference_picking(self):
@@ -635,6 +651,10 @@ class Job:
             jobmodel.initial_picking_heartbeat = timezone.now()
             jobmodel.initial_picking_stats     = {}
             jobmodel.initial_picking_update    = {}
+            jobmodel.generate_pickrefs_status    = "restarting"
+            jobmodel.generate_pickrefs_heartbeat = timezone.now()
+            jobmodel.generate_pickrefs_stats     = {}
+            jobmodel.generate_pickrefs_update    = {}
             simplestream = SIMPLEStream()
             if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "opening_2D"):
                 return
@@ -647,6 +667,10 @@ class Job:
             jobmodel.generate_pickrefs_heartbeat = timezone.now()
             jobmodel.generate_pickrefs_stats     = {}
             jobmodel.generate_pickrefs_update    = {}
+            jobmodel.initial_picking_status    = "restarting"
+            jobmodel.initial_picking_heartbeat = timezone.now()
+            jobmodel.initial_picking_stats     = {}
+            jobmodel.initial_picking_update    = {}
             simplestream = SIMPLEStream()
             if not simplestream.restart(os.path.join(project.dirc, dataset.dirc, self.dirc),  "opening_2D"):
                 return

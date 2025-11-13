@@ -260,6 +260,12 @@ window.addEventListener("visibilitychange", (event) => {
   }
 })
 
+window.addEventListener("load", (event) => {
+  // reload generate refs
+  console.log("RELOAD GEPICKREFS")
+  window.parent.document.querySelector("#genpickrefs_iframe").contentWindow.location.reload()
+})
+
 setInterval(function () {
   if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();

@@ -6841,6 +6841,14 @@ contains
         call json%add(input, 'descr_short', '2D averages for use as picking references (optional)')
         call json%add(input, 'descr_long',  '2D averages for use as picking references (optional)')
         call json%add(input, 'required',    .FALSE.)
+        !! box size
+        call json%create_object(input, 'input')
+        call json%add(user_inputs, input)
+        call json%add(input, 'key',         'box_extract')
+        call json%add(input, 'keytype',     'int')
+        call json%add(input, 'descr_short', 'force box size (px, optional)')
+        call json%add(input, 'descr_long',  'force a box size (px) eg. to match an existing dataset')
+        call json%add(input, 'required',    .FALSE.)
         ! programs
         call json%create_array(processes, 'processes')
         call json%add(ui, processes)
@@ -6899,6 +6907,7 @@ contains
         call json%create_array(process_inputs, 'user_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'pickrefs')
+        call json%add(process_inputs, '', 'box_extract')
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=preprocessing')
