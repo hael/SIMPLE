@@ -1,12 +1,27 @@
 ! operations on micrographs
 module simple_micproc
 include 'simple_lib.f08'
-use simple_image,    only: image
+use simple_image,     only: image
 use simple_image_bin, only: image_bin
 implicit none
 #include "simple_local_flags.inc"
 
 contains
+
+    function sample_filetab( filetab, nsample ) result(filetab_smpl)
+        character(len=*), intent(in) :: filetab(:)
+        integer,          intent(in) :: nsample
+        character(len=LONGSTRLEN), allocatable :: filetab_smpl(:)
+        integer, allocatable :: inds(:)
+        type(ran_tabu) :: rt
+        integer :: n
+        n   = size(filetab)
+        rt = ran_tabu(n)
+        allocate(inds(nsample), source=0)
+        call rt%ne_ran_iarr(inds)
+        call rt%kill
+        allocate(filetab_smpl(nsample), source=filetab(inds))
+    end function sample_filetab
 
     subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty, mic_mask )
         character(len=*),               intent(in)    :: micname !< micrograph file name
