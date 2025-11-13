@@ -670,9 +670,11 @@ contains
                 integer, allocatable, intent(in) :: cls2reject(:)
                 integer, allocatable             :: states(:)
                 type(sp_project)                 :: spproj
-                integer :: i, n
+                integer,             allocatable :: clusters_accepted(:)
+                integer :: i, n, n_clusters, cluster
                 logical :: l_class_selection
                 if( .not.allocated(cls2reject) )then
+                    write(logfhandle, *) ">>> cls2reject not allocated"
                     return  ! gui must return an non empty vector
                 endif
                 ! read all fields
@@ -682,15 +684,37 @@ contains
                 call spproj%os_ptcl2D%set_all2single('state', 1)
                 call spproj%os_ptcl3D%set_all2single('state', 1)
                 ! selection
-                allocate(states(n),source=1)
+                allocate(states(n), source=1)
                 l_class_selection = .true.
                 if( size(cls2reject) == 1 )then
                     ! no rejection applied, all classes are to be selected
                     l_class_selection = cls2reject(1) /= 0
                 endif
                 if( l_class_selection )then
-                    ! >= 1 class rejected, state=0 for all rejected
-                    states(cls2reject(:)) = 0
+                    ! get all clusters and calculate their populations
+                    n_clusters = maxval(spproj%os_cls2D%get_all_asint('cluster'))
+                    allocate(clusters_accepted(n_clusters), source=0)
+                    do i=1, spproj%os_cls2D%get_noris()
+                        ! set clusters_accepted(cluster) to 1 if any child class is selected
+                        if( any(cls2reject == i) ) cycle
+                        cluster = spproj%os_cls2D%get_int(i, 'cluster')
+                        if( cluster > 0 ) clusters_accepted(cluster) = 1
+                    enddo
+                    do i=1, size(clusters_accepted)
+                        if( clusters_accepted(i) > 0) then
+                            write(logfhandle, *) ">>> CLUSTER ", i, " HAS BEEN SELECTED"
+                        else
+                            write(logfhandle, *) ">>> CLUSTER ", i, " HAS BEEN DESELECTED"
+                        endif
+                    enddo
+                    do i=1, spproj%os_cls2D%get_noris()
+                        cluster = spproj%os_cls2D%get_int(i, 'cluster')
+                        if( cluster == 0 ) then
+                            states(i) = 0
+                        else
+                            states(i) = clusters_accepted(cluster)
+                        endif
+                    enddo
                 endif
                 ! maintain state=0 for junk
                 do i = 1, n
@@ -701,6 +725,7 @@ contains
                 call spproj%write(setslist%projfiles(1))
                 ! cleanup
                 call spproj%kill
+                if( allocated(clusters_accepted) ) deallocate(clusters_accepted)
                 deallocate(states)
             end subroutine report_interactive_selection
 
