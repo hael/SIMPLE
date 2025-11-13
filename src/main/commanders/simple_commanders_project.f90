@@ -889,7 +889,6 @@ contains
         integer                         :: state,nstates,nptcls,ipart
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
-        if( .not. cline%defined('prune')           ) call cline%set('prune',            'no')
         if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
         if( .not. cline%defined('ranked_parts')    ) call cline%set('ranked_parts',    'yes')
         call params%new(cline, silent=.true.)
@@ -955,8 +954,6 @@ contains
                 ! communicate state mapping to copied project
                 call spproj_part%os_ptcl2D%set_all('state', real(states_map))
                 call spproj_part%os_ptcl3D%set_all('state', real(states_map))
-                ! prune
-                call spproj_part%prune_particles
                 ! map ptcl states to classes
                 call spproj_part%map_ptcls_state_to_cls
                 ! write project
@@ -975,7 +972,6 @@ contains
             endif
             call spproj%os_ptcl2D%set_all('state', real(states))
             call spproj%os_ptcl3D%set_all('state', real(states))
-            if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
             call spproj%map_ptcls_state_to_cls
         endif
         ! final full write
