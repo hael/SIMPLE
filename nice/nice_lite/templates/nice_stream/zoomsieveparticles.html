@@ -79,10 +79,10 @@
             </div>
         </div>
     </div>
-    <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
-            {% if status == "running" and jobstats.latest_accepted_cls2D|length == 0 and jobstats.latest_rejected_cls2D|length == 0%}
-                {% if jobstats.user_input is True and "accepted_cls2D" in jobstats and "rejected_cls2D" in jobstats %}
+    <div class="w-full flex-1 flex flex-row mb-[10px] overflow-hidden">
+        {% if status == "running" and jobstats.latest_accepted_cls2D|length == 0 and jobstats.latest_rejected_cls2D|length == 0%}
+            {% if jobstats.user_input is True and "accepted_cls2D" in jobstats and "rejected_cls2D" in jobstats %}
+                <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
                     <div class="font-bold text-[12px] pl-[10px]">accepted classes</div>
                     <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
@@ -105,9 +105,9 @@
                                                 {{ cls2D.res|floatformat:1 }}Å
                                             </div>
                                         </div>
-                                        <div onclick="toggleSievecls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[100px] w-[100px]">
-                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                        <div onclick="toggleSievecls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[80px] w-[80px] overflow-hidden rounded m-auto">
+                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[80px] w-[80px]">
+                                                <div class="xmark hidden h-[80px] w-[80px] text-nice4alert flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                     </svg>
@@ -139,6 +139,8 @@
                             </div>
                         </div> 
                     </div>
+                </div>
+                <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
                     <div class="font-bold text-[12px] pl-[10px]">rejected classes</div>
                     <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
@@ -161,9 +163,9 @@
                                                 {{ cls2D.res|floatformat:1 }}Å
                                             </div>
                                         </div>
-                                        <div onclick="toggleSievecls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[100px] w-[100px]">
-                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                        <div onclick="toggleSievecls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[80px] w-[80px] overflow-hidden rounded m-auto">
+                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[80px] w-[80px]">
+                                                <div class="xmark hidden h-[80px] w-[80px] text-nice4alert flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                     </svg>
@@ -195,17 +197,19 @@
                             </div>
                         </div>
                     </div>
-                {% elif "stage" in jobstats and jobstats.stage == "saving selection" %}
-                    <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
-                        saving selection ...
-                    </div>
-                {% else %}
-                    <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
-                        sieving particles ...
-                    </div>  
-                {% endif %}
+                </div>
+            {% elif "stage" in jobstats and jobstats.stage == "saving selection" %}
+                <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
+                    saving selection ...
+                </div>
+            {% else %}
+                <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
+                    sieving particles ...
+                </div>  
             {% endif %}
-            {% if "latest_accepted_cls2D" in jobstats and "latest_rejected_cls2D" in jobstats and jobstats.latest_accepted_cls2D|length > 0 or jobstats.latest_rejected_cls2D|length > 0 %}
+        {% endif %}
+        {% if "latest_accepted_cls2D" in jobstats and "latest_rejected_cls2D" in jobstats and jobstats.latest_accepted_cls2D|length > 0 or jobstats.latest_rejected_cls2D|length > 0 %}
+            <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">  
                 <div class="font-bold text-[12px] pl-[10px]">latest accepted classes</div>
                 <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                     <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
@@ -228,9 +232,9 @@
                                             {{ cls2D.res|floatformat:1 }}Å
                                         </div>
                                     </div>
-                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                        <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%;  filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[100px] w-[100px]">
-                                            <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[80px] w-[80px] overflow-hidden rounded m-auto">
+                                        <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%;  filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[80px] w-[80px]">
+                                            <div class="xmark hidden h-[80px] w-[80px] text-nice4alert flex items-center justify-center">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                                     <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                 </svg>
@@ -262,6 +266,8 @@
                         </div>
                     </div> 
                 </div>
+            </div>
+            <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
                 <div class="font-bold text-[12px] pl-[10px]">latest rejected classes</div>
                 <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                     <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
@@ -284,9 +290,9 @@
                                             {{ cls2D.res|floatformat:1 }}Å
                                         </div>
                                     </div>
-                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                        <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[100px] w-[100px]">
-                                            <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                    <div oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="sievecls bg-black h-[80px] w-[80px] overflow-hidden rounded m-auto">
+                                        <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--sieve-contrast)) brightness(var(--sieve-brightness));" class="sieveclsimg bg-black h-[80px] w-[80px]">
+                                            <div class="xmark hidden h-[80px] w-[80px] text-nice4alert flex items-center justify-center">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                                     <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                 </svg>
@@ -318,8 +324,8 @@
                         </div>
                     </div>
                 </div>
-            {% endif %}
-        </div>
+            </div>
+        {% endif %}
     </div>
 </body>
 </html>

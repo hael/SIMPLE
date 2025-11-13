@@ -306,6 +306,12 @@ window.addEventListener("visibilitychange", (event) => {
   }
 })
 
+window.addEventListener("load", (event) => {
+  // reload generate refs
+  console.log("RELOAD INIPICK")
+  window.parent.document.querySelector("#inipick_iframe").contentWindow.location.reload()
+})
+
 setInterval(function () {
   if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();
