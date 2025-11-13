@@ -575,7 +575,7 @@ class Job:
             jobmodel.initial_picking_stats = self.initial_picking_stats
             jobmodel.generate_pickrefs_status     = "terminating"
             jobmodel.generate_pickrefs_status     = {"terminate":True}
-            self.generate_pickrefs_status["stage"] = "terminating"
+            self.generate_pickrefs_stats["stage"] = "terminating"
             jobmodel.generate_pickrefs_stats = self.generate_pickrefs_stats
             jobmodel.save()
     
