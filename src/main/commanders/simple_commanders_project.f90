@@ -376,7 +376,7 @@ contains
         if(.not. inputted_dir_movies .and. .not. inputted_filetab)            THROW_HARD ('either dir_movies or filetab must be given! exec_import_movies')
         if(inputted_dir_movies .and. ( inputted_deftab .or. inputted_boxtab)) THROW_HARD ('dir_movies cannot be set with a deftab or boxtab! exec_import_movies')
         ! project file management
-        if( .not. file_exists(trim(params%projfile)) )then
+        if(.not. file_exists(trim(params%projfile)))then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
         endif
         ! nice communicator init
@@ -460,7 +460,7 @@ contains
             call spproj%add_movies(movfnames, ctfvars)
         endif
         ! add boxtab
-        if( inputted_boxtab .and. .not. inputted_dir_movies)then
+        if( inputted_boxtab .and. .not. inputted_dir_movies )then
             call read_filetable(params%boxtab, boxfnames)
             nboxf = size(boxfnames)
             if( nboxf /= nmovf )then

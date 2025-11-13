@@ -59,6 +59,7 @@ contains
     procedure          :: get_mics_table
     procedure          :: get_micparams
     procedure          :: get_micname
+    procedure          :: get_mic_kind
     procedure          :: set_boxfile
     ! os_stk related methods
     procedure          :: add_stk
@@ -1525,6 +1526,22 @@ contains
         end if
         micname = trim(self%os_mic%get_static(imic, 'intg'))
     end function get_micname
+
+    function get_mic_kind( self, imic ) result( mickind )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: imic
+        character(len=:), allocatable    :: mickind
+        mickind = NIL
+        if( self%os_mic%isthere(imic, 'imgkind') )then
+            mickind = self%os_mic%get_static(imic, 'imgkind')
+            return
+        else
+            if( self%os_mic%isthere(imic, 'movie') )then
+                mickind = 'movie'
+                return
+            endif
+        endif
+    end function get_mic_kind
 
     subroutine set_boxfile( self, i, boxfname, nptcls )
         class(sp_project), intent(inout) :: self
