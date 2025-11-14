@@ -6928,7 +6928,7 @@ contains
         call json%add(process_inputs, '', 'nptcls_per_cls='// int2str(SIEVING_NPTCLS_PER_CLASS))
         call json%add(process_inputs, '', 'nchunks='       // int2str(SIEVING_NCHUNKS))
         call json%add(process_inputs, '', 'nparts='        // int2str(SIEVING_NPARTS))
-        call json%add(process_inputs, '', 'nthr=8'         // int2str(SIEVING_NTHR))
+        call json%add(process_inputs, '', 'nthr='          // int2str(SIEVING_NTHR))
         call json%add(process_inputs, '', 'interactive=yes')
         !! 2D classification
         call json%create_object(process, 'process')
