@@ -1,6 +1,6 @@
 module simple_defs_stream
 
-    integer,            parameter :: NMICS_DELTA                = 5     ! number of micrographs to increment nmics by when user requests more particles to be used in reference generation
+    integer,            parameter :: NMICS_DELTA                = 100   ! number of micrographs to increment nmics by when user requests more particles to be used in reference generation
     integer,            parameter :: DEFAULT_NTHR_MASTER        = 4     ! number of threads requested from queue system for master processes
     integer,            parameter :: PREPROC_NPARTS             = 10
     integer,            parameter :: PREPROC_NTHR               = 4
