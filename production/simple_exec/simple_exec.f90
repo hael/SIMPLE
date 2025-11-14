@@ -47,6 +47,7 @@ type(commander_import_starproject)          :: ximport_starproject
 type(commander_export_starproject)          :: xexport_starproject
 type(commander_assign_optics_groups)        :: xassign_optics_groups
 type(commander_merge_projects)              :: xmerge_projects
+type(commander_extract_subproj)             :: xextract_subproj
 
 ! PRE-PROCESSING WORKFLOWS
 type(commander_preprocess_distr)            :: xpreprocess
@@ -236,6 +237,8 @@ select case(trim(prg))
         call xassign_optics_groups%execute(cline)
     case( 'merge_projects' )
         call xmerge_projects%execute(cline)
+    case( 'extract_subproj' )
+        call xextract_subproj%execute(cline)
 
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
@@ -497,7 +500,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('fcde1d84')
+    call simple_print_git_version('38b97c78')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

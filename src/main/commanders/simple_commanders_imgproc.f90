@@ -79,10 +79,10 @@ type, extends(commander_base) :: commander_match_stacks
     procedure :: execute      => exec_match_stacks
 end type commander_match_stacks
 
-type, extends(commander_base) :: estimate_diam_commander
+type, extends(commander_base) :: commander_estimate_diam
   contains
     procedure :: execute      => exec_estimate_diam
-end type estimate_diam_commander
+end type commander_estimate_diam
 
 contains
 
@@ -1306,7 +1306,7 @@ contains
     subroutine exec_estimate_diam( self, cline )
         use simple_segmentation
         use simple_image_msk, only: automask2D
-        class(estimate_diam_commander), intent(inout) :: self
+        class(commander_estimate_diam), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
         character(len=*), parameter :: FILT   = 'filtered.mrc'

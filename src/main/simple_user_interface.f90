@@ -1514,7 +1514,7 @@ contains
         &'extract_subproj',&                                                                                     ! name
         &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! descr_short
         &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! descr_long
-        &'single_exec',&                                                                                         ! executable
+        &'all',&                                                                                                 ! executable
         &0, 4, 0, 0, 0, 0, 0, .true., gui_advanced=.false.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output

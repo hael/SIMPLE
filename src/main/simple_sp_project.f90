@@ -2560,34 +2560,39 @@ contains
             ctfvars%phshift = 0.
             return
         endif
-        ! defocus in x
-        if( ptcl_field%isthere(iptcl, 'dfx') )then
-            ctfvars%dfx = ptcl_field%get_dfx(iptcl)
-        else
-            call ptcl_field%print(iptcl)
-            THROW_HARD('dfx (defocus in x) lacking in ptcl_field; get_ctfparams')
-        endif
-        ! defocus in y
-        dfy_was_there = .false.
-        if( ptcl_field%isthere(iptcl, 'dfy') )then
-            ctfvars%dfy = ptcl_field%get(iptcl, 'dfy')
-            dfy_was_there = .true.
-        else
-            ctfvars%dfy = ctfvars%dfx
-        endif
-        ! angle of astigmatism
-        if( ptcl_field%isthere(iptcl, 'angast') )then
-            ctfvars%angast = ptcl_field%get(iptcl, 'angast')
-        else
-            if( dfy_was_there )then
-                print *, 'iptcl: ', iptcl
-                print *, 'oritype in get_ctfparams ', trim(oritype)
-                call ptcl_field%print(iptcl)
-                THROW_HARD('astigmatic CTF model requires angast (angle of astigmatism) lacking in os_stk field; get_ctfparams')
-            else
-                ctfvars%angast = 0.
-            endif
-        endif
+        select case(trim(oritype))
+            case('stk')
+                ! nothing to do
+            case DEFAULT
+                ! defocus in x
+                if( ptcl_field%isthere(iptcl, 'dfx') )then
+                    ctfvars%dfx = ptcl_field%get_dfx(iptcl)
+                else
+                    call ptcl_field%print(iptcl)
+                    THROW_HARD('dfx (defocus in x) lacking in ptcl_field; get_ctfparams')
+                endif
+                ! defocus in y
+                dfy_was_there = .false.
+                if( ptcl_field%isthere(iptcl, 'dfy') )then
+                    ctfvars%dfy = ptcl_field%get(iptcl, 'dfy')
+                    dfy_was_there = .true.
+                else
+                    ctfvars%dfy = ctfvars%dfx
+                endif
+                ! angle of astigmatism
+                if( ptcl_field%isthere(iptcl, 'angast') )then
+                    ctfvars%angast = ptcl_field%get(iptcl, 'angast')
+                else
+                    if( dfy_was_there )then
+                        print *, 'iptcl: ', iptcl
+                        print *, 'oritype in get_ctfparams ', trim(oritype)
+                        call ptcl_field%print(iptcl)
+                        THROW_HARD('astigmatic CTF model requires angast (angle of astigmatism) lacking in os_stk field; get_ctfparams')
+                    else
+                        ctfvars%angast = 0.
+                    endif
+                endif
+        end select
         ! has phaseplate
         if( self%os_stk%isthere(stkind, 'phaseplate') )then
             phaseplate = trim(self%os_stk%get_static(stkind, 'phaseplate'))

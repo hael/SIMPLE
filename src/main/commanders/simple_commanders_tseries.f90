@@ -22,30 +22,30 @@ use simple_nice
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: tseries_import_commander
+type, extends(commander_base) :: commander_tseries_import
   contains
     procedure :: execute      => exec_tseries_import
-end type tseries_import_commander
+end type commander_tseries_import
 
-type, extends(commander_base) :: tseries_commander_import_particles
+type, extends(commander_base) :: commander_tseries_import_particles
   contains
     procedure :: execute      => exec_tseries_import_particles
-end type tseries_commander_import_particles
+end type commander_tseries_import_particles
 
-type, extends(commander_base) :: commander_tseries_motion_correctdistr
+type, extends(commander_base) :: commander_tseries_motion_correct_distr
   contains
     procedure :: execute      => exec_tseries_motion_correct_distr
-end type commander_tseries_motion_correctdistr
+end type commander_tseries_motion_correct_distr
 
 type, extends(commander_base) :: commander_tseries_motion_correct
   contains
     procedure :: execute      => exec_tseries_motion_correct
 end type commander_tseries_motion_correct
 
-type, extends(commander_base) :: tseries_make_pickavg_commander
+type, extends(commander_base) :: commander_tseries_make_pickavg
   contains
     procedure :: execute      => exec_tseries_make_pickavg
-end type tseries_make_pickavg_commander
+end type commander_tseries_make_pickavg
 
 type, extends(commander_base) :: commander_tseries_track_particles_distr
   contains
@@ -57,101 +57,96 @@ type, extends(commander_base) :: commander_tseries_track_particles
     procedure :: execute      => exec_tseries_track_particles
 end type commander_tseries_track_particles
 
-type, extends(commander_base) :: analysis2D_nano_commander
+type, extends(commander_base) :: commander_analysis2D_nano
   contains
     procedure :: execute      => exec_analysis2D_nano
-end type analysis2D_nano_commander
+end type commander_analysis2D_nano
 
-type, extends(commander_base) :: center2D_nano_commander
+type, extends(commander_base) :: commander_center2D_nano
   contains
     procedure :: execute      => exec_center2D_nano
-end type center2D_nano_commander
+end type commander_center2D_nano
 
-type, extends(commander_base) :: cluster2D_nano_commander
+type, extends(commander_base) :: commander_cluster2D_nano
   contains
     procedure :: execute      => exec_cluster2D_nano
-end type cluster2D_nano_commander
+end type commander_cluster2D_nano
 
-type, extends(commander_base) :: tseries_backgr_subtr_commander
+type, extends(commander_base) :: commander_tseries_backgr_subtr
   contains
     procedure :: execute      => exec_tseries_backgr_subtr
-end type tseries_backgr_subtr_commander
+end type commander_tseries_backgr_subtr
 
-type, extends(commander_base) :: tseries_commander_ctf_estimate
+type, extends(commander_base) :: commander_tseries_ctf_estimate
   contains
     procedure :: execute      => exec_tseries_ctf_estimate
-end type tseries_commander_ctf_estimate
+end type commander_tseries_ctf_estimate
 
-type, extends(commander_base) :: extract_substk_commander
+type, extends(commander_base) :: commander_extract_substk
 contains
     procedure :: execute      => exec_extract_substk
-end type extract_substk_commander
+end type commander_extract_substk
 
-type, extends(commander_base) :: extract_subproj_commander
-contains
-    procedure :: execute      => exec_extract_subproj
-end type extract_subproj_commander
-
-type, extends(commander_base) :: autorefine3D_nano_commander
+type, extends(commander_base) :: commander_autorefine3D_nano
   contains
     procedure :: execute      => exec_autorefine3D_nano
-end type autorefine3D_nano_commander
+end type commander_autorefine3D_nano
 
-type, extends(commander_base) :: cavgsproc_nano_commander
+type, extends(commander_base) :: commander_cavgsproc_nano
   contains
     procedure :: execute      => exec_cavgsproc_nano
-end type cavgsproc_nano_commander
+end type commander_cavgsproc_nano
 
-type, extends(commander_base) :: cavgseoproc_nano_commander
+type, extends(commander_base) :: commander_cavgseoproc_nano
   contains
     procedure :: execute      => exec_cavgseoproc_nano
-end type cavgseoproc_nano_commander
+end type commander_cavgseoproc_nano
 
-type, extends(commander_base) :: ptclsproc_nano_commander
+type, extends(commander_base) :: commander_ptclsproc_nano
   contains
     procedure :: execute      => exec_ptclsproc_nano
-end type ptclsproc_nano_commander
+end type commander_ptclsproc_nano
 
-type, extends(commander_base) :: refine3D_nano_commander
+type, extends(commander_base) :: commander_refine3D_nano
   contains
     procedure :: execute      => exec_refine3D_nano
-end type refine3D_nano_commander
+end type commander_refine3D_nano
 
-type, extends(commander_base) :: graphene_subtr_commander
+type, extends(commander_base) :: commander_graphene_subtr
   contains
     procedure :: execute      => exec_graphene_subtr
-end type graphene_subtr_commander
+end type commander_graphene_subtr
 
-type, extends(commander_base) :: denoise_trajectory_commander
+type, extends(commander_base) :: commander_denoise_trajectory
   contains
     procedure :: execute      => exec_denoise_trajectory
-end type denoise_trajectory_commander
+end type commander_denoise_trajectory
 
-type, extends(commander_base) :: tseries_swap_commander_stack
+type, extends(commander_base) :: commander_tseries_swap_stack
   contains
     procedure :: execute      => exec_tseries_swap_stack
-end type tseries_swap_commander_stack
+end type commander_tseries_swap_stack
 
-type, extends(commander_base) :: tseries_reconstruct3D_distr
+type, extends(commander_base) :: commander_tseries_reconstruct3D_distr
   contains
-    procedure :: execute      => exec_tseries_reconstruct3D_distr
-end type tseries_reconstruct3D_distr
+    procedure :: execute      => exec_commander_tseries_reconstruct3D_distr
+end type commander_tseries_reconstruct3D_distr
 
-type, extends(commander_base) :: tseries_core_finder_commander
+type, extends(commander_base) :: commander_tseries_core_finder
   contains
     procedure :: execute      => exec_tseries_core_finder
-end type tseries_core_finder_commander
+end type commander_tseries_core_finder
 
-type, extends(commander_base) :: tseries_make_projavgs_commander
+type, extends(commander_base) :: commander_tseries_make_projavgs
   contains
     procedure :: execute      => exec_tseries_make_projavgs
-end type tseries_make_projavgs_commander
+end type commander_tseries_make_projavgs
 
 contains
 
     subroutine exec_tseries_import( self, cline )
         use simple_sp_project, only: sp_project
-        class(tseries_import_commander), intent(inout) :: self
+        class(commander_tseries_import), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -186,7 +181,7 @@ contains
     subroutine exec_tseries_import_particles( self, cline )
         use simple_sp_project,       only: sp_project
         use simple_ctf_estimate_fit, only: ctf_estimate_fit
-        class(tseries_commander_import_particles), intent(inout) :: self
+        class(commander_tseries_import_particles), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         type(parameters)       :: params
         type(sp_project)       :: spproj
@@ -236,7 +231,7 @@ contains
     end subroutine exec_tseries_import_particles
 
     subroutine exec_tseries_motion_correct_distr( self, cline )
-        class(commander_tseries_motion_correctdistr), intent(inout) :: self
+        class(commander_tseries_motion_correct_distr), intent(inout) :: self
         class(cmdline),                                intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -373,7 +368,7 @@ contains
         use simple_commanders_imgproc,   only: commander_stack
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_tvfilter,            only: tvfilter
-        class(tseries_make_pickavg_commander), intent(inout) :: self
+        class(commander_tseries_make_pickavg), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         real, parameter :: LAM_TV = 1.5
         character(len=LONGSTRLEN), allocatable :: framenames(:)
@@ -593,15 +588,15 @@ contains
     end subroutine exec_tseries_track_particles
 
     subroutine exec_analysis2D_nano( self, cline )
-        use simple_commanders_imgproc, only: estimate_diam_commander
-        use simple_commanders_sim,     only: simulate_atoms_commander
-        class(analysis2D_nano_commander), intent(inout) :: self
+        use simple_commanders_imgproc, only: commander_estimate_diam
+        use simple_commanders_sim,     only: commander_simulate_atoms
+        class(commander_analysis2D_nano), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
-        type(center2D_nano_commander)  :: xcenter2D
-        type(cluster2D_nano_commander) :: xcluster2D
-        type(estimate_diam_commander)  :: xest_diam
-        type(simulate_atoms_commander) :: xsim_atms
+        type(commander_center2D_nano)  :: xcenter2D
+        type(commander_cluster2D_nano) :: xcluster2D
+        type(commander_estimate_diam)  :: xest_diam
+        type(commander_simulate_atoms) :: xsim_atms
         ! other variables
         type(simple_nice_communicator) :: nice_communicator
         type(parameters)               :: params
@@ -665,10 +660,10 @@ contains
     end subroutine exec_analysis2D_nano
 
     subroutine exec_center2D_nano( self, cline )
-        class(center2D_nano_commander), intent(inout) :: self
+        class(commander_center2D_nano), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(cluster2D_nano_commander)   :: xcluster2D_nano ! shared-memory by default
+        type(commander_cluster2D_nano)   :: xcluster2D_nano ! shared-memory by default
         type(commander_make_cavgs_distr) :: xmake_cavgs
         ! constants
         integer, parameter               :: NCLS_CEN_NANO = 10
@@ -735,7 +730,7 @@ contains
     end subroutine exec_center2D_nano
 
     subroutine exec_cluster2D_nano( self, cline )
-        class(cluster2D_nano_commander), intent(inout) :: self
+        class(commander_cluster2D_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commander
         type(commander_cluster2D) :: xcluster2D ! shared-memory
@@ -777,7 +772,7 @@ contains
         ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
         ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
         use simple_ctf,   only: ctf
-        class(tseries_backgr_subtr_commander), intent(inout) :: self
+        class(commander_tseries_backgr_subtr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -853,7 +848,7 @@ contains
 
     subroutine exec_tseries_ctf_estimate( self, cline )
         use simple_ctf_estimate_fit, only: ctf_estimate_fit
-        class(tseries_commander_ctf_estimate), intent(inout) :: self
+        class(commander_tseries_ctf_estimate), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=LONGSTRLEN), parameter :: pspec_fname  = 'tseries_ctf_estimate_pspec.mrc'
         character(len=LONGSTRLEN), parameter :: diag_fname   = 'tseries_ctf_estimate_diag'//JPG_EXT
@@ -905,7 +900,7 @@ contains
 
     subroutine exec_refine3D_nano( self, cline )
         use simple_commanders_refine3D, only: commander_refine3D_distr
-        class(refine3D_nano_commander), intent(inout) :: self
+        class(commander_refine3D_nano), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commander
         type(commander_refine3D_distr) :: xrefine3D_distr
@@ -935,7 +930,7 @@ contains
 
     subroutine exec_extract_substk( self, cline )
         use simple_image, only: image
-        class(extract_substk_commander), intent(inout) :: self
+        class(commander_extract_substk), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -950,81 +945,12 @@ contains
         call simple_end('**** SINGLE_EXTRACT_SUBSTK NORMAL STOP ****')
     end subroutine exec_extract_substk
 
-    subroutine exec_extract_subproj( self, cline )
-        use simple_image, only: image
-        use simple_commanders_project, only: commander_new_project, commander_import_particles
-        class(extract_subproj_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        integer, allocatable             :: pinds(:)
-        type(parameters)                 :: params
-        type(sp_project)                 :: spproj
-        type(commander_new_project)      :: xnew_proj
-        type(commander_import_particles) :: ximport_particles
-        type(ctfparams)                  :: ctfvars
-        type(cmdline)                    :: cline_new_proj, cline_import_particles
-        type(oris)                       :: os_ptcl2D_prev, os_ptcl3D_prev
-        integer :: cnt, i, n, np2D, np3D
-        call cline%set('mkdir', 'no')
-        ! init params
-        call params%new(cline)
-        ! read the project file
-        call spproj%read(params%projfile)
-        call spproj%write_segment_inside('projinfo')
-        ! create substack
-        if( .not. cline%defined('outstk') )then
-            params%outstk = trim(params%subprojname)//'.mrcs'
-        endif
-        call spproj%write_substk([params%fromp,params%top], params%outstk)
-        ! extarct previous oris
-        os_ptcl2D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
-        os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
-        ! extract previous pinds
-        pinds = nint(os_ptcl3D_prev%get_all('pind'))
-        n     = size(pinds) 
-        ! get ctf variables
-        ctfvars = spproj%get_ctfparams('stk', 1)
-        ! make new project
-        call cline_new_proj%set('projname', trim(params%subprojname))
-        call xnew_proj%execute_safe(cline_new_proj)
-        ! import particles
-        call cline_import_particles%set('prg',      'import_particles') ! needs to be here for exec_dir creation
-        call cline_import_particles%set('projfile', trim(params%subprojname)//'.simple')
-        call cline_import_particles%set('cs',       ctfvars%cs)
-        call cline_import_particles%set('fraca',    ctfvars%fraca)
-        call cline_import_particles%set('kv',       ctfvars%kv)
-        call cline_import_particles%set('smpd',     ctfvars%smpd)
-        call cline_import_particles%set('stk',      '../'//trim(params%outstk))
-        call cline_import_particles%set('ctf',      'no')
-        call ximport_particles%execute_safe(cline_import_particles)
-        ! trasnfer previous particle indices to project
-        call spproj%read(trim(params%subprojname)//'.simple')
-        np3D = spproj%os_ptcl3D%get_noris()
-        np2D = spproj%os_ptcl2D%get_noris()
-        if( np3D /= n .or. np2D /= n ) THROW_HARD('Incongruent ptcl2D/ptcl3D fields')
-        do i = 1,n
-            call spproj%os_ptcl2D%transfer_2Dparams(i, os_ptcl2D_prev, i)
-            call spproj%os_ptcl3D%transfer_3Dparams(i, os_ptcl3D_prev, i)
-            call spproj%os_ptcl2D%set(i, 'pind', pinds(i))
-            call spproj%os_ptcl3D%set(i, 'pind', pinds(i))
-        end do
-        call spproj%write
-        ! get back to working dir
-        call simple_chdir('../')
-        call simple_chdir('../')
-        ! destruct
-        call spproj%kill
-        call os_ptcl2D_prev%kill
-        call os_ptcl3D_prev%kill
-        ! end gracefully
-        call simple_end('**** SINGLE_EXTRACT_SUBPROJ NORMAL STOP ****')
-    end subroutine exec_extract_subproj
-
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commanders_atoms, only: commander_detect_atoms
-        class(autorefine3D_nano_commander), intent(inout) :: self
+        class(commander_autorefine3D_nano), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)              :: params
-        type(refine3D_nano_commander) :: xrefine3D_nano
+        type(commander_refine3D_nano) :: xrefine3D_nano
         type(commander_detect_atoms)  :: xdetect_atms
         type(commander_reproject)     :: xreproject
         type(commander_vizoris)       :: xvizoris
@@ -1229,7 +1155,7 @@ contains
 
     subroutine exec_ptclsproc_nano( self, cline )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
-        class(ptclsproc_nano_commander), intent(inout) :: self
+        class(commander_ptclsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
@@ -1287,7 +1213,7 @@ contains
     end subroutine exec_ptclsproc_nano
 
     subroutine exec_cavgseoproc_nano( self, cline )
-        class(cavgseoproc_nano_commander), intent(inout) :: self
+        class(commander_cavgseoproc_nano), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)              :: params
         type(image)                   :: cavg_even, cavg_odd, img_w
@@ -1354,10 +1280,10 @@ contains
 
     subroutine exec_cavgsproc_nano( self, cline )
         !use simple_commanders_atoms, only: commander_detect_atoms
-        class(cavgsproc_nano_commander), intent(inout) :: self
+        class(commander_cavgsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)              :: params
-        type(refine3D_nano_commander) :: xrefine3D_nano
+        type(commander_refine3D_nano) :: xrefine3D_nano
         type(commander_reproject)     :: xreproject
         type(cmdline)                 :: cline_refine3D_cavgs, cline_reproject
         type(image),      allocatable :: imgs(:)
@@ -1473,7 +1399,7 @@ contains
 
     subroutine exec_graphene_subtr( self, cline )
         use simple_tseries_graphene_subtr
-        class(graphene_subtr_commander), intent(inout) :: self
+        class(commander_graphene_subtr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
@@ -1564,7 +1490,7 @@ contains
 
     subroutine exec_denoise_trajectory( self, cline )
         use simple_commanders_imgproc, only: commander_ppca_denoise
-        class(denoise_trajectory_commander), intent(inout) :: self
+        class(commander_denoise_trajectory), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(commander_ppca_denoise) :: xkpca_den
         if( .not. cline%defined('neigs')    ) call cline%set('neigs', 500)
@@ -1574,7 +1500,7 @@ contains
 
     subroutine exec_tseries_swap_stack( self, cline )
         use simple_commanders_project
-        class(tseries_swap_commander_stack), intent(inout) :: self
+        class(commander_tseries_swap_stack), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(sp_project) :: spproj, spproj_tmp
         type(parameters) :: params
@@ -1609,13 +1535,13 @@ contains
         call simple_end('**** SINGLE_TSERIES_SWAP_STACK NORMAL STOP ****')
     end subroutine exec_tseries_swap_stack
 
-    subroutine exec_tseries_reconstruct3D_distr( self, cline )
+    subroutine exec_commander_tseries_reconstruct3D_distr( self, cline )
         use simple_commanders_rec, only: commander_volassemble
         ! use simple_opt_mask,      only: estimate_spher_mask
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
         ! real, parameter :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
-        class(tseries_reconstruct3D_distr), intent(inout) :: self
+        class(commander_tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN), allocatable :: vol_fnames(:)
         real,                  allocatable :: ccs(:,:,:), fsc(:), rstates(:), rad_cc(:), rad_dists(:)
@@ -1746,12 +1672,12 @@ contains
             call fclose(funit)
         enddo
         call simple_end('**** SIMPLE_TSERIES_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_tseries_reconstruct3D_distr
+    end subroutine exec_commander_tseries_reconstruct3D_distr
 
     subroutine exec_tseries_core_finder( self, cline )
         use simple_opt_mask, only: estimate_spher_mask
         use simple_image_msk,   only: image_msk
-        class(tseries_core_finder_commander), intent(inout) :: self
+        class(commander_tseries_core_finder), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
         real, parameter   :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
         type(parameters)  :: params
@@ -1823,7 +1749,7 @@ contains
 
     subroutine exec_tseries_make_projavgs( self, cline )
         use simple_strategy2D3D_common
-        class(tseries_make_projavgs_commander), intent(inout) :: self
+        class(commander_tseries_make_projavgs), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)               :: params
         type(builder)                  :: build
