@@ -17,8 +17,8 @@ module simple_defs_stream
     integer,            parameter :: CLASS2D_NPARTS             = 10
     integer,            parameter :: CLASS2D_NTHR               = 8
     integer,            parameter :: STREAM_DEFAULT_KV          = 300
-    real,               parameter :: STREAM_DEFAULT_CS          = 2.7
-    real,               parameter :: STREAM_DEFAULT_FRACA       = 0.1
+    character(len=*),   parameter :: STREAM_DEFAULT_CS          = '2.7'
+    character(len=*),   parameter :: STREAM_DEFAULT_FRACA       = '0.1'
     character(len=*),   parameter :: PREPROC_JOB_NAME           = 'preprocessing'           ! name of preproc job. also used for folder name
     character(len=*),   parameter :: OPTICS_JOB_NAME            = 'optics_assignment'       ! name of optics assignment job. also used for folder name
     character(len=*),   parameter :: OPENING2D_JOB_NAME         = 'opening_2D'              ! name of opening 2D job. also used for folder name

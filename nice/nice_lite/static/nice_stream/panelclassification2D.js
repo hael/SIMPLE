@@ -310,14 +310,15 @@ window.addEventListener("load", () =>{
             },
             data: {
             labels: [
-                'queued',
+         //       'queued',
                 'accepted',
                 'rejected'
             ],
             datasets: [{
-                data: [n_imported - n_accepted - n_rejected, n_accepted, n_rejected],
+             //   data: [n_imported - n_accepted - n_rejected, n_accepted, n_rejected],
+                data: [n_accepted, n_rejected],
                 backgroundColor: [
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
+               //     window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
                     window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
                     window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
                 ],

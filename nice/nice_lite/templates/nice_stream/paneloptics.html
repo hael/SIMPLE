@@ -12,7 +12,7 @@
 <body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
     <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
     {% if "micrographs_assigned" not in jobstats or jobstats.micrographs_assigned == 0 %}
-        <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for output ...</div>
+        <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for preprocessing ...</div>
     {% endif %}
     {% if status == "restarting" %}
         <div class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">restarting ...</div>

@@ -6787,7 +6787,7 @@ contains
         call json%add(input, 'descr_short', 'Spherical aberration (mm)')
         call json%add(input, 'descr_long',  'Spherical aberration (mm)')
         call json%add(input, 'required',    .TRUE.)
-        call json%add(input, 'default',     real2str(STREAM_DEFAULT_CS))
+        call json%add(input, 'default',     STREAM_DEFAULT_CS)
         !! fraca
         call json%create_object(input, 'input')
         call json%add(user_inputs, input)
@@ -6796,7 +6796,7 @@ contains
         call json%add(input, 'descr_short', 'Amplitude contrast fraction')
         call json%add(input, 'descr_long',  'Amplitude contrast fraction')
         call json%add(input, 'required',    .TRUE.)
-        call json%add(input, 'default',     real2str(STREAM_DEFAULT_FRACA))
+        call json%add(input, 'default',     STREAM_DEFAULT_FRACA)
         !! kv
         call json%create_object(input, 'input')
         call json%add(user_inputs, input)
