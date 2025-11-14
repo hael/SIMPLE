@@ -6,9 +6,9 @@ use simple_ctf,        only: ctf
 use simple_simulator,  only: simimg
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
-use simple_commanders_sim, only: simulate_atoms_commander
+use simple_commanders_sim, only: commander_simulate_atoms
 implicit none
-type(simulate_atoms_commander) :: xsim_atoms
+type(commander_simulate_atoms) :: xsim_atoms
 type(parameters) :: params
 type(cmdline)    :: cline, cline_graphene, cline_particle
 type(image)      :: graphene, graphene_vol, particle_vol, particle, img

@@ -126,6 +126,11 @@ type, extends(commander_base) :: commander_write_mic_filetab
     procedure :: execute      => exec_write_mic_filetab
 end type commander_write_mic_filetab
 
+type, extends(commander_base) :: commander_extract_subproj
+contains
+    procedure :: execute      => exec_extract_subproj
+end type commander_extract_subproj
+
 contains
 
     subroutine exec_new_project( self, cline )
@@ -1822,5 +1827,72 @@ contains
         if( allocated(orimap)  ) deallocate(orimap)
         call simple_end('**** WRITE_MIC_FILETAB NORMAL STOP ****')
     end subroutine exec_write_mic_filetab
+
+    subroutine exec_extract_subproj( self, cline )
+        class(commander_extract_subproj), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        integer, allocatable             :: pinds(:)
+        type(parameters)                 :: params
+        type(sp_project)                 :: spproj
+        type(commander_new_project)      :: xnew_proj
+        type(commander_import_particles) :: ximport_particles
+        type(ctfparams)                  :: ctfvars
+        type(cmdline)                    :: cline_new_proj, cline_import_particles
+        type(oris)                       :: os_ptcl2D_prev, os_ptcl3D_prev
+        integer :: cnt, i, n, np2D, np3D
+        call cline%set('mkdir', 'no')
+        ! init params
+        call params%new(cline)
+        ! read the project file
+        call spproj%read(params%projfile)
+        call spproj%write_segment_inside('projinfo')
+        ! create substack
+        if( .not. cline%defined('outstk') )then
+            params%outstk = trim(params%subprojname)//'.mrcs'
+        endif
+        call spproj%write_substk([params%fromp,params%top], params%outstk)
+        ! extract previous oris
+        os_ptcl2D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
+        os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
+        ! extract previous pinds
+        pinds = nint(os_ptcl3D_prev%get_all('pind'))
+        n     = size(pinds) 
+        ! get ctf variables
+        ctfvars = spproj%get_ctfparams('stk', 1)
+        ! make new project
+        call cline_new_proj%set('projname', trim(params%subprojname))
+        call xnew_proj%execute_safe(cline_new_proj)
+        ! import particles
+        call cline_import_particles%set('prg',      'import_particles') ! needs to be here for exec_dir creation
+        call cline_import_particles%set('projfile', trim(params%subprojname)//'.simple')
+        call cline_import_particles%set('cs',       ctfvars%cs)
+        call cline_import_particles%set('fraca',    ctfvars%fraca)
+        call cline_import_particles%set('kv',       ctfvars%kv)
+        call cline_import_particles%set('smpd',     ctfvars%smpd)
+        call cline_import_particles%set('stk',      '../'//trim(params%outstk))
+        call cline_import_particles%set('ctf',      'no')
+        call ximport_particles%execute_safe(cline_import_particles)
+        ! transfer previous particle indices to project
+        call spproj%read(trim(params%subprojname)//'.simple')
+        np3D = spproj%os_ptcl3D%get_noris()
+        np2D = spproj%os_ptcl2D%get_noris()
+        if( np3D /= n .or. np2D /= n ) THROW_HARD('Incongruent ptcl2D/ptcl3D fields')
+        do i = 1,n
+            call spproj%os_ptcl2D%transfer_2Dparams(i, os_ptcl2D_prev, i)
+            call spproj%os_ptcl3D%transfer_3Dparams(i, os_ptcl3D_prev, i)
+            call spproj%os_ptcl2D%set(i, 'pind', pinds(i))
+            call spproj%os_ptcl3D%set(i, 'pind', pinds(i))
+        end do
+        call spproj%write
+        ! get back to working dir
+        call simple_chdir('../')
+        call simple_chdir('../')
+        ! destruct
+        call spproj%kill
+        call os_ptcl2D_prev%kill
+        call os_ptcl3D_prev%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_EXTRACT_SUBPROJ NORMAL STOP ****')
+    end subroutine exec_extract_subproj
 
 end module simple_commanders_project

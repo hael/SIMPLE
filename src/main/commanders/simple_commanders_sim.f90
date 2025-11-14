@@ -31,10 +31,10 @@ type, extends(commander_base) :: commander_simulate_subtomogram
     procedure :: execute      => exec_simulate_subtomogram
 end type commander_simulate_subtomogram
 
-type, extends(commander_base) :: simulate_atoms_commander
+type, extends(commander_base) :: commander_simulate_atoms
   contains
     procedure :: execute      => exec_simulate_atoms
-end type simulate_atoms_commander
+end type commander_simulate_atoms
 
 contains
 
@@ -432,7 +432,7 @@ contains
 
     subroutine exec_simulate_atoms( self, cline )
         use simple_atoms, only: atoms
-        class(simulate_atoms_commander), intent(inout) :: self
+        class(commander_simulate_atoms), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         real, parameter  :: NPIX_CUTOFF = 12.
         type(parameters) :: params
