@@ -1831,7 +1831,9 @@ contains
     subroutine exec_extract_subproj( self, cline )
         class(commander_extract_subproj), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        integer, allocatable             :: pinds(:)
+        character(len=*), parameter      :: DEFTAB = 'subproj_deftab.txt'
+        integer,          allocatable    :: pinds(:)
+        character(len=:), allocatable    :: ctfflag
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         type(commander_new_project)      :: xnew_proj
@@ -1859,6 +1861,14 @@ contains
         n     = size(pinds) 
         ! get ctf variables
         ctfvars = spproj%get_ctfparams('stk', 1)
+        select case(ctfvars%ctfflag)
+            case(CTFFLAG_NO)
+                ctfflag = 'no'
+            case DEFAULT
+                ! generate file with defocus values
+                call spproj%write_segment2txt('ptcl2D', DEFTAB, [params%fromp,params%top])
+                ctfflag = spproj%get_ctfflag('ptcl2D', 1)
+        end select
         ! make new project
         call cline_new_proj%set('projname', trim(params%subprojname))
         call xnew_proj%execute_safe(cline_new_proj)
@@ -1870,7 +1880,10 @@ contains
         call cline_import_particles%set('kv',       ctfvars%kv)
         call cline_import_particles%set('smpd',     ctfvars%smpd)
         call cline_import_particles%set('stk',      '../'//trim(params%outstk))
-        call cline_import_particles%set('ctf',      'no')
+        call cline_import_particles%set('ctf',      ctfflag)
+        if( trim(ctfflag) .ne. 'no' )then
+            call cline_import_particles%set('deftab', '../'//DEFTAB)
+        endif
         call ximport_particles%execute_safe(cline_import_particles)
         ! transfer previous particle indices to project
         call spproj%read(trim(params%subprojname)//'.simple')
@@ -1885,8 +1898,8 @@ contains
         end do
         call spproj%write
         ! get back to working dir
-        call simple_chdir('../')
-        call simple_chdir('../')
+        call simple_chdir('../../')
+        call del_file(DEFTAB)
         ! destruct
         call spproj%kill
         call os_ptcl2D_prev%kill
