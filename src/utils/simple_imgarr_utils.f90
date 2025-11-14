@@ -38,7 +38,7 @@ contains
         type(image), allocatable :: imgs_packed(:)
         integer :: n, cnt, n_pack, i
         n = size(imgs)
-        if( n /= size(mask) ) THROW_HARD('Incongruent mask')
+        if( n /= size(mask) ) THROW_HARD('Incongruent mask: '//int2str(n)//' vs '//int2str(size(mask)))
         n_pack = count(mask)
         if( n_pack == 0 ) return
         allocate(imgs_packed(n_pack))

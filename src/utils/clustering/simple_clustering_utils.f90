@@ -70,6 +70,7 @@ contains
             case('refine') 
                 call kmed%new(labels, dmat)
                 call kmed%cluster
+                allocate(i_medoids(nclust))
                 call kmed%get_labels(labels)
                 call kmed%get_medoids(i_medoids)
                 call kmed%kill

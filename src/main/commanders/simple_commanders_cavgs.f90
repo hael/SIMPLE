@@ -171,6 +171,7 @@ contains
         if( trim(params%have_clustering).eq.'yes' )then
             labels    = spproj%os_cls2D%get_all_asint('cluster')
             allocate(l_non_junk(size(labels)), source=labels > 0)
+            labels    = pack(labels,mask=l_non_junk)
             ncls_sel  = count(l_non_junk)
             cavg_imgs = read_cavgs_into_imgarr(spproj, l_non_junk)
             smpd      = cavg_imgs(1)%get_smpd()
