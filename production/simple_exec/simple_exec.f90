@@ -71,7 +71,6 @@ type(commander_cluster_cavgs)               :: xcluster_cavgs
 type(commander_cluster_stack)               :: xcluster_stack
 type(commander_select_clusters)             :: xsel_clusts
 type(commander_match_cavgs)                 :: xmatch_cavgs
-type(commander_match_cavgs2afm)             :: xmatch_cavgs2afm
 type(commander_match_stacks)                :: xmatch_stacks
 type(commander_score_ptcls)                 :: xscore_ptcls
 type(commander_write_classes)               :: xwrite_classes
@@ -285,8 +284,6 @@ select case(trim(prg))
         call xsel_clusts%execute(cline)
     case( 'match_cavgs' )
         call xmatch_cavgs%execute(cline)
-    case( 'match_cavgs2afm' )
-        call xmatch_cavgs2afm%execute(cline)
     case( 'match_stacks' )
         call xmatch_stacks%execute(cline)
     case( 'score_ptcls' )
@@ -500,7 +497,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('178c50eb')
+    call simple_print_git_version('a474b69f')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

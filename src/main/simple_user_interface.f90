@@ -143,7 +143,6 @@ type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: map_validation
 type(simple_program), target :: mask
 type(simple_program), target :: match_cavgs
-type(simple_program), target :: match_cavgs2afm
 type(simple_program), target :: match_stacks
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mini_stream
@@ -481,7 +480,6 @@ contains
         call new_map_validation
         call new_mask
         call new_match_cavgs
-        call new_match_cavgs2afm
         call new_match_stacks
         call new_merge_projects
         call new_mini_stream
@@ -635,7 +633,6 @@ contains
         call push2prg_ptr_array(map_validation)
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(match_cavgs)
-        call push2prg_ptr_array(match_cavgs2afm)
         call push2prg_ptr_array(match_stacks)
         call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mini_stream)
@@ -802,10 +799,9 @@ contains
             case('map_validation');              ptr2prg => map_validation
             case('mask');                        ptr2prg => mask
             case('match_cavgs');                 ptr2prg => match_cavgs
-            case('match_cavgs2afm');             ptr2prg => match_cavgs2afm
             case('match_stacks');                ptr2prg => match_stacks
             case('merge_projects');              ptr2prg => merge_projects
-            case('mini_stream');                  ptr2prg => mini_stream
+            case('mini_stream');                 ptr2prg => mini_stream
             case('mkdir');                       ptr2prg => mkdir_
             case('model_validation');            ptr2prg => model_validation
             case('model_validation_eo');         ptr2prg => model_validation_eo
@@ -941,7 +937,6 @@ contains
         write(logfhandle,'(A)') map_validation%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') match_cavgs%name
-        write(logfhandle,'(A)') match_cavgs2afm%name
         write(logfhandle,'(A)') match_stacks%name
         write(logfhandle,'(A)') merge_projects%name
         write(logfhandle,'(A)') mini_stream%name
@@ -3306,14 +3301,15 @@ contains
         &'Analysis of class averages with k-medoids',&                ! descr_short
         &'is a program for analyzing class averages with k-medoids',& ! descr_long
         &'simple_exec',&                                              ! executable
-        &0, 3, 0, 1, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 4, 0, 1, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call match_cavgs%set_input('parm_ios', 1, projfile_target)
-        call match_cavgs%set_input('parm_ios', 2, projfile_merged)
-        call match_cavgs%set_input('parm_ios', 3, prune)
+        call match_cavgs%set_input('parm_ios', 1, projfile)
+        call match_cavgs%set_input('parm_ios', 2, projfile_target)
+        call match_cavgs%set_input('parm_ios', 3, projfile_merged)
+        call match_cavgs%set_input('parm_ios', 4, prune)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3326,32 +3322,6 @@ contains
         ! computer controls
         call match_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_match_cavgs
-
-    subroutine new_match_cavgs2afm
-        ! PROGRAM SPECIFICATION
-        call match_cavgs2afm%new(&
-        &'match_cavgs2afm',&                                              ! name
-        &'Analysis of class averages against AFM particles',&                ! descr_short
-        &'is a program for analyzing class averages with AFM particles',& ! descr_long
-        &'simple_exec',&                                              ! executable
-        &1, 1, 0, 0, 2, 0, 1, .true.)                                 ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call match_cavgs2afm%set_input('img_ios', 1, 'stk',  'file', 'Stack of AFM particles',  'Stack of AFM particles for comparison', 'e.g. stk.mrcs', .true., '')
-        ! parameter input/output
-        call match_cavgs2afm%set_input('parm_ios', 1, smpd_target)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call match_cavgs2afm%set_input('filt_ctrls', 1, hp)
-        call match_cavgs2afm%set_input('filt_ctrls', 2, lp)
-        ! mask controls
-        ! <empty> 
-        ! computer controls
-        call match_cavgs2afm%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_match_cavgs2afm
 
     subroutine new_match_stacks
         ! PROGRAM SPECIFICATION
