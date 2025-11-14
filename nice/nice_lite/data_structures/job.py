@@ -482,6 +482,18 @@ class Job:
             jobmodel.save()
             self.terminate_initial_pick()
 
+    def regenerate_pickrefs(self):
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is not None:
+            updated = jobmodel.generate_pickrefs_update
+            updated["increase_nmics"]          = True
+            updated["terminate"]               = False
+            jobmodel.generate_pickrefs_update  = updated
+            self.generate_pickrefs_stats["user_input"] = False
+            self.generate_pickrefs_stats["stage"]      = "using more particles"
+            jobmodel.generate_pickrefs_stats = self.generate_pickrefs_stats
+            jobmodel.save()
+
     def snapshot_classification_2D(self, snapshot_selection, snapshot_iteration):
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is not None:

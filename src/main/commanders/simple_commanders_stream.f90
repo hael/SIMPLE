@@ -921,6 +921,10 @@ contains
                 call cline%delete('moldiam')
                 write(logfhandle,'(A)')'>>> MOLDIAM IGNORED'
             endif
+            ! test for STREAM_NMICS file in pickrefs folder and copy here if it exists
+            if(file_exists(stemname(params%pickrefs) // '/' // STREAM_NMICS)) then
+                call simple_copy_file(stemname(params%pickrefs) // '/' // STREAM_NMICS, STREAM_NMICS)
+            endif
         else if( .not.cline%defined('moldiam') )then
             THROW_HARD('MOLDIAM required for picker=new reference-free picking')
             write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
@@ -1790,6 +1794,7 @@ contains
         type(commander_extract_distr)          :: xextract
         type(commander_abinitio2D)             :: xabinitio2D
         type(commander_shape_rank_cavgs)       :: xshape_rank
+        type(oris)                             :: nmics_ori
         type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: final_selection_source, cavgsstk, mapfileprefix
@@ -1801,7 +1806,7 @@ contains
         integer                                :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
         integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt, optics_map_id
         integer                                :: n_non_zero
-        logical                                :: found
+        logical                                :: found, increase_nmics = .false.
         real                                   :: mskdiam_estimate, smpd_stk
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',            'yes')
@@ -1838,6 +1843,12 @@ contains
         call communicator_init_initial_picking()
         call communicator_gen_pickrefs_init()
         call send_jobstats()
+        ! write nmics to file
+999     if(file_exists(trim(STREAM_NMICS))) call del_file(trim(STREAM_NMICS))
+        call nmics_ori%new(1,          .false.)
+        call nmics_ori%set(1, 'nmics', params%nmics)
+        call nmics_ori%write(1, trim(STREAM_NMICS))
+        call nmics_ori%kill
         ! master project file
         call spproj%read( params%projfile )
         if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(1, .false.) !!!!!!!?????
@@ -1922,7 +1933,7 @@ contains
         call cline_shape_rank%set('projfile', PROJFILE_GEN_PICKREFS)
         call xshape_rank%execute_safe(cline_shape_rank)
         call spproj%read(PROJFILE_GEN_PICKREFS)
-        call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
+        call spproj%shape_ranked_cavgs2jpg(cavg_inds, "shape_ranked_" // int2str(params%nmics) // JPG_EXT, xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
         call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
         ! join background http heartbeats
         call join_background_heartbeats()
@@ -1938,7 +1949,7 @@ contains
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input", .true.)
         if(allocated(cavg_inds)) then
             do i=0, size(cavg_inds) - 1
-                call communicator_add_cls2D(trim(cwd_glob) // '/' // SHAPE_RANKED_CAVGS_JPGNAME,&
+                call communicator_add_cls2D(trim(cwd_glob) // '/' // "shape_ranked_" // int2str(params%nmics) // JPG_EXT,&
                     cavgsstk,&
                     cavg_inds(i + 1),&
                     xtile * (100.0 / (xtiles - 1)),&
@@ -1960,6 +1971,17 @@ contains
         write(logfhandle, *) ">>> WAITING FOR USER TO SELECT REFERENCES"
         do 
             call send_jobstats()
+            call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'increase_nmics', increase_nmics, found)
+            if (found) then
+                if(increase_nmics) then
+                    increase_nmics = .false.
+                    call cline%set('nmics', params%nmics + NMICS_DELTA)
+                    params%nmics = params%nmics + NMICS_DELTA
+                    call cleanup_previous
+                    call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input", .false.)
+                    GOTO 999
+                endif
+            endif
             call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection', final_selection, found)
             if(found) then
                 call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
@@ -2044,6 +2066,23 @@ contains
                     call EXIT(0)
                 endif
             end subroutine join_background_heartbeats
+
+            subroutine cleanup_previous()
+                character(len=LONGSTRLEN), allocatable :: list(:)
+                integer :: i
+                write(logfhandle,'(A)')'>>> CLEANING UP'
+                call spproj%kill
+                call cline%set('projfile', '')
+                call simple_list_files('*', list)
+                do i=1, size(list)
+                    call del_file(trim(list(i)))
+                enddo
+                call cline%set('projname', PROJNAME_GEN_PICKREFS)
+                call cline%set('projfile', PROJFILE_GEN_PICKREFS)
+                call spproj%update_projinfo(cline)
+                call spproj%update_compenv(cline)
+                call spproj%write
+            end subroutine cleanup_previous
 
             subroutine micimporter( nmics )
                 integer, intent(in) :: nmics

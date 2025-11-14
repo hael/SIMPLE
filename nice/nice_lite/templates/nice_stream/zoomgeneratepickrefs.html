@@ -51,12 +51,16 @@
             </div>
             {% if status == "running" and jobstats.user_input is True %}
                 <div class="flex flex-row flex-1 justify-center items-center">
+                    <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:stream_regenerate_pickrefs' jobid %}>
+                        {% csrf_token %}
+                        <button class="userbutton animate-bounce !text-[14px]" onclick="this.form.submit()">use more particles</button>
+                    </form> 
                     <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_refs_stream_generate_pickrefs' jobid %}>
                         {% csrf_token %}
                         <input type="hidden" id="final_selection" name="final_selection" value=""/>
                         <input type="hidden" id="final_selection_source"  name="final_selection_source" value=""/>
                         <input type="hidden" id="final_selection_boxsize" name="final_selection_boxsize" value=""/>
-                        <button class="userbutton animate-bounce !text-[14px]" onclick="selectRefs(this.form)">use selection</button>
+                        <button class="userbutton animate-bounce !text-[14px]" onclick="selectRefs(this)" type="button">use selection</button>
                     </form> 
                 </div>
             {% endif %}

@@ -1207,7 +1207,11 @@ contains
         call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=nsel)
         do icls=1, nsel
             call stkio_r%get_image(selection(icls), cavgs(icls))
-            call cavgs(icls)%pad_inplace([box_for_extract,box_for_extract,1])
+            if( ldim(1) > box_for_extract ) then
+                call cavgs(icls)%clip_inplace([box_for_extract,box_for_extract,1])
+            else
+                call cavgs(icls)%pad_inplace([box_for_extract,box_for_extract,1])
+            endif
             call cavgs(icls)%mask(mskrad_in_pix, 'softavg')
             call stkio_w%write(icls, cavgs(icls))
             call cavgs(icls)%kill
