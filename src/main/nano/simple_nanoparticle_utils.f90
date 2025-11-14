@@ -159,7 +159,8 @@ contains
             eye(3,3) = -1.
             ret_mat  = matmul(matmul(eig_vecs, eye), transpose(mat))
         endif
-        ret_scale = sqrt(sum(var2**2) / sum(var1**2))
+        ret_scale = 1.
+        ! ret_scale = sqrt(sum(var2**2) / sum(var1**2))
         mean2     = - ret_scale * matmul(mean1, transpose(ret_mat)) + mean2
         ret_trans = mean2(1,:)
     

@@ -118,37 +118,32 @@ contains
     subroutine exec_atoms_register( self, cline )
         class(commander_atoms_register), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
-        type(parameters)  :: params
-        real, allocatable :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:), mat_mirr(:,:)
-        real    :: smpd, mid_r
-        integer :: ldim(3), ifoo, i
+        type(parameters)    :: params
+        real, allocatable   :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
+        character(len=100)  :: io_message
+        character(len=2048) :: line
+        integer :: i, file_stat, nl, fnr
         call params%new(cline)
         if( .not. cline%defined('maxits') )params%maxits = 1
-        ! reading pdb file
-        call read_pdb2matrix( params%pdbfile,  matrix1 )
-        call read_pdb2matrix( params%pdbfile2, matrix2 )
-        allocate(matrix_rot(3,size(matrix1,2)))
-        allocate(mat_mirr(3,size(matrix2,2)),source=matrix2)
-        ! mirroring
-        call find_ldim_nptcls(params%vols(1), ldim, ifoo, smpd=smpd)
-        mid_r = real(ldim(1)-1)*smpd/2.
-        do i = 1, size(mat_mirr,2)
-            mat_mirr(3,i) = 2. * mid_r - mat_mirr(3,i)
+        nl = nlines(trim(params%fname))
+        if( nl == 0 ) return
+        call fopen(fnr, FILE=params%fname, STATUS='OLD', action='READ', iostat=file_stat, iomsg=io_message)
+        call fileiochk("exec_atoms_register: error when opening file for reading: "//trim(params%fname)//':'//trim(io_message), file_stat)
+        do i = 1, nl
+            read(fnr, fmt='(A)') line
+            if( i == 1 )then
+                call read_pdb2matrix( trim(line), matrix1 )
+            else
+                if( allocated(matrix_rot) )deallocate(matrix_rot)
+                call read_pdb2matrix( line, matrix2 )
+                allocate(matrix_rot(3,size(matrix2,2)))
+                call atoms_register(matrix2, matrix1, matrix_rot, maxits=params%maxits)
+                call write_matrix2pdb( 'Pt', matrix_rot, 'DOCKED_'//trim(line) )
+                ! if( allocated(matrix1) )deallocate(matrix1)
+                ! allocate(matrix1(3,size(matrix2,2)), source=matrix_rot)
+            endif
         enddo
-        call write_matrix2pdb( 'Pt', mat_mirr, 'pdb2_mirror.pdb' )
-        ! registration
-        call atoms_register(matrix1, matrix2, matrix_rot, maxits=params%maxits)
-        if( cline%defined('pdbout') )then
-            call write_matrix2pdb( 'Pt', matrix_rot, params%pdbout )
-        else
-            call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec.pdb' )
-        endif
-        call atoms_register(matrix1, mat_mirr, matrix_rot, maxits=params%maxits)
-        if( cline%defined('pdbout') )then
-            call write_matrix2pdb( 'Pt', matrix_rot, params%pdbout )
-        else
-            call write_matrix2pdb( 'Pt', matrix_rot, 'ATMS_rec_mirror.pdb' )
-        endif
+        call fclose(fnr)
         ! end gracefully
         call simple_end('**** SIMPLE_ATOMS_REGISTER NORMAL STOP ****')
     end subroutine exec_atoms_register
