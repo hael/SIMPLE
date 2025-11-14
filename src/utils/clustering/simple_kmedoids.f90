@@ -113,7 +113,7 @@ contains
             do i = 1, self%n
                 dist = dist + self%dists2meds(i,self%cls_labels(i))
             end do
-            write(logfhandle,'(a,1x,f8.2)') 'ITER: '//int2str(iter)//' DIST: ', dist
+            write(logfhandle,'(a,1x,f8.2)') 'ITER: '//int2str_pad(iter,2)//' DIST: ', dist
             ! set l_converged flag
             if( nchanges == 0 .or. iter == MAXITS) exit
         end do
