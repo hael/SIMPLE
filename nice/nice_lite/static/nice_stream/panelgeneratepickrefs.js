@@ -44,7 +44,7 @@ toggleTemplate = (templ) => {
     lastinteraction = Date.now() + 90000; // dont update for 2 minutes
 }
 
-selectRefs = (form) => {
+selectRefs = (element) => {
     const selected = []
     var path       = ""
     for(const pick_template of document.getElementsByClassName("picktemplate")){
@@ -56,6 +56,11 @@ selectRefs = (form) => {
     }
     document.getElementById("final_selection_source").value = path
     document.getElementById("final_selection").value = selected
+    if(selected.length == 0){
+      alert("You must select at least 1 reference");
+    }else{
+      element.form.submit()
+    }
 }
 
 showMenu = (element, event) => {

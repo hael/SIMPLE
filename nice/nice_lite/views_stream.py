@@ -298,6 +298,13 @@ def select_refs_stream_generate_pickrefs(request, jobid):
     return response
 
 @login_required(login_url="/login/")
+def stream_regenerate_pickrefs(request, jobid):
+    job = Job(id=jobid)
+    job.regenerate_pickrefs()
+    response = redirect('nice_lite:view_stream', jobid=jobid)
+    return response
+
+@login_required(login_url="/login/")
 def snapshot_stream_classification_2D(request, jobid):
     job = Job(id=jobid)
     snapshot_selection  = [int(numeric_string) for numeric_string in request.POST["snapshot_selection"].split(',')]

@@ -6787,7 +6787,7 @@ contains
         call json%add(input, 'descr_short', 'Spherical aberration (mm)')
         call json%add(input, 'descr_long',  'Spherical aberration (mm)')
         call json%add(input, 'required',    .TRUE.)
-        call json%add(input, 'default',     '2.7')
+        call json%add(input, 'default',     real2str(STREAM_DEFAULT_CS))
         !! fraca
         call json%create_object(input, 'input')
         call json%add(user_inputs, input)
@@ -6796,7 +6796,7 @@ contains
         call json%add(input, 'descr_short', 'Amplitude contrast fraction')
         call json%add(input, 'descr_long',  'Amplitude contrast fraction')
         call json%add(input, 'required',    .TRUE.)
-        call json%add(input, 'default',     '0.1')
+        call json%add(input, 'default',     real2str(STREAM_DEFAULT_FRACA))
         !! kv
         call json%create_object(input, 'input')
         call json%add(user_inputs, input)
@@ -6805,7 +6805,7 @@ contains
         call json%add(input, 'descr_short', 'Acceleration voltage (kV)')
         call json%add(input, 'descr_long',  'Acceleration voltage (kV)')
         call json%add(input, 'required',    .TRUE.)
-        call json%add(input, 'default',     '300')
+        call json%add(input, 'default',     int2str(STREAM_DEFAULT_KV))
         !! smpd
         call json%create_object(input, 'input')
         call json%add(user_inputs, input)
@@ -6853,9 +6853,9 @@ contains
         !! preproc
         call json%create_object(process, 'process')
         call json%add(processes, process)
-        call json%add(process, 'name',        'preprocessing') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'preproc')
-        call json%add(process, 'nthr_master', 4)
+        call json%add(process, 'name',         PREPROC_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process, 'prg',          'preproc')
+        call json%add(process, 'nthr_master',  DEFAULT_NTHR_MASTER)
         call json%create_array(process_inputs, 'user_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_movies')
@@ -6870,81 +6870,80 @@ contains
         call json%add(process_inputs, '', 'smpd_downscale')
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'outdir=preprocessing') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'nparts=10')
-        call json%add(process_inputs, '', 'nthr=4')
-        call json%add(process_inputs, '', 'ninipick=500')
+        call json%add(process_inputs, '', 'outdir='   // PREPROC_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nparts='   // int2str(PREPROC_NPARTS))
+        call json%add(process_inputs, '', 'nthr='     // int2str(PREPROC_NTHR))
+        call json%add(process_inputs, '', 'ninipick=' // int2str(PREPROC_NINIPICK))
         !! assign_optics
         call json%create_object(process, 'process')
         call json%add(processes, process)
-        call json%add(process, 'name',        'optics_assignment') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'assign_optics')
-        call json%add(process, 'nthr_master', 4)
+        call json%add(process, 'name',         OPTICS_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process, 'prg',          'assign_optics')
+        call json%add(process, 'nthr_master',  DEFAULT_NTHR_MASTER)
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'dir_target=preprocessing')
-        call json%add(process_inputs, '', 'outdir=optics_assignment') !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'dir_target=' // PREPROC_JOB_NAME)
+        call json%add(process_inputs, '', 'outdir='     // OPTICS_JOB_NAME) !important - directory names and name must match between processes
         !! opening 2D
         call json%create_object(process, 'process')
         call json%add(processes, process)
-        call json%add(process, 'name',        'opening_2D') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'gen_pickrefs')
-        call json%add(process, 'nthr_master', 32)
+        call json%add(process, 'name',         OPENING2D_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process, 'prg',          'gen_pickrefs')
+        call json%add(process, 'nthr_master',  OPENING2D_NTHR)
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'dir_target=preprocessing')
-        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
-        call json%add(process_inputs, '', 'outdir=opening_2D') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'nthr=32')
+        call json%add(process_inputs, '', 'dir_target='    // PREPROC_JOB_NAME)
+        call json%add(process_inputs, '', 'optics_dir=../' // OPTICS_JOB_NAME)
+        call json%add(process_inputs, '', 'outdir='        // OPENING2D_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nthr='          // int2str(OPENING2D_NTHR))
         !! reference_based_picking
         call json%create_object(process, 'process')
         call json%add(processes, process)
-        call json%add(process, 'name',        'reference_based_picking') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'pick_extract')
-        call json%add(process, 'nthr_master', 4)
+        call json%add(process, 'name',         REFPICK_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process, 'prg',          'pick_extract')
+        call json%add(process, 'nthr_master',  DEFAULT_NTHR_MASTER)
         call json%create_array(process_inputs, 'user_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'pickrefs')
         call json%add(process_inputs, '', 'box_extract')
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'dir_target=preprocessing')
-        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
-        call json%add(process_inputs, '', 'outdir=reference_based_picking') !important - directory names and name must match between processes
-        ! call json%add(process_inputs, '', 'pick_roi=yes')
-        call json%add(process_inputs, '', 'nparts=10')
-        call json%add(process_inputs, '', 'nthr=4')
+        call json%add(process_inputs, '', 'dir_target='    // PREPROC_JOB_NAME)
+        call json%add(process_inputs, '', 'optics_dir=../' // OPTICS_JOB_NAME)
+        call json%add(process_inputs, '', 'outdir='        // REFPICK_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nparts='        // int2str(REFPICK_NPARTS))
+        call json%add(process_inputs, '', 'nthr='          // int2str(REFPICK_NTHR))
         !! particle_sieving
         call json%create_object(process, 'process')
         call json%add(processes, process)
-        call json%add(process, 'name',        'particle_sieving') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'sieve_cavgs')
-        call json%add(process, 'nthr_master', 4)
+        call json%add(process, 'name',         SIEVING_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process, 'prg',          'sieve_cavgs')
+        call json%add(process, 'nthr_master',  DEFAULT_NTHR_MASTER)
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'dir_target=reference_based_picking')
-        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
-        call json%add(process_inputs, '', 'outdir=particle_sieving') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'ncls=100')
-        call json%add(process_inputs, '', 'nptcls_per_cls=0')
+        call json%add(process_inputs, '', 'dir_target='    // REFPICK_JOB_NAME)
+        call json%add(process_inputs, '', 'optics_dir=../' // OPTICS_JOB_NAME)
+        call json%add(process_inputs, '', 'outdir='        // SIEVING_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'ncls='          // int2str(SIEVING_NCLS))
+        call json%add(process_inputs, '', 'nptcls_per_cls='// int2str(SIEVING_NPTCLS_PER_CLASS))
+        call json%add(process_inputs, '', 'nchunks='       // int2str(SIEVING_NCHUNKS))
+        call json%add(process_inputs, '', 'nparts='        // int2str(SIEVING_NPARTS))
+        call json%add(process_inputs, '', 'nthr=8'         // int2str(SIEVING_NTHR))
         call json%add(process_inputs, '', 'interactive=yes')
-        call json%add(process_inputs, '', 'nchunks=2')
-        call json%add(process_inputs, '', 'nparts=8')
-        call json%add(process_inputs, '', 'nthr=8')
         !! 2D classification
         call json%create_object(process, 'process')
         call json%add(processes, process)
-        call json%add(process, 'name',        'classification_2D') !important - directory names and name must match between processes
-        call json%add(process, 'prg',         'abinitio2D_stream')
-        call json%add(process, 'nthr_master', 4)
+        call json%add(process, 'name',         CLASS2D_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process, 'prg',          'abinitio2D_stream')
+        call json%add(process, 'nthr_master',  DEFAULT_NTHR_MASTER)
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
-        call json%add(process_inputs, '', 'dir_target=particle_sieving')
-        call json%add(process_inputs, '', 'optics_dir=../optics_assignment')
-        call json%add(process_inputs, '', 'outdir=classification_2D') !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'ncls=200')
-        call json%add(process_inputs, '', 'nparts=10')
-        call json%add(process_inputs, '', 'nthr=8')
+        call json%add(process_inputs, '', 'dir_target='    // SIEVING_JOB_NAME)
+        call json%add(process_inputs, '', 'optics_dir=../' // OPTICS_JOB_NAME)
+        call json%add(process_inputs, '', 'outdir='        // CLASS2D_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'ncls='          // int2str(CLASS2D_NCLS))
+        call json%add(process_inputs, '', 'nparts='        // int2str(CLASS2D_NPARTS))
+        call json%add(process_inputs, '', 'nthr='          // int2str(CLASS2D_NTHR))
         ! print & clean
         call json%print(ui, logfhandle)
         if( json%failed() )then

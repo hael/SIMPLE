@@ -66,7 +66,7 @@ contains
         type(qsys_env)                         :: qenv
         type(stream_http_communicator)         :: http_communicator
         type(projs_list)                       :: chunkslist, setslist
-        type(oris)                             :: moldiamori, chunksizeori
+        type(oris)                             :: moldiamori, chunksizeori, nmicsori
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob
         type(json_value),          pointer     :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
@@ -157,6 +157,15 @@ contains
             params%mskdiam = mskdiam
             call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+            ! read nmics from file if present
+            if( file_exists( trim(params%dir_target)//'/'//trim(STREAM_NMICS)) ) then
+                call nmicsori%new(1, .false.)
+                call nmicsori%read( trim(params%dir_target)//'/'//trim(STREAM_NMICS) )
+                if( nmicsori%isthere(1, "nmics" ) ) then
+                    params%nmics = nmicsori%get_int(1, "nmics")
+                    write(logfhandle,'(A,I6)')'>>> NMICS SET TO', params%nmics
+                endif
+            endif
         endif
         ! Computing environment
         call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)

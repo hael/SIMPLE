@@ -6,6 +6,7 @@ use simple_defs_atoms
 use simple_defs_conv
 use simple_defs_fname
 use simple_defs_ori
+use simple_defs_stream
 use simple_defs
 use simple_fftw3
 ! src/fileio

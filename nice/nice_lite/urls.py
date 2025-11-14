@@ -98,6 +98,7 @@ urlpatterns = [
     path("increasemoldiamstreaminitialpick/<int:jobid>",                                views_stream.increase_moldiam_stream_initial_pick,  name="increase_moldiam_stream_initial_pick"),
     path("decreasemoldiamstreaminitialpick/<int:jobid>",                                views_stream.decrease_moldiam_stream_initial_pick,  name="decrease_moldiam_stream_initial_pick"),
     path("selectrefsstreamgeneratepickrefs/<int:jobid>",                                views_stream.select_refs_stream_generate_pickrefs,  name="select_refs_stream_generate_pickrefs"),
+    path("updatestreamregeneratepickrefs/<int:jobid>",                                  views_stream.stream_regenerate_pickrefs,            name="stream_regenerate_pickrefs"),
     path("snapshotstreamclassification2D/<int:jobid>",                                  views_stream.snapshot_stream_classification_2D,     name="snapshot_stream_classification_2D"),
     path("selectstreamclassification2D/<int:jobid>",                                    views_stream.select_stream_classification_2D,       name="select_stream_classification_2D"),
     path("selectstreamsieveparticles/<int:jobid>",                                      views_stream.select_stream_sieve_particles,         name="select_stream_sieve_particles"),
