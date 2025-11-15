@@ -1805,7 +1805,7 @@ contains
         integer,                   allocatable :: final_selection(:), final_boxsize(:)
         integer                                :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
         integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt, optics_map_id
-        integer                                :: n_non_zero
+        integer                                :: n_non_zero, nmics
         logical                                :: found, increase_nmics = .false.
         real                                   :: mskdiam_estimate, smpd_stk
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
@@ -1864,7 +1864,8 @@ contains
         ! background http heartbeats
         call background_heartbeats()
         ! segmentation-based picking
-        call segdiampick_mics(spproj, params%pcontrast, params%nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
+        nmics = params%nmics ! because of Susan's bug report
+        call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
         ! join background http heartbeats
         call join_background_heartbeats()
         ! send initial picking display info to gui
