@@ -69,7 +69,7 @@ contains
     subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam )
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: pcontrast
-        integer,           intent(in)    :: mic_to     ! last micrograph to process
+        integer,           intent(inout) :: mic_to     ! last micrograph to process
         real,              intent(in)    :: moldiam_max
         integer,           intent(out)   :: box_in_pix
         real,              intent(out)   :: mskdiam    ! estimated mask diameter
@@ -95,7 +95,10 @@ contains
         smpd = spproj%get_smpd()
         call spproj%get_mics_table(micnames, orimap)
         nmics = size(micnames)
-        if( mic_to > nmics ) THROW_HARD('mic_to out of range')
+        if( mic_to > nmics )then
+            THROW_WARN('mic_to out of range, mic_to='//int2str(mic_to)//', nmics='//int2str(nmics))
+            mic_to = nmics
+        endif
         ! read the first micrograph
         scale = smpd / SMPD_SHRINK1
         call read_mic_subtr_backgr_shrink(micnames(1), smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
