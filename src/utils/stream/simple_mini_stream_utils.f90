@@ -1,13 +1,13 @@
 module simple_mini_stream_utils
 include 'simple_lib.f08'
-use simple_cmdline,     only: cmdline
-use simple_parameters,  only: parameters
 use simple_sp_project,  only: sp_project
-use simple_image_bin,    only: image_bin
-use simple_image,       only: image
 use simple_picksegdiam, only: picksegdiam
-use simple_micproc
+use simple_parameters,  only: parameters
+use simple_image_bin,   only: image_bin
+use simple_image,       only: image
+use simple_cmdline,     only: cmdline
 use simple_gui_utils
+use simple_micproc
 use simple_nrtxtfile
 implicit none
 #include "simple_local_flags.inc"
