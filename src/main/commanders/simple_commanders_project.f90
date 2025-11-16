@@ -998,9 +998,10 @@ contains
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
         integer                         :: state,nstates,nptcls,ipart,n_thumbnails
-        logical                         :: l_ctfres, l_icefrac, l_append, l_keep
+        logical                         :: l_ctfres, l_icefrac, l_append, l_keep, l_writecls2d
         class(oris), pointer :: pos => NULL()
-        l_append = .false.
+        l_append     = .false.
+        l_writecls2d = .false.
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune')  ) call cline%set('prune',  'no')
         if( .not. cline%defined('append') ) call cline%set('append', 'no')
@@ -1130,7 +1131,9 @@ contains
                 write(logfhandle, *) "DESELECTING INDEX", state
                 states(state) = 0
             end do
-            call fclose(fnr)   
+            call fclose(fnr)
+            ! from GUI so write cavgs
+            l_writecls2d = .true.
         endif
         ! updates relevant segments
         select case(iseg)
@@ -1177,6 +1180,7 @@ contains
         end select        
         ! final full write
         call spproj%write(params%projfile)
+        if( l_writecls2d ) call spproj%cavgs2mrc()
         call http_communicator%term()
         call simple_end('**** SELECTION NORMAL STOP ****')
     end subroutine exec_selection

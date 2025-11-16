@@ -155,6 +155,7 @@ contains
     procedure, private :: segwriter
     procedure          :: segwriter_inside
     procedure          :: cavgs2jpg
+    procedure          :: cavgs2mrc
     procedure          :: shape_ranked_cavgs2jpg
     ! destructor
     procedure          :: kill
@@ -5017,6 +5018,47 @@ contains
         call img%kill
         call jpegimg%kill
     end subroutine cavgs2jpg
+
+    subroutine cavgs2mrc( self )
+        class(sp_project),    intent(inout) :: self
+        logical,                allocatable :: cls_mask(:)
+        character(len=:),       allocatable :: cavgsstk
+        type(image)    :: img
+        type(stack_io) :: stkio_r, stkio_w
+        integer        :: icls, ncls, ncls_stk, isel, ldim_read(3), ncls_sel
+        real           :: smpd
+        ncls = self%os_cls2D%get_noris()
+        if( ncls == 0 ) return
+        allocate(cls_mask(ncls))
+        cls_mask = .true.
+        do icls = 1, ncls
+            if( self%os_cls2D%get_state(icls)     == 0 ) cls_mask(icls) = .false.
+        enddo
+        ncls_sel = count(cls_mask)
+        if( ncls_sel == 0 ) return
+        call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg')
+        if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
+        if( ncls /= ncls_stk ) THROW_HARD('Inconsistent # cavgs in spproj and stack file')
+        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        ldim_read    = stkio_r%get_ldim()
+        ldim_read(3) = 1
+        call stkio_r%read_whole
+        call stkio_w%open("cls2D_selected.mrcs", smpd, 'write', box=ldim_read(1), bufsz=ncls_sel)
+        isel = 0
+        do icls = 1,ncls
+            if( cls_mask(icls) ) then
+                isel = isel + 1
+                call img%new(ldim_read, smpd)
+                call stkio_r%get_image(icls, img)
+                call stkio_w%write(isel, img)
+            endif
+        enddo
+        call stkio_r%close
+        call stkio_w%close
+        call img%kill
+        if(allocated(cls_mask)) deallocate(cls_mask)
+        if(allocated(cavgsstk)) deallocate(cavgsstk)
+    end subroutine cavgs2mrc
 
     subroutine shape_ranked_cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, mskdiam_px )
         class(sp_project),    intent(inout) :: self
