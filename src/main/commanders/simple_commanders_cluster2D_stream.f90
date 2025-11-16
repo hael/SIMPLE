@@ -855,7 +855,6 @@ contains
         endif
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
-        call simple_rmdir(DIR_SNAPSHOT)
         call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call del_file(projfile4gui)
         if( .not.debug_here )then
