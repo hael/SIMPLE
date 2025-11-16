@@ -96,7 +96,7 @@ contains
         call spproj%get_mics_table(micnames, orimap)
         nmics = size(micnames)
         if( mic_to > nmics )then
-            THROW_WARN('mic_to out of range, mic_to='//int2str(mic_to)//', nmics='//int2str(nmics))
+            THROW_WARN('mic_to out of range, setting current mic_to='//int2str(mic_to)//', to nmics='//int2str(nmics))
             mic_to = nmics
         endif
         ! read the first micrograph
