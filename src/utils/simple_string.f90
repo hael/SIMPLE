@@ -55,22 +55,14 @@ contains
     ! Length
     pure integer function strlen(self)
         class(string), intent(in) :: self
-        if (allocated(self%buffer)) then
-            strlen = len(self%buffer)
-        else
-            strlen = 0
-        endif
+        strlen = len(self%buffer)
     end function strlen
 
     ! Convert to plain CHARACTER for legacy code
     pure function to_char(self) result(c)
-        class(string), intent(in) :: self
-        character(len=self%strlen()) :: c
-        if (self%strlen() > 0) then
-            c = self%buffer
-        else
-            c = ""
-        endif
+        class(string),       intent(in) :: self
+        character(len=len(self%buffer)) :: c
+        if( len(c) > 0) c = self%buffer
     end function to_char
 
 end module simple_string
