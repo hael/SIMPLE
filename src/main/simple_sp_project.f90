@@ -2341,7 +2341,6 @@ contains
         get_smpd = 0.
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            THROW_WARN('empty os_stk field! get_smpd, reverting to os_mic field')
             n_os_mic = self%os_mic%get_noris()
             if( n_os_mic == 0 )then
                 THROW_HARD('empty os_mic field! get_smpd, aborting')
