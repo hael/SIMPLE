@@ -121,30 +121,58 @@ contains
         type(parameters)    :: params
         real, allocatable   :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
         character(len=100)  :: io_message
-        character(len=2048) :: line, ref_pdb, cur_pdb
-        integer :: i, file_stat, nl, fnr
+        character(len=2048) :: line, ref_pdb, cur_pdb, params_file
+        integer :: i, j, file_stat, nl, fnr, io_stat, addr, funit
+        real    :: rot_mat(3,3), trans_vec(3), scale
         call params%new(cline)
         if( .not. cline%defined('maxits') )params%maxits = 5
-        nl = nlines(trim(params%fname))
+        addr = 1 + sizeof(scale) * 9    ! rot_mat is of size 3x3
+        nl   = nlines(trim(params%fname))
         if( nl == 0 ) return
         call fopen(fnr, FILE=params%fname, STATUS='OLD', action='READ', iostat=file_stat, iomsg=io_message)
         call fileiochk("exec_atoms_register: error when opening file for reading: "//trim(params%fname)//':'//trim(io_message), file_stat)
         do i = 1, nl
             read(fnr, fmt='(A)') line
+            ! identity rotation matrix
+            rot_mat=0.; do j=1,3 ; rot_mat(j,j)=1. ; end do
+            ! zero translation
+            scale       = 1.
+            trans_vec   = 0.
+            cur_pdb     = trim(line)
+            params_file = trim('PARAMS_'//cur_pdb)
             if( i == 1 )then
                 ! the first one is the reference pdb
-                ref_pdb = trim(line)
+                ref_pdb = cur_pdb
                 call read_pdb2matrix( ref_pdb, matrix1 )
                 call write_matrix2pdb( 'Pt', matrix1, 'DOCKED_'//ref_pdb )
             else
-                cur_pdb = trim(line)
-                print *, 'Registering ', trim(cur_pdb), ' to the reference ', trim(ref_pdb)
+                print *, 'Docking nanoparticle ', trim(cur_pdb), ' to the reference nanoparticle ', trim(ref_pdb)
                 if( allocated(matrix_rot) )deallocate(matrix_rot)
                 call read_pdb2matrix( line, matrix2 )
                 allocate(matrix_rot(3,size(matrix2,2)))
-                call atoms_register(matrix2, matrix1, matrix_rot, maxits=params%maxits)
+                if( file_exists(params_file) )then
+                    print *, 'Using cached rotation matrix and translation vector from ', trim(params_file)
+                    call fopen(funit,params_file,access='STREAM',action='READ',status='OLD', iostat=io_stat)
+                    read(unit=funit,pos=1)    rot_mat
+                    read(unit=funit,pos=addr) trans_vec
+                    call fclose(funit)
+                    do j = 1, size(matrix2,2)
+                        matrix_rot(:,j) = scale * matmul(rot_mat, matrix2(:,j)) + trans_vec
+                    enddo
+                else
+                    call atoms_register(matrix2, matrix1, matrix_rot, maxits=params%maxits,&
+                        &out_mat=rot_mat, out_trans=trans_vec, out_scale=scale)
+                endif
                 call write_matrix2pdb( 'Pt', matrix_rot, 'DOCKED_'//trim(line) )
             endif
+            if( .not. file_exists(params_file) )then
+                ! write out the rotation matrix and translation vector
+                call fopen(funit,params_file,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+                write(funit,pos=1)    rot_mat
+                write(funit,pos=addr) trans_vec
+                call fclose(funit)
+            endif
+            print *, '--------------------------'
         enddo
         call fclose(fnr)
         ! end gracefully
