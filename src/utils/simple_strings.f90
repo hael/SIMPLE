@@ -474,6 +474,18 @@ contains
         str_has_substr = .not. (index(str, substr) == 0)
     end function str_has_substr
 
+    !>  \brief  check for presence of substring at the end of another
+    logical function str_endswith_substr( str, substr )
+        character(len=*), intent(in) :: str, substr
+        integer :: start_substr, lenstr
+        str_endswith_substr = .false.
+        lenstr              = len_trim(str)
+        start_substr        = lenstr - len_trim(substr) + 1
+        if( start_substr >= 1 )then
+            str_endswith_substr = str(start_substr:lenstr) == trim(substr)
+        endif
+    end function str_endswith_substr
+
     !>  \brief  removes occurrences of substr in str into str_out
     subroutine void_substr( str, substr, str_out )
         character(len=*), intent(in)                 :: str, substr

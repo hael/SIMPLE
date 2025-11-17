@@ -570,21 +570,21 @@ contains
 
     function simple_list_dirs( path, status ) result( list )
         use simple_strings, only: int2str
-        character(len=*),           intent(in)  :: path
-        integer,          optional, intent(out) :: status
-        character(len=STDLEN),        allocatable :: list(:)
+        character(len=*),             intent(in)  :: path
+        integer,            optional, intent(out) :: status
+        character(len=LONGSTRLEN),    allocatable :: list(:)
         character(kind=c_char,len=:), allocatable :: pathhere
-        character(len=STDLEN) :: list_fname
-        integer               :: stat, i,num_dirs, luntmp, pid
+        character(len=LONGSTRLEN) :: list_fname
+        integer :: stat, i,num_dirs, luntmp, pid
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
-        pid = getpid()
+        pid        = getpid()
         list_fname =  '__simple_dirlist_'//int2str(part_glob)//'_'//int2str(pid)//'__'
-        stat = list_dirs(trim(pathhere),len_trim(pathhere), trim(list_fname), len_trim(list_fname), num_dirs)
-        if(stat/=0)THROW_ERROR("failed to process list_dirs "//trim(pathhere))
+        stat       = list_dirs(trim(pathhere),len_trim(pathhere), trim(list_fname), len_trim(list_fname), num_dirs)
+        if( stat /= 0 )THROW_ERROR("failed to process list_dirs "//trim(pathhere))
         open(newunit=luntmp, file=trim(list_fname))
-        allocate( list(num_dirs) )
+        allocate(list(num_dirs))
         do i = 1,num_dirs
-            read( luntmp, '(a)' ) list(i)
+            read(luntmp, '(a)') list(i)
         enddo
         close(luntmp)
         call del_file(list_fname)
