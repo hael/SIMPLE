@@ -32,8 +32,10 @@ jobs:
              make distclean
              cd ..
              echo "Intall EMAN2"
-             wget --no-check-certificate https://cryoem.bcm.edu/cryoem/static/software/release-2.99.47/eman2.99.47_sphire1.4_sparx_huge.linux64.sh 
-             echo "eman2" | bash eman2.99.47_sphire1.4_sparx_huge.linux64.sh 
+             #wget --no-check-certificate https://cryoem.bcm.edu/cryoem/static/software/release-2.99.47/eman2.99.47_sphire1.4_sparx_huge.linux64.sh 
+             #echo "eman2" | bash eman2.99.47_sphire1.4_sparx_huge.linux64.sh 
+             wget --no-check-certificate https://cryoem.bcm.edu/cryoem/static/software/continuous_build/eman2_sphire_sparx_huge.linux.unstable.sh 
+             echo "eman2" | bash eman2_sphire_sparx_huge.linux.unstable.sh 
              ##eval "$($GITHUB_WORKSPACE/eman2/bin/conda shell.bash hook)" 
              #eval "$($GITHUB_WORKSPACE/eman2/bin/conda update all)" 
              #eval "$($GITHUB_WORKSPACE/eman2/bin/conda install mamba -c conda-forge)" 
