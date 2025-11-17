@@ -121,10 +121,10 @@ contains
         type(parameters)    :: params
         real, allocatable   :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
         character(len=100)  :: io_message
-        character(len=2048) :: line
+        character(len=2048) :: line, ref_pdb, cur_pdb
         integer :: i, file_stat, nl, fnr
         call params%new(cline)
-        if( .not. cline%defined('maxits') )params%maxits = 1
+        if( .not. cline%defined('maxits') )params%maxits = 5
         nl = nlines(trim(params%fname))
         if( nl == 0 ) return
         call fopen(fnr, FILE=params%fname, STATUS='OLD', action='READ', iostat=file_stat, iomsg=io_message)
@@ -132,15 +132,18 @@ contains
         do i = 1, nl
             read(fnr, fmt='(A)') line
             if( i == 1 )then
-                call read_pdb2matrix( trim(line), matrix1 )
+                ! the first one is the reference pdb
+                ref_pdb = trim(line)
+                call read_pdb2matrix( ref_pdb, matrix1 )
+                call write_matrix2pdb( 'Pt', matrix1, 'DOCKED_'//ref_pdb )
             else
+                cur_pdb = trim(line)
+                print *, 'Registering ', trim(cur_pdb), ' to the reference ', trim(ref_pdb)
                 if( allocated(matrix_rot) )deallocate(matrix_rot)
                 call read_pdb2matrix( line, matrix2 )
                 allocate(matrix_rot(3,size(matrix2,2)))
                 call atoms_register(matrix2, matrix1, matrix_rot, maxits=params%maxits)
                 call write_matrix2pdb( 'Pt', matrix_rot, 'DOCKED_'//trim(line) )
-                ! if( allocated(matrix1) )deallocate(matrix1)
-                ! allocate(matrix1(3,size(matrix2,2)), source=matrix_rot)
             endif
         enddo
         call fclose(fnr)

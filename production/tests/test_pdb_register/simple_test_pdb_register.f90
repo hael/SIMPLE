@@ -32,7 +32,7 @@ npdbs = size(pdbfnames)
 do ipdb = 1, npdbs
     call read_pdb2matrix( trim(pdbfnames(ipdb)), cur_mat )
     call find_core(cur_mat, cur_core)
-    call atoms_register(cur_core, core_mat, core_rot, p%maxits, rot_mat, trans_vec, scale)
+    call atoms_register(cur_core, core_mat, core_rot, maxits=p%maxits, out_mat=rot_mat, out_trans=trans_vec, out_scale=scale)
     if(allocated(matrix_rot)) deallocate(matrix_rot)
     allocate(matrix_rot(3,size(cur_mat,2)))
     do j = 1, size(cur_mat,2)

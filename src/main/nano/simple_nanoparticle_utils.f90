@@ -20,40 +20,54 @@ integer, parameter :: NSTRAIN_COMPS = 7
 
 contains
 
-    ! registering two sets of atom positions and rotate the first set to align the second set
-    subroutine atoms_register( atoms1, atoms2, reg_atom, maxits, out_mat, out_trans, out_scale)
+    ! registering two sets of atom positions and rotate the first set to align the second set, i.e.
+    ! - reference atoms: atoms2
+    ! - reg_atom = out_scale * (out_mat * atoms1 + out_trans)
+    subroutine atoms_register( atoms1, atoms2, reg_atom, mirror_mid, maxits, out_mat, out_trans, out_scale)
         use simple_parameters, only: params_glob
         real,              intent(in)    :: atoms1(:,:)
         real,              intent(in)    :: atoms2(:,:)
         real,              intent(inout) :: reg_atom(:,:)
+        integer, optional, intent(in)    :: mirror_mid
         integer, optional, intent(in)    :: maxits
         real,    optional, intent(out)   :: out_mat(3,3), out_trans(3), out_scale
         integer, allocatable :: perm(:,:), inds(:)
-        real,    allocatable :: costs(:), atom1_pos(:,:), atom2_pos(:,:)
+        real,    allocatable :: costs(:), large_pos(:,:), small_pos(:,:), mirr_pos(:,:), mirr_atoms1(:,:)
         logical, allocatable :: taken(:,:)
         real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost, glob_cost
         integer :: N1, N2, tmp, i, j, k, a1, a2, min_a2, counter, errflg, ref_inds(3), ithr, min_ref(3), min_perm(3), iter, cnt, stoch_iters
-        logical :: l_flip, l_exist
+        logical :: l_flip, l_exist, l_mirror, l_mirr_cost
         N1     = size(atoms1, 2)
         N2     = size(atoms2, 2)
         l_flip = (N2 < N1)
         if( N1 < 3 .or. N2 < 3 ) THROW_HARD('need at least 3 atoms in each set!')
-        ! processing assuming N1 > N2 and swap if necessary
+        ! processing assuming N2 > N1 and swap if necessary
+        ! N2 > N1 because the larger set of atoms will have some atoms that do not match the smaller set of atoms
         if( l_flip )then
             tmp = N1
             N1  = N2
             N2  = tmp
-            allocate(atom1_pos(3,N1), source=atoms2)
-            allocate(atom2_pos(3,N2), source=atoms1)
+            allocate(small_pos(3,N1), source=atoms2)
+            allocate(large_pos(3,N2), source=atoms1)
         else
-            allocate(atom1_pos(3,N1), source=atoms1)
-            allocate(atom2_pos(3,N2), source=atoms2)
+            allocate(small_pos(3,N1), source=atoms1)
+            allocate(large_pos(3,N2), source=atoms2)
         endif
         allocate(costs(N2**3),perm(3,N2**3),taken(N2,params_glob%nthr))
         glob_cost = huge(glob_cost)
         call seed_rnd
         stoch_iters = 1
-        if( present(maxits) ) stoch_iters = maxits
+        l_mirror    = .false.
+        if( present(maxits)    ) stoch_iters = maxits
+        if( present(mirror_mid)) l_mirror    = .true.
+        if( l_mirror )then
+            allocate(mirr_atoms1(3,size(atoms1,2)), source=atoms1)
+            allocate(mirr_pos(3,N2), source=large_pos)
+            do a2 = 1, N2
+                mirr_pos(3,a2) = 2*mirror_mid - large_pos(3,a2)
+            enddo
+        endif
+        l_mirr_cost = .false.
         do iter = 1,stoch_iters
             print *, 'Stochastic iter ', iter
             ! atom 1 reference position indeces
@@ -71,18 +85,18 @@ contains
                         counter         = (i-1)*N2**2 + (j-1)*N2 + k
                         perm(:,counter) = [i,j,k]
                         costs(counter)  = 0.
-                        call Kabsch_algo(atom1_pos(:,ref_inds), atom2_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
+                        call Kabsch_algo(small_pos(:,ref_inds), large_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
                         ! rotate atom1 pos from index 4 using the same rotation matrix and find the corresponding closest atom2 pos
                         taken(:,ithr) = .false.
                         cnt           = 0
                         do a1 = 1, N1
                             if( cnt >= N2 )cycle
-                            tmp_atom2 = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
+                            tmp_atom2 = rec_scale * matmul(rec_mat, small_pos(:,a1)) + rec_trans
                             min_cost  = huge(rec_scale)
                             l_exist   = .false.
                             do a2 = 1, N2
                                 if( taken(a2,ithr) )cycle
-                                cur_cost = sqrt(sum((tmp_atom2 - atom2_pos(:,a2))**2))
+                                cur_cost = sqrt(sum((tmp_atom2 - large_pos(:,a2))**2))
                                 if( cur_cost < min_cost )then
                                     min_cost = cur_cost
                                     min_a2   = a2
@@ -103,21 +117,85 @@ contains
             ! best permutation
             i = minloc(costs, dim=1)
             if( costs(i) < glob_cost )then
-                glob_cost = costs(i)
-                min_ref   = ref_inds
-                min_perm  = perm(:,i)
+                glob_cost   = costs(i)
+                min_ref     = ref_inds
+                min_perm    = perm(:,i)
+                l_mirr_cost = .false.
+            endif
+            ! with mirroring
+            if( l_mirror )then
+                costs    = huge(rec_scale)
+                !$omp parallel do collapse(3) default(shared) private(ithr,i,j,k,counter,rec_mat,rec_trans,rec_scale,a1,tmp_atom2,min_cost,a2,min_a2,cur_cost,l_exist,cnt)&
+                !$omp proc_bind(close) schedule(static)
+                do i = 1, N2
+                    do j = 1, N2
+                        do k = 1, N2
+                            ithr = omp_get_thread_num() + 1
+                            if( k == j .or. i == j .or. i == k )cycle
+                            counter         = (i-1)*N2**2 + (j-1)*N2 + k
+                            perm(:,counter) = [i,j,k]
+                            costs(counter)  = 0.
+                            call Kabsch_algo(small_pos(:,ref_inds), mirr_pos(:,perm(:,counter)), rec_mat, rec_trans, rec_scale)
+                            ! rotate atom1 pos from index 4 using the same rotation matrix and find the corresponding closest atom2 pos
+                            taken(:,ithr) = .false.
+                            cnt           = 0
+                            do a1 = 1, N1
+                                if( cnt >= N2 )cycle
+                                tmp_atom2 = rec_scale * matmul(rec_mat, small_pos(:,a1)) + rec_trans
+                                min_cost  = huge(rec_scale)
+                                l_exist   = .false.
+                                do a2 = 1, N2
+                                    if( taken(a2,ithr) )cycle
+                                    cur_cost = sqrt(sum((tmp_atom2 - mirr_pos(:,a2))**2))
+                                    if( cur_cost < min_cost )then
+                                        min_cost = cur_cost
+                                        min_a2   = a2
+                                        l_exist  = .true.
+                                    endif
+                                enddo
+                                if( l_exist )then
+                                    costs(counter)     = costs(counter) + min_cost
+                                    taken(min_a2,ithr) = .true.
+                                    cnt                = cnt + 1
+                                endif
+                            enddo
+                            costs(counter) = costs(counter) / real(cnt)
+                        enddo
+                    enddo
+                enddo
+                !$omp end parallel do
+                ! best permutation
+                i = minloc(costs, dim=1)
+                if( costs(i) < glob_cost )then
+                    glob_cost   = costs(i)
+                    min_ref     = ref_inds
+                    min_perm    = perm(:,i)
+                    l_mirr_cost = .true.
+                endif
             endif
         enddo
-        call Kabsch_algo(atom1_pos(:,min_ref), atom2_pos(:,min_perm), rec_mat, rec_trans, rec_scale)
-        ! rotating all atoms1 to reg_atom
+        if( l_mirr_cost )then
+            call Kabsch_algo(small_pos(:,min_ref), mirr_pos(:,min_perm), rec_mat, rec_trans, rec_scale)
+        else
+            call Kabsch_algo(small_pos(:,min_ref), large_pos(:,min_perm), rec_mat, rec_trans, rec_scale)
+        endif
         if( l_flip )then
-            do a2 = 1, N2
-                call matinv(rec_mat, inv_mat, 3, errflg)
-                reg_atom(:,a2) = matmul(inv_mat, (atom2_pos(:,a2) - rec_trans) / rec_scale)
+            call matinv(rec_mat, inv_mat, 3, errflg)
+            rec_mat   = inv_mat
+            rec_scale = 1./rec_scale
+            rec_trans = -matmul(rec_mat, rec_trans)*rec_scale
+        endif
+        ! reg_atom = rec_scale * (rec_mat * atoms1 + rec_trans)
+        if( l_mirr_cost )then
+            print *, 'mirroring'
+            do a1 = 1, size(atoms1, 2)
+                if( l_flip )mirr_atoms1(3,a1) = 2*mirror_mid - atoms1(3,a1)
+                reg_atom(:,a1) = rec_scale * matmul(rec_mat, mirr_atoms1(:,a1)) + rec_trans
+                if( .not. l_flip )reg_atom(3,a1) = 2*mirror_mid - reg_atom(3,a1)
             enddo
         else
-            do a1 = 1, N1
-                reg_atom(:,a1) = rec_scale * matmul(rec_mat, atom1_pos(:,a1)) + rec_trans
+            do a1 = 1, size(atoms1, 2)
+                reg_atom(:,a1) = rec_scale * matmul(rec_mat, atoms1(:,a1)) + rec_trans
             enddo
         endif
         if( present(out_mat) .and. present(out_trans) .and. present(out_scale) )then
@@ -159,8 +237,7 @@ contains
             eye(3,3) = -1.
             ret_mat  = matmul(matmul(eig_vecs, eye), transpose(mat))
         endif
-        ret_scale = 1.
-        ! ret_scale = sqrt(sum(var2**2) / sum(var1**2))
+        ret_scale = sqrt(sum(var2**2) / sum(var1**2))
         mean2     = - ret_scale * matmul(mean1, transpose(ret_mat)) + mean2
         ret_trans = mean2(1,:)
     
