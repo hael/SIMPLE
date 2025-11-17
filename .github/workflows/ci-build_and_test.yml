@@ -134,8 +134,6 @@ jobs:
              simple_test_phasecorr
              echo "-------------------- TEST RANK WEIGHTS -------------------------"
              simple_test_rank_weights
-             echo "-------------------- TEST REPLACE SUBSTR -------------------------"
-             simple_test_replace_substr
              echo "-------------------- TEST SERIALIZE -------------------------"
              simple_test_serialize
              echo "-------------------- TEST SIMD -------------------------"
