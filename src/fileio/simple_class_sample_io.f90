@@ -1,6 +1,6 @@
 module simple_class_sample_io
 use simple_defs
-use simple_strings
+use simple_string_utils
 use simple_error
 use simple_syslib
 use simple_fileio

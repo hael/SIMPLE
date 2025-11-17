@@ -377,7 +377,7 @@ contains
     !!          The array of reals should have +2 elements in the first dimension.
     !!          2-Dimensional images are assumed
     subroutine rTiffSlices( self, image_index, rarr )
-        use simple_strings, only: int2str, tocstring
+        use simple_string_utils, only: int2str, to_cstring
         use, intrinsic :: iso_c_binding
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: image_index  !<

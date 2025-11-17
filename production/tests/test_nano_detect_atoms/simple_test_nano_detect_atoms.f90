@@ -7,7 +7,7 @@ use simple_nanoparticle
 use simple_nanoparticle_utils
 use simple_image
 use simple_parameters
-use simple_strings, only: int2str
+use simple_string_utils, only: int2str
 implicit none
 #include "simple_local_flags.inc"
 real                     :: smpd, mskdiam

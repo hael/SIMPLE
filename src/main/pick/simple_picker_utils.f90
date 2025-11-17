@@ -22,7 +22,7 @@ logical, parameter :: L_DEBUG      = .false.
 contains
 
     subroutine exec_refpick( micname, boxfile_out, thumb_den_out, smpd, nptcls, pickrefs, dir_out, nboxes_max )
-        use simple_strings, only: str2real, parsestr
+        use simple_string_utils, only: str2real, parsestr
         character(len=*),           intent(in)    :: micname
         character(len=LONGSTRLEN),  intent(out)   :: boxfile_out, thumb_den_out
         real,                       intent(in)    :: smpd    !< sampling distance in A

@@ -72,7 +72,7 @@ void noprint(FILE *f,...){}
 #define REMOVE_DIRECTORY remove_directory_
 
 // Protect fortran strings by appending '\0' to end
-char *F90toCstring(char *str, int len)
+char *F90to_cstring(char *str, int len)
 {
     char *res; /* C arrays are from 0:len-1 */
     if(len > LONGSTRLEN) {
@@ -127,7 +127,7 @@ int isdir(char* pathname, int* len, size_t ivf_pathname)
         return 0;
     }
     //printf("isdir pathname :%s: len %d\n",  pathname, *len);
-    char* cpathname = F90toCstring(pathname, *len);
+    char* cpathname = F90to_cstring(pathname, *len);
     if(!cpathname) {
         printf("%d %s\nisdir failed to create str %s\n", errno, strerror(errno), pathname);
         perror("Failed : simple_posix.c::isdir ");
@@ -204,7 +204,7 @@ int makedir(char *path,
       ENOTDIR pathname is relative and dirfd is a file descriptor referring to a
       file other than a directory.
     */
-    char *cpath = F90toCstring(path, *charLen);
+    char *cpath = F90to_cstring(path, *charLen);
     // fprintf(stderr, "makedir  %d  %d %s  %s\n",  *charLen, strlen(path), path, cpath);
     if(cpath == NULL) {
         printf("%d %s\n makedir failed to convert string (unprotected) %s\n", errno, strerror(errno), path);
@@ -297,7 +297,7 @@ int removedir(char *path, int* len, int* count, size_t ivf_path)
 
       EROFS  pathname refers to a directory on a read-only filesystem.
     */
-    char *cpath = F90toCstring(path, *len);
+    char *cpath = F90to_cstring(path, *len);
     if(cpath == NULL) {
         printf("%d %s\n removedir failed to convert string (unprotected) %s\n", errno, strerror(errno), path);
         perror("Failed : simple_posix.c::remove_dir ");
@@ -352,8 +352,8 @@ int removedir(char *path, int* len, int* count, size_t ivf_path)
 // list directories in directory 'path'
 int list_dirs(char * path, int*len, char * fout, int*len_fout, int* count, size_t ivf_path)
 {
-    char *cpath = F90toCstring(path, *len);
-    char *cfout = F90toCstring(fout, *len_fout);
+    char *cpath = F90to_cstring(path, *len);
+    char *cfout = F90to_cstring(fout, *len_fout);
     if(cpath == NULL) {
         printf("%d %s\nlist_dirs failed to open convert string (unprotected) %s\n", errno, strerror(errno), path);
         perror("Failed : simple_posix.c::list_dirs ");
@@ -455,7 +455,7 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
     // realpath(in, resolved_path);
     //      printf("\n%s\n",resolved_path);
     //      return 0;
-    char *filein = F90toCstring(in, *inlen);
+    char *filein = F90to_cstring(in, *inlen);
 #if defined(HAVE_CANONICALIZE_FILE_NAME)
     char *resolved = canonicalize_file_name(filein);
 #else
@@ -591,7 +591,7 @@ static int rmFiles(const char *pathname, const struct stat *sbuf, int type, stru
 
 int remove_directory_recursive(char *path, int *len, int*count)
 {
-    char *cpath = F90toCstring(path, *len);
+    char *cpath = F90to_cstring(path, *len);
     DIR *d = opendir(cpath);
     size_t path_len = strlen(cpath);
     int r = -1;
@@ -641,7 +641,7 @@ int remove_directory(char *path, int *len, int*count)
 
 int touch(char* path, int*len)
 {
-    char*cpath = F90toCstring(path, *len);
+    char*cpath = F90to_cstring(path, *len);
     int fd2 = open(cpath, O_RDWR | O_CREAT, 0777);
     free(cpath);
     if(fd2 != -1) {
@@ -657,7 +657,7 @@ int regexp_match(char* srcstr,  int*srclen, char* regexString , int*rgxlen)
   regex_t regex;
   int reti;
   char msgbuf[100];
-  char*rgxstr = F90toCstring(regexString, *rgxlen);
+  char*rgxstr = F90to_cstring(regexString, *rgxlen);
   /* Compile regular expression */
   reti = regcomp(&regex, rgxstr, REG_EXTENDED|REG_ICASE|REG_NOSUB);
   if (reti) {
@@ -666,7 +666,7 @@ int regexp_match(char* srcstr,  int*srclen, char* regexString , int*rgxlen)
     return -1;
   }
 
-  char*instr = F90toCstring(srcstr, *srclen);
+  char*instr = F90to_cstring(srcstr, *srclen);
   /* Execute regular expression */
   reti = regexec(&regex, instr, 0, NULL, 0);
   if (!reti) {

@@ -14,7 +14,7 @@ use simple_is_check_assert
 use simple_math
 use simple_math_ft
 use simple_fileio
-use simple_strings
+use simple_string_utils
 use simple_defs
 use simple_defs_ori
 use simple_syslib

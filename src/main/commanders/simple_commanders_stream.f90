@@ -144,7 +144,7 @@ contains
         if( l_movie_found )then
             ! movies
             call cline%set('dir_movies', directory)
-            l_add_suffix = str_endswith_substr(cline%get_carg('dir_movies'), '/Data')
+            l_add_suffix = str_ends_with_substr(cline%get_carg('dir_movies'), '/Data')
             ! XML
             if( l_add_suffix .and. cline%defined('dir_meta') ) call cline%set('dir_meta', directory)
         endif

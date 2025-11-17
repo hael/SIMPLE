@@ -1,6 +1,6 @@
 module simple_fileio
 use simple_defs
-use simple_strings
+use simple_string_utils
 use simple_error
 use simple_syslib
 implicit none
@@ -63,7 +63,7 @@ contains
             &position_this, errmsg_this
         ! check to see if filename is empty
         write(filename,'(A)') trim(adjustl(file))
-        if ( strIsBlank(filename) )then
+        if ( str_is_blank(filename) )then
             write(logfhandle,*) 'simple_system::fopen filename blank'
             if(present(iomsg))  write(logfhandle,*) trim(adjustl(iomsg))
             if(present(errmsg)) write(logfhandle,*) "Message: ", trim(adjustl(errmsg))
@@ -88,25 +88,25 @@ contains
         write(status_this,'(A)') 'UNKNOWN'
         write(position_this,'(A)') 'APPEND'
         if (present(status))then
-            if (stringsAreEqual(status, 'OLD',.false.))     write(status_this,'(A)')  upperCase(status)
-            if (stringsAreEqual(status, 'SCRATCH',.false.)) write(status_this,'(A)')  upperCase(status)
-            if (stringsAreEqual(status, 'REPLACE',.false.)) write(status_this ,'(A)') upperCase(status)
-            if (stringsAreEqual(status, 'NEW',.false.))     write( status_this,'(A)')  upperCase(status)
+            if (strings_are_equal(status, 'OLD',.false.))     write(status_this,'(A)')  upperCase(status)
+            if (strings_are_equal(status, 'SCRATCH',.false.)) write(status_this,'(A)')  upperCase(status)
+            if (strings_are_equal(status, 'REPLACE',.false.)) write(status_this ,'(A)') upperCase(status)
+            if (strings_are_equal(status, 'NEW',.false.))     write( status_this,'(A)')  upperCase(status)
         end if
         ! ACTION: READ, WRITE, or READWRITE (default).
         if (present(action))then
-            if (stringsAreEqual(action, 'WRITE',.false.)) write(action_this ,'(A)') upperCase(action)
-            if (stringsAreEqual(action, 'READ',.false.))  write(action_this ,'(A)') upperCase(action)
+            if (strings_are_equal(action, 'WRITE',.false.)) write(action_this ,'(A)') upperCase(action)
+            if (strings_are_equal(action, 'READ',.false.))  write(action_this ,'(A)') upperCase(action)
         end if
-        if ( (stringsAreEqual(status_this, 'NEW',.false.))  .and. &
-            (stringsAreEqual(action_this, 'READ',.false.))  .and. &
+        if ( (strings_are_equal(status_this, 'NEW',.false.))  .and. &
+            (strings_are_equal(action_this, 'READ',.false.))  .and. &
             (.not. file_exists(filename) ) )then
             write(logfhandle,*) "::fopen incompatible status=NEW and action=READ ", trim(filename)," does not exist"
             return ! false
         end if
         if(present(position)) then
-            if ( (stringsAreEqual(status_this, 'OLD',.false.))  .and. &
-                (stringsAreEqual(position, 'APPEND',.false.))  .and. &
+            if ( (strings_are_equal(status_this, 'OLD',.false.))  .and. &
+                (strings_are_equal(position, 'APPEND',.false.))  .and. &
                 (.not. file_exists(filename) ) )then
                 write(logfhandle,*) "::fopen incompatible status=OLD and position=APPEND  when ",&
                     trim(filename)," does not exist"
@@ -116,8 +116,8 @@ contains
         ! access: DIRECT (random access) or SEQUENTIAL  or STREAM (F2003)
         write(access_this ,'(A)') 'SEQUENTIAL'
         if (present(access))then
-            if (stringsAreEqual(access, 'DIRECT',.false.))  write(access_this ,'(A)') upperCase(access)
-            if (stringsAreEqual(access, 'STREAM',.false.))then
+            if (strings_are_equal(access, 'DIRECT',.false.))  write(access_this ,'(A)') upperCase(access)
+            if (strings_are_equal(access, 'STREAM',.false.))then
                 write(access_this ,'(A)') upperCase(access)
             endif
         end if
@@ -126,7 +126,7 @@ contains
         !! Common file open
         if (.not.( present(form) .or. present(async) .or. present(pad) .or. &
             &present(decimal) .or. present(round) .or. present(delim) .or. present(blank) ) )then
-            if (stringsAreEqual(access_this, 'DIRECT',.false.) .and. (recl_this > 0) ) then
+            if (strings_are_equal(access_this, 'DIRECT',.false.) .and. (recl_this > 0) ) then
 
                 if (present(action))then
                     if (present(position))then
@@ -177,45 +177,45 @@ contains
         if(present(recl)) recl_this=recl
         write(pad_this,'(A)') 'YES'
         if (present(pad))then
-            if (stringsAreEqual(pad, 'NO',.false.))  write(pad_this ,'(A)') upperCase(pad)
+            if (strings_are_equal(pad, 'NO',.false.))  write(pad_this ,'(A)') upperCase(pad)
         end if
         write(async_this,'(A)')'NO'
         if (present(async))then
-            if (stringsAreEqual(async, 'YES',.false.))  write(async_this ,'(A)')upperCase(async)
+            if (strings_are_equal(async, 'YES',.false.))  write(async_this ,'(A)')upperCase(async)
         end if
         write(blank_this,'(A)')'NULL'
         if (present(blank))then
-            if (stringsAreEqual(blank, 'ZERO',.false.)) write( blank_this ,'(A)') upperCase(blank)
+            if (strings_are_equal(blank, 'ZERO',.false.)) write( blank_this ,'(A)') upperCase(blank)
         end if
         write(decimal_this,'(A)')'POINT'
         if (present(decimal))then
-            if (stringsAreEqual(decimal, 'COMMA',.false.)) write( decimal_this ,'(A)') upperCase(decimal)
+            if (strings_are_equal(decimal, 'COMMA',.false.)) write( decimal_this ,'(A)') upperCase(decimal)
         end if
         write(delim_this,'(A)')'NONE'
         if (present(delim))then
-            if (stringsAreEqual(delim, 'APOSTROPHE',.false.)) write( delim_this ,'(A)') upperCase(delim)
-            if (stringsAreEqual(delim, 'QUOTE',.false.))  write(delim_this ,'(A)') upperCase(delim)
+            if (strings_are_equal(delim, 'APOSTROPHE',.false.)) write( delim_this ,'(A)') upperCase(delim)
+            if (strings_are_equal(delim, 'QUOTE',.false.))  write(delim_this ,'(A)') upperCase(delim)
         end if
         write(form_this,'(A)')'FORMATTED'
         if (present(form))then
-            if (stringsAreEqual(form, 'UNFORMATTED',.false.))  write(form_this ,'(A)') upperCase(form)
-            if (stringsAreEqual(form, 'BINARY',.false.))  write(form_this ,'(A)') upperCase(form)
+            if (strings_are_equal(form, 'UNFORMATTED',.false.))  write(form_this ,'(A)') upperCase(form)
+            if (strings_are_equal(form, 'BINARY',.false.))  write(form_this ,'(A)') upperCase(form)
         end if
         write(round_this,'(A)')'PROCESSOR_DEFINED'
         if (present(round))then
-            if (stringsAreEqual(round, 'SUPPRESS',.false.)) write( round_this ,'(A)') upperCase(round)
-            if (stringsAreEqual(round, 'PLUS',.false.))  write(round_this ,'(A)') upperCase(round)
-            if (stringsAreEqual(round, 'UNDEFINED',.false.)) write( round_this ,'(A)') upperCase(round)
+            if (strings_are_equal(round, 'SUPPRESS',.false.)) write( round_this ,'(A)') upperCase(round)
+            if (strings_are_equal(round, 'PLUS',.false.))  write(round_this ,'(A)') upperCase(round)
+            if (strings_are_equal(round, 'UNDEFINED',.false.)) write( round_this ,'(A)') upperCase(round)
         end if
         if(present(iomsg)) iomsg_this=iomsg
         ! execute open under specific conditions
-        if (stringsAreEqual(form_this, 'FORMATTED',.false.)) then
+        if (strings_are_equal(form_this, 'FORMATTED',.false.)) then
             open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
                 &ACTION=action_this,STATUS=status_this,ACCESS=access_this,&
                 &BLANK=blank_this,FORM='FORMATTED', ROUND=round_this,&
                 &IOMSG=iomsg_this)
         else
-            if (stringsAreEqual(access_this, 'DIRECT',.false.))then
+            if (strings_are_equal(access_this, 'DIRECT',.false.))then
                 open( NEWUNIT=funit, FILE=filename, IOSTAT=iostat_this, &
                     &ACTION=action_this, STATUS=status_this,&
                     &ACCESS=access_this, FORM=form_this, RECL=recl_this,&
@@ -266,7 +266,7 @@ contains
     end subroutine wait_for_closure
 
     function nlines( fname ) result( n )
-        use simple_strings
+        use simple_string_utils
         character(len=*), intent(in)  :: fname !< input filename
         character(len=:), allocatable :: tfile
         integer          :: n, funit, ios,io_status
@@ -281,7 +281,7 @@ contains
                 if(ios /= 0)then
                     exit
                 else
-                    if(.not. strIsComment(junk))  n = n + 1
+                    if(.not. str_is_comment(junk))  n = n + 1
                 endif
             end do
             call fclose(funit)
@@ -430,7 +430,7 @@ contains
     end function fname2ext
 
     integer function fname2iter( fname )
-        use simple_strings, only: map_str_nrs, str2int
+        use simple_string_utils, only: map_str_nrs, str2int
         character(len=*), intent(in)  :: fname
         character(len=:), allocatable :: iter_num_ext, nrstr
         logical,          allocatable :: lnrs(:)
@@ -506,7 +506,7 @@ contains
 
     !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
-        use simple_strings, only: int2str, int2str_pad
+        use simple_string_utils, only: int2str, int2str_pad
         character(len=*),  intent(in) :: body
         integer,           intent(in) :: n
         integer, optional, intent(in) :: numlen
@@ -522,7 +522,7 @@ contains
 
     !>  \brief  returns numbered file-names with 0-padded integer strings
     function make_filenames( body, n, ext, numlen, suffix ) result( names )
-        use simple_strings, only: int2str, int2str_pad
+        use simple_string_utils, only: int2str, int2str_pad
         character(len=*),           intent(in) :: body, ext
         integer,                    intent(in) :: n
         integer,          optional, intent(in) :: numlen

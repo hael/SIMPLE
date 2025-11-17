@@ -5,7 +5,7 @@ use, intrinsic :: ISO_C_BINDING
 use simple_fileio
 use simple_map_reduce
 use simple_syslib
-use simple_strings
+use simple_string_utils
 use simple_ori
 use simple_oris
 use simple_defs

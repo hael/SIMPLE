@@ -7,7 +7,7 @@ use simple_defs_conv
 use simple_srch_sort_loc
 use simple_syslib
 use simple_math_ft
-use simple_strings
+use simple_string_utils
 use simple_fileio
 implicit none
 

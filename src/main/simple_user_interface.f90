@@ -6462,7 +6462,7 @@ contains
                 sorted_keys(i) = arr(i)%key
                 required(i)    = arr(i)%required
             end do
-            call lexSort(sorted_keys, inds=inds)
+            call lex_sort(sorted_keys, inds=inds)
             required = required(inds)
             if( any(required) )then
                 ! fish out the required ones

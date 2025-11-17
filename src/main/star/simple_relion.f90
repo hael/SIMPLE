@@ -622,7 +622,7 @@ contains
             else
                 tmpname = trim(adjustl(cline%get_carg('xmlloc'))) // "/" //  trim(adjustl(self%movienames(i))) //".xml"
             endif
-            call void_substr(tmpname, '_EER', fname)
+            call remove_substr(tmpname, '_EER', fname)
 
             inquire(file=fname, exist=exists)
             if(.NOT. exists) then

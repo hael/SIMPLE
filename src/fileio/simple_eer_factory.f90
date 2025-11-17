@@ -68,7 +68,7 @@ contains
         inquire(file=self%fname,size=self%filesz)
         ! open
         call TIFFMuteWarnings
-        self%fhandle = TIFFOpen(toCstring(self%fname),toCstring('r'))
+        self%fhandle = TIFFOpen(to_cstring(self%fname),to_cstring('r'))
         call TIFFUnMuteWarnings
         ! header
         self%nx      = TIFFGetWidth(self%fhandle)

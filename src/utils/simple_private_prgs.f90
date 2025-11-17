@@ -153,7 +153,7 @@ contains
             write(logfhandle,'(a)') ''
             write(logfhandle,'(a)') 'REQUIRED'
             allocate(sorted_keys(nreq), source=private_prgs(iprg)%keys_required(:nreq))
-            call lexSort(sorted_keys)
+            call lex_sort(sorted_keys)
             call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
             deallocate(sorted_keys)
         endif
@@ -163,7 +163,7 @@ contains
             write(logfhandle,'(a)') ''
             write(logfhandle,'(a)') 'OPTIONAL'
             allocate(sorted_keys(nopt), source=private_prgs(iprg)%keys_optional(:nopt))
-            call lexSort(sorted_keys)
+            call lex_sort(sorted_keys)
             call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
             deallocate(sorted_keys)
         endif
@@ -193,7 +193,7 @@ contains
                 write(logfhandle,'(a)') ''
                 write(logfhandle,'(a)') 'REQUIRED'
                 allocate(sorted_keys(nreq), source=keys_required)
-                call lexSort(sorted_keys)
+                call lex_sort(sorted_keys)
                 call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
                 deallocate(sorted_keys)
             endif
@@ -205,7 +205,7 @@ contains
                 write(logfhandle,'(a)') ''
                 write(logfhandle,'(a)') 'OPTIONAL'
                 allocate(sorted_keys(nopt), source=keys_optional)
-                call lexSort(sorted_keys)
+                call lex_sort(sorted_keys)
                 call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
                 deallocate(sorted_keys)
             endif
