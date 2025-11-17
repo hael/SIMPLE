@@ -65,6 +65,7 @@ contains
 
     subroutine exec_stream_preprocess( self, cline )
         use simple_motion_correct_utils, only: flip_gain
+        use simple_moviewatcher,         only: sniff_movies_SJ
         class(commander_stream_preprocess), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                                  :: params
@@ -79,12 +80,12 @@ contains
         type(sp_project)                                  :: spproj_glob    ! global project
         type(starproject_stream)                          :: starproj_stream
         character(len=LONGSTRLEN),          allocatable   :: movies(:)
-        character(len=:),                   allocatable   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
+        character(len=:),                   allocatable   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, directory
         character(len=STDLEN)                             :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         integer                                           :: movies_set_counter, import_counter
         integer                                           :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer                                           :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
-        logical                                           :: l_movies_left, l_haschanged, l_restart
+        logical                                           :: l_movies_left, l_haschanged, l_restart, l_movie_found, l_add_suffix
         logical(LK)                                       :: found 
         real                                              :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real                                              :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
@@ -137,6 +138,16 @@ contains
             call spproj_glob%update_compenv(cline)
             call spproj_glob%write
         endif
+        ! Sniffing for movies & XML in subdirectories, updates dir_movies
+        call sniff_movies_SJ(cline%get_carg('dir_movies'), l_movie_found, directory)
+        l_add_suffix = .false.
+        if( l_movie_found )then
+            ! movies
+            call cline%set('dir_movies', directory)
+            l_add_suffix = str_endswith_substr(cline%get_carg('dir_movies'), '/Data')
+            ! XML
+            if( cline%defined('dir_meta') ) call cline%set('dir_meta', directory)
+        endif
         ! master parameters
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
@@ -155,7 +166,11 @@ contains
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
         ! movie watcher init
-        movie_buff = moviewatcher(LONGTIME, params%dir_movies)
+        if( l_add_suffix )then
+            movie_buff = moviewatcher(LONGTIME, params%dir_movies, suffix_filter='_fractions')
+        else
+            movie_buff = moviewatcher(LONGTIME, params%dir_movies)
+        endif
         ! restart
         movies_set_counter = 0  ! global number of movies set
         import_counter     = 0  ! global import id

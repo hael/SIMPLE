@@ -5,7 +5,7 @@ use simple_parameters, only: params_glob
 use simple_progress
 implicit none
 
-public :: moviewatcher
+public :: moviewatcher, sniff_movies_SJ
 private
 #include "simple_local_flags.inc"
 
@@ -31,7 +31,6 @@ type moviewatcher
     integer                            :: ratetime       = 0     !< time of last rate checkpoint
     integer                            :: raten          = 0     !< number imported at last rate checkpoint
     integer                            :: n_watch        = 0     !< number of times the folder has been watched
-    integer                            :: len_ext        = 0
     logical                            :: exists         = .false.
 contains
     ! getters
@@ -63,46 +62,22 @@ integer, parameter :: RATE_INTERVAL = 3600 ! 1 hour
 contains
 
     !>  \brief  is a constructor
-    function constructor( report_time, dir, spproj, checkpoint_dir, nretries )result( self )
+    function constructor( report_time, dir, spproj, nretries, suffix_filter )result( self )
         integer,                    intent(in) :: report_time  ! in seconds
         character(len=*),           intent(in) :: dir
         logical,          optional, intent(in) :: spproj
-        character(len=*), optional, intent(in) :: checkpoint_dir
         integer,          optional, intent(in) :: nretries
+        character(len=*), optional, intent(in) :: suffix_filter
         type(moviewatcher)                     :: self
         character(len=LONGSTRLEN), allocatable :: strings(:)
         integer :: i
-        logical :: l_movies, l_checkpoint
+        logical :: l_movies
         call self%kill
         l_movies     = .true.
-        l_checkpoint = present(checkpoint_dir)
         if( present(spproj) ) l_movies = .not.spproj
         self%watch_dir   = trim(adjustl(dir))
         self%cwd         = trim(params_glob%cwd)
         self%report_time = report_time
-        if( l_checkpoint )then
-            if( .not.dir_exists(checkpoint_dir) )then
-                THROW_HARD('Could not find checkpoint directory: '//trim(checkpoint_dir))
-            endif
-            if(         (.not.file_exists(trim(checkpoint_dir)//'/'//trim(WATCHER_HISTORY)))&
-                &.and.  (.not.file_exists(trim(checkpoint_dir)//'/'//trim(WATCHER_DIRS))))then
-                THROW_HARD('Insufficient information for checkpoint inititalization')
-            endif
-            ! directories to watch
-            call read_filetable(trim(checkpoint_dir)//trim(WATCHER_DIRS), strings)
-            if( .not.allocated(strings) ) THROW_HARD('No directory defined in moviewatcher checkpoint')
-            do i = 1,size(strings)
-                call self%add2watchdirs(strings(i))
-            enddo
-            deallocate(strings)
-            ! history of files watched
-            call read_filetable(trim(checkpoint_dir)//trim(WATCHER_HISTORY), strings)
-            if( allocated(strings) )then
-                call self%add2history(strings)
-                deallocate(strings)
-                write(logfhandle,'(A,I6,A)')'>>> ADDED ',self%n_history,' FILES TO WATCHING HISTORY'
-            endif
-        endif
         if( l_movies )then
             ! watching movies
             if( .not.file_exists(self%watch_dir) )then
@@ -111,9 +86,22 @@ contains
                 write(logfhandle,'(A,A)')'>>> MOVIES WILL BE DETECTED FROM DIRECTORY: ',trim(self%watch_dir)
             endif
             self%ext    = trim(adjustl(params_glob%ext))
-            self%regexp = '\.mrc$|\.mrcs$'
+            if( present(suffix_filter) )then
+                self%regexp = '\.mrc$|\.mrcs$'
+            endif
 #ifdef USING_TIFF
-            self%regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
+            if( present(suffix_filter) )then
+                self%regexp = '\'//trim(suffix_filter)//'.mrc$|\'//trim(suffix_filter)//'.mrcs$|\'&
+                &//trim(suffix_filter)//'.tif$|\'//trim(suffix_filter)//'.tiff$|\.eer$'
+            else
+                self%regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
+            endif
+#else
+            if( present(suffix_filter) )then
+                self%regexp = '\'//trim(suffix_filter)//'.mrc$|\'//trim(suffix_filter)//'.mrcs$'
+            else
+                self%regexp = '\.mrc$|\.mrcs$'
+            endif
 #endif
         else
             ! watching simple projects
@@ -135,7 +123,6 @@ contains
         endif
         allocate(self%ratehistory(1))
         self%ratehistory(1) = 0
-        self%len_ext = len_trim(self%ext)
         self%exists  = .true.
     end function constructor
 
@@ -417,8 +404,89 @@ contains
         self%raten          = 0
         self%n_watch        = 0
         self%n_history      = 0
-        self%len_ext        = 0
         self%exists = .false.
     end subroutine kill
+
+
+    subroutine sniff_movies_SJ( directory, found, found_directory )
+        character(len=*),              intent(in)    :: directory
+        logical,                       intent(inout) :: found
+        character(len=:), allocatable, intent(inout) :: found_directory
+        character(len=:),          allocatable :: regexp, dir, absdirectory, subdir
+        character(len=LONGSTRLEN), allocatable :: str_array(:), dirs(:), subdirs(:)
+        integer :: i,j
+        regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
+        absdirectory = simple_abspath(directory)
+        call simple_list_files_regexp(absdirectory, regexp, str_array)
+        found = found_movie(str_array)
+        if( found )then
+            found_directory = absdirectory
+            write(logfhandle,'(A,A)')'>>> FOUND MOVIES IN: ',found_directory
+            return
+        endif
+        ! subdirectories, depth=1
+        dirs = simple_list_dirs(absdirectory)
+        if( .not.allocated(dirs) ) return
+        do i = 1,size(dirs)
+            dir = absdirectory//'/'//trim(dirs(i))
+            if( trim(dirs(i)) == 'Data' )then
+                call simple_list_files_regexp(dir, regexp, str_array)
+                found = found_movie(str_array)
+                if( found )then
+                    found_directory = dir
+                    write(logfhandle,'(A,A)')'>>> FOUND MOVIES IN: ',found_directory
+                    return
+                else
+                    write(logfhandle,'(A,A)')'>>> NO MOVIE FOUND IN: ',dir
+                endif
+            else
+                write(logfhandle,'(A,A)')'>>> NO MOVIE FOUND IN: ',dir
+            endif
+        enddo
+        ! subdirectories, depth=2
+        do i = 1,size(dirs)
+            if( allocated(subdirs) ) deallocate(subdirs)
+            dir     = absdirectory//'/'//trim(dirs(i))
+            subdirs = simple_list_dirs(dir)
+            if( .not.allocated(subdirs) ) cycle
+            do j = 1,size(subdirs)
+                subdir = dir//'/'//trim(subdirs(j))
+                if( trim(subdirs(j)) == 'Data' )then
+
+                    call simple_list_files_regexp(subdir, regexp, str_array)
+                    found = found_movie(str_array)
+                    if( found )then
+                        found_directory = subdir
+                        write(logfhandle,'(A,A)')'>>> FOUND MOVIES IN: ',found_directory
+                        return
+                    else
+                        write(logfhandle,'(A,A)')'>>> NO MOVIE FOUND IN: ',subdir
+                    endif
+                else
+                    write(logfhandle,'(A,A)')'>>> NO MOVIE FOUND IN: ',subdir
+                endif
+            enddo
+        enddo
+      contains
+
+            logical function found_movie( files )
+                character(len=LONGSTRLEN), intent(in) :: files(:)
+                integer :: i,n
+                found_movie = .false.
+                n = size(files)
+                if( n == 0 )return
+                do i = 1,n
+                    found_movie = str_endswith_substr(files(i), '.eer')
+                    if( found_movie ) exit
+                    found_movie = str_endswith_substr(files(i), '_fractions.tif')
+                    if( found_movie ) exit
+                    found_movie = str_endswith_substr(files(i), '_fractions.tiff')
+                    if( found_movie ) exit
+                    found_movie = str_endswith_substr(files(i), '_fractions.mrc')
+                    if( found_movie ) exit
+                enddo
+            end function found_movie
+
+    end subroutine sniff_movies_SJ
 
 end module simple_moviewatcher
