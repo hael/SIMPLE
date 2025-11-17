@@ -2,7 +2,7 @@
 module simple_nrtxtfile
 use simple_defs
 use simple_error
-use simple_strings, only: striscomment, cntrecsperline, strisblank
+use simple_string_utils, only: str_is_comment, cnt_recs_per_line, str_is_blank
 use simple_fileio,  only: fopen, fclose, fileiochk
 use simple_syslib,  only: is_open
 implicit none
@@ -61,12 +61,12 @@ contains
                 ! work out records per line, and number_of_lines
                 read(self%funit, '(a)', iostat=ios) buffer
                 if ( ios == 0 ) then
-                    if( strIsComment(buffer) .or. strIsBlank(buffer) )then
+                    if( str_is_comment(buffer) .or. str_is_blank(buffer) )then
                         ! don't do anything
                     else
                         self%ndatalines = self%ndatalines+1
                         ! work out how many records on this line..
-                        recs_on_curr_line = cntRecsPerLine(buffer)
+                        recs_on_curr_line = cnt_recs_per_line(buffer)
                         tot_nr_of_recs = tot_nr_of_recs + recs_on_curr_line
                     endif
                 else
@@ -119,7 +119,7 @@ contains
                 call fileiochk('simple_nrtxtfile::readNextDataLine; Encountered iostat error: '//&
                     trim(io_message),ios)
             endif
-            if( .not. strIsComment(buffer) .and. .not. strIsBlank(buffer) )then
+            if( .not. str_is_comment(buffer) .and. .not. str_is_blank(buffer) )then
                 buffer = trim(adjustl(buffer))
                 read(buffer, *) read_data(1:self%recs_per_line)
                 exit

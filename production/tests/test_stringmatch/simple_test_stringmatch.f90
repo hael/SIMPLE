@@ -8,7 +8,7 @@ character(len=*), parameter :: inds_str = ' 1,3,  5,7,15  '
 integer,        allocatable :: inds(:)
 integer :: i 
 
-inds = listofints2arr(inds_str)
+inds = list_of_ints2arr(inds_str)
 
 print *, 'found # integer numbers: ', size(inds)
 do i = 1, size(inds)

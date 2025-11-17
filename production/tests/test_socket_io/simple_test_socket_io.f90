@@ -1,7 +1,7 @@
 program simple_test_socket_io
    use, intrinsic :: iso_c_binding
    use simple_socket_comm
-   use simple_strings
+   use simple_string_utils
    use unix, only : c_pthread_t, c_pthread_create 
    implicit none
 

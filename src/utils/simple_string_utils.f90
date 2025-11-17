@@ -1,7 +1,7 @@
 ! contains various string manipulation subroutines and functions
 ! adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
 ! modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
-module simple_strings
+module simple_string_utils
 use simple_defs
 use simple_error, only: simple_exception
 use, intrinsic :: iso_c_binding
@@ -227,7 +227,7 @@ contains
         return
     end subroutine split
 
-    function listofints2arr( listofints ) result( iarr )
+    function list_of_ints2arr( listofints ) result( iarr )
         character(len=*), intent(in) :: listofints
         integer, allocatable :: iarr(:)
         character(len=:), allocatable :: str, before
@@ -266,7 +266,7 @@ contains
                 str       = adjustl(str(index+1:))
             endif    
         end do
-    end function listofints2arr
+    end function list_of_ints2arr
 
     !> \brief  removes punctuation (except comma) characters in string str
     subroutine removepunct( str )
@@ -419,20 +419,6 @@ contains
         endif
     end function str_pad
 
-    !>  \brief  pad string with spaces
-    ! function str_pad( str_in, len_padded ) result( str_out )
-    !     character(len=*), intent(in)  :: str_in
-    !     integer,          intent(in)  :: len_padded
-    !     character(len=:), allocatable :: str_out
-    !     integer :: slen
-    !     slen = len(str_in)
-    !     if( slen >= len_padded )then
-    !         str_out = str_in
-    !     else
-    !         str_out = str_in // spaces(len_padded - slen)
-    !     endif
-    ! end function str_pad
-
     !>  \brief  turns a string into an integer variable
     integer function str2int_1( string )
         character(len=*), intent(in)  :: string
@@ -475,19 +461,19 @@ contains
     end function str_has_substr
 
     !>  \brief  check for presence of substring at the end of another
-    logical function str_endswith_substr( str, substr )
+    logical function str_ends_with_substr( str, substr )
         character(len=*), intent(in) :: str, substr
         integer :: start_substr, lenstr
-        str_endswith_substr = .false.
+        str_ends_with_substr = .false.
         lenstr              = len_trim(str)
         start_substr        = lenstr - len_trim(substr) + 1
         if( start_substr >= 1 )then
-            str_endswith_substr = str(start_substr:lenstr) == trim(substr)
+            str_ends_with_substr = str(start_substr:lenstr) == trim(substr)
         endif
-    end function str_endswith_substr
+    end function str_ends_with_substr
 
     !>  \brief  removes occurrences of substr in str into str_out
-    subroutine void_substr( str, substr, str_out )
+    subroutine remove_substr( str, substr, str_out )
         character(len=*), intent(in)                 :: str, substr
         character(len=:), allocatable, intent(inout) :: str_out
         integer :: l, lout, pos
@@ -512,7 +498,7 @@ contains
             endif
             pos = index(str_out, substr)
         end do
-    end subroutine
+    end subroutine remove_substr
 
     !>  \brief  Convert string to lower case
     pure function lowercase( str )
@@ -539,56 +525,56 @@ contains
     end function uppercase
 
     !>  \brief works out whether a character string is a comment line
-    logical function strIsComment( line )
+    logical function str_is_comment( line )
         character(len=*), intent(in)  ::  line
         integer ::  pos1,linelen
-        strIsComment = .false.
-        if(strIsEmpty(line)) return
-        pos1 = firstNonBlank(line)
+        str_is_comment = .false.
+        if(str_is_empty(line)) return
+        pos1 = first_non_blank(line)
         ! if we didn't find a non-blank character, then the line must be blank!
         if( pos1 .eq. 0 ) return
         linelen=len_trim(line)
         if( scan(line(pos1:),'#!;', back=.false.) .eq. 1 )then
             ! the first non-blank character is a comment character.
-            strIsComment = .true.
+            str_is_comment = .true.
         endif
-    end function strIsComment
+    end function str_is_comment
 
     !>  \brief works out whether a character string is blank
-    pure logical function strIsEmpty( line )
+    pure logical function str_is_empty( line )
         character(len=*),   intent(in)  ::  line
         if( len_trim(line) == 0 )then
-             strIsEmpty = .true.
+             str_is_empty = .true.
          else
-             strIsEmpty = .false.
+             str_is_empty = .false.
          end if
-    end function strIsEmpty
+    end function str_is_empty
 
     !>  \brief works out whether a character string is blank
-    pure logical function strIsBlank( line )
+    pure logical function str_is_blank( line )
         character(len=*),   intent(in)  ::  line
         if( trim(line) .eq. '' )then
-             strIsBlank = .true.
-        else if( firstNonBlank(line) .eq. 0 )then
-             strIsBlank = .true.
+             str_is_blank = .true.
+        else if( first_non_blank(line) .eq. 0 )then
+             str_is_blank = .true.
         else
-             strIsBlank = .false.
+             str_is_blank = .false.
         endif
-    end function strIsBlank
+    end function str_is_blank
 
     !>  \brief  Find the first non-blank character in a string and return its position.
-    pure integer function firstNonBlank( string, back )
+    pure integer function first_non_blank( string, back )
         character(len=*), intent(in)  :: string !< input string
         logical, optional, intent(in) :: back !<  if .true., we'll look for the last non-blank character in the string
         logical ::  bback
         ! reverse?
         bback = .false.
         if (present(back)) bback = back
-        firstNonBlank = verify(string,BLANKS_AND_NEW_LINES,back=bback)
-    end function firstNonBlank
+        first_non_blank = verify(string,BLANKS_AND_NEW_LINES,back=bback)
+    end function first_non_blank
 
     !>  \brief  find the first blank character in a string and return its position.
-    pure integer function firstBlank( string, back )
+    pure integer function first_blank( string, back )
         character(len=*), intent(in)  :: string !< input string
         logical, optional, intent(in) :: back !<  if .true., we'll look for the last blank character in the string
         logical ::  bback
@@ -598,11 +584,11 @@ contains
         else
             bback = .false.
         endif
-        firstBlank = scan(string,BLANKS_AND_NEW_LINES,back=bback)
-    end function firstBlank
+        first_blank = scan(string,BLANKS_AND_NEW_LINES,back=bback)
+    end function first_blank
 
     !>  \brief  test whether two strings are equal, ignoring blank characters
-    logical function stringsAreEqual( instr1, instr2, case_sensitive )
+    logical function strings_are_equal( instr1, instr2, case_sensitive )
         character(len=*), intent(in)  :: instr1 !< input string
         character(len=*), intent(in)  :: instr2 !< input string
         logical, optional, intent(in) :: case_sensitive  !< is the comparison case-sensitive
@@ -628,28 +614,28 @@ contains
         last_non_blank_2  = verify(local_str2,blank_characters,back=.true.)
         if( first_non_blank_1 .eq. 0 .and. first_non_blank_2 .eq. 0 )then
             ! both strings are blank
-            stringsAreEqual = .true.
+            strings_are_equal = .true.
         else if( first_non_blank_1 .eq. 0 .or. first_non_blank_2 .eq. 0 )then
             ! one string is blank, the other isn't
-            stringsAreEqual = .false.
+            strings_are_equal = .false.
         else if( index(local_str1(first_non_blank_1:last_non_blank_1), &
                        local_str2(first_non_blank_1:last_non_blank_2)) .eq. 1  &
                  .and. last_non_blank_1-first_non_blank_1 .eq. last_non_blank_2-first_non_blank_2 )then
             ! neither string is blank, and the strings match
-            stringsAreEqual = .true.
+            strings_are_equal = .true.
         else
             ! all other cases
-            stringsAreEqual = .false.
+            strings_are_equal = .false.
         endif
-    end function stringsAreEqual
+    end function strings_are_equal
 
     !>  \brief  count the number of records in a line
-    function cntRecsPerLine( line, separators ) result( nrecs )
+    function cnt_recs_per_line( line, separators ) result( nrecs )
         character(len=*)            :: line        !<  line to be split
         character(len=*), optional  :: separators  !<  characters which separate words, if not present, default is blank characters (space, tabs...)
         character(len=LINE_MAX_LEN) :: buffer
         integer :: nrecs, pos1, pos2
-        if (strIsBlank(line) .or. strIsComment(line)) then
+        if (str_is_blank(line) .or. str_is_comment(line)) then
             nrecs = 0
         else
             buffer = trim(line)
@@ -664,10 +650,10 @@ contains
                     endif
                 else
                     ! find the first non-blank character
-                    pos1 = firstNonBlank(buffer)
+                    pos1 = first_non_blank(buffer)
                     if (pos1 .ne. 0) then
                         ! find the last non-blank character after that
-                        pos2 = pos1+firstBlank(buffer(pos1:))-2
+                        pos2 = pos1+first_blank(buffer(pos1:))-2
                     endif
                 endif
                 if( pos1 .ne. 0 .and. pos2 .ne. 0 )then ! if we found a word
@@ -680,14 +666,14 @@ contains
                 endif
             enddo
         endif
-    end function cntRecsPerLine
+    end function cnt_recs_per_line
 
     !> \brief  Lexographical sort.
     !> \param strArr is a one-dimensional array of character strings to be  sorted in ascending lexical order.
     !>   the sorted array. The characters of
     !>         the elements of the string array are not modified. If blanks or punctuation characters are
     !>         to be ignored, this needs to be taken care of before calling.
-    subroutine lexSort( strArr, CaseSens, inds )
+    subroutine lex_sort( strArr, CaseSens, inds )
         character(len=*),               intent(inout) :: strArr(:)
         logical, optional,              intent(in)    :: CaseSens  !< case-sensitive sorting
         integer, optional, allocatable, intent(out)   :: inds(:)
@@ -778,10 +764,10 @@ contains
               end if
           end function UpperCaseFirst
 
-    end subroutine lexSort
+    end subroutine lex_sort
 
     !>  \brief  converst to C string
-    pure function toCstring( f_string )result( c_string )
+    pure function to_cstring( f_string )result( c_string )
         character(len=*),intent(in)  :: f_string
         character(len=1,kind=c_char) :: c_string(len_trim(f_string)+1)
         integer :: i, n
@@ -790,12 +776,12 @@ contains
             c_string(i) = f_string(i:i)
         enddo
         c_string(n+1) = C_NULL_CHAR
-    end function toCstring
+    end function to_cstring
 
     !>  Replace all occurrences of s1 in str with s2
     !!  Optionally one occurence (one=.true.) and
     !!  optionally starting from end of string (back=.true.)
-    pure subroutine replace_substring( str, s1, s2, one, back )
+    pure subroutine replace_substr( str, s1, s2, one, back )
         character(len=:), allocatable, intent(inout) :: str
         character(len=*),              intent(in)    :: s1, s2
         logical,             optional, intent(in)    :: one, back
@@ -834,6 +820,6 @@ contains
             end do
             str = tmp
         end if
-    end subroutine replace_substring
+    end subroutine replace_substr
 
-end module simple_strings
+end module simple_string_utils

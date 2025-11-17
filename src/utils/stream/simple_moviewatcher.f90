@@ -476,13 +476,13 @@ contains
                 n = size(files)
                 if( n == 0 )return
                 do i = 1,n
-                    found_movie = str_endswith_substr(files(i), '.eer')
+                    found_movie = str_ends_with_substr(files(i), '.eer')
                     if( found_movie ) exit
-                    found_movie = str_endswith_substr(files(i), '_fractions.tif')
+                    found_movie = str_ends_with_substr(files(i), '_fractions.tif')
                     if( found_movie ) exit
-                    found_movie = str_endswith_substr(files(i), '_fractions.tiff')
+                    found_movie = str_ends_with_substr(files(i), '_fractions.tiff')
                     if( found_movie ) exit
-                    found_movie = str_endswith_substr(files(i), '_fractions.mrc')
+                    found_movie = str_ends_with_substr(files(i), '_fractions.mrc')
                     if( found_movie ) exit
                 enddo
             end function found_movie

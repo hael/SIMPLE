@@ -5,7 +5,7 @@ use simple_ori
 use simple_oris
 use simple_math
 use simple_rnd
-use simple_strings
+use simple_string_utils
 implicit none
 
 public :: sym, is_valid_pointgroup, sym_tester

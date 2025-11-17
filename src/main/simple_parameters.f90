@@ -17,7 +17,7 @@ type :: parameters
     ! pointer 2 program UI
     type(simple_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3)          :: acf='no'         !< calculate autocorrelation function(yes|no){no}
+    character(len=3)          :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)          :: append='no'          !< append selection (yes|no){no}
     character(len=3)          :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)          :: atom_thres='yes'     !< do atomic thresholding or not (yes|no){yes}

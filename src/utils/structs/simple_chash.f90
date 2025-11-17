@@ -3,7 +3,7 @@ module simple_chash
 use simple_defs
 use simple_error,   only: simple_exception
 use simple_fileio,  only: fopen, fileiochk, fclose
-use simple_strings, only: strisblank, striscomment, lexsort
+use simple_string_utils, only: str_is_blank, str_is_comment, lex_sort
 use simple_syslib,  only: is_open
 use simple_ansi_ctrls
 implicit none
@@ -354,7 +354,7 @@ contains
 
     !>  \brief  concatenates the chash into a string
     pure function chash2str( self ) result( str )
-        class(chash), intent(in)  :: self
+        class(chash), intent(in)   :: self
         character(len=XLONGSTRLEN) :: str
         integer :: i, len
         if( self%chash_index > 0 )then
@@ -422,7 +422,7 @@ contains
                 keys_sorted(ikey) = self%keys(ikey)%str
             end do
             ! sort keys
-            call lexSort(keys_sorted)
+            call lex_sort(keys_sorted)
             ! generate the sorted hash
             do ikey=1,self%chash_index
                 val = self%get(keys_sorted(ikey))
@@ -566,13 +566,13 @@ contains
         do
             read(funit, '(a)', iostat=ios) buffer
             if ( ios == 0 ) then
-                if( strIsComment(buffer) .or. strIsBlank(buffer) )then
+                if( str_is_comment(buffer) .or. str_is_blank(buffer) )then
                     ! don't do anything
                 else
                     pos = index(buffer, '=') ! position of '='
                     key = trim(adjustl(buffer(:pos-1)))
                     val = trim(adjustl(buffer(pos+1:)))
-                    if( .not. strIsBlank(val) ) call self%set(key, val)
+                    if( .not. str_is_blank(val) ) call self%set(key, val)
                 endif
             else
                 exit ! we found the end...

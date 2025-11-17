@@ -220,7 +220,7 @@ end function cast_time_char
 
    !< Setup profiling
    subroutine timer_profile_setup(nLoops, nVars, vin)
-   use simple_strings
+   use simple_string_utils
       integer,          intent(in)    :: nLoops
       integer,          intent(in)    :: nVars
       character(len=*), intent(inout) :: vin
@@ -229,7 +229,7 @@ end function cast_time_char
       ! define number of tokens
       if(nVars .le. 0)then
           call removepunct(vin)
-          nargs_parse = cntRecsPerLine(vin)
+          nargs_parse = cnt_recs_per_line(vin)
       else
           nargs_parse = nVars
       end if

@@ -332,7 +332,7 @@ contains
             nclust_sel = 1
             allocate(clustinds(nclust_sel), source=params%clustind)
         else
-            clustinds = listofints2arr(params%clustinds)
+            clustinds = list_of_ints2arr(params%clustinds)
             nclust_sel = size(clustinds)
         endif
         do iclust = 1, nclust_sel

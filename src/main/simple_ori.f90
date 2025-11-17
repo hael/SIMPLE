@@ -8,7 +8,7 @@ use simple_hash
 use simple_chash
 use simple_rnd
 use simple_is_check_assert
-use simple_strings
+use simple_string_utils
 use simple_math
 use simple_stat
 use simple_nrtxtfile

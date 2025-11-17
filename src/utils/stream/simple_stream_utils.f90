@@ -327,7 +327,7 @@ contains
         if( need_sigma )then
             ! making sure the executable is *always* simple_private_exec
             exec = trim(self%qenv%get_exec_bin())
-            call replace_substring(exec,'/simple_exec','/simple_private_exec',one=.true.,back=.true.)
+            call replace_substr(exec,'/simple_exec','/simple_private_exec',one=.true.,back=.true.)
             ! submission
             self%converged  = .false.
             call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, './distr_chunk2D', 'simple_log_chunk2d', exec_bin=exec)

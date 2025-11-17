@@ -15,7 +15,7 @@ module simple_imghead
 use simple_defs
 use simple_error,   only: simple_exception
 use simple_fileio,  only: fopen, fileiochk, fclose, fname2format
-use simple_strings, only: int2str, toCstring
+use simple_string_utils, only: int2str, to_cstring
 use simple_syslib,  only: file_exists
 #ifdef USING_TIFF
 use simple_tifflib
@@ -433,8 +433,8 @@ contains
         select type( self )
 #ifdef USING_TIFF
             type is( TiffImgHead )
-                filename_c  = toCstring(fname)
-                open_mode_c = toCstring('rc')
+                filename_c  = to_cstring(fname)
+                open_mode_c = to_cstring('rc')
                 form = fname2format(fname)
                 if( form == 'L' ) call TIFFMuteWarnings
                 self%fhandle = TIFFOpen(filename_c,open_mode_c)
@@ -1406,7 +1406,7 @@ contains
     end subroutine get_spifile_info
 
     subroutine get_tiffile_info(fname, ldim, nptcls, smpd_here, doprint)
-        use simple_strings, only: tocstring
+        use simple_string_utils, only: to_cstring
         character(len=*), intent(in)  :: fname
         real,             intent(out) :: smpd_here
         integer,          intent(out) :: ldim(3), nptcls
@@ -1417,8 +1417,8 @@ contains
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
-        filename_c  = toCstring(fname)
-        open_mode_c = toCstring('rc')
+        filename_c  = to_cstring(fname)
+        open_mode_c = to_cstring('rc')
 #ifdef USING_TIFF
         form = fname2format(fname)
         if( form == 'L' ) call TIFFMuteWarnings
@@ -1434,7 +1434,7 @@ contains
     end subroutine get_tiffile_info
 
     subroutine get_eerfile_info(fname, ldim, nptcls, smpd_here, doprint)
-        use simple_strings, only: tocstring
+        use simple_string_utils, only: to_cstring
         character(len=*), intent(in)  :: fname
         real,             intent(out) :: smpd_here
         integer,          intent(out) :: ldim(3), nptcls
@@ -1444,8 +1444,8 @@ contains
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
-        filename_c  = toCstring(fname)
-        open_mode_c = toCstring('r')
+        filename_c  = to_cstring(fname)
+        open_mode_c = to_cstring('r')
 #ifdef USING_TIFF
         call TIFFMuteWarnings
         fhandle = TIFFOpen(filename_c, open_mode_c)

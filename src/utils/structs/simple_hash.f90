@@ -1,7 +1,7 @@
 ! real hash data structure
 module simple_hash
 use simple_defs
-use simple_strings, only: real2str, parsestr, int2str
+use simple_string_utils, only: real2str, parsestr, int2str
 use simple_error,   only: simple_exception
 implicit none
 

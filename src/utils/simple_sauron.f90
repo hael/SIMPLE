@@ -5,7 +5,7 @@ use simple_hash,    only: hash
 use simple_chash,   only: chash
 use simple_defs
 use simple_defs_ori
-use simple_strings
+use simple_string_utils
 implicit none
 
 public :: sauron_ori_parser
@@ -20,7 +20,7 @@ contains
 
     !> whether a string represents a double precision real (and its value) or characters
     subroutine str2realdp_local( str, isreal, rvar)
-        use simple_strings, only: char_is_a_letter
+        use simple_string_utils, only: char_is_a_letter
         character(len=*), intent(in)  :: str
         logical,          intent(out) :: isreal
         real(dp),         intent(out) :: rvar

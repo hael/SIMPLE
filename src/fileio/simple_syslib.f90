@@ -527,7 +527,7 @@ contains
     end subroutine syslib_c2fortran_string
 
     function find_next_int_dir_prefix( dir2list, last_prev_dir ) result( next_int_dir_prefix )
-        use simple_strings, only: char_is_a_number, map_str_nrs, str2int
+        use simple_string_utils, only: char_is_a_number, map_str_nrs, str2int
         character(len=*),                        intent(in)  :: dir2list
         character(len=:), allocatable, optional, intent(out) :: last_prev_dir
         character(len=STDLEN)              :: str
@@ -569,7 +569,7 @@ contains
     end function find_next_int_dir_prefix
 
     function simple_list_dirs( path, status ) result( list )
-        use simple_strings, only: int2str
+        use simple_string_utils, only: int2str
         character(len=*),             intent(in)  :: path
         integer,            optional, intent(out) :: status
         character(len=LONGSTRLEN),    allocatable :: list(:)
@@ -593,7 +593,7 @@ contains
     end function simple_list_dirs
 
     subroutine simple_list_files( pattern, list )
-        use simple_strings, only: int2str
+        use simple_string_utils, only: int2str
         character(len=*),                       intent(in)    :: pattern
         character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
         character(len=LONGSTRLEN) :: cmd
@@ -630,7 +630,7 @@ contains
     end subroutine simple_list_files
 
     subroutine simple_list_files_regexp( dir, regexp, list, chronological )
-        use simple_strings, only: int2str
+        use simple_string_utils, only: int2str
         character(len=*),                       intent(in)    :: dir
         character(len=*),                       intent(in)    :: regexp
         character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
