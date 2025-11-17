@@ -7,18 +7,16 @@ use simple_error, only: simple_exception
 use, intrinsic :: iso_c_binding
 implicit none
 
-character(len=*), parameter :: LOWER_CASE_LETTERS = 'abcdefghijklmnopqrstuvwxyz'
-character(len=*), parameter :: UPPER_CASE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-character(len=*), parameter :: INTEGERS = '1234567890'
-character(kind=c_char,len=*), parameter :: NEW_LINES_C = C_FORM_FEED // &
-C_NEW_LINE // C_CARRIAGE_RETURN // C_VERTICAL_TAB
+character(len=*),             parameter :: LOWER_CASE_LETTERS = 'abcdefghijklmnopqrstuvwxyz'
+character(len=*),             parameter :: UPPER_CASE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+character(len=*),             parameter :: INTEGERS = '1234567890'
+character(kind=c_char,len=*), parameter :: NEW_LINES_C = C_FORM_FEED // C_NEW_LINE // C_CARRIAGE_RETURN // C_VERTICAL_TAB
 character(kind=c_char,len=*), parameter :: BLANK_C_CHARACTERS = C_NULL_CHAR // C_HORIZONTAL_TAB
-character(len=*), parameter :: BLANK_CHARACTERS =  ' '//BLANK_C_CHARACTERS
-character(len=*), parameter :: BLANKS_AND_NEW_LINES = BLANK_CHARACTERS // NEW_LINES_C
-character(len=*), parameter :: INTEGER_DIGITS = '10' !< Maximum number of digits expected when reading an integer
+character(len=*),             parameter :: BLANK_CHARACTERS =  ' '//BLANK_C_CHARACTERS
+character(len=*),             parameter :: BLANKS_AND_NEW_LINES = BLANK_CHARACTERS // NEW_LINES_C
 
 private :: LOWER_CASE_LETTERS, UPPER_CASE_LETTERS, INTEGERS, NEW_LINES_C, BLANK_C_CHARACTERS,&
-BLANK_CHARACTERS, BLANKS_AND_NEW_LINES, INTEGER_DIGITS
+BLANK_CHARACTERS, BLANKS_AND_NEW_LINES
 public
 
 interface real2str
@@ -52,44 +50,9 @@ contains
         character(len=:), allocatable, intent(out) :: format
         real,                          intent(out) :: rvar
         integer,                       intent(out) :: ivar
-        integer :: iostat, i
-        logical :: str_is_file
-        i = index(str, '.')
-        ! check if first symbol after . is a character
-        str_is_file = .false.
-        if( i /= 0 .and. i < len_trim(str)  )then
-            if( char_is_a_letter(str(i+1:i+1)) )str_is_file = .true.
-        endif
-        ! file name
-        if( str_is_file )then
-            allocate( format, source='file' )
-            return
-        endif
-        ! check if string contains / -> directory
-        i = index(str, PATH_SEPARATOR)
-        if( i /= 0 )then
-            allocate(format, source='dir')
-            return
-        endif
-        i = index(str,',')
-        if( i /= 0 )then
-            allocate(format,source='char')
-            return
-        endif
-        ! real
-        read(str,*,iostat=iostat) rvar
-        if( iostat == 0 )then
-            allocate( format, source='real' )
-            return
-        endif
-        ! integer
-        read(str,*, iostat=iostat) ivar
-        if( iostat == 0 )then
-            allocate( format, source='int' )
-            return
-        endif
-        ! char is last resort
-        allocate( format, source='char' )
+        real(dp) :: rvar_dp
+        call str2format_2( str, format, rvar_dp, ivar )
+        rvar = real(rvar_dp)
     end subroutine str2format_1
 
     !> \brief  assesses whether a string represents a filename
@@ -137,25 +100,6 @@ contains
         ! char is last resort
         allocate( format, source='char' )
     end subroutine str2format_2
-
-    function str2latex( str2convert ) result( str_latex )
-        character(len=*), intent(in)  :: str2convert
-        character(len=:), allocatable :: str_latex, str
-        allocate(str_latex, source=adjustl(trim(str2convert)))
-        call replace_substr(str_latex, '{', '\{', str)
-        deallocate(str_latex)
-        call replace_substr(str, '}', '\}', str_latex)
-        deallocate(str)
-        call replace_substr(str_latex, '_', '\_', str)
-        deallocate(str_latex)
-        call replace_substr(str, '%', '\%', str_latex)
-        deallocate(str)
-        call replace_substr(str_latex, '#', '\#', str)
-        ! deallocate(str_latex)
-        ! call replace_substr(str, 'in A', 'in \AA{}', str_latex)
-        ! THE ISSUE HERE IS THAT THE SUBSTRING CANNOT HAVE SPACES
-        str_latex = str
-    end function str2latex
 
     logical function char_is_a_letter( c )
         character(len=1), intent(in) :: c
@@ -435,45 +379,6 @@ contains
         end if
     end function int2str
 
-    !>  \brief  turn integer variable into character variable with commas
-    !! - now supports negative values
-    pure function int2commastr( intg ) result( string )
-        integer, intent(in)           :: intg
-        character(len=:), allocatable :: string
-        integer :: ndigs_int, intg_this
-        logical :: isnegative, comma_thousands, comma_millions
-        isnegative      = .false.
-        comma_thousands = .false.
-        comma_millions  = .false.
-        intg_this=intg
-        if( intg < 0 )then
-            isnegative=.true.
-            intg_this =  -intg
-        end if
-        if (intg_this .eq. 0) then
-            ndigs_int = 1
-        else
-            ndigs_int = int(log10(real(intg_this))) + 1
-        endif
-        if (ndigs_int .gt. 6) then
-            ndigs_int = ndigs_int + 2
-            comma_thousands = .true.
-            comma_millions  = .true.
-        else if (ndigs_int .gt. 3) then
-            ndigs_int = ndigs_int + 1
-            comma_thousands = .true.
-        endif
-        if (isnegative) ndigs_int = ndigs_int + 1
-        allocate(character(len=ndigs_int) :: string)
-        if (isnegative)then
-            write(string,'(a1,i0)') '-',intg_this
-        else
-            write(string,'(i0)') intg_this
-        end if
-        if(comma_millions)  string = string(:ndigs_int - 8) // ',' // string(ndigs_int - 7:)
-        if(comma_thousands) string = string(:ndigs_int - 4) // ',' // string(ndigs_int - 3:)
-    end function int2commastr
-
     !>  \brief  turn integer variable into zero padded character variable
     function int2str_pad( intg, numlen ) result( string )
         integer, intent(in)           :: intg, numlen
@@ -514,6 +419,20 @@ contains
         endif
     end function str_pad
 
+    !>  \brief  pad string with spaces
+    ! function str_pad( str_in, len_padded ) result( str_out )
+    !     character(len=*), intent(in)  :: str_in
+    !     integer,          intent(in)  :: len_padded
+    !     character(len=:), allocatable :: str_out
+    !     integer :: slen
+    !     slen = len(str_in)
+    !     if( slen >= len_padded )then
+    !         str_out = str_in
+    !     else
+    !         str_out = str_in // spaces(len_padded - slen)
+    !     endif
+    ! end function str_pad
+
     !>  \brief  turns a string into an integer variable
     integer function str2int_1( string )
         character(len=*), intent(in)  :: string
@@ -549,13 +468,6 @@ contains
          end do
     end function map_str_nrs
 
-    !> \brief copies the trimmed and justified version of the instr into outstr
-    subroutine cpStr( instr, outstr )
-        character(len=*),              intent(in)    :: instr
-        character(len=:), allocatable, intent(inout) :: outstr
-        outstr = trim(adjustl(instr))
-    end subroutine cpStr
-
     !>  \brief  check for presence of substring
     logical function str_has_substr( str, substr )
         character(len=*), intent(in) :: str, substr
@@ -589,32 +501,6 @@ contains
             pos = index(str_out, substr)
         end do
     end subroutine
-
-    subroutine replace_substr( str, substr, repl, str_out )
-        character(len=*), intent(inout) :: str
-        character(len=*), intent(in)    :: substr, repl
-        character(len=:), allocatable   :: str_out
-        integer :: nargs, iarg, iback, ls
-        character(len=LONGSTRLEN) :: args(32)
-        logical :: back_occur
-        iback      = index(str, substr, back=.true.)
-        ls         = len(substr)
-        back_occur = len(str) - ls + 1 == iback
-        call parsestr(str, substr, args, nargs)
-        if( nargs == 0 )then
-            allocate(str_out, source=str)
-            return
-        else
-            str_out = ''
-            do iarg=1,nargs
-                if( iarg == nargs .and. .not. back_occur )then
-                    str_out = str_out // trim(args(iarg))
-                else
-                    str_out = str_out // trim(args(iarg)) // repl
-                endif
-            end do
-        endif
-    end subroutine replace_substr
 
     !>  \brief  Convert string to lower case
     pure function lowercase( str )
@@ -686,7 +572,7 @@ contains
         ! reverse?
         bback = .false.
         if (present(back)) bback = back
-        firstNonBlank = verify(string,blanks_and_new_lines,back=bback)
+        firstNonBlank = verify(string,BLANKS_AND_NEW_LINES,back=bback)
     end function firstNonBlank
 
     !>  \brief  find the first blank character in a string and return its position.
@@ -700,7 +586,7 @@ contains
         else
             bback = .false.
         endif
-        firstBlank = scan(string,blanks_and_new_lines,back=bback)
+        firstBlank = scan(string,BLANKS_AND_NEW_LINES,back=bback)
     end function firstBlank
 
     !>  \brief  test whether two strings are equal, ignoring blank characters
@@ -717,8 +603,8 @@ contains
         if( present(case_sensitive) ) ccase_sensitive = case_sensitive
         ! Copy to local string, with or without capitalization
         if( ccase_sensitive )then
-            call cpStr(instr1,local_str1)
-            call cpStr(instr2,local_str2)
+            local_str1 = trim(adjustl(instr1))
+            local_str2 = trim(adjustl(instr2))
         else
             local_str1 = upperCase(instr1)
             local_str2 = upperCase(instr2)
@@ -783,18 +669,6 @@ contains
             enddo
         endif
     end function cntRecsPerLine
-
-    !! reverse string
-    recursive function strflip( string ) result ( res )
-        implicit none
-        character (*), intent (in) :: string
-        character (len (string)) :: res
-        if (len (string) == 0) then
-            res = ''
-        else
-            res = string(len(string):)//strflip(string(:len(string)-1))
-        end if
-    end function strflip
 
     !> \brief  Lexographical sort.
     !> \param strArr is a one-dimensional array of character strings to be  sorted in ascending lexical order.
