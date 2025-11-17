@@ -146,7 +146,7 @@ contains
             call cline%set('dir_movies', directory)
             l_add_suffix = str_endswith_substr(cline%get_carg('dir_movies'), '/Data')
             ! XML
-            if( cline%defined('dir_meta') ) call cline%set('dir_meta', directory)
+            if( l_add_suffix .and. cline%defined('dir_meta') ) call cline%set('dir_meta', directory)
         endif
         ! master parameters
         call cline%set('numlen', 5.)
@@ -1843,7 +1843,7 @@ contains
         endif
         ! generate own project file if projfile isnt set
         ! or all the individual processes try and read the same project file and it goes crazy
-        if(cline%get_carg('projfile') .eq. '') then 
+        if( .not.cline%defined('projfile') ) then
             call cline%set('projname', PROJNAME_GEN_PICKREFS)
             call cline%set('projfile', PROJFILE_GEN_PICKREFS)
             call spproj%update_projinfo(cline)
