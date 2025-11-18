@@ -185,42 +185,54 @@ contains
     end subroutine exec_atoms_register
 
     subroutine exec_crys_score( self, cline )
+        use simple_commanders_sim, only: commander_simulate_atoms
         class(commander_crys_score), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline !< command line input
+        class(cmdline),              intent(inout) :: cline
         character(len=LONGSTRLEN),   allocatable   :: pdbfnames(:), cmd, corenames(:)
         real,                        allocatable   :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:)
         integer,                     allocatable   :: cnts(:)
         logical,                     allocatable   :: l_dists(:)
-        character(len=LONGSTRLEN) :: t_name
-        type(parameters)          :: p
-        integer                   :: npdbs, ipdb, icore, ncores, Natoms, cnt, i, j, nclus
-        real                      :: min_dist, dist, prob, d, max_dist, moldiam
+        type(commander_simulate_atoms) :: xsim_atoms
+        type(nanoparticle)             :: nano
+        type(parameters)               :: p
+        type(cmdline)                  :: cline_sim_atoms
+        character(len=LONGSTRLEN)      :: t_name
+        integer :: npdbs, ipdb, icore, ncores, Natoms, cnt, i, j, nclus
+        real    :: min_dist, dist, prob, d, moldiam, a(3)
         call p%new(cline)
         call read_filetable(p%fname, pdbfnames)
         npdbs = size(pdbfnames)
         do ipdb = 1, npdbs
             ! finding max_dist for moldiam
-            call read_pdb2matrix( trim(pdbfnames(ipdb)) // 'startvol_ATMS.pdb', mat )
-            Natoms   = size(mat,2)
-            max_dist = 0.
+            call read_pdb2matrix( trim(p%pdbfile), mat )
+            Natoms  = size(mat,2)
+            moldiam = 0.
             do i = 1, Natoms-1
                 do j = i+1, Natoms
                     dist = sqrt(sum((mat(:,i) - mat(:,j))**2))
-                    if( dist > max_dist ) max_dist = dist
+                    if( dist > moldiam ) moldiam = dist
                 enddo
             enddo
-            moldiam = max_dist
-            cmd     = 'nohup single_exec prg=simulate_atoms outvol=tmp.mrc box=160 smpd='//real2str(p%smpd)//' moldiam='//real2str(moldiam)//' nthr='//int2str(p%nthr)//' element=Pt'
-            call execute_command_line(cmd)
-            cmd     = 'nohup single_exec prg=detect_atoms vol1=./tmp.mrc smpd='//real2str(p%smpd)//' element=Pt nthr='//int2str(p%nthr)//' mskdiam=40'
-            call execute_command_line(cmd)
+            ! simulating nanoparticle with the found moldiam
+            call cline_sim_atoms%set('mkdir',   'no')
+            call cline_sim_atoms%set('smpd',    p%smpd)
+            call cline_sim_atoms%set('element', p%element)
+            call cline_sim_atoms%set('outvol',  'tmp.mrc')
+            call cline_sim_atoms%set('moldiam', moldiam)
+            call cline_sim_atoms%set('box',     p%box)
+            call cline_sim_atoms%set('nthr',    real(p%nthr))
+            call xsim_atoms%execute(cline_sim_atoms)
+            ! detecting atom positions of the simulated nanoparticle
+            call nano%new('tmp.mrc')
+            call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=trim(p%atom_thres).eq.'yes', l_print=.false.)
+            call nano%kill
             ! generating stats for the reference lattice
             call read_pdb2matrix( 'tmp_ATMS.pdb', mat )
             Natoms = size(mat,2)
-            if( allocated(dists)   )deallocate(dists)
             if( allocated(l_dists) )deallocate(l_dists)
-            allocate(  dists(Natoms**2), source=0.)
+            if( allocated(  dists) )deallocate(  dists)
             allocate(l_dists(Natoms**2), source=.false.)
+            allocate(  dists(Natoms**2), source=0.)
             ! finding all dists and min_dist
             cnt      = 0
             min_dist = huge(min_dist)
@@ -240,19 +252,21 @@ contains
             allocate(ref_stats(nclus), cur_stats(nclus), source=0.)
             call compute_stats(mat, dists_cen(1:nclus), ref_stats)
             ! generating stats for the core
-            t_name = trim(pdbfnames(ipdb)) // 'segvols/1_tseries_core_atoms_analysis/'
-            print *, trim(t_name)
-            cmd = 'ls '// trim(t_name) // '*_core.pdb | xargs -n 1 basename > output_'//int2str(ipdb)//'.log'
+            t_name = trim(pdbfnames(ipdb))
+            print *, '--------------------------'
+            print *, 'Computing crystal score of cores in folder : ', trim(t_name)
+            cmd = 'ls '// trim(t_name) // '/*_core.pdb | xargs -n 1 basename > output_'//int2str(ipdb)//'.log'
             call execute_command_line(cmd)
             call read_filetable('output_'//int2str(ipdb)//'.log', corenames)
             ncores = size(corenames)
             do icore = 1, ncores
-                call read_pdb2matrix( trim(t_name) // trim(corenames(icore)), cur_mat )
+                call read_pdb2matrix( trim(t_name) // '/' // trim(corenames(icore)), cur_mat )
                 call compute_stats(cur_mat, dists_cen(1:nclus), cur_stats)
                 call kstwo( ref_stats, nclus, cur_stats, nclus, d, prob )
-                print *, trim(corenames(icore)), prob
+                print *, 'Core : ', trim(corenames(icore)), ' with score : ', prob
             enddo
-            call execute_command_line('rm nohup.out largest_cc.mrc split_ccs.mrc binarized.mrc tmp* output_'//int2str(ipdb)//'.log')
+            call execute_command_line('rm largest_cc.mrc split_ccs.mrc binarized.mrc tmp* output_'//int2str(ipdb)//'.log')
+            print *, '--------------------------'
         enddo
         ! end gracefully
         call simple_end('**** SIMPLE_CRYS_SCORE NORMAL STOP ****')
