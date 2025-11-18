@@ -64,6 +64,7 @@ type(commander_detect_atoms)                  :: xdetect_atoms
 type(commander_conv_atom_denoise)             :: xconv_atom_denoise
 type(commander_atoms_stats)                   :: xatoms_stats
 type(commander_atoms_register)                :: xatoms_register
+type(commander_crys_score)                    :: xcrys_score
 type(commander_tseries_atoms_rmsd)            :: xtseries_atoms_rmsd
 type(commander_tseries_core_atoms_analysis)   :: xtseries_core_atoms_analysis
 type(commander_tseries_make_projavgs)         :: xtseries_make_projavgs
@@ -202,6 +203,9 @@ select case(prg)
     case( 'atoms_register' )
         call cline%set('mkdir', 'no')
         call xatoms_register%execute(cline)
+    case( 'crys_score' )
+        call cline%set('mkdir', 'no')
+        call xcrys_score%execute(cline)
     case( 'tseries_atoms_rmsd' )
         call xtseries_atoms_rmsd%execute(cline)
     case( 'tseries_core_atoms_analysis' )

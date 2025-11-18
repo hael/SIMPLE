@@ -107,6 +107,7 @@ type(simple_program), target :: comparemc
 type(simple_program), target :: consolidate_chunks
 type(simple_program), target :: conv_atom_denoise
 type(simple_program), target :: convert
+type(simple_program), target :: crys_score
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctf_phaseflip
 type(simple_program), target :: ctfops
@@ -444,6 +445,7 @@ contains
         call new_consolidate_chunks
         call new_conv_atom_denoise
         call new_convert
+        call new_crys_score
         call new_ctf_estimate
         call new_ctf_phaseflip
         call new_ctfops
@@ -599,6 +601,7 @@ contains
         call push2prg_ptr_array(consolidate_chunks)
         call push2prg_ptr_array(conv_atom_denoise)
         call push2prg_ptr_array(convert)
+        call push2prg_ptr_array(crys_score)
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(ctfops)
@@ -763,6 +766,7 @@ contains
             case('consolidate_chunks');          ptr2prg => consolidate_chunks
             case('conv_atom_denoise');           ptr2prg => conv_atom_denoise
             case('convert');                     ptr2prg => convert
+            case('crys_score');                  ptr2prg => crys_score
             case('ctf_estimate');                ptr2prg => ctf_estimate
             case('ctf_phaseflip');               ptr2prg => ctf_phaseflip
             case('ctfops');                      ptr2prg => ctfops
@@ -1059,6 +1063,7 @@ contains
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') atoms_register%name
+        write(logfhandle,'(A)') crys_score%name
         write(logfhandle,'(A)') tseries_atoms_rmsd%name
         write(logfhandle,'(A)') tseries_core_atoms_analysis%name
         write(logfhandle,'(A)') tseries_core_finder%name
@@ -5467,6 +5472,30 @@ contains
         ! computer controls
         call atoms_register%set_input('comp_ctrls', 1, nthr)
     end subroutine new_atoms_register
+
+    subroutine new_crys_score
+        ! PROGRAM SPECIFICATION
+        call crys_score%new(&
+        &'crys_score',&                                                 ! name
+        &'Computing crystal score',&                                    ! descr_short
+        &'is a program that computes crystal score.',&                  ! descr long
+        &'single_exec',&                                                ! executable
+        &1, 1, 0, 0, 0, 0, 1, .false., gui_advanced=.false.)            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call crys_score%set_input('img_ios', 1, 'fname', 'file', 'Core PDB file list', 'Core PDB file list', 'e.g. pdb_files.txt', .true., '')
+        ! parameter input/output
+        call crys_score%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call crys_score%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_crys_score
 
     subroutine new_tseries_atoms_rmsd
         ! PROGRAM SPECIFICATION
