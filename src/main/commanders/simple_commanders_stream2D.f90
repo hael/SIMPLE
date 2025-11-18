@@ -105,7 +105,7 @@ contains
         ! restart
         call cleanup4restart
         ! generate own project file if projfile isnt set
-        if(cline%get_carg('projfile') .eq. '') then 
+        if( .not.cline%defined('projfile') ) then
             call cline%set('projname', 'sieve_cavgs')
             call cline%set('projfile', 'sieve_cavgs.simple')
             call spproj_glob%update_projinfo(cline)
@@ -413,10 +413,9 @@ contains
                         endif
                     endif
                 endif
-            else
-                ! make completed sets available to abinitio2D_stream
-                call flag_complete_sets
             endif
+            ! make completed sets available to abinitio2D_stream
+            call flag_complete_sets
             ! 2D analyses
             call analyze2D_new_chunks(projrecords)
             call sleep(WAITTIME)
@@ -1001,7 +1000,7 @@ contains
         ! restart
         call cleanup4restart
         ! generate own project file if projfile isnt set
-        if(cline%get_carg('projfile') .eq. '') then 
+        if( .not.cline%defined('projfile') )then
             call cline%set('projname', 'stream_abinitio2D')
             call cline%set('projfile', 'stream_abinitio2D.simple')
             call spproj_glob%update_projinfo(cline)

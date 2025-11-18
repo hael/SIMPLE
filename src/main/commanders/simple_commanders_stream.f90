@@ -131,7 +131,7 @@ contains
             l_restart = .true.
         endif
         ! generate own project file if projfile isnt set
-        if(cline%get_carg('projfile') .eq. '') then 
+        if( .not.cline%defined('projfile') )then
             call cline%set('projname', 'preprocess')
             call cline%set('projfile', 'preprocess.simple')
             call spproj_glob%update_projinfo(cline)
@@ -886,7 +886,7 @@ contains
             l_restart = .true.
         endif
         ! generate own project file if projfile isnt set
-        if(cline%get_carg('projfile') .eq. '') then 
+        if( .not.cline%defined('projfile') )then
             if(cline%get_carg('interactive') .eq. 'yes') then
                 call cline%set('projname', 'initial_picking')
                 call cline%set('projfile', 'initial_picking.simple')
@@ -1671,7 +1671,7 @@ contains
             call del_file(TERM_STREAM)
         endif
         ! generate own project file if projfile isnt set
-        if(cline%get_carg('projfile') .eq. '') then 
+        if( .not.cline%defined('projfile') )then
             call cline%set('projname', 'assign_optics')
             call cline%set('projfile', 'assign_optics.simple')
             call spproj%update_projinfo(cline)
