@@ -592,18 +592,22 @@ contains
         call simatms%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, l_atom_thres, split_fname )
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, l_atom_thres, split_fname, l_print )
         class(nanoparticle),        intent(inout) :: self
         real,                       intent(inout) :: a(3)                ! lattice parameters
         logical,                    intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
         logical,                    intent(in)    :: l_atom_thres        ! do atomic thresholding or not
         character(len=*), optional, intent(in)    :: split_fname
+        logical,          optional, intent(in)    :: l_print
         type(image) :: simatms, img_cos
+        logical     :: ll_print
+        ll_print = .true.
+        if( present( l_print) ) ll_print = l_print
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
         ! Nanoparticle binarization
-        call self%binarize_and_find_centers()
+        call self%binarize_and_find_centers(l_print=ll_print)
         ! discard small connected components
         call self%discard_small_ccs
         ! atom splitting by correlation map validation
@@ -613,22 +617,22 @@ contains
         if( WRITE_OUTPUT ) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
         call self%validate_atoms(simatms, l_print=.false.)
         if( WRITE_OUTPUT ) call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
-        if( l_atom_thres ) call self%discard_atoms
+        if( l_atom_thres ) call self%discard_atoms(l_print=ll_print)
         ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
         call self%simulate_atoms(simatms)
-        call self%validate_atoms(simatms, l_print=.true.)
+        call self%validate_atoms(simatms, l_print=ll_print)
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
-        write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
+        if( ll_print ) write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
         call self%img_bin%grow_bins(1)
         call self%img_bin%cos_edge(SOFT_EDGE, img_cos)
         call img_cos%write(trim(self%fbody)//'_MSK.mrc')
-        write(logfhandle,'(A)') 'output, envelope mask map:        '//trim(self%fbody)//'_MSK.mrc'
+        if( ll_print ) write(logfhandle,'(A)') 'output, envelope mask map:        '//trim(self%fbody)//'_MSK.mrc'
         call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
-        write(logfhandle,'(A)') 'output, connected components map: '//trim(self%fbody)//'_CC.mrc'
+        if( ll_print ) write(logfhandle,'(A)') 'output, connected components map: '//trim(self%fbody)//'_CC.mrc'
         call self%write_centers
         call simatms%write(trim(self%fbody)//'_SIM.mrc')
-        write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
+        if( ll_print ) write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
         ! destruct
         call img_cos%kill
         call simatms%kill
@@ -640,22 +644,26 @@ contains
     ! Among those thresholds, the selected one is the for which
     ! that correlation between the raw map and a simulated distribution
     ! obtained with that threshold reaches the maximum value.
-    subroutine binarize_and_find_centers( self )
+    subroutine binarize_and_find_centers( self, l_print )
         class(nanoparticle), intent(inout) :: self
-        type(image_bin)       :: img_bin_t
-        type(image_bin)       :: img_ccs_t
+        logical, optional,   intent(in)    :: l_print
+        type(image_bin)      :: img_bin_t
+        type(image_bin)      :: img_ccs_t
         type(atoms)          :: atom
         type(image)          :: simulated_distrib
         integer, allocatable :: imat_t(:,:,:)
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
         logical, parameter   :: L_BENCH = .false.
+        logical :: ll_print
         real    :: ts(NBIN_THRESH)
         integer :: fnr, low, high, mid
         real    :: corr, max_corr, thresh_opt
         real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
         integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
-        write(logfhandle,'(A)') '>>> BINARIZATION'
+        ll_print = .true.
+        if( present(l_print) ) ll_print = l_print
+        if( ll_print ) write(logfhandle,'(A)') '>>> BINARIZATION'
         rmat = self%img%get_rmat()
         allocate(imat_t(self%ldim(1), self%ldim(2), self%ldim(3)), source = 0)
         call simulated_distrib%new(self%ldim,self%smpd)
@@ -672,7 +680,7 @@ contains
         do while( low <= high ) 
             mid  = (low + high) / 2
             corr = t2c(ts(mid))
-            write(logfhandle,*) 'threshold: ', ts(mid) , 'corr: ', corr
+            if( ll_print ) write(logfhandle,*) 'threshold: ', ts(mid) , 'corr: ', corr
             if( corr > max_corr )then
                 max_corr   = corr
                 thresh_opt = ts(mid)
@@ -701,7 +709,7 @@ contains
             &((rt_find_ccs+rt_find_centers+rt_gen_sim+rt_real_corr)/rt_tot)     * 100.
             call fclose(fnr)
         endif
-        write(logfhandle,*) 'optimal threshold: ', thresh_opt, 'max_corr: ', max_corr
+        if( ll_print ) write(logfhandle,*) 'optimal threshold: ', thresh_opt, 'max_corr: ', max_corr
         ! Update img_bin and img_cc
         corr = t2c( thresh_opt )
         call self%img_bin%copy_bimg(img_bin_t)
@@ -715,7 +723,7 @@ contains
         if(allocated(imat_t)) deallocate(imat_t)
         if(allocated(coords)) deallocate(coords)
         call simulated_distrib%kill
-        write(logfhandle,'(A)') '>>> BINARIZATION, COMPLETED'
+        if( ll_print ) write(logfhandle,'(A)') '>>> BINARIZATION, COMPLETED'
 
     contains
 
@@ -1017,8 +1025,9 @@ contains
         endif
     end subroutine validate_atoms
 
-    subroutine discard_atoms( self )
+    subroutine discard_atoms( self, l_print )
         class(nanoparticle), intent(inout) :: self
+        logical, optional,   intent(in)    :: l_print
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:), cscores(:)
         real,    allocatable :: centers_A(:,:), cendists(:), cendists_sorted(:)
         logical, allocatable :: atom_del_mask(:)
@@ -1026,7 +1035,10 @@ contains
         type(stats_struct)   :: cscore_stats
         real    :: percen, cendist_thres
         integer :: cc, cn, n_discard, cnt_discard
-        write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
+        logical :: ll_print
+        ll_print = .true.
+        if( present(l_print) ) ll_print = l_print
+        if( ll_print ) write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
         ! calculate contact scores
         centers_A = self%atominfo2centers_A()
         allocate(cscores(self%n_cc), source=0)
@@ -1048,37 +1060,39 @@ contains
         endwhere
         do cn = 1,12
             percen = (real(count(cscores >= cn)) / real(self%n_cc)) * 100.
-            write(logfhandle,*) 'percen atoms with contact score > '//int2str(cn)//':', percen
+            if( ll_print ) write(logfhandle,*) 'percen atoms with contact score > '//int2str(cn)//':', percen
             if( percen <= 95. )then
                 cscore_thres = cn
                 exit
             endif
         end do
         if( cscore_thres > 6 ) cscore_thres = 6
-        write(logfhandle,*) 'contact score threshold: ', cscore_thres
+        if( ll_print ) write(logfhandle,*) 'contact score threshold: ', cscore_thres
         ! get connected components and binary matrices
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! discard atoms
         n_discard = 0
         call remove_lowly_contacted(cscore_thres - 1) ! remove these without consideration to size
-        write(logfhandle, *) '# atoms, discarded based on cs ', n_discard
+        if( ll_print ) write(logfhandle, *) '# atoms, discarded based on cs ', n_discard
         cnt_discard = 1
         do while( cnt_discard > 0 )
             call remove_small_and_lowly_contacted(cscore_thres)
-            write(logfhandle, *) '# atoms, discarded based on sz ', cnt_discard
+            if( ll_print ) write(logfhandle, *) '# atoms, discarded based on sz ', cnt_discard
         end do
         call calc_stats(real(cscores), cscore_stats)
-        write(logfhandle,'(A)') '>>> CONTACT SCORE STATS BELOW'
-        write(logfhandle,'(A,F8.4)') 'Average: ', cscore_stats%avg
-        write(logfhandle,'(A,F8.4)') 'Median : ', cscore_stats%med
-        write(logfhandle,'(A,F8.4)') 'Sigma  : ', cscore_stats%sdev
-        write(logfhandle,'(A,F8.4)') 'Max    : ', cscore_stats%maxv
-        write(logfhandle,'(A,F8.4)') 'Min    : ', cscore_stats%minv
         deallocate(imat_bin, imat_cc)
-        write(logfhandle, *) '# atoms, discarded in total ', n_discard
-        write(logfhandle, *) '# atoms, final              ', self%n_cc
-        write(logfhandle, '(A)') '>>> DISCARDING ATOMS, COMPLETED'
+        if( ll_print )then
+            write(logfhandle,'(A)') '>>> CONTACT SCORE STATS BELOW'
+            write(logfhandle,'(A,F8.4)') 'Average: ', cscore_stats%avg
+            write(logfhandle,'(A,F8.4)') 'Median : ', cscore_stats%med
+            write(logfhandle,'(A,F8.4)') 'Sigma  : ', cscore_stats%sdev
+            write(logfhandle,'(A,F8.4)') 'Max    : ', cscore_stats%maxv
+            write(logfhandle,'(A,F8.4)') 'Min    : ', cscore_stats%minv
+            write(logfhandle, *) '# atoms, discarded in total ', n_discard
+            write(logfhandle, *) '# atoms, final              ', self%n_cc
+            write(logfhandle, '(A)') '>>> DISCARDING ATOMS, COMPLETED'
+        endif
 
     contains
 

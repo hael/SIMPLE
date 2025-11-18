@@ -5480,17 +5480,20 @@ contains
         &'Computing crystal score',&                                    ! descr_short
         &'is a program that computes crystal score.',&                  ! descr long
         &'single_exec',&                                                ! executable
-        &1, 1, 0, 0, 0, 0, 1, .false., gui_advanced=.false.)            ! # entries in each group, requires sp_project
+        &2, 2, 0, 0, 1, 0, 1, .false., gui_advanced=.false.)            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call crys_score%set_input('img_ios', 1, 'fname', 'file', 'Core PDB file list', 'Core PDB file list', 'e.g. pdb_files.txt', .true., '')
+        call crys_score%set_input('img_ios', 1, 'fname',   'file', 'Core PDB folder list', 'Core PDB folder list', 'e.g. core_pdbs.txt', .true., '')
+        call crys_score%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file to estimate moldiam', 'Input coordinates file in PDB format', 'PDB file e.g. startvol_ATMS.pdb', .true., 'startvol_ATMS.pdb')
         ! parameter input/output
         call crys_score%set_input('parm_ios', 1, smpd)
+        call crys_score%set_input('parm_ios', 2, box)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
+        call crys_score%set_input('filt_ctrls', 1, element)
         ! mask controls
         ! <empty>
         ! computer controls
