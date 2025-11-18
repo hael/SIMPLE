@@ -65,7 +65,7 @@ contains
 
     subroutine exec_stream_preprocess( self, cline )
         use simple_motion_correct_utils, only: flip_gain
-        use simple_moviewatcher,         only: sniff_movies_SJ
+        use simple_moviewatcher,         only: sniff_folders_SJ
         class(commander_stream_preprocess), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                                  :: params
@@ -79,16 +79,16 @@ contains
         type(moviewatcher)                                :: movie_buff
         type(sp_project)                                  :: spproj_glob    ! global project
         type(starproject_stream)                          :: starproj_stream
-        character(len=LONGSTRLEN),          allocatable   :: movies(:)
+        character(len=LONGSTRLEN),          allocatable   :: movies(:), dir_movies(:)
         character(len=:),                   allocatable   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, directory
         character(len=STDLEN)                             :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
-        integer                                           :: movies_set_counter, import_counter
-        integer                                           :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
-        integer                                           :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
-        logical                                           :: l_movies_left, l_haschanged, l_restart, l_movie_found, l_add_suffix
-        logical(LK)                                       :: found 
-        real                                              :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
-        real                                              :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
+        real        :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
+        real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
+        integer     :: movies_set_counter, import_counter
+        integer     :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
+        integer     :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
+        logical     :: l_movies_left, l_haschanged, l_restart, l_movie_found, SJ_directory_structure
+        logical(LK) :: found
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
         call cline%set('reject_mics', 'no')
@@ -138,15 +138,11 @@ contains
             call spproj_glob%update_compenv(cline)
             call spproj_glob%write
         endif
-        ! Sniffing for movies & XML in subdirectories, updates dir_movies
-        call sniff_movies_SJ(cline%get_carg('dir_movies'), l_movie_found, directory)
-        l_add_suffix = .false.
-        if( l_movie_found )then
-            ! movies
-            call cline%set('dir_movies', directory)
-            l_add_suffix = str_ends_with_substr(cline%get_carg('dir_movies'), '/Data')
-            ! XML
-            if( l_add_suffix .and. cline%defined('dir_meta') ) call cline%set('dir_meta', directory)
+        ! Sniffing for movies & XML in subdirectories prior to args parsing
+        call sniff_folders_SJ(cline%get_carg('dir_movies'), SJ_directory_structure, dir_movies)
+        if( SJ_directory_structure )then
+            ! dir_meta will be updated at runtime in create_movies_set_project
+            call cline%set('dir_movies', dir_movies(1))
         endif
         ! master parameters
         call cline%set('numlen', 5.)
@@ -166,9 +162,14 @@ contains
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
         ! movie watcher init
-        if( l_add_suffix )then
+        if( SJ_directory_structure )then
+            ! add a suffix & multiple folders
             movie_buff = moviewatcher(LONGTIME, params%dir_movies, suffix_filter='_fractions')
+            do i = 1,size(dir_movies)
+                call movie_buff%add2watchdirs(dir_movies(i))
+            enddo
         else
+            ! no suffix, one folder
             movie_buff = moviewatcher(LONGTIME, params%dir_movies)
         endif
         ! restart
@@ -602,7 +603,13 @@ contains
                     call spproj_here%os_mic%set(imov, "shifty",    0.0)
                     call spproj_here%os_mic%set(imov, "flsht",     0.0)
                     if(cline%defined('dir_meta')) then
-                        xmldir = cline%get_carg('dir_meta')
+                        if( SJ_directory_structure )then
+                            ! multiple folders
+                            xmldir = stemname(movie_names(imov))
+                        else
+                            ! single folder
+                            xmldir = cline%get_carg('dir_meta')
+                        endif
                         xmlfile = basename(trim(movie_names(imov)))
                         if(index(xmlfile, '_fractions') > 0) xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
                         if(index(xmlfile, '_EER') > 0)       xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
