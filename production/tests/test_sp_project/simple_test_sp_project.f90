@@ -55,24 +55,24 @@ call project1%write('myproject.simple')
 call project2%read('myproject.simple')
 ! compare
 do i = 1,NMICS
-	if( trim(project1%os_mic%ori2str(i)) /= trim(project2%os_mic%ori2str(i)) )then
-		write(*,*)'1 TEST FAILED COMPARING ',trim(project1%os_mic%ori2str(i)),' AND ',trim(project2%os_mic%ori2str(i))
-		stop
-	endif
+    if( trim(project1%os_mic%ori2str(i)) /= trim(project2%os_mic%ori2str(i)) )then
+        write(*,*)'1 TEST FAILED COMPARING ',trim(project1%os_mic%ori2str(i)),' AND ',trim(project2%os_mic%ori2str(i))
+        stop
+    endif
 enddo
 write(*,*)'TEST SUCCES WRITE/READ/COMPARE os_mic'
 do i = 1,NPTCLS
-	if( trim(project1%os_ptcl2D%ori2str(i)) /= trim(project2%os_ptcl2D%ori2str(i)) )then
-		write(*,*)'2 TEST FAILED COMPARING ',trim(project1%os_ptcl2D%ori2str(i)),' AND ',trim(project2%os_ptcl2D%ori2str(i))
-		stop
-	endif
+    if( trim(project1%os_ptcl2D%ori2str(i)) /= trim(project2%os_ptcl2D%ori2str(i)) )then
+        write(*,*)'2 TEST FAILED COMPARING ',trim(project1%os_ptcl2D%ori2str(i)),' AND ',trim(project2%os_ptcl2D%ori2str(i))
+        stop
+    endif
 enddo
 write(*,*)'TEST SUCCES WRITE/READ/COMPARE os_ptcl2D'
 do i = 1,NPTCLS
-	if( trim(project1%os_ptcl3D%ori2str(i)) /= trim(project2%os_ptcl3D%ori2str(i)) )then
-		write(*,*)'3 TEST FAILED COMPARING ',trim(project1%os_ptcl3D%ori2str(i)),' AND ',trim(project2%os_ptcl3D%ori2str(i))
-		stop
-	endif
+    if( trim(project1%os_ptcl3D%ori2str(i)) /= trim(project2%os_ptcl3D%ori2str(i)) )then
+        write(*,*)'3 TEST FAILED COMPARING ',trim(project1%os_ptcl3D%ori2str(i)),' AND ',trim(project2%os_ptcl3D%ori2str(i))
+        stop
+    endif
 enddo
 write(*,*)'TEST SUCCES WRITE/READ/COMPARE os_ptcl3D'
 call project2%kill
@@ -87,10 +87,10 @@ call del_file('doc_1.simple')
 call del_file('doc_2.simple')
 call del_file('doc_3.simple')
 do i = 1,NPTCLS
-	if( trim(project1%os_ptcl2D%ori2str(i)) /= trim(project3%os_ptcl2D%ori2str(i)) )then
-		write(*,*)'TEST FAILED COMPARING ',trim(project1%os_ptcl2D%ori2str(i)),' AND ',trim(project3%os_ptcl2D%ori2str(i))
-		stop
-	endif
+    if( trim(project1%os_ptcl2D%ori2str(i)) /= trim(project3%os_ptcl2D%ori2str(i)) )then
+        write(*,*)'TEST FAILED COMPARING ',trim(project1%os_ptcl2D%ori2str(i)),' AND ',trim(project3%os_ptcl2D%ori2str(i))
+        stop
+    endif
 enddo
 write(*,*)'TEST SUCCES WRITE PARTS/MERGE/COMPARE os_ptcl2D'
 call project3%kill
