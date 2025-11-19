@@ -1366,47 +1366,15 @@ contains
     !>  \brief  prepares one polar cluster centre image for alignment
     subroutine polar_prep3Dref( icls )
         integer, intent(in) :: icls
-        real, allocatable   :: frc(:), filter(:), gaufilter(:)
+        real, allocatable   :: gaufilter(:)
         integer :: filtsz
-        logical :: l_filter
-        ! Filtering
-        l_filter = .false.
-        filtsz   = build_glob%clsfrcs%get_filtsz()
-        if( params_glob%l_ml_reg )then
-            ! filtering upon restoration
-        else
-            ! FRC-based optimal filter
-            if(trim(params_glob%frcref).eq.'yes')then
-                allocate(filter(filtsz),frc(filtsz))
-                filter = 1.0
-                frc    = 0.0
-                call build_glob%clsfrcs%frc_getter(icls, frc)
-                if( any(frc > 0.143) )then
-                    if( params_glob%beta > 0.001 )then
-                        call fsc2boostfilter(params_glob%beta, filtsz, frc, filter, merged=params_glob%l_lpset)
-                    else
-                        call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-                    endif
-                endif
-                deallocate(frc)
-                l_filter = .true.
-            endif
-        endif
+        ! Gaussian filter if needed
         if(trim(params_glob%gauref).eq.'yes')then
-            ! Gaussian filter
+            filtsz = build_glob%clsfrcs%get_filtsz()
             allocate(gaufilter(filtsz),source=0.)
             call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
-            if( allocated(filter) )then
-                filter = filter * gaufilter
-            else
-                filter = gaufilter
-            endif
+            call filterrefs(icls, gaufilter)
             deallocate(gaufilter)
-            l_filter = .true.
-        endif
-        if( l_filter )then
-            call filterrefs(icls, filter)
-            deallocate(filter)
         endif
     end subroutine polar_prep3Dref
 
