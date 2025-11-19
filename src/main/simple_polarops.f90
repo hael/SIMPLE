@@ -344,16 +344,6 @@ contains
         end select
         ! ML-regularization
         if( params_glob%l_ml_reg ) call add_invtausq2rho
-        ! Optional CL/CLS directional FRCs & filtering, part 1
-        if( trim(params_glob%polar_frcs) .eq. 'yes' )then
-            select case(trim(params_glob%ref_type))
-            case('clin', 'vol')
-                call nonuniform_frc_filtering(cavg_clin_frcs, pfts_clin_even, pfts_clin_odd,&
-                &ctf2_clin_even, ctf2_clin_odd)
-            case DEFAULT
-                THROW_HARD('Invalid REF_TYPE with POLAR_FRCS=YES')
-            end select
-        endif
         ! Restoration of references
         pfts_merg = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
@@ -373,8 +363,6 @@ contains
                 call cavg2clin_frcs%write( 'frcs_cavg2clin'//trim(BIN_EXT) )
                 call restore_cavgs_comlins( 1.d0 )
         end select
-        ! Optional CL/CLS directional FRCs & filtering, part 2
-        if( trim(params_glob%polar_frcs) .eq. 'yes' ) pfts_merg = pfts_merg * cavg_clin_frcs
         ! cleanup
         call cavg2clin_frcs%kill
         if( allocated(cavg_clin_frcs) ) deallocate(cavg_clin_frcs)
@@ -701,134 +689,6 @@ contains
         end subroutine restore_cavgs_comlins
 
     end subroutine polar_cavger_merge_eos_and_norm
-
-    subroutine nonuniform_frc_filtering( cavg_clin_frcs, pfts_cl_even, pfts_cl_odd, ctf2_cl_even, ctf2_cl_odd )
-        real,             allocatable, intent(inout) :: cavg_clin_frcs(:,:,:)
-        complex(kind=dp),              intent(inout) :: pfts_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
-        complex(kind=dp),              intent(inout) :: pfts_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
-        real(kind=dp),                 intent(inout) :: ctf2_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
-        real(kind=dp),                 intent(inout) :: ctf2_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
-        complex(dp) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls), pfts_clin(pftsz,kfromto(1):kfromto(2),ncls)
-        complex(dp) :: clin_odd(pftsz,kfromto(1):kfromto(2),ncls), clin_even(pftsz,kfromto(1):kfromto(2),ncls)
-        complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
-        real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
-        integer     :: icls, eo_pop(2), pop, k, pops(ncls)
-        if( allocated(cavg_clin_frcs) ) deallocate(cavg_clin_frcs)
-        allocate(cavg_clin_frcs(pftsz,kfromto(1):kfromto(2),ncls), source=1.0)
-        pfts_cavg = DCMPLX_ZERO
-        pfts_clin = DCMPLX_ZERO
-        clin_odd  = DCMPLX_ZERO
-        clin_even = DCMPLX_ZERO
-        ! CL Contribution
-        call get_cavg_clin(pfts_cavg, pfts_clin, clin_odd, clin_even)
-        ! Restoration of 2D classes
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(icls,eo_pop,pop,pft,ctf2)
-        do icls = 1,ncls
-            eo_pop     = prev_eo_pops(:,icls) + eo_pops(:,icls)
-            pop        = sum(eo_pop)
-            pops(icls) = pop
-            if(pop > 1)then
-                pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
-                ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
-                call safe_norm(pft, ctf2, pfts_cavg(:,:,icls))
-            endif
-        end do
-        !$omp end parallel do
-        ! Restoration of CL classes
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(icls,pft,ctf2)
-        do icls = 1,ncls
-            call safe_norm(pfts_cl_even(:,:,icls), ctf2_cl_even(:,:,icls), clin_even(:,:,icls))
-            call safe_norm(pfts_cl_odd( :,:,icls), ctf2_cl_odd( :,:,icls), clin_odd( :,:,icls))
-            pft  = pfts_cl_even(:,:,icls) + pfts_cl_odd(:,:,icls)
-            ctf2 = ctf2_cl_even(:,:,icls) + ctf2_cl_odd(:,:,icls)
-            call safe_norm(pft, ctf2, pfts_clin(:,:,icls))
-        enddo
-        !$omp end parallel do
-        ! FRCs & filtering
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(icls,k)
-        do icls = 1, ncls
-            if( pops(icls) < 2 )cycle
-            do k = kfromto(1), kfromto(2)
-                call nonuni_frc(pfts_clin(:,k,icls), pfts_cavg(:,k,icls), cavg_clin_frcs(:,k,icls))
-            enddo
-        enddo
-        !$omp end parallel do
-
-    contains
-
-        subroutine get_cavg_clin( pfts_cavg, pfts_clin, clin_odd, clin_even )
-            complex(dp), intent(inout) :: pfts_cavg(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp), intent(inout) :: pfts_clin(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp), intent(inout) :: clin_odd(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp), intent(inout) :: clin_even(pftsz,kfromto(1):kfromto(2),ncls)
-            complex(dp) :: pft(pftsz,kfromto(1):kfromto(2))
-            real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
-            integer     :: icls, eo_pop(2), pop, pops(ncls)
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,eo_pop,pop,pft,ctf2)
-            do icls = 1,ncls
-                eo_pop     = prev_eo_pops(:,icls) + eo_pops(:,icls)
-                pop        = sum(eo_pop)
-                pops(icls) = pop
-                if(pop == 0)then
-                    pfts_cavg(:,:,icls) = DCMPLX_ZERO
-                else
-                    if(pop > 1)then
-                        pft  = pfts_even(:,:,icls) + pfts_odd(:,:,icls)
-                        ctf2 = ctf2_even(:,:,icls) + ctf2_odd(:,:,icls)
-                        call safe_norm(pft, ctf2, pfts_cavg(:,:,icls))
-                    endif
-                endif
-            end do
-            !$omp end parallel do
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(icls,pft,ctf2)
-            do icls = 1,ncls
-                call safe_norm(pfts_cl_even(:,:,icls), ctf2_cl_even(:,:,icls), clin_even(:,:,icls))
-                call safe_norm(pfts_cl_odd( :,:,icls), ctf2_cl_odd( :,:,icls), clin_odd( :,:,icls))
-                pft  = pfts_cl_even(:,:,icls) + pfts_cl_odd(:,:,icls)
-                ctf2 = ctf2_cl_even(:,:,icls) + ctf2_cl_odd(:,:,icls)
-                call safe_norm(pft, ctf2, pfts_clin(:,:,icls))
-            enddo
-            !$omp end parallel do
-        end subroutine get_cavg_clin
-
-        ! Directional FRC filter
-        subroutine nonuni_frc(pft1, pft2, pfrc)
-            complex(dp), intent(in)    :: pft1(pftsz), pft2(pftsz)
-            real,        intent(inout) :: pfrc(pftsz)
-            integer,     parameter     :: NKER = 3, HALF = NKER/2, MID = HALF + 1
-            integer  :: i
-            real(dp) :: numer, denom1, denom2
-            do i = MID, pftsz - HALF
-                pfrc(i) = 1._dp
-                numer   = real(sum(         pft1(i-HALF:i+HALF) * conjg(pft2(i-HALF:i+HALF))),dp)
-                denom1  =      sum(csq_fast(pft1(i-HALF:i+HALF)))
-                denom2  =      sum(csq_fast(pft2(i-HALF:i+HALF)))
-                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
-            enddo
-            do i = 1, MID-1
-                pfrc(i) = 1._dp
-                numer   = real(sum(         pft1(           1:i+HALF) * conjg(pft2(           1:i+HALF))),dp)
-                numer   = real(sum(         pft1(pftsz-HALF+i:pftsz ) * conjg(pft2(pftsz-HALF+i:pftsz ))),dp) + numer
-                denom1  =      sum(csq_fast(pft1(1:i+HALF))) + sum(csq_fast(pft1(pftsz-HALF+i:pftsz)))
-                denom2  =      sum(csq_fast(pft2(1:i+HALF))) + sum(csq_fast(pft2(pftsz-HALF+i:pftsz)))
-                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
-            enddo
-            do i = pftsz-HALF+1, pftsz
-                pfrc(i) = 1._dp
-                numer   = real(sum(         pft1(     1:HALF-(pftsz-i)) * conjg(pft2(     1:HALF-(pftsz-i)))),dp)
-                numer   = real(sum(         pft1(i-HALF:pftsz         ) * conjg(pft2(i-HALF:pftsz         ))),dp) + numer
-                denom1  =      sum(csq_fast(pft1(1:HALF-(pftsz-i)))) + sum(csq_fast(pft1(i-HALF:pftsz)))
-                denom2  =      sum(csq_fast(pft2(1:HALF-(pftsz-i)))) + sum(csq_fast(pft2(i-HALF:pftsz)))
-                if( denom1*denom2 > DTINY ) pfrc(i) = real(numer / dsqrt(denom1*denom2))
-            enddo
-        end subroutine nonuni_frc
-
-    end subroutine nonuniform_frc_filtering
 
     ! Calculate common-lines contributions from all the slices
     subroutine calc_comlin_contrib( ref_space, symop, pfts_cl_even, pfts_cl_odd, ctf2_cl_even, ctf2_cl_odd )
