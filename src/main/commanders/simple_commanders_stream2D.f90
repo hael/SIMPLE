@@ -252,7 +252,7 @@ contains
             endif
             ! Sets analysis section
             if( setslist%n > 0 )then
-                if( setslist%processed(1) .and. (setslist%n > 1) .and. (.not.l_wait_for_user)) then
+                if( setslist%processed(1) .and. setslist%imported(1) .and. (setslist%n > 1) .and. (.not.l_wait_for_user)) then
                     ! all sets but the first employ match_cavgs
                     latest_processed_set = 0
                     do i = 2,setslist%n
@@ -415,7 +415,13 @@ contains
                 endif
             endif
             ! make completed sets available to abinitio2D_stream
-            call flag_complete_sets
+            if ( params%interactive == 'no' ) then
+                ! for non-iteractive
+                call flag_complete_sets
+            else if ( .not. l_wait_for_user) then
+                ! interactive -> l_wait_for_user must be false (ie user selection performed) before completing any sets
+                call flag_complete_sets
+            endif
             ! 2D analyses
             call analyze2D_new_chunks(projrecords)
             call sleep(WAITTIME)
