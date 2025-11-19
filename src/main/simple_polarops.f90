@@ -47,19 +47,17 @@ contains
         logical,                 intent(in) :: comlin
         integer,       optional, intent(in) :: nrefs
         call polar_cavger_kill
-        nrots   = pftcc%get_nrots()
-        pftsz   = pftcc%get_pftsz()
-        kfromto = pftcc%get_kfromto()
+        nrots    = pftcc%get_nrots()
+        pftsz    = pftcc%get_pftsz()
+        kfromto  = pftcc%get_kfromto()
+        l_comlin = comlin
+        smpd     = params_glob%smpd
         if( present(nrefs) )then
             ncls = nrefs
         else
             ncls = pftcc%get_nrefs()
         endif
-        l_comlin = comlin
-        ! dimensions
-        smpd    = params_glob%smpd
         allocate(prev_eo_pops(2,ncls), eo_pops(2,ncls), source=0)
-        ! Arrays        
         allocate(pfts_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                 &ctf2_even(pftsz,kfromto(1):kfromto(2),ncls),ctf2_odd(pftsz,kfromto(1):kfromto(2),ncls),&
                 &pfts_merg(pftsz,kfromto(1):kfromto(2),ncls))
@@ -189,7 +187,7 @@ contains
             ! Particle rotation
             call pftcc%rotate_pft(pptcls(:,:,i), irot, rptcl)
             ! Particle weight
-            rptcl = w * rptcl
+            rptcl = real(w) * rptcl
             ! Particle ML regularization
             if( params_glob%l_ml_reg )then
                 sigma2 = eucl_sigma2_glob%sigma2_noise(kfromto(1):kfromto(2),iptcl)
@@ -507,7 +505,7 @@ contains
             !$omp end parallel do
         end subroutine add_invtausq2rho
 
-        ! Mirror 2D classes, calculate CL contibution & FRCS
+        ! Mirror 2D classes, calculate CL contribution & FRCS
         ! Module arrays are untouched on exit
         subroutine mirr_and_calc_cavg_comlin_frcs( frcs )
             class(class_frcs), intent(inout) :: frcs
@@ -530,7 +528,7 @@ contains
             ctf2_even(:,:,:) = ctf2e_backup(:,:,:); ctf2_odd(:,:,:) = ctf2o_backup(:,:,:)
         end subroutine mirr_and_calc_cavg_comlin_frcs
 
-        ! Calculate CL contibution & FRCS from mirrored 2D classes
+        ! Calculate CL contribution & FRCS from mirrored 2D classes
         ! Module arrays are untouched on exit
         subroutine calc_cavg_comlin_frcs( frcs )
             class(class_frcs), intent(inout) :: frcs
