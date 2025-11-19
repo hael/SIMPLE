@@ -413,7 +413,7 @@ contains
                     call safe_norm(pft, ctf2, even)
                     pft  = pfts_odd(:,:,icls) + pfts_clin_odd(:,:,icls)
                     ctf2 = ctf2_odd(:,:,icls) + ctf2_clin_odd(:,:,icls)
-                    call safe_norm(pft, ctf2, even)
+                    call safe_norm(pft, ctf2, odd)
                     ! FSC contribution
                     do k = kfromto(1),kfromto(2)
                         fsc(k)   = fsc(k)   + real(sum(even(:,k) * conjg(odd(:,k))) ,dp)
