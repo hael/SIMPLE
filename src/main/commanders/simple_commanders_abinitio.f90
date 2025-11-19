@@ -76,7 +76,6 @@ integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! st
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
 integer,          parameter :: GAUREF_LAST_STAGE     = 6                    ! When to stop using a gaussian filtering of the references with polar=yes
-integer,          parameter :: FRCREF_START_STAGE    = GAUREF_LAST_STAGE+1  ! When to start using the FRC drived optimal filter of references with polar=yes
 integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, PROBREFINE_STAGE, NSTAGES]
 integer,          parameter :: NSPACE_POLAR(3)       = [500,             1000,    1500]
 
@@ -541,8 +540,6 @@ contains
         if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                        'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                          'clin')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
-        if( .not. cline%defined('frcref')              ) call cline%set('frcref',                              'no')
-        if( .not. cline%defined('frcref_start_stage')  ) call cline%set('frcref_start_stage',    FRCREF_START_STAGE)
         if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
         ! splitting stage
@@ -1053,7 +1050,7 @@ contains
     subroutine set_cline_refine3D( istage, l_cavgs )
         integer,          intent(in)  :: istage
         logical,          intent(in)  :: l_cavgs
-        character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin, cavgw, ref_type, frcref
+        character(len=:), allocatable :: sh_first, prob_sh, ml_reg, fillin, cavgw, ref_type
         character(len=:), allocatable :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn, nspace_phase
         real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg, gaufreq
@@ -1107,18 +1104,10 @@ contains
         balance = 'yes'
         ! Filtering of polar references
         gaufreq = -1.
-        frcref  = 'no'
         if( l_polar )then
             ! Gaussian filtering
             if( istage <= params_glob%gauref_last_stage )then
                 if( trim(params_glob%gauref).ne.'no' ) gaufreq = lpinfo(istage)%lp
-            endif
-            ! FRC-based filtering
-            if( istage >= params_glob%frcref_start_stage )then
-                if( trim(params_glob%frcref).ne.'no' )then
-                    gaufreq = -1.   ! overrides gaussian filtering
-                    frcref  = 'yes'
-                endif
             endif
         endif
         ! trailing reconstruction
@@ -1236,7 +1225,6 @@ contains
             inspace  = NSPACE_POLAR(nspace_phase)
             ! volume filtering
             icm = 'no'
-            if( frcref.eq.'yes' )                   ml_reg = 'no'
             if( trim(params_glob%gauref).eq.'no' ) gaufreq = -1.
             if( ml_reg.eq.'yes' )                  gaufreq = -1.
             ! CL-based approach
@@ -1310,7 +1298,6 @@ contains
                 call cline_refine3D%delete('gauref')
                 call cline_refine3D%delete('gaufreq')
             endif
-            call cline_refine3D%set('frcref',                  frcref)
         endif
     end subroutine set_cline_refine3D
 

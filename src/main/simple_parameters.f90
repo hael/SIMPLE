@@ -52,7 +52,6 @@ type :: parameters
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: first_sigmas='yes'   !< Whether to estimate sigma2 from provided volume
-    character(len=3)          :: frcref='no'          !< Whether to apply a FRC filter to the 3D polar reference(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
@@ -303,7 +302,6 @@ type :: parameters
     integer :: extr_iter=1
     integer :: extr_lim=MAX_EXTRLIM2D
     integer :: find=1              !< Fourier index
-    integer :: frcref_start_stage=0!< When to switch on FRC-based filtering{0}
     integer :: gauref_last_stage=0 !< When to switch off gaussian filtering{0}
     integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromp=1             !< start ptcl index
@@ -650,7 +648,6 @@ contains
         call check_carg('first_sigmas',   self%first_sigmas)
         call check_carg('flag',           self%flag)
         call check_carg('flipgain',       self%flipgain)
-        call check_carg('frcref',         self%frcref)
         call check_carg('gauref',         self%gauref)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
@@ -855,7 +852,6 @@ contains
         call check_iarg('extr_iter',      self%extr_iter)
         call check_iarg('extr_lim',       self%extr_lim)
         call check_iarg('find',           self%find)
-        call check_iarg('frcref_start_stage', self%frcref_start_stage)
         call check_iarg('gauref_last_stage',  self%gauref_last_stage)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromp',          self%fromp)
