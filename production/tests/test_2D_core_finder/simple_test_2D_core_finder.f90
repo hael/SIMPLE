@@ -152,7 +152,7 @@ contains
     ! Normalizes img2 to match the normalizaiton of img1 in preparation for subtraction
     ! by matching the energy of img2 to img1 over rings in Fourier space.
     ! Adapted from E. Fernandez-Gimenez, et. al., 2021, doi: https://doi.org/10.1016/j.jsb.2021.107780
-    subroutine match_fourier_variance(img1, img2)
+    subroutine match_fourier_variance( img1, img2 )
         type(image), intent(in)                :: img1
         type(image), intent(inout)             :: img2
         type(image)                            :: img1_copy, img2_orig_ft

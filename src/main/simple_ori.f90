@@ -1041,7 +1041,7 @@ contains
 
     pure function pparms2str( self ) result( str )
         class(ori), intent(in)     :: self
-        character(len=XLONGSTRLEN)  :: str
+        character(len=XLONGSTRLEN) :: str
         character(len=XLONGSTRLEN) :: tmpstr
         integer :: i, cnt
         str = repeat(' ',XLONGSTRLEN)
@@ -2011,8 +2011,8 @@ contains
     ! this test only tests the Euler part of ori,
     ! the rest is tested in the oris class
         type(ori) :: e1, e2, e3
-        real :: euls(3), normal(3), mat(3,3), normal2(3), dist
-        logical :: passed
+        real      :: euls(3), normal(3), mat(3,3), normal2(3), dist
+        logical   :: passed
         call e1%new_ori(.false.)
         call e2%new_ori(.false.)
         call e3%new_ori(.false.)
@@ -2037,7 +2037,7 @@ contains
         if( abs(normal(1))+abs(normal(2))+abs(normal(3)-1.)<3.*TINY ) passed = .true.
         if( .not. passed ) THROW_HARD('Euler normal derivation corrupt!')
         passed = .false.
-        mat = e1%get_mat()
+        mat    = e1%get_mat()
         if( abs(mat(1,1)-1.)+abs(mat(2,2)-1.)+abs(mat(3,3)-1.)<3.*TINY )then
             mat(1,1) = 0.
             mat(2,2) = 0.
@@ -2047,15 +2047,15 @@ contains
         if( .not. passed ) THROW_HARD('Euler rotation matrix derivation corrupt!')
         passed = .false.
         call e2%set_euler([20.,20.,20.])
-        e3 = e2
-        normal = e2%get_normal()
+        e3      = e2
+        normal  = e2%get_normal()
         normal2 = e3%get_normal()
         if( pearsn(normal,normal2) > 0.99 ) passed = .true.
-        passed = .false.
-        dist = rad2deg(e1.euldist.e2) ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
+        passed  = .false.
+        dist    = rad2deg(e1.euldist.e2) ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
         if( dist < 20.00001 .and. dist > 19.99999 ) passed = .true.
-        passed = .false.
-        call e1%compeuler(e2, e3)         ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
+        passed  = .false.
+        call e1%compeuler(e2, e3)        ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
         euls = e3%get_euler()
         if( euls(1) < 20.0001 .and. euls(1) > 19.9999 .and.&
             euls(2) < 20.0001 .and. euls(2) > 19.9999 .and.&
