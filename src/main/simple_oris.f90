@@ -4234,14 +4234,14 @@ contains
         integer, allocatable :: order(:)
         logical              :: passed
         write(logfhandle,'(a)') '**info(simple_oris_unit_test, part1): testing getters/setters'
-        os  = oris(100, is_ptcl=.false.)
-        os2 = oris(100, is_ptcl=.false.)
+        os     = oris(100, is_ptcl=.false.)
+        os2    = oris(100, is_ptcl=.false.)
         passed = .false.
         if( os%get_noris() == 100 ) passed = .true.
         if( .not. passed ) THROW_HARD('get_noris failed!')
         passed = .false.
         call os%set_euler(1, [1.,2.,3.])
-        euls = os%get_euler(1)
+        euls   = os%get_euler(1)
         if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.0001 ) passed = .true.
         if( .not. passed ) THROW_HARD('get/set eulers failed!')
         passed = .false.

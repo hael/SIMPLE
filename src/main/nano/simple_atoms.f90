@@ -1318,16 +1318,13 @@ contains
         character(len=*), optional, intent(in)    :: filename
         type(image) :: vol_at1, vol_at2
         type(atoms) :: atom
-        integer     :: i_atom, atom_box, center(3), i_res
+        integer     :: i_atom, atom_box, center(3), i_res, funit
         real        :: atom_coord(3), smpd, cc, cc_score, cc_score_byres, sdev
         logical     :: outside
         logical, allocatable :: mask_byres(:)
         smpd = vol1%get_smpd()
         if( present(filename) )then
-             open(unit=46,file=trim(filename//".csv"))
-        !     !  open(unit=45,file=trim("atomic_centers.xyz"))
-        !     !  write(45,*) self%n
-        !     !  write(45,*) " "
+            call fopen(funit, FILE=trim(filename//".csv"), STATUS='NEW', action='WRITE')
         endif
         do i_atom = 1, self%n
             atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
@@ -1349,35 +1346,32 @@ contains
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
             if( present(filename) )then
-                write(46,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
-                !write(45,'(a,1x,f10.6,1x,f10.6,1x,f10.6)') trim(adjustl(self%element(i_atom))), self%xyz(i_atom,1), self%xyz(i_atom,2), self%xyz(i_atom,3)
+                write(funit,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
             endif
             call vol_at1%kill
             call vol_at2%kill
             call atom%kill
         enddo
         if( present(filename) )then
-            write(46,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
+            write(funit,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
             do i_res = 1, self%get_nres()
                 allocate(mask_byres(self%n),source=.false.)
                 do i_atom = 1, self%n
                     if( self%get_resnum(i_atom) .eq. i_res ) mask_byres(i_atom) = .true.
                 enddo
                 call avg_sdev(self%atom_corr, cc_score_byres, sdev, mask=mask_byres)
-                write(46,'(i4,f10.3)') i_res, cc_score_byres
+                write(funit,'(i4,f10.3)') i_res, cc_score_byres
                 deallocate(mask_byres)
             enddo
             call avg_sdev(self%atom_corr, cc_score, sdev )
-            write(46,'(a,f10.3)')         'Global CC Score [-1 1]:', cc_score
+            write(funit,'(a,f10.3)')         'Global CC Score [-1 1]:', cc_score
             write(logfhandle,'(a,f10.3)') 'Global CC Score [-1 1]:', cc_score
-            close(46)
+            close(funit)
             call self%writepdb(trim(filename)//'.pdb')
         endif
-        ! if(present(filename))then
-        !     ! close(45)
-        !     close(46)
-        !     call self%writepdb(trim(filename)//'.pdb')
-        ! endif
+        if(present(filename))then
+            call fclose(funit)
+        endif
     end subroutine map_validation
 
     subroutine model_validation_eo( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
@@ -1404,22 +1398,12 @@ contains
             write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
             call self%center_pdbcoord(ldim, smpd)
         endif
-        call exp_vol%read_and_crop(  exp_vol_file, smpd, box_new, smpd_new)
+        call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
         call even_vol%read_and_crop(even_vol_file, smpd, box_new, smpd_new)
-        call odd_vol%read_and_crop(  odd_vol_file, smpd, box_new, smpd_new)
-        call self%atom_validation( exp_vol, 'experimental')
+        call odd_vol%read_and_crop(odd_vol_file, smpd, box_new, smpd_new)
+        call self%atom_validation(exp_vol, 'experimental')
         call self%atom_validation(even_vol, 'exp-even')
-        call self%atom_validation( odd_vol, 'exp-odd')
-        ! do i = 1, natoms
-        !     beta_map_model(i) = self%get_beta(i)
-        ! enddo
-        ! ! beta_map-model = beta
-        ! call self%map_validation(even_vol, odd_vol, 'model_val_corr_even-odd')
-        ! do i = 1, natoms
-        !     beta_even_odd(i) = self%get_beta(i)
-        !     call self%set_atom_corr(i, beta_map_model(i) - beta_even_odd(i))
-        ! enddo
-        ! call self%writepdb(trim(get_fbody(exp_vol_file,'pdb'))//'_half.pdb')
+        call self%atom_validation(odd_vol, 'exp-odd')
         call exp_vol%kill
         call even_vol%kill
         call odd_vol%kill
@@ -1436,9 +1420,6 @@ contains
         integer               :: ifoo, ldim(3), ldim_new(3), box, box_new     
         upscale_vol_file = trim(get_fbody(exp_vol_file,'mrc'))//'_upscale.mrc'
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
-        !call exp_vol%new(ldim, smpd)
-        !call exp_vol%read(exp_vol_file)
-        !smpd             = exp_vol%get_smpd()
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
         box              = ldim(1)
         upscaling_factor = smpd / smpd_target
@@ -1465,14 +1446,14 @@ contains
         character(len=*), optional, intent(in)    :: filename
         type(image) :: vol_atom, vol_at
         type(atoms) :: atom
-        integer     :: i_atom, atom_box, center(3), i_res
+        integer     :: i_atom, atom_box, center(3), i_res, funit
         real        :: atom_coord(3), smpd, cc, cc_score, cc_score_byres, sdev
         logical     :: outside
         logical, allocatable :: mask_byres(:)
         cc_score = 0.
-        smpd = vol%get_smpd()
+        smpd     = vol%get_smpd()
         if(present(filename))then
-            open(unit=46,file=trim(filename//".csv"))
+            call fopen(funit, FILE=trim(filename//".csv"), STATUS='NEW', action='WRITE')
         endif
         do i_atom = 1, self%n
             atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
@@ -1491,32 +1472,32 @@ contains
             call vol%window_slim(center, atom_box, vol_at, outside)
             call vol_at%mask(real(atom_box)/2., 'soft')
             ! compute cross-correlation between both volumes
-            cc = vol_atom%real_corr(vol_at)
+            cc       = vol_atom%real_corr(vol_at)
             cc_score = cc_score + cc
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
             if(present(filename))then
-                write(46,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
+                write(funit,'(a,1x,4(a,f10.6))') self%element(i_atom),",",self%xyz(i_atom,1),",",self%xyz(i_atom,2),",",self%xyz(i_atom,3),",",self%atom_corr(i_atom)
             endif
             call vol_atom%kill
             call vol_at%kill
             call atom%kill
         enddo
         if(present(filename))then
-            write(46,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
+            write(funit,'(a,/,a)') 'CC Score by Residue [-1 1]',' Res    CC Res Score'
             do i_res = 1, self%get_nres()
                 allocate(mask_byres(self%n),source=.false.)
                 do i_atom = 1, self%n
                     if( self%get_resnum(i_atom) .eq. i_res ) mask_byres(i_atom) = .true.
                 enddo
                 call avg_sdev(self%atom_corr, cc_score_byres, sdev, mask=mask_byres)
-                write(46,'(i4,f10.3)') i_res, cc_score_byres
+                write(funit,'(i4,f10.3)') i_res, cc_score_byres
                 deallocate(mask_byres)
             enddo
             call avg_sdev(self%atom_corr, cc_score, sdev )
-            write(46,'(a,f10.3)')         'Global CC Score [-1 1]:', cc_score
+            write(funit,'(a,f10.3)')      'Global CC Score [-1 1]:', cc_score
             write(logfhandle,'(a,f10.3)') 'Global CC Score [-1 1]:', cc_score
-            close(46)
+            call fclose(funit)
             call self%writepdb(trim(filename)//'.pdb')
         endif
     end subroutine atom_validation
