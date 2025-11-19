@@ -4,11 +4,12 @@ implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
 public :: print_ui_json, write_ui_json, list_single_prgs_in_ui, list_stream_prgs_in_ui
-public :: print_stream_ui_json
+public :: print_stream_ui_json, validate_ui_json
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .false.
+character(len=26), parameter :: UI_FNAME = 'simple_user_interface.json'
+logical,           parameter :: DEBUG    = .false.
 
 type simple_input_param
     character(len=:), allocatable :: key
@@ -6653,7 +6654,7 @@ contains
             call json%add(all_programs, program_entry)
         end do
         ! write & clean
-        call json%print(all_programs, 'simple_user_interface.json')
+        call json%print(all_programs, UI_FNAME)
         if( json%failed() )then
             write(logfhandle,*) 'json input/output error for simple_user_interface'
             stop
@@ -6950,7 +6951,6 @@ contains
             stop
         endif
         call json%destroy(ui)
-
     end subroutine print_stream_ui_json
 
     subroutine write2json( self )
@@ -7029,6 +7029,27 @@ contains
             end subroutine create_section
 
     end subroutine write2json
+
+    subroutine validate_ui_json
+        use json_module
+        use json_kinds
+        use json_file_module
+        type(json_core)                       :: json
+        type(json_value),             pointer :: p
+        character(kind=CK,len=:), allocatable :: fname
+        ! Builds & writes UI
+        call make_user_interface
+        write(*,*)'Constructed UI'
+        call write_ui_json
+        write(*,*)'Wrote UI'
+        ! Parses all values, check for duplicate and invalid types
+        fname = UI_FNAME
+        call json%parse(fname, p)
+        write(*,*)'Completed json_parse_file'
+        ! Cleanup
+        call json%destroy()
+        nullify(p)
+    end subroutine validate_ui_json
 
     function get_name( self ) result( name )
         class(simple_program), intent(in) :: self
