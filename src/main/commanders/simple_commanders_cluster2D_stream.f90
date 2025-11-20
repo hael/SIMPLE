@@ -945,17 +945,12 @@ contains
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
         frcsfname  = trim(frcsfname)//trim(BIN_EXT)
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
-        if(present(snapshot_projfile)) then
-            if(snapshot_iteration .gt. 0) then
-                l_snapshot = .true.
-            end if
-        end if
+        if(present(snapshot_projfile)) l_snapshot = snapshot_iteration > 0
         lastmap = 0
-        if(l_snapshot) then
+        if( l_snapshot ) then
             write(logfhandle, '(A,I4,A,A,A,I0,A)') ">>> WRITING SNAPSHOT FROM ITERATION ", snapshot_iteration, trim(snapshot_projfile), ' AT: ',cast_time_char(simple_gettime()), snapshot_jobid, params_glob%niceserver
             call json%destroy(snapshot_json)
             nullify(snapshot_json)
-           ! call snapshot_comm%init(snapshot_jobid, "")
             if(snapshot_iteration .eq. pool_iter) then
                 call snapshot_proj%copy(pool_proj)
                 call snapshot_proj%add_frcs2os_out(trim(POOL_DIR)//trim(FRCS_FILE), 'frc2D')
@@ -975,7 +970,7 @@ contains
                     endif
                 endif
                 call apply_snapshot_selection(snapshot_proj)
-                call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd) 
+                call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd)
                 call snapshot_proj%get_frcs(l_frcsname, 'frc2D')
                 call simple_copy_file(trim(l_stkname), stemname(snapshot_projfile) // "/cavgs" // STK_EXT)
                 call simple_copy_file(trim(add2fbody(l_stkname, params_glob%ext,'_even')), stemname(snapshot_projfile) // "/cavgs_even" // STK_EXT)
@@ -988,7 +983,6 @@ contains
                 snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
                 call snapshot_proj%write(snapshot_projfile)
                 if(present(snapshot_starfile_base)) then
-                  !  call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
                     if( DEBUG_HERE ) t = tic()
                     call snapshot_proj%write_mics_star(snapshot_starfile_base // "_micrographs.star")
                     if( DEBUG_HERE ) print *,'ms_export  : ', toc(t); call flush(6); t = tic()
@@ -997,13 +991,10 @@ contains
                 endif
                 call set_snapshot_time()
                 last_snapshot_nptcls = snapshot_proj%os_ptcl2D%count_state_gt_zero()
-              !  call snapshot_comm%terminate(export_project=snapshot_proj)
                 call snapshot_proj%kill
             else
                 write(logfhandle, '(A)') ">>> FAILED TO WRITE SNAPSHOT"
-              !  call snapshot_comm%terminate(failed=.true.)
             end if
-          !  call snapshot_comm%get_stat_json(snapshot_json)
             snapshot_complete_jobid = snapshot_jobid
             snapshot_jobid = 0
             snapshot_iteration = 0
@@ -2205,7 +2196,7 @@ contains
             if( micproj_records(iproj)%nptcls_sel > 0 )then
                 if( first2import == 0 ) first2import = iproj
                 nptcls = nptcls + micproj_records(iproj)%nptcls_sel
-                if( nptcls > nptcls_per_chunk )then
+                if( nptcls >= nptcls_per_chunk )then
                     n2fill = n2fill+1
                     if( n2fill >= n_avail_chunks )exit
                     nptcls = 0
@@ -2224,12 +2215,12 @@ contains
             do iproj = first2import,n_spprojs_in
                 nptcls   = nptcls   + micproj_records(iproj)%nptcls_sel
                 n2import = n2import + 1
-                if( nptcls > nptcls_per_chunk )then
+                if( nptcls >= nptcls_per_chunk )then
                     last2import = iproj
                     exit
                 endif
             enddo
-            if( nptcls > nptcls_per_chunk )then
+            if( nptcls >= nptcls_per_chunk )then
                 call chunks(ichunk)%generate(micproj_records(first2import:last2import))
                 micproj_records(first2import:last2import)%included = .true.
                 ! execution
@@ -2424,7 +2415,7 @@ contains
     subroutine cleanup_root_folder( all )
         logical, optional, intent(in)  :: all
         character(len=LONGSTRLEN), allocatable :: files(:)
-        character(len=STDLEN),     allocatable :: folders(:)
+        character(len=LONGSTRLEN), allocatable :: folders(:)
         integer :: i
  !       call qsys_cleanup(nparts=params_glob%nparts_pool) ! cyril - fails on stream 2d classification restart
         call simple_rmdir(SIGMAS_DIR)
@@ -2550,13 +2541,14 @@ contains
         character(len=STDLEN),       parameter :: DIR_PROJS   = trim(PATH_HERE)//'spprojs/'
         integer,                     parameter :: WAITTIME    = 5
         type(projrecord),          allocatable :: micproj_records(:)
+        integer,                   allocatable :: nptcls_per_chunk_vec(:)
         character(len=:),          allocatable :: alg, fname
         type(parameters) :: params
         type(sp_project) :: spproj_glob
         type(projs_list) :: chunkslist, setslist
         integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic
         integer          :: tot_nchunks_imported, id, nc
-        logical          :: all_chunks_submitted, all_chunks_imported, l_makecavgs
+        logical          :: all_chunks_submitted, all_chunks_imported
         call cline%set('oritype',      'ptcl2D')
         call cline%set('wiener',       'full')
         call cline%set('kweight_chunk','default')
@@ -2571,7 +2563,7 @@ contains
         call cline%set('sigma_est',    'global')
         call cline%set('refine',       'snhc_smpl')
         call cline%set('algorithm',    'abinitio2D')
-        call cline%set('nchunksperset',1)
+        call cline%set('nchunks',      1)
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('center')         ) call cline%set('center',        'yes')
@@ -2601,8 +2593,8 @@ contains
         ! projects packaging
         call generate_chunk_projects
         ! Update to global parameters prior to 2D inititalization
-        params_glob%ncls = floor(real(nptcls_tot) / real(params_glob%nptcls_per_cls))
-        params%nchunks   = 1
+        nptcls_per_chunk = nint(real(sum(nptcls_per_chunk_vec)) / real(ntot_chunks))    ! average value
+        params_glob%ncls = floor(real(nptcls_per_chunk) / real(params_glob%nptcls_per_cls))
         ! General streaming initialization
         call init_chunk_clustering( cline, spproj_glob )
         ! Updates folllowing streaming init
@@ -2616,7 +2608,6 @@ contains
         call cline_cluster2D_chunk%delete('extr_lim')
         call cline_cluster2D_chunk%delete('cc_iters')
         call cline_cluster2D_chunk%set('rank_cavgs', params%rank_cavgs)
-        l_makecavgs = .false.
         ! re-init with updated command-lines
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%kill
@@ -2631,18 +2622,17 @@ contains
         do
             ! sequential chunk prep & submission
             if( .not.all_chunks_submitted )then
-                do ic = 1,params%nchunks
-                    if( all_chunks_submitted ) exit
-                    if( chunks(ic)%available )then
-                        ichunk = ichunk + 1
-                        call analyze2D_new_chunks(micproj_records, l_makecavgs)
-                        if( ichunk == ntot_chunks )then
-                            all_chunks_submitted = .true.
-                            deallocate(micproj_records)
-                            exit
-                        endif
+                if( all_chunks_submitted ) exit
+                if( chunks(1)%available )then
+                    ichunk = ichunk + 1
+                    nptcls_per_chunk = nptcls_per_chunk_vec(ichunk) ! is a variable
+                    call analyze2D_new_chunks(micproj_records, .false.)
+                    if( ichunk == ntot_chunks )then
+                        all_chunks_submitted = .true.
+                        deallocate(micproj_records)
+                        exit
                     endif
-                enddo
+                endif
             endif
             ! convergence
             call check_completed_chunks
@@ -2656,9 +2646,13 @@ contains
                 do ic = 1,nc
                     fname = trim(converged_chunks(ic)%get_projfile_fname())
                     id    = converged_chunks(ic)%get_id()
-                    call chunkslist%append(fname, id, .true.)
+                    call chunkslist%append(fname, id, .false.)
                     ! cleanup
                     call converged_chunks(ic)%kill
+                    ! run cluster_cavgs on first item of chunkslist
+                    call cluster_chunk_cavgs
+                    ! run match_cavgs on last item(s) of chunkslist
+                    call match_sets
                 enddo
                 deallocate(converged_chunks)
             endif
@@ -2669,11 +2663,7 @@ contains
             endif
             call sleep(WAITTIME)
         end do
-        ! consolidate: merge chunks, write project(s) & splits into sets
-        ! spproj_glob is destroyed on output
-        call consolidate_chunks
-        ! Cluster & match classes & write final project
-        call cluster_and_match_sets
+        ! no final project
         ! cleanup
         call kill_projrecords(micproj_records)
         call spproj_glob%kill
@@ -2696,52 +2686,19 @@ contains
             type(cmdline)                   :: cline_rank_cavgs
             character(len=:),   allocatable :: cavgs_ranked, cavgs
             integer :: ichunk, jchunk, nthr2D, n
-            logical :: chunk_complete, converged, cavgs_made
+            logical :: chunk_complete
             if( .not. stream2D_active ) return
             do ichunk = 1,params_glob%nchunks
                 if( chunks(ichunk)%available ) cycle
                 chunk_complete = .false.
-                converged      = .false.
-                cavgs_made     = .false.
                 if( chunks(ichunk)%toanalyze2D )then
-                    converged = chunks(ichunk)%has_converged()
-                    if( converged )then
-                        if( l_makecavgs )then
-                            cavgs_made = file_exists(trim(chunks(ichunk)%path)//trim(MAKECAVGS_FINISHED))
-                        else
-                            cavgs_made = .true.
-                        endif
-                    endif
-                    chunk_complete = converged .and. cavgs_made
+                    chunk_complete = chunks(ichunk)%has_converged()
                 else
                     THROW_HARD('Fatal Error 1')
                 endif
                 if( chunk_complete )then
                     ! read & print out info
                     call chunks(ichunk)%display_iter
-                    ! rank classes
-                    if( l_makecavgs )then
-                        call chdir(chunks(ichunk)%path)
-                        call simple_getcwd(cwd_glob)
-                        cavgs        = trim(CAVGS_ITER_FBODY)//int2str_pad(chunks(ichunk)%it,3)//trim(params%ext)
-                        cavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(chunks(ichunk)%it,3)//'_ranked'//trim(params%ext)
-                        call cline_rank_cavgs%set('projfile', chunks(ichunk)%projfile_out)
-                        call cline_rank_cavgs%set('stk',      cavgs)
-                        call cline_rank_cavgs%set('outstk',   cavgs_ranked)
-                        call simple_rename('final_cavgs'//trim(params%ext), cavgs)
-                        call spproj%read_segment('out', chunks(ichunk)%projfile_out)
-                        call spproj%add_cavgs2os_out(cavgs, params_glob%smpd, 'cavg')
-                        call spproj%write_segment_inside('out', chunks(ichunk)%projfile_out)
-                        call spproj%kill
-                        cavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(chunks(ichunk)%it,3)//'_even'//trim(params%ext)
-                        call simple_rename('final_cavgs_even'//trim(params%ext), cavgs)
-                        cavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(chunks(ichunk)%it,3)//'_odd'//trim(params%ext)
-                        call simple_rename('final_cavgs_odd'//trim(params%ext), cavgs)
-                        call xrank_cavgs%execute_safe( cline_rank_cavgs )
-                        call chdir('..')
-                        call simple_getcwd(cwd_glob)
-                        call cline_rank_cavgs%kill
-                    endif
                     ! book-keeping
                     if( allocated(converged_chunks) )then
                         n = size(converged_chunks)
@@ -2774,12 +2731,13 @@ contains
             type(sp_project)              :: spproj
             integer,          allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
             character(len=:), allocatable :: fname,absfname,path,projname,projfile
-            integer :: cnt,ichunk, istk, iptcl,jptcl,kptcl,fromp,top,cfromp,ctop,n
-            integer :: cnt_stk, cnt_mics, cnt_ptcls
+            integer :: cnt, ichunk, istk, iptcl,jptcl,kptcl,fromp,top,cfromp,ctop,n
+            integer :: cnt_stk
             call simple_mkdir(DIR_PROJS)
-            ! Mapping particles/stacks
+            ! Mapping particles/stacks, number of chunks
             allocate(stk_all_nptcls(nstks),stk_nptcls(nstks),source=0)
-            ntot_chunks = 1 !!
+            ntot_chunks = 0
+            cnt         = 0
             cnt_stk     = 0
             do istk = 1,nstks
                 if( (spproj_glob%os_stk%get_state(istk)==0) .or. (spproj_glob%os_stk%get_int(istk,'nptcls')==0) )cycle
@@ -2788,28 +2746,39 @@ contains
                 do iptcl = fromp,top
                     stk_all_nptcls(istk) = stk_all_nptcls(istk) + 1 ! including state=0
                     if( spproj_glob%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-                    stk_nptcls(istk)     = stk_nptcls(istk) + 1     ! excluding state=0
+                    stk_nptcls(istk) = stk_nptcls(istk) + 1 ! excluding state=0
                 enddo
+                cnt     = cnt     + stk_nptcls(istk)
                 cnt_stk = cnt_stk + 1
+                if( (cnt_stk >= params%nmics) .or. (cnt >= params%maxnptcls) )then
+                    ntot_chunks = ntot_chunks + 1
+                    cnt         = 0
+                    cnt_stk     = 0
+                endif
             enddo
             nptcls_tot = sum(stk_nptcls)
-            write(logfhandle,'(A,I8)')'>>> # OF STACKS          : ', cnt_stk
+            write(logfhandle,'(A,I8)')'>>> # OF STACKS          : ', nstks
             write(logfhandle,'(A,I8)')'>>> # OF PARTICLES       : ', nptcls_tot
-            cnt_ptcls = 0
-            cnt_stk   = 0
-            do istk = 1,nstks
-                if( stk_nptcls(istk) == 0 ) cycle
-                cnt_ptcls = cnt_ptcls + stk_nptcls(istk)
-                cnt_stk   = cnt_stk + 1
-                if( cnt_stk   >= params%nmics )    exit
-                if( cnt_ptcls >= params%maxnptcls )exit
-            enddo
-            nptcls_tot = cnt_ptcls
-            nstks      = cnt_stk
+            write(logfhandle,'(A,I8)')'>>> # OF AVAILABLE CHUNKS: ', ntot_chunks
+            if( cline%defined('maxnchunks') ) ntot_chunks = min(params%maxnchunks, ntot_chunks)
             ! chunks map, leftovers are abandoned
-            ntot_chunks = 1
-            allocate(chunks_map(ntot_chunks,2),source=0)
-            chunks_map(1,:) = [1,cnt_stk]
+            allocate(chunks_map(ntot_chunks,2),nptcls_per_chunk_vec(ntot_chunks),source=0)
+            cnt     = 0
+            cnt_stk = 0
+            ichunk  = 1
+            do istk = 1,nstks
+                if( ichunk > ntot_chunks ) exit
+                if( cnt==0 ) chunks_map(ichunk,1) = istk
+                cnt     = cnt + stk_nptcls(istk)
+                cnt_stk = cnt_stk + 1
+                if( (cnt_stk >= params%nmics) .or. (cnt >= params%maxnptcls) )then
+                    chunks_map(ichunk,2)         = istk
+                    nptcls_per_chunk_vec(ichunk) = cnt
+                    ichunk  = ichunk + 1
+                    cnt     = 0
+                    cnt_stk = 0
+                endif
+            enddo
             write(logfhandle,'(A)')'>>> CHUNKS MAP: '
             spproj%compenv = spproj_glob%compenv
             spproj%jobproc = spproj_glob%jobproc
@@ -2871,86 +2840,82 @@ contains
                 call spproj%os_ptcl2D%delete_2Dclustering(keepshifts=.false., keepcls=.false.)
                 call spproj%write(projfile)
                 nptcls = sum(micproj_records(chunks_map(ichunk,1):chunks_map(ichunk,2))%nptcls_sel)
-                write(logfhandle,'(A,I8,A,I8,A,I8)')'>>> CHUNK ID; # OF MICS & PARTICLES  : ',  ichunk,&
-                    &' ; ',nstks,' & ',nptcls_tot
+                write(logfhandle,'(A,I8,A,I8,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk,&
+                    &' ; ',nptcls,' / ',sum(stk_nptcls)
             enddo
             call spproj%kill
         end subroutine generate_chunk_projects
 
-        subroutine consolidate_chunks
-            character(len=:), allocatable :: tmpl
-            integer                       :: i,j,k
-            ! combines all chunks
-            fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-            call merge_chunk_projfiles(chunkslist%projfiles(:), './', spproj_glob, projname_out=fname)
-            ! optionally consolidate chunks into sets
-            if( cline%defined('nchunksperset') )then
-                j = 0
-                do i = 1,chunkslist%n,params%nchunksperset
-                    j    = j + 1
-                    k    = min(i+params%nchunksperset-1,chunkslist%n)
-                    tmpl = trim(DIR_SET)//int2str(j)
-                    call simple_mkdir(tmpl)
-                    call merge_chunk_projfiles(chunkslist%projfiles(i:k), tmpl, spproj_glob, projname_out=tmpl)
-                    call setslist%append(tmpl//'/'//tmpl//METADATA_EXT, j, .false.)
-                    write(*,'(A,I4,A,I8,A)')'>>> GENERATED SET',j,' WITH',spproj_glob%get_nptcls(),' PARTICLES'
-                enddo
-            endif
-        end subroutine consolidate_chunks
-
-        subroutine cluster_and_match_sets
+        ! subjects first chunk of to cluster_cavgs
+        subroutine cluster_chunk_cavgs
             type(commander_cluster_cavgs) :: xcluster_cavgs
-            type(commander_match_cavgs)   :: xmatch_cavgs
-            type(cmdline)                 :: cline_cluster_cavgs, cline_match_cavgs
-            character(len=:), allocatable :: path, projfile_ref
+            type(cmdline)                 :: cline_cluster_cavgs
+            type(sp_project)              :: spproj
+            character(len=:), allocatable :: path, tmpl
             character(len=XLONGSTRLEN)    :: cwd
-            if( setslist%n == 0 )return
-            ! first set is for clustercavgs
+            if( chunkslist%n /= 1 )      return
+            if( chunkslist%processed(1) )return
+            ! updates directory structure
+            tmpl = trim(DIR_SET)//int2str(1)
+            call simple_mkdir(tmpl)
+            call merge_chunk_projfiles(chunkslist%projfiles(1:1), tmpl, spproj,&
+            &projname_out=tmpl, write_proj=.true.)
+            ! update path
+            chunkslist%projfiles(1:1) = simple_abspath(tmpl//'/'//tmpl//METADATA_EXT)
+            call spproj%kill
+            ! execute
             cline_cluster_cavgs = cline
             call cline_cluster_cavgs%set('mkdir',   'no')
             call cline_cluster_cavgs%set('prg',     'cluster_cavgs')
-            call cline_cluster_cavgs%set('projfile', basename(setslist%projfiles(1)))
+            call cline_cluster_cavgs%set('projfile', basename(chunkslist%projfiles(1)))
             call cline_cluster_cavgs%delete('nparts')
-            call cline_cluster_cavgs%delete('nparts_chunk')
-            path = stemname(setslist%projfiles(1))
+            path = stemname(chunkslist%projfiles(1))
             call chdir(path)
             call simple_getcwd(cwd)
             cwd_glob = trim(cwd)
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
             call chdir('..')
             call simple_getcwd(cwd_glob)
-            setslist%processed(1) = .true.
-            if( setslist%n == 1 )then
-                ! update & write final project
-                fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-                call merge_chunk_projfiles(setslist%projfiles(1:1), './', spproj_glob, projname_out=fname)
-            else
-                ! run match_cavgs on all other with setslist%projfiles(1) as reference
-                projfile_ref      = simple_abspath(setslist%projfiles(1) ,"in cluster_and_match_sets")
-                cline_match_cavgs = cline
-                call cline_match_cavgs%set('mkdir',    'no')
-                call cline_match_cavgs%set('prg',      'cluster_cavgs')
-                call cline_match_cavgs%set('projfile', projfile_ref)
-                call cline_match_cavgs%delete('nparts')
-                do ic = 2,setslist%n
-                    call cline_match_cavgs%set('projfile_target', basename(setslist%projfiles(ic)))
-                    path = stemname(setslist%projfiles(ic))
-                    call chdir(path)
-                    call simple_getcwd(cwd)
-                    cwd_glob = trim(cwd)
-                    call xmatch_cavgs%execute_safe(cline_match_cavgs)
-                    call chdir('..')
-                    call simple_getcwd(cwd_glob)
-                    setslist%processed(ic) = .true.
-                enddo
-                ! need to re-consolidate projects into final project
-                fname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-                call merge_chunk_projfiles(setslist%projfiles(:), './', spproj_glob, projname_out=fname)
-            endif
+            chunkslist%processed(1) = .true. !!
             ! cleanup
             call cline_cluster_cavgs%kill
+        end subroutine cluster_chunk_cavgs
+
+        ! subjects last chunk(s) chunk of to match_cavgs
+        subroutine match_sets
+            type(commander_match_cavgs)   :: xmatch_cavgs
+            type(cmdline)                 :: cline_match_cavgs
+            type(sp_project)              :: spproj
+            character(len=:), allocatable :: path, tmpl
+            character(len=XLONGSTRLEN)    :: cwd
+            integer :: id
+            if( chunkslist%n < 2 )return
+            id = chunkslist%n
+            if(      chunkslist%processed(id)   ) return
+            if( .not.chunkslist%processed(id-1) ) return
+            ! updates directory structure
+            tmpl = trim(DIR_SET)//int2str(id)
+            call simple_mkdir(tmpl)
+            ! execute
+            cline_match_cavgs = cline
+            call cline_match_cavgs%set('mkdir',           'no')
+            call cline_match_cavgs%set('prg',             'cluster_cavgs')
+            call cline_match_cavgs%set('projfile',        simple_abspath(chunkslist%projfiles(id-1)))
+            call cline_match_cavgs%set('projfile_target', simple_abspath(chunkslist%projfiles(id)))
+            call cline_match_cavgs%set('projfile_merged', 'set_'//int2str(id)//METADATA_EXT)
+            call cline_match_cavgs%delete('nparts')
+            path = stemname(chunkslist%projfiles(id))
+            call chdir(path)
+            call simple_getcwd(cwd)
+            cwd_glob = trim(cwd)
+            call xmatch_cavgs%execute_safe(cline_match_cavgs)
+            call chdir('..')
+            call simple_getcwd(cwd_glob)
+            chunkslist%processed(id) = .true. !!
+            chunkslist%projfiles(id) = simple_abspath(tmpl//'/'//'set_'//int2str(id)//METADATA_EXT)
+            ! cleanup
             call cline_match_cavgs%kill
-        end subroutine cluster_and_match_sets
+        end subroutine match_sets
 
     end subroutine exec_cluster2D_subsets
 

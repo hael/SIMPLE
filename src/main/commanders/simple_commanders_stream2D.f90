@@ -827,7 +827,7 @@ contains
                     l_restart = .true.
                 endif
                 if( l_restart ) then
-                    write(logfhandle, *) ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
+                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
                     if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(TERM_STREAM)
                     call del_file(USER_PARAMS2D)
@@ -1356,7 +1356,7 @@ contains
                     l_restart = .true.
                 endif
                 if( l_restart ) then
-                    write(logfhandle, *) ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
+                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
                     if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(micspproj_fname)
                     call cleanup_root_folder
