@@ -505,10 +505,9 @@ contains
     subroutine read( self, cmd_line )
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: cmd_line
-        !character(len=:), allocatable   :: arg(:)
-        character(len=STDLEN)         :: arg(32)
-        integer                       :: i
-        type(args)                    :: allowed_args
+        character(len=STDLEN) :: arg(32)
+        integer               :: i
+        type(args)            :: allowed_args
         call self%kill
         self%entire_line=adjustl(trim(cmd_line))
         call parsestr( self%entire_line, ' ', arg, self%argcnt )
@@ -537,8 +536,8 @@ contains
             call fileiochk('readline reading failed'//trim(filename),iostat=ok)
             line = adjustl(trim(line))
             call split_str(line, ' ', tmp)
-            key = adjustl(trim(tmp))
-            arg = adjustl(trim(line))
+            key  = adjustl(trim(tmp))
+            arg  = adjustl(trim(line))
             read(arg,*,iostat=ok) rarg
             if( ok == 0 )then
                 call self%set(key, rarg)
@@ -709,7 +708,7 @@ contains
         if( cmdstat == -1 )then
             write(logfhandle,*) 'ERROR! while parsing the command line'
             write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-            write(logfhandle,*) 'which likely exeeds the lenght limit LONGSTRLEN'
+            write(logfhandle,*) 'which likely exceeds the lenght limit LONGSTRLEN'
             write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
             stop
         endif

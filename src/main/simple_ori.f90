@@ -117,7 +117,7 @@ type :: ori
     procedure          :: mirror2d
     procedure          :: transp
     procedure          :: geodesic_dist_frobdev
-     generic           :: operator(.geod.)        => geodesic_dist_frobdev
+    generic            :: operator(.geod.)        => geodesic_dist_frobdev
     procedure          :: geodesic_dist_trace
     procedure, private :: euldist
     procedure, private :: inplrotdist
@@ -442,7 +442,7 @@ contains
         endif
     end subroutine set_shift
 
-    subroutine set_dfx( self, dfx)
+    subroutine set_dfx( self, dfx )
         class(ori), intent(inout) :: self
         real,       intent(in)    :: dfx
         if( self%is_ptcl )then
@@ -452,7 +452,7 @@ contains
         endif
     end subroutine set_dfx
 
-    subroutine set_dfy( self, dfy)
+    subroutine set_dfy( self, dfy )
         class(ori), intent(inout) :: self
         real,       intent(in)    :: dfy
         if( self%is_ptcl )then
@@ -824,7 +824,7 @@ contains
     end function get_int
 
     !>  \brief  is a getter with fixed length return string
-    function get_static( self, key )result( val )
+    function get_static( self, key ) result( val )
         class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
         character(len=STDLEN)        :: val
@@ -1335,7 +1335,7 @@ contains
         call self%set('angast', ctfvars%angast)
     end subroutine set_ctfvars
 
-    function get_keys( self ) result (keys)
+    function get_keys( self ) result( keys )
         class(ori),                 intent(in)  :: self
         type(str4arr),              allocatable :: hkeys(:)
         character(len=XLONGSTRLEN), allocatable :: keys(:)
@@ -1719,7 +1719,7 @@ contains
     end subroutine euler2dm
 
     !>  \brief  returns a Spider format Euler triplet, given a rotation matrix
-    pure function m2euler( mat ) result ( euls )
+    pure function m2euler( mat ) result( euls )
         real, intent(in), dimension(3,3) :: mat(3,3)
         real, dimension(3,3):: tmp, anticomp1z, anticomp2y, get_euler3eul
         real :: imagevec(3), absxy, mceul1deg, mceul2deg, phitmp, euls(3)
@@ -1768,7 +1768,7 @@ contains
     ! [r11 r21 r31]   [...         ...         sΘcΦ]
     ! [r12 r22 r32] = [cΘcΨsΦ+cΦsΨ cΦcΨ-cΘsΦsΨ sΘsΦ]
     ! [r13 r23 r33]   [-sΘcΨ       sΘsΨ        cΘ  ]
-    pure function m2euler_fast( R )result( e )
+    pure function m2euler_fast( R ) result( e )
         real, intent(in)  :: R(3,3)
         real :: e(3)
         if( R(3,3) < 0.9999999 )then
@@ -1789,7 +1789,7 @@ contains
     end function m2euler_fast
 
     !>  in-plane parameters to 3x3 transformation matrix
-    function make_transfmat( psi, tx, ty )result( R )
+    function make_transfmat( psi, tx, ty ) result( R )
         real,intent(in) :: psi,tx,ty
         real            :: R(3,3),radpsi,cospsi,sinpsi
         radpsi = deg2rad( psi )
@@ -1968,7 +1968,7 @@ contains
     end subroutine euler_compose
 
     !>  \brief  Generates mirror euler angles
-    pure subroutine euler_mirror( euls, euls_out)
+    pure subroutine euler_mirror( euls, euls_out )
         real, intent(in)    :: euls(3)
         real, intent(inout) :: euls_out(3)
         real :: rmat(3,3)

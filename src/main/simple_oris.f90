@@ -567,7 +567,7 @@ contains
         normal = self%o(i)%get_normal()
     end function get_normal
 
-    pure function get_2Dshift( self, i )  result(shvec)
+    pure function get_2Dshift( self, i )  result( shvec )
         class(oris), intent(in) :: self
         integer,     intent(in)    :: i
         real :: shvec(2)
@@ -651,7 +651,7 @@ contains
     end function get_updatecnt
 
     ! assumes project has been pruned to remove state=0 particles
-    subroutine get_tseries_neighs( self, nsz, ptcls2neigh  )
+    subroutine get_tseries_neighs( self, nsz, ptcls2neigh )
        class(oris),          intent(in)    :: self
        integer,              intent(in)    :: nsz
        integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
@@ -694,7 +694,7 @@ contains
         is = self%o(i)%isthere(key)
     end function isthere_2
 
-    function ischar( self, i, key ) result ( is )
+    function ischar( self, i, key ) result( is )
         class(oris),       intent(in) :: self
         integer,           intent(in) :: i
         character(len=*),  intent(in) :: key
@@ -844,7 +844,7 @@ contains
         !$omp end parallel do
     end subroutine get_pops
 
-    function get_all_normals(self) result(normals)
+    function get_all_normals( self ) result( normals )
         class(oris), intent(inout) :: self
         real, allocatable :: normals(:,:)
         integer :: i
@@ -855,7 +855,7 @@ contains
     end function get_all_normals
 
     !>  \brief  returns a logical array of state existence
-    function states_exist(self, nstates, thres) result(state_exists)
+    function states_exist( self, nstates, thres ) result( state_exists )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: nstates
         integer, optional, intent(in)    :: thres
@@ -869,7 +869,7 @@ contains
     end function states_exist
 
     !>  \brief  returns a logical array of state existence
-    function projs_exist(self, nstates, nprojs, thres) result(proj_exists)
+    function projs_exist( self, nstates, nprojs, thres ) result( proj_exists )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: nstates
         integer,           intent(in)    :: nprojs
@@ -1332,7 +1332,7 @@ contains
         if( n < nptcls )then
             ! if less than desired particles select all
         else
-            rt = ran_tabu(n)
+            rt   = ran_tabu(n)
             call rt%shuffle(inds)
             call rt%kill
             inds = inds(1:nptcls)
@@ -1468,7 +1468,7 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_cnt
 
-    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, frac_best)
+    subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, frac_best )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:) ! data structure for balanced sampling
         integer,              intent(in)    :: fromto(2)
@@ -1869,7 +1869,7 @@ contains
         enddo
     end subroutine balance_ptcls_within_cls
 
-    function get_sample_ind( self, incr_sampled ) result(sample_ind)
+    function get_sample_ind( self, incr_sampled ) result( sample_ind )
         class(oris), intent(in) :: self
         logical,     intent(in) :: incr_sampled
         integer :: i, sample_ind
@@ -2070,7 +2070,7 @@ contains
         end do
     end subroutine copy_1
 
-    subroutine copy_2( self_out, self_in)
+    subroutine copy_2( self_out, self_in )
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
         logical :: is_ptcl
@@ -2999,7 +2999,7 @@ contains
     end subroutine write_1
 
     !>  \brief  writes orientation info to file
-    subroutine write_2( self, i, orifile  )
+    subroutine write_2( self, i, orifile )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: orifile
         integer,          intent(in)    :: i
@@ -3011,7 +3011,7 @@ contains
     end subroutine write_2
 
     !>  \brief  writes object to BILD Chimera readable format
-    subroutine write2bild( self, file  )
+    subroutine write2bild( self, file )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: file
         integer :: i,funit, file_stat
@@ -3218,7 +3218,7 @@ contains
     end subroutine stats_2
 
     !>  \brief  is for calculating variable statistics
-    subroutine stats_3( self, which, ave, sdev, var, err, fromto)
+    subroutine stats_3( self, which, ave, sdev, var, err, fromto )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
@@ -3903,7 +3903,7 @@ contains
     end function extremal_bound
 
     !>  \brief  utility function for setting extremal optimization parameters
-    subroutine set_extremal_vars(self, extr_init, extr_iter, iter, frac_srch_space, do_extr, iextr_lim, update_frac)
+    subroutine set_extremal_vars( self, extr_init, extr_iter, iter, frac_srch_space, do_extr, iextr_lim, update_frac )
         class(oris),       intent(in)  :: self
         real,              intent(in)  :: extr_init
         integer,           intent(in)  :: extr_iter, iter
@@ -4277,8 +4277,8 @@ contains
             else
                 exit
             endif
-            y  = os%get(i,'y')
-            y2 = os2%get(i,'y')
+            y      = os%get(i,'y')
+            y2     = os2%get(i,'y')
             passed = (abs(y-y2)<TINY)
             if( passed )then
                 cycle
