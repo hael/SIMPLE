@@ -94,7 +94,6 @@ type :: parameters
     character(len=3)          :: pick_roi='yes'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: polar='no'           !< To use polar FT representation(yes|no){no}
-
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
