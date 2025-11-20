@@ -75,7 +75,7 @@ integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE         ! sw
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
-integer,          parameter :: GAUREF_LAST_STAGE     = 6                    ! When to stop using a gaussian filtering of the references with polar=yes
+integer,          parameter :: GAUREF_LAST_STAGE     = PHASES(1)            ! When to stop using gaussian filtering of the references with polar=yes
 integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, PROBREFINE_STAGE, NSTAGES]
 integer,          parameter :: NSPACE_POLAR(3)       = [500,             1000,    1500]
 
@@ -539,9 +539,14 @@ contains
         if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                            'yes')
         if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                        'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                          'clin')
-        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
         if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
+        ! adjust cartesian/polar options
+        if( trim(cline%get_carg('polar'))=='yes' )then
+        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
+        else
+        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                              'no')
+        endif
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -1102,13 +1107,10 @@ contains
         if( istage >= ICM_STAGE ) icm = 'yes'
         ! balance
         balance = 'yes'
-        ! Filtering of polar references
+        ! Gaussian filtering of reference volume
         gaufreq = -1.
-        if( l_polar )then
-            ! Gaussian filtering
-            if( istage <= params_glob%gauref_last_stage )then
-                if( trim(params_glob%gauref).ne.'no' ) gaufreq = lpinfo(istage)%lp
-            endif
+        if( (trim(params_glob%gauref)=='yes') .and. (istage <= params_glob%gauref_last_stage) )then
+            gaufreq = lpinfo(istage)%lp
         endif
         ! trailing reconstruction
         trail_rec = 'no'
@@ -1288,16 +1290,16 @@ contains
         else
         call cline_refine3D%delete('snr_noise_reg')
         endif
+        if( gaufreq > 0.)then
+        call cline_refine3D%set('gauref',                      'yes')
+        call cline_refine3D%set('gaufreq',                   gaufreq)
+        else
+        call cline_refine3D%delete('gauref')
+        call cline_refine3D%delete('gaufreq')
+        endif
         if( l_polar )then
             call cline_refine3D%set('center_type',           'params')
             call cline_refine3D%set('ref_type',              ref_type)
-            if( gaufreq > 0.)then
-                call cline_refine3D%set('gauref',               'yes')
-                call cline_refine3D%set('gaufreq',            gaufreq)
-            else
-                call cline_refine3D%delete('gauref')
-                call cline_refine3D%delete('gaufreq')
-            endif
         endif
     end subroutine set_cline_refine3D
 
