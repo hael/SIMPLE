@@ -65,7 +65,7 @@ contains
 
     subroutine exec_stream_preprocess( self, cline )
         use simple_motion_correct_utils, only: flip_gain
-        use simple_moviewatcher,         only: sniff_folders_SJ
+        use simple_moviewatcher,         only: sniff_folders_SJ, workout_directory_structure
         class(commander_stream_preprocess), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                                  :: params
@@ -80,14 +80,15 @@ contains
         type(sp_project)                                  :: spproj_glob    ! global project
         type(starproject_stream)                          :: starproj_stream
         character(len=LONGSTRLEN),          allocatable   :: movies(:), dir_movies(:)
-        character(len=:),                   allocatable   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, directory
+        character(len=:),                   allocatable   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
+        character(len=:),                   allocatable   :: directory
         character(len=STDLEN)                             :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         real        :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
-        integer     :: movies_set_counter, import_counter
+        integer     :: movies_set_counter, import_counter, nwaits
         integer     :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer     :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
-        logical     :: l_movies_left, l_haschanged, l_restart, l_movie_found, SJ_directory_structure
+        logical     :: l_movies_left, l_haschanged, l_restart, SJ_directory_structure, l_dir_found
         logical(LK) :: found
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
@@ -138,12 +139,6 @@ contains
             call spproj_glob%update_compenv(cline)
             call spproj_glob%write
         endif
-        ! Sniffing for movies & XML in subdirectories prior to args parsing
-        call sniff_folders_SJ(cline%get_carg('dir_movies'), SJ_directory_structure, dir_movies)
-        if( SJ_directory_structure )then
-            ! dir_meta will be updated at runtime in create_movies_set_project
-            call cline%set('dir_movies', dir_movies(1))
-        endif
         ! master parameters
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
@@ -161,13 +156,29 @@ contains
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
+        ! Sniffing for movies & subfolders: we have to wait for first movie/subfolder
+        ! to know which directory structure we are working with
+        l_dir_found = .false.
+        nwaits      = 0
+        do while( .not.l_dir_found )
+            call workout_directory_structure(params%dir_movies, l_dir_found, SJ_directory_structure)
+            if( .not.l_dir_found)then
+                call sleep(SHORTWAIT)
+                nwaits = nwaits + 1
+                if( mod(nwaits*SHORTWAIT, 60)==0 )then
+                    write(*,"(A,I3,A)")'>>> NO MOVIE HAS BEEN DETECTED FOR ',&
+                    &nint(real(nwaits*SHORTWAIT)/60.),' MINS'
+                endif
+            endif
+        enddo
         ! movie watcher init
         if( SJ_directory_structure )then
             ! add a suffix & multiple folders
-            movie_buff = moviewatcher(LONGTIME, params%dir_movies, suffix_filter='_fractions')
-            do i = 1,size(dir_movies)
-                call movie_buff%add2watchdirs(dir_movies(i))
-            enddo
+            call sniff_folders_SJ(params%dir_movies, l_dir_found, dir_movies )
+            if( .not.l_dir_found ) THROW_HARD('Fatal error directory structure')
+            movie_buff = moviewatcher(LONGTIME, dir_movies(1), suffix_filter='_fractions')
+            call movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
+            deallocate(dir_movies)
         else
             ! no suffix, one folder
             movie_buff = moviewatcher(LONGTIME, params%dir_movies)
@@ -177,7 +188,7 @@ contains
         import_counter     = 0  ! global import id
         nmic_star          = 0
         if( l_restart )then
-            write(logfhandle, *) ">>> RESTARTING EXISTING JOB"
+            write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB"
             call del_file(TERM_STREAM)
             if( cline%defined('dir_exec') ) call cline%delete('dir_exec')
             ! http stats
@@ -266,8 +277,9 @@ contains
             call http_communicator%json%update(http_communicator%job_json, "cutoff_ice_score",    dble(params%icefracthreshold),       found)
             call http_communicator%json%update(http_communicator%job_json, "cutoff_astigmatism",  dble(params%astigthreshold),         found)
             call http_communicator%json%update(http_communicator%job_json, "movies_rate",         movie_buff%rate,                     found)
-            ! detection of new movies
-            call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts*STREAM_NMOVS_SET )
+            ! detection of new folders & movies
+            call movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
+            call movie_buff%watch( nmovies, movies, max_nmovies=4*params%nparts*STREAM_NMOVS_SET )
             ! append movies to processing stack
             if( nmovies >= STREAM_NMOVS_SET )then
                 nsets = floor(real(nmovies) / real(STREAM_NMOVS_SET))
@@ -1660,7 +1672,7 @@ contains
         if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
         ! sanity check for restart
         if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
-            write(logfhandle, *) ">>> RESTARTING EXISTING JOB"
+            write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB"
             call del_file(TERM_STREAM)
         endif
         ! below may be redundant
@@ -1838,7 +1850,7 @@ contains
         if( .not. cline%defined('nmics')            ) call cline%set('nmics',              100)
         ! sanity check for restart
         if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
-            write(logfhandle, *) ">>> RESTARTING EXISTING JOB"
+            write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB"
             call del_file(TERM_STREAM)
         endif
         ! below may be redundant

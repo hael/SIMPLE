@@ -1,25 +1,23 @@
 ! movie watcher for stream processing
 module simple_moviewatcher
 include 'simple_lib.f08'
-use simple_parameters, only: params_glob
 use simple_progress
 implicit none
 
-public :: moviewatcher, sniff_folders_SJ
+public :: moviewatcher
+public :: workout_directory_structure, sniff_folders_SJ
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: STREAM_DIRS     = 'SIMPLE_STREAM_DIRS'
 character(len=STDLEN), parameter :: WATCHER_HISTORY = 'watcher_history.txt'
 character(len=STDLEN), parameter :: WATCHER_DIRS    = 'watcher_dirs.txt'
+integer,               parameter :: RATE_INTERVAL   = 3600 ! 1 hour
 
 type moviewatcher
     private
     character(len=LONGSTRLEN), allocatable :: history(:)         !< history of movies detected
     character(len=LONGSTRLEN), allocatable :: watch_dirs(:)      !< directories to watch
-    character(len=LONGSTRLEN)          :: cwd            = ''    !< CWD
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
-    character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: regexp         = ''    !< movies extensions
     integer, public,       allocatable :: ratehistory(:)
     integer, public                    :: n_history      = 0     !< history of movies detected
@@ -45,6 +43,7 @@ contains
     generic            :: add2history => add2history_1, add2history_2
     procedure          :: clear_history
     procedure          :: is_past
+    procedure          :: detect_and_add_dirs
     procedure          :: add2watchdirs
     ! destructor
     procedure          :: kill
@@ -53,10 +52,6 @@ end type
 interface moviewatcher
     module procedure constructor
 end interface moviewatcher
-
-integer, parameter :: FAIL_THRESH   = 50
-integer, parameter :: FAIL_TIME     = 7200 ! 2 hours
-integer, parameter :: RATE_INTERVAL = 3600 ! 1 hour
 
 contains
 
@@ -71,10 +66,9 @@ contains
         integer :: i
         logical :: l_movies
         call self%kill
-        l_movies     = .true.
+        l_movies = .true.
         if( present(spproj) ) l_movies = .not.spproj
         self%watch_dir   = trim(adjustl(dir))
-        self%cwd         = trim(params_glob%cwd)
         self%report_time = report_time
         if( l_movies )then
             ! watching movies
@@ -83,7 +77,6 @@ contains
             else
                 write(logfhandle,'(A,A)')'>>> MOVIES DETECTED FROM: ',trim(self%watch_dir)
             endif
-            self%ext    = trim(adjustl(params_glob%ext))
             if( present(suffix_filter) )then
                 self%regexp = '\.mrc$|\.mrcs$'
             endif
@@ -116,7 +109,6 @@ contains
             else
                 write(logfhandle,'(A,A)')'>>> PROJECTS DETECTED FROM: ',trim(self%watch_dir)
             endif
-            self%ext         = trim(adjustl(METADATA_EXT))
             self%regexp = '\.simple$'
         endif
         allocate(self%ratehistory(1))
@@ -268,14 +260,14 @@ contains
     subroutine clear_history( self )
         class(moviewatcher), intent(inout) :: self
         if( allocated(self%history) ) deallocate(self%history)
-        self%n_history    = 0
+        self%n_history = 0
     end subroutine clear_history
 
     !>  \brief  is for checking a file has already been reported
     !>          absolute path is implied
     logical function is_past( self, fname )
-        class(moviewatcher), intent(inout) :: self
-        character(len=*),    intent(in)    :: fname
+        class(moviewatcher), intent(in) :: self
+        character(len=*),    intent(in) :: fname
         character(len=LONGSTRLEN) :: fname1
         integer :: i
         is_past = .false.
@@ -296,6 +288,27 @@ contains
             !$omp end parallel do
         endif
     end function is_past
+
+    subroutine detect_and_add_dirs( self, rootdir, SJdirstruct )
+        class(moviewatcher),     intent(inout) :: self
+        character(len=*),        intent(in)    :: rootdir
+        logical,                 intent(in)    :: SJdirstruct
+        character(len=LONGSTRLEN), allocatable :: dir_movies(:)
+        integer :: i
+        logical :: l_new_dir
+        if( SJdirstruct )then
+            ! Runtime detection of new grid square directories
+            call sniff_folders_SJ( rootdir, l_new_dir, dir_movies )
+            if( l_new_dir )then
+                do i = 1,size(dir_movies)
+                    call self%add2watchdirs(dir_movies(i))
+                enddo
+                deallocate(dir_movies)
+            endif
+        else
+            ! not relevant yet
+        endif
+    end subroutine detect_and_add_dirs
 
     !>  \brief  is for adding a directory to watch
     subroutine add2watchdirs( self, fname )
@@ -337,7 +350,7 @@ contains
 
     !>  \brief  is for watching directories
     subroutine watchdirs( self, farray, chrono )
-        class(moviewatcher),                    intent(inout) :: self
+        class(moviewatcher),                    intent(in)    :: self
         character(len=LONGSTRLEN), allocatable, intent(inout) :: farray(:)
         logical,                   optional,    intent(in)    :: chrono
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:), tmp_farr2(:)
@@ -372,9 +385,8 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(moviewatcher), intent(inout) :: self
-        self%cwd        = ''
-        self%watch_dir  = ''
-        self%ext        = ''
+        self%watch_dir = ''
+        self%regexp    = ''
         if( allocated(self%history)    ) deallocate(self%history)
         if( allocated(self%ratehistory)) deallocate(self%ratehistory)
         if( allocated(self%watch_dirs) ) deallocate(self%watch_dirs)
@@ -390,34 +402,26 @@ contains
         self%exists = .false.
     end subroutine kill
 
+    ! PUBLIC UTILITIES
+
+    ! List all directories following the so-called SJ format: directory/xxx/Data
     subroutine sniff_folders_SJ( directory, SJdirstruct, found_directories )
         character(len=*),                       intent(in)    :: directory
         logical,                                intent(inout) :: SJdirstruct
         character(len=LONGSTRLEN), allocatable, intent(inout) :: found_directories(:)
-        character(len=:),          allocatable :: regexp, dir, absdirectory, subdir
-        character(len=LONGSTRLEN), allocatable :: str_array(:), dirs(:), subdirs(:), tmp(:)
+        character(len=:),          allocatable :: dir, absdirectory, subdir
+        character(len=LONGSTRLEN), allocatable :: dirs(:), subdirs(:), tmp(:)
         integer :: i, j, nfound
         SJdirstruct  = .false.
         nfound       = 0
         absdirectory = simple_abspath(directory)
+        if( allocated(found_directories) ) deallocate(found_directories)
         ! subdirectories, depth=1
         dirs = simple_list_dirs(absdirectory)
         if( .not.allocated(dirs) ) return
+        ! subdirectories, depth=2
         allocate(found_directories(0))
         do i = 1,size(dirs)
-            dir = absdirectory//'/'//trim(dirs(i))
-            if( trim(dirs(i)) == 'Data' )then
-                nfound = nfound + 1
-                call move_alloc(found_directories, tmp)
-                allocate(found_directories(nfound))
-                found_directories(1:nfound-1) = tmp(:)
-                found_directories(nfound)     = subdir
-                deallocate(tmp)
-            endif
-        enddo
-        ! subdirectories, depth=2
-        do i = 1,size(dirs)
-            if( allocated(subdirs) ) deallocate(subdirs)
             dir     = absdirectory//'/'//trim(dirs(i))
             subdirs = simple_list_dirs(dir)
             if( .not.allocated(subdirs) ) cycle
@@ -432,14 +436,52 @@ contains
                     deallocate(tmp)
                 endif
             enddo
+            deallocate(subdirs)
         enddo
-        ! return value
         SJdirstruct = nfound > 0
-        if( SJdirstruct )then
-            do i = 1,nfound
-                write(logfhandle,'(A,A)')'>>> FOLDER FOUND: ',trim(found_directories(i))
-            enddo
-        endif
     end subroutine sniff_folders_SJ
+
+    ! Determines which directory structure is present:
+    ! 1. movies appear in the folder  'directory'
+    ! 2. movies appear in the folders 'directory/xx/Data/'
+    subroutine workout_directory_structure( directory, found, SJdirstruct )
+        character(len=*),          intent(in)  :: directory
+        logical,                   intent(out) :: found, SJdirstruct
+        character(len=LONGSTRLEN), allocatable :: dirs(:), subdirs(:), tmp(:)
+        character(len=:),          allocatable :: regexp, absdirectory, dir
+        integer :: i, j, nfound
+        found        = .false.
+        SJdirstruct  = .false.
+        absdirectory = simple_abspath(directory)
+        ! Test root folder first
+        regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
+        call simple_list_files_regexp(absdirectory, regexp, tmp)
+        if( allocated(tmp) )then
+            ! Movies are present in the folder: this single folder will be watched
+            found = .true.
+            return
+        endif
+        ! Test for subdirectories, depth=2
+        nfound = 0
+        dirs   = simple_list_dirs(absdirectory)
+        if( .not.allocated(dirs) )then
+            ! no subfolder, better luck next time
+            return
+        endif
+        do i = 1,size(dirs)
+            dir     = absdirectory//'/'//trim(dirs(i))
+            subdirs = simple_list_dirs(dir)
+            if( .not.allocated(subdirs) ) cycle
+            do j = 1,size(subdirs)
+                if( trim(subdirs(j)) == 'Data' ) nfound = nfound + 1
+            enddo
+            deallocate(subdirs)
+        enddo
+        if( nfound > 0 )then
+            ! folder(s) two levels down with suffix Data have been found
+            found       = .true.
+            SJdirstruct = .true.
+        endif
+    end subroutine workout_directory_structure
 
 end module simple_moviewatcher
