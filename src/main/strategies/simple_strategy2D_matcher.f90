@@ -108,11 +108,11 @@ contains
         endif
         l_polar = trim(params_glob%polar).eq.'yes'
         l_clin  = .false.
-        if( l_polar .and. trim(params_glob%ref_type)=='cavgvol' )then
+        if( l_polar .and. trim(params_glob%ref_type)=='comlin_hybrid' )then
             if( l_snhc .or. (params_glob%extr_iter==1 .and.l_greedy))then
                 l_clin =.true.
             else
-                THROW_HARD('REF_TYPE=CAVGVOL only supported with refine=snhc|snhc_smpl')
+                THROW_HARD('REF_TYPE=COMLIN_HYBRID only supported with refine=snhc|snhc_smpl')
             endif
         endif
 
@@ -640,7 +640,7 @@ contains
             endif
         endif
         ! Read polar references
-        call polar_cavger_new(pftcc, trim(params_glob%ref_type)=='cavgvol')
+        call polar_cavger_new(pftcc, trim(params_glob%ref_type)=='comlin_hybrid')
         call polar_cavger_read_all(trim(POLAR_REFS_FBODY)//trim(BIN_EXT))
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! Centering-related objects

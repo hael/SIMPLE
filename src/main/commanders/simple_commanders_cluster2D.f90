@@ -1162,7 +1162,7 @@ contains
             call qsys_job_finished('simple_commanders_cluster2D :: exec_cluster2D')
         else
             ! Polar specifics
-            if( (trim(params%polar)=='yes') .and. (trim(params%ref_type)=='cavgvol') )then
+            if( (trim(params%polar)=='yes') .and. (trim(params%ref_type)=='comlin_hybrid') )then
                 call build%pgrpsyms%new('c1')
                 params%nsym    = build%pgrpsyms%get_nsym()
                 params%eullims = build%pgrpsyms%get_eullims()
@@ -1473,7 +1473,7 @@ contains
         if( trim(params%polar).eq.'yes' )then
             call polar_cavger_dims_from_header('cavgs_even_part1'//BIN_EXT, pftsz, kfromto, ncls)
             call pftcc%new(1, [1,1], kfromto)
-            if( trim(params%ref_type)=='cavgvol' )then
+            if( trim(params%ref_type)=='comlin_hybrid' )then
                 call polar_cavger_new(pftcc, .true., nrefs=params%ncls)
                 call polar_cavger_calc_pops(build%spproj)
                 call build%pgrpsyms%new('c1')
