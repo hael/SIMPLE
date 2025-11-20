@@ -4,25 +4,28 @@ use simple_chash
 include 'simple_lib.f08'
 implicit none
 #include "simple_local_flags.inc"
-type(cmdline)             :: cline
-type(chash)               :: job_descr
-character(len=STDLEN)     :: xarg, line
-logical                   :: test_passed
-integer                   :: cmdstat, cmdlen, pos, funit, funit1
-test_passed=.true.
-xarg    = "prg=symmetrize_map"
-cmdlen  = len(trim(xarg))
-line    = "projname=system_name smpd=1.3 cs=2.7 kv=300 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies &
-        &  gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200"
-cmdstat = 1
-pos     = index(xarg, '=')
-call cmdline_err( cmdstat, cmdlen, xarg, pos )
+type(cmdline)         :: cline, cline1
+type(chash)           :: job_descr
+character(len=STDLEN) :: xarg, line, fname
+logical               :: test_passed
+integer               :: cmdstat, cmdlen, pos, funit, funit1
+test_passed  = .true.
+fname        = 'file_command.txt'
+xarg         = "prg=symmetrize_map"
+cmdlen       = len(trim(xarg))
+line         = "projname=system_name smpd=1.3 cs=2.7 kv=300 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies &
+              & gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200"
+cmdstat      = 1
+pos  = index(xarg, '=')
+call cmdline_err(cmdstat, cmdlen, xarg, pos)
 call cline%read(line)
+print *, '>>> CLINE'
 call cline%printline()
-call cline%writeline('file_command.txt')
+call cline%writeline(trim(fname))
 call cline%kill()
-call fopen(funit, FILE='file_command.txt', STATUS='NEW', action='WRITE')
-call cline%readline('file_command.txt')
+call fopen(funit, FILE=trim(fname), STATUS='NEW', action='WRITE')
+call cline%readline(trim(fname))
+print *, '>>> CLINE'
 call cline%printline()
 call cline%checkvar('projname',        1)
 call cline%checkvar('smpd',            2)
@@ -44,21 +47,14 @@ call cline%check()
 call cline%gen_job_descr(job_descr)
 call job_descr%set('prg',      'scale')
 call job_descr%set('autoscale','no')
-call fopen(funit1, FILE='job_descr.txt', STATUS='NEW', action='WRITE')
+print *,'>>> JOB_DESCR'
 call job_descr%print_key_val_pairs(logfhandle) 
-!print *, line%get_keys()
-!call cline%parse()
-!call cline%parse_private()
-!call cline%parse_oldschool()
-!call cline%parse_command_line_value(i, arg)
-!call cline%copy()
-!call cline%assign()
-!call cline%set()
-!cline%lookup()
-!cline%get_keys()
-!cline%get_rarg()
-!cline%get_iarg()
-!cline%get_carg() 
+call cline%set('prg', 'list')
+print *,'>>> PROGRAM ',cline%get_carg('prg')
+if( .not. (cline%get_carg('prg').eq.'list')) test_passed=.false.
+call cline%delete('kv')
+print *,'>>> CS ',cline%get_rarg('cs')
+print *,'>>> NPARTS ',cline%get_iarg('nparts')
 if( test_passed )then
     print *, '>>> TEST PASSED'
 else
