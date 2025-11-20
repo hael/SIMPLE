@@ -672,9 +672,15 @@ contains
         else if( params_glob%l_icm )then
             ! filtering done above
         else if( params_glob%l_lpset )then
-            ! Cosine low-pass filter, works best for nanoparticles
-            call build_glob%vol%bp(0., params_glob%lp)
-            call build_glob%vol_odd%bp(0., params_glob%lp)
+            if( trim(params_glob%gauref)=='yes' )then
+                ! Gaussian filter
+                call build_glob%vol%bpgau3D(0., params_glob%gaufreq)
+                call build_glob%vol_odd%bpgau3D(0., params_glob%gaufreq)
+            else
+                ! Cosine low-pass filter, works best for nanoparticles
+                call build_glob%vol%bp(0., params_glob%lp)
+                call build_glob%vol_odd%bp(0., params_glob%lp)
+            endif
         else
             ! Optimal filter
             filtsz = build_glob%vol%get_filtsz()

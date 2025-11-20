@@ -207,9 +207,8 @@ contains
     procedure          :: whiten_noise_power
     procedure          :: fcomps_below_noise_power_stats
     procedure          :: apply_bfac
-    procedure          :: bp
-    procedure          :: lp
-    procedure          :: bpgau2D
+    procedure          :: bp, lp
+    procedure          :: bpgau2D, bpgau3D
     procedure          :: tophat
     procedure, private :: apply_filter_1, apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
@@ -3667,6 +3666,51 @@ contains
         enddo
         !$omp end parallel do
     end subroutine bpgau2D
+
+    ! Band-pass gaussian filter for volumes
+    subroutine bpgau3D( self, hp, lp )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: hp, lp
+        real    :: hp_fwhm(3), hp_halfinvsigsq(3), hpa
+        real    :: lp_fwhm(3), lp_halfinvsigsq(3), lpa
+        integer :: phys(3), lims(3,2), h,k,l
+        logical :: l_hp, l_lp
+        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
+        if(.not.self%is_3d()) THROW_HARD('Input image must be three-dimensional')
+        lims = self%fit%loop_lims(2)
+        l_hp = .false.
+        if( hp > TINY )then
+            l_hp = .true.
+            hp_fwhm         = hp / self%smpd / real(self%ldim)
+            hp_halfinvsigsq = 0.5 * (PI * 2.0 * hp_fwhm / 2.35482)**2
+        endif
+        l_lp = .false.
+        if( lp > TINY )then
+            l_lp = .true.
+            lp_fwhm         = lp / self%smpd / real(self%ldim)
+            lp_halfinvsigsq = 0.5 * (PI * 2.0 * lp_fwhm / 2.35482)**2
+        endif
+        !$omp parallel do collapse(3) schedule(static) default(shared) proc_bind(close)&
+        !$omp private(h,k,l,hpa,lpa,phys)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                do l = lims(3,1),lims(3,2)
+                    phys = self%comp_addr_phys(h,k,l)
+                    if( l_hp )then
+                        hpa  = sum(hp_halfinvsigsq * real([h,k,l]**2))
+                        self%cmat(phys(1),phys(2),phys(3)) =&
+                        &self%cmat(phys(1),phys(2),phys(3)) * (1.0-exp(-hpa))
+                    endif
+                    if( l_lp )then
+                        lpa  = sum(lp_halfinvsigsq * real([h,k,l]**2))
+                        self%cmat(phys(1),phys(2),phys(3)) =&
+                        &self%cmat(phys(1),phys(2),phys(3)) * exp(-lpa)
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine bpgau3D
 
     !> \brief bp  is for tophat band-pass filtering an image
     subroutine tophat( self, shell, halfwidth )
