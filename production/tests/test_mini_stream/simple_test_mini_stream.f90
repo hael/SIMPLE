@@ -27,7 +27,6 @@ type(moviewatcher)               :: movie_buff
 integer                          :: i, ndata_sets, status, n_nonzero, nmovf
 character(len=LONGSTRLEN)        :: abspath, projfile
 character(len=LONGSTRLEN)        :: filetab_file='filetab.txt'
-
 ! Parsing
 if( command_argument_count() < 1 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mini_stream fname=filetab.txt'
@@ -40,7 +39,7 @@ call cline%check()
 call params%new(cline)
 call read_filetable(params%fname, dataset_cmds)
 ndata_sets=size(dataset_cmds)
-! projname=name_system smpd=1.3 cs=2.7 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200 nram=100
+! projname=system_name smpd=1.3 cs=2.7 kv=300 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200 nram=100
 call getcwd(abspath)
 output_dir=trim(adjustl(abspath))
 do i = 1, ndata_sets
@@ -131,7 +130,6 @@ do i = 1, ndata_sets
         call xsel%execute_safe(cline_select)
         call cline_select%kill()
     endif
-
     call spproj%read(projfile)
     call spproj%get_mics_table(micstab, orimap)
     call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
