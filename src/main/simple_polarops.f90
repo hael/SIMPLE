@@ -271,7 +271,7 @@ contains
         real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2))
         integer     :: icls, eo_pop(2), pop
         select case(trim(params_glob%ref_type))
-        case('cavg')
+        case('polar_cavg')
             ! all good
         case DEFAULT
             THROW_HARD('polar_cavger_merge_eos_and_norm2D only for 2D cavgs restoration')
@@ -320,7 +320,7 @@ contains
         real(dp)    :: fsc(kfromto(1):kfromto(2)), clw
         clw = 1.d0
         select case(trim(params_glob%ref_type))
-        case('cavgvol')
+        case('comlin_hybrid')
             ! 2.5D: cavgs + variable CLs contribution
             ! Common-line contribution weight
             if( present(cl_weight) ) clw = min(max(0.d0,real(cl_weight,dp)),1.d0)
@@ -331,7 +331,7 @@ contains
                 call calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
                 &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             endif
-        case('clin', 'vol')
+        case('comlin_noself', 'comlin')
             ! Mirroring slices
             call mirror_slices(reforis, build_glob%pgrpsyms)
             ! Common-lines conribution
@@ -345,7 +345,7 @@ contains
         ! Restoration of references
         pfts_merg = DCMPLX_ZERO
         select case(trim(params_glob%ref_type))
-            case('cavgvol')
+            case('comlin_hybrid')
                 if( clw > 1.d-6 )then
                     call calc_cavg_comlin_frcs(cavg2clin_frcs)
                     call restore_cavgs_comlins(clw)
@@ -354,9 +354,9 @@ contains
                     call polar_cavger_merge_eos_and_norm2D
                 endif
                 call cavg2clin_frcs%write('frcs_cavg2clin'//trim(BIN_EXT))
-            case('clin')
+            case('comlin_noself')
                 call restore_comlins
-            case('vol')
+            case('comlin')
                 call calc_cavg_comlin_frcs( cavg2clin_frcs )
                 call cavg2clin_frcs%write( 'frcs_cavg2clin'//trim(BIN_EXT) )
                 call restore_cavgs_comlins( 1.d0 )
@@ -380,9 +380,9 @@ contains
             vare = 0.d0; varo = 0.d0
             sig2e = 0.d0; sig2o = 0.d0
             select case(trim(params_glob%ref_type))
-            case('cavgvol')
+            case('comlin_hybrid')
                 THROW_HARD('Not supported yet')
-            case('clin')
+            case('comlin_noself')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
                 !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo,sig2e,sig2o)
                 do icls = 1,ncls/2
@@ -403,7 +403,7 @@ contains
                     enddo
                 enddo
                 !$omp end parallel do
-            case('vol')
+            case('comlin')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
                 !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo,sig2e,sig2o)
                 do icls = 1,ncls/2

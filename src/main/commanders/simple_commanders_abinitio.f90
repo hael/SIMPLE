@@ -538,7 +538,7 @@ contains
         if( .not. cline%defined('projrec')             ) call cline%set('projrec',                            'yes')
         if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                            'yes')
         if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                        'no')
-        if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                          'clin')
+        if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                 'comlin_noself')
         if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
         ! adjust cartesian/polar options
@@ -1232,7 +1232,7 @@ contains
             ! CL-based approach
             ref_type = trim(params_glob%ref_type)
             if( (istage >= params_glob%switch_reftype_stage) .and.&
-            &(params_glob%switch_reftype_stage > 0 )) ref_type = 'vol'
+            &(params_glob%switch_reftype_stage > 0 )) ref_type = 'comlin'
         endif
         ! turn off ML-regularization when icm is on
         if( icm.eq.'yes' ) ml_reg = 'no'
