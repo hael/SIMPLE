@@ -1105,6 +1105,12 @@ contains
         ! ICM regularization
         icm = 'no'
         if( istage >= ICM_STAGE ) icm = 'yes'
+        ! forcing icm to no if user sets icm to no
+        if( cline_refine3D%defined('icm') )then
+            if( trim(params_glob%icm).eq.'no')then
+                icm = 'no'
+            endif
+        endif
         ! balance
         balance = 'yes'
         ! Gaussian filtering of reference volume

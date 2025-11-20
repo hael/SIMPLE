@@ -260,6 +260,11 @@ contains
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params_glob%refine)
+        if( trim(params_glob%gauref).eq.'yes' )then
+        write(logfhandle,607) '>>> GAU REGULARIZATION IS ON'
+        else
+        write(logfhandle,609) '>>> GAU REGULARIZATION IS OFF'
+        endif
         if( params_glob%l_ml_reg )then
         write(logfhandle,607) '>>> ML  REGULARIZATION IS ON, TAU:    ', params_glob%tau
         else
