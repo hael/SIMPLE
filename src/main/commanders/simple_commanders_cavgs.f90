@@ -161,7 +161,7 @@ contains
         call params%new(cline)
         ! read project file
         call spproj%read(params%projfile)
-        ncls        = spproj%os_cls2D%get_noris()
+        ncls = spproj%os_cls2D%get_noris()
         ! prep class average stack
         if( trim(params%have_clustering).eq.'yes' )then
             labels    = spproj%os_cls2D%get_all_asint('cluster')
@@ -198,9 +198,9 @@ contains
         else
             call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
         endif
-        ncls_sel    = size(cavg_imgs)
-        smpd        = cavg_imgs(1)%get_smpd()
-        ldim        = cavg_imgs(1)%get_ldim()
+        ncls_sel = size(cavg_imgs)
+        smpd     = cavg_imgs(1)%get_smpd()
+        ldim     = cavg_imgs(1)%get_ldim()
         allocate(resvals(ncls_sel), source=0.)
         do i = 1, ncls_sel
             resvals(i) = spproj%os_cls2D%get(clsinds(i), 'res')
