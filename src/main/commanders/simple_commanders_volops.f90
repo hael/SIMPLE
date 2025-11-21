@@ -170,14 +170,14 @@ contains
         !use simple_sp_project, only: sp_project
         use simple_atoms,        only: atoms
         use simple_segmentation, only: otsu_img
-        use simple_image_bin,     only: image_bin
+        use simple_image_bin,    only: image_bin
         class(commander_sharpvol), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
         character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pproc, fname_lp, fname_mirr
         type(parameters)      :: params
         type(image)           :: vol_bfac, vol_no_bfac, vol_pdb, cos_img
-        type(image_bin)        :: vol_pdbin
+        type(image_bin)       :: vol_pdbin
         type(atoms)           :: pdb
         character(len=STDLEN) :: pdbout_fname
         real    :: fsc0143, fsc05, lplim, lp_min=0., lp_max=20.

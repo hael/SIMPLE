@@ -329,7 +329,7 @@ contains
 
     subroutine byte_manager4seg_inside_2( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
         class(binoris),                intent(inout) :: self
-        integer(kind(ENUM_ORISEG)),       intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)),       intent(in) :: isegment
         integer(kind=8),               intent(in)    :: end_part1, start_part3, end_part3
         character(len=1), allocatable, intent(in)    :: bytearr_part3(:)
         integer(kind=8) :: n_bytes_part3_orig, n_bytes_part3
@@ -363,13 +363,13 @@ contains
     end subroutine byte_manager4seg_inside_2
 
     subroutine write_segment_1( self, isegment, os, fromto )
-        class(binoris),          intent(inout) :: self
+        class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),             intent(in) :: os ! indexed from 1 to nptcls
-        integer, optional,       intent(in)    :: fromto(2)
+        class(oris),                intent(in)    :: os ! indexed from 1 to nptcls
+        integer, optional,          intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
-        real    :: ptcl_record(N_PTCL_ORIPARAMS)
-        integer :: i, nspaces, noris
+        real            :: ptcl_record(N_PTCL_ORIPARAMS)
+        integer         :: i, nspaces, noris
         integer(kind=8) :: ibytes
         noris = os%get_noris()
         if( noris == 0 ) return
@@ -488,7 +488,7 @@ contains
 
     subroutine update_byte_ranges( self )
         class(binoris), intent(inout) :: self
-        integer(kind=8)         :: n_bytes_tot
+        integer(kind=8)            :: n_bytes_tot
         integer(kind(ENUM_ORISEG)) :: isegment
         n_bytes_tot = N_BYTES_HEADER
         if( self%n_segments <= 0 ) return
