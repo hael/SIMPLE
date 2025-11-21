@@ -31,7 +31,7 @@ contains
         character(len=*),  intent(in)    :: fname
         class(sp_project), intent(inout) :: spproj
         class(oris),       intent(inout) :: a
-        integer,           intent(in), optional    :: fromto(2)
+        integer,           intent(in), optional :: fromto(2)
         if( .not. file_exists(fname) )then
             THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif

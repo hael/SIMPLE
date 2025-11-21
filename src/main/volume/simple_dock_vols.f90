@@ -2,10 +2,10 @@ module simple_dock_vols
 include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_image,           only: image
-use simple_projector,       only: projector
-use simple_simple_volinterp,  only: rotvol
-use simple_volpft_corrcalc, only: volpft_corrcalc
+use simple_image,            only: image
+use simple_projector,        only: projector
+use simple_simple_volinterp, only: rotvol
+use simple_volpft_corrcalc,  only: volpft_corrcalc
 implicit none
 
 public :: dock_vols

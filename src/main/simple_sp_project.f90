@@ -915,7 +915,7 @@ contains
         enddo
     end subroutine get_movies_table
 
-    subroutine get_mics_table( self, micstab, orimap)
+    subroutine get_mics_table( self, micstab, orimap )
         class(sp_project),                      intent(inout) :: self
         character(len=LONGSTRLEN), allocatable, intent(out)   :: micstab(:)
         integer,                   allocatable, intent(out)   :: orimap(:)
@@ -1626,7 +1626,7 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath)
+    subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath )
         class(sp_project),          intent(inout) :: self
         character(len=*),           intent(in)    :: stk
         real,                       intent(in)    :: smpd ! sampling distance of images in stk
@@ -1689,7 +1689,7 @@ contains
         call self%os_out%set(ind, 'imgkind', which_imgkind)
     end subroutine add_frcs2os_out
 
-    subroutine add_fsc2os_out( self, fsc, state, box)
+    subroutine add_fsc2os_out( self, fsc, state, box )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fsc
         integer,           intent(in)    :: state, box
@@ -1892,7 +1892,7 @@ contains
         if( ind > 0 ) isthere_in_osout = .true.
     end function isthere_in_osout
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath, out_ind, box)
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath, out_ind, box )
         class(sp_project),                       intent(inout) :: self
         character(len=:), allocatable,           intent(inout) :: stkname
         integer,                                 intent(out)   :: ncls
@@ -1958,7 +1958,7 @@ contains
         if(present(box)) box = self%os_out%get(ind, 'box')
     end subroutine get_cavgs_stk
 
-    subroutine get_vol( self, imgkind, state, vol_fname, smpd, box)
+    subroutine get_vol( self, imgkind, state, vol_fname, smpd, box )
         class(sp_project),             intent(inout) :: self
         character(len=*),              intent(in)    :: imgkind
         integer,                       intent(in)    :: state
@@ -2182,7 +2182,7 @@ contains
     end subroutine get_imginfo_from_osout
 
     ! returns cavg/volume dimensions based on segment
-    subroutine get_imgdims_from_osout( self, iseg, smpd, box)
+    subroutine get_imgdims_from_osout( self, iseg, smpd, box )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: iseg
         real,              intent(out)   :: smpd
@@ -2763,7 +2763,7 @@ contains
 
     ! setters
 
-    subroutine copy( self_out, self_in)
+    subroutine copy( self_out, self_in )
         class(sp_project), target, intent(inout) :: self_out
         class(sp_project), target, intent(in)    :: self_in
         call self_out%os_mic%copy(self_in%os_mic)
@@ -3698,7 +3698,7 @@ contains
         call self%bos%close
     end subroutine read_ctfparams_state_eo
 
-    subroutine read_mic_stk_ptcl2D_segments( self, fname, wthreads)
+    subroutine read_mic_stk_ptcl2D_segments( self, fname, wthreads )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         logical, optional, intent(in)    :: wthreads
@@ -4666,7 +4666,7 @@ contains
                 if(allocated(projection_counts)) deallocate(projection_counts)
             end subroutine add_oriplot
 
-            function sort_oris( seg_oris ) result (arr)
+            function sort_oris( seg_oris ) result( arr )
                 type(oris), intent(in)  :: seg_oris
                 integer,    allocatable :: arr(:)
                 real,       allocatable :: sort_vals(:)
@@ -4682,7 +4682,7 @@ contains
             end function sort_oris
 
 
-            subroutine get_projections(noris_l)
+            subroutine get_projections( noris_l )
                 integer, intent(in) :: noris_l
                 real                :: minproj, maxproj, e1, e2
                 integer             :: iproj, iptcl, istate, proj, state
@@ -4819,7 +4819,7 @@ contains
         call star%complete()
     end subroutine write_ptcl2D_star
 
-    subroutine import_optics_map(self, mapfileprefix)
+    subroutine import_optics_map( self, mapfileprefix )
         class(sp_project),             intent(inout) :: self
         character(len=:), allocatable, intent(in)    :: mapfileprefix
         type(nrtxtfile)                              :: mapfile
@@ -4873,7 +4873,7 @@ contains
         if(allocated(mics_optics_map)) deallocate(mics_optics_map)
     end subroutine import_optics_map
 
-    subroutine write_optics_map(self, fname_prefix)
+    subroutine write_optics_map( self, fname_prefix )
         class(sp_project),          intent(inout) :: self
         character(len=*),           intent(in)    :: fname_prefix
         type(sp_project)                          :: spproj_optics

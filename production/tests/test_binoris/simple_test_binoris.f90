@@ -1,10 +1,22 @@
 program simple_test_binoris
 include 'simple_lib.f08'
+use simple_cmdline,            only: cmdline
+use simple_commanders_project, only: commander_new_project
+use simple_sp_project
 implicit none
-type(oris)         :: a1, os_peak1, os_peak2
-!type(binoris)      :: bos
-logical            :: mask(5)
-mask = [.true.,.false.,.true.,.false.,.true.]
+type(commander_new_project) :: xnew_project
+type(ori)                   :: o 
+type(oris)                  :: a1, os_peak1, os_peak2
+type(cmdline)               :: cline
+type(binoris)               :: bos
+type(sp_project)            :: spproj 
+logical                     :: mask(5), test_passed
+character(len=STDLEN)       :: fname, projname
+#include "simple_local_flags.inc"
+test_passed = .true.
+fname       = 'spproject.simple'
+projname    = 'spproject'
+mask        = [.true.,.false.,.true.,.false.,.true.]
 call a1%new(5, is_ptcl=.false.)
 call a1%rnd_oris
 call a1%write('oris1_facit.txt')
@@ -22,6 +34,50 @@ call os_peak2%rnd_corrs()
 call os_peak2%set_all2single('ow', 0.5)
 call os_peak2%set_all2single('proj', 5.0)
 call os_peak2%write('os_peak2_facit.txt')
+call cline%set('projname', projname)
+call cline%set('mkdir',        'no')
+call cline%check()
+call xnew_project%execute_safe(cline)
+print *,'>>> OPEN BINORIS'
+call bos%open(fname)
+print *,'>>> WRITE HEADER '
+call bos%write_header()
+ print *,'>>> WRITE SEGMENT '
+ call bos%write_segment(1, a1)
+ print *,'>>> ADD SEGMENT '
+ call bos%add_segment(1, a1)
+ print *,'>>> UPDATE BYTE RANGES '
+ call bos%update_byte_ranges()
+! print *,'>>> READ FIRST SEGMENT RECORD '
+! call bos%read_first_segment_record(PROJINFO_SEG, o)
+! print *,'>>> READ SEGMENT '
+! call bos%read_segment(PROJINFO_SEG, o)
+! print *,'>>> READ RECORD '
+! call bos%read_record()
+! print *,'>>> GET SEGMENTS INFO '
+! call bos%get_segments_info()
+! print *,'>>> GET N SEGMENTS '
+! call bos%get_n_segments()
+! print *,'>>> GET FROM TO'
+! call box%get_fromto()
+! print *,'>>> GET N RECORDS '
+! call bos%get_n_records()
+! print *,'>>> GET N BYTES PER RECORD '
+! call bos%get_n_bytes_per_record()
+! print *,'>>> GET N BYTES TOTAL '
+! call bos%get_n_bytes_tot()
+! print *,'>>> GET FIRST DATA BYTE '
+! call bos%get_first_data_byte()
+print *,'>>> IS OPENED '
+if(.not. bos%is_opened()) test_passed = .false.
+print *,'>>> CLOSE BINORIS'
+call bos%close()
+if( test_passed )then
+    print *, '>>> TEST PASSED'
+else
+    THROW_HARD('>>> TEST FAILED')
+endif
+
 ! do i=1,5
 !     call psrch3D(i)%set_o_peaks(os_peak1)
 ! end do
