@@ -187,6 +187,71 @@ contains
         class(starfile),            intent(inout) :: self
         class(oris),                intent(in)    :: ptcl2d_oris, stk_oris
         class(oris), optional,      intent(in)    :: mics_oris
+        type(starfile_table_type)                 :: ptcl_table
+        character(len=XLONGSTRLEN)                :: stkname, micname
+        integer                                   :: iptcl, pathtrim, half_boxsize, stkind, indstk, fromp, top
+        integer(timer_int_kind)                   :: ms0
+        real(timer_int_kind)                      :: ms_complete
+        ms0 = tic()
+        call starfile_table__new(ptcl_table)
+        call starfile_table__setIsList(ptcl_table, .false.)
+        call starfile_table__setname(ptcl_table, 'particles')
+        pathtrim = 0
+        do iptcl=1, ptcl2d_oris%get_noris()
+            if(ptcl2d_oris%get_state(iptcl) .eq. 0 ) cycle
+            call starfile_table__addObject(ptcl_table)
+            stkind = ptcl2d_oris%get_int(iptcl, 'stkind')
+            if( ptcl2d_oris%isthere(iptcl, 'indstk') ) then
+                indstk = ptcl2d_oris%get_int(iptcl, 'indstk')
+            else
+                fromp = stk_oris%get_fromp(stkind)
+                top   = stk_oris%get_top(stkind)
+                if( iptcl < fromp .or. iptcl > top ) cycle
+                indstk = iptcl - fromp + 1
+            endif
+            half_boxsize = floor(stk_oris%get(stkind, 'box') / 2.0)
+            ! ints
+            if(ptcl2d_oris%isthere(iptcl, 'ogid'   )) call starfile_table__setValue_int(ptcl_table, EMDL_IMAGE_OPTICS_GROUP, ptcl2d_oris%get_int(iptcl, 'ogid'))
+            if(ptcl2d_oris%isthere(iptcl, 'class'  )) call starfile_table__setValue_int(ptcl_table, EMDL_PARTICLE_CLASS,     ptcl2d_oris%get_class(iptcl))
+            if(ptcl2d_oris%isthere(iptcl, 'gid'    )) call starfile_table__setValue_int(ptcl_table, EMDL_MLMODEL_GROUP_NO,   ptcl2d_oris%get_int(iptcl, 'gid'))
+            ! doubles
+            if(ptcl2d_oris%isthere(iptcl, 'dfx'    )) call starfile_table__setValue_double(ptcl_table,  EMDL_CTF_DEFOCUSU,              real(ptcl2d_oris%get(iptcl, 'dfx') / 0.0001,        dp))
+            if(ptcl2d_oris%isthere(iptcl, 'dfy'    )) call starfile_table__setValue_double(ptcl_table,  EMDL_CTF_DEFOCUSV,              real(ptcl2d_oris%get(iptcl, 'dfy') / 0.0001,        dp))
+            if(ptcl2d_oris%isthere(iptcl, 'angast' )) call starfile_table__setValue_double(ptcl_table,  EMDL_CTF_DEFOCUS_ANGLE,         real(ptcl2d_oris%get(iptcl, 'angast'),              dp))
+            if(ptcl2d_oris%isthere(iptcl, 'phshift')) call starfile_table__setValue_double(ptcl_table,  EMDL_CTF_PHASESHIFT,            real(ptcl2d_oris%get(iptcl, 'phshift'),             dp))
+            if(ptcl2d_oris%isthere(iptcl, 'e3'     )) call starfile_table__setValue_double(ptcl_table,  EMDL_ORIENT_PSI,                real(ptcl2d_oris%get(iptcl, 'e3'),                  dp))
+            if(ptcl2d_oris%isthere(iptcl, 'xpos'   )) call starfile_table__setValue_double(ptcl_table,  EMDL_IMAGE_COORD_X,             real(ptcl2d_oris%get(iptcl, 'xpos') + half_boxsize, dp))
+            if(ptcl2d_oris%isthere(iptcl, 'ypos'   )) call starfile_table__setValue_double(ptcl_table,  EMDL_IMAGE_COORD_Y,             real(ptcl2d_oris%get(iptcl, 'ypos') + half_boxsize, dp))
+            if(ptcl2d_oris%isthere(iptcl, 'x'      )) call starfile_table__setValue_double(ptcl_table,  EMDL_ORIENT_ORIGIN_X_ANGSTROM,  real(ptcl2d_oris%get(iptcl, 'x'),                   dp))
+            if(ptcl2d_oris%isthere(iptcl, 'y'      )) call starfile_table__setValue_double(ptcl_table,  EMDL_ORIENT_ORIGIN_Y_ANGSTROM,  real(ptcl2d_oris%get(iptcl, 'y'),                   dp))
+            ! strings
+            if(stkind .gt. 0 .and. indstk .gt. 0) then
+                if(stk_oris%isthere(stkind, 'stk')) then
+                    stkname = int2str(indstk) // '@' // trim(get_relative_path(trim(stk_oris%get_static(stkind, 'stk')), self%relroot, pathtrim))
+                    call starfile_table__setValue_string(ptcl_table, EMDL_IMAGE_NAME, trim(stkname))
+                    if(present(mics_oris)) then
+                        if(stk_oris%get_noris() .eq. mics_oris%get_noris()) then
+                            if(mics_oris%isthere(stkind, 'intg')) then
+                                micname = trim(get_relative_path(trim(mics_oris%get_static(stkind, 'intg')), self%relroot, pathtrim))
+                                call starfile_table__setValue_string(ptcl_table, EMDL_MICROGRAPH_NAME, trim(micname))
+                            end if
+                        end if
+                    end if
+                end if
+            end if
+        end do
+        call starfile_table__open_ofile(ptcl_table, trim(self%ftmp), 1)
+        call starfile_table__write_ofile(ptcl_table, tableend=.true.)
+        call starfile_table__close_ofile(ptcl_table)
+        call starfile_table__delete(ptcl_table)
+        ms_complete = toc(ms0)
+        if (self%verbose) print *,'wrote particles2D table in: ', ms_complete; call flush(6)
+    end subroutine write_ptcl2D_table
+
+    subroutine write_ptcl2D_table_parallel(self, ptcl2d_oris, stk_oris, mics_oris)
+        class(starfile),            intent(inout) :: self
+        class(oris),                intent(in)    :: ptcl2d_oris, stk_oris
+        class(oris), optional,      intent(in)    :: mics_oris
         type(starfile_table_type)                 :: part_table
         integer,                    allocatable   :: part_boundaries(:,:)
         character(len=XLONGSTRLEN)                :: stkname, micname
@@ -265,6 +330,6 @@ contains
         if(allocated(part_boundaries)) deallocate(part_boundaries)
         ms_complete = toc(ms0)
         if (self%verbose) print *,'wrote particles2D table in: ', ms_complete; call flush(6)
-    end subroutine write_ptcl2D_table
+    end subroutine write_ptcl2D_table_parallel
 
 end module simple_starfile

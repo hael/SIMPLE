@@ -998,10 +998,11 @@ contains
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
         integer                         :: state,nstates,nptcls,ipart,n_thumbnails
-        logical                         :: l_ctfres, l_icefrac, l_append, l_keep, l_writecls2d
+        logical                         :: l_ctfres, l_icefrac, l_append, l_keep, l_writecls2d, l_writestar
         class(oris), pointer :: pos => NULL()
         l_append     = .false.
         l_writecls2d = .false.
+        l_writestar  = .false.
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune')  ) call cline%set('prune',  'no')
         if( .not. cline%defined('append') ) call cline%set('append', 'no')
@@ -1132,8 +1133,9 @@ contains
                 states(state) = 0
             end do
             call fclose(fnr)
-            ! from GUI so write cavgs
+            ! from GUI so write cavgs and star
             l_writecls2d = .true.
+            l_writestar  = .true.
         endif
         ! updates relevant segments
         select case(iseg)
@@ -1181,6 +1183,10 @@ contains
         ! final full write
         call spproj%write(params%projfile)
         if( l_writecls2d ) call spproj%cavgs2mrc()
+        if( l_writestar ) then
+            if( spproj%os_mic%get_noris() > 0)    call spproj%write_mics_star()
+            if( spproj%os_ptcl2D%get_noris() > 0) call spproj%write_ptcl2D_star()
+        endif
         call http_communicator%term()
         call simple_end('**** SELECTION NORMAL STOP ****')
     end subroutine exec_selection
