@@ -518,10 +518,10 @@ contains
         resarr = get_resarr(ldim(1), smpd)
         nclust = maxval(labels)
         allocate(frc(filtsz), clust_info_arr(nclust))
-        nclust = maxval(labels)
         do iclust = 1, nclust
-            clust_info_arr(iclust)%pop             = count(labels == iclust)
-            cluster_imgs                           = pack_imgarr(cavg_imgs, mask=labels == iclust)
+            clust_info_arr(iclust)%pop = count(labels == iclust)
+            if( clust_info_arr(iclust)%pop == 0 ) cycle
+            cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
             clust_info_arr(iclust)%algninfo%params = match_imgs2ref(hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
             call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
             ! estimate resolution
@@ -575,6 +575,7 @@ contains
         write(logfhandle,'(A)') '>>> ROTATING & SHIFTING CLASS AVERAGES'
         nclust = size(clust_info_arr)
         do iclust = 1, nclust
+            if( clust_info_arr(iclust)%pop == 0 ) cycle
             cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
             call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
             call write_imgarr(cluster_imgs, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
@@ -708,7 +709,7 @@ contains
         type(inpl_struct), allocatable  :: algninfo(:,:), algninfo_mirr(:,:)
         integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, nrefs, ntargets
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3), rotmat(2,2)
-        logical :: didft, l_rot_shvec
+        logical :: l_rot_shvec
         nrefs      = size(imgs_ref)
         ntargets   = size(imgs_targ)
         ldim       = imgs_ref(1)%get_ldim()
