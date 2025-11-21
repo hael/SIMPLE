@@ -214,8 +214,7 @@ real, parameter    :: SHC_INPL_TRSHWDTH         = 2.0            !< shift search
 real, parameter    :: MC_PATCHSZ                = 200.           !< recommended patch size (in Angstroms) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH         = 0.8            !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real, parameter    :: MAX_SMPD                  = 2.67           !< maximum sampling distance in scaling
-real, parameter    :: TAU_DEFAULT               = 3.0            !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
-                                                                 !! tau < 3 leads to excessive low-pass filtering
+real, parameter    :: TAU_DEFAULT               = 1.0            !< TAU fudge factor to control strength or regularization [0.5,5] more -> less low-pass effect
 real, parameter    :: CENTHRESH                 = 0.5            ! threshold for performing volume/cavg centering in pixels
 real, parameter    :: MAXCENTHRESH2D            = 3.0            ! max threshold for performing cavg centering in pixels
 real, parameter    :: EXTR_POWER                = 2.0            ! Exponent of the sampling function during extremal stochastic phase of 2D analysis
