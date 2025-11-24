@@ -5,18 +5,26 @@ use simple_sym
 use json_kinds
 use json_module
 use simple_chash
+use simple_sp_project
+use simple_cmdline
+use simple_commanders_project
 implicit none
 #include "simple_local_flags.inc"
-type(json_value), pointer :: json_ori
-type(ori)                 :: o_truth, o, o1
-type(sym)                 :: pgrpsyms
-type(chash)               :: descr
-real                      :: vec(3), angle, rotmat(3,3), euls(3), shvec(2), rval, eullims(3,2)
-real(dp)                  :: rval_dp
-character(len=STDLEN)     :: key, cval
-integer                   :: ival, state
-logical                   :: test_passed
-test_passed=.true.
+type(json_value), pointer   :: json_ori
+type(commander_new_project) :: xnew_project
+type(ori)                   :: o_truth, o, o1, compenv_o
+type(cmdline)               :: cline
+type(sp_project)            :: spproj
+type(sym)                   :: pgrpsyms
+type(chash)                 :: qdescr
+real                        :: vec(3), angle, rotmat(3,3), euls(3), shvec(2), rval, eullims(3,2)
+real(dp)                    :: rval_dp
+character(len=STDLEN)       :: key, cval, projname, projfile
+integer                     :: ival, state
+logical                     :: test_passed
+character(len=XLONGSTRLEN), allocatable :: keys(:)
+test_passed = .true.
+projname    = 'str_proj'
 call pgrpsyms%new('c1')
 call o_truth%new(.true.)
 call pgrpsyms%rnd_euler(o_truth)
@@ -61,13 +69,20 @@ print *,'>>> ORI TO STRING ', o%ori2str()
 print *,'>>> ORI TO JSON'
 call o%ori2json(json_ori, .true.)
 print *,'>>> STRLEN_TRIM',o%ori_strlen_trim()
-
-!print *,'>>> ORI2CHAS',o%ori2chash()
-!print *,'>>> CHASH2ORI'
-!call o%chash2ori(descr)
-!print *, '>>> PRINT GET KEYS ',o%get_keys()
-
-print *, '>>> PRINT CTFVARS ',o%get_ctfvars()
+call cline%set('projname', projname)
+call cline%set('mkdir',        'no')
+call cline%check()
+call xnew_project%execute_safe(cline)
+projfile=trim(projname)//'.simple'
+call spproj%read_segment('compenv', projfile)
+print *,'>>> ORI2CHASH '
+call spproj%compenv%get_ori(1, compenv_o)
+qdescr = compenv_o%ori2chash()
+print *,'>>> CHASH2ORI'
+call o%chash2ori(qdescr)
+print *, '>>> GET KEYS '
+keys=o%get_keys()
+print *, '>>> GET CTFVARS ',o%get_ctfvars()
 print *, '>>> PRINT ORI'
 call o%print_ori()
 call o_truth%kill()
