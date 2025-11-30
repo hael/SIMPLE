@@ -70,12 +70,13 @@ type(commander_tseries_core_atoms_analysis)   :: xtseries_core_atoms_analysis
 type(commander_tseries_make_projavgs)         :: xtseries_make_projavgs
 
 ! OTHER DECLARATIONS
-character(len=STDLEN)   :: args, prg, entire_line
-type(cmdline)           :: cline
-integer                 :: cmdstat, cmdlen, pos
-integer(timer_int_kind) :: t0
-real(timer_int_kind)    :: rt_exec
-logical                 :: l_silent
+character(len=STDLEN)      :: args, prg
+character(len=XLONGSTRLEN) :: entire_line
+type(cmdline)              :: cline
+integer                    :: cmdstat, cmdlen, pos
+integer(timer_int_kind)    :: t0
+real(timer_int_kind)       :: rt_exec
+logical                    :: l_silent
 
 ! start timer
 t0 = tic()
@@ -94,7 +95,7 @@ endif
 ! parse command line into cline object
 call cline%parse
 ! generate script for queue submission?
-call script_exec(cline, trim(prg), 'single_exec')
+call script_exec(cline, string(trim(prg)), string('single_exec'))
 ! set global defaults
 if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 
@@ -159,7 +160,7 @@ select case(prg)
         call xextract_subproj%execute(cline)
     case( 'autorefine3D_nano' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'autorefine3D_nano', 'single_exec')
+            call restarted_exec(cline, string('autorefine3D_nano'), string('single_exec'))
         else
             call xautorefine3D_nano%execute(cline)
         endif
@@ -223,7 +224,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('b7566bf1')
+    call simple_print_git_version('0a778afd')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

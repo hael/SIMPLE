@@ -24,9 +24,10 @@ abstract interface
 
     !>  \brief  getter that returns the submit command of the qsys
     function generic_submit_cmd( self ) result ( submit_cmd )
+        use simple_string, only: string
         import :: qsys_base
         class(qsys_base), intent(in)  :: self
-        character(len=:), allocatable :: submit_cmd
+        type(string) :: submit_cmd
     end function generic_submit_cmd
 
     !>  \brief  writes a header instruction for the submit script

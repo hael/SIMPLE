@@ -133,76 +133,87 @@ type :: parameters
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
-    character(len=3)          :: write_imgarr='no'     !< write out cavgs
+    character(len=3)          :: write_imgarr='no'    !< write out cavgs
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
-    character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
-    character(len=LONGSTRLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
-    character(len=LONGSTRLEN) :: classdoc=''          !< doc with per-class stats(.txt)
-    character(len=LONGSTRLEN) :: cwd=''
-    character(len=LONGSTRLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
-    character(len=LONGSTRLEN) :: deselfile=''         !< file with indices to be deselected(.txt)
-    character(len=LONGSTRLEN) :: dir=''               !< directory
-    character(len=LONGSTRLEN) :: dir_meta=''          !< grab xml files from here
-    character(len=LONGSTRLEN) :: dir_movies=''        !< grab mrc mrcs files from here
-    character(len=LONGSTRLEN) :: dir_prev=''          !< grab previous projects for streaming
-    character(len=LONGSTRLEN) :: dir_refine=''        !< refinement directory
-    character(len=LONGSTRLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
-    character(len=LONGSTRLEN) :: dir_select='selected'!< move selected files to here{selected}
-    character(len=LONGSTRLEN) :: dir_target=''        !< put output here
-    character(len=LONGSTRLEN) :: dir_ptcls=''
-    character(len=LONGSTRLEN) :: dir_box=''
-    character(len=LONGSTRLEN) :: exec_dir='./'        !< auto-named execution directory
-    character(len=LONGSTRLEN) :: filetab=''           !< list of files(.txt)
-    character(len=LONGSTRLEN) :: fname=''             !< file name
-    character(len=LONGSTRLEN) :: frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
-    character(len=LONGSTRLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
-    character(len=LONGSTRLEN) :: gainref=''           !< gain reference for movie alignment
-    character(len=LONGSTRLEN) :: import_dir=''        !< dir to import .star files from for import_starproject
-    character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt)
-    character(len=LONGSTRLEN) :: infile2=''           !< file with inputs(.txt)
-    character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
-    character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
-    character(len=LONGSTRLEN) :: mskvols(MAXS)=''
-    character(len=LONGSTRLEN) :: niceserver=''        !< address and port of nice server for comms
-    character(len=LONGSTRLEN) :: optics_dir=''        !< directory containing stream optics
-    character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
-    character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
-    character(len=LONGSTRLEN) :: outdir=''            !< manually set output directory name
-    character(len=LONGSTRLEN) :: outfile=''           !< output document
-    character(len=LONGSTRLEN) :: outstk=''            !< output image stack
-    character(len=LONGSTRLEN) :: outvol=''            !< output volume{outvol.ext}
-    character(len=LONGSTRLEN) :: pdbfile=''           !< PDB file
-    character(len=LONGSTRLEN) :: pdbfile2=''          !< PDB file, another one
-    character(len=LONGSTRLEN) :: pdbfiles=''          !< list of PDB files
-    character(len=LONGSTRLEN) :: pdbout=''            !< PDB output file
-    character(len=LONGSTRLEN) :: pdfile='pdfile.bin'
-    character(len=LONGSTRLEN) :: pickrefs=''          !< picking references
-    character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
-    character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
-    character(len=LONGSTRLEN) :: projfile_merged=''   !< merged SIMPLE *.simple project file output
-    character(len=LONGSTRLEN) :: projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
-    character(len=LONGSTRLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
-    character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
-    character(len=LONGSTRLEN) :: refs_even=''
-    character(len=LONGSTRLEN) :: refs_odd=''
-    character(len=LONGSTRLEN) :: snapshot=''          !< path to write snapshot project file to
-    character(len=LONGSTRLEN) :: star_datadir=''      !< STAR-generated data directory
-    character(len=LONGSTRLEN) :: starfile=''          !< STAR-formatted EM file (proj.star)
-    character(len=LONGSTRLEN) :: star_mic=''          !< STAR-formatted EM file (micrographs.star)
-    character(len=LONGSTRLEN) :: star_model=''        !< STAR-formatted EM file (model.star)
-    character(len=LONGSTRLEN) :: star_ptcl=''         !< STAR-formatted EM file (data.star)
-    character(len=LONGSTRLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
-    character(len=LONGSTRLEN) :: stktab=''            !< list of per-micrograph stacks
-    character(len=LONGSTRLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
-    character(len=LONGSTRLEN) :: stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
-    character(len=LONGSTRLEN) :: stk_backgr=''        !< stack with image for background subtraction
-    character(len=LONGSTRLEN) :: vol=''
-    character(len=LONGSTRLEN) :: vols(MAXS)=''
-    character(len=LONGSTRLEN) :: vols_even(MAXS)=''
-    character(len=LONGSTRLEN) :: vols_odd(MAXS)=''
-    character(len=LONGSTRLEN) :: xmldir=''
-    character(len=LONGSTRLEN) :: xmlloc=''
+    ! default initialization is done in the init_strings method below
+    type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
+    type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
+    type(string)              :: classdoc             !< doc with per-class stats(.txt)
+    type(string)              :: cwd
+    type(string)              :: deftab               !< file with CTF info(.txt|.simple)
+    type(string)              :: deselfile            !< file with indices to be deselected(.txt)
+    type(string)              :: dir                  !< directory
+    type(string)              :: dir_box
+    type(string)              :: dir_exec             !< name of execution directory
+    type(string)              :: dir_meta             !< grab xml files from here
+    type(string)              :: dir_movies           !< grab mrc mrcs files from here
+    type(string)              :: dir_prev             !< grab previous projects for streaming
+    type(string)              :: dir_ptcls
+    type(string)              :: dir_refine           !< refinement directory
+    type(string)              :: dir_reject           !< move rejected files to here{rejected}
+    type(string)              :: dir_select           !< move selected files to here{selected}
+    type(string)              :: dir_target           !< put output here
+    type(string)              :: exec_dir             !< auto-named execution directory
+    type(string)              :: executable           !< name of executable
+    type(string)              :: ext                  !< file extension{.mrc}
+    type(string)              :: fbody                !< file body
+    type(string)              :: filetab              !< list of files(.txt)
+    type(string)              :: fname                !< file name
+    type(string)              :: frcs                 !< binary file with per-class/proj Fourier Ring Correlations(.bin)
+    type(string)              :: fsc                  !< binary file with FSC info{fsc_state01.bin}
+    type(string)              :: gainref              !< gain reference for movie alignment
+    type(string)              :: import_dir           !< dir to import .star files from for import_starproject
+    type(string)              :: infile               !< file with inputs(.txt)
+    type(string)              :: infile2              !< file with inputs(.txt)
+    type(string)              :: last_prev_dir        !< last previous execution directory
+    type(string)              :: mskfile              !< maskfile.ext
+    type(string)              :: msklist              !< table (text file) of mask volume files(.txt)
+    type(string)              :: mskvols(MAXS)
+    type(string)              :: niceserver           !< address and port of nice server for comms
+    type(string)              :: optics_dir           !< directory containing stream optics
+    type(string)              :: oritab               !< table  of orientations(.txt|.simple)
+    type(string)              :: oritab2              !< 2nd table of orientations(.txt|.simple)
+    type(string)              :: outdir               !< manually set output directory name
+    type(string)              :: outfile              !< output document
+    type(string)              :: outstk               !< output image stack
+    type(string)              :: outvol               !< output volume{outvol.ext}
+    type(string)              :: pdbfile              !< PDB file
+    type(string)              :: pdbfile2             !< PDB file, another one
+    type(string)              :: pdbfiles             !< list of PDB files
+    type(string)              :: pdbout               !< PDB output file
+    type(string)              :: pdfile
+    type(string)              :: pickrefs             !< picking references
+    type(string)              :: plaintexttab         !< plain text file of input parameters
+    type(string)              :: prg                  !< SIMPLE program being executed
+    type(string)              :: projfile             !< SIMPLE *.simple project file
+    type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
+    type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
+    type(string)              :: projfile_target      !< another SIMPLE *.simple project file
+    type(string)              :: projname             !< SIMPLE  project name
+    type(string)              :: refs                 !< initial2Dreferences.ext
+    type(string)              :: refs_even
+    type(string)              :: refs_odd
+    type(string)              :: snapshot             !< path to write snapshot project file to
+    type(string)              :: star_datadir         !< STAR-generated data directory
+    type(string)              :: star_mic             !< STAR-formatted EM file (micrographs.star)
+    type(string)              :: star_model           !< STAR-formatted EM file (model.star)
+    type(string)              :: star_ptcl            !< STAR-formatted EM file (data.star)
+    type(string)              :: starfile             !< STAR-formatted EM file (proj.star)
+    type(string)              :: stk                  !< particle stack with all images(ptcls.ext)
+    type(string)              :: stk2                 !< 2nd stack(in selection map: selected(cavgs).ext)
+    type(string)              :: stk3                 !< 3d stack (in selection map (cavgs)2selectfrom.ext)
+    type(string)              :: stk_backgr           !< stack with image for background subtraction
+    type(string)              :: stktab               !< list of per-micrograph stacks
+    type(string)              :: subprojname          !< SIMPLE  subproject name
+    type(string)              :: vol
+    type(string)              :: vol_even             !< even reference volume
+    type(string)              :: vol_odd              !< odd  reference volume
+    type(string)              :: vols(MAXS)
+    type(string)              :: vols_even(MAXS)
+    type(string)              :: vols_odd(MAXS)
+    type(string)              :: xmldir
+    type(string)              :: xmlloc
     ! other character variables in ascending alphabetical order
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
@@ -216,11 +227,7 @@ type :: parameters
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
-    character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
     character(len=4)          :: element ='    '      !< atom kind
-    character(len=STDLEN)     :: executable=''        !< name of executable
-    character(len=4)          :: ext='.mrc'           !< file extension{.mrc}
-    character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
@@ -249,9 +256,6 @@ type :: parameters
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
-    character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
-    character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN)     :: subprojname=''       !< SIMPLE  subproject name
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
@@ -268,12 +272,9 @@ type :: parameters
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
-    character(len=STDLEN)     :: vol_even=''          !< even reference volume
-    character(len=STDLEN)     :: vol_odd=''           !< odd  reference volume
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
     character(len=STDLEN)     :: wfun='kb'
     character(len=STDLEN)     :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
-    character(len=:), allocatable  :: last_prev_dir   !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
@@ -557,6 +558,7 @@ type :: parameters
     logical :: l_wiener_part  = .false.
     logical :: sp_required    = .false.
     contains
+    procedure, private :: init_strings
     procedure          :: new
     procedure, private :: set_img_format
 end type parameters
@@ -565,16 +567,97 @@ class(parameters), pointer :: params_glob => null()
 
 contains
 
+    subroutine init_strings( self )
+        class(parameters), intent(inout) :: self
+        self%boxfile=''           !< file with EMAN particle coordinates(.txt)
+        self%boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
+        self%classdoc=''          !< doc with per-class stats(.txt)
+        self%cwd=''
+        self%deftab=''            !< file with CTF info(.txt|.simple)
+        self%deselfile=''         !< file with indices to be deselected(.txt)
+        self%dir=''               !< directory
+        self%dir_box=''
+        self%dir_exec=''          !< name of execution directory
+        self%dir_meta=''          !< grab xml files from here
+        self%dir_movies=''        !< grab mrc mrcs files from here
+        self%dir_prev=''          !< grab previous projects for streaming
+        self%dir_ptcls=''
+        self%dir_refine=''        !< refinement directory
+        self%dir_reject='rejected'!< move rejected files to here{rejected}
+        self%dir_select='selected'!< move selected files to here{selected}
+        self%dir_target=''        !< put output here
+        self%exec_dir='./'        !< auto-named execution directory
+        self%executable=''        !< name of executable
+        self%ext='.mrc'           !< file extension{.mrc}
+        self%fbody=''             !< file body
+        self%filetab=''           !< list of files(.txt)
+        self%fname=''             !< file name
+        self%frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
+        self%fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
+        self%gainref=''           !< gain reference for movie alignment
+        self%import_dir=''        !< dir to import .star files from for import_starproject
+        self%infile2=''           !< file with inputs(.txt)
+        self%infile=''            !< file with inputs(.txt)
+        self%last_prev_dir=''     !< last previous execution directory
+        self%mskfile=''           !< maskfile.ext
+        self%msklist=''           !< table (text file) of mask volume files(.txt)
+        self%mskvols(MAXS)=''
+        self%niceserver=''        !< address and port of nice server for comms
+        self%optics_dir=''        !< directory containing stream optics
+        self%oritab2=''           !< 2nd table of orientations(.txt|.simple)
+        self%oritab=''            !< table  of orientations(.txt|.simple)
+        self%outdir=''            !< manually set output directory name
+        self%outfile=''           !< output document
+        self%outstk=''            !< output image stack
+        self%outvol=''            !< output volume{outvol.ext}
+        self%pdbfile2=''          !< PDB file, another one
+        self%pdbfile=''           !< PDB file
+        self%pdbfiles=''          !< list of PDB files
+        self%pdbout=''            !< PDB output file
+        self%pdfile='pdfile.bin'
+        self%pickrefs=''          !< picking references
+        self%plaintexttab=''      !< plain text file of input parameters
+        self%prg=''               !< SIMPLE program being executed
+        self%projfile=''          !< SIMPLE *.simple project file
+        self%projfile_merged=''   !< merged SIMPLE *.simple project file output
+        self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
+        self%projfile_target=''   !< another SIMPLE *.simple project file
+        self%projname=''          !< SIMPLE  project name
+        self%refs=''              !< initial2Dreferences.ext
+        self%refs_even=''
+        self%refs_odd=''
+        self%snapshot=''          !< path to write snapshot project file to
+        self%star_datadir=''      !< STAR-generated data directory
+        self%star_mic=''          !< STAR-formatted EM file (micrographs.star)
+        self%star_model=''        !< STAR-formatted EM file (model.star)
+        self%star_ptcl=''         !< STAR-formatted EM file (data.star)
+        self%starfile=''          !< STAR-formatted EM file (proj.star)
+        self%stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
+        self%stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
+        self%stk=''               !< particle stack with all images(ptcls.ext)
+        self%stk_backgr=''        !< stack with image for background subtraction
+        self%stktab=''            !< list of per-micrograph stacks
+        self%subprojname=''       !< SIMPLE  subproject name
+        self%vol=''
+        self%vol_even=''          !< even reference volume
+        self%vol_odd=''           !< odd  reference volume
+        self%vols(MAXS)=''
+        self%vols_even(MAXS)=''
+        self%vols_odd(MAXS)=''
+        self%xmldir=''
+        self%xmlloc=''
+    end subroutine init_strings
+
     subroutine new( self, cline, silent )
         use simple_sp_project, only: sp_project
         class(parameters), target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         logical,         optional, intent(in)    :: silent
-        character(len=LONGSTRLEN), allocatable   :: sp_files(:)
-        character(len=:),          allocatable   :: phaseplate, ctfflag
-        logical                       :: vol_defined(MAXS)
-        character(len=1)              :: checkupfile(50)
-        character(len=:), allocatable :: absname
+        type(string), allocatable :: sp_files(:)
+        logical                   :: vol_defined(MAXS)
+        character(len=1)          :: checkupfile(50)
+        character(len=STDLEN)     :: str_static
+        type(string)     :: str_tmp, absname, phaseplate, ctfflag
         type(binoris)    :: bos
         type(sp_project) :: spproj
         type(ori)        :: o
@@ -583,6 +666,9 @@ contains
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer          :: idir, nsp_files, box, nptcls, nthr
         logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd, is_2D
+        ! initialize dynamically allocated strings
+        call self%init_strings
+        ! set silent flag
         ssilent = .false.
         if( present(silent) ) ssilent = silent
         ! seed random number generator
@@ -1046,13 +1132,14 @@ contains
         ! get cwd
         call simple_getcwd(self%cwd)
         ! update CWD globals in defs
-        if( .not. allocated(cwd_glob_orig) ) allocate(cwd_glob_orig, source=trim(self%cwd))
-        cwd_glob = trim(self%cwd)
+        if( .not. allocated(CWD_GLOB_ORIG) ) allocate(CWD_GLOB_ORIG, source=self%cwd%to_char())
+        CWD_GLOB = self%cwd%to_char()
         ! get process ID
         self%pid = get_process_id()
         ! get name of executable
-        call get_command_argument(0,self%executable)
-        if(len_trim(self%executable) == 0) THROW_HARD('get_command_argument failed; new')
+        call get_command_argument(0,str_static)
+        self%executable = trim(adjustl(str_static))
+        if(self%executable%strlen_trim() == 0) THROW_HARD('get_command_argument failed; new')
         ! set execution mode (shmem or distr)
         if( cline%defined('part') .and. cline%defined('nparts') )then
             self%l_distr_exec = .true.
@@ -1065,12 +1152,12 @@ contains
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for the last previous execution directory and get next directory number
-        if( allocated(self%last_prev_dir) ) deallocate(self%last_prev_dir)
+        call self%last_prev_dir%kill
         idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
         ! look for a project file
         if( .not.cline%defined('projfile') )then
-            if( allocated(self%last_prev_dir) )then
-                call simple_list_files(self%last_prev_dir//'/*.simple', sp_files)
+            if( self%last_prev_dir%is_allocated() )then
+                call simple_list_files(self%last_prev_dir%to_char()//'/*.simple', sp_files)
             else
                 call simple_list_files('*.simple', sp_files)
             endif
@@ -1082,7 +1169,7 @@ contains
         else
             nsp_files = 0
         endif
-        if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
+        if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('private') )then
             ! the associated(self%ptr2prg) condition required for commanders executed within
             ! distributed workflows without invoking simple_private_exec
             self%sp_required = self%ptr2prg%requires_sp_project()
@@ -1092,7 +1179,7 @@ contains
                 if( nsp_files > 1 )then
                     write(logfhandle,*) 'Multiple *simple project files detected'
                     do i=1,nsp_files
-                        write(logfhandle,*) trim(sp_files(i))
+                        write(logfhandle,*) sp_files(i)%to_char()
                     end do
                     THROW_HARD('a unique *.simple project could NOT be identified; new')
                 endif
@@ -1101,75 +1188,78 @@ contains
             self%sp_required = .false.
         endif
         if( nsp_files == 0 .and. self%sp_required .and. .not. cline%defined('projfile') )then
-            write(logfhandle,*) 'program: ', trim(self%prg), ' requires a project file!'
-            write(logfhandle,*) 'cwd:     ', trim(self%cwd)
+            write(logfhandle,*) 'program: ', self%prg%to_char(), ' requires a project file!'
+            write(logfhandle,*) 'cwd:     ', self%cwd%to_char()
             THROW_HARD('no *.simple project file identified; new')
         endif
         if( nsp_files == 1 .and. self%sp_required )then
             ! good, we found a single monolithic project file
             ! set projfile and projname fields unless given on command line
-            if( .not. cline%defined('projfile') ) self%projfile = trim(sp_files(1))
-            self%projname = get_fbody(basename(self%projfile), 'simple')
+            if( .not. cline%defined('projfile') ) self%projfile = sp_files(1)%to_char()
+            str_tmp = get_fbody(basename(self%projfile), string('simple'))
+            self%projname = str_tmp%to_char()
             ! update command line so that prototype copy in distr commanders transfers the info
-            if( .not. cline%defined('projfile') ) call cline%set('projfile', trim(self%projname)//'.simple')
-            if( .not. cline%defined('projname') ) call cline%set('projname', trim(self%projname))
+            if( .not. cline%defined('projfile') ) call cline%set('projfile', self%projname//'.simple')
+            if( .not. cline%defined('projname') ) call cline%set('projname', self%projname)
         endif
         ! put a full path on projfile
         if( self%projfile .ne. '' )then
             if( file_exists(self%projfile) )then
-                absname       = simple_abspath(self%projfile,errmsg='simple_parameters::new 1')
-                self%projfile = trim(absname)
-                self%projname = get_fbody(basename(self%projfile), 'simple')
+                absname       = simple_abspath(self%projfile)
+                self%projfile = absname%to_char()
+                str_tmp       = get_fbody(basename(absname), string('simple'))
+                self%projname = str_tmp%to_char()
             endif
         endif
         ! execution directory
         if( self%mkdir .eq. 'yes' )then
-            if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
-                if( trim(self%prg) .eq. 'mkdir' )then
-                    self%exec_dir = int2str(idir)//'_'//trim(self%dir)
+            if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('simple_private') )then
+                if( self%prg .eq. 'mkdir' )then
+                    self%exec_dir = int2str(idir)//'_'//self%dir%to_char()
                 else if( cline%defined('dir_exec') )then
-                    if( trim(basename(self%executable)).eq.'simple_stream' )then
+                    if( self%executable%has_substr('simple_stream') )then
                         ! to allow for specific restart strategy
-                        self%exec_dir = trim(self%dir_exec)
+                        self%exec_dir = self%dir_exec
                     else
-                        self%exec_dir = int2str(idir)//'_'//trim(self%dir_exec)
+                        self%exec_dir = int2str(idir)//'_'//self%dir_exec%to_char()
                     endif
                 else
                     if(self%outdir .eq. '') then
-                        self%exec_dir = int2str(idir)//'_'//trim(self%prg)
+                        self%exec_dir = int2str(idir)//'_'//self%prg%to_char()
                     else
                         ! To allow manual selection of output directory name
-                        self%exec_dir = trim(adjustl(self%outdir))
+                        self%exec_dir = self%outdir
                     end if
                 endif
                 ! make execution directory
-                call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 2")
-                if( trim(self%prg) .eq. 'mkdir' ) return
-                write(logfhandle,'(a)') '>>> EXECUTION DIRECTORY: '//trim(self%exec_dir)
+                call simple_mkdir(filepath(string(PATH_HERE), self%exec_dir))
+                if( self%prg .eq. 'mkdir' ) return
+                write(logfhandle,'(a)') '>>> EXECUTION DIRECTORY: '//self%exec_dir%to_char()
                 ! change to execution directory directory
-                call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 3")
+                call simple_chdir(filepath(string(PATH_HERE),self%exec_dir))
                 if( self%sp_required )then
                     ! copy the project file
-                    call simple_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
+                    call simple_copy_file(self%projfile, filepath(string(PATH_HERE), basename(self%projfile)))
                     ! update the projfile/projname
-                    self%projfile = filepath(PATH_HERE, basename(self%projfile))
-                    absname       = simple_abspath(self%projfile,errmsg='simple_parameters::new 4')
-                    self%projfile = trim(absname)
-                    self%projname = get_fbody(basename(self%projfile), 'simple')
+                    self%projfile = filepath(string(PATH_HERE), basename(self%projfile))
+                    absname       = simple_abspath(self%projfile)
+                    self%projfile = absname
+                    str_tmp       = get_fbody(basename(self%projfile), string('simple'))
+                    self%projname = str_tmp%to_char()
                     ! so the projfile in cline and parameters are consistent
                     call cline%set('projfile', self%projfile)
                     ! cwd of SP-project will be updated in the builder
                 endif
                 ! get new cwd
                 call simple_getcwd(self%cwd)
-                cwd_glob = trim(self%cwd)
+                CWD_GLOB = self%cwd%to_char()
             endif
         endif
         ! open log file for write
-        if( .not. str_has_substr(self%executable,'private') .and. STDOUT2LOG )then
+        if( .not. self%executable%has_substr('private') .and. STDOUT2LOG )then
             ! this is NOT a simple_private_exec execution but a simple_exec or simple_distr_exec one
             ! open the log file
-            call fopen(logfhandle, status='replace', file=LOGFNAME, action='write')
+            call fopen(logfhandle, status='replace', file=string(LOGFNAME), action='write')
         endif
         !>>> END, EXECUTION RELATED
 
@@ -1208,8 +1298,8 @@ contains
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
-            if( self%dir_movies(1:1).ne.PATH_SEPARATOR )self%dir_movies = PATH_PARENT//trim(self%dir_movies)
-            if( self%dir_target(1:1).ne.PATH_SEPARATOR )self%dir_target = PATH_PARENT//trim(self%dir_target)
+            if( self%dir_movies%to_char([1,1]).ne.PATH_SEPARATOR )self%dir_movies = PATH_PARENT//self%dir_movies%to_char()
+            if( self%dir_target%to_char([1,1]).ne.PATH_SEPARATOR )self%dir_target = PATH_PARENT//self%dir_target%to_char()
         endif
         ! project file segment
         if( cline%defined('oritype') )then
@@ -1246,7 +1336,7 @@ contains
             self%spproj_iseg = PTCL3D_SEG
         endif
         ! take care of nptcls etc.
-        if( file_exists(trim(self%projfile)) )then ! existence should be the only requirement here (not sp_required)
+        if( file_exists(self%projfile) )then ! existence should be the only requirement here (not sp_required)
             ! or the private_exec programs don't get what they need
             ! get nptcls/box/smpd from project file
             if( self%stream.eq.'no' )then
@@ -1258,7 +1348,7 @@ contains
                     if( .not.cline%defined('box'))      self%box       = box
                     if( .not.cline%defined('nptcls'))   self%nptcls    = nptcls
                 else
-                    call bos%open(trim(self%projfile)) ! projfile opened here
+                    call bos%open(self%projfile) ! projfile opened here
                     ! nptcls
                     if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_iseg)
                     ! smpd/box
@@ -1276,7 +1366,7 @@ contains
             else
                 ! nothing to do for streaming, values set at runtime
             endif
-            if( .not.bos%is_opened() ) call bos%open(trim(self%projfile)) ! projfile opened here
+            if( .not.bos%is_opened() ) call bos%open(self%projfile) ! projfile opened here
             ! CTF plan
             select case(trim(self%oritype))
                 case('ptcl2D', 'ptcl3D')
@@ -1286,21 +1376,21 @@ contains
                 if( o%exists() )then
                     if( o%isthere('ctf') )then
                         call o%getter('ctf', ctfflag)
-                        self%ctf = trim(ctfflag)
+                        self%ctf = ctfflag%to_char()
                     endif
                 endif
             endif
             if( .not. cline%defined('phaseplate') )then
                 if( o%isthere('phaseplate') )then
                     call o%getter('phaseplate', phaseplate)
-                    self%phaseplate   = trim(phaseplate)
-                    self%l_phaseplate = trim(self%phaseplate).eq.'yes'
+                    self%phaseplate   = phaseplate%to_char()
+                    self%l_phaseplate = self%phaseplate.eq.'yes'
                 else
                     self%phaseplate   = 'no'
                     self%l_phaseplate = .false.
                 endif
             else
-                self%l_phaseplate = trim(self%phaseplate).eq.'yes'
+                self%l_phaseplate = self%phaseplate.eq.'yes'
             endif
             call bos%close
         else if( self%stk .ne. '' )then
@@ -1310,11 +1400,11 @@ contains
                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
                 endif
             else
-                write(logfhandle,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', trim(self%stk)
+                write(logfhandle,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', self%stk%to_char()
                 stop
             endif
         else if( self%oritab .ne. '' )then
-            if( .not. cline%defined('nptcls') .and. str_has_substr(self%oritab, '.txt') )then
+            if( .not. cline%defined('nptcls') .and. self%oritab%has_substr('.txt') )then
                 ! get # particles from oritab
                 self%nptcls = nlines(self%oritab)
             endif
@@ -1386,15 +1476,15 @@ contains
         if( def_even .or. def_odd .or. def_vol1 )then
             if( def_even .and. def_odd )then
                 if( def_vol1 ) THROW_HARD('vol1 cannot be part of command line when vol_even and vol_odd are')
-                self%vols_even(1) = trim(self%vol_even)
-                self%vols_odd(1)  = trim(self%vol_odd)
-                self%vols(1)      = trim(self%vol_even) ! the even volume will substitute the average one in this mode
+                self%vols_even(1) = self%vol_even
+                self%vols_odd(1)  = self%vol_odd
+                self%vols(1)      = self%vol_even ! the even volume will substitute the average one in this mode
             else
                 if( def_vol1 )then
                     do istate=1,self%nstates
                         self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
                         self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
-                        if( str_has_substr(self%prg, 'refine') )then
+                        if( self%prg%has_substr('refine') )then
                             if( .not. file_exists(self%vols_even(istate)) ) call simple_copy_file(self%vols(istate), self%vols_even(istate))
                             if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
                         endif
@@ -1524,7 +1614,7 @@ contains
         ! automasking options
         self%l_filemsk = .false.
         if( cline%defined('mskfile') )then
-            if( .not.file_exists(trim(self%mskfile)) ) THROW_HARD('Inputted mask file '//trim(self%mskfile)//' does not exist')
+            if( .not.file_exists(self%mskfile) ) THROW_HARD('Inputted mask file '//self%mskfile%to_char()//' does not exist')
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
         ! comlin generation
@@ -1573,7 +1663,7 @@ contains
         ! checks automask related values
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
-                write(logfhandle,*) 'file: ', trim(self%mskfile)
+                write(logfhandle,*) 'file: ', self%mskfile%to_char()
                 THROW_HARD('input mask file not in cwd')
             endif
         endif
@@ -1628,7 +1718,7 @@ contains
             call find_ldim_nptcls(self%refs, lfoo, ncls)
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls )then
-                    write(logfhandle,*)'ncls in ',trim(self%refs),' : ',ncls
+                    write(logfhandle,*)'ncls in ',self%refs%to_char(),' : ',ncls
                     write(logfhandle,*)'self%ncls : ',self%ncls
                     THROW_HARD('input number of clusters (ncls) not consistent with the number of references in stack (p%refs)')
                 endif
@@ -1767,7 +1857,7 @@ contains
         self%l_bfac = cline%defined('bfac')
         ! smoothing extension
         is_2D = .false.
-        if( str_has_substr(self%prg, '2D') ) is_2D = .true.
+        if( self%prg%has_substr('2D') ) is_2D = .true.
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
@@ -1841,11 +1931,9 @@ contains
     contains
 
         subroutine check_vol( volname, is_even )
-            character(len=*),  intent(inout) :: volname
+            class(string),     intent(inout) :: volname
             logical, optional, intent(in)    :: is_even
-            character(len=STDLEN)            :: key
-            character(len=LONGSTRLEN)        :: vol
-            character(len=:), allocatable    :: abs_volname
+            type(string) :: vol, key
             if( present(is_even) )then
                 if( is_even )then
                     key = 'vol_even'
@@ -1855,57 +1943,47 @@ contains
             else
                 key = 'vol'//int2str(i)
             endif
-            if( cline%defined(key) )then
-                vol = trim(cline%get_carg(key))
-                if( vol(1:1).eq.PATH_SEPARATOR )then
+            if( cline%defined(key%to_char()) )then
+                vol = cline%get_carg(key%to_char())
+                if( vol%to_char([1,1]).eq.PATH_SEPARATOR )then
                     ! already in absolute path format
-                    call check_file(key, volname, notAllowed='T')
+                    call check_file(key%to_char(), volname, notAllowed='T')
                     if( .not. file_exists(volname) )then
-                        write(logfhandle,*) 'Input volume:', trim(volname), ' does not exist! 1'
+                        write(logfhandle,*) 'Input volume:', volname%to_char(), ' does not exist! 1'
                         stop
                     endif
                 else
                     if( self%mkdir .eq. 'yes' )then
                         ! with respect to parent folder
-                        ! needs to be done here because not part of the check_file list
-                        vol = PATH_PARENT//trim(vol)
-                        call cline%set(key, vol)
+                        ! needs to be done here because not part of the check_file list 
+                        call cline%set(key%to_char(), PATH_PARENT//vol%to_char())
                     endif
-                    call check_file(key, volname, notAllowed='T')
+                    call check_file(key%to_char(), volname, notAllowed='T')
                     if( .not. file_exists(volname) )then
-                        write(logfhandle,*) 'Input volume:', trim(volname), ' does not exist! 2'
+                        write(logfhandle,*) 'Input volume:', volname%to_char(), ' does not exist! 2'
                         stop
                     else
-                        abs_volname = simple_abspath(volname,'parameters :: check_vol', check_exists=.false.)
-                        if( len_trim( abs_volname) > LONGSTRLEN )then
-                            THROW_HARD('argument too long: '//trim( abs_volname)//' new :: check_vol')
-                        endif
-                        volname = trim(abs_volname)
-                        call cline%set(key, trim(volname))
-                        deallocate(abs_volname)
+                        call cline%set(key%to_char(), simple_abspath(volname, check_exists=.false.))
                     endif
                 endif
             endif
         end subroutine check_vol
 
         subroutine read_masks
-            character(len=LONGSTRLEN)     :: filename, name
-            character(len=:), allocatable :: abs_name
-            integer                       :: nl, fnr, i, io_stat
+            type(string) :: filename, name
+            integer      :: nl, fnr, i, io_stat
             filename = cline%get_carg('msklist')
-            if( filename(1:1).ne.PATH_SEPARATOR )then
-                if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
+            if( filename%to_char([1,1]).ne.PATH_SEPARATOR )then
+                if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//filename%to_char()
             endif
             nl = nlines(filename)
             call fopen(fnr, file=filename, iostat=io_stat)
-            if(io_stat /= 0) call fileiochk("parameters ; read_masks error opening "//trim(filename), io_stat)
+            if(io_stat /= 0) call fileiochk("parameters ; read_masks error opening "//filename%to_char(), io_stat)
             do i=1,nl
-                read(fnr,*, iostat=io_stat) name
-                if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
-                if( name .ne. '' )then
-                    abs_name = simple_abspath(name,errmsg='parameters :: read_masks', check_exists=.false.)
-                    self%mskvols(i) = trim(abs_name)
-                    deallocate(abs_name)
+                call name%readline(fnr, io_stat)
+                if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//filename%to_char(), io_stat)
+                if( name%to_char() .ne. '' )then
+                    self%mskvols(i) = simple_abspath(name, check_exists=.false.)
                 endif
             end do
             call fclose(fnr)
@@ -1913,13 +1991,13 @@ contains
 
         subroutine check_file( file, var, allowed1, allowed2, notAllowed )
             character(len=*),           intent(in)    :: file
-            character(len=*),           intent(inout) :: var
+            class(string),              intent(inout) :: var
             character(len=1), optional, intent(in)    :: allowed1, allowed2, notAllowed
-            character(len=:), allocatable :: abspath_file
-            character(len=1)              :: file_descr
-            logical                       :: raise_exception
+            type(string)     :: abspath_file
+            character(len=1) :: file_descr
+            logical          :: raise_exception
             if( cline%defined(file) )then
-                var             = trim(cline%get_carg(file))
+                var             = cline%get_carg(file)
                 file_descr      = fname2format(var)
                 raise_exception = .false.
                 if( present(allowed1) )then
@@ -1937,7 +2015,7 @@ contains
                     if( notAllowed == file_descr ) raise_exception = .true.
                 endif
                 if( raise_exception )then
-                    write(logfhandle,*) 'This format: ', file_descr, ' is not allowed for this file: ', trim(var)
+                    write(logfhandle,*) 'This format: ', file_descr, ' is not allowed for this file: ', var%to_char()
                     write(logfhandle,*) 'flag:', trim(file)
                     stop
                 endif
@@ -1953,7 +2031,7 @@ contains
                         cntfile = cntfile+1
                         checkupfile(cntfile) = 'S'
                     case ('N')
-                        write(logfhandle,*) 'file: ', trim(var)
+                        write(logfhandle,*) 'file: ', var%to_char()
                         THROW_HARD('This file format is not supported by SIMPLE')
                     case ('T','B','P','O', 'R')
                         ! text files are supported
@@ -1976,37 +2054,31 @@ contains
                         checkupfile(cntfile) = 'K'
 #endif
                     case DEFAULT
-                        write(logfhandle,*) 'file: ', trim(var)
+                        write(logfhandle,*) 'file: ', var%to_char()
                         THROW_HARD('This file format is not supported by SIMPLE')
                 end select
                 if( file_exists(var) )then
                     ! updates name to include absolute path
-                    abspath_file = simple_abspath(var,errmsg='parameters :: check_file', check_exists=.false.)
-                    if( len_trim(abspath_file) > LONGSTRLEN )then
-                        THROW_HARD('argument too long: '//trim(abspath_file)//' new :: checkfile')
-                    endif
-                    var = trim(abspath_file)
-                    call cline%set(file,trim(var))
-                    deallocate(abspath_file)
+                    abspath_file = simple_abspath(var, check_exists=.false.)
+                    var = abspath_file%to_char()
+                    call cline%set(file,var)
+                    call abspath_file%kill
                 endif
             endif
         end subroutine check_file
 
         subroutine check_dir( dir, var )
             character(len=*), intent(in)    :: dir
-            character(len=*), intent(inout) :: var
-            character(len=:), allocatable   :: abspath_dir
+            class(string),    intent(inout) :: var
+            type(string) :: abspath_dir
             if( cline%defined(dir) )then
-                var = trim(cline%get_carg(dir))
+                var = cline%get_carg(dir)
                 if( file_exists(var) )then
                     ! updates name to include absolute path
-                    abspath_dir = simple_abspath(var,errmsg='parameters :: check_dir', check_exists=.false.)
-                    if( len_trim(abspath_dir) > LONGSTRLEN )then
-                        THROW_HARD('argument too long: '//trim(abspath_dir)//' new :: checkdir')
-                    endif
-                    var = trim(abspath_dir)
-                    call cline%set(dir,trim(var))
-                    deallocate(abspath_dir)
+                    abspath_dir = simple_abspath(var, check_exists=.false.)
+                    var = abspath_dir%to_char()
+                    call cline%set(dir,var)
+                    call abspath_dir%kill
                 endif
             endif
         end subroutine check_dir
@@ -2025,14 +2097,14 @@ contains
         end subroutine check_file_formats
 
         subroutine double_check_file_formats
-            character(len=STDLEN) :: fname
+            type(string) :: fname
             character(len=1)      :: form
-            integer :: funit, io_stat
+            integer :: funit, io_stat, ios
             if( cntfile == 0 )then
                 if( cline%defined('filetab') )then
                     call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
-                    call fileiochk("In parameters:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
-                    read(funit,'(a256)') fname
+                    call fileiochk("In parameters:: double_check_file_formats fopen failed "//self%filetab%to_char() , io_stat)
+                    call fname%readline(funit, ios)
                     form = fname2format(fname)
                     call fclose(funit)
                     call self%set_img_format(form)
@@ -2041,15 +2113,26 @@ contains
         end subroutine double_check_file_formats
 
         subroutine mkfnames
-            if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
-            if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
+            if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext%to_char()
+            if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext%to_char()
         end subroutine mkfnames
 
         subroutine check_carg( carg, var )
             character(len=*), intent(in)    :: carg
-            character(len=*), intent(inout) :: var
+            ! character(len=*), intent(inout) :: var
+            class(*), intent(inout) :: var
+            type(string) :: str
             if( cline%defined(carg) )then
-                var = cline%get_carg(carg)
+                select type(var)
+                    type is (string)
+                        str = cline%get_carg(carg)
+                        var = str%to_char()
+                    type is(character(*))
+                        str = cline%get_carg(carg)
+                        var = str%to_char()
+                    class default
+                        THROW_HARD('Unsupported assignment')
+                end select
             endif
         end subroutine check_carg
 
@@ -2081,7 +2164,7 @@ contains
                     endif
                 else
                     write(logfhandle,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
-                    write(logfhandle,'(a,1x,a)') 'Stack file does not exist!', trim(self%stk)
+                    write(logfhandle,'(a,1x,a)') 'Stack file does not exist!', self%stk%to_char()
                     THROW_HARD("set_ldim_box_from_stk")
                 endif
             endif

@@ -1,13 +1,13 @@
 module simple_commanders_euclid
 include 'simple_lib.f08'
-use simple_builder,          only: builder, build_glob
-use simple_cmdline,          only: cmdline
-use simple_commander_base,   only: commander_base
-use simple_parameters,       only: parameters, params_glob
-use simple_sigma2_binfile,   only: sigma2_binfile
-use simple_qsys_env,         only: qsys_env
-use simple_euclid_sigma2,    only: write_groups_starfile
-use simple_image,            only: image
+use simple_builder,        only: builder, build_glob
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_euclid_sigma2,  only: write_groups_starfile
+use simple_image,          only: image
+use simple_parameters,     only: parameters, params_glob
+use simple_qsys_env,       only: qsys_env
+use simple_sigma2_binfile, only: sigma2_binfile
 use simple_qsys_funs
 implicit none
 #include "simple_local_flags.inc"
@@ -33,8 +33,8 @@ type, extends(commander_base) :: commander_calc_group_sigmas
 end type commander_calc_group_sigmas
 
 type :: sigma_array
-    character(len=:), allocatable :: fname
-    real,             allocatable :: sigma2(:,:)
+    type(string)      :: fname
+    real, allocatable :: sigma2(:,:)
 end type sigma_array
 
 contains
@@ -110,18 +110,18 @@ contains
         use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
         class(commander_calc_pspec), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters)                :: params
-        type(image)                     :: sum_img
-        type(builder)                   :: build
-        type(sigma2_binfile)            :: binfile
-        complex, pointer                :: cmat(:,:,:), cmat_sum(:,:,:)
-        integer,            allocatable :: pinds(:)
-        real,               allocatable :: pspec(:), sigma2(:,:)
-        character(len=:),   allocatable :: binfname
-        real    :: sdev_noise
-        integer :: batchlims(2),kfromto(2)
-        integer :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
-        logical :: l_scale_update_frac
+        type(parameters)     :: params
+        type(image)          :: sum_img
+        type(builder)        :: build
+        type(sigma2_binfile) :: binfile
+        complex, pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
+        integer, allocatable :: pinds(:)
+        real,    allocatable :: pspec(:), sigma2(:,:)
+        type(string) :: binfname
+        real         :: sdev_noise
+        integer      :: batchlims(2),kfromto(2)
+        integer      :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
+        logical      :: l_scale_update_frac
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -184,7 +184,7 @@ contains
                 !$omp end workshare
             enddo
         end do
-        call sum_img%write('sum_img_part'//int2str_pad(params%part,params%numlen)//params%ext)
+        call sum_img%write(string('sum_img_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char())
         ! write to disk
         kfromto(1) = 1
         kfromto(2) = nyq
@@ -197,7 +197,7 @@ contains
         call killimgbatch
         call sum_img%kill
         ! end gracefully
-        call qsys_job_finished('simple_commanders_euclid :: exec_calc_pspec')
+        call qsys_job_finished(string('simple_commanders_euclid :: exec_calc_pspec'))
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_pspec
 
@@ -209,7 +209,7 @@ contains
         type(builder)                    :: build
         type(sigma2_binfile)             :: binfile
         type(sigma_array), allocatable   :: sigma2_arrays(:)
-        character(len=:),  allocatable   :: part_fname,starfile_fname,outbin_fname
+        type(string)                     :: part_fname,starfile_fname,outbin_fname
         integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nyq,pspec_l,pspec_u
         real(dp),          allocatable   :: group_pspecs(:,:,:)
         real,              allocatable   :: pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
@@ -228,7 +228,7 @@ contains
         call avg_img%zero_and_flag_ft
         do ipart = 1,params%nparts
             call build%img%zero_and_flag_ft
-            part_fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext
+            part_fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
             call build%img%read(part_fname)
             call avg_img%add(build%img)
             call del_file(part_fname)
@@ -248,7 +248,7 @@ contains
             pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
             pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
             if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
-                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; file ' // sigma2_arrays(ipart)%fname // ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
+                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; file ' // sigma2_arrays(ipart)%fname%to_char()// ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
             end if
             pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
         end do
@@ -289,9 +289,9 @@ contains
         end do
         ! write group sigmas to starfile
         if( cline%defined('which_iter') )then
-            starfile_fname = trim(SIGMA2_GROUP_FBODY)//int2str(params%which_iter)//trim(STAR_EXT)
+            starfile_fname = SIGMA2_GROUP_FBODY//int2str(params%which_iter)//STAR_EXT
         else
-            starfile_fname = trim(SIGMA2_GROUP_FBODY)//'1'//trim(STAR_EXT)
+            starfile_fname = SIGMA2_GROUP_FBODY//'1'//STAR_EXT
         endif
         call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
         ! update sigmas in binfiles to match averages
@@ -320,13 +320,13 @@ contains
         end do
         ! end gracefully
         do ipart = 1,params%nparts
-            deallocate(sigma2_arrays(ipart)%fname)
+            call sigma2_arrays(ipart)%fname%kill
             deallocate(sigma2_arrays(ipart)%sigma2)
         end do
         deallocate(sigma2_arrays,group_pspecs,pspec_ave,pspecs,group_weights)
         call binfile%kill
         call build%kill_general_tbox
-        call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_euclid::calc_pspec_assemble')
+        call simple_touch('CALC_PSPEC_FINISHED')
         call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
 
     contains
@@ -353,7 +353,7 @@ contains
                         do while (.not. is_positive)
                             nn = nn + 1
                             if( nn > size(group_pspecs,3) )then
-                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // trim(int2str(eo)) // ', igroup=' // trim(int2str(igroup)))
+                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // int2str(eo) // ', igroup=' // int2str(igroup))
                             end if
                             if( group_pspecs(eo,igroup,nn) > 0.d0 )then
                                 is_positive = .true.
@@ -370,15 +370,15 @@ contains
     subroutine exec_calc_group_sigmas( self, cline )
         class(commander_calc_group_sigmas), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        type(parameters)              :: params
-        type(builder)                 :: build
-        type(sigma2_binfile)          :: binfile
-        type(sigma_array)             :: sigma2_array
-        character(len=:), allocatable :: starfile_fname
-        real,             allocatable :: pspecs(:,:)
-        real(dp),         allocatable :: group_weights(:,:), group_pspecs(:,:,:)
-        real(dp)                      :: w
-        integer                       :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
+        type(parameters)      :: params
+        type(builder)         :: build
+        type(sigma2_binfile)  :: binfile
+        type(sigma_array)     :: sigma2_array
+        type(string)          :: starfile_fname
+        real,     allocatable :: pspecs(:,:)
+        real(dp), allocatable :: group_weights(:,:), group_pspecs(:,:,:)
+        real(dp)              :: w
+        integer               :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
@@ -397,7 +397,7 @@ contains
             fromp = lbound(sigma2_array%sigma2,2)
             top   = ubound(sigma2_array%sigma2,2)
             if( (fromp<1).or.(top>params_glob%nptcls) )then
-                THROW_HARD('commander_euclid; exec_calc_group_sigmas; file ' // sigma2_array%fname // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
+                THROW_HARD('commander_euclid; exec_calc_group_sigmas; file ' // sigma2_array%fname%to_char() // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
             end if
             if( ipart == 1 )then
                 call binfile%get_resrange(kfromto)
@@ -450,11 +450,11 @@ contains
             end do
         end do
         ! write group sigmas to starfile
-        starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//trim(STAR_EXT)
+        starfile_fname = SIGMA2_GROUP_FBODY//int2str(params_glob%which_iter)//STAR_EXT
         call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
         ! cleanup
         call build%kill_general_tbox
-        call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_euclid::calc_group_sigmas')
+        call simple_touch('CALC_GROUP_SIGMAS_FINISHED')
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
 

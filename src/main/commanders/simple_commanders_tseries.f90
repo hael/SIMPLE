@@ -1,24 +1,24 @@
 ! concrete commander: time-series analysis
 module simple_commanders_tseries
 include 'simple_lib.f08'
-use simple_builder,          only: builder
-use simple_cmdline,          only: cmdline
-use simple_commander_base,   only: commander_base
-use simple_parameters,       only: parameters, params_glob
-use simple_sp_project,       only: sp_project
-use simple_image,            only: image
-use simple_image_bin,         only: image_bin
-use simple_qsys_env,         only: qsys_env
-use simple_commanders_volops, only: commander_reproject
-use simple_stack_io,         only: stack_io
+use simple_builder,           only: builder
+use simple_cmdline,           only: cmdline
+use simple_commander_base,    only: commander_base
 use simple_commanders_oris,   only: commander_vizoris
 use simple_commanders_rec,    only: commander_reconstruct3D
-use simple_exec_helpers,     only: set_shmem_flag
+use simple_commanders_volops, only: commander_reproject
+use simple_exec_helpers,      only: set_shmem_flag
+use simple_image,             only: image
+use simple_image_bin,         only: image_bin
+use simple_parameters,        only: parameters, params_glob
+use simple_qsys_env,          only: qsys_env
+use simple_sp_project,        only: sp_project
+use simple_stack_io,          only: stack_io
+use simple_binoris_io
 use simple_commanders_cluster2D
 use simple_nanoparticle
-use simple_qsys_funs
-use simple_binoris_io
 use simple_nice
+use simple_qsys_funs
 implicit none
 #include "simple_local_flags.inc"
 
@@ -151,7 +151,7 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         type(ctfparams)  :: ctfvars
-        character(len=LONGSTRLEN), allocatable :: filenames(:)
+        type(string), allocatable :: filenames(:)
         integer :: iframe, nfiles, numlen
         call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -162,7 +162,7 @@ contains
         numlen = len(int2str(nfiles))
         if( params%mkdir.eq.'yes' )then
             do iframe = 1,nfiles
-                if(filenames(iframe)(1:1).ne.'/') filenames(iframe) = '../'//trim(filenames(iframe))
+                if(filenames(iframe)%to_char([1,1]).ne.'/') filenames(iframe) = '../'//filenames(iframe)%to_char()
             enddo
         endif
         ! set CTF parameters
@@ -266,7 +266,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(nframes, params%nparts, 'mic', ALGN_FBODY)
@@ -281,8 +281,8 @@ contains
         use simple_motion_correct_iter, only: motion_correct_iter
         class(commander_tseries_motion_correct), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: framenames(:)
-        character(len=:),          allocatable :: frames2align
+        type(string), allocatable :: framenames(:)
+        type(string)              :: frames2align
         type(image)               :: img
         type(sp_project)          :: spproj
         type(parameters)          :: params
@@ -310,7 +310,7 @@ contains
         allocate(framenames(nframes))
         do i = 1,nframes
             if( spproj%os_mic%isthere(i,'frame') )then
-                framenames(i) = trim(spproj%os_mic%get_static(i,'frame'))
+                framenames(i) = spproj%os_mic%get_str(i,'frame')
                 params%smpd   = spproj%os_mic%get(i,'smpd')
             endif
         enddo
@@ -348,9 +348,11 @@ contains
             ! motion corr
             frame_counter = 0
             if( cline%defined('gainref') )then
-                call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './', tseries='yes', gainref_fname=params%gainref)
+                call mciter%iterate(cline_mcorr, ctfvars, o, string('tseries_win')//int2str_pad(iframe,numlen_nframes),&
+                &frame_counter, frames2align, string('./'), tseries='yes', gainref_fname=params%gainref)
             else
-                call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './', tseries='yes')
+                call mciter%iterate(cline_mcorr, ctfvars, o, string('tseries_win')//int2str_pad(iframe,numlen_nframes),&
+                frame_counter, frames2align, string('./'), tseries='yes')
             endif
             call spproj%os_mic%set_ori(iframe, o)
         end do
@@ -360,7 +362,7 @@ contains
         call del_file(frames2align)
         call img%kill
         call o%kill
-        call qsys_job_finished('simple_commanders_tseries :: exec_tseries_motion_correct' )
+        call qsys_job_finished(string('simple_commanders_tseries :: exec_tseries_motion_correct'))
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct
 
@@ -371,8 +373,8 @@ contains
         class(commander_tseries_make_pickavg), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         real, parameter :: LAM_TV = 1.5
-        character(len=LONGSTRLEN), allocatable :: framenames(:)
-        character(len=:),          allocatable :: filetabname
+        type(string), allocatable :: framenames(:)
+        type(string)              :: filetabname
         type(sp_project)          :: spproj
         type(parameters)          :: params
         type(cmdline)             :: cline_stack, cline_mcorr
@@ -406,7 +408,7 @@ contains
         do i = istart,istop
             if( spproj%os_mic%isthere(i,'frame') )then
                 cnt = cnt + 1
-                framenames(cnt) = trim(spproj%os_mic%get_static(i,'frame'))
+                framenames(cnt) = spproj%os_mic%get_str(i,'frame')
                 params%smpd     = spproj%os_mic%get(i,'smpd')
             endif
         enddo
@@ -432,21 +434,21 @@ contains
         frame_counter = 0
         ! motion corr
         if( cline%defined('gainref') )then
-            call mciter%iterate(cline_mcorr, ctfvars, o, 'frames2align', frame_counter,&
-                &'frames2align.mrc', './', gainref_fname=params%gainref, tseries='yes')
+            call mciter%iterate(cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
+                &string('frames2align.mrc'), string('./'), gainref_fname=params%gainref, tseries='yes')
         else
-            call mciter%iterate(cline_mcorr, ctfvars, o, 'frames2align', frame_counter,&
-                &'frames2align.mrc', './', tseries='yes')
+            call mciter%iterate(cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
+                &string('frames2align.mrc'), string('./'), tseries='yes')
         endif
         call o%kill
         ! apply TV filter for de-noising
-        call find_ldim_nptcls('frames2align_intg.mrc',ldim,ifoo)
+        call find_ldim_nptcls(string('frames2align_intg.mrc'),ldim,ifoo)
         call img_intg%new(ldim, params%smpd)
-        call img_intg%read('frames2align_intg.mrc',1)
+        call img_intg%read(string('frames2align_intg.mrc'),1)
         call tvfilt%new
         call tvfilt%apply_filter(img_intg, LAM_TV)
         call tvfilt%kill
-        call img_intg%write('frames2align_intg_denoised.mrc')
+        call img_intg%write(string('frames2align_intg_denoised.mrc'))
         call img_intg%kill
         call simple_end('**** SIMPLE_TSERIES_MAKE_PICKAVG NORMAL STOP ****')
     end subroutine exec_tseries_make_pickavg
@@ -504,9 +506,9 @@ contains
             call part_params(ipart)%set('ycoord', real2str(boxdata(ipart,2)))
             call part_params(ipart)%set('box',    real2str(boxdata(ipart,3)))
             if( params%nparts > 1 )then
-                call part_params(ipart)%set('fbody', trim(params%fbody)//'_'//int2str_pad(ipart,numlen))
+                call part_params(ipart)%set('fbody', params%fbody%to_char()//'_'//int2str_pad(ipart,numlen))
             else
-                call part_params(ipart)%set('fbody', trim(params%fbody))
+                call part_params(ipart)%set('fbody', params%fbody%to_char())
             endif
         end do
         ! setup the environment for distributed execution
@@ -524,13 +526,13 @@ contains
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_sp_project, only: sp_project
         class(commander_tseries_track_particles), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(sp_project)                       :: spproj
-        type(parameters)                       :: params
-        character(len=:),          allocatable :: dir, forctf
-        character(len=LONGSTRLEN), allocatable :: intg_names(:), frame_names(:)
-        real,                      allocatable :: boxdata(:,:)
-        logical,                   allocatable :: frames_are_there(:), intgs_are_there(:)
+        class(cmdline),                           intent(inout) :: cline
+        type(sp_project)          :: spproj
+        type(parameters)          :: params
+        type(string)              :: dir, forctf
+        type(string), allocatable :: intg_names(:), frame_names(:)
+        real,         allocatable :: boxdata(:,:)
+        logical,      allocatable :: frames_are_there(:), intgs_are_there(:)
         integer :: i, orig_box, nframes
         call cline%set('oritype','mic')
         call params%new(cline)
@@ -555,17 +557,17 @@ contains
         if( all(frames_are_there) )then
             allocate(frame_names(nframes))
             do i = 1,nframes
-                frame_names(i) = trim(spproj%os_mic%get_static(i,'frame'))
+                frame_names(i) = spproj%os_mic%get_str(i,'frame')
             enddo
         endif
         if( all(intgs_are_there) )then
             allocate(intg_names(nframes))
             do i = 1,nframes
-                intg_names(i) = trim(spproj%os_mic%get_static(i,'intg'))
+                intg_names(i) = spproj%os_mic%get_str(i,'intg')
             enddo
         endif
         ! actual tracking
-        dir = trim(params%fbody)
+        dir = params%fbody
         call simple_mkdir(dir)
         if( allocated(frame_names) )then
             if( allocated(intg_names) )then
@@ -582,7 +584,7 @@ contains
         ! clean tracker
         call kill_tracker
         ! end gracefully
-        call qsys_job_finished('simple_commanders_tseries :: exec_tseries_track_particles')
+        call qsys_job_finished(string('simple_commanders_tseries :: exec_tseries_track_particles'))
         call spproj%kill
         call simple_end('**** SIMPLE_TSERIES_TRACK_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_track_particles
@@ -602,7 +604,7 @@ contains
         type(parameters)               :: params
         type(sp_project)               :: spproj
         type(cmdline)                  :: cline_est_diam, cline_sim_atms, cline_copy
-        character(len=:), allocatable  :: stkname
+        type(string)                   :: stkname
         character(len=*), parameter    :: STARTVOL    = 'startvol.mrc'
         real,             parameter    :: LP_EST_DIAM = 3.
         integer :: ncls, nptcls, ldim(3)
@@ -626,7 +628,7 @@ contains
         endif
         call xcenter2D%execute(cline)
         ! prep for diameter estimation
-        call spproj%read(trim(params%projfile))
+        call spproj%read(params%projfile)
         call spproj%get_cavgs_stk(stkname, ncls, smpd)
         call cline_est_diam%set('stk',     stkname)
         call cline_est_diam%set('smpd',    smpd)
@@ -671,8 +673,8 @@ contains
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         type(cmdline)                    :: cline_make_cavgs, cline_cluster2D_nano
-        character(len=:), allocatable    :: orig_projfile
-        character(len=LONGSTRLEN)        :: finalcavgs
+        type(string)                     :: orig_projfile
+        type(string)                     :: finalcavgs
         integer :: last_iter_stage2, nptcls
         call cline%set('dir_exec', 'center2D_nano')
         if( .not. cline%defined('center') ) call cline%set('center', 'no')
@@ -682,11 +684,11 @@ contains
         call cline%set('mkdir', 'no')
         ! read project file
         call spproj%read(params%projfile)
-        orig_projfile = trim(params%projfile)
+        orig_projfile = params%projfile
         ! sanity checks
         nptcls = spproj%get_nptcls()
         if( nptcls == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_center2D_nano')
+            THROW_HARD('No particles found in project file: '//params%projfile%to_char()//'; exec_center2D_nano')
         endif
         ! delete any previous solution
         if( .not. spproj%is_virgin_field(params%oritype) )then
@@ -702,29 +704,29 @@ contains
         endif
         call cline_make_cavgs%set('tseries', 'yes')
         call cline_make_cavgs%set('nparts',   1)
-        call cline_make_cavgs%set('refs',    'start2Drefs'//params%ext)
-        call cline_make_cavgs%set('projfile', trim(params%projfile))
+        call cline_make_cavgs%set('refs',    'start2Drefs'//params%ext%to_char())
+        call cline_make_cavgs%set('projfile', params%projfile)
         call xmake_cavgs%execute_safe(cline_make_cavgs)
         ! do centering
         cline_cluster2D_nano = cline
         call cline_cluster2D_nano%set('prg',     'cluster2D_nano')
         call cline_cluster2D_nano%set('mskdiam',  0.)
         call cline_cluster2D_nano%set('refine',  'inpl')
-        call cline_cluster2D_nano%set('projfile', trim(params%projfile))
+        call cline_cluster2D_nano%set('projfile', params%projfile)
         call xcluster2D_nano%execute_safe(cline_cluster2D_nano)        
         last_iter_stage2 = cline_cluster2D_nano%get_iarg('endit')
-        finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
+        finalcavgs       = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//params%ext%to_char()
         ! adding cavgs & FRCs to project
-        params%projfile = trim(orig_projfile)
+        params%projfile = orig_projfile
         call spproj%read( params%projfile )
-        call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-        call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+        call spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+        call spproj%add_cavgs2os_out(finalcavgs, spproj%get_smpd(), imgkind='cavg')
         ! transfer 2D shifts to 3D field
         call spproj%map2Dshifts23D
         call spproj%write
         call spproj%kill
         ! cleanup
-        call del_file('start2Drefs'//params%ext)
+        call del_file('start2Drefs'//params%ext%to_char())
         ! end gracefully
         call simple_end('**** SIMPLE_CENTER2D_NANO NORMAL STOP ****')
     end subroutine exec_center2D_nano
@@ -734,6 +736,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         ! commander
         type(commander_cluster2D) :: xcluster2D ! shared-memory
+        type(string) :: str_refine
         ! static parameters
         call cline%delete('nparts') ! always shared-memory
         call cline%set('prg',           'cluster2D')
@@ -741,7 +744,8 @@ contains
         call cline%set('autoscale',            'no')
         if( .not. cline%defined('tseries') ) call cline%set('tseries', 'yes')
         if( .not. cline%defined('refine')  ) call cline%set('refine','greedy')
-        select case(trim(cline%get_carg('refine')))
+        str_refine = cline%get_carg('refine')
+        select case(str_refine%to_char())
             case('no','greedy')
                 call cline%set('refine','greedy')
                 if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 20)
@@ -764,6 +768,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         call xcluster2D%execute_safe(cline)
+        call str_refine%kill
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano
 
@@ -779,7 +784,7 @@ contains
         type(image)      :: img_backgr, img_backgr_wctf, ave_img
         type(ctf)        :: tfun
         type(ctfparams)  :: ctfvars
-        character(len=:), allocatable :: ext,imgname
+        type(string)     :: ext,imgname
         real             :: ave,sdev,minv,maxv
         integer          :: iptcl, nptcls, ldim(3)
         logical          :: do_flip, err
@@ -835,7 +840,7 @@ contains
             ! generates average
             call ave_img%div(real(nptcls))
             ext     = fname2ext(params%outstk)
-            imgname = trim(get_fbody(params%outstk,ext,.true.))//'_ave.'//trim(ext)
+            imgname = get_fbody(params%outstk,ext,.true.)//'_ave.'//ext%to_char()
             call ave_img%write(imgname)
         endif
         call ave_img%kill
@@ -850,14 +855,14 @@ contains
         use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(commander_tseries_ctf_estimate), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=LONGSTRLEN), parameter :: pspec_fname  = 'tseries_ctf_estimate_pspec.mrc'
-        character(len=LONGSTRLEN), parameter :: diag_fname   = 'tseries_ctf_estimate_diag'//JPG_EXT
-        integer,                   parameter :: nmics4ctf    = 10
-        type(parameters)              :: params
-        type(builder)                 :: build
-        type(ctf_estimate_fit)        :: ctffit
-        type(ctfparams)               :: ctfvars
-        character(len=:), allocatable :: fname_diag, tmpl_fname, docname
+        character(len=*), parameter :: pspec_fname = 'tseries_ctf_estimate_pspec.mrc'
+        character(len=*), parameter :: diag_fname  = 'tseries_ctf_estimate_diag'//JPG_EXT
+        integer,          parameter :: nmics4ctf    = 10
+        type(parameters)       :: params
+        type(builder)          :: build
+        type(ctf_estimate_fit) :: ctffit
+        type(ctfparams)        :: ctfvars
+        type(string)           :: fname_diag, tmpl_fname, docname
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('hp')      ) call cline%set('hp', 5.)
         if( .not. cline%defined('lp')      ) call cline%set('lp', 1.)
@@ -866,9 +871,9 @@ contains
         if( .not. cline%defined('astigtol')) call cline%set('astigtol', 0.001)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! prep
-        tmpl_fname = trim(get_fbody(basename(trim(params%stk)), params%ext, separator=.false.))
-        fname_diag = filepath('./',trim(adjustl(tmpl_fname))//'_ctf_estimate_diag'//trim(JPG_EXT))
-        docname    = filepath('./',trim(adjustl(tmpl_fname))//'_ctf'//trim(TXT_EXT))
+        tmpl_fname = get_fbody(basename(params%stk), params%ext, separator=.false.)
+        fname_diag = filepath('./',tmpl_fname//'_ctf_estimate_diag'//JPG_EXT)
+        docname    = filepath('./',tmpl_fname//'_ctf'//TXT_EXT)
         if( build%spproj%os_mic%get_noris() /= 0 )then
             ctfvars = build%spproj%os_mic%get_ctfvars(1)
         else if( build%spproj%os_stk%get_noris() /= 0 )then
@@ -972,14 +977,14 @@ contains
         character(len=*), parameter   :: FINAL_MAPS = './final_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         integer,          parameter   :: NSPACE_CLS3D = 500
-        character(len=:), allocatable :: iter_dir, cavgs_stk, fname
+        type(string)                  :: iter_dir, cavgs_stk, fname
         integer,          allocatable :: pinds(:)
         real,             allocatable :: rstates(:), corrs(:), euldists(:)
         logical,          allocatable :: state_mask(:), pind_mask(:)
-        character(len=STDLEN) :: fbody, fbody_split
-        integer :: i, iter, cnt, cnt2, funit, io_stat, endit, noris, pind_plus_one
-        real    :: smpd
-        logical :: fall_over
+        type(string) :: fbody, fbody_split, fname_reprojs, fname_reprojs_sim, fname_cvags_vs_reprojs
+        integer      :: i, iter, cnt, cnt2, funit, io_stat, endit, noris, pind_plus_one
+        real         :: smpd
+        logical      :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
@@ -1010,7 +1015,7 @@ contains
         cline_detect_atms   = cline
         ! then update cline_refine3D_nano accordingly
         call cline_refine3D_nano%set('prg',     'refine3D_nano')
-        call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we need to keep track of project file
+        call cline_refine3D_nano%set('projfile', params%projfile) ! since we are not making directories (non-standard execution) we need to keep track of project file
         call cline_refine3D_nano%set('keepvol',  'yes')
         call cline_refine3D_nano%set('maxits',   params%maxits_between) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
@@ -1031,21 +1036,21 @@ contains
             ! copy critical output
             iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
             call simple_mkdir(iter_dir)
-            call simple_copy_file(RECVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
-            call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
-            call simple_copy_file(SIMVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
-            call simple_copy_file(ATOMS,    iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
-            call simple_copy_file(BINARY,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
-            call simple_copy_file(CCS,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            call simple_copy_file(SPLITTED, iter_dir//trim(fbody_split)//'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(string(RECVOL),   iter_dir//fbody//'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(string(EVEN),     iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_even.mrc')
+            call simple_copy_file(string(ODD),      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_odd.mrc')
+            call simple_copy_file(string(SIMVOL),   iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_SIM.mrc')
+            call simple_copy_file(string(ATOMS),    iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
+            call simple_copy_file(string(BINARY),   iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(string(CCS),      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(string(SPLITTED), iter_dir//fbody_split//'_iter'//int2str_pad(i,3)//'.mrc')
             if( params%l_needs_sigma )then
-                call simple_copy_file(trim(SIGMA2_GROUP_FBODY)//trim(int2str(endit))//trim(STAR_EXT),&
-                    &iter_dir//trim(SIGMA2_GROUP_FBODY)//int2str_pad(i,3)//trim(STAR_EXT))
+                call simple_copy_file(string(SIGMA2_GROUP_FBODY)//int2str(endit)//STAR_EXT,&
+                    &iter_dir//SIGMA2_GROUP_FBODY//int2str_pad(i,3)//STAR_EXT)
             endif
             ! clean
             call exec_cmdline('rm -f recvol_state01_iter*')
-            if( params%l_needs_sigma ) call exec_cmdline('rm -f '//trim(SIGMA2_GROUP_FBODY)//'*'//trim(STAR_EXT))
+            if( params%l_needs_sigma ) call exec_cmdline('rm -f '//SIGMA2_GROUP_FBODY//'*'//STAR_EXT)
             call del_file(ATOMS)
             call del_file(BINARY)
             call del_file(CCS)
@@ -1054,14 +1059,14 @@ contains
         end do
         call xdetect_atms%execute_safe(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)
-        call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
-        call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
-        call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_odd.mrc')
-        call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
-        call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_ATMS.pdb')
-        call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
-        call simple_copy_file(CCS,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_CC.mrc')
-        call simple_copy_file(SPLITTED, FINAL_MAPS//trim(fbody_split)//'_iter'//int2str_pad(iter,3)//'.mrc')
+        call simple_copy_file(string(RECVOL),   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'.mrc')
+        call simple_copy_file(string(EVEN),     string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_even.mrc')
+        call simple_copy_file(string(ODD),      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_odd.mrc')
+        call simple_copy_file(string(SIMVOL),   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+        call simple_copy_file(string(ATOMS),    string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_ATMS.pdb')
+        call simple_copy_file(string(BINARY),   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
+        call simple_copy_file(string(CCS),      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_CC.mrc')
+        call simple_copy_file(string(SPLITTED), string(FINAL_MAPS)//fbody_split//'_iter'//int2str_pad(iter,3)//'.mrc')
         ! clean
         call del_file(SIMVOL)
         call del_file(ATOMS)
@@ -1081,18 +1086,18 @@ contains
         call cline_make_cavgs%set('ml_reg',   'no')
         call xmake_cavgs%execute_safe(cline_make_cavgs)
         call spproj%os_cls3D%new(NSPACE_CLS3D, is_ptcl=.false.)
-        call spproj%os_cls3D%read('cavgs_oris.txt') ! will not be written as part of document
+        call spproj%os_cls3D%read(string('cavgs_oris.txt')) ! will not be written as part of document
         if( allocated(rstates) ) deallocate(rstates)
         rstates = spproj%os_cls3D%get_all('state')
         ! prepare for re-projection
-        call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
+        call cline_reproject%set('vol1',   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'.mrc')
         call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
         call cline_reproject%set('smpd',   params%smpd)
         call cline_reproject%set('oritab', 'cavgs_oris.txt')
         call cline_reproject%set('pgrp',   params%pgrp)
         call cline_reproject%set('nthr',   params%nthr)
         call xreproject%execute_safe(cline_reproject)
-        call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+        call cline_reproject%set('vol1',   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
         call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
         ! re-project
         call xreproject%execute_safe(cline_reproject)
@@ -1103,19 +1108,22 @@ contains
         call imgs(3)%new([params%box,params%box,1], smpd)
         cnt  = 0
         cnt2 = 1
+        fname_reprojs          = 'reprojs_recvol.mrc'
+        fname_reprojs_sim      = 'reprojs_SIM.mrc'
+        fname_cvags_vs_reprojs = 'cavgs_vs_reprojections_rec_and_sim.mrc'
         do i = 1,3*NSPACE_CLS3D,3
             cnt = cnt + 1
             if( rstates(cnt) > 0.5 )then
                 state_mask(cnt) = .true.
-                call imgs(1)%read(cavgs_stk,            cnt)
-                call imgs(2)%read('reprojs_recvol.mrc', cnt)
-                call imgs(3)%read('reprojs_SIM.mrc',    cnt)
+                call imgs(1)%read(cavgs_stk,         cnt)
+                call imgs(2)%read(fname_reprojs,     cnt)
+                call imgs(3)%read(fname_reprojs_sim, cnt)
                 call imgs(1)%norm
                 call imgs(2)%norm
                 call imgs(3)%norm
-                call imgs(1)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2    )
-                call imgs(2)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 1)
-                call imgs(3)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 2)
+                call imgs(1)%write(fname_cvags_vs_reprojs, cnt2    )
+                call imgs(2)%write(fname_cvags_vs_reprojs, cnt2 + 1)
+                call imgs(3)%write(fname_cvags_vs_reprojs, cnt2 + 2)
                 cnt2 = cnt2 + 3
             else
                 state_mask(cnt) = .false.
@@ -1130,7 +1138,7 @@ contains
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
         ! extract ptcls oritab
-        call spproj%os_ptcl3D%write('ptcls_oris.txt')
+        call spproj%os_ptcl3D%write(string('ptcls_oris.txt'))
         call cline_vizoris%set('oritab', 'ptcls_oris.txt')
         call cline_vizoris%set('pgrp',        params%pgrp)
         call cline_vizoris%set('nspace',     NSPACE_CLS3D)
@@ -1139,16 +1147,16 @@ contains
         ! print CSV file of correlation vs particle number
         corrs = spproj%os_ptcl3D%get_all('corr')
         fname = 'ptcls_vs_reprojs_corrs.csv'
-        call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
-        call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
+        call fopen(funit, fname, 'replace', 'unknown', iostat=io_stat, form='formatted')
+        call fileiochk('autorefine3D_nano fopen failed'//fname%to_char(), io_stat)
         write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
         do i = 1,size(corrs)
             write(funit,*) int2str(i)//CSV_DELIM//real2str(corrs(i))
         end do
         call fclose(funit)
         ! deallocate
-        if( allocated(iter_dir)  ) deallocate(iter_dir)
-        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        call iter_dir%kill
+        call cavgs_stk%kill
         ! end gracefully
         call simple_end('**** AUTOREFINE3D_NANO NORMAL STOP ****')
     end subroutine exec_autorefine3D_nano
@@ -1157,17 +1165,16 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
         class(commander_ptclsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)              :: params
-        type(builder)                 :: build
-        type(image)                   :: cavg_img
-        type(sp_project)              :: spproj
-        character(len=STDLEN)         :: command_plot
-        character(len=:), allocatable :: cavgs_stk
-        character(len=:), allocatable :: ptcls_stk
-        real,             allocatable :: rad_cc(:,:), rad_dists(:,:)
-        integer,          allocatable :: pinds(:)
-        integer            :: cnt, iptcl, icavgs, ncavgs, sz_cls2D, j, nptcls
-        real               :: smpd, corr, tmpstap
+        real,          allocatable :: rad_cc(:,:), rad_dists(:,:)
+        integer,       allocatable :: pinds(:)
+        type(parameters)     :: params
+        type(builder)        :: build
+        type(image)          :: cavg_img
+        type(sp_project)     :: spproj
+        type(string)         :: command_plot
+        type(string)         :: cavgs_stk, ptcls_stk
+        integer              :: cnt, iptcl, icavgs, ncavgs, sz_cls2D, j, nptcls
+        real                 :: smpd, corr, tmpstap
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_ptclsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -1204,10 +1211,10 @@ contains
         command_plot = "gnuplot -e "//'"'//"set view map; set zrange[-.4:1]; splot " //"'"//"ptcls_cc_analysis.csv"//"'"// &
             " u 1:2:4 ; set term png; set xlabel " //"'"//"Class average"//"'"// "; set ylabel " //"'"//"Time"// &
             "'"// "; set title " //"'"//"Time Particles Class Analysis"//"'"// "; set nokey; set output 'ptcl_analysis.png'; replot" //'"'
-        call execute_command_line(command_plot)
+        call execute_command_line(command_plot%to_char())
         call exec_cmdline('rm -rf fsc* fft* stderrout')
         ! deallocate
-        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        call cavgs_stk%kill
         ! end gracefully
         call simple_end('**** PTCLSPROC_NANO NORMAL STOP ****')
     end subroutine exec_ptclsproc_nano
@@ -1215,14 +1222,14 @@ contains
     subroutine exec_cavgseoproc_nano( self, cline )
         class(commander_cavgseoproc_nano), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(parameters)              :: params
-        type(image)                   :: cavg_even, cavg_odd, img_w
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: cavgs_stk, cavgs_stk_even, cavgs_stk_odd
-        character(len=STDLEN)         :: command_plot, ext
-        real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
-        logical,          allocatable :: state_mask(:)
-        integer,          allocatable :: pinds(:)
+        type(parameters)     :: params
+        type(image)          :: cavg_even, cavg_odd, img_w
+        type(sp_project)     :: spproj
+        type(string)         :: cavgs_stk, cavgs_stk_even, cavgs_stk_odd
+        type(string)         :: command_plot, ext
+        real,    allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
+        logical, allocatable :: state_mask(:)
+        integer, allocatable :: pinds(:)
         integer :: ncavgs, ncavgs_even, ncavgs_odd, i, j, cnt, cnt2, ncls, icls, tmax, tmin, tstamp
         real    :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgseoproc_nano & copy the project file
@@ -1270,16 +1277,15 @@ contains
         command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"evenodd_radial_analysis.csv"//"'"// &
             " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
             "'"// "; set title " //"'"//"Even-Odd Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
-        call execute_command_line(command_plot)
+        call execute_command_line(command_plot%to_char())
         close(25)
         ! deallocate
-        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        call cavgs_stk%kill
         ! end gracefully
         call simple_end('**** CAVGSEOPROC_NANO NORMAL STOP ****')
     end subroutine exec_cavgseoproc_nano
 
     subroutine exec_cavgsproc_nano( self, cline )
-        !use simple_commanders_atoms, only: commander_detect_atoms
         class(commander_cavgsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)              :: params
@@ -1289,8 +1295,7 @@ contains
         type(image),      allocatable :: imgs(:)
         type(image)                   :: img_w
         type(sp_project)              :: spproj
-        character(len=:), allocatable :: cavgs_stk
-        character(len=STDLEN)         :: command_plot
+        type(string)                  :: cavgs_stk, command_plot, fname
         real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
         integer,          allocatable :: pinds(:)
@@ -1325,7 +1330,7 @@ contains
             ! align cavgs
             call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
             ! ...so write out its content
-            call spproj%os_cls3D%write('cavgs_oris.txt')
+            call spproj%os_cls3D%write(string('cavgs_oris.txt'))
             ! ...and get the state flags
             if( allocated(rstates) ) deallocate(rstates)
             rstates = spproj%os_cls3D%get_all('state')
@@ -1349,7 +1354,7 @@ contains
                     call imgs(i    )%new([params%box,params%box,1], smpd)
                     call imgs(i + 1)%new([params%box,params%box,1], smpd)
                     call imgs(i    )%read(cavgs_stk,     cnt)
-                    call imgs(i + 1)%read('reprojs.mrc', cnt)
+                    call imgs(i + 1)%read(string('reprojs.mrc'), cnt)
                     call img_w%new([params%box,params%box,1], smpd)
                     ! cavgs images are weighted using radial cross-correlation
                     call spproj%os_ptcl2D%get_pinds(cnt, 'class', pinds)
@@ -1374,15 +1379,16 @@ contains
             command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"radial_analysis.csv"//"'"// &
             " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
             "'"// "; set title " //"'"//"Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
-            call execute_command_line(command_plot)
+            call execute_command_line(command_plot%to_char())
             close(25)
-            cnt  = 0
-            cnt2 = 1 ! needed because we have omissions
+            cnt   = 0
+            cnt2  = 1 ! needed because we have omissions
+            fname = 'cavgs_vs_reprojections.mrc'
             do i = 1,2*ncavgs,2
                 cnt = cnt + 1
                 if( state_mask(cnt) )then
-                    call imgs(i    )%write('cavgs_vs_reprojections.mrc', cnt2    )
-                    call imgs(i + 1)%write('cavgs_vs_reprojections.mrc', cnt2 + 1)
+                    call imgs(i    )%write(fname, cnt2    )
+                    call imgs(i + 1)%write(fname, cnt2 + 1)
                     call imgs(i    )%kill
                     call imgs(i + 1)%kill
                     cnt2 = cnt2 + 2
@@ -1392,7 +1398,7 @@ contains
         endif ! end of class average-based validation
         call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* reproject_oris.txt stderrout')
         ! deallocate
-        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        call cavgs_stk%kill
         ! end gracefully
         call simple_end('**** CAVGSPROC_NANO NORMAL STOP ****')
     end subroutine exec_cavgsproc_nano
@@ -1465,8 +1471,8 @@ contains
         call progress(iptcl,nptcls)
         call ave_pre%div(real(nptcls))
         call ave_post%div(real(nptcls))
-        call ave_pre%write('pre_subtr_ave_pspec.mrc')
-        call ave_post%write('subtr_ave_pspec.mrc')
+        call ave_pre%write(string('pre_subtr_ave_pspec.mrc'))
+        call ave_post%write(string('subtr_ave_pspec.mrc'))
         ! stats
         call moment(angles1, ave, sdev, var, err)
         write(logfhandle,'(A,F6.2,A2,F6.2,A1)')'>>> POSITION GRAPHENE SHEET 1 (DEGREES): ',ave,' (',sdev,')'
@@ -1537,19 +1543,15 @@ contains
 
     subroutine exec_commander_tseries_reconstruct3D_distr( self, cline )
         use simple_commanders_rec, only: commander_volassemble
-        ! use simple_opt_mask,      only: estimate_spher_mask
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
-        ! real, parameter :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
         class(commander_tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        character(len=STDLEN), allocatable :: vol_fnames(:)
+        type(string),          allocatable :: vol_fnames(:)
         real,                  allocatable :: ccs(:,:,:), fsc(:), rstates(:), rad_cc(:), rad_dists(:)
         integer,               allocatable :: parts(:,:)
-        character(len=:),      allocatable :: recname
-        character(len=LONGSTRLEN)     :: fname
-        character(len=STDLEN)         :: volassemble_output, str_state, recname_even, res_fname
-        character(len=STDLEN)         :: recname_odd, vol_fname_even, vol_fname_odd
+        type(string)                  :: recname, fname, volassemble_output, str_state, recname_even, res_fname
+        type(string)                  :: recname_odd, vol_fname_even, vol_fname_odd
         type(commander_reconstruct3D) :: xrec3D_shmem
         type(commander_volassemble)   :: xvolassemble
         type(parameters)              :: params
@@ -1587,18 +1589,18 @@ contains
         endif
         parts = split_nobjs_even(nptcls, nparts)
         allocate(vol_fnames(nparts), rad_cc(params%box/2), rad_dists(params%box/2))
-        recname      = trim(VOL_FBODY)//int2str_pad(1,2)//trim(params%ext)
-        recname_even = trim(VOL_FBODY)//int2str_pad(1,2)//'_even'//trim(params%ext)
-        recname_odd  = trim(VOL_FBODY)//int2str_pad(1,2)//'_odd'//trim(params%ext)
+        recname      = VOL_FBODY//int2str_pad(1,2)//params%ext%to_char()
+        recname_even = VOL_FBODY//int2str_pad(1,2)//'_even'//params%ext%to_char()
+        recname_odd  = VOL_FBODY//int2str_pad(1,2)//'_odd'//params%ext%to_char()
         fname        = 'lifetimes.csv'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
         write(funit,*) 'PARTITION, ', 'FRAME_START, ', 'FRAME_END, ', 'LIFETIME'
         do ipart = 1,nparts
             str_state         = int2str_pad(ipart,2)
-            vol_fnames(ipart) = 'partvol'//trim(str_state)//trim(params%ext)
-            vol_fname_even    = 'partvol'//trim(str_state)//'_even'//trim(params%ext)
-            vol_fname_odd     = 'partvol'//trim(str_state)//'_odd'//trim(params%ext)
-            res_fname         = 'RESOLUTION_STATE'//trim(str_state)
+            vol_fnames(ipart) = 'partvol'//str_state%to_char()//params%ext%to_char()
+            vol_fname_even    = 'partvol'//str_state%to_char()//'_even'//params%ext%to_char()
+            vol_fname_odd     = 'partvol'//str_state%to_char()//'_odd'//params%ext%to_char()
+            res_fname         = 'RESOLUTION_STATE'//str_state%to_char()
             ! prep 3D rec command line
             cline_rec = cline
             call cline_rec%delete('nparts') ! shared-memory implementation
@@ -1612,13 +1614,13 @@ contains
             ! rec
             call xrec3D_shmem%execute(cline_rec)
             ! rename volumes and resolution files
-            call simple_rename(recname,               trim(vol_fnames(ipart)))
-            call simple_rename(recname_even,          trim(vol_fname_even))
-            call simple_rename(recname_odd,           trim(vol_fname_odd))
+            call simple_rename(recname,      vol_fnames(ipart))
+            call simple_rename(recname_even, vol_fname_even)
+            call simple_rename(recname_odd,  vol_fname_odd)
             if( ipart == 1 )then
-                call simple_rename('RESOLUTION_STATE01',  'RESOLUTION_FILE_FIRST')
+                call simple_rename('RESOLUTION_STATE01', 'RESOLUTION_FILE_FIRST')
             else
-                call simple_rename('RESOLUTION_STATE01',  trim(res_fname))
+                call simple_rename('RESOLUTION_STATE01',  res_fname)
             endif
         end do
         call fclose(funit)
@@ -1675,23 +1677,23 @@ contains
     end subroutine exec_commander_tseries_reconstruct3D_distr
 
     subroutine exec_tseries_core_finder( self, cline )
-        use simple_opt_mask, only: estimate_spher_mask
-        use simple_image_msk,   only: image_msk
+        use simple_opt_mask,  only: estimate_spher_mask
+        use simple_image_msk, only: image_msk
         class(commander_tseries_core_finder), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
         real, parameter   :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
         type(parameters)  :: params
         integer           :: ivol, nvols, ldim(3), ifoo, loc(1), best_msk, mskfromto(2)
         real, allocatable :: msk_in_pix(:)
-        type(image_msk)      :: mskvol
+        type(image_msk)   :: mskvol
         type(image)       :: vol, vol_ref, mskimg, mskimg2, mskimg2inv, vol_sum, vol_sum2, vol_w
-        character(len=LONGSTRLEN), allocatable :: volnames(:)
+        type(string), allocatable :: volnames(:)
         call params%new(cline)
         call read_filetable(params%filetab, volnames)
         nvols = size(volnames)
         if( params%mkdir.eq.'yes' )then
             do ivol = 1,nvols
-                if(volnames(ivol)(1:1).ne.'/') volnames(ivol) = '../'//trim(volnames(ivol))
+                if(volnames(ivol)%to_char([1,1]).ne.'/') volnames(ivol) = '../'//volnames(ivol)%to_char()
             enddo
         endif
         call find_ldim_nptcls(volnames(1), ldim, ifoo)
@@ -1727,7 +1729,7 @@ contains
             endif
         enddo
         call vol_sum%div(vol_w)
-        call vol_sum%write('radial_average_vol_'// int2str_pad(loc(1),2)//'.mrc')
+        call vol_sum%write(string('radial_average_vol_')// int2str_pad(loc(1),2)//'.mrc')
         ! now do the reverse
         call vol_sum2%new(ldim, params%smpd)
         do ivol = 1,nvols
@@ -1743,7 +1745,7 @@ contains
             call vol_sum2%zero_and_unflag_ft
             call vol_sum2%add(vol)
             call vol_sum2%add(vol_ref)
-            call vol_sum2%write('core_inserted_vol_'// int2str_pad(ivol,2)//'.mrc')
+            call vol_sum2%write(string('core_inserted_vol_')// int2str_pad(ivol,2)//'.mrc')
         end do
     end subroutine exec_tseries_core_finder
 
@@ -1888,7 +1890,7 @@ contains
             cnt = cnt + 1
             call pavgs(iref)%write(params%outstk,cnt)
         enddo
-        call build%eulspace%write('projdirs.txt')
+        call build%eulspace%write(string('projdirs.txt'))
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_PROJAVGS NORMAL STOP ****')
     end subroutine exec_tseries_make_projavgs

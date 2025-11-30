@@ -52,7 +52,7 @@ contains
         call stkio_r%open(p%stk, p%smpd, 'read')
         do ipart=1,p%nparts
             call progress(ipart,p%nparts)
-            call stkio_w%open('stack_part'//int2str_pad(ipart,p%numlen)//p%ext, p%smpd, 'write', box=p%box, is_ft=.false.)
+            call stkio_w%open(string('stack_part')//int2str_pad(ipart,p%numlen)//p%ext%to_char(), p%smpd, 'write', box=p%box, is_ft=.false.)
             cnt = 0
             do iptcl=parts(ipart,1),parts(ipart,2)
                 cnt = cnt + 1

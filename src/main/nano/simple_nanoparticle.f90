@@ -125,7 +125,7 @@ end type atom_stats
 type :: nanoparticle
     private
     type(image)           :: img, img_raw
-    type(image_bin)        :: img_bin, img_cc         ! binary and connected component images
+    type(image_bin)       :: img_bin, img_cc         ! binary and connected component images
     integer               :: ldim(3)            = 0  ! logical dimension of image
     integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
     integer               :: n_aniso            = 0  ! number of atoms with aniso calculations               NANISO
@@ -185,8 +185,8 @@ type :: nanoparticle
     ! OTHER
     character(len=2)      :: element   = ' '
     character(len=4)      :: atom_name = '    '
-    character(len=STDLEN) :: npname    = '' ! fname
-    character(len=STDLEN) :: fbody     = '' ! fbody
+    type(string)          :: npname
+    type(string)          :: fbody
   contains
     ! constructor
     procedure          :: new
@@ -208,7 +208,6 @@ type :: nanoparticle
     procedure, private :: atominfo2centers_A
     procedure, private :: center_on_atom
     procedure          :: update_ncc
-    procedure          :: per_atom_valid_corr_from_pdb
     ! atomic position determination
     procedure          :: conv_denoise 
     procedure          :: identify_lattice_params
@@ -245,7 +244,7 @@ contains
 
     subroutine new( self, fname, msk )
         class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: fname
+        class(string),       intent(in)    :: fname
         real, optional,      intent(in)    :: msk
         type(image_msk)  :: mskvol
         character(len=2) :: el_ucase
@@ -254,11 +253,10 @@ contains
         real    :: smpd, msk_in_pix
         call self%kill
         self%npname    = fname
-        self%fbody     = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
+        self%fbody     = get_fbody(basename(fname), fname2ext(fname))
         self%smpd      = params_glob%smpd
         self%atom_name = ' '//params_glob%element
         self%element   = params_glob%element
-        !el_ucase       = upperCase(trim(adjustl(params_glob%element)))
         el_ucase       = upperCase(params_glob%element)
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
@@ -322,7 +320,7 @@ contains
     ! set one of the images of the nanoparticle type
     subroutine set_img( self, imgfile, which )
         class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: imgfile
+        class(string),       intent(in)    :: imgfile
         character(len=*),    intent(in)    :: which
         select case(which)
             case('img')
@@ -361,30 +359,26 @@ contains
     end subroutine set_atomic_coords_from_xyz
 
     ! sets the atom positions to be the ones in the inputted PDB file.
-    subroutine set_atomic_coords_from_pdb( self, pdb_file, write_file )
-        class(nanoparticle),        intent(inout) :: self
-        character(len=*),           intent(in)    :: pdb_file
-        character(len=*), optional, intent(in)    :: write_file
+    subroutine set_atomic_coords_from_pdb( self, pdb_file)
+        class(nanoparticle),     intent(inout) :: self
+        class(string),           intent(in)    :: pdb_file
         type(atoms) :: a
         integer     :: i, N
         if( fname2ext(pdb_file) .ne. 'pdb' ) THROW_HARD('Inputted filename has to have pdb extension; set_atomic_coords_from_pdb')
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
-        call a%new(trim(pdb_file))
+        call a%new(pdb_file)
         N = a%get_n() ! number of atoms
         allocate(self%atominfo(N))
-        if(present(write_file)) open(unit=44,file=trim(write_file))
         do i = 1, N
             self%atominfo(i)%center(:) = a%get_coord(i)/self%smpd + 1.
-            if(present(write_file)) write(44,'(f8.4,a,f8.4,a,f8.4)') self%atominfo(i)%center(1), ',', self%atominfo(i)%center(2), ',', self%atominfo(i)%center(3)
         enddo
-        if(present(write_file)) close(44)
         self%n_cc = N
         call a%kill
     end subroutine set_atomic_coords_from_pdb
 
     subroutine set_coords4stats( self, pdb_file )
         class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: pdb_file
+        class(string),       intent(in)    :: pdb_file
         call read_pdb2matrix(pdb_file, self%coords4stats)
         self%n4stats = size(self%coords4stats, dim=2)
     end subroutine set_coords4stats
@@ -498,8 +492,8 @@ contains
     ! of the nanoparticle coincides with its closest atom
     subroutine center_on_atom( self, pdbfile_in, pdbfile_out )
         class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: pdbfile_in
-        character(len=*),    intent(inout) :: pdbfile_out
+        class(string),       intent(in)    :: pdbfile_in
+        class(string),       intent(inout) :: pdbfile_out
         type(atoms) :: atom_centers
         real        :: m(3), vec(3), d, d_before
         integer     :: i
@@ -517,7 +511,7 @@ contains
             self%atominfo(i)%center(:) = self%atominfo(i)%center(:) + vec
             call atom_centers%set_coord(i,(self%atominfo(i)%center(:)-1.)*self%smpd)
         enddo
-        call atom_centers%writePDB(pdbfile_out//'.pdb')
+        call atom_centers%writePDB(pdbfile_out)
         call atom_centers%kill
     end subroutine center_on_atom
 
@@ -531,37 +525,11 @@ contains
         endif
     end subroutine update_ncc
 
-    ! finds per-atom valid correlation for positions from an input pdb file
-    subroutine per_atom_valid_corr_from_pdb( self, pdb_file, output_file)
-        use simple_nano_picker_utils, only : find_corr_by_coords
-        class(nanoparticle),        intent(inout) :: self
-        character(len=*),           intent(in)    :: pdb_file
-        character(len=*), optional, intent(in)    :: output_file
-        real, allocatable :: coords(:,:), corrs(:)
-        real              :: maxrad
-        type(image)       :: simatms
-        integer           :: icoord, ncoord
-        if( .not. allocated(self%atominfo) ) THROW_HARD('must set coordinates for nanoparticle before calling per_atom_valid_corr_from_pdb')
-        call read_pdb2matrix(pdb_file, coords)
-        ncoord = size(coords,dim=2)
-        do icoord = 1, ncoord 
-            coords(:,icoord) = (coords(:,icoord) / self%smpd) + 1 ! convert to pixels
-        enddo
-        call self%simulate_atoms(simatms)
-        maxrad = (self%theoretical_radius * 1.5) / self%smpd
-        if( present(output_file) )then
-            call find_corr_by_coords(coords, maxrad, self%img_raw, simatms, self%smpd, corrs, filename=trim(output_file))
-        else
-            call find_corr_by_coords(coords, maxrad, self%img_raw, simatms, self%smpd, corrs)
-        endif
-        deallocate(coords, corrs)
-    end subroutine per_atom_valid_corr_from_pdb
-
     ! atomic position determination
 
     subroutine conv_denoise( self, fname )
         class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: fname 
+        class(string),       intent(in)    :: fname 
         call phasecorr_one_atom(self%img, self%element)
         call self%img%write(fname)
     end subroutine conv_denoise
@@ -593,12 +561,12 @@ contains
     end subroutine identify_lattice_params
 
     subroutine identify_atomic_pos( self, a, l_fit_lattice, l_atom_thres, split_fname, l_print )
-        class(nanoparticle),        intent(inout) :: self
-        real,                       intent(inout) :: a(3)                ! lattice parameters
-        logical,                    intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
-        logical,                    intent(in)    :: l_atom_thres        ! do atomic thresholding or not
-        character(len=*), optional, intent(in)    :: split_fname
-        logical,          optional, intent(in)    :: l_print
+        class(nanoparticle),     intent(inout) :: self
+        real,                    intent(inout) :: a(3)                ! lattice parameters
+        logical,                 intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
+        logical,                 intent(in)    :: l_atom_thres        ! do atomic thresholding or not
+        class(string), optional, intent(in)    :: split_fname
+        logical,       optional, intent(in)    :: l_print
         type(image) :: simatms, img_cos
         logical     :: ll_print
         ll_print = .true.
@@ -614,25 +582,25 @@ contains
         call self%split_atoms(split_fname)
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
-        if( WRITE_OUTPUT ) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
+        if( WRITE_OUTPUT ) call simatms%write(self%fbody//'_SIM_pre_validation.mrc')
         call self%validate_atoms(simatms, l_print=.false.)
-        if( WRITE_OUTPUT ) call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
+        if( WRITE_OUTPUT ) call self%write_centers(string('valid_corr_in_bfac_field_pre_discard.pdb'), 'valid_corr')
         if( l_atom_thres ) call self%discard_atoms(l_print=ll_print)
         ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
         call self%simulate_atoms(simatms)
         call self%validate_atoms(simatms, l_print=ll_print)
         ! WRITE OUTPUT
-        call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
-        if( ll_print ) write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
+        call self%img_bin%write_bimg(self%fbody//'_BIN.mrc')
+        if( ll_print ) write(logfhandle,'(A)') 'output, binarized map:            '//self%fbody%to_char()//'_BIN.mrc'
         call self%img_bin%grow_bins(1)
         call self%img_bin%cos_edge(SOFT_EDGE, img_cos)
-        call img_cos%write(trim(self%fbody)//'_MSK.mrc')
-        if( ll_print ) write(logfhandle,'(A)') 'output, envelope mask map:        '//trim(self%fbody)//'_MSK.mrc'
-        call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
-        if( ll_print ) write(logfhandle,'(A)') 'output, connected components map: '//trim(self%fbody)//'_CC.mrc'
+        call img_cos%write(self%fbody//'_MSK.mrc')
+        if( ll_print ) write(logfhandle,'(A)') 'output, envelope mask map:        '//self%fbody%to_char()//'_MSK.mrc'
+        call self%img_cc%write_bimg(self%fbody//'_CC.mrc')
+        if( ll_print ) write(logfhandle,'(A)') 'output, connected components map: '//self%fbody%to_char()//'_CC.mrc'
         call self%write_centers
-        call simatms%write(trim(self%fbody)//'_SIM.mrc')
-        if( ll_print ) write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
+        call simatms%write(self%fbody//'_SIM.mrc')
+        if( ll_print ) write(logfhandle,'(A)') 'output, simulated atomic density: '//self%fbody%to_char()//'_SIM.mrc'
         ! destruct
         call img_cos%kill
         call simatms%kill
@@ -691,7 +659,7 @@ contains
         enddo
         rt_tot = toc(t_tot)
         if( L_BENCH )then
-            call fopen(fnr, FILE='BINARIZE_AND_FIND_CENTERS_BENCH.txt', STATUS='REPLACE', action='WRITE')
+            call fopen(fnr, FILE=string('BINARIZE_AND_FIND_CENTERS_BENCH.txt'), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'find_ccs       : ', rt_find_ccs
             write(fnr,'(a,1x,f9.2)') 'find_centers   : ', rt_find_centers
@@ -748,8 +716,8 @@ contains
             rt_find_centers = rt_find_centers + toc(t_find_centers)
             ! Generate a simulated distribution based on those center
             t_gen_sim = tic()
-            call self%write_centers('centers_iteration', coords)
-            call atom%new('centers_iteration.pdb')
+            call self%write_centers(string('centers_iteration.pdb'), coords)
+            call atom%new(string('centers_iteration.pdb'))
             call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
             call del_file('centers_iteration.pdb')
             call atom%kill
@@ -758,7 +726,7 @@ contains
             t_real_corr = tic()
             t2c = self%img%real_corr(simulated_distrib)
             rt_real_corr = rt_real_corr + toc(t_real_corr)
-            if( WRITE_OUTPUT ) call simulated_distrib%write('simvol_thres'//trim(real2str(thres))//'_corr'//trim(real2str(t2c))//'.mrc')
+            if( WRITE_OUTPUT ) call simulated_distrib%write(string('simvol_thres'//trim(real2str(thres))//'_corr'//trim(real2str(t2c))//'.mrc'))
         end function t2c
 
     end subroutine binarize_and_find_centers
@@ -830,8 +798,8 @@ contains
     end subroutine discard_small_ccs
 
     subroutine split_atoms( self, fname )
-        class(nanoparticle),        intent(inout) :: self
-        character(len=*), optional, intent(in)    :: fname
+        class(nanoparticle),     intent(inout) :: self
+        class(string), optional, intent(in)    :: fname
         type(image_bin)       :: img_split_ccs
         real,    allocatable :: x(:)
         real,    pointer     :: rmat_pc(:,:,:)
@@ -890,9 +858,9 @@ contains
         ! update relevant data fields
         call img_split_ccs%set_imat(imat_split_ccs)
         if( present(fname) )then
-            call img_split_ccs%write(trim(fname))
+            call img_split_ccs%write(fname)
         else
-            call img_split_ccs%write('split_ccs.mrc')
+            call img_split_ccs%write(string('split_ccs.mrc'))
         endif
         call img_split_ccs%kill
         call self%img_bin%set_imat(imat_bin)
@@ -1170,7 +1138,7 @@ contains
         logical, allocatable :: cc_mask(:)
         real                 :: tmp_diam, a(3)
         integer              :: i, cc, cn, max_size
-        character(*), parameter :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
+        character(len=*), parameter :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         write(logfhandle, '(A)') '---Dev Note: ADP and Max Neighboring Displacements Under Testing---'
         ! calc cn and cn_gen
@@ -1257,8 +1225,8 @@ contains
         write(logfhandle,'(a,i5)') "ADP Tossed: ", count(self%atominfo(:)%tossADP)
         write(logfhandle, '(A)') '>>> WRITING OUTPUT'
         self%n_aniso = self%n_cc - count(self%atominfo(:)%tossADP)
-        call fit_isotropic%write(fn_fit_isotropic)
-        call fit_anisotropic%write(fn_fit_anisotropic)
+        call fit_isotropic%write(string(fn_fit_isotropic))
+        call fit_anisotropic%write(string(fn_fit_anisotropic))
         if( WRITE_OUTPUT ) call write_2D_slice()
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats,         mask=self%atominfo(:)%size >= NVOX_THRESH )
@@ -1288,13 +1256,13 @@ contains
             call write_cn_atoms( cn )
         enddo
         ! write pdf files with valid_corr and max_int in the B-factor field (for validation/visualisation)
-        call self%write_centers('valid_corr_in_bfac_field', 'valid_corr')
-        call self%write_centers('max_int_in_bfac_field',    'max_int')
-        call self%write_centers('cn_std_in_bfac_field',     'cn_std')
-        call self%write_centers('u_iso_in_bfac_field',      'u_iso')
-        call self%write_centers('doi_in_bfac_field',        'doi')
-        call self%write_centers('doi_min_in_bfac_field',    'doi_min')
-        call self%write_centers_aniso('aniso_bfac_field')
+        call self%write_centers(string('valid_corr_in_bfac_field.pdb'), 'valid_corr')
+        call self%write_centers(string('max_int_in_bfac_field.pdb'),    'max_int')
+        call self%write_centers(string('cn_std_in_bfac_field.pdb'),     'cn_std')
+        call self%write_centers(string('u_iso_in_bfac_field.pdb'),      'u_iso')
+        call self%write_centers(string('doi_in_bfac_field.pdb'),        'doi')
+        call self%write_centers(string('doi_min_in_bfac_field.pdb'),    'doi_min')
+        call self%write_centers_aniso(string('aniso_bfac_field.pdb'))
         ! Write a pdb file containing the ideal lattice positions (with no missing atoms) for visualization
         ! destruct
         deallocate(mask, cc_mask, imat_cc, tmpcens, strain_array, centers_A)
@@ -1357,8 +1325,8 @@ contains
                 ! make cn mask
                 cn_mask = self%atominfo(:)%cn_std == cn_std
                 call self%simulate_atoms(simatms, mask=cn_mask, atoms_obj=atoms_obj)
-                call atoms_obj%writepdb('atoms_cn'//int2str_pad(cn_std,2)//'.pdb')
-                call simatms%write('simvol_cn'//int2str_pad(cn_std,2)//'.mrc')
+                call atoms_obj%writepdb(string('atoms_cn'//int2str_pad(cn_std,2)//'.pdb'))
+                call simatms%write(string('simvol_cn'//int2str_pad(cn_std,2)//'.mrc'))
                 ! make binary image of atoms with given cn_std
                 call img_atom%copy_bimg(self%img_cc)
                 allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
@@ -1369,7 +1337,7 @@ contains
                     endif
                 enddo
                 call img_atom%set_imat(imat_atom)
-                call img_atom%write_bimg('binvol_cn'//int2str_pad(cn_std,2)//'.mrc')
+                call img_atom%write_bimg(string('binvol_cn'//int2str_pad(cn_std,2)//'.mrc'))
                 deallocate(imat,imat_atom)
                 call img_atom%kill_bimg
                 call simatms%kill
@@ -1381,8 +1349,8 @@ contains
             ! positions with respect to the CC center.
             subroutine write_2D_slice()
                 integer :: cc, cc_largest, max_size, center(3), i, j, funit
-                character(*), parameter :: fn_slice='cc_2D_slice.csv'
-                character(*), parameter :: header='X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
+                character(len=*), parameter :: fn_slice='cc_2D_slice.csv'
+                character(len=*), parameter :: header='X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
                 ! Find largest CC for best visualization
                 max_size   = 0
                 cc_largest = 0
@@ -1394,7 +1362,7 @@ contains
                 enddo
                 center(:) = self%atominfo(cc_largest)%center(:)
                 ! Write output as CSV file with the cc center at the origin for easy analysis
-                call fopen(funit, file=fn_slice, status='replace')
+                call fopen(funit, file=string(fn_slice), status='replace')
                 write(funit, '(A)') 'X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
                 601 format(F10.6,A2)
                 602 format(F10.6)
@@ -1784,9 +1752,9 @@ contains
     end subroutine simulate_atoms
 
     subroutine write_centers_1( self, fname, coords )
-        class(nanoparticle),        intent(inout) :: self
-        character(len=*), optional, intent(in)    :: fname
-        real,             optional, intent(in)    :: coords(:,:)
+        class(nanoparticle),     intent(inout) :: self
+        class(string), optional, intent(in)    :: fname
+        real,          optional, intent(in)    :: coords(:,:)
         type(atoms) :: centers_pdb
         integer     :: cc
         if( present(coords) )then
@@ -1801,10 +1769,10 @@ contains
             enddo
         endif
         if( present(fname) )then
-            call centers_pdb%writepdb(trim(fname)//'.pdb')
+            call centers_pdb%writepdb(fname)
         else
-            call centers_pdb%writepdb(trim(self%fbody)//'_ATMS'//'.pdb')
-            write(logfhandle,'(A)') 'output, atomic coordinates:       '//trim(self%fbody)//'_ATMS'
+            call centers_pdb%writepdb(self%fbody//'_ATMS.pdb')
+            write(logfhandle,'(A)') 'output, atomic coordinates:       '//self%fbody%to_char()//'_ATMS.pdb'
         endif
 
         contains
@@ -1821,7 +1789,7 @@ contains
 
     subroutine write_centers_2( self, fname, which )
         class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: fname
+        class(string),       intent(in)    :: fname
         character(len=*),    intent(in)    :: which ! parameter in the B-factor field of the pdb file
         type(atoms) :: centers_pdb
         integer     :: cc
@@ -1848,12 +1816,12 @@ contains
             end select
             call centers_pdb%set_resnum(cc,cc)
         enddo
-        call centers_pdb%writepdb(trim(fname)//'.pdb')
+        call centers_pdb%writepdb(fname)
     end subroutine write_centers_2
 
     subroutine write_centers_aniso( self, fname )
         class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: fname
+        class(string),       intent(in)    :: fname
         type(atoms) :: centers_pdb
         real        :: aniso(3, 3, self%n_cc)
         integer     :: cc
@@ -1865,12 +1833,12 @@ contains
             call centers_pdb%set_resnum(cc,cc)
             aniso(:,:,cc) = self%atominfo(cc)%aniso(:,:) ! in Angstroms
         enddo
-        call centers_pdb%writepdb_aniso(trim(fname)//'.pdb', aniso)
+        call centers_pdb%writepdb_aniso(fname, aniso)
     end subroutine write_centers_aniso
 
     subroutine write_individual_atoms( self )
         class(nanoparticle), intent(inout) :: self
-        type(image_bin)       :: img_atom
+        type(image_bin)      :: img_atom
         integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
         integer :: i
         call img_atom%copy_bimg(self%img_cc)
@@ -1883,7 +1851,7 @@ contains
                 imat_atom = 0
             endwhere
             call img_atom%set_imat(imat_atom)
-            call img_atom%write_bimg('Atom'//trim(int2str(i))//'.mrc')
+            call img_atom%write_bimg(string('Atom'//int2str(i)//'.mrc'))
         enddo
         deallocate(imat,imat_atom)
         call img_atom%kill_bimg
@@ -1891,10 +1859,10 @@ contains
 
     subroutine write_csv_files( self )
         class(nanoparticle), intent(in) :: self
-        integer            :: ios, funit, cc, cn
-        character(len=256) :: io_msg
+        integer               :: ios, funit, cc, cn
+        character(len=STDLEN) :: io_msg
         ! NANOPARTICLE STATS
-        call fopen(funit, file=NP_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
+        call fopen(funit, file=string(NP_STATS_FILE), iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//NP_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
         write(funit,'(a)') NP_STATS_HEAD
@@ -1902,7 +1870,7 @@ contains
         call self%write_np_stats(funit)
         call fclose(funit)
         ! CN-DEPENDENT STATS
-        call fopen(funit, file=CN_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
+        call fopen(funit, file=string(CN_STATS_FILE), iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//CN_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
         write(funit,'(a)') CN_STATS_HEAD
@@ -1912,7 +1880,7 @@ contains
         enddo
         call fclose(funit)
         ! PER-ATOM STATS
-        call fopen(funit, file=ATOMS_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
+        call fopen(funit, file=string(ATOMS_STATS_FILE), iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//ATOMS_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
         if( ATOMS_STATS_OMIT )then

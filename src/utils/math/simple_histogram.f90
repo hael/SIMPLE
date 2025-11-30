@@ -472,7 +472,7 @@ contains
         class(histogram),           intent(in) :: self
         character(len=*),           intent(in) :: fname
         character(len=*), optional, intent(in) :: abscissa
-        type(str4arr)                :: title
+        type(string)                 :: title
         type(CPlot2D_type)           :: fig
         type(CDataSet_type)          :: dataSet
         character(len=LONGSTRLEN)    :: ps2pdf_cmd, fname_pdf, fname_eps
@@ -496,19 +496,19 @@ contains
         call CPlot2D__AddDataSet(fig, dataset)
         call CDataSet__delete(dataset)
         if( present(abscissa) )then
-            title%str = trim(abscissa)//C_NULL_CHAR
+            title = trim(abscissa)//C_NULL_CHAR
         else
-            title%str = 'X'//C_NULL_CHAR
+            title = 'X'//C_NULL_CHAR
         endif
-        call CPlot2D__SetXAxisTitle(fig, title%str)
-        title%str = 'Counts'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(fig, title%str)
+        call CPlot2D__SetXAxisTitle(fig, title%to_char())
+        title = 'Counts'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(fig, title%to_char())
         call CPlot2D__OutputPostScriptPlot(fig, trim(fname_eps)//C_NULL_CHAR)
         call CPlot2D__delete(fig)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
             &//trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot
     

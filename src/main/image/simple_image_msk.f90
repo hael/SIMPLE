@@ -110,10 +110,10 @@ contains
         call vol_filt%copy(vol_even)
         call vol_filt%add(vol_odd)
         call vol_filt%mul(0.5)
-        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write('ICM_avg.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write(string('ICM_avg.mrc'))
         ! low-pass filter
         call vol_filt%bp(0., self%amsklp)
-        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write('ICM_avg_lp.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write(string('ICM_avg_lp.mrc'))
         ! transfer image to binary image
         call self%transfer2bimg(vol_filt)
     end subroutine automask3D_filter
@@ -132,7 +132,7 @@ contains
             call otsu_img(self, tight=l_tight)
         endif
         call self%set_imat
-        if( L_WRITE .and. params_glob%part == 1 ) call self%write('binarized.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call self%write(string('binarized.mrc'))
         ! identify connected components
         call self%find_ccs(ccimage, update_imat=.true.)
         ! extract all cc sizes (in # pixels)
@@ -146,7 +146,7 @@ contains
             call ccimage%cc2bin(1)
         endif
         call self%copy_bimg(ccimage)
-        if( L_WRITE .and. params_glob%part == 1 ) call self%write('largest_cc.mrc')
+        if( L_WRITE .and. params_glob%part == 1 ) call self%write(string('largest_cc.mrc'))
         ! destruct
         call ccimage%kill_bimg
         if( allocated(ccsizes) ) deallocate(ccsizes)
@@ -154,11 +154,11 @@ contains
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout )
         use simple_atoms, only: atoms
-        class(image_msk),           intent(inout) :: self
-        type(atoms),                intent(inout) :: pdb
-        class(image),               intent(inout) :: vol_inout
-        class(oris),      optional, intent(inout) :: os
-        character(len=*), optional, intent(inout) :: pdbout
+        class(image_msk),        intent(inout) :: self
+        type(atoms),             intent(inout) :: pdb
+        class(image),            intent(inout) :: vol_inout
+        class(oris),   optional, intent(inout) :: os
+        class(string), optional, intent(inout) :: pdbout
         type(image) :: distimg, cos_img
         type(atoms) :: shifted_pdb
         real        :: centre(3), shift(3), pdb_center(3), minmax(2), radius, smpd
@@ -345,16 +345,13 @@ contains
             call img_bin(i)%bp(0., params_glob%amsklp)
             ! filter with non-local means
             call img_bin(i)%NLmean2D
-            ! if( l_write ) call img_bin(i)%write('NLmean_filtered.mrc', i)
             ! binarize with Otsu
             call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
             call img_bin(i)%masscen(xyz)
             shifts(i,:) = xyz(:2)
             call img_bin(i)%set_imat
-            ! if( l_write ) call img_bin(i)%write(BIN_OTSU, i)
             ! grow ngrow layers
             if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)
-            ! if( l_write ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
             ! find the largest connected component
             call img_bin(i)%find_ccs(cc_img(i))
             ccsizes = cc_img(i)%size_ccs()
@@ -376,11 +373,9 @@ contains
                 if( winsz > 0 )then
                     call cc_img(i)%real_space_filter(winsz, 'median')
                     call cc_img(i)%set_imat
-                    ! if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
                 endif
                 ! fill-in holes
                 call cc_img(i)%set_edgecc2background
-                ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
             endif
             ! apply cosine egde to soften mask (to avoid Fourier artefacts)
             call imgs(i)%zero_and_unflag_ft
@@ -390,9 +385,9 @@ contains
         ! destruct
         do i = 1,n
             call img_bin(i)%kill_bimg
-            call cc_img(i)%write('binarized_automask2D.mrc', i)
+            call cc_img(i)%write(string('binarized_automask2D.mrc'), i)
             call cc_img(i)%kill_bimg
-            call imgs(i)%write('masks_automask2D.mrc', i)
+            call imgs(i)%write(string('masks_automask2D.mrc'), i)
         end do
         deallocate(img_bin, cc_img)
         if( allocated(ccsizes) ) deallocate(ccsizes)

@@ -17,10 +17,10 @@ call img_spec%new(LDIM, SMPD)
 tfun = ctf(SMPD, KV, CS, AC)
 call tfun%ctf2img(img, DFX, DFY, ANGAST, PHSH)
 call img%ft2img('real', img_spec)
-call img_spec%write('ctfimg.mrc')
+call img_spec%write(string('ctfimg.mrc'))
 
 call tfun%ctf_1stzero2img(img, DFX, DFY, ANGAST, PHSH)
 call img%ft2img('real', img_spec)
-call img_spec%write('ctfimg_1stzero.mrc')
+call img_spec%write(string('ctfimg_1stzero.mrc'))
 
 end program simple_test_ctf

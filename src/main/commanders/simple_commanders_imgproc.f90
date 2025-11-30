@@ -120,7 +120,7 @@ contains
                 call img_or_vol%read(params%stk, iptcl)
                 call doit
                 if( fill_holes ) call img_or_vol%set_edgecc2background
-                if( l_sauvola  ) call img_sdevs%write('local_sdevs.mrc', iptcl)
+                if( l_sauvola  ) call img_sdevs%write(string('local_sdevs.mrc'), iptcl)
                 call img_or_vol%write(params%outstk, iptcl)
             end do
         else if( cline%defined('vol1') )then
@@ -372,14 +372,14 @@ contains
         type(builder)    :: build
         integer          :: nptcls, ldim(3), iptcl
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'phaseflipped'//trim(STK_EXT))
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'phaseflipped'//STK_EXT)
         call build%init_params_and_build_general_tbox(cline,params)
         if( cline%defined('stk') )then
-            call find_ldim_nptcls(trim(params%stk), ldim, nptcls)
+            call find_ldim_nptcls(params%stk, ldim, nptcls)
             allocate(imgs(nptcls))
             do iptcl = 1, nptcls
                 call imgs(iptcl)%new([ldim(1),ldim(2),1],params%smpd)
-                call imgs(iptcl)%read(trim(params%stk), iptcl)
+                call imgs(iptcl)%read(params%stk, iptcl)
             enddo
             print *, 'FINISHED READING...'
             !$omp parallel do private(iptcl,ctfparms,tfun) default(shared) proc_bind(close) schedule(static)
@@ -393,7 +393,7 @@ contains
             !$omp end parallel do
             print *, 'START WRITING...'
             do iptcl = 1, nptcls
-                call imgs(iptcl)%write(trim(params%outstk), iptcl)
+                call imgs(iptcl)%write(params%outstk, iptcl)
                 call imgs(iptcl)%kill
             enddo
         else
@@ -430,7 +430,7 @@ contains
         real              :: fsc05, fsc0143
         integer           :: find
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered'//trim(STK_EXT))
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered'//STK_EXT)
         if( .not. cline%defined('outvol') ) call cline%set('outvol', 'filtered.mrc')
         if( cline%defined('stk') )then
             ! 2D
@@ -548,7 +548,7 @@ contains
         integer                        :: npix, iptcl, j
         logical                        :: l_transp_pca
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//trim(STK_EXT))
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//STK_EXT)
         ! doesn't work if projfile given - may need to mod in future
         if(cline%defined('projfile')) call cline%delete('projfile')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -661,6 +661,7 @@ contains
         use simple_qsys_funs,  only: qsys_job_finished
         class(commander_scale), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
+        type(string), allocatable :: filenames(:)
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: vol2, img, img2
@@ -668,9 +669,7 @@ contains
         real             :: ave, sdev, var, med, smpd_new, scale, smpd_sc
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer          :: istk, nstks, ptcl_fromp, ptcl_top
-        character(len=:), allocatable :: fname, stkin, stkout
-        character(len=LONGSTRLEN), allocatable :: filenames(:)
-        character(len=STDLEN)         :: ext
+        type(string)     :: fname, stkin, stkout, ext
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('projfile') .and. cline%defined('fromp') .and. cline%defined('top')&
@@ -696,11 +695,11 @@ contains
                 stkin      = build%spproj%get_stkname(istk)
                 ptcl_fromp = build%spproj%os_stk%get_fromp(istk)
                 ptcl_top   = build%spproj%os_stk%get_top(istk)
-                ext        = '.'//fname2ext(stkin)
+                ext        = string('.')//fname2ext(stkin)
                 if( cline%defined('dir_target') )then
-                    stkout = filepath(trim(params%dir_target),add2fbody(basename(stkin),ext,SCALE_SUFFIX))
+                    stkout = filepath(params%dir_target,add2fbody(basename(stkin),ext,SCALE_SUFFIX))
                 else
-                    stkout = add2fbody(trim(stkin),ext,SCALE_SUFFIX)
+                    stkout = add2fbody(stkin,ext,SCALE_SUFFIX)
                 endif
                 call scale_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new)
             enddo
@@ -789,19 +788,19 @@ contains
                 do ifile=1,nfiles
                     call progress(ifile, nfiles)
                     if( cline%defined('dir_target') )then
-                        fname = filepath(trim(params%dir_target),add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX))
+                        fname = filepath(params%dir_target,add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX))
                     else
-                        fname = add2fbody(trim(filenames(ifile)), params%ext, SCALE_SUFFIX)
+                        fname = add2fbody(filenames(ifile), params%ext, SCALE_SUFFIX)
                     endif
                     call stkio_w%open(fname, smpd_sc, 'write', box=ldim_scaled(1))
                     call find_ldim_nptcls(filenames(ifile),ldim,nframes)
                     ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
                     do iframe= 1, nframes
                         if( .not. stkio_r%stk_is_open() )then
-                            call stkio_r%open(trim(filenames(ifile)), params%smpd, 'read')
-                        else if( .not. stkio_r%same_stk(trim(filenames(ifile)), ldim) )then
+                            call stkio_r%open(filenames(ifile), params%smpd, 'read')
+                        else if( .not. stkio_r%same_stk(filenames(ifile), ldim) )then
                             call stkio_r%close
-                            call stkio_r%open(trim(filenames(ifile)), params%smpd, 'read')
+                            call stkio_r%open(filenames(ifile), params%smpd, 'read')
                         endif
                         call stkio_r%read(iframe, img)
                         call img%fft()
@@ -813,7 +812,7 @@ contains
                         call img2%ifft()
                         call stkio_w%write(iframe, img2)
                     end do
-                    deallocate(fname)
+                    call fname%kill
                     call stkio_w%close
                     call stkio_r%close
                 end do
@@ -828,14 +827,14 @@ contains
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished( 'simple_commanders_imgproc :: exec_scale' )
+        call qsys_job_finished(string('simple_commanders_imgproc :: exec_scale'))
     end subroutine exec_scale
 
    !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
         class(commander_stack), intent(inout)  :: self
         class(cmdline),         intent(inout)  :: cline
-        character(len=LONGSTRLEN), allocatable :: filenames(:)
+        type(string), allocatable :: filenames(:)
         type(parameters) :: params
         integer          :: nfiles, ldim(3), ifile, ifoo, cnt
         integer          :: lfoo(3), nimgs, iimg
@@ -855,13 +854,13 @@ contains
             cnt = 0
             do ifile=1,nfiles
                 if( .not. file_exists(filenames(ifile)) )then
-                    write(logfhandle,*) 'inputted file does not exist: ', trim(adjustl(filenames(ifile)))
+                    write(logfhandle,*) 'inputted file does not exist: ', filenames(ifile)%to_char()
                 endif
                 call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
                 do iimg=1,nimgs
                     cnt = cnt + 1
                     call img%read(filenames(ifile), iimg)
-                    call img%write(trim(params%outstk), cnt)
+                    call img%write(params%outstk, cnt)
                 end do
                 call progress(ifile, nfiles)
             end do
@@ -872,15 +871,15 @@ contains
             l_clip = cline%defined('clip')
             if( l_clip )then
                 call tmp%new([params%clip,params%clip,1], params%smpd)
-                call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=params%clip)
+                call stkio_w%open(params%outstk, params%smpd, 'write', box=params%clip)
             else
-                call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
+                call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
             endif
             ! loop over files
             cnt = 0
             do ifile=1,nfiles
                 if( .not. file_exists(filenames(ifile)) )then
-                    write(logfhandle,*) 'inputted file does not exist: ', trim(adjustl(filenames(ifile)))
+                    write(logfhandle,*) 'inputted file does not exist: ', filenames(ifile)%to_char()
                 endif
                 call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
                 do iimg=1,nimgs
@@ -915,13 +914,13 @@ contains
         use simple_procimgstk
         class(commander_stackops), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters)              :: params
-        type(builder)                 :: build
-        type(ran_tabu)                :: rt
-        type(oris)                    :: o_here, os_ran
-        type(ori)                     :: o, o2
-        integer,          allocatable :: pinds(:)
-        character(len=:), allocatable :: fname
+        type(parameters)          :: params
+        type(builder)             :: build
+        type(ran_tabu)            :: rt
+        type(oris)                :: o_here, os_ran
+        type(ori)                 :: o, o2
+        integer,      allocatable :: pinds(:)
+        type(string)              :: fname
         integer :: i, s, cnt, nincl
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
@@ -986,7 +985,7 @@ contains
                         call o_here%set_ori(cnt, o2)
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(params%state,2)//trim(TXT_EXT))
+                fname = 'extracted_oris_state'//int2str_pad(params%state,2)//TXT_EXT
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,nincl
@@ -1010,7 +1009,7 @@ contains
                         call o_here%set_ori(cnt, o2)
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(params%class,5)//trim(TXT_EXT))
+                fname = 'extracted_oris_class'//int2str_pad(params%class,5)//TXT_EXT
             else
                 o_here = oris(nincl, is_ptcl=.true.)
                 do i=1,nincl
@@ -1020,7 +1019,7 @@ contains
                     call build%spproj_field%get_ori(pinds(i), o2)
                     call o_here%set_ori(i, o2)
                 end do
-                allocate(fname, source='extracted_oris'//trim(TXT_EXT))
+                fname = 'extracted_oris'//TXT_EXT
             endif
             if( cline%defined('outfile') )then
                 call o_here%write(params%outfile, [1,o_here%get_noris()])
@@ -1055,7 +1054,7 @@ contains
                         call o_here%set_ori(cnt, o2)
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(params%state,2)//trim(TXT_EXT))
+                fname = 'extracted_oris_state'//int2str_pad(params%state,2)//TXT_EXT
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,params%nptcls
@@ -1079,7 +1078,7 @@ contains
                         call o_here%set_ori(cnt, o2)
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(params%class,5)//trim(TXT_EXT))
+                fname = 'extracted_oris_class'//int2str_pad(params%class,5)//TXT_EXT
             endif
             if( cline%defined('outfile') )then
                 call o_here%write(params%outfile, [1,o_here%get_noris()])
@@ -1101,7 +1100,7 @@ contains
         ! produce image statistics
         if( params%stats .eq. 'yes' )then
             call stats_imgfile(params%stk, build%spproj_field)
-            call build%spproj_field%write('image_statistics.txt')
+            call build%spproj_field%write(string('image_statistics.txt'))
             goto 999
         endif
         ! produce local standard deviations
@@ -1227,7 +1226,7 @@ contains
         else
             call cluster_dmat( dmat, 'aprop', nclust, i_medoids, labels)
         endif
-        call arr2file(real(i_medoids), CLUST_MEDIODS_FNAME)
+        call arr2file(real(i_medoids), string(CLUST_MEDIODS_FNAME))
         call dealloc_imgarr(stk_imgs)
         stk_imgs = read_stk_into_imgarr(params%stk)
         call write_imgarr( nimgs, stk_imgs, labels, 'cluster', '.mrcs' )
@@ -1297,7 +1296,7 @@ contains
 
         ! write matching references
         do imatch = 1, nmatch
-            call stk_imgs_ref(labels_match(imatch))%write('matching_refs.mrcs', imatch)
+            call stk_imgs_ref(labels_match(imatch))%write(string('matching_refs.mrcs'), imatch)
         end do
         call dealloc_imgarr(stk_imgs_ref)
         call dealloc_imgarr(stk_imgs_match)
@@ -1340,7 +1339,7 @@ contains
         write(logfhandle,'(A,2F6.1)') '>>> MEDIAN DIAMETER (IN A & pix): ', med_diam,       med_diam/params%smpd
         write(logfhandle,'(A,2F6.1)') '>>> MAX    DIAMETER (IN A & pix): ', diamstats%maxv, diamstats%maxv/params%smpd
         write(logfhandle,'(A,2F6.1)') '>>> MIN    DIAMETER (IN A & pix): ', diamstats%minv, diamstats%minv/params%smpd
-        call fopen(funit, file='diameter_stats.txt', status='replace')
+        call fopen(funit, file=string('diameter_stats.txt'), status='replace')
         write(funit,     '(A,2F6.1)') '>>> AVG    DIAMETER (IN A & pix): ', diamstats%avg,  diamstats%avg/params%smpd
         write(funit,     '(A,2F6.1)') '>>> SDEV   DIAMETER (IN A & pix): ', diamstats%sdev, diamstats%sdev/params%smpd
         write(funit,     '(A,2F6.1)') '>>> MEDIAN DIAMETER (IN A & pix): ', med_diam,       med_diam/params%smpd

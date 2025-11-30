@@ -23,33 +23,32 @@ contains
     subroutine iterate( self, ctfvars, moviename_forctf, orientation, dir_out, l_gen_thumb )
         class(ctf_estimate_iter), intent(inout) :: self
         class(ctfparams),         intent(inout) :: ctfvars
-        character(len=*),         intent(in)    :: moviename_forctf
+        class(string),            intent(in)    :: moviename_forctf
         class(ori),               intent(inout) :: orientation
-        character(len=*),         intent(in)    :: dir_out
+        class(string),            intent(in)    :: dir_out
         logical,                  intent(in)    :: l_gen_thumb
-        type(ctf_estimate_fit)        :: ctffit
-        character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb, docname, tmpl_fname
-        integer                       :: nframes, ldim(3)
+        type(ctf_estimate_fit) :: ctffit
+        type(string) :: fname_diag, moviename_thumb, docname, tmpl_fname
+        integer      :: nframes, ldim(3)
         if( .not. file_exists(moviename_forctf) )&
-        & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
-        call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
+        & write(logfhandle,*) 'inputted micrograph does not exist: ', moviename_forctf%to_char()
+        call find_ldim_nptcls(moviename_forctf, ldim, nframes)
         if( nframes /= 1 )then
             write(logfhandle,*) 'nframes: ', nframes
             THROW_HARD('single frame input to ctf_estimate assumed; iterate')
         endif
         ldim(3) = 1
         ! deal with output
-        tmpl_fname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
-        if( str_has_substr(moviename_forctf, FORCTF_SUFFIX) )then
-            tmpl_fname = tmpl_fname(1:len_trim(tmpl_fname)-7)
+        tmpl_fname = get_fbody(basename(moviename_forctf), params_glob%ext, separator=.false.)
+        if( moviename_forctf%has_substr(FORCTF_SUFFIX) )then
+            tmpl_fname = tmpl_fname%to_char([1,tmpl_fname%strlen_trim()-7])
         endif
-        fname_diag      = filepath(trim(dir_out),trim(adjustl(tmpl_fname))//'_ctf_estimate_diag'//trim(JPG_EXT))
-        moviename_thumb = filepath(trim(dir_out),trim(adjustl(tmpl_fname))//trim(THUMBNAIL_SUFFIX)//trim(JPG_EXT))
-        docname         = filepath(trim(dir_out),trim(adjustl(tmpl_fname))//'_ctf'//trim(TXT_EXT)) !//C_NULL_CHAR ! for future use of star format?
+        fname_diag      = filepath(dir_out, tmpl_fname)//'_ctf_estimate_diag'//JPG_EXT
+        moviename_thumb = filepath(dir_out, tmpl_fname)//THUMBNAIL_SUFFIX//JPG_EXT
+        docname         = filepath(dir_out, tmpl_fname)//'_ctf'//TXT_EXT !//C_NULL_CHAR ! for future use of star format?
         ! filter out frequencies lower than the box can express to avoid aliasing
         call self%micrograph%new(ldim, ctfvars%smpd)
-        call self%micrograph%read(trim(adjustl(moviename_forctf)), 1)
+        call self%micrograph%read(moviename_forctf, 1)
         call self%micrograph%bp(real(params_glob%pspecsz) * ctfvars%smpd, 0.)
         call self%micrograph%ifft
         ! global fitting

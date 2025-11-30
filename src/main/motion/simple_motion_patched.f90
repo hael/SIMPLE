@@ -34,7 +34,7 @@ type :: motion_patched
     real,                   allocatable :: patch_centers(:,:,:)     ! patches centers
     integer,                allocatable :: updateres(:,:)
     integer,                allocatable :: lims_patches(:,:,:,:)    ! patches corners
-    character(len=:),       allocatable :: shift_fname
+    type(string)                        :: shift_fname
     integer                             :: nframes
     integer                             :: ldim(3)                  ! size of entire frame, reference
     integer                             :: ldim_patch(3)            ! size of one patch
@@ -142,18 +142,18 @@ contains
     ! DRIVERS
 
     subroutine correct( self, hp, frames, shift_fname, global_shifts )
-        class(motion_patched),           intent(inout) :: self
-        real,                            intent(in)    :: hp
-        type(image),        allocatable, intent(inout) :: frames(:)
-        character(len=:),   allocatable, intent(inout) :: shift_fname
-        real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
+        class(motion_patched),       intent(inout) :: self
+        real,                        intent(in)    :: hp
+        type(image),    allocatable, intent(inout) :: frames(:)
+        class(string),               intent(inout) :: shift_fname
+        real, optional, allocatable, intent(in)    :: global_shifts(:,:)
         integer :: ldim_frames(3)
         integer :: iframe
         ! prep
         self%hp          = hp
         self%lp          = params_glob%lpstart
         self%updateres   = 0
-        self%shift_fname = trim(shift_fname) // C_NULL_CHAR
+        self%shift_fname = shift_fname%to_char() // C_NULL_CHAR
         if (allocated(self%global_shifts)) deallocate(self%global_shifts)
         self%has_global_shifts = .false.
         if (present(global_shifts)) then
@@ -175,10 +175,10 @@ contains
         call self%set_size_frames_ref()
         ! determine shifts for patches
         select case(trim(params_glob%algorithm))
-        case('patch_refine')
-            call self%det_shifts_refine(frames)
-        case DEFAULT
-            call self%det_shifts(frames)
+            case('patch_refine')
+                call self%det_shifts_refine(frames)
+            case DEFAULT
+                call self%det_shifts(frames)
         end select
         ! deals with frame of reference convention
         select case(trim(params_glob%mcconvention))
@@ -198,7 +198,7 @@ contains
         call self%fit_polynomial()
         ! report visual results
         call self%plot_shifts()
-        shift_fname = trim(self%shift_fname) // C_NULL_CHAR
+        shift_fname = self%shift_fname%to_char() // C_NULL_CHAR
     end subroutine correct
 
     subroutine correct_poly( self, hp, rmsd_threshold, frames, shift_fname, patched_polyn, global_shifts )
@@ -206,7 +206,7 @@ contains
         class(motion_patched),           intent(inout) :: self
         real,                            intent(in)    :: hp, rmsd_threshold
         type(image),        allocatable, intent(inout) :: frames(:)
-        character(len=:),   allocatable, intent(inout) :: shift_fname
+        class(string),                   intent(inout) :: shift_fname
         real(dp),           allocatable, intent(inout) :: patched_polyn(:)
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
         type(motion_align_hybrid), allocatable :: align_hybrid(:,:)
@@ -345,7 +345,7 @@ contains
         end do
         ! report visual results
         call self%plot_shifts()
-        shift_fname = trim(self%shift_fname) // C_NULL_CHAR
+        shift_fname = self%shift_fname%to_char() // C_NULL_CHAR
     end subroutine correct_poly
 
     ! SPECIFIC METHODS
@@ -636,14 +636,14 @@ contains
     subroutine plot_shifts( self )
         class(motion_patched), intent(inout) :: self
         real, parameter           :: SCALE = 40.
-        type(str4arr)             :: title
+        type(string)              :: title
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSetStart, dataSet, fit, patch_start!, obs
-        type(CDataPoint_type)     :: point2, p_fit, point!, p_obs
-        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf
+        type(CDataPoint_type)     :: point2, p_fit, point
+        type(string)              :: ps2pdf_cmd, fname_pdf
         integer :: l, ipx,ipy, iframe, j, iostat
         real    :: shifts(self%nframes,2), loc_shift(2), ref_shift(2), xcenter,ycenter, cx,cy
-        call CPlot2D__new(plot2D, self%shift_fname)
+        call CPlot2D__new(plot2D, self%shift_fname%to_char())
         call CPlot2D__SetXAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
@@ -723,23 +723,24 @@ contains
         call CDataset__delete(dataSet)
         call CDataset__delete(dataSetStart)
         call CDataPoint__delete(point2)
-        title%str = 'X (in pixels; trajectory scaled by '//trim(int2str(nint(SCALE)))//')'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        title%str(1:1) = 'Y'
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
-        call CPlot2D__OutputPostScriptPlot(plot2D, self%shift_fname)
+        title = 'X (in pixels; trajectory scaled by '//trim(int2str(nint(SCALE)))//')'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
+        title = 'Y (in pixels; trajectory scaled by '//trim(int2str(nint(SCALE)))//')'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%to_char())
+        call CPlot2D__OutputPostScriptPlot(plot2D, self%shift_fname%to_char())
         call CPlot2D__delete(plot2D)
         ! conversion to PDF
-        l = len_trim(self%shift_fname)
-        self%shift_fname = self%shift_fname(:l-1) ! removing trailing C NULL character
-        fname_pdf  = trim(get_fbody(self%shift_fname,'eps'))//'.pdf'
-        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
-            //trim(fname_pdf)//' '//trim(self%shift_fname)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        l = self%shift_fname%strlen_trim()
+        self%shift_fname = self%shift_fname%to_char([1,l-1]) ! removing trailing C NULL character
+        fname_pdf        = get_fbody(self%shift_fname,string('eps'))//'.pdf'
+        ps2pdf_cmd       = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760&
+        &-dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
+            //fname_pdf%to_char()//' '//self%shift_fname%to_char()
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         ! update name
         if( iostat == 0 )then
             call del_file(self%shift_fname)
-            self%shift_fname = trim(fname_pdf)
+            self%shift_fname = fname_pdf
         endif
     end subroutine plot_shifts
 

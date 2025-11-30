@@ -3,15 +3,15 @@ module simple_commanders_volops
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_strategy2D_utils
-use simple_parameters,     only: parameters, params_glob
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
+use simple_parameters,       only: parameters, params_glob
+use simple_builder,          only: builder
+use simple_cmdline,          only: cmdline
+use simple_commander_base,   only: commander_base
+use simple_image,            only: image
 use simple_simple_volinterp, only: reproject, rotvol
-use simple_image_msk,         only: image_msk
-use simple_projector,      only: projector
-use simple_dock_vols,      only: dock_vols
+use simple_image_msk,        only: image_msk
+use simple_projector,        only: projector
+use simple_dock_vols,        only: dock_vols
 implicit none
 #include "simple_local_flags.inc"
 
@@ -152,7 +152,7 @@ contains
                 end select
                 write(logfhandle,'(A,3F6.1)')'>>> OFFSET: ',shvec(istate,:)
                 call build%vol%shift(shvec(istate,1:3))
-                call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)
+                call build%vol%write(string('shifted_vol_state'//int2str(istate)//params%ext%to_char()))
             end do
         endif
         if( cline%defined('oritab') )then
@@ -174,12 +174,11 @@ contains
         class(commander_sharpvol), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
-        character(len=:), allocatable :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pproc, fname_lp, fname_mirr
+        type(string)          :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pproc, fname_lp, fname_mirr, pdbout_fname
         type(parameters)      :: params
         type(image)           :: vol_bfac, vol_no_bfac, vol_pdb, cos_img
         type(image_bin)       :: vol_pdbin
         type(atoms)           :: pdb
-        character(len=STDLEN) :: pdbout_fname
         real    :: fsc0143, fsc05, lplim, lp_min=0., lp_max=20.
         integer :: ldim(3), ifoo
         logical :: has_fsc
@@ -190,20 +189,20 @@ contains
         ! check volume, get correct smpd & box
         fname_vol = params%vols(1)
         if( .not.file_exists(fname_vol) )then
-            THROW_HARD('volume: '//trim(fname_vol)//' does not exist')
+            THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
         ! generate file names
-        fname_pdb   = add2fbody(trim(fname_vol), params%ext, '_pdb')
-        fname_even  = add2fbody(trim(fname_vol), params%ext, '_even')
-        fname_odd   = add2fbody(trim(fname_vol), params%ext, '_odd' )
-        fname_pproc = basename(add2fbody(trim(fname_vol),   params%ext, PPROC_SUFFIX))
-        fname_mirr  = basename(add2fbody(trim(fname_pproc), params%ext, MIRR_SUFFIX))
-        fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
+        fname_pdb   = add2fbody(fname_vol, params%ext, '_pdb')
+        fname_even  = add2fbody(fname_vol, params%ext, '_even')
+        fname_odd   = add2fbody(fname_vol, params%ext, '_odd' )
+        fname_pproc = basename(add2fbody(fname_vol,   params%ext, PPROC_SUFFIX))
+        fname_mirr  = basename(add2fbody(fname_pproc, params%ext, MIRR_SUFFIX))
+        fname_lp    = basename(add2fbody(fname_vol,   params%ext, LP_SUFFIX))
         if( .not.file_exists(fname_even) )then
-            THROW_HARD('volume: '//trim(fname_even)//' does not exist')
+            THROW_HARD('volume: '//fname_even%to_char()//' does not exist')
         endif
         if( .not.file_exists(fname_odd) )then
-            THROW_HARD('volume: '//trim(fname_odd)//' does not exist')
+            THROW_HARD('volume: '//fname_odd%to_char()//' does not exist')
         endif
         ! read volume(s)
         call find_ldim_nptcls(fname_vol, ldim, ifoo)
@@ -212,7 +211,7 @@ contains
         ! generate & apply pdb mask from pdb
         call pdb%new(params%pdbfile)
         if( pdb%check_center() .or. params%center_pdb .eq. 'yes' )then
-            pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered.pdb'
+            pdbout_fname = get_fbody(params%pdbfile, 'pdb') // '_centered.pdb'
             call pdb%pdb2mrc( params%pdbfile, fname_pdb, params%smpd, center_pdb=.true., pdb_out=pdbout_fname, vol_dim=ldim )
         else 
             call pdb%pdb2mrc( params%pdbfile, fname_pdb, params%smpd, vol_dim=ldim )
@@ -230,13 +229,13 @@ contains
         ! check fsc filter & determine resolution
         has_fsc = .false.        
         if( cline%defined('fsc') )then
-            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
+            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//params%fsc%to_char()//' not found')
             has_fsc = .true.
         else
             if( file_exists(params%fsc) )then
                 has_fsc = .true.
             else
-                THROW_WARN('FSC file: '//trim(params%fsc)//' not found')
+                THROW_WARN('FSC file: '//params%fsc%to_char()//' not found')
                 has_fsc = .false.
                 if( .not. cline%defined('lp') ) THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_sharpvol')
             endif 
@@ -304,9 +303,9 @@ contains
         use simple_sp_project, only: sp_project
         class(commander_postprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        character(len=:), allocatable :: fname_vol, fname_fsc, fname_mirr
-        character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
-        real,             allocatable :: fsc(:), optlp(:), res(:)
+        real, allocatable :: fsc(:), optlp(:), res(:)
+        type(string)     :: fname_vol, fname_fsc, fname_mirr
+        type(string)     :: fname_even, fname_odd, fname_pproc, fname_lp
         type(parameters) :: params
         type(image)      :: vol_bfac, vol_no_bfac
         type(sp_project) :: spproj
@@ -333,16 +332,16 @@ contains
             call spproj%get_vol('vol', state, fname_vol, smpd, box)
         endif
         if( .not.file_exists(fname_vol) )then
-            THROW_HARD('volume: '//trim(fname_vol)//' does not exist')
+            THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
         ! using the input volume for postprocessing
-        if( cline%defined('vol'//int2str(state)) ) fname_vol = trim(params%vols(state))
+        if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
         ! generate file names
-        fname_even  = add2fbody(trim(fname_vol), params%ext, '_even')
-        fname_odd   = add2fbody(trim(fname_vol), params%ext, '_odd' )
-        fname_pproc = basename(add2fbody(trim(fname_vol),   params%ext, PPROC_SUFFIX))
-        fname_mirr  = basename(add2fbody(trim(fname_pproc), params%ext, MIRR_SUFFIX))
-        fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
+        fname_even  = add2fbody(fname_vol, params%ext, '_even')
+        fname_odd   = add2fbody(fname_vol, params%ext, '_odd' )
+        fname_pproc = basename(add2fbody(fname_vol,   params%ext, PPROC_SUFFIX))
+        fname_mirr  = basename(add2fbody(fname_pproc, params%ext, MIRR_SUFFIX))
+        fname_lp    = basename(add2fbody(fname_vol,   params%ext, LP_SUFFIX))
         ! read volume(s)
         ldim = [box,box,box]
         call vol_bfac%new(ldim, smpd)
@@ -350,15 +349,15 @@ contains
         ! check fsc filter & determine resolution
         has_fsc = .false.        
         if( cline%defined('fsc') )then
-            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
+            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//params%fsc%to_char()//' not found')
             has_fsc = .true.
         else
             call spproj%get_fsc(state, fname_fsc, fsc_box)
-            params%fsc = trim(fname_fsc)
+            params%fsc = fname_fsc
             if( file_exists(params%fsc) )then
                 has_fsc = .true.
             else
-                THROW_WARN('FSC file: '//trim(params%fsc)//' not found')
+                THROW_WARN('FSC file: '//params%fsc%to_char()//' not found')
                 has_fsc = .false.
                 if( .not. cline%defined('lp') ) THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
             endif 
@@ -434,7 +433,7 @@ contains
         if( .not. cline%defined('wfun')   ) call cline%set('wfun',   'kb')
         if( .not. cline%defined('winsz')  ) call cline%set('winsz',   1.5)
         if( .not. cline%defined('alpha')  ) call cline%set('alpha',    2.)
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'reprojs'//trim(STK_EXT))
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'reprojs'//STK_EXT)
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) THROW_HARD('need nspace (for number of projections)!')
         endif
@@ -481,7 +480,7 @@ contains
             endif
         enddo
         call build%spproj_field%set_all('state', states) ! restore
-        call build%spproj_field%write('reproject_oris'//trim(TXT_EXT), [1,params%nptcls])
+        call build%spproj_field%write(string('reproject_oris'//TXT_EXT), [1,params%nptcls])
         if( cline%defined('state') ) where( states /= params%state ) states = 0
         ! zero state=0
         call imgs(1)%zero
@@ -519,7 +518,7 @@ contains
         type(image)      :: vol_rot
         real             :: shvec(3),  ave, sdev, maxv, minv
         call build%init_params_and_build_general_tbox(cline,params)
-        inquire(FILE=params%vols(1), EXIST=here)
+        here = file_exists(params%vols(1))
         if( here )then
             call build%vol%read(params%vols(1))
         else
@@ -592,7 +591,7 @@ contains
         if( cline%defined('nspace') )then
             call noisevol%ran()
             call noisevol%div(real(params%box))
-            call noisevol%write('noisevol.mrc')
+            call noisevol%write(string('noisevol.mrc'))
             params%refs      = 'start2Drefs.mrc'
             params%refs_even = 'start2Drefs_even.mrc'
             params%refs_odd  = 'start2Drefs_odd.mrc'
@@ -610,11 +609,11 @@ contains
         else
             do s = 1, params%nstates
                 call noisevol%ran()
-                call noisevol%write('noisevol_state'//int2str_pad(s,2)//'.mrc')
+                call noisevol%write(string('noisevol_state'//int2str_pad(s,2)//'.mrc'))
                 call noisevol%ran()
-                call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_even.mrc')
+                call noisevol%write(string('noisevol_state'//int2str_pad(s,2)//'_even.mrc'))
                 call noisevol%ran()
-                call noisevol%write('noisevol_state'//int2str_pad(s,2)//'_odd.mrc')
+                call noisevol%write(string('noisevol_state'//int2str_pad(s,2)//'_odd.mrc'))
             end do
         endif
         call noisevol%kill
@@ -628,10 +627,10 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(dock_vols)  :: dvols
         type(parameters) :: params
-        character(:), allocatable :: fn_vol_docked
+        type(string)     :: fn_vol_docked
         if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
-        fn_vol_docked = trim(get_fbody(params%vols(2),'mrc'))//'_docked.mrc'
+        fn_vol_docked = get_fbody(params%vols(2),'mrc')//'_docked.mrc'
         call dvols%new(params%vols(1), params%vols(2), params%smpd, params%hp, params%lp, params%mskdiam)
         call dvols%srch()
         call dvols%rotate_target(params%vols(2), fn_vol_docked)
@@ -646,14 +645,14 @@ contains
         use simple_volpft_symsrch
         class(commander_symaxis_search), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
-        character(len=32), parameter :: SYMAXISTAB = 'sym_axis'//trim(TXT_EXT)
+        character(len=*), parameter :: SYMSHTAB   = 'sym_3dshift'//TXT_EXT
+        character(len=*), parameter :: SYMAXISTAB = 'sym_axis'//TXT_EXT
         type(parameters)      :: params
         type(builder)         :: build
         type(ori)             :: symaxis
         type(oris)            :: symaxis4write
         type(sym)             :: syme
-        character(len=STDLEN) :: fbody
+        type(string)          :: fbody
         real                  :: shvec(3)
         integer               :: box
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
@@ -668,7 +667,7 @@ contains
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk_crop)
             call build%vol%shift(shvec)
             fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            call build%vol%write(trim(fbody)//'_centered.mrc')
+            call build%vol%write(fbody//'_centered.mrc')
         endif
         ! mask volume
         call build%vol%mask(params%msk_crop, 'soft')
@@ -678,13 +677,13 @@ contains
         call volpft_srch4symaxis(symaxis)
         call symaxis4write%new(1, is_ptcl=.false.)
         call symaxis4write%set_ori(1, symaxis)
-        call symaxis4write%write(SYMAXISTAB, [1,1])
+        call symaxis4write%write(string(SYMAXISTAB), [1,1])
         if( cline%defined('projfile') )then
             if( trim(params%mkdir).eq.'yes' )then
                 ! updates paths manually as project is not required in this application
                 ! this is usually performed in the parameters type
-                call simple_copy_file(trim(params%projfile), filepath(PATH_HERE, basename(params%projfile)))
-                params%projfile = trim(simple_abspath(filepath(PATH_HERE, basename(params%projfile))))
+                call simple_copy_file(params%projfile, filepath(PATH_HERE, basename(params%projfile)))
+                params%projfile = simple_abspath(filepath(PATH_HERE, basename(params%projfile)))
                 params%projname = get_fbody(params%projfile, 'simple')
                 call cline%set('projname', params%projname)
                 call build%spproj%update_projinfo(cline)
@@ -711,14 +710,14 @@ contains
         ! rotate volume to symaxis for later comparison
         call build%vol%read(params%vols(1))
         build%vol2 = rotvol(build%vol, symaxis)
-        call build%vol2%write('vol_aligned2_'//trim(params%pgrp)//'axis'//params%ext)
+        call build%vol2%write(string('vol_aligned2_')//trim(params%pgrp)//'axis'//params%ext%to_char())
         ! destruct
         call symaxis%kill
         call symaxis4write%kill
         call syme%kill
         ! end gracefully
         call simple_end('**** SIMPLE_SYMAXIS_SEARCH NORMAL STOP ****')
-        call simple_touch('SYMAXIS_SEARCH_FINISHED', errmsg='In: commander_volops :: exec_symsrch')
+        call simple_touch('SYMAXIS_SEARCH_FINISHED')
     end subroutine exec_symaxis_search
 
     subroutine exec_symmetrize_map( self, cline )
@@ -736,7 +735,7 @@ contains
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        if( .not. cline%defined('outvol') ) params%outvol = 'symmetrized_map'//params%ext
+        if( .not. cline%defined('outvol') ) params%outvol = string('symmetrized_map')//params%ext
         call build%vol%read(params%vols(1))
         ! possible downscaling of input vol
         ldim = build%vol%get_ldim()
@@ -771,8 +770,8 @@ contains
             if( trim(params%mkdir).eq.'yes' )then
                 ! updates paths manually as project is not required in this application
                 ! this is usually performed in the parameters type
-                call simple_copy_file(trim(params%projfile), filepath(PATH_HERE, basename(params%projfile)))
-                params%projfile = trim(simple_abspath(filepath(PATH_HERE, basename(params%projfile))))
+                call simple_copy_file(params%projfile, filepath(PATH_HERE, basename(params%projfile)))
+                params%projfile = simple_abspath(filepath(PATH_HERE, basename(params%projfile)))
                 params%projname = get_fbody(params%projfile, 'simple')
                 call cline%set('projname', params%projname)
                 call build%spproj%update_projinfo(cline)
@@ -796,7 +795,7 @@ contains
             endif
         endif
         ! write
-        call build%vol2%write(trim(params%outvol))
+        call build%vol2%write(params%outvol)
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRIZE_MAP NORMAL STOP ****')
     end subroutine exec_symmetrize_map
@@ -870,7 +869,7 @@ contains
         type(image)       :: vol
         integer           :: npix
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//trim(STK_EXT))
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//STK_EXT)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         if( .not.file_exists(params%vols(1)) ) THROW_HARD('cannot find the inputvolume')
         call build%vol%read(params%vols(1))

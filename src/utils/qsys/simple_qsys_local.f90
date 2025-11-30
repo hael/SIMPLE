@@ -35,7 +35,7 @@ contains
     !> \brief  is a getter
     function get_local_submit_cmd( self ) result( cmd )
         class(qsys_local), intent(in) :: self
-        character(len=:), allocatable :: cmd
+        type(string) :: cmd
         cmd = self%env%get('qsys_submit_cmd')
     end function get_local_submit_cmd
 

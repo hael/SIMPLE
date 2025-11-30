@@ -9,9 +9,9 @@ implicit none
 contains
 
     function sample_filetab( filetab, nsample ) result(filetab_smpl)
-        character(len=*), intent(in) :: filetab(:)
-        integer,          intent(in) :: nsample
-        character(len=LONGSTRLEN), allocatable :: filetab_smpl(:)
+        class(string), intent(in) :: filetab(:)
+        integer,       intent(in) :: nsample
+        type(string), allocatable :: filetab_smpl(:)
         integer, allocatable :: inds(:)
         type(ran_tabu) :: rt
         integer :: n
@@ -20,11 +20,12 @@ contains
         allocate(inds(nsample), source=0)
         call rt%ne_ran_iarr(inds)
         call rt%kill
-        allocate(filetab_smpl(nsample), source=filetab(inds))
+        allocate(filetab_smpl(nsample))
+        filetab_smpl = filetab(inds)
     end function sample_filetab
 
     subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty, mic_mask )
-        character(len=*),               intent(in)    :: micname !< micrograph file name
+        class(string),                  intent(in)    :: micname !< micrograph file name
         real,                           intent(in)    :: smpd    !< sampling distance in A
         real,                           intent(in)    :: scale   !< scale factor
         character(len=*),               intent(in)    :: pcontrast
@@ -80,7 +81,7 @@ contains
     end subroutine read_mic_subtr_backgr_shrink
 
     subroutine read_mic_subtr_backgr( micname, smpd, pcontrast, mic_raw, l_empty )
-        character(len=*), intent(in)    :: micname !< micrograph file name
+        class(string),    intent(in)    :: micname !< micrograph file name
         real,             intent(in)    :: smpd    !< sampling distance in A
         character(len=*), intent(in)    :: pcontrast
         class(image),     intent(inout) :: mic_raw
@@ -111,8 +112,8 @@ contains
     end subroutine read_mic_subtr_backgr
 
     subroutine read_mic( micname, mic_out )
-        character(len=*), intent(in)    :: micname !< micrograph file name
-        type(image),      intent(inout) :: mic_out
+        class(string), intent(in)    :: micname !< micrograph file name
+        type(image),   intent(inout) :: mic_out
         integer :: nframes, ldim(3)
         real    :: smpd
         call find_ldim_nptcls(micname, ldim, nframes, smpd=smpd)
@@ -337,9 +338,9 @@ contains
                                 enddo
                             enddo
                         enddo
-                        call tmpimg2%write('clusters.mrc',i)
+                        call tmpimg2%write(string('clusters.mrc'),i)
                     enddo
-                    call mic%write('clusters.mrc',K+1)
+                    call mic%write(string('clusters.mrc'),K+1)
                     call tmpimg2%kill
                 endif
                 call tmpimg%kill

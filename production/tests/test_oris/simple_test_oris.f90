@@ -23,11 +23,11 @@ print *,'>>> ORIS ELEMENT EXISTS ', o%exists(1)
 if(.not. o%exists(1)) test_passed=.false.
 call o%rnd_oris(5.)
 print *,'>>> ORIS WRITE'
-call o%write('test_oris_rndoris.txt')
+call o%write(string('test_oris_rndoris.txt'))
 print *,'>>> ORIS READ'
-call o2%read('test_oris_rndoris.txt')
+call o2%read(string('test_oris_rndoris.txt'))
 print *,'>>> ORIS WRITE 2'
-call o2%write('test_oris_rndoris_copy.txt')
+call o2%write(string('test_oris_rndoris_copy.txt'))
 ! call o%getter( 1, key='projname', val=valstr)
 ! print *, valstr
 ! string=o%ori2str(1)

@@ -21,7 +21,7 @@ type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)
     type(qsys_ctrl),           public  :: qscripts
     type(chash),               public  :: qdescr
-    character(len=STDLEN),     private :: simple_exec_bin
+    type(string),              private :: simple_exec_bin
     type(qsys_factory),        private :: qsys_fac
     class(qsys_base), pointer, private :: myqsys=>null()
     integer,                   private :: nparts
@@ -44,21 +44,21 @@ contains
 
     subroutine new( self, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
         use simple_sp_project, only: sp_project
-        class(qsys_env),             intent(inout) :: self
-        integer,                     intent(in)    :: nparts
-        logical,           optional, intent(in)    :: stream
-        integer,           optional, intent(in)    :: numlen, nptcls, qsys_nthr
-        character(len=*),  optional, intent(in)    :: exec_bin
-        character(len=*),  optional, intent(in)    :: qsys_name ! to override the qsys read in
-        character(len=*),  optional, intent(in)    :: qsys_partition ! to override the qsys read in
-        type(ori)                     :: compenv_o
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
-        character(len=STDLEN)         :: default_time_env
-        integer                       :: partsz, hrs, mins, secs, nptcls_here, envlen
-        real                          :: rtpi, tot_time_sec, default_time
-        logical                       :: sstream
-        integer, parameter            :: MAXENVKEYS = 30
+        class(qsys_env),         intent(inout) :: self
+        integer,                 intent(in)    :: nparts
+        logical,       optional, intent(in)    :: stream
+        integer,       optional, intent(in)    :: numlen, nptcls, qsys_nthr
+        class(string), optional, intent(in)    :: exec_bin
+        class(string), optional, intent(in)    :: qsys_name ! to override the qsys read in
+        class(string), optional, intent(in)    :: qsys_partition ! to override the qsys read in
+        type(ori)             :: compenv_o
+        type(sp_project)      :: spproj
+        type(string)          :: qsnam, tpi, hrs_str, mins_str, secs_str
+        character(len=STDLEN) :: default_time_env
+        integer               :: partsz, hrs, mins, secs, nptcls_here, envlen
+        real                  :: rtpi, tot_time_sec, default_time
+        logical               :: sstream
+        integer, parameter    :: MAXENVKEYS = 30
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream
@@ -108,29 +108,27 @@ contains
             mins_str     = int2str(mins)
             secs         = int(tot_time_sec - 3600.*real(hrs) - 60.*real(mins))
             secs_str     = int2str(secs)
-            call self%qdescr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
+            call self%qdescr%set('job_time','0-'//hrs_str%to_char()//':'//mins_str%to_char()//':'//secs_str%to_char())
         endif
         if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
-        ! force local if nparts is 1 or less
-       ! if(params_glob%nparts < 2) call self%qdescr%set('qsys_name', 'local')
         qsnam = self%qdescr%get('qsys_name')
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         if(present(exec_bin))then
-            self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin',trim(exec_bin), nonalloc=.true.)
+            self%simple_exec_bin = filepath(self%qdescr%get('simple_path'),string('bin'),exec_bin)
         else
-            self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin','simple_private_exec', nonalloc=.true.)
+            self%simple_exec_bin = filepath(self%qdescr%get('simple_path'),string('bin'),string('simple_private_exec'))
         endif
         call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
             &[1, self%nparts], params_glob%ncunits, sstream, numlen)
         if(present(qsys_nthr)) then
-            call self%qdescr%set('job_cpus_per_task', int2str(qsys_nthr))         ! overrides env file and params_glob
+            call self%qdescr%set('job_cpus_per_task', int2str(qsys_nthr))                  ! overrides env file and params_glob
         else
-            call self%qdescr%set('job_cpus_per_task', int2str(params_glob%nthr))  ! overrides env file
+            call self%qdescr%set('job_cpus_per_task', int2str(params_glob%nthr))           ! overrides env file
         endif
-        if(present(qsys_partition)) call self%qdescr%set('qsys_partition', trim(qsys_partition))         ! overrides env file and params_glob
-        call self%qdescr%set('job_nparts', int2str(params_glob%nparts)) ! overrides env file
-        deallocate(qsnam)
+        if(present(qsys_partition)) call self%qdescr%set('qsys_partition', qsys_partition) ! overrides env file and params_glob
+        call self%qdescr%set('job_nparts', int2str(params_glob%nparts))                    ! overrides env file
+        call qsnam%kill
         call compenv_o%kill
         call spproj%kill
         self%existence = .true.
@@ -146,7 +144,7 @@ contains
         use simple_cmdline, only: cmdline
         class(qsys_env)              :: self
         class(cmdline)               :: cline
-        character(len=*), intent(in) :: script_name, prg_output
+        class(string),    intent(in) :: script_name, prg_output
         call self%qscripts%generate_script(cline, self%qdescr, script_name, prg_output)
     end subroutine gen_script
 
@@ -155,7 +153,7 @@ contains
         class(chash)                           :: job_descr
         class(chash),     optional             :: part_params(self%nparts)
         type(parameters), optional, intent(in) :: extra_params
-        character(len=*), optional             :: algnfbody
+        class(string),    optional             :: algnfbody
         logical,          optional             :: array
         logical :: aarray
         aarray = .false.
@@ -175,11 +173,11 @@ contains
         end select
         call qsys_cleanup
         if( aarray )then
-            call self%qscripts%generate_array_script(job_descr, trim(params_glob%ext), self%qdescr,&
+            call self%qscripts%generate_array_script(job_descr, params_glob%ext, self%qdescr,&
             &outfile_body=algnfbody, part_params=part_params)
             call self%qscripts%schedule_array_jobs
         else
-            call self%qscripts%generate_scripts(job_descr, trim(params_glob%ext), self%qdescr,&
+            call self%qscripts%generate_scripts(job_descr, params_glob%ext, self%qdescr,&
             &outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
             call self%qscripts%schedule_jobs
         endif
@@ -187,16 +185,16 @@ contains
 
     subroutine exec_simple_prg_in_queue( self, cline, finish_indicator )
         use simple_cmdline, only: cmdline
-        class(qsys_env),  intent(inout) :: self
-        class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(in)    :: finish_indicator
-        character(len=*), parameter     :: SCRIPT_NAME = 'simple_script_single'
-        type(chash)                     :: job_descr
+        class(qsys_env), intent(inout) :: self
+        class(cmdline),  intent(inout) :: cline
+        class(string),   intent(in)    :: finish_indicator
+        character(len=*), parameter    :: SCRIPT_NAME = 'simple_script_single'
+        type(chash)                    :: job_descr
         call del_file(finish_indicator)
         call cline%gen_job_descr(job_descr)
-        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, SCRIPT_NAME)
-        call wait_for_closure(SCRIPT_NAME)
-        call self%qscripts%submit_script(SCRIPT_NAME)
+        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, string(SCRIPT_NAME))
+        call wait_for_closure(string(SCRIPT_NAME))
+        call self%qscripts%submit_script(string(SCRIPT_NAME))
         call qsys_watcher(finish_indicator)
         call del_file(finish_indicator)
         call job_descr%kill
@@ -204,10 +202,10 @@ contains
 
     subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, exec_bin )
         use simple_cmdline, only: cmdline
-        class(qsys_env),            intent(inout) :: self
-        class(cmdline),             intent(in)    :: cline
-        character(len=*),           intent(in)    :: script_name, outfile
-        character(len=*), optional, intent(in)    :: exec_bin
+        class(qsys_env),         intent(inout) :: self
+        class(cmdline),          intent(in)    :: cline
+        class(string),           intent(in)    :: script_name, outfile
+        class(string), optional, intent(in)    :: exec_bin
         type(chash) :: job_descr
         call cline%gen_job_descr(job_descr)
         if( present(exec_bin) )then
@@ -224,10 +222,10 @@ contains
     !>  To submit a list of jobs asynchronously
     subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile, exec_bins )
         use simple_cmdline, only: cmdline
-        class(qsys_env),                 intent(inout) :: self
-        type(cmdline),      allocatable, intent(in)    :: clines(:)
-        character(len=*),                intent(in)    :: script_name, outfile
-        character(len=STDLEN), optional, intent(in)    :: exec_bins(:)
+        class(qsys_env),            intent(inout) :: self
+        type(cmdline), allocatable, intent(in)    :: clines(:)
+        class(string),              intent(in)    :: script_name, outfile
+        class(string),    optional, intent(in)    :: exec_bins(:)
         type(chash), allocatable :: jobs_descr(:)
         integer :: i, njobs
         njobs = size(clines)
@@ -246,8 +244,8 @@ contains
 
     function get_exec_bin( self ) result( exec_bin )
         class(qsys_env), intent(in) :: self
-        character(len=STDLEN)   :: exec_bin
-        exec_bin = trim(self%simple_exec_bin)
+        type(string):: exec_bin
+        exec_bin = self%simple_exec_bin
     end function get_exec_bin
 
     function get_qsys( self )result( qsys )

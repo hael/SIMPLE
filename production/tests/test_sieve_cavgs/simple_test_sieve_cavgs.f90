@@ -4,7 +4,7 @@ use simple_cmdline,             only: cmdline
 use simple_commanders_stream2D, only:stream_test_sieve_cavgs
 implicit none
 type(cmdline)                 :: cline
-character(len=:), allocatable :: last_prev_dir, fname
+type(string)                  :: last_prev_dir, fname
 integer                       :: idir
 if( command_argument_count() < 8 )then
     write(logfhandle,'(a)') 'ERROR! Required parameters:'
@@ -24,12 +24,12 @@ call cline%checkvar('nthr',            7)
 call cline%checkvar('ncls',            8)
 call cline%check
 ! For test program convenience
-idir = find_next_int_dir_prefix(PATH_HERE, last_prev_dir)
+idir = find_next_int_dir_prefix(string(PATH_HERE), last_prev_dir)
 call cline%set('exec_dir', int2str(idir)//'_test_sieve_cavgs')
 call cline%set('filetab',  simple_abspath(cline%get_carg('filetab')))
 call cline%set('pickrefs', simple_abspath(cline%get_carg('pickrefs')))
-call simple_mkdir( filepath(PATH_HERE, trim(cline%get_carg('exec_dir'))))
-call simple_chdir( filepath(PATH_HERE, trim(cline%get_carg('exec_dir'))))
+call simple_mkdir( filepath(PATH_HERE, cline%get_carg('exec_dir')))
+call simple_chdir( filepath(PATH_HERE, cline%get_carg('exec_dir')))
 ! execution
 call stream_test_sieve_cavgs(cline)
 end program simple_test_sieve_cavgs

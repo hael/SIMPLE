@@ -2,7 +2,7 @@
 module simple_reconstructor_eo
 include 'simple_lib.f08'
 use simple_reconstructor, only: reconstructor
-use simple_image_msk,        only: image_msk
+use simple_image_msk,     only: image_msk
 use simple_parameters,    only: params_glob
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
@@ -18,8 +18,8 @@ type :: reconstructor_eo
     type(reconstructor) :: even
     type(reconstructor) :: odd
     type(reconstructor) :: eosum
-    type(image_msk)        :: envmask
-    character(len=4)    :: ext
+    type(image_msk)     :: envmask
+    type(string)        :: ext
     real, allocatable   :: fsc(:)
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
@@ -194,15 +194,15 @@ contains
         res_fsc05   = self%res_fsc05
     end subroutine get_res
 
-    subroutine get_rhoexp_ptr( self, string, rho_ptr )
+    subroutine get_rhoexp_ptr( self, str_eo, rho_ptr )
         class(reconstructor_eo), target, intent(in)  :: self
-        character(len=*),                intent(in)  :: string
+        character(len=*),                intent(in)  :: str_eo
         real(kind=c_float), pointer,     intent(out) :: rho_ptr(:,:,:)
-        select case(trim(string))
-        case('even')
-            call self%even%get_rhoexp_ptr(rho_ptr)
-        case('odd')
-            call self%odd%get_rhoexp_ptr(rho_ptr)
+        select case(trim(str_eo))
+            case('even')
+                call self%even%get_rhoexp_ptr(rho_ptr)
+            case('odd')
+                call self%odd%get_rhoexp_ptr(rho_ptr)
         end select
     end subroutine get_rhoexp_ptr
 
@@ -211,7 +211,7 @@ contains
     !>  \brief  write the even and odd reconstructions
     subroutine write_eos( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody !< filename
+        class(string),           intent(in)    :: fbody !< filename
         call self%write_even(fbody)
         call self%write_odd(fbody)
     end subroutine write_eos
@@ -219,23 +219,23 @@ contains
     !>  \brief  write the even reconstruction
     subroutine write_even( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
-        call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
-        call self%even%write_rho(trim('rho_'//trim(adjustl(fbody))//'_even'//self%ext))
+        class(string),           intent(in)    :: fbody
+        call self%even%write(fbody//'_even'//self%ext%to_char(), del_if_exists=.true.)
+        call self%even%write_rho(string('rho_')//fbody//'_even'//self%ext%to_char())
     end subroutine write_even
 
     !>  \brief  write the odd reconstruction
     subroutine write_odd( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
-        call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
-        call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//self%ext)
+        class(string),           intent(in)    :: fbody
+        call self%odd%write(fbody//'_odd'//self%ext%to_char(), del_if_exists=.true.)
+        call self%odd%write_rho(string('rho_')//fbody//'_odd'//self%ext%to_char())
     end subroutine write_odd
 
     !>  \brief read the even and odd reconstructions
     subroutine read_eos( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
+        class(string),           intent(in)    :: fbody
         logical, parameter :: SERIAL_READ = .false.
         if( SERIAL_READ )then
             call self%read_even(fbody)
@@ -249,23 +249,23 @@ contains
     subroutine read_eos_parallel_io( self, fbody )
         use simple_imgfile, only: imgfile
         class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
+        class(string),           intent(in)    :: fbody
         real(kind=c_float),            pointer :: rmat_ptr(:,:,:) => null() !< image pixels/voxels (in data)
         real(kind=c_float),            pointer :: rho_ptr(:,:,:)  => null() !< sampling+CTF**2 density
         complex(kind=c_float_complex), pointer :: pcmate(:,:,:),pcmato(:,:,:), pprevcmate(:,:,:),pprevcmato(:,:,:)
         real(kind=c_float),            pointer :: prhoe(:,:,:), prhoo(:,:,:)
         real,                      allocatable :: rho_e(:,:,:), rho_o(:,:,:)
-        character(len=:),          allocatable :: even_vol, even_rho, odd_vol, odd_rho
+        type(string)  :: even_vol, even_rho, odd_vol, odd_rho
         type(image)   :: prev_vol_e, prev_vol_o
         type(imgfile) :: ioimg_e, ioimg_o
         integer       :: lims(3,2), cshape(3), prev_ldim(3), phys_out(3),phys_in(3)
         integer       :: h,k,l, fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
         real          :: prev_smpd
         logical       :: here(4), l_pad_with_zeros
-        even_vol = trim(adjustl(fbody))//'_even'//self%ext
-        even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
-        odd_vol  = trim(adjustl(fbody))//'_odd'//self%ext
-        odd_rho  = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
+        even_vol = fbody//'_even'//self%ext%to_char()
+        even_rho = string('rho_')//fbody//'_even'//self%ext%to_char()
+        odd_vol  = fbody//'_odd'//self%ext
+        odd_rho  = string('rho_')//fbody//'_odd'//self%ext%to_char()
         here(1)  = file_exists(even_vol)
         here(2)  = file_exists(even_rho)
         here(3)  = file_exists(odd_vol)
@@ -283,10 +283,10 @@ contains
                     l_pad_with_zeros = .true.
                 endif
             endif
-            call fopen(fhandle_rho_e, file=trim(even_rho), status='OLD', action='READ', access='STREAM', iostat=ierr)
-            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//trim(even_rho), ierr)
-            call fopen(fhandle_rho_o, file=trim(odd_rho),  status='OLD', action='READ', access='STREAM', iostat=ierr)
-            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//trim(odd_rho),  ierr)
+            call fopen(fhandle_rho_e, file=even_rho, status='OLD', action='READ', access='STREAM', iostat=ierr)
+            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//even_rho%to_char(), ierr)
+            call fopen(fhandle_rho_o, file=odd_rho,  status='OLD', action='READ', access='STREAM', iostat=ierr)
+            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//odd_rho%to_char(),  ierr)
             if( l_pad_with_zeros )then
                 call ioimg_e%open(even_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
                 call ioimg_o%open(odd_vol,  prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
@@ -309,11 +309,11 @@ contains
                         case(3)
                             read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
                             if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(even_rho), ierr)
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// even_rho%to_char(), ierr)
                         case(4)
                             read(fhandle_rho_o, pos=1, iostat=ierr) rho_o
                             if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(odd_rho), ierr)
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// odd_rho%to_char(), ierr)
                         end select
                 end do
                 !$omp end parallel do
@@ -359,12 +359,12 @@ contains
                             call self%even%get_rho_ptr(rho_ptr)
                             read(fhandle_rho_e, pos=1, iostat=ierr) rho_ptr
                             if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(even_rho), ierr)
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// even_rho%to_char(), ierr)
                         case(4)
                             call self%odd%get_rho_ptr(rho_ptr)
                             read(fhandle_rho_o, pos=1, iostat=ierr) rho_ptr
                             if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(odd_rho), ierr)
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// odd_rho%to_char(), ierr)
                     end select
                 end do
                 !$omp end parallel do
@@ -382,11 +382,11 @@ contains
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
-        character(len=STDLEN)                  :: even_vol, even_rho
-        logical                                :: here(2)
-        even_vol = trim(adjustl(fbody))//'_even'//self%ext
-        even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
+        class(string),           intent(in)    :: fbody
+        type(string) :: even_vol, even_rho
+        logical      :: here(2)
+        even_vol = fbody//'_even'//self%ext%to_char()
+        even_rho = string('rho_')//fbody//'_even'//self%ext%to_char()
         here(1)= file_exists(even_vol)
         here(2)= file_exists(even_rho)
         if( all(here) )then
@@ -400,11 +400,11 @@ contains
     !>  \brief  read the odd reconstruction
     subroutine read_odd( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
-        character(len=STDLEN)                  :: odd_vol, odd_rho
-        logical                                :: here(2)
-        odd_vol = trim(adjustl(fbody))//'_odd'//self%ext
-        odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
+        class(string),           intent(in)    :: fbody
+        type(string) :: odd_vol, odd_rho
+        logical      :: here(2)
+        odd_vol = fbody//'_odd'//self%ext%to_char()
+        odd_rho = string('rho_')//fbody//'_odd'//self%ext%to_char()
         here(1)= file_exists(odd_vol)
         here(2)= file_exists(odd_rho)
         if( all(here) )then
@@ -489,7 +489,7 @@ contains
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg, fsc_in )
         class(reconstructor_eo), intent(inout) :: self                   !< instance
         integer,                 intent(in)    :: state                  !< state
-        character(len=*),        intent(in)    :: fname_even, fname_odd  !< even/odd filenames
+        class(string),           intent(in)    :: fname_even, fname_odd  !< even/odd filenames
         integer,                 intent(out)   :: find4eoavg             !< Fourier index for eo averaging
         real, optional,          intent(in)    :: fsc_in(self%filtsz)    !< inputted fsc
         type(image)           :: even, odd
@@ -539,7 +539,7 @@ contains
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
-                    call self%envmask%write(MSKVOL_FILE)
+                    call self%envmask%write(string(MSKVOL_FILE))
                 else
                     call even%mask(self%msk, 'soft', backgr=0.)
                     call odd%mask(self%msk, 'soft', backgr=0.)
@@ -559,7 +559,7 @@ contains
             call even%zero_and_unflag_ft
             call self%even%clip(even)
             call even%div(self%mag_correction)
-            call even%write(trim(fname_even), del_if_exists=.true.)
+            call even%write(fname_even, del_if_exists=.true.)
             call self%even%set_cmat(cmat)
             call even%kill
             deallocate(cmat)
@@ -570,7 +570,7 @@ contains
             call odd%zero_and_unflag_ft
             call self%odd%clip(odd)
             call odd%div(self%mag_correction)
-            call odd%write(trim(fname_odd), del_if_exists=.true.)
+            call odd%write(fname_odd, del_if_exists=.true.)
             call self%odd%set_cmat(cmat)
             call odd%kill
             deallocate(cmat)
@@ -591,8 +591,8 @@ contains
             call even%div(self%mag_correction)
             call odd%div(self%mag_correction)
             ! write un-normalised unmasked even/odd volumes
-            call even%write(trim(fname_even), del_if_exists=.true.)
-            call odd%write(trim(fname_odd),   del_if_exists=.true.)
+            call even%write(fname_even, del_if_exists=.true.)
+            call odd%write(fname_odd,   del_if_exists=.true.)
             if( .not. l_have_fsc )then
                 ! masking
                 if( self%automsk )then
@@ -604,7 +604,7 @@ contains
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
-                    call self%envmask%write(MSKVOL_FILE)
+                    call self%envmask%write(string(MSKVOL_FILE))
                 else
                     call even%mask(self%msk, 'soft', backgr=0.)
                     call odd%mask(self%msk, 'soft', backgr=0.)
@@ -616,7 +616,7 @@ contains
             endif
         endif
         ! save, get & print resolution
-        call arr2file(self%fsc, trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT)
+        call arr2file(self%fsc, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
         call get_resolution(self%fsc, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)
@@ -658,12 +658,12 @@ contains
 
     subroutine write_fsc2txt( self, fname )
         class(reconstructor_eo), intent(in) :: self
-        character(len=*),        intent(in) :: fname
+        class(string),           intent(in) :: fname
         real, allocatable :: res(:)
         integer :: k, fnr
         if( .not. allocated(self%fsc) ) THROW_HARD('No FSC available to write to text file!')
         res = get_resarr(self%box, self%smpd)
-        call fopen(fnr, FILE=trim(fname), STATUS='REPLACE', action='WRITE')
+        call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
         do k=1,size(res)
             write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', self%fsc(k)
         end do

@@ -1,12 +1,22 @@
 program simple_test_units
 include 'simple_lib.f08'
-use simple_testfuns      ! use all in there
-use simple_ftiter,       only: test_ftiter
-use simple_image,        only: test_image
-use simple_args,         only: test_args
-use simple_online_var,   only: test_online_var
-use simple_ftexp_shsrch, only: test_ftexp_shsrch
-use simple_aff_prop,     only: test_aff_prop
+! core library tester modules generated with help from chatgpt
+use simple_test_utils
+use simple_string_tester
+use simple_syslib_tester
+use simple_fileio_tester
+use simple_chash_tester
+use simple_hash_tester
+use simple_cmdline_tester
+use simple_ori_tester
+use simple_oris_tester
+! hand-written unit tests
+use simple_aff_prop,       only: test_aff_prop
+use simple_ftexp_shsrch,   only: test_ftexp_shsrch
+use simple_ftiter,         only: test_ftiter
+use simple_image,          only: test_image
+use simple_online_var,     only: test_online_var
+use simple_user_interface, only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 character(8)          :: datestr
@@ -16,17 +26,28 @@ call date_and_time(date=datestr)
 folder = './SIMPLE_TEST_UNITS_'//datestr
 call simple_mkdir(folder)
 call simple_chdir(folder)
-call test_args
+! core library tests generated with help from chatgpt
+call run_all_string_tests
+call run_all_syslib_tests
+call run_all_fileio_tests
+call run_all_chash_tests
+call run_all_hash_tests
+call run_all_cmdline_tests
+call run_all_ori_tests
+call run_all_oris_tests
+call report_summary()
+! hand-written unit tests
+write(*,*)'VALIDATING UI JSON FILE:'
+call validate_ui_json
+write(*,*)'PASSED UI JSON FILE TEST'
 call test_online_var
 call test_imghead
-call test_ori
 call test_oris(.false.)
 call test_image(.false.)
-!call test_ftexp_shsrch
+call test_ftexp_shsrch
 call test_ftiter
-! LOCAL TESTFUNCTIONS
+! local test functions
 call test_multinomal
-call test_testfuns
 call test_euler_shift
 call simple_test_fit_line
 call test_aff_prop
@@ -60,69 +81,6 @@ contains
         prob = prob/1000.
         write(logfhandle,*) 'this should be 0.1:', prob
         write(logfhandle,'(a)') 'SIMPLE_RND: MULTINOMAL TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
-    end subroutine
-
-    subroutine test_testfuns
-        procedure(testfun), pointer :: ptr
-        integer                     :: i
-        real                        :: gmin, range(2)
-        logical                     :: success
-        class(*), pointer           :: fun_self => null()
-        success = .false.
-        do i=1, 20
-            call get_testfun(i, 2, gmin, range, ptr)
-            select case(i)
-                case(1)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(2)
-                    if( abs(ptr(fun_self,[1.,1.],2)-gmin) < 1e-5 ) success = .true.
-                case(3)
-                    if( abs(ptr(fun_self,[-2.903534,-2.903534],2)-gmin) < 1e-5 ) success = .true.
-                case(4)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(5)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(6)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(7)
-                    if( abs(ptr(fun_self,[420.9687,420.9687],2)-gmin) < 1e-5 ) success = .true.
-                case(8)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(9)
-                    if( abs(ptr(fun_self,[1.,1.],2)-gmin) < 1e-5 ) success = .true.
-                case(10)
-                    if( abs(ptr(fun_self,[3.,0.5],2)-gmin) < 1e-5 ) success = .true.
-                case(11)
-                    if( abs(ptr(fun_self,[0.,-1.],2)-gmin) < 1e-5 ) success = .true.
-                case(12)
-                    if( abs(ptr(fun_self,[1.,3.],2)-gmin) < 1e-5 ) success = .true.
-                case(13)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(14)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(15)
-                    if( abs(ptr(fun_self,[1.,1.],2)-gmin) < 1e-5 ) success = .true.
-                case(16)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(17)
-                    if( abs(ptr(fun_self,[pi,pi],2)-gmin) < 1e-5 ) success = .true.
-                case(18)
-                    if( abs(ptr(fun_self,[512.,404.2319],2)-gmin) < 1e-5 ) success = .true.
-                case(19)
-                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
-                case(20)
-                    if( abs(ptr(fun_self,[0.,1.25313],2)-gmin) < 1e-5 ) success = .true.
-                case DEFAULT
-                    THROW_HARD('Unknown function index; test_testfuns')
-            end select
-            if( success )then
-                cycle
-            else
-                write(logfhandle,*) 'testing of testfun:', i, 'failed!'
-                write(logfhandle,*) 'minimum:', gmin
-            endif
-        end do
-        write(logfhandle,'(a)') 'SIMPLE_TESTFUNS: TEST OF TEST FUNCTIONS COMPLETED ;-)'
     end subroutine
 
     subroutine test_euler_shift

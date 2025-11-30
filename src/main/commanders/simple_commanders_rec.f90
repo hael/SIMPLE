@@ -4,9 +4,9 @@ include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
+use simple_exec_helpers,   only: set_master_num_threads
 use simple_parameters,     only: parameters
 use simple_qsys_env,       only: qsys_env
-use simple_exec_helpers,   only: set_master_num_threads
 use simple_qsys_funs
 use simple_strategy2D3D_common
 implicit none
@@ -39,7 +39,7 @@ contains
         class(cmdline),                       intent(inout) :: cline
         type(commander_reconstruct3D) :: xrec3D_shmem
         type(commander_volassemble)   :: xvolassemble
-        character(len=STDLEN)         :: str_state, fsc_file
+        type(string)     :: str_state, fsc_file
         type(parameters) :: params
         type(builder)    :: build
         type(qsys_env)   :: qenv
@@ -56,7 +56,7 @@ contains
             return
         endif
         ! deal with # threads for the master process
-        call set_master_num_threads(nthr_here, 'RECONSTRUCT3D')
+        call set_master_num_threads(nthr_here, string('RECONSTRUCT3D'))
         ! parse parameters and project
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
@@ -73,7 +73,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! splitting
-        if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! eo partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! weights
@@ -104,12 +104,12 @@ contains
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
                 str_state = int2str_pad(state,2)
-                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box_crop)
+                fsc_file  = FSC_FBODY//str_state%to_char()//BIN_EXT
+                call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
                 if( trim(params%oritype).eq.'cls3D' )then
-                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd_crop, state, 'vol_cavg')
+                    call build%spproj%add_vol2os_out(string(VOL_FBODY)//str_state//params%ext, params%smpd_crop, state, 'vol_cavg')
                 else
-                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd_crop, state, 'vol')
+                    call build%spproj%add_vol2os_out(string(VOL_FBODY)//str_state//params%ext, params%smpd_crop, state, 'vol')
                 endif
             enddo
             call build%spproj%write_segment_inside('out',params%projfile)
@@ -127,12 +127,12 @@ contains
         use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
         class(commander_reconstruct3D), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)                :: params
-        type(builder)                   :: build
-        type(euclid_sigma2),     target :: eucl_sigma
-        character(len=:),   allocatable :: fname
-        integer,            allocatable :: pinds(:)
-        integer :: nptcls2update
+        type(parameters)            :: params
+        type(builder)               :: build
+        type(euclid_sigma2), target :: eucl_sigma
+        type(string)                :: fname
+        integer, allocatable        :: pinds(:)
+        integer                     :: nptcls2update
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
         if( .not. cline%defined('nparts') )then ! shared-memory implementation
@@ -174,7 +174,7 @@ contains
         endif
         ! cleanup
         call eucl_sigma%kill
-        call qsys_job_finished('simple_commanders_rec :: exec_reconstruct3D')
+        call qsys_job_finished(string('simple_commanders_rec :: exec_reconstruct3D'))
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D
@@ -188,9 +188,9 @@ contains
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
         type(image)                   :: vol_prev_even, vol_prev_odd
-        character(len=:), allocatable :: finished_fname, recname, volname, volname_prev, fsc_txt_file
-        character(len=:), allocatable :: volname_prev_even, volname_prev_odd, str_state, str_iter
-        character(len=LONGSTRLEN)     :: eonames(2), benchfname
+        type(string)                  :: recname, volname, volname_prev, fsc_txt_file
+        type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
+        type(string)                  :: eonames(2), benchfname
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec
         integer                       :: part, state, find4eoavg, fnr
@@ -236,7 +236,7 @@ contains
             ! assemble volumes
             do part=1,params%nparts
                 if( L_BENCH_GLOB ) t_read = tic()
-                call eorecvol_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
+                call eorecvol_read%read_eos(string(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
                 ! sum the Fourier coefficients
                 if( L_BENCH_GLOB )then
                     rt_read       = rt_read + toc(t_read)
@@ -246,10 +246,10 @@ contains
                 if( L_BENCH_GLOB ) rt_sum_reduce = rt_sum_reduce + toc(t_sum_reduce)
             end do
             ! correct for sampling density and estimate resolution
-            allocate(recname, source=VOL_FBODY//int2str_pad(state,2))
-            allocate(volname, source=recname//params%ext)
-            eonames(1) = trim(recname)//'_even'//params%ext
-            eonames(2) = trim(recname)//'_odd'//params%ext
+            recname    = VOL_FBODY//int2str_pad(state,2)
+            volname    = recname//params%ext
+            eonames(1) = recname//'_even'//params%ext%to_char()
+            eonames(2) = recname//'_odd'//params%ext%to_char()
             if( params%l_ml_reg )then
                 ! the sum is done after regularization
             else
@@ -263,8 +263,8 @@ contains
                 volname_prev      = cline%get_carg('vol'//int2str(state))
                 volname_prev_even = add2fbody(volname_prev, params%ext, '_even')
                 volname_prev_odd  = add2fbody(volname_prev, params%ext, '_odd')
-                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
-                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
+                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
+                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
                 call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
                 call vol_prev_odd%read_and_crop( volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
                 if( allocated(fsc) ) deallocate(fsc)
@@ -276,9 +276,9 @@ contains
             str_state = int2str_pad(state,2)
             if( cline%defined('which_iter') )then
                 str_iter     = int2str_pad(params%which_iter,3)
-                fsc_txt_file = 'RESOLUTION_STATE'//str_state//'_ITER'//str_iter
+                fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()//'_ITER'//str_iter%to_char()
             else
-                fsc_txt_file = 'RESOLUTION_STATE'//str_state
+                fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()
             endif
             call build%eorecvol%write_fsc2txt(fsc_txt_file)
             if( L_BENCH_GLOB ) rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
@@ -325,7 +325,8 @@ contains
                 call vol_prev_odd%kill
             endif
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
-            deallocate(recname, volname)
+            call recname%kill
+            call volname%kill
         end do
         ! destruct
         call build%kill_general_tbox
@@ -337,12 +338,11 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
-        call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble')
+        call simple_touch('VOLASSEMBLE_FINISHED')
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
             benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
-            call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
             write(fnr,'(a,1x,f9.2)') 'reading of volumes (I/O) : ', rt_read

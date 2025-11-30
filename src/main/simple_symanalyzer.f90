@@ -78,7 +78,7 @@ contains
         call vol_pad%expand_cmat(KBALPHA)
         ! generate volume aligned to symaxis
         call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
-        call vol_asym_aligned2axis%write('vol_c1_aligned2_'//trim(params%pgrp)//'axis.mrc')
+        call vol_asym_aligned2axis%write(string('vol_c1_aligned2_'//trim(params%pgrp)//'axis.mrc'))
         ! rotate over symmetry related rotations and update average
         do isym=1,nsym
             rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
@@ -136,12 +136,12 @@ contains
     end subroutine print_subgroups
 
     subroutine symmetry_tester( vol_in, msk, hp, lp, cn_stop, platonic, pgrp_out, fname_out )
-        class(projector), intent(inout) :: vol_in
-        real,             intent(in)    :: msk, hp, lp
-        integer,          intent(in)    :: cn_stop
-        logical,          intent(in)    :: platonic
-        character(len=3), intent(out)   :: pgrp_out
-        character(len=*), optional, intent(in) :: fname_out
+        class(projector),        intent(inout) :: vol_in
+        real,                    intent(in)    :: msk, hp, lp
+        integer,                 intent(in)    :: cn_stop
+        logical,                 intent(in)    :: platonic
+        character(len=3),        intent(out)   :: pgrp_out
+        class(string), optional, intent(in) :: fname_out
         type(sym_stats), allocatable    :: pgrps(:)
         real,    allocatable  :: ccs(:), zscores(:)
         integer, allocatable  :: peaks(:), labels(:)
@@ -230,7 +230,7 @@ contains
         if(present(fname_out)) then
           call fopen(fnr, status='keep', file=fname_out, action='write')
         else
-          call fopen(fnr, status='replace', file='symmetry_test_output.txt', action='write')
+          call fopen(fnr, status='replace', file=string('symmetry_test_output.txt'), action='write')
         endif
         write(fnr,'(a)') '>>> RESULTS RANKED ACCORDING TO DEGREE OF SYMMETRY'
         do isym=1,nsym
@@ -300,13 +300,13 @@ contains
             ! rotate input (non-symmetrized) volume to symmetry axis
             if( DEBUG_HERE ) write(logfhandle,*) 'rotating input volume to symmetry axis'
             call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
-            if( WRITE_VOLUMES ) call vol_asym_aligned2axis%write('vol_c1_aligned2_'//trim(pgrps(igrp)%str)//'axis.mrc')
+            if( WRITE_VOLUMES ) call vol_asym_aligned2axis%write(string('vol_c1_aligned2_'//trim(pgrps(igrp)%str)//'axis.mrc'))
             call vol_asym_aligned2axis%mask(msk, 'soft')
             ! generate symmetrized volume
             if( DEBUG_HERE ) write(logfhandle,*) 'generating symmetrized volume'
             call symaverage
             if( WRITE_VOLUMES )then
-                call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
+                call vol_sym%write(string('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc'))
             else
                 call del_file('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             endif

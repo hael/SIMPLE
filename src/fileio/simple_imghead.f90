@@ -13,10 +13,11 @@
 
 module simple_imghead
 use simple_defs
-use simple_error,   only: simple_exception
-use simple_fileio,  only: fopen, fileiochk, fclose, fname2format
-use simple_string_utils, only: int2str, to_cstring
-use simple_syslib,  only: file_exists
+use simple_error
+use simple_fileio
+use simple_string
+use simple_string_utils
+use simple_syslib
 #ifdef USING_TIFF
 use simple_tifflib
 #define     SAMPLEFORMAT_UINT       1   /* !unsigned integer data */
@@ -424,7 +425,7 @@ contains
     !>  \brief  Read the header data from disk
     subroutine read_tiff( self, fname, pos, print_entire )
         class(ImgHead),            intent(inout) :: self
-        character(len=*),          intent(in)    :: fname
+        class(string),             intent(in)    :: fname
         integer(kind=8), optional, intent(in)    :: pos
         logical,         optional, intent(in)    :: print_entire
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
@@ -433,7 +434,7 @@ contains
         select type( self )
 #ifdef USING_TIFF
             type is( TiffImgHead )
-                filename_c  = to_cstring(fname)
+                filename_c  = to_cstring(fname%to_char())
                 open_mode_c = to_cstring('rc')
                 form = fname2format(fname)
                 if( form == 'L' ) call TIFFMuteWarnings
@@ -1279,7 +1280,7 @@ contains
 
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
-        character(len=*), intent(in)  :: fname
+        class(string),    intent(in)  :: fname
         character(len=1), intent(in)  :: form
         integer,          intent(out) :: ldim(3)
         real,             intent(out) :: smpd
@@ -1294,7 +1295,7 @@ contains
                     allocate(MrcImgHead :: hed)
                     call hed%new
                     call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
-                    call fileiochk(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call fileiochk(" get_mrcfile_info fopen error "//fname%to_char(),ios)
                     call hed%read(filnum)
                     call fclose(filnum)
                     ldim = hed%getDims()
@@ -1312,7 +1313,7 @@ contains
                     allocate(MrcImgHead :: hed)
                     call hed%new
                     call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
-                    call fileiochk(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call fileiochk(" get_mrcfile_info fopen error "//fname%to_char(),ios)
                     call hed%read(filnum)
                     call fclose(filnum)
                     if( doprint )then
@@ -1321,19 +1322,19 @@ contains
                         write(logfhandle,'(a,1x,f10.6)')  'Maximum value: ', hed%getMaxPixVal()
                     endif
                 case DEFAULT
-                    write(logfhandle,*) 'file: ', trim(fname)
+                    write(logfhandle,*) 'file: ', fname%to_char()
                     THROW_HARD('the inputted file is not an MRC file')
             end select
             call hed%kill
             deallocate(hed)
         else
-            THROW_HARD('file: '//trim(fname)//' does not exists')
+            THROW_HARD('file: '//fname%to_char()//' does not exists')
         endif
     end subroutine get_mrcfile_info
 
     !>  \brief is for gettign a part of the info in a SPIDER image header
     subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
-        character(len=*),              intent(in)  :: fname
+        class(string),                 intent(in)  :: fname
         integer,                       intent(out) :: ldim(3), iform, maxim
         real,                          intent(out) :: smpd
         character(len=:), allocatable, intent(out) :: conv
@@ -1344,7 +1345,7 @@ contains
             if( fname2format(fname) .eq. 'S' )then
                 if( allocated(conv) ) deallocate(conv)
                 call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios)
-                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
+                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//fname%to_char(),ios)
                 call read_spihed
                 call fclose(filnum)
                 if( .not. any(ldim < 1) )then
@@ -1353,7 +1354,7 @@ contains
                     return
                 endif
                 call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
-                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
+                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//fname%to_char(),ios)
                 call read_spihed
                 call fclose(filnum)
                 if( .not. any(ldim < 1) )then
@@ -1363,7 +1364,7 @@ contains
                 endif
                 call fopen(filnum, status='OLD', action='READ', file=fname,&
                 &access='STREAM', iostat=ios)
-                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
+                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//fname%to_char(),ios)
                 call read_spihed
                 call fclose(filnum)
                 if( .not. any(ldim < 1) )then
@@ -1372,10 +1373,10 @@ contains
                     return
                 endif
             else
-                THROW_HARD(trim(fname)//' is not a SPIDER file')
+                THROW_HARD(fname%to_char()//' is not a SPIDER file')
             endif
         else
-            THROW_HARD('file: '//trim(fname)//' does not exist')
+            THROW_HARD('file: '//fname%to_char()//' does not exist')
         endif
 
         contains
@@ -1406,18 +1407,17 @@ contains
     end subroutine get_spifile_info
 
     subroutine get_tiffile_info(fname, ldim, nptcls, smpd_here, doprint)
-        use simple_string_utils, only: to_cstring
-        character(len=*), intent(in)  :: fname
-        real,             intent(out) :: smpd_here
-        integer,          intent(out) :: ldim(3), nptcls
-        logical,          intent(in)  :: doprint
+        class(string), intent(in)  :: fname
+        real,          intent(out) :: smpd_here
+        integer,       intent(out) :: ldim(3), nptcls
+        logical,       intent(in)  :: doprint
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
         character(len=1) :: form
         type(c_ptr)      :: fhandle = c_null_ptr
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
-        filename_c  = to_cstring(fname)
+        filename_c  = to_cstring(fname%to_char())
         open_mode_c = to_cstring('rc')
 #ifdef USING_TIFF
         form = fname2format(fname)
@@ -1434,17 +1434,16 @@ contains
     end subroutine get_tiffile_info
 
     subroutine get_eerfile_info(fname, ldim, nptcls, smpd_here, doprint)
-        use simple_string_utils, only: to_cstring
-        character(len=*), intent(in)  :: fname
-        real,             intent(out) :: smpd_here
-        integer,          intent(out) :: ldim(3), nptcls
-        logical,          intent(in)  :: doprint
+        class(string), intent(in)  :: fname
+        real,          intent(out) :: smpd_here
+        integer,       intent(out) :: ldim(3), nptcls
+        logical,       intent(in)  :: doprint
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
         type(c_ptr) :: fhandle = c_null_ptr
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
-        filename_c  = to_cstring(fname)
+        filename_c  = to_cstring(fname%to_char())
         open_mode_c = to_cstring('r')
 #ifdef USING_TIFF
         call TIFFMuteWarnings
@@ -1463,7 +1462,7 @@ contains
 
     !>  \brief  is for finding logical dimension and number of particles in stack
     subroutine find_ldim_nptcls( fname, ldim, nptcls, smpd, doprint, formatchar )
-        character(len=*),           intent(in)  :: fname      !< filename
+        class(string),              intent(in)  :: fname      !< filename
         integer,                    intent(out) :: ldim(3)    !< logical dimension
         integer,                    intent(out) :: nptcls     !< number of particles
         real,             optional, intent(out) :: smpd       !< do print or not
@@ -1495,16 +1494,16 @@ contains
                 call get_eerfile_info(fname, ldim, nptcls, smpd_here, ddoprint)
 #endif
             case DEFAULT
-                THROW_HARD('format of file: '//trim(fname)//' not supported')
+                THROW_HARD('format of file: '//fname%to_char()//' not supported')
         end select
         if( present(smpd) )smpd = smpd_here
     end subroutine find_ldim_nptcls
 
     !>  \brief  is for checking logical dimension and number of particles in stack
     logical function has_ldim_nptcls( fname, ldim, nptcls )
-        character(len=*), intent(in) :: fname   !< filename
-        integer,          intent(in) :: ldim(3) !< expected logical dimension
-        integer,          intent(in) :: nptcls  !< number of expected particles
+        class(string), intent(in) :: fname   !< filename
+        integer,       intent(in) :: ldim(3) !< expected logical dimension
+        integer,       intent(in) :: nptcls  !< number of expected particles
         integer :: ldim_found(3), nptcls_found
         call find_ldim_nptcls( fname, ldim_found, nptcls_found )
         if( ldim_found(1) /= ldim(1) .or. ldim_found(2) /= ldim(2) )then
@@ -1520,30 +1519,30 @@ contains
 
     !>  \brief is updating and writing the number of images in an MRC image stack
     subroutine update_stack_nimgs( fname, nimgs )
-        character(len=*), intent(in) :: fname
-        integer,          intent(in) :: nimgs
+        class(string), intent(in) :: fname
+        integer,       intent(in) :: nimgs
         class(imghead), allocatable  :: hed
         integer :: ldim(3),filnum, ios
         if( file_exists(fname) )then
             select case(fname2format(fname))
-            case('M')
-                allocate(MrcImgHead :: hed)
-                call hed%new
-                call fopen(filnum, status='OLD', action='READWRITE', file=fname, access='STREAM', iostat=ios)
-                call fileiochk(" update_nimgs "//trim(fname),ios)
-                call hed%read(filnum)
-                ldim    = hed%getDims()
-                ldim(3) = nimgs
-                call hed%setDims(ldim)
-                call hed%write(filnum)
-                call fclose(filnum)
-                call hed%kill
-                deallocate(hed)
-            case DEFAULT
-                ! Only MRC is the target file format
+                case('M')
+                    allocate(MrcImgHead :: hed)
+                    call hed%new
+                    call fopen(filnum, status='OLD', action='READWRITE', file=fname, access='STREAM', iostat=ios)
+                    call fileiochk(" update_nimgs "//fname%to_char(),ios)
+                    call hed%read(filnum)
+                    ldim    = hed%getDims()
+                    ldim(3) = nimgs
+                    call hed%setDims(ldim)
+                    call hed%write(filnum)
+                    call fclose(filnum)
+                    call hed%kill
+                    deallocate(hed)
+                case DEFAULT
+                    ! Only MRC is the target file format
             end select
         else
-            THROW_HARD('file: '//trim(fname)//' does not exists')
+            THROW_HARD('file: '//fname%to_char()//' does not exists')
         endif
     end subroutine update_stack_nimgs
 
@@ -1575,7 +1574,7 @@ contains
         call hed%new([120,120,1])
         call hed2%new([120,120,1])
         recsz = 120*4
-        call fopen(funit,file='test_imghed.spi',status='UNKNOWN',action='READWRITE',&
+        call fopen(funit,file=string('test_imghed.spi'),status='UNKNOWN',action='READWRITE',&
              access='STREAM',iostat=ios)
         if(ios/=0)call fileiochk("test_imghead fopen error",ios)
         call hed%write(funit)

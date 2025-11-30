@@ -6,7 +6,8 @@ implicit none
 #include "simple_local_flags.inc"
 type(cmdline)         :: cline, cline1
 type(chash)           :: job_descr
-character(len=STDLEN) :: xarg, line, fname
+character(len=STDLEN) :: xarg, line
+type(string)          :: fname, str_prg
 logical               :: test_passed
 integer               :: cmdstat, cmdlen, pos, funit, funit1
 test_passed  = .true.
@@ -21,10 +22,7 @@ call cmdline_err(cmdstat, cmdlen, xarg, pos)
 call cline%read(line)
 print *, '>>> CLINE'
 call cline%printline()
-call cline%writeline(trim(fname))
-call cline%kill()
-call fopen(funit, FILE=trim(fname), STATUS='NEW', action='WRITE')
-call cline%readline(trim(fname))
+call cline%writeline(fname)
 print *, '>>> CLINE'
 call cline%printline()
 call cline%checkvar('projname',        1)
@@ -43,6 +41,8 @@ if(.not. cline%defined('smpd'))        test_passed=.false.
 if(.not. cline%defined('dir_movies'))  test_passed=.false.
 if(.not. cline%defined('gainref'))     test_passed=.false.
 if(.not. cline%defined('moldiam_max')) test_passed=.false.
+
+print *, '**************TST PASS: ', test_passed
 call cline%check()
 call cline%gen_job_descr(job_descr)
 call job_descr%set('prg',      'scale')
@@ -50,7 +50,8 @@ call job_descr%set('autoscale','no')
 print *,'>>> JOB_DESCR'
 call job_descr%print_key_val_pairs(logfhandle) 
 call cline%set('prg', 'list')
-print *,'>>> PROGRAM ',cline%get_carg('prg')
+str_prg = cline%get_carg('prg')
+print *,'>>> PROGRAM ', str_prg%to_char()
 if( .not. (cline%get_carg('prg').eq.'list')) test_passed=.false.
 call cline%delete('kv')
 print *,'>>> CS ',cline%get_rarg('cs')

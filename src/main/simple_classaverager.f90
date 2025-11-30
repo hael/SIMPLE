@@ -2,12 +2,12 @@ module simple_classaverager
 include 'simple_lib.f08'
 !$ use omp_lib
 use simple_builder,           only: build_glob
-use simple_parameters,        only: params_glob
 use simple_ctf,               only: ctf
-use simple_image,             only: image, image_ptr
-use simple_stack_io,          only: stack_io
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
+use simple_image,             only: image, image_ptr
+use simple_parameters,        only: params_glob
+use simple_stack_io,          only: stack_io
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
@@ -73,7 +73,7 @@ logical                          :: l_alloc_read_cavgs = .true.   !< whether to 
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
-character(len=STDLEN)   :: benchfname
+type(string)            :: benchfname
 
 contains
 
@@ -173,7 +173,7 @@ contains
     end subroutine cavger_transf_oridat
 
     subroutine cavger_read_euclid_sigma2
-        character(len=STDLEN) :: fname
+        type(string) :: fname
         if( l_ml_reg )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -344,16 +344,16 @@ contains
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !           using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
-        logical, intent(in)           :: do_frac_update
-        integer, parameter            :: READBUFFSZ = 1024
-        complex, parameter            :: zero = cmplx(0.,0.)
-        type(kbinterpol)              :: kbwin
-        type(dstack_io)               :: dstkio_r
-        type(image_ptr)               :: pcmat(nthr_glob), prhomat(nthr_glob)
-        type(image),      allocatable :: cgrid_imgs(:), read_imgs(:), cgrid_imgs_crop(:)
-        character(len=:), allocatable :: stk_fname
-        complex,          allocatable :: cmats(:,:,:)
-        real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
+        logical, intent(in)        :: do_frac_update
+        integer, parameter         :: READBUFFSZ = 1024
+        complex, parameter         :: zero = cmplx(0.,0.)
+        type(kbinterpol)           :: kbwin
+        type(dstack_io)            :: dstkio_r
+        type(image_ptr)            :: pcmat(nthr_glob), prhomat(nthr_glob)
+        type(image), allocatable   :: cgrid_imgs(:), read_imgs(:), cgrid_imgs_crop(:)
+        complex,     allocatable   :: cmats(:,:,:)
+        real,        allocatable   :: rhos(:,:,:), tvals(:,:,:)
+        type(string) :: stk_fname
         complex :: fcompl, fcompll
         real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale, crop_scale
         integer :: batch_iprecs(READBUFFSZ), fdims_crop(3), logi_lims_crop(3,2)
@@ -786,10 +786,10 @@ contains
 
      !>  \brief  calculates Fourier ring correlations
     subroutine cavger_calc_and_write_frcs_and_eoavg( fname, which_iter )
-        character(len=*), intent(in) :: fname
-        integer,          intent(in) :: which_iter
-        type(image), allocatable     :: even_imgs(:), odd_imgs(:)
-        real,        allocatable     :: frc(:)
+        class(string), intent(in) :: fname
+        integer,       intent(in) :: which_iter
+        type(image), allocatable  :: even_imgs(:), odd_imgs(:)
+        real,        allocatable  :: frc(:)
         integer :: eo_pop(2), icls, find, pop, filtsz_crop
         filtsz_crop = cavgs_even(1)%get_filtsz()
         allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz_crop))
@@ -1078,26 +1078,27 @@ contains
 
     !>  \brief  writes class averages to disk
     subroutine cavger_write( fname, which )
-        character(len=*),  intent(in) :: fname, which
-        character(len=:), allocatable :: fname_wfilt, fname_here
+        class(string),    intent(in) :: fname
+        character(len=*), intent(in) :: which
+        type(string) :: fname_wfilt, fname_here
         integer :: icls
-        fname_here  = trim(fname)
-        fname_wfilt = add2fbody(fname_here, params_glob%ext, trim(WFILT_SUFFIX))
+        fname_here  = fname
+        fname_wfilt = add2fbody(fname_here, params_glob%ext, WFILT_SUFFIX)
         select case(which)
             case('even')
-                if( l_stream ) fname_wfilt = add2fbody(fname_here, '_even'//trim(params_glob%ext), trim(WFILT_SUFFIX))
+                if( l_stream ) fname_wfilt = add2fbody(fname_here, '_even'//params_glob%ext%to_char(), WFILT_SUFFIX)
                 do icls=1,ncls
                     call cavgs_even(icls)%write(fname_here, icls)
                     if( l_stream ) call cavgs_even_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case('odd')
-                if( l_stream ) fname_wfilt = add2fbody(fname_here, '_odd'//trim(params_glob%ext), trim(WFILT_SUFFIX))
+                if( l_stream ) fname_wfilt = add2fbody(fname_here, '_odd'//params_glob%ext%to_char(), WFILT_SUFFIX)
                 do icls=1,ncls
                     call cavgs_odd(icls)%write(fname_here, icls)
                     if( l_stream ) call cavgs_odd_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case('merged')
-                if( l_stream ) fname_wfilt = add2fbody(fname_here, params_glob%ext, trim(WFILT_SUFFIX))
+                if( l_stream ) fname_wfilt = add2fbody(fname_here, params_glob%ext%to_char(), WFILT_SUFFIX)
                 do icls=1,ncls
                     call cavgs_merged(icls)%write(fname_here, icls)
                     if( l_stream ) call cavgs_merged_wfilt(icls)%write(fname_wfilt, icls)
@@ -1168,19 +1169,20 @@ contains
 
     !>  \brief  reads class averages from disk
     subroutine cavger_read( fname, which )
-        character(len=*),  intent(in) :: fname, which
+        class(string),    intent(in) :: fname
+        character(len=*), intent(in) :: which
         class(image), pointer :: cavgs(:)
         type(stack_io)        :: stkio_r
         integer :: ldim_read(3), icls
         select case(trim(which))
-        case('even')
-            cavgs => cavgs_even
-        case('odd')
-            cavgs => cavgs_odd
-        case('merged')
-            cavgs => cavgs_merged
-        case DEFAULT
-            THROW_HARD('unsupported which flag')
+            case('even')
+                cavgs => cavgs_even
+            case('odd')
+                cavgs => cavgs_odd
+            case('merged')
+                cavgs => cavgs_merged
+            case DEFAULT
+                THROW_HARD('unsupported which flag')
         end select
         ! read
         call stkio_r%open(fname, smpd_crop, 'read', bufsz=ncls)
@@ -1212,18 +1214,18 @@ contains
     !>  \brief  writes partial class averages to disk (distributed execution)
     subroutine cavger_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
-        integer                       :: icls, ldim_here(3)
-        character(len=:), allocatable :: cae, cao, cte, cto, caewf, caowf, ctewf, ctowf
-        type(stack_io)                :: stkio(4)
-        logical                       :: is_ft
-        allocate(cae, source='cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
-        allocate(cao, source='cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
-        allocate(cte, source='ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
-        allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
-        allocate(caewf, source='cavgs_even_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
-        allocate(caowf, source='cavgs_odd_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
-        allocate(ctewf, source='ctfsqsums_even_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
-        allocate(ctowf, source='ctfsqsums_odd_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        integer        :: icls, ldim_here(3)
+        type(string)   :: cae, cao, cte, cto, caewf, caowf, ctewf, ctowf
+        type(stack_io) :: stkio(4)
+        logical        :: is_ft
+        cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        cao   = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        cte   = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        cto   = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        caewf = 'cavgs_even_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        caowf = 'cavgs_odd_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        ctewf = 'ctfsqsums_even_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        ctowf = 'ctfsqsums_odd_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
         select case(trim(which))
             case('read')
                 call stkio(1)%open(cae, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
@@ -1294,7 +1296,14 @@ contains
             case DEFAULT
                 THROW_HARD('unknown which flag; only read & write supported; cavger_readwrite_partial_sums')
         end select
-        deallocate(cae, cao, cte, cto)
+        call cae%kill
+        call cao%kill
+        call cte%kill
+        call cto%kill
+        call caewf%kill
+        call caowf%kill
+        call ctewf%kill
+        call ctowf%kill
     end subroutine cavger_readwrite_partial_sums
 
     subroutine cavger_apply_weights( w )
@@ -1326,9 +1335,8 @@ contains
         real(kind=c_float),            pointer :: rmat_ptr(:,:,:)  => null()  !< image pixels/voxels (in data)
         integer(timer_int_kind)       ::  t_init,  t_io,  t_workshare_sum,  t_set_sums,  t_merge_eos_and_norm,  t_tot
         real(timer_int_kind)          :: rt_init, rt_io, rt_workshare_sum, rt_set_sums, rt_merge_eos_and_norm, rt_tot
-        complex,          allocatable :: csums(:,:,:,:)
-        character(len=:), allocatable :: cae, cao, cte, cto
-        character(len=STDLEN)         :: benchfname
+        complex, allocatable :: csums(:,:,:,:)
+        type(string)  :: cae, cao, cte, cto, benchfname
         type(image)   :: imgs4read(4)
         type(imgfile) :: ioimg(4)
         integer       :: ipart, icls, array_shape(3), ldim_here(3), fnr, i
@@ -1365,10 +1373,10 @@ contains
         do ipart=1,params_glob%nparts
             if( L_BENCH_GLOB ) t_io = tic()
             ! look for files
-            allocate(cae, source='cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            allocate(cao, source='cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            allocate(cto, source='ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
             call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
             call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
             call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
@@ -1383,7 +1391,10 @@ contains
             call ioimg(2)%close
             call ioimg(3)%close
             call ioimg(4)%close
-            deallocate(cae, cao, cte, cto)
+            call cae%kill
+            call cao%kill
+            call cte%kill
+            call cto%kill
             if( L_BENCH_GLOB )then
                 rt_io = rt_io + toc(t_io)
                 t_workshare_sum = tic()
@@ -1415,10 +1426,10 @@ contains
             do ipart=1,params_glob%nparts
                 if( L_BENCH_GLOB ) t_io = tic()
                 ! look for files
-                allocate(cae, source='cavgs_even_wfilt_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-                allocate(cao, source='cavgs_odd_wfilt_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-                allocate(cte, source='ctfsqsums_even_wfilt_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-                allocate(cto, source='ctfsqsums_odd_wfilt_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+                cae = 'cavgs_even_wfilt_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+                cao = 'cavgs_odd_wfilt_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+                cte = 'ctfsqsums_even_wfilt_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+                cto = 'ctfsqsums_odd_wfilt_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
                 call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
                 call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
                 call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
@@ -1433,7 +1444,10 @@ contains
                 call ioimg(2)%close
                 call ioimg(3)%close
                 call ioimg(4)%close
-                deallocate(cae, cao, cte, cto)
+                call cae%kill
+                call cao%kill
+                call cte%kill
+                call cto%kill
                 if( L_BENCH_GLOB )then
                     rt_io = rt_io + toc(t_io)
                     t_workshare_sum = tic()
@@ -1472,7 +1486,7 @@ contains
             rt_merge_eos_and_norm = toc(t_merge_eos_and_norm)
             rt_tot                = toc(t_tot)
             benchfname = 'CAVGASSEMBLE_BENCH.txt'
-            call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
             write(fnr,'(a,1x,f9.2)') 'I/O                  : ', rt_io
@@ -1601,7 +1615,7 @@ contains
         type(image)           :: img(nthr_glob), timg(nthr_glob)
         type(ctfparams)       :: ctfparms
         type(ctf)             :: tfun
-        character(len=STDLEN) :: string
+        type(string)          :: str
         complex :: fcompl, fcompll
         real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
@@ -1634,15 +1648,15 @@ contains
         if(present(cavg)) call cavg%kill
         select case(trim(oritype))
             case('ptcl2D')
-                string = 'class'
+                str = 'class'
             case('ptcl3D')
-                string = 'proj'
+                str = 'proj'
             case DEFAULT
                 THROW_HARD('ORITYPE not supported!')
         end select
         call spproj%ptr2oritype( oritype, pos )
         if( allocated(pinds) ) deallocate(pinds)
-        call pos%get_pinds(icls, string, pinds)
+        call pos%get_pinds(icls, str%to_char(), pinds)
         if( .not.(allocated(pinds)) ) return
         pop = size(pinds)
         if( pop == 0 ) return

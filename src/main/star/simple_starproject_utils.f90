@@ -4,21 +4,19 @@ include 'simple_lib.f08'
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: LEN_LINE, LEN_FLAG, stk_map, star_flag, star_data, star_file, tilt_info
+public :: LEN_FLAG, stk_map, star_flag, star_data, star_file, tilt_info
 public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex, center_boxes
 public :: split_dataline, h_clust, find_separators, get_value_from_ptcls
 public :: VERBOSE_OUTPUT
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: LEN_LINE = 2048
 integer, parameter :: LEN_FLAG = 64
-
 logical            :: VERBOSE_OUTPUT =.false.
 
 type stk_map
-    character(LEN=2056) :: stkpath
-    integer             :: stkmax
+    type(string) :: stkpath
+    integer      :: stkmax
 end type stk_map
 
 type star_flag
@@ -43,38 +41,37 @@ type star_data
 end type star_data
 
 type star_file
-    character(len=LONGSTRLEN) :: filename
-    character(len=LONGSTRLEN) :: filenamebak
-    character(len=LEN_LINE)   :: rootdir
-    type(star_data)           :: optics
-    type(star_data)           :: stacks
-    type(star_data)           :: micrographs
-    type(star_data)           :: particles2D
-    type(star_data)           :: particles3D
-    type(star_data)           :: clusters2D
-    type(star_data)           :: class3D
-    integer, allocatable      :: opticsmap(:)
-    integer, allocatable      :: stkmap(:,:) ! (stkid : z)
-    integer, allocatable      :: stkstates(:)
-    integer                   :: stkptclcount
-    integer                   :: fd
-    logical                   :: initialised = .false.
+    type(string)         :: filename
+    type(string)         :: filenamebak
+    type(string)         :: rootdir
+    type(star_data)      :: optics
+    type(star_data)      :: stacks
+    type(star_data)      :: micrographs
+    type(star_data)      :: particles2D
+    type(star_data)      :: particles3D
+    type(star_data)      :: clusters2D
+    type(star_data)      :: class3D
+    integer, allocatable :: opticsmap(:)
+    integer, allocatable :: stkmap(:,:) ! (stkid : z)
+    integer, allocatable :: stkstates(:)
+    integer              :: stkptclcount
+    integer              :: fd
+    logical              :: initialised = .false.
 end type star_file
 
 type tilt_info
-    character(len=LONGSTRLEN) :: basename
-    integer                   :: initialtiltgroupid = 1
-    integer                   :: finaltiltgroupid   = 1
-    real                      :: tiltx = 0.0
-    real                      :: tilty = 0.0
-    real                      :: smpd  = 0.0
-    real                      :: kv    = 0.0
-    real                      :: fraca = 0.0
-    real                      :: cs    = 0.0
-    real                      :: box   = 0.0
-    real                      :: centroidx = 0.0
-    real                      :: centroidy = 0.0
-
+    type(string) :: basename
+    integer      :: initialtiltgroupid = 1
+    integer      :: finaltiltgroupid   = 1
+    real         :: tiltx = 0.0
+    real         :: tilty = 0.0
+    real         :: smpd  = 0.0
+    real         :: kv    = 0.0
+    real         :: fraca = 0.0
+    real         :: cs    = 0.0
+    real         :: box   = 0.0
+    real         :: centroidx = 0.0
+    real         :: centroidy = 0.0
 end type tilt_info
 
 contains
@@ -109,11 +106,11 @@ contains
     end subroutine enable_splflag
 
     subroutine enable_splflags(sporis, flags)
-        class(oris),              intent(inout) :: sporis
-        type(star_flag),          intent(inout) :: flags(:)
-        type(ori)                               :: testori
-        character(len=XLONGSTRLEN), allocatable :: keys(:)
-        integer                                 :: iori, ikey, testcount
+        class(oris),     intent(inout) :: sporis
+        type(star_flag), intent(inout) :: flags(:)
+        type(string), allocatable :: keys(:)
+        type(ori) :: testori
+        integer   :: iori, ikey, testcount
         do iori = 1, size(flags)
             flags(iori)%present = .false.
         end do
@@ -124,7 +121,7 @@ contains
                 call sporis%get_ori(iori, testori)
                 keys = testori%get_keys()
                 do ikey=1, size(keys)
-                    call enable_splflag(trim(adjustl(keys(ikey))), flags)
+                    call enable_splflag(keys(ikey)%to_char(), flags)
                 end do
                 testcount = testcount + 1
                 if(testcount == 1000) then ! Do 1000 tests to counter xpos or ypos being 0
@@ -151,18 +148,19 @@ contains
     end subroutine get_rlnflagindex
 
     subroutine split_dataline(line, splitline)
-        character(len=LEN_LINE), intent(in)    :: line
-        character(len=LEN_LINE), intent(inout) :: splitline(:)
-        integer :: iend, istart, flagid
+        class(string), intent(in)    :: line
+        class(string), intent(inout) :: splitline(:)
+        integer :: iend, istart, flagid, end
         flagid = 1
         iend   = 1
         istart = 1
         do while (flagid <= size(splitline))
-            do while (line(istart:istart + 1) .eq. " ")
+            do while (line%to_char([istart,istart + 1]) .eq. " ")
                 istart = istart + 1
             end do
-            iend = index(line(istart + 1:), ' ') + istart
-            splitline(flagid) = trim(adjustl(line(istart:iend)))
+            end  = line%strlen_trim()
+            iend = index(line%to_char([istart + 1,end]), ' ') + istart
+            splitline(flagid) =  line%to_char([istart,iend])
             istart = iend + 1
             flagid = flagid + 1
         end do
@@ -293,11 +291,11 @@ contains
     end subroutine h_clust
     
     subroutine find_separators(seppos, path)
-        integer, allocatable, intent(inout)   :: seppos(:)
-        character(len=LONGSTRLEN), intent(in) :: path
-        integer                               :: i
-        do i=1, len(path)
-            if(path(i:i) == "/") seppos = [seppos, i]
+        integer, allocatable, intent(inout) :: seppos(:)
+        class(string),        intent(in)    :: path
+        integer :: i
+        do i=1, path%strlen()
+            if(path%to_char([i,i]) == "/") seppos = [seppos, i]
         end do
     end subroutine find_separators
     

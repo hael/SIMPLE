@@ -241,7 +241,7 @@ contains
         logical,           optional, intent(in) :: line
         character(len=*),  optional, intent(in) :: suptitle, xtitle, ytitle
         real,              optional, intent(in) :: z(n)
-        type(str4arr)             :: title
+        type(string)              :: title
         type(CPlot2D_type)        :: plot
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
@@ -286,27 +286,28 @@ contains
             call CPlot2D__AddDataSet(plot, dataset)
             call CDataSet__delete(dataset)
         endif
-        title%str = 'X'//C_NULL_CHAR
-        if( present(xtitle) ) title%str = trim(xtitle)//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot, title%str)
-        title%str = 'Y'//C_NULL_CHAR
-        if( present(ytitle) ) title%str = trim(ytitle)//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot, title%str)
+        title = 'X'//C_NULL_CHAR
+        if( present(xtitle) ) title = trim(xtitle)//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot, title%to_char())
+        title = 'Y'//C_NULL_CHAR
+        if( present(ytitle) ) title = trim(ytitle)//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot, title%to_char())
         call CPlot2D__OutputPostScriptPlot(plot, trim(fname_eps)//C_NULL_CHAR)
         call CPlot2D__delete(plot)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
             &//trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot2D
 
     subroutine test_CPlot2D
         include 'simple_lib.f08'
-        type(str4arr)             :: title
-        type(CPlot2D_type)        :: plot
-        type(CDataSet_type)       :: dataSet
-        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, ps2jpeg_cmd, fname_jpeg, fname_eps
+        type(string)               :: title
+        type(CPlot2D_type)         :: plot
+        type(CDataSet_type)        :: dataSet
+        type(string)               :: fname_pdf, fname_jpeg
+        character(len=LONGSTRLEN) :: ps2pdf_cmd, ps2jpeg_cmd, fname_eps
         real    :: vals1(50,2), vals2(50,2), left, right, up, down, xdim,ydim
         integer :: l, i, iostat
         call seed_rnd
@@ -359,10 +360,10 @@ contains
             call CDataSet__delete(dataset)
         enddo
         ! legend
-        title%str = 'X axis legend'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot, title%str)
-        title%str = 'Y axis legend'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot, title%str)
+        title = 'X axis legend'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot, title%to_char())
+        title = 'Y axis legend'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot, title%to_char())
         ! output
         fname_eps = 'test.eps'//C_NULL_CHAR
         call CPlot2D__OutputPostScriptPlot(plot, fname_eps)
@@ -370,15 +371,15 @@ contains
         l = len_trim(fname_eps)
         fname_eps = fname_eps(:l-1) ! removing trailing C NULL character
         ! conversion to JPEG
-        fname_jpeg  = trim(get_fbody(fname_eps,'eps'))//'.jpeg'
+        fname_jpeg  = get_fbody(fname_eps,'eps')//'.jpeg'
         ps2jpeg_cmd = 'gs -q -sDEVICE=jpeg -dJPEGQ=96 -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=512 -dDEVICEHEIGHTPOINTS=512 -sOutputFile='&
-            //trim(fname_jpeg)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2jpeg_cmd)), suppress_errors=.true., exitstat=iostat)
+            //fname_jpeg%to_char()//' '//trim(fname_eps)
+        call exec_cmdline(ps2jpeg_cmd, suppress_errors=.true., exitstat=iostat)
         ! conversion to PDF
-        fname_pdf  = trim(get_fbody(fname_eps,'eps'))//'.pdf'
+        fname_pdf  = get_fbody(fname_eps,'eps')//'.pdf'
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=512 -dDEVICEHEIGHTPOINTS=512 -sOutputFile='&
-            //trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+            //fname_pdf%to_char()//' '//trim(fname_eps)
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         ! remove eps
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine test_CPlot2D

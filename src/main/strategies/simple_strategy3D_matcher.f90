@@ -31,20 +31,20 @@ public :: refine3D_exec
 private
 #include "simple_local_flags.inc"
 
-logical                        :: has_been_searched
-type(eul_prob_tab),     target :: eulprob_obj_part
-type(image),       allocatable :: ptcl_match_imgs(:)
-integer,           allocatable :: pinds(:)
-character(len=:),  allocatable :: fname
-integer                        :: nptcls2update
-type(euclid_sigma2)            :: eucl_sigma
-type(polarft_corrcalc)         :: pftcc
+logical                    :: has_been_searched
+type(eul_prob_tab), target :: eulprob_obj_part
+type(image),   allocatable :: ptcl_match_imgs(:)
+integer,       allocatable :: pinds(:)
+type(string)               :: fname
+integer                    :: nptcls2update
+type(euclid_sigma2)        :: eucl_sigma
+type(polarft_corrcalc)     :: pftcc
 ! benchmarking
-integer(timer_int_kind)        :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
-integer(timer_int_kind)        :: t_prepare_polar_references
-real(timer_int_kind)           :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
-real(timer_int_kind)           :: rt_prepare_polar_references
-character(len=STDLEN)          :: benchfname
+integer(timer_int_kind)    :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
+integer(timer_int_kind)    :: t_prepare_polar_references
+real(timer_int_kind)       :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
+real(timer_int_kind)       :: rt_prepare_polar_references
+type(string)               :: benchfname
 
 contains
 
@@ -129,7 +129,7 @@ contains
                 call polar_cavger_new(pftcc, .true.)
                 if( params_glob%l_trail_rec )then
                     ! In the first iteration the polarized cartesian references are written down
-                    call polar_cavger_writeall_pftccrefs(POLAR_REFS_FBODY)
+                    call polar_cavger_writeall_pftccrefs(string(POLAR_REFS_FBODY))
                 endif
             endif
             call polar_cavger_zero_pft_refs
@@ -152,7 +152,7 @@ contains
         ! READING THE ASSIGNMENT FOR PROB MODE
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             call eulprob_obj_part%new(pinds)
-            call eulprob_obj_part%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+            call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         endif
 
         if( L_BENCH_GLOB )then
@@ -343,7 +343,7 @@ contains
         endif
 
         ! REPORT CONVERGENCE
-        call qsys_job_finished('simple_strategy3D_matcher :: refine3D_exec')
+        call qsys_job_finished(string('simple_strategy3D_matcher :: refine3D_exec'))
         if( .not. params_glob%l_distr_exec .and. trim(params_glob%refine).ne.'sigma' )then
             converged = conv%check_conv3D(cline, params_glob%msk)
         endif
@@ -353,7 +353,7 @@ contains
             if( params_glob%part /= 1 ) doprint = .false.
             if( doprint )then
                 benchfname = 'REFINE3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
-                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles    : ', rt_build_batch_particles
@@ -381,10 +381,10 @@ contains
       contains
 
         subroutine polar_restoration()
-            params_glob%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
+            params_glob%refs = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
             call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
-            call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
-            call polar_cavger_writeall(POLAR_REFS_FBODY)
+            call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+            call polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
             call polar_cavger_kill
         end subroutine polar_restoration

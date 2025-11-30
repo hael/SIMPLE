@@ -39,13 +39,13 @@ contains
         use simple_atoms,      only: atoms
         class(commander_mask), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        type(parameters)           :: params
-        type(builder)              :: build
-        type(image)                :: mskvol
-        type(atoms)                :: pdb
-        type(image_msk)            :: msker
-        character(len=STDLEN)      :: pdbout_fname
-        integer                    :: ldim(3)
+        type(parameters) :: params
+        type(builder)    :: build
+        type(image)      :: mskvol
+        type(atoms)      :: pdb
+        type(image_msk)  :: msker
+        type(string)     :: pdbout_fname
+        integer          :: ldim(3)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
@@ -84,7 +84,7 @@ contains
             else if( cline%defined('pdbfile') )then
                 ! focus masking
                 call pdb%new(params%pdbfile)
-                pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered.pdb'
+                pdbout_fname = get_fbody(params%pdbfile, 'pdb') // string('_centered.pdb')
                 if( params%center.eq.'yes' )then
                     call msker%mask_from_pdb( pdb, build%vol, os=build%spproj_field, pdbout=pdbout_fname)
                 else
@@ -93,7 +93,7 @@ contains
                 call build%spproj%write_segment_inside(params%oritype,params%projfile)
                 call build%spproj_field%write(params%outfile)
                 call build%vol%write(params%outvol)
-                call msker%write('maskfile'//params%ext)
+                call msker%write(string('maskfile')//params%ext)
             else
                 THROW_HARD('Nothing to do!')
             endif
@@ -127,7 +127,7 @@ contains
         call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         do i = 1,n
             call imgs(i)%mul(masks(i))
-            call imgs(i)%write('automasked.mrc', i)
+            call imgs(i)%write(string('automasked.mrc'), i)
             call masks(i)%kill
             call imgs(i)%kill
         end do
@@ -142,9 +142,9 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(builder)    :: build
         type(parameters) :: params
-        type(image_msk)     :: mskvol
+        type(image_msk)  :: mskvol
         logical          :: l_tight
-        character(len=:), allocatable :: fname_out
+        type(string)     :: fname_out
         if(.not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
         call build%build_spproj(params, cline)
@@ -159,16 +159,16 @@ contains
                 fname_out = 'automask3D_filtered.mrc'
             else
                 call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight, params%thres)
-                call mskvol%write(MSKVOL_FILE)
+                call mskvol%write(string(MSKVOL_FILE))
                 fname_out = 'automask3D_masked_vol.mrc'
             endif
         else
             call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight)
-            call mskvol%write(MSKVOL_FILE)
+            call mskvol%write(string(MSKVOL_FILE))
             fname_out = 'automask3D_masked_vol.mrc'
         endif
         call build%vol2%write(fname_out)
-        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//fname_out
+        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//fname_out%to_char()
         call simple_end('**** SIMPLE_AUTOMASK NORMAL STOP ****')
     end subroutine exec_automask
 
@@ -177,9 +177,9 @@ contains
         class(cmdline),                   intent(inout) :: cline
         type(builder)    :: build
         type(parameters) :: params
-        type(image_msk)     :: mskvol
+        type(image_msk)  :: mskvol
         real             :: msk_in_pix
-        character(len=:), allocatable :: fname_out
+        type(string)     :: fname_out
         if(.not.cline%defined('mkdir') ) call cline%set('mkdir','no')
         call params%new(cline)
         call build%build_spproj(params, cline)
@@ -189,12 +189,12 @@ contains
         write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * params%smpd
         call build%vol%mask(msk_in_pix, 'soft')
         if( cline%defined('outfile') )then
-            fname_out = trim(params%outfile)
+            fname_out = params%outfile%to_char()
         else
-            fname_out = add2fbody(trim(params%vols(1)), params%ext, '_msk')
+            fname_out = add2fbody(params%vols(1), params%ext, '_msk')
         endif
         call build%vol%write(fname_out)
-        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//fname_out
+        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//fname_out%to_char()
         call simple_end('**** SIMPLE_AUTO_SPHER_MASK NORMAL STOP ****')
     end subroutine exec_auto_spher_mask
 

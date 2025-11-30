@@ -176,8 +176,8 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( file_exists(trim(DIST_FBODY)//'.dat') )then
-            call self%read_tab_to_glob(trim(DIST_FBODY)//'.dat')
+        if( file_exists(DIST_FBODY//'.dat') )then
+            call self%read_tab_to_glob(string(DIST_FBODY//'.dat'))
         endif
     end subroutine new_2
 
@@ -591,11 +591,11 @@ contains
     ! write the partition-wise (or global) dist value table to a binary file
     subroutine write_tab( self, binfname )
         class(eul_prob_tab), intent(in) :: self
-        character(len=*),    intent(in) :: binfname
+        class(string),       intent(in) :: binfname
         integer :: funit, addr, io_stat, file_header(2)
         file_header(1) = self%nrefs
         file_header(2) = self%nptcls
-        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) file_header
         addr = sizeof(file_header) + 1
         write(funit,pos=addr) self%loc_tab
@@ -605,12 +605,12 @@ contains
     ! read the partition-wise dist value binary file to global reg object's dist value table
     subroutine read_tab_to_glob( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
-        character(len=*),    intent(in)    :: binfname
+        class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: mat_loc(:,:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob
-        if( file_exists(trim(binfname)) )then
-            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-            call fileiochk('simple_eul_prob_tab; read_tab_to_glob; file: '//trim(binfname), io_stat)
+        if( file_exists(binfname) )then
+            call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            call fileiochk('simple_eul_prob_tab; read_tab_to_glob; file: '//binfname%to_char(), io_stat)
         else
             THROW_HARD( 'corr/rot files of partitions should be ready! ' )
         endif
@@ -639,10 +639,10 @@ contains
 
     subroutine write_state_tab( self, binfname )
         class(eul_prob_tab), intent(in) :: self
-        character(len=*),    intent(in) :: binfname
+        class(string),       intent(in) :: binfname
         integer :: funit, io_stat, headsz
         headsz = sizeof(self%nptcls)
-        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1)          self%nptcls
         write(unit=funit,pos=headsz + 1) self%state_tab
         call fclose(funit)
@@ -650,16 +650,16 @@ contains
 
     subroutine read_state_tab( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
-        character(len=*),    intent(in)    :: binfname
+        class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: state_tab_glob(:,:)
         integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
         headsz = sizeof(nptcls_glob)
-        if( .not. file_exists(trim(binfname)) )then
-            THROW_HARD('file '//trim(binfname)//' does not exists!')
+        if( .not. file_exists(binfname) )then
+            THROW_HARD('file '//binfname%to_char()//' does not exists!')
         else
-            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('simple_eul_prob_tab; read_state_tab; file: '//trim(binfname), io_stat)
+        call fileiochk('simple_eul_prob_tab; read_state_tab; file: '//binfname%to_char(), io_stat)
         read(unit=funit,pos=1) nptcls_glob
         allocate(state_tab_glob(self%nstates,nptcls_glob))
         read(unit=funit,pos=headsz + 1) state_tab_glob
@@ -680,10 +680,10 @@ contains
     ! write a global assignment map to binary file
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab), intent(in) :: self
-        character(len=*),    intent(in) :: binfname
+        class(string),       intent(in) :: binfname
         integer :: funit, io_stat, headsz
         headsz = sizeof(self%nptcls)
-        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1)          self%nptcls
         write(unit=funit,pos=headsz + 1) self%assgn_map
         call fclose(funit)
@@ -692,16 +692,16 @@ contains
     ! read from the global assignment map to local partition for shift search and further refinement
     subroutine read_assignment( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
-        character(len=*),    intent(in)    :: binfname
+        class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: assgn_glob(:)
         integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
         headsz = sizeof(nptcls_glob)
-        if( .not. file_exists(trim(binfname)) )then
-            THROW_HARD('file '//trim(binfname)//' does not exists!')
+        if( .not. file_exists(binfname) )then
+            THROW_HARD('file '//binfname%to_char()//' does not exists!')
         else
-            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('simple_eul_prob_tab; read_assignment; file: '//trim(binfname), io_stat)
+        call fileiochk('simple_eul_prob_tab; read_assignment; file: '//binfname%to_char(), io_stat)
         read(unit=funit,pos=1) nptcls_glob
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit,pos=headsz + 1) assgn_glob
@@ -741,7 +741,7 @@ contains
         integer,           intent(out) :: num_smpl
         integer, optional, intent(in)  :: state
         real :: athres
-        athres   = calc_athres( field_str, state )
+        athres   = calc_athres(field_str, state)
         num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
 

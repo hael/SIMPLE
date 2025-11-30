@@ -3,29 +3,29 @@ module simple_strategy2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_binoris_io
-use simple_strategy2D_alloc
-use simple_polarft_corrcalc,       only: polarft_corrcalc
-use simple_cmdline,                only: cmdline
 use simple_builder,                only: build_glob
-use simple_parameters,             only: params_glob
+use simple_cmdline,                only: cmdline
+use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_image,                  only: image
+use simple_parameters,             only: params_glob
+use simple_polarft_corrcalc,       only: polarft_corrcalc
 use simple_qsys_funs,              only: qsys_job_finished
-use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
-use simple_strategy2D_srch,        only: strategy2D_spec
+use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D_greedy,      only: strategy2D_greedy
+use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
 use simple_strategy2D_inpl,        only: strategy2D_inpl
 use simple_strategy2D_inpl_smpl,   only: strategy2D_inpl_smpl
-use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
-use simple_strategy2D_tseries,     only: strategy2D_tseries
+use simple_strategy2D_prob,        only: strategy2D_prob
 use simple_strategy2D_snhc,        only: strategy2D_snhc
 use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
-use simple_strategy2D_prob,        only: strategy2D_prob
-use simple_euclid_sigma2,          only: euclid_sigma2
+use simple_strategy2D_srch,        only: strategy2D_spec
+use simple_strategy2D_tseries,     only: strategy2D_tseries
+use simple_binoris_io
 use simple_classaverager
 use simple_polarops
 use simple_progress
+use simple_strategy2D_alloc
 implicit none
 
 public :: cluster2D_exec
@@ -39,7 +39,7 @@ type(euclid_sigma2)      :: eucl_sigma
 type(image), allocatable :: ptcl_match_imgs(:)
 real(timer_int_kind)     :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)  ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
-character(len=STDLEN)    :: benchfname
+type(string)             :: benchfname
 
 contains
 
@@ -52,7 +52,7 @@ contains
         integer,                 intent(in)    :: which_iter
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
-        character(len=STDLEN),     allocatable :: refine_flag
+        character(len=STDLEN)                  :: refine_flag
         real,                      allocatable :: states(:), incr_shifts(:,:)
         integer,                   allocatable :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),           target :: probtab
@@ -206,7 +206,7 @@ contains
         ! READ THE ASSIGNMENT FOR PROB MODE
         if( l_prob )then
             call probtab%new(pinds)
-            call probtab%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+            call probtab%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
             s2D%probtab => probtab ! table accessible to strategies
         endif
 
@@ -380,9 +380,9 @@ contains
             if(.not. l_stream) call progressfile_update(conv%get('progress'))
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
                 if( cline%defined('which_iter') )then
-                    params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
-                    params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
-                    params_glob%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext
+                    params_glob%refs      = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
+                    params_glob%refs_even = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext%to_char()
+                    params_glob%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext%to_char()
                 else
                     THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                 endif
@@ -395,8 +395,8 @@ contains
                     else
                         call polar_cavger_merge_eos_and_norm2D
                     endif
-                    call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
-                    call polar_cavger_writeall(POLAR_REFS_FBODY)
+                    call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+                    call polar_cavger_writeall(string(POLAR_REFS_FBODY))
                     call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
                     call polar_cavger_gen2Dclassdoc(build_glob%spproj)
                     call polar_cavger_kill
@@ -418,7 +418,7 @@ contains
                     call cavger_kill(dealloccavgs=.false.)
                 endif
                 ! update command line
-                call cline%set('refs', trim(params_glob%refs))
+                call cline%set('refs', params_glob%refs)
                 ! write project: cls2D and state congruent cls3D
                 call build_glob%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
                 states = build_glob%spproj%os_cls2D%get_all('state')
@@ -432,12 +432,12 @@ contains
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call pftcc%kill
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
-        call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
+        call qsys_job_finished(string('simple_strategy2D_matcher :: cluster2D_exec'))
         if( L_BENCH_GLOB )then
             if( params_glob%part == 1 )then
                 rt_tot  = toc(t_tot)
                 benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
-                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', rt_prep_pftcc
@@ -511,6 +511,7 @@ contains
         if( .not.build_glob%img_crop_polarizer%polarizer_initialized() )then
             call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         endif
+        ! call build_glob%spproj_field%write('ptcl2Dfield_going_in.txt')
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
         !$omp schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
@@ -535,10 +536,10 @@ contains
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
         type(image),      allocatable :: match_imgs(:), tmp_imgs(:)
-        character(len=:), allocatable :: fname
-        real      :: xyz(3)
-        integer   :: icls, pop, pop_even, pop_odd
-        logical   :: do_center, has_been_searched
+        type(string) :: fname
+        real         :: xyz(3)
+        integer      :: icls, pop, pop_even, pop_odd
+        logical      :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
@@ -619,10 +620,10 @@ contains
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
         type(image),      allocatable :: tmp_imgs(:)
-        character(len=:), allocatable :: fname
-        real      :: xyz(3)
-        integer   :: icls, pop, pop_even, pop_odd
-        logical   :: has_been_searched, do_center, l_center
+        type(string) :: fname
+        real         :: xyz(3)
+        integer      :: icls, pop, pop_even, pop_odd
+        logical      :: has_been_searched, do_center, l_center
         ! PFTCC instantiation
         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
         ! Sigma2
@@ -641,7 +642,7 @@ contains
         endif
         ! Read polar references
         call polar_cavger_new(pftcc, trim(params_glob%ref_type)=='comlin_hybrid')
-        call polar_cavger_read_all(trim(POLAR_REFS_FBODY)//trim(BIN_EXT))
+        call polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! Centering-related objects
         do_center = (params_glob%center .eq. 'yes') .and. has_been_searched&

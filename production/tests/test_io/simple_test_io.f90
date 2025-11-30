@@ -4,7 +4,7 @@ use simple_image,    only: image
 use simple_stack_io, only: stack_io
 implicit none
 type(image),      allocatable :: imgs(:)
-character(len=:), allocatable :: benchfname
+type(string)                  :: benchfname
 type(image)                   :: vol
 type(stack_io)                :: stkio_r, stkio_w
 integer,          parameter   :: NVOLRWS   = 10
@@ -30,13 +30,13 @@ end do
 print *, 'simulating a volume'
 call vol%new([BOX,BOX,BOX], SMPD)
 call vol%ran()
-call vol%write('random_vol.mrc')
+call vol%write(string('random_vol.mrc'))
 
 print *, 'writing the stack '//int2str(NSTKRWS)//' times'
 rt_tot  = 0.
 t_stk_w = tic()
 do i = 1, NSTKRWS
-    call stkio_w%open('stack_of_random_imgs.mrcs', SMPD, 'write', box=BOX)
+    call stkio_w%open(string('stack_of_random_imgs.mrcs'), SMPD, 'write', box=BOX)
     do iptcl = 1, NPTCLS
         call stkio_w%write(iptcl, imgs(iptcl))
     end do
@@ -48,7 +48,7 @@ rt_tot   = rt_tot + rt_stk_w
 print *, 'reading the stack '//int2str(NSTKRWS)//' times'
 t_stk_r = tic()
 do i = 1, NSTKRWS
-    call stkio_r%open('stack_of_random_imgs.mrcs', SMPD, 'read')
+    call stkio_r%open(string('stack_of_random_imgs.mrcs'), SMPD, 'read')
     do iptcl = 1, NPTCLS
         call stkio_r%read(iptcl, imgs(iptcl))
     end do
@@ -60,7 +60,7 @@ rt_tot   = rt_tot + rt_stk_r
 print *, 'writing the volume '//int2str(NVOLRWS)//' times'
 t_vol_w = tic()
 do i = 1, NVOLRWS
-    call vol%write('random_vol.mrc')
+    call vol%write(string('random_vol.mrc'))
 end do
 rt_vol_w = toc(t_vol_w)
 rt_tot   = rt_tot + rt_vol_w
@@ -68,7 +68,7 @@ rt_tot   = rt_tot + rt_vol_w
 print *, 'reading the volume '//int2str(NVOLRWS)//' times'
 t_vol_r = tic()
 do i = 1, NVOLRWS
-    call vol%read('random_vol.mrc')
+    call vol%read(string('random_vol.mrc'))
 end do
 rt_vol_r = toc(t_vol_r)
 rt_tot   = rt_tot + rt_vol_r
@@ -83,7 +83,7 @@ mb_per_s_r     = real(real(NSTKBYTES + NVOLBYTES,dp) / real(ONE_M,dp) / (rt_stk_
 
 ! write benchmark stats
 benchfname = 'SIMPLE_IO_BENCH.txt'
-call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
 write(fnr,'(a)') '*** TIMINGS (s) ***'
 write(fnr,'(a,1x,f9.2)') 'stack  writes : ', rt_stk_w
 write(fnr,'(a,1x,f9.2)') 'stack  reads  : ', rt_stk_r

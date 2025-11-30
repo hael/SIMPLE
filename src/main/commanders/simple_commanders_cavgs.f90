@@ -65,10 +65,10 @@ contains
             call img%new([params%box,params%box,1], params%smpd)
             call clsdoc_ranked%new(params%ncls, is_ptcl=.false.)
             select case(trim(params%flag))
-            case('res','corr','pop')
-                ! supported
-            case DEFAULT
-                THROW_HARD('Unsupported cavg flag: '//trim(params%flag))
+                case('res','corr','pop')
+                    ! supported
+                case DEFAULT
+                    THROW_HARD('Unsupported cavg flag: '//trim(params%flag))
             end select
             vals    = os_ptr%get_all(params%flag)
             order   = (/(icls,icls=1,params%ncls)/)
@@ -113,7 +113,7 @@ contains
             end do
             call stkio_r%close
             call stkio_w%close
-            call clsdoc_ranked%write('classdoc_ranked.txt')
+            call clsdoc_ranked%write(string('classdoc_ranked.txt'))
         else
             ! nothing to do
         endif
@@ -233,9 +233,9 @@ contains
         call dealloc_imgarr(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
         ! write aligned clusters
-        call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', trim(params%ext))
+        call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', params%ext%to_char())
         ! write un-aligned clusters
-        call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', trim(params%ext) )
+        call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', params%ext%to_char() )
         ! update project
         call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
         call spproj%os_cls2D%set_all2single('cluster',  0)
@@ -271,7 +271,7 @@ contains
             deallocate(inds, resvals_tmp)
         enddo
         ! write ranked_cavgs
-        call write_imgarr(cavg_imgs,'ranked_cavgs'//trim(params%ext), inds_glob)
+        call write_imgarr(cavg_imgs, string('ranked_cavgs')//params%ext%to_char(), inds_glob)
         deallocate(inds_glob)
         ! report cluster info
         do iclust = 1, nclust
@@ -299,7 +299,7 @@ contains
             labels4write(icls) = clust_info_arr(labels(icls))%good_bad
         end do
         ! write selection
-        call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext)
+        call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext%to_char())
         ! map selection to project
         call spproj%map_cavgs_selection(states)
         ! optional pruning
@@ -318,10 +318,10 @@ contains
     subroutine exec_select_clusters( self, cline )
         class(commander_select_clusters), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        integer,          allocatable :: clustinds(:)
-        character(len=:), allocatable :: selflag
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        integer, allocatable :: clustinds(:)
+        type(string) :: selflag
         integer :: iclust, nclust_sel, nclust_max
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('prune')       ) call cline%set('prune',           'yes')
@@ -340,7 +340,7 @@ contains
         end do
         ! check flag
         selflag = trim(params%select_flag)
-        select case(selflag)
+        select case(selflag%to_char())
             case('cluster','class')
                 ! all good
             case DEFAULT
@@ -348,21 +348,21 @@ contains
         end select
         ! read project file
         call spproj%read(params%projfile)
-        nclust_max = spproj%os_ptcl2D%get_n(selflag)
+        nclust_max = spproj%os_ptcl2D%get_n(selflag%to_char())
         if( any(clustinds > nclust_max) ) THROW_HARD('Maximum cluster index value: '//int2str(nclust_max)//' exceeded!')
         do iclust = 1, nclust_max
             if( any(clustinds == iclust) )then
                 ! set state=1 to flag inclusion
-                call spproj%os_cls2D%set_field2single(selflag,  iclust, 'state', 1) ! 2D class field
-                call spproj%os_cls3D%set_field2single(selflag,  iclust, 'state', 1) ! 3D class field
-                call spproj%os_ptcl2D%set_field2single(selflag, iclust, 'state', 1) ! 2D particle field
-                call spproj%os_ptcl3D%set_field2single(selflag, iclust, 'state', 1) ! 3D particle field
+                call spproj%os_cls2D%set_field2single(selflag%to_char(),  iclust, 'state', 1) ! 2D class field
+                call spproj%os_cls3D%set_field2single(selflag%to_char(),  iclust, 'state', 1) ! 3D class field
+                call spproj%os_ptcl2D%set_field2single(selflag%to_char(), iclust, 'state', 1) ! 2D particle field
+                call spproj%os_ptcl3D%set_field2single(selflag%to_char(), iclust, 'state', 1) ! 3D particle field
             else
                 ! set state=0 to flag exclusion
-                call spproj%os_cls2D%set_field2single(selflag,  iclust, 'state', 0) ! 2D class field
-                call spproj%os_cls3D%set_field2single(selflag,  iclust, 'state', 0) ! 3D class field
-                call spproj%os_ptcl2D%set_field2single(selflag, iclust, 'state', 0) ! 2D particle field
-                call spproj%os_ptcl3D%set_field2single(selflag, iclust, 'state', 0) ! 3D particle field
+                call spproj%os_cls2D%set_field2single(selflag%to_char(),  iclust, 'state', 0) ! 2D class field
+                call spproj%os_cls3D%set_field2single(selflag%to_char(),  iclust, 'state', 0) ! 3D class field
+                call spproj%os_ptcl2D%set_field2single(selflag%to_char(), iclust, 'state', 0) ! 2D particle field
+                call spproj%os_ptcl3D%set_field2single(selflag%to_char(), iclust, 'state', 0) ! 3D particle field
             endif
         end do
         ! prune
@@ -384,8 +384,7 @@ contains
         type(cmdline)    :: cline_cluster_cavgs
         type(commander_cluster_cavgs)  :: xcluster_cavgs
         character(len=*),  parameter   :: TMPPROJFILE = 'tmp_projfile_match_cavgs.simple'
-        character(len=LONGSTRLEN)      :: chunk_fnames(2)
-        character(len=:),  allocatable :: folder
+        type(string)                   :: chunk_fnames(2), folder
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
         integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
@@ -441,7 +440,7 @@ contains
         end do
         allocate(labels_match(nmatch), source=0)
         labels_match = minloc(dmat_clust, dim=1)
-        call  write_imgarr(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext)
+        call  write_imgarr(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext%to_char())
         ! update project
         call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)
         call spproj_match%os_cls2D%set_all2single('cluster',  0)
@@ -464,7 +463,7 @@ contains
         enddo
         if( cline%defined('projfile_merged') )then
             ! merge spproj_ref & spproj_match projects
-            call spproj_match%write(TMPPROJFILE)
+            call spproj_match%write(string(TMPPROJFILE))
             chunk_fnames(1) = params%projfile
             chunk_fnames(2) = simple_abspath(TMPPROJFILE)
             folder = PATH_HERE

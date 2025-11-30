@@ -28,7 +28,7 @@ contains
     !>  \brief  is for making a stack of vectors for PCA analysis
     !! \param fnameStack,fnamePCAvecs filenames for stack and pattern
     subroutine make_pcavec_stack( fnameStack, fnamePCAvecs, D, recsz, avg, l_mask )
-        character(len=*),  intent(in)  :: fnameStack, fnamePCAvecs
+        class(string),     intent(in)  :: fnameStack, fnamePCAvecs
         integer,           intent(out) :: D, recsz      !< record size
         real, allocatable, intent(out) :: avg(:)        !< frame stack average
         logical, optional, intent(in)  :: l_mask(:,:,:) !< true for pixels to extract
@@ -89,10 +89,10 @@ contains
     !! \param fname stack filename
     !! \param avgname output filename
     subroutine make_avg_stack( fname, avgname, smpd )
-        character(len=*), intent(in) :: fname, avgname
-        real,             intent(in) :: smpd              !< sampling distance, resolution
-        type(image)                  :: avg, img
-        integer                      :: i, n, ldim(3)
+        class(string), intent(in) :: fname, avgname
+        real,          intent(in) :: smpd              !< sampling distance, resolution
+        type(image) :: avg, img
+        integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
         ldim(3) = 1
         call raise_exception( n, ldim, 'make_avg_imgfile' )
@@ -115,9 +115,9 @@ contains
     !! \param smpd  sampling distance
     !! \param navg number of averages
     subroutine frameavg_stack( fname2process, fname, navg, smpd )
-        character(len=*), intent(in) :: fname2process, fname
-        integer,          intent(in) :: navg
-        real,             intent(in) :: smpd
+        class(string), intent(in) :: fname2process, fname
+        integer,       intent(in) :: navg
+        real,          intent(in) :: smpd
         type(image) :: img, avg
         integer     :: i, n, cnt, cnt2, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
@@ -150,7 +150,7 @@ contains
     !! \param fname2acf  output filename
     !! \param fname  input filename
     subroutine acf_stack( fname2acf, fname )
-        character(len=*), intent(in) :: fname2acf, fname
+        class(string), intent(in) :: fname2acf, fname
         type(image)   :: img
         integer       :: i, n, ldim(3)
         call find_ldim_nptcls(fname2acf, ldim, n)
@@ -169,9 +169,9 @@ contains
 
     !>  \brief  is for calculating image statistics
     subroutine stats_imgfile( fname, os, msk )
-        character(len=*), intent(in)  :: fname
-        class(oris),      intent(out) :: os
-        real, optional,   intent(in)  :: msk
+        class(string),  intent(in)  :: fname
+        class(oris),    intent(out) :: os
+        real, optional, intent(in)  :: msk
         real              :: ave, sdev, med, minv, maxv, spec
         real, allocatable :: spectrum(:)
         type(image)       :: img
@@ -202,11 +202,11 @@ contains
 
     !>  \brief  is for calculating image statistics
     subroutine prep_imgfile4movie( fname, smpd )
-        character(len=*), intent(in) :: fname
-        real,             intent(in) :: smpd
-        character(len=:), allocatable :: fname_out
-        type(image)       :: img
-        integer           :: i, ldim(3), numlen, funit, iostat, nptcls
+        class(string), intent(in) :: fname
+        real,          intent(in) :: smpd
+        type(string) :: fname_out, str_cat, str_mp4
+        type(image)  :: img
+        integer      :: i, ldim(3), numlen, funit, iostat, nptcls
         call find_ldim_nptcls(fname, ldim, nptcls)
         ldim(3) = 1
         call img%new(ldim, smpd)
@@ -214,18 +214,23 @@ contains
         numlen = len(int2str(nptcls))
         do i=1,nptcls
             call progress(i, nptcls)
-            fname_out = fname_new_ext(basename(fname), int2str_pad(i,numlen)//'.jpg')
+            fname_out = fname_new_ext(basename(fname), string(int2str_pad(i,numlen)//'.jpg'))
             call img%read(fname, i)
             call img%write_jpg(fname_out, quality=100, norm=.false.)
         end do
         call img%kill
         ! script ouput
-        call fopen(funit, status='replace', action='write', file='makemovie.script',iostat=iostat)
+        str_cat = fname_new_ext(basename(fname),string('*.jpg'))
+        str_mp4 = fname_new_ext(basename(fname),string('mp4'))
+        call fopen(funit, status='replace', action='write', file=string('makemovie.script'),iostat=iostat)
         write(funit,*)'# Increase the argument to the first occurence of argument -r:v for a faster movie'
-        write(funit,*)'cat '//trim(fname_new_ext(basename(fname),'*.jpg'))//' | ffmpeg -y -f image2pipe -vcodec mjpeg -r:v 5 '&
-            &//'-i - -vcodec:v libx264 -preset veryslow -r:v 25 '//fname_new_ext(basename(fname),'mp4')
+        write(funit,*)'cat '//str_cat%to_char()//' | ffmpeg -y -f image2pipe -vcodec mjpeg -r:v 5 '&
+            &//'-i - -vcodec:v libx264 -preset veryslow -r:v 25 '//str_mp4%to_char()
         call fclose(funit)
         iostat = simple_chmod('makemovie.script','+x')
+        call fname_out%kill
+        call str_cat%kill
+        call str_mp4%kill
         write(logfhandle,'(A)')'>>> Execute the generated script: ./makemovie.script'
     end subroutine prep_imgfile4movie
 

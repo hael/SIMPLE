@@ -12,16 +12,16 @@ character(len=26), parameter :: UI_FNAME = 'simple_user_interface.json'
 logical,           parameter :: DEBUG    = .false.
 
 type simple_input_param
-    character(len=:), allocatable :: key
-    character(len=:), allocatable :: keytype ! (binary|multi|num|str|file|dir)
-    character(len=:), allocatable :: descr_short
-    character(len=:), allocatable :: descr_long
-    character(len=:), allocatable :: descr_placeholder
-    character(len=:), allocatable :: gui_submenu
-    character(len=:), allocatable :: active_flags
-    character(len=:), allocatable :: exclusive_group
-    character(len=:), allocatable :: cval_default
-    real                          :: rval_default = 0.
+    type(string) :: key
+    type(string) :: keytype ! (binary|multi|num|str|file|dir)
+    type(string) :: descr_short
+    type(string) :: descr_long
+    type(string) :: descr_placeholder
+    type(string) :: gui_submenu
+    type(string) :: active_flags
+    type(string) :: exclusive_group
+    type(string) :: cval_default
+    real    :: rval_default = 0.
     logical :: required = .true.
     logical :: advanced = .true.
     logical :: online   = .false.
@@ -29,12 +29,12 @@ end type simple_input_param
 
 type :: simple_program
     private
-    character(len=:), allocatable :: name
-    character(len=:), allocatable :: descr_short
-    character(len=:), allocatable :: descr_long
-    character(len=:), allocatable :: executable
-    character(len=:), allocatable :: gui_submenu_list
-    logical                       :: advanced = .true.
+    type(string) :: name
+    type(string) :: descr_short
+    type(string) :: descr_long
+    type(string) :: executable
+    type(string) :: gui_submenu_list
+    logical      :: advanced = .true.
     ! image input/output
     type(simple_input_param), allocatable :: img_ios(:)
     ! parameter input/output
@@ -729,9 +729,9 @@ contains
     end subroutine set_prg_ptr_array
 
     subroutine get_prg_ptr( which_program, ptr2prg )
-        character(len=*), intent(in)  :: which_program
+        class(string), intent(in) :: which_program
         type(simple_program), pointer :: ptr2prg
-        select case(trim(which_program))
+        select case(which_program%to_char())
             case('abinitio2D');                  ptr2prg => abinitio2D
             case('abinitio2D_stream');           ptr2prg => abinitio2D_stream
             case('abinitio3D');                  ptr2prg => abinitio3D
@@ -890,185 +890,185 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_simple_prgs_in_ui
-        write(logfhandle,'(A)') abinitio2D%name
-        write(logfhandle,'(A)') abinitio3D%name
-        write(logfhandle,'(A)') abinitio3D_cavgs%name
-        write(logfhandle,'(A)') abinitio3D_cavgs_fast%name
-        write(logfhandle,'(A)') afm%name
-        write(logfhandle,'(A)') assign_optics_groups%name
-        write(logfhandle,'(A)') auto_spher_mask%name
-        write(logfhandle,'(A)') automask%name
-        write(logfhandle,'(A)') automask2D%name
-        write(logfhandle,'(A)') binarize%name
-        write(logfhandle,'(A)') calc_pspec%name
-        write(logfhandle,'(A)') center%name
-        write(logfhandle,'(A)') check_refpick%name
-        write(logfhandle,'(A)') check_states%name
-        write(logfhandle,'(A)') cleanup2D%name
-        write(logfhandle,'(A)') clin_fsc%name
-        write(logfhandle,'(A)') cluster2D%name
-        write(logfhandle,'(A)') cluster2D_subsets%name
-        write(logfhandle,'(A)') cluster_cavgs%name
-        write(logfhandle,'(A)') cluster_stack%name
-        write(logfhandle,'(A)') comparemc%name
-        write(logfhandle,'(A)') consolidate_chunks%name
-        write(logfhandle,'(A)') convert%name
-        write(logfhandle,'(A)') ctf_estimate%name
-        write(logfhandle,'(A)') ctf_phaseflip%name
-        write(logfhandle,'(A)') ctfops%name
-        write(logfhandle,'(A)') dock_volpair%name
-        write(logfhandle,'(A)') estimate_lpstages%name
-        write(logfhandle,'(A)') export_relion%name
-        write(logfhandle,'(A)') export_starproject%name
-        write(logfhandle,'(A)') extract%name
-        write(logfhandle,'(A)') filter%name
-        write(logfhandle,'(A)') fractionate_movies%name
-        write(logfhandle,'(A)') fsc%name
-        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
-        write(logfhandle,'(A)') icm2D%name
-        write(logfhandle,'(A)') icm3D%name
-        write(logfhandle,'(A)') import_boxes%name
-        write(logfhandle,'(A)') import_cavgs%name
-        write(logfhandle,'(A)') import_movies%name
-        write(logfhandle,'(A)') import_particles%name
-        write(logfhandle,'(A)') import_starproject%name
-        write(logfhandle,'(A)') info_image%name
-        write(logfhandle,'(A)') info_stktab%name
-        write(logfhandle,'(A)') make_cavgs%name
-        write(logfhandle,'(A)') make_oris%name
-        write(logfhandle,'(A)') map2model_fsc%name
-        write(logfhandle,'(A)') map_cavgs_selection%name
-        write(logfhandle,'(A)') map_cavgs_states%name
-        write(logfhandle,'(A)') map_validation%name
-        write(logfhandle,'(A)') mask%name
-        write(logfhandle,'(A)') match_cavgs%name
-        write(logfhandle,'(A)') match_stacks%name
-        write(logfhandle,'(A)') merge_projects%name
-        write(logfhandle,'(A)') mini_stream%name
-        write(logfhandle,'(A)') mkdir_%name
-        write(logfhandle,'(A)') model_validation%name
-        write(logfhandle,'(A)') model_validation_eo%name
-        write(logfhandle,'(A)') motion_correct%name
-        write(logfhandle,'(A)') multivol_assign%name
-        write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') noisevol%name
-        write(logfhandle,'(A)') normalize_%name
-        write(logfhandle,'(A)') nununiform_filter3D%name
-        write(logfhandle,'(A)') oriconsensus%name
-        write(logfhandle,'(A)') orisops%name
-        write(logfhandle,'(A)') oristats%name
-        write(logfhandle,'(A)') pdb2mrc%name
-        write(logfhandle,'(A)') pick%name
-        write(logfhandle,'(A)') postprocess%name
-        write(logfhandle,'(A)') ppca_denoise%name
-        write(logfhandle,'(A)') ppca_denoise_classes%name
-        write(logfhandle,'(A)') ppca_volvar%name
-        write(logfhandle,'(A)') preprocess%name
-        write(logfhandle,'(A)') print_dose_weights%name
-        write(logfhandle,'(A)') print_fsc%name
-        write(logfhandle,'(A)') print_magic_boxes%name
-        write(logfhandle,'(A)') print_project_field%name
-        write(logfhandle,'(A)') print_project_info%name
-        write(logfhandle,'(A)') projops%name
-        write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') reconstruct3D%name
-        write(logfhandle,'(A)') reextract%name
-        write(logfhandle,'(A)') refine3D%name
-        write(logfhandle,'(A)') refine3D_auto%name
-        write(logfhandle,'(A)') replace_project_field%name
-        write(logfhandle,'(A)') reproject%name
-        write(logfhandle,'(A)') sample_classes%name
-        write(logfhandle,'(A)') scale%name
-        write(logfhandle,'(A)') scale_project%name
-        write(logfhandle,'(A)') score_ptcls%name
-        write(logfhandle,'(A)') select_%name
-        write(logfhandle,'(A)') select_clusters%name
-        write(logfhandle,'(A)') selection%name
-        write(logfhandle,'(A)') sharpvol%name
-        write(logfhandle,'(A)') simulate_movie%name
-        write(logfhandle,'(A)') simulate_noise%name
-        write(logfhandle,'(A)') simulate_particles%name
-        write(logfhandle,'(A)') simulate_subtomogram%name
-        write(logfhandle,'(A)') split_%name
-        write(logfhandle,'(A)') split_stack%name
-        write(logfhandle,'(A)') stack%name
-        write(logfhandle,'(A)') stackops%name
-        write(logfhandle,'(A)') symaxis_search%name
-        write(logfhandle,'(A)') symmetrize_map%name
-        write(logfhandle,'(A)') symmetry_test%name
-        write(logfhandle,'(A)') uniform_filter2D%name
-        write(logfhandle,'(A)') uniform_filter3D%name
-        write(logfhandle,'(A)') update_project%name
-        write(logfhandle,'(A)') vizoris%name
-        write(logfhandle,'(A)') volanalyze%name
-        write(logfhandle,'(A)') volops%name
-        write(logfhandle,'(A)') write_classes%name
-        write(logfhandle,'(A)') write_mic_filetab%name
-        write(logfhandle,'(A)') zero_project_shifts%name
+        write(logfhandle,'(A)') abinitio2D%name%to_char()
+        write(logfhandle,'(A)') abinitio3D%name%to_char()
+        write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
+        write(logfhandle,'(A)') abinitio3D_cavgs_fast%name%to_char()
+        write(logfhandle,'(A)') afm%name%to_char()
+        write(logfhandle,'(A)') assign_optics_groups%name%to_char()
+        write(logfhandle,'(A)') auto_spher_mask%name%to_char()
+        write(logfhandle,'(A)') automask%name%to_char()
+        write(logfhandle,'(A)') automask2D%name%to_char()
+        write(logfhandle,'(A)') binarize%name%to_char()
+        write(logfhandle,'(A)') calc_pspec%name%to_char()
+        write(logfhandle,'(A)') center%name%to_char()
+        write(logfhandle,'(A)') check_refpick%name%to_char()
+        write(logfhandle,'(A)') check_states%name%to_char()
+        write(logfhandle,'(A)') cleanup2D%name%to_char()
+        write(logfhandle,'(A)') clin_fsc%name%to_char()
+        write(logfhandle,'(A)') cluster2D%name%to_char()
+        write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
+        write(logfhandle,'(A)') cluster_cavgs%name%to_char()
+        write(logfhandle,'(A)') cluster_stack%name%to_char()
+        write(logfhandle,'(A)') comparemc%name%to_char()
+        write(logfhandle,'(A)') consolidate_chunks%name%to_char()
+        write(logfhandle,'(A)') convert%name%to_char()
+        write(logfhandle,'(A)') ctf_estimate%name%to_char()
+        write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
+        write(logfhandle,'(A)') ctfops%name%to_char()
+        write(logfhandle,'(A)') dock_volpair%name%to_char()
+        write(logfhandle,'(A)') estimate_lpstages%name%to_char()
+        write(logfhandle,'(A)') export_relion%name%to_char()
+        write(logfhandle,'(A)') export_starproject%name%to_char()
+        write(logfhandle,'(A)') extract%name%to_char()
+        write(logfhandle,'(A)') filter%name%to_char()
+        write(logfhandle,'(A)') fractionate_movies%name%to_char()
+        write(logfhandle,'(A)') fsc%name%to_char()
+        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
+        write(logfhandle,'(A)') icm2D%name%to_char()
+        write(logfhandle,'(A)') icm3D%name%to_char()
+        write(logfhandle,'(A)') import_boxes%name%to_char()
+        write(logfhandle,'(A)') import_cavgs%name%to_char()
+        write(logfhandle,'(A)') import_movies%name%to_char()
+        write(logfhandle,'(A)') import_particles%name%to_char()
+        write(logfhandle,'(A)') import_starproject%name%to_char()
+        write(logfhandle,'(A)') info_image%name%to_char()
+        write(logfhandle,'(A)') info_stktab%name%to_char()
+        write(logfhandle,'(A)') make_cavgs%name%to_char()
+        write(logfhandle,'(A)') make_oris%name%to_char()
+        write(logfhandle,'(A)') map2model_fsc%name%to_char()
+        write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
+        write(logfhandle,'(A)') map_cavgs_states%name%to_char()
+        write(logfhandle,'(A)') map_validation%name%to_char()
+        write(logfhandle,'(A)') mask%name%to_char()
+        write(logfhandle,'(A)') match_cavgs%name%to_char()
+        write(logfhandle,'(A)') match_stacks%name%to_char()
+        write(logfhandle,'(A)') merge_projects%name%to_char()
+        write(logfhandle,'(A)') mini_stream%name%to_char()
+        write(logfhandle,'(A)') mkdir_%name%to_char()
+        write(logfhandle,'(A)') model_validation%name%to_char()
+        write(logfhandle,'(A)') model_validation_eo%name%to_char()
+        write(logfhandle,'(A)') motion_correct%name%to_char()
+        write(logfhandle,'(A)') multivol_assign%name%to_char()
+        write(logfhandle,'(A)') new_project%name%to_char()
+        write(logfhandle,'(A)') noisevol%name%to_char()
+        write(logfhandle,'(A)') normalize_%name%to_char()
+        write(logfhandle,'(A)') nununiform_filter3D%name%to_char()
+        write(logfhandle,'(A)') oriconsensus%name%to_char()
+        write(logfhandle,'(A)') orisops%name%to_char()
+        write(logfhandle,'(A)') oristats%name%to_char()
+        write(logfhandle,'(A)') pdb2mrc%name%to_char()
+        write(logfhandle,'(A)') pick%name%to_char()
+        write(logfhandle,'(A)') postprocess%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
+        write(logfhandle,'(A)') ppca_volvar%name%to_char()
+        write(logfhandle,'(A)') preprocess%name%to_char()
+        write(logfhandle,'(A)') print_dose_weights%name%to_char()
+        write(logfhandle,'(A)') print_fsc%name%to_char()
+        write(logfhandle,'(A)') print_magic_boxes%name%to_char()
+        write(logfhandle,'(A)') print_project_field%name%to_char()
+        write(logfhandle,'(A)') print_project_info%name%to_char()
+        write(logfhandle,'(A)') projops%name%to_char()
+        write(logfhandle,'(A)') prune_project%name%to_char()
+        write(logfhandle,'(A)') reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') reextract%name%to_char()
+        write(logfhandle,'(A)') refine3D%name%to_char()
+        write(logfhandle,'(A)') refine3D_auto%name%to_char()
+        write(logfhandle,'(A)') replace_project_field%name%to_char()
+        write(logfhandle,'(A)') reproject%name%to_char()
+        write(logfhandle,'(A)') sample_classes%name%to_char()
+        write(logfhandle,'(A)') scale%name%to_char()
+        write(logfhandle,'(A)') scale_project%name%to_char()
+        write(logfhandle,'(A)') score_ptcls%name%to_char()
+        write(logfhandle,'(A)') select_%name%to_char()
+        write(logfhandle,'(A)') select_clusters%name%to_char()
+        write(logfhandle,'(A)') selection%name%to_char()
+        write(logfhandle,'(A)') sharpvol%name%to_char()
+        write(logfhandle,'(A)') simulate_movie%name%to_char()
+        write(logfhandle,'(A)') simulate_noise%name%to_char()
+        write(logfhandle,'(A)') simulate_particles%name%to_char()
+        write(logfhandle,'(A)') simulate_subtomogram%name%to_char()
+        write(logfhandle,'(A)') split_%name%to_char()
+        write(logfhandle,'(A)') split_stack%name%to_char()
+        write(logfhandle,'(A)') stack%name%to_char()
+        write(logfhandle,'(A)') stackops%name%to_char()
+        write(logfhandle,'(A)') symaxis_search%name%to_char()
+        write(logfhandle,'(A)') symmetrize_map%name%to_char()
+        write(logfhandle,'(A)') symmetry_test%name%to_char()
+        write(logfhandle,'(A)') uniform_filter2D%name%to_char()
+        write(logfhandle,'(A)') uniform_filter3D%name%to_char()
+        write(logfhandle,'(A)') update_project%name%to_char()
+        write(logfhandle,'(A)') vizoris%name%to_char()
+        write(logfhandle,'(A)') volanalyze%name%to_char()
+        write(logfhandle,'(A)') volops%name%to_char()
+        write(logfhandle,'(A)') write_classes%name%to_char()
+        write(logfhandle,'(A)') write_mic_filetab%name%to_char()
+        write(logfhandle,'(A)') zero_project_shifts%name%to_char()
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
-        write(logfhandle,'(A)') abinitio2D_stream%name
-        write(logfhandle,'(A)') assign_optics%name
-        write(logfhandle,'(A)') cluster2D_stream%name
-        write(logfhandle,'(A)') gen_pickrefs%name
-        write(logfhandle,'(A)') pick_extract%name
-        write(logfhandle,'(A)') preproc%name
-        write(logfhandle,'(A)') sieve_cavgs%name
+        write(logfhandle,'(A)') abinitio2D_stream%name%to_char()
+        write(logfhandle,'(A)') assign_optics%name%to_char()
+        write(logfhandle,'(A)') cluster2D_stream%name%to_char()
+        write(logfhandle,'(A)') gen_pickrefs%name%to_char()
+        write(logfhandle,'(A)') pick_extract%name%to_char()
+        write(logfhandle,'(A)') preproc%name%to_char()
+        write(logfhandle,'(A)') sieve_cavgs%name%to_char()
     end subroutine list_stream_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
         write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') update_project%name
-        write(logfhandle,'(A)') print_project_info%name
-        write(logfhandle,'(A)') print_project_field%name
-        write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') import_particles%name
-        write(logfhandle,'(A)') tseries_import_particles%name
-        write(logfhandle,'(A)') prune_project%name
+        write(logfhandle,'(A)') new_project%name%to_char()
+        write(logfhandle,'(A)') update_project%name%to_char()
+        write(logfhandle,'(A)') print_project_info%name%to_char()
+        write(logfhandle,'(A)') print_project_field%name%to_char()
+        write(logfhandle,'(A)') tseries_import%name%to_char()
+        write(logfhandle,'(A)') import_particles%name%to_char()
+        write(logfhandle,'(A)') tseries_import_particles%name%to_char()
+        write(logfhandle,'(A)') prune_project%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') tseries_make_pickavg%name
-        write(logfhandle,'(A)') tseries_motion_correct%name
-        write(logfhandle,'(A)') tseries_track_particles%name
-        write(logfhandle,'(A)') graphene_subtr%name
-        write(logfhandle,'(A)') denoise_trajectory%name
+        write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()
+        write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
+        write(logfhandle,'(A)') tseries_track_particles%name%to_char()
+        write(logfhandle,'(A)') graphene_subtr%name%to_char()
+        write(logfhandle,'(A)') denoise_trajectory%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') analysis2D_nano%name
-        write(logfhandle,'(A)') center2D_nano%name
-        write(logfhandle,'(A)') cluster2D_nano%name
-        write(logfhandle,'(A)') map_cavgs_selection%name
-        write(logfhandle,'(A)') ppca_denoise_classes%name
-        write(logfhandle,'(A)') ppca_volvar%name
-        write(logfhandle,'(A)') estimate_diam%name
-        write(logfhandle,'(A)') simulate_atoms%name
-        write(logfhandle,'(A)') refine3D_nano%name
-        write(logfhandle,'(A)') extract_substk%name
-        write(logfhandle,'(A)') extract_subproj%name
-        write(logfhandle,'(A)') autorefine3D_nano%name
-        write(logfhandle,'(A)') tseries_reconstruct3D%name
-        write(logfhandle,'(A)') tseries_swap_stack%name
+        write(logfhandle,'(A)') analysis2D_nano%name%to_char()
+        write(logfhandle,'(A)') center2D_nano%name%to_char()
+        write(logfhandle,'(A)') cluster2D_nano%name%to_char()
+        write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
+        write(logfhandle,'(A)') ppca_volvar%name%to_char()
+        write(logfhandle,'(A)') estimate_diam%name%to_char()
+        write(logfhandle,'(A)') simulate_atoms%name%to_char()
+        write(logfhandle,'(A)') refine3D_nano%name%to_char()
+        write(logfhandle,'(A)') extract_substk%name%to_char()
+        write(logfhandle,'(A)') extract_subproj%name%to_char()
+        write(logfhandle,'(A)') autorefine3D_nano%name%to_char()
+        write(logfhandle,'(A)') tseries_reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') tseries_swap_stack%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') vizoris%name
-        write(logfhandle,'(A)') cavgsproc_nano%name
-        write(logfhandle,'(A)') cavgseoproc_nano%name
-        write(logfhandle,'(A)') model_validation%name
-        write(logfhandle,'(A)') ptclsproc_nano%name
+        write(logfhandle,'(A)') vizoris%name%to_char()
+        write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
+        write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
+        write(logfhandle,'(A)') model_validation%name%to_char()
+        write(logfhandle,'(A)') ptclsproc_nano%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') pdb2mrc%name
-        write(logfhandle,'(A)') conv_atom_denoise%name
-        write(logfhandle,'(A)') detect_atoms%name
-        write(logfhandle,'(A)') atoms_stats%name
-        write(logfhandle,'(A)') atoms_register%name
-        write(logfhandle,'(A)') crys_score%name
-        write(logfhandle,'(A)') tseries_atoms_rmsd%name
-        write(logfhandle,'(A)') tseries_core_atoms_analysis%name
-        write(logfhandle,'(A)') tseries_core_finder%name
-        write(logfhandle,'(A)') tseries_make_projavgs%name
+        write(logfhandle,'(A)') pdb2mrc%name%to_char()
+        write(logfhandle,'(A)') conv_atom_denoise%name%to_char()
+        write(logfhandle,'(A)') detect_atoms%name%to_char()
+        write(logfhandle,'(A)') atoms_stats%name%to_char()
+        write(logfhandle,'(A)') atoms_register%name%to_char()
+        write(logfhandle,'(A)') crys_score%name%to_char()
+        write(logfhandle,'(A)') tseries_atoms_rmsd%name%to_char()
+        write(logfhandle,'(A)') tseries_core_atoms_analysis%name%to_char()
+        write(logfhandle,'(A)') tseries_core_finder%name%to_char()
+        write(logfhandle,'(A)') tseries_make_projavgs%name%to_char()
     end subroutine list_single_prgs_in_ui
 
     ! private class methods
@@ -1078,11 +1078,11 @@ contains
         character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
         logical,                  intent(in)    :: required
         real,                     intent(in)    :: default_value
-        allocate(self%key,               source=trim(key))
-        allocate(self%keytype,           source=trim(keytype))
-        allocate(self%descr_short,       source=trim(descr_short))
-        allocate(self%descr_long,        source=trim(descr_long))
-        allocate(self%descr_placeholder, source=trim(descr_placeholder))
+        self%key               = trim(key)
+        self%keytype           = trim(keytype)
+        self%descr_short       = trim(descr_short)
+        self%descr_long        = trim(descr_long)
+        self%descr_placeholder = trim(descr_placeholder)
         self%required = required
         if( .not. self%required ) self%rval_default = default_value
     end subroutine set_param_1
@@ -1092,13 +1092,13 @@ contains
         character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
         logical,                  intent(in)    :: required
         character(len=*),         intent(in)    :: default_value
-        allocate(self%key,               source=trim(key))
-        allocate(self%keytype,           source=trim(keytype))
-        allocate(self%descr_short,       source=trim(descr_short))
-        allocate(self%descr_long,        source=trim(descr_long))
-        allocate(self%descr_placeholder, source=trim(descr_placeholder))
+        self%key               = trim(key)
+        self%keytype           = trim(keytype)
+        self%descr_short       = trim(descr_short)
+        self%descr_long        = trim(descr_long)
+        self%descr_placeholder = trim(descr_placeholder)
         self%required = required
-        if( .not. self%required ) allocate(self%cval_default, source=trim(default_value))
+        if( .not. self%required ) self%cval_default = trim(default_value)
     end subroutine set_param_2
 
     subroutine set_common_params
@@ -6193,10 +6193,10 @@ contains
         logical,          optional, intent(in)    :: gui_advanced
         character(len=*), optional, intent(in)    :: gui_submenu_list
         call self%kill
-        allocate(self%name,        source=trim(name)       )
-        allocate(self%descr_short, source=trim(descr_short))
-        allocate(self%descr_long,  source=trim(descr_long) )
-        allocate(self%executable,  source=trim(executable) )
+        self%name        = trim(name)
+        self%descr_short = trim(descr_short)
+        self%descr_long  = trim(descr_long)
+        self%executable  = trim(executable)
         if( n_img_ios    > 0 ) allocate(self%img_ios(n_img_ios)      )
         if( n_parm_ios   > 0 ) allocate(self%parm_ios(n_parm_ios)    )
         if( n_alt_ios    > 0 ) allocate(self%alt_ios(n_alt_ios)      )
@@ -6244,22 +6244,22 @@ contains
             subroutine set( arr, i )
                 integer,                  intent(in)    :: i
                 type(simple_input_param), intent(inout) :: arr(:)
-                allocate(arr(i)%key,               source=trim(key))
-                allocate(arr(i)%keytype,           source=trim(keytype))
-                allocate(arr(i)%descr_short,       source=trim(descr_short))
-                allocate(arr(i)%descr_long,        source=trim(descr_long))
-                allocate(arr(i)%descr_placeholder, source=trim(descr_placeholder))
+                arr(i)%key               = trim(key)
+                arr(i)%keytype           = trim(keytype)
+                arr(i)%descr_short       = trim(descr_short)
+                arr(i)%descr_long        = trim(descr_long)
+                arr(i)%descr_placeholder = trim(descr_placeholder)
                 arr(i)%required = required
                 if( .not. arr(i)%required ) arr(i)%rval_default = default_value
                 ! GUI options
                 if( present(gui_submenu) ) then
-                    allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
+                    arr(i)%gui_submenu = trim(gui_submenu)
                 endif
                 if( present (gui_exclusive_group) ) then
-                    allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
+                    arr(i)%exclusive_group =trim(gui_exclusive_group)
                 endif
                 if( present(gui_active_flags) ) then
-                    allocate(arr(i)%active_flags, source=trim(gui_active_flags))
+                    arr(i)%active_flags =trim(gui_active_flags)
                 endif
                 if( present(gui_online) ) then
                     arr(i)%online = gui_online
@@ -6305,22 +6305,22 @@ contains
             subroutine set( arr, i )
                 integer,                  intent(in)    :: i
                 type(simple_input_param), intent(inout) :: arr(:)
-                allocate(arr(i)%key,               source=trim(key))
-                allocate(arr(i)%keytype,           source=trim(keytype))
-                allocate(arr(i)%descr_short,       source=trim(descr_short))
-                allocate(arr(i)%descr_long,        source=trim(descr_long))
-                allocate(arr(i)%descr_placeholder, source=trim(descr_placeholder))
+                arr(i)%key               = trim(key)
+                arr(i)%keytype           = trim(keytype)
+                arr(i)%descr_short       = trim(descr_short)
+                arr(i)%descr_long        = trim(descr_long)
+                arr(i)%descr_placeholder = trim(descr_placeholder)
                 arr(i)%required = required
-                if( .not. arr(i)%required ) allocate(arr(i)%cval_default, source=trim(default_value))
+                if( .not. arr(i)%required ) arr(i)%cval_default = trim(default_value)
                 ! GUI options
                 if( present(gui_submenu) ) then
-                    allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
+                    arr(i)%gui_submenu     = trim(gui_submenu)
                 endif
                 if( present (gui_exclusive_group) ) then
-                    allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
+                    arr(i)%exclusive_group = trim(gui_exclusive_group)
                 endif
                 if( present(gui_active_flags) ) then
-                    allocate(arr(i)%active_flags, source=trim(gui_active_flags))
+                    arr(i)%active_flags    = trim(gui_active_flags)
                 endif
                 if( present(gui_online) ) then
                     arr(i)%online = gui_online
@@ -6363,28 +6363,28 @@ contains
             subroutine set( arr, i )
                 integer,                  intent(in)    :: i
                 type(simple_input_param), intent(inout) :: arr(:)
-                allocate(arr(i)%key,               source=trim(param%key))
-                allocate(arr(i)%keytype,           source=trim(param%keytype))
-                allocate(arr(i)%descr_short,       source=trim(param%descr_short))
-                allocate(arr(i)%descr_long,        source=trim(param%descr_long))
-                allocate(arr(i)%descr_placeholder, source=trim(param%descr_placeholder))
+                arr(i)%key               = param%key
+                arr(i)%keytype           = param%keytype
+                arr(i)%descr_short       = param%descr_short
+                arr(i)%descr_long        = param%descr_long
+                arr(i)%descr_placeholder = param%descr_placeholder
                 arr(i)%required = param%required
                 if( .not. arr(i)%required ) then
-                    if(arr(i)%keytype == "num") then
+                    if(arr(i)%keytype%to_char() == "num") then
                         arr(i)%rval_default = param%rval_default
-                    else if(allocated(param%cval_default)) then
-                       allocate(arr(i)%cval_default, source=trim(param%cval_default))
+                    else if( param%cval_default%is_allocated() ) then
+                        arr(i)%cval_default = param%cval_default
                     endif
                 endif
                 ! GUI options
                 if( present(gui_submenu) ) then
-                    allocate(arr(i)%gui_submenu, source=trim(gui_submenu))
+                    arr(i)%gui_submenu = trim(gui_submenu)
                 endif
                 if( present (gui_exclusive_group) ) then
-                    allocate(arr(i)%exclusive_group, source=trim(gui_exclusive_group))
+                    arr(i)%exclusive_group = trim(gui_exclusive_group)
                 endif
                 if( present(gui_active_flags) ) then
-                    allocate(arr(i)%active_flags, source=trim(gui_active_flags))
+                    arr(i)%active_flags = trim(gui_active_flags)
                 endif
                 if( present(gui_online) ) then
                     arr(i)%online = gui_online
@@ -6402,10 +6402,10 @@ contains
         write(logfhandle,'(a)') ''
         write(logfhandle,'(a)') '>>> PROGRAM INFO'
         call ch%new(4)
-        call ch%push('name',        self%name)
-        call ch%push('descr_short', self%descr_short)
-        call ch%push('descr_long',  self%descr_long)
-        call ch%push('executable',  self%executable)
+        call ch%push('name',        self%name%to_char())
+        call ch%push('descr_short', self%descr_short%to_char())
+        call ch%push('descr_long',  self%descr_long%to_char())
+        call ch%push('executable',  self%executable%to_char())
         call ch%print_key_val_pairs(logfhandle)
         call ch%kill
         write(logfhandle,'(a)') ''
@@ -6439,11 +6439,11 @@ contains
                     do i=1,size(arr)
                         write(logfhandle,'(a,1x,i3)') '>>> PARAMETER #', i
                         call ch%new(6)
-                        call ch%push('key',               arr(i)%key)
-                        call ch%push('keytype',           arr(i)%keytype)
-                        call ch%push('descr_short',       arr(i)%descr_short)
-                        call ch%push('descr_long',        arr(i)%descr_long)
-                        call ch%push('descr_placeholder', arr(i)%descr_placeholder)
+                        call ch%push('key',               arr(i)%key%to_char())
+                        call ch%push('keytype',           arr(i)%keytype%to_char())
+                        call ch%push('descr_short',       arr(i)%descr_short%to_char())
+                        call ch%push('descr_long',        arr(i)%descr_long%to_char())
+                        call ch%push('descr_placeholder', arr(i)%descr_placeholder%to_char())
                         if( arr(i)%required )then
                             call ch%push('required', 'T')
                         else
@@ -6460,7 +6460,7 @@ contains
     subroutine print_cmdline( self )
         class(simple_program), intent(in) :: self
         write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
-        write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
+        write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' //self%name%to_char() // ' key1=val1 key2=val2 ...', C_ITALIC)
         write(logfhandle,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
         if( allocated(self%img_ios) )    write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
         call print_param_hash(self%img_ios)
@@ -6491,8 +6491,8 @@ contains
             call ch%new(nparams)
             allocate(sorted_keys(nparams), rearranged_keys(nparams), required(nparams))
             do i=1,nparams
-                call ch%push(arr(i)%key, arr(i)%descr_short//'; '//arr(i)%descr_placeholder)
-                sorted_keys(i) = arr(i)%key
+                call ch%push(arr(i)%key%to_char(), arr(i)%descr_short%to_char()//'; '//arr(i)%descr_placeholder%to_char())
+                sorted_keys(i) = arr(i)%key%to_char()
                 required(i)    = arr(i)%required
             end do
             call lex_sort(sorted_keys, inds=inds)
@@ -6528,7 +6528,7 @@ contains
 
     subroutine print_prg_descr_long( self )
         class(simple_program), intent(in) :: self
-        write(logfhandle,'(a)') self%descr_long
+        write(logfhandle,'(a)') self%descr_long%to_char()
     end subroutine print_prg_descr_long
 
     subroutine print_ui_json
@@ -6555,17 +6555,17 @@ contains
         contains
 
             subroutine create_program_entry
-                call json%create_object(program_entry, trim(prg_ptr_array(iprg)%ptr2prg%name))
+                call json%create_object(program_entry, prg_ptr_array(iprg)%ptr2prg%name%to_char())
                 call json%create_object(program, 'program')
                 call json%add(program_entry, program)
                 ! program section
-                call json%add(program, 'name',        prg_ptr_array(iprg)%ptr2prg%name)
-                call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short)
-                call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long)
-                call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable)
+                call json%add(program, 'name',        prg_ptr_array(iprg)%ptr2prg%name%to_char())
+                call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short%to_char())
+                call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long%to_char())
+                call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable%to_char())
                 call json%add(program, 'advanced',    prg_ptr_array(iprg)%ptr2prg%advanced)
-                if( allocated(prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)) then
-                    call json%add(program, 'gui_submenu_list', prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)
+                if( prg_ptr_array(iprg)%ptr2prg%gui_submenu_list%is_allocated() )then
+                    call json%add(program, 'gui_submenu_list', prg_ptr_array(iprg)%ptr2prg%gui_submenu_list%to_char())
                 endif
                 ! all sections
                 call create_section( 'image input/output',     prg_ptr_array(iprg)%ptr2prg%img_ios )
@@ -6589,42 +6589,42 @@ contains
                 if( allocated(arr) )then
                     sz = size(arr)
                     do i=1,sz
-                        call json%create_object(entry, trim(arr(i)%key))
-                        call json%add(entry, 'key', trim(arr(i)%key))
-                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
-                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
-                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
-                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
-                        call json%add(entry, 'required', arr(i)%required)
-                        if( allocated(arr(i)%gui_submenu) ) then
-                            call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
+                        call json%create_object(entry, arr(i)%key%to_char())
+                        call json%add(entry, 'key',               arr(i)%key%to_char())
+                        call json%add(entry, 'keytype',           arr(i)%keytype%to_char())
+                        call json%add(entry, 'descr_short',       arr(i)%descr_short%to_char())
+                        call json%add(entry, 'descr_long',        arr(i)%descr_long%to_char())
+                        call json%add(entry, 'descr_placeholder', arr(i)%descr_placeholder%to_char())
+                        call json%add(entry, 'required',          arr(i)%required)
+                        if( arr(i)%gui_submenu%is_allocated()) then
+                            call json%add(entry, 'gui_submenu', arr(i)%gui_submenu%to_char())
                         endif
-                        if( allocated(arr(i)%exclusive_group) ) then
-                            call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
+                        if( arr(i)%exclusive_group%is_allocated() ) then
+                            call json%add(entry, 'exclusive_group', arr(i)%exclusive_group%to_char())
                         endif
-                        if( allocated(arr(i)%active_flags) ) then
-                            call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
+                        if( arr(i)%active_flags%is_allocated() ) then
+                            call json%add(entry, 'active_flags', arr(i)%active_flags%to_char())
                         endif
-                        if(trim(arr(i)%keytype) == "num") then
+                        if( arr(i)%keytype%to_char() == "num") then
                             call json%add(entry, 'default', dble(arr(i)%rval_default))
-                        else if( allocated(arr(i)%cval_default) ) then
-                            call json%add(entry, 'default', trim(arr(i)%cval_default))
+                        else if( arr(i)%cval_default%is_allocated() ) then
+                            call json%add(entry, 'default', arr(i)%cval_default%to_char())
                         else
                             call json%add(entry, 'default', "unknown")
                         endif
                         call json%add(entry, 'advanced', arr(i)%advanced)
                         call json%add(entry, 'online', arr(i)%online)
-                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
-                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
+                        param_is_multi  = arr(i)%keytype%to_char().eq.'multi'
+                        param_is_binary = arr(i)%keytype%to_char().eq.'binary'
                         if( param_is_multi .or. param_is_binary )then
-                            options_str = trim(arr(i)%descr_placeholder)
+                            options_str = arr(i)%descr_placeholder%to_char()
                             call split( options_str, '(', before )
                             call split( options_str, ')', before )
                             call parsestr(before, '|', args, nargs)
                             exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 2)
                             if( exception )then
-                                write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
-                                write(logfhandle,*)trim(arr(i)%descr_placeholder)
+                                write(logfhandle,*)'Poorly formatted options string for entry ', arr(i)%key%to_char()
+                                write(logfhandle,*)arr(i)%descr_placeholder%to_char()
                                 stop
                             endif
                             call json%add(entry, 'options', args(1:nargs))
@@ -6665,16 +6665,16 @@ contains
 
             subroutine create_program_entry
                 call json%create_object(program_entry,'')
-                call json%create_object(program, trim(prg_ptr_array(iprg)%ptr2prg%name))
+                call json%create_object(program, prg_ptr_array(iprg)%ptr2prg%name%to_char())
                 call json%add(program_entry, program)
                 ! program section
-                call json%add(program, 'name',        prg_ptr_array(iprg)%ptr2prg%name)
-                call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short)
-                call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long)
-                call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable)
+                call json%add(program, 'name',        prg_ptr_array(iprg)%ptr2prg%name%to_char())
+                call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short%to_char())
+                call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long%to_char())
+                call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable%to_char())
                 call json%add(program, 'advanced', prg_ptr_array(iprg)%ptr2prg%advanced)
-                if( allocated(prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)) then
-                    call json%add(program, 'gui_submenu_list', prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)
+                if( prg_ptr_array(iprg)%ptr2prg%gui_submenu_list%is_allocated() )then
+                    call json%add(program, 'gui_submenu_list', prg_ptr_array(iprg)%ptr2prg%gui_submenu_list%to_char())
                 endif
                 ! all sections
                 call create_section( 'image input/output',     prg_ptr_array(iprg)%ptr2prg%img_ios )
@@ -6698,35 +6698,35 @@ contains
                 if( allocated(arr) )then
                     sz = size(arr)
                     do i=1,sz
-                        call json%create_object(entry, trim(arr(i)%key))
-                        call json%add(entry, 'key', trim(arr(i)%key))
-                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
-                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
-                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
-                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
-                        call json%add(entry, 'required', arr(i)%required)
-                        if( allocated(arr(i)%gui_submenu) ) then
-                            call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
+                        call json%create_object(entry,            arr(i)%key%to_char())
+                        call json%add(entry, 'key',               arr(i)%key%to_char())
+                        call json%add(entry, 'keytype',           arr(i)%keytype%to_char())
+                        call json%add(entry, 'descr_short',       arr(i)%descr_short%to_char())
+                        call json%add(entry, 'descr_long',        arr(i)%descr_long%to_char())
+                        call json%add(entry, 'descr_placeholder', arr(i)%descr_placeholder%to_char())
+                        call json%add(entry, 'required',          arr(i)%required)
+                        if( arr(i)%gui_submenu%is_allocated() ) then
+                            call json%add(entry, 'gui_submenu', arr(i)%gui_submenu%to_char())
                         endif
-                        if( allocated(arr(i)%exclusive_group) ) then
-                            call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
+                        if( arr(i)%exclusive_group%is_allocated() ) then
+                            call json%add(entry, 'exclusive_group', arr(i)%exclusive_group%to_char())
                         endif
-                        if( allocated(arr(i)%active_flags) ) then
-                            call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
+                        if( arr(i)%active_flags%is_allocated() ) then
+                            call json%add(entry, 'active_flags', arr(i)%active_flags%to_char())
                         endif
                         call json%add(entry, 'advanced', arr(i)%advanced)
                         call json%add(entry, 'online', arr(i)%online)
-                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
-                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
+                        param_is_multi  = arr(i)%keytype%to_char().eq.'multi'
+                        param_is_binary = arr(i)%keytype%to_char().eq.'binary'
                         if( param_is_multi .or. param_is_binary )then
-                            options_str = trim(arr(i)%descr_placeholder)
+                            options_str = arr(i)%descr_placeholder%to_char()
                             call split( options_str, '(', before )
                             call split( options_str, ')', before )
                             call parsestr(before, '|', args, nargs)
                             exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 2)
                             if( exception )then
-                                write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
-                                write(logfhandle,*)trim(arr(i)%descr_placeholder)
+                                write(logfhandle,*)'Poorly formatted options string for entry ', arr(i)%key%to_char()
+                                write(logfhandle,*)arr(i)%descr_placeholder%to_char()
                                 stop
                             endif
                             call json%add(entry, 'options', args(1:nargs))
@@ -6961,13 +6961,13 @@ contains
         ! JSON init
         call json%initialize()
         call json%create_object(program_entry,'')
-        call json%create_object(program, trim(self%name))
+        call json%create_object(program, self%name%to_char())
         call json%add(program_entry, program)
         ! program section
-        call json%add(program, 'name',        self%name)
-        call json%add(program, 'descr_short', self%descr_short)
-        call json%add(program, 'descr_long',  self%descr_long)
-        call json%add(program, 'executable',  self%executable)
+        call json%add(program, 'name',        self%name%to_char())
+        call json%add(program, 'descr_short', self%descr_short%to_char())
+        call json%add(program, 'descr_long',  self%descr_long%to_char())
+        call json%add(program, 'executable',  self%executable%to_char())
         ! all sections
         call create_section( 'image input/output',     self%img_ios )
         call create_section( 'parameter input/output', self%parm_ios )
@@ -6977,9 +6977,9 @@ contains
         call create_section( 'mask controls',          self%mask_ctrls )
         call create_section( 'computer controls',      self%comp_ctrls )
         ! write & clean
-        call json%print(program_entry, trim(adjustl(self%name))//'.json')
+        call json%print(program_entry, self%name%to_char()//'.json')
         if( json%failed() )then
-            THROW_HARD('json input/output error for program: '//trim(self%name))
+            THROW_HARD('json input/output error for program: '//self%name%to_char())
         endif
         call json%destroy(program_entry)
 
@@ -6997,24 +6997,24 @@ contains
                 if( allocated(arr) )then
                     sz = size(arr)
                     do i=1,sz
-                        call json%create_object(entry, trim(arr(i)%key))
-                        call json%add(entry, 'key', trim(arr(i)%key))
-                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
-                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
-                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
-                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
-                        call json%add(entry, 'required', arr(i)%required)
-                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
-                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
+                        call json%create_object(entry,            arr(i)%key%to_char())
+                        call json%add(entry, 'key',               arr(i)%key%to_char())
+                        call json%add(entry, 'keytype',           arr(i)%keytype%to_char())
+                        call json%add(entry, 'descr_short',       arr(i)%descr_short%to_char())
+                        call json%add(entry, 'descr_long',        arr(i)%descr_long%to_char())
+                        call json%add(entry, 'descr_placeholder', arr(i)%descr_placeholder%to_char())
+                        call json%add(entry, 'required',          arr(i)%required)
+                        param_is_multi  = arr(i)%keytype%to_char().eq.'multi'
+                        param_is_binary = arr(i)%keytype%to_char().eq.'binary'
                         if( param_is_multi .or. param_is_binary )then
-                            options_str = trim(arr(i)%descr_placeholder)
+                            options_str = arr(i)%descr_placeholder%to_char()
                             call split( options_str, '(', before )
                             call split( options_str, ')', before )
                             call parsestr(before, '|', args, nargs)
                             exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 2)
                             if( exception )then
-                                write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
-                                write(logfhandle,*)trim(arr(i)%descr_placeholder)
+                                write(logfhandle,*)'Poorly formatted options string for entry ', arr(i)%key%to_char()
+                                write(logfhandle,*) arr(i)%descr_placeholder%to_char()
                                 stop
                             endif
                             call json%add(entry, 'options', args(1:nargs))
@@ -7053,14 +7053,14 @@ contains
 
     function get_name( self ) result( name )
         class(simple_program), intent(in) :: self
-        character(len=:), allocatable :: name
-        allocate(name, source=trim(self%name))
+        type(string) :: name
+        name = self%name
     end function get_name
 
     function get_executable( self ) result( name )
         class(simple_program), intent(in) :: self
-        character(len=:), allocatable :: name
-        allocate(name, source=trim(self%executable))
+        type(string) :: name
+        name = self%executable
     end function get_executable
 
     integer function get_nrequired_keys( self )
@@ -7087,7 +7087,7 @@ contains
 
     function get_required_keys( self ) result( keys )
         class(simple_program), intent(in) :: self
-        type(str4arr), allocatable :: keys(:)
+        type(string), allocatable :: keys(:)
         integer :: nreq, ireq
         ! count # required
         nreq = self%get_nrequired_keys()
@@ -7113,7 +7113,7 @@ contains
                     do i=1,size(arr)
                         if( arr(i)%required )then
                             ireq = ireq + 1
-                            allocate(keys(ireq)%str, source=arr(i)%key)
+                            keys(ireq) = arr(i)%key
                         endif
                     end do
                 endif
@@ -7130,7 +7130,10 @@ contains
         class(simple_program), intent(inout) :: self
         integer :: i, sz
         if( self%exists )then
-            deallocate(self%name, self%descr_short, self%descr_long, self%executable)
+            call self%name%kill
+            call self%descr_short%kill
+            call self%descr_long%kill
+            call self%executable%kill
             call dealloc_field(self%img_ios)
             call dealloc_field(self%parm_ios)
             call dealloc_field(self%alt_ios)
@@ -7148,15 +7151,15 @@ contains
                 if( allocated(arr) )then
                     sz = size(arr)
                     do i=1,sz
-                        if( allocated(arr(i)%key)               ) deallocate(arr(i)%key              )
-                        if( allocated(arr(i)%keytype)           ) deallocate(arr(i)%keytype          )
-                        if( allocated(arr(i)%descr_short)       ) deallocate(arr(i)%descr_short      )
-                        if( allocated(arr(i)%descr_long)        ) deallocate(arr(i)%descr_long       )
-                        if( allocated(arr(i)%descr_placeholder) ) deallocate(arr(i)%descr_placeholder)
-                        if( allocated(arr(i)%gui_submenu)       ) deallocate(arr(i)%gui_submenu)
-                        if( allocated(arr(i)%active_flags)      ) deallocate(arr(i)%active_flags)
-                        if( allocated(arr(i)%exclusive_group)   ) deallocate(arr(i)%exclusive_group)
-                        if( allocated(arr(i)%cval_default)      ) deallocate(arr(i)%cval_default)
+                        call arr(i)%key%kill
+                        call arr(i)%keytype%kill
+                        call arr(i)%descr_short%kill
+                        call arr(i)%descr_long%kill
+                        call arr(i)%descr_placeholder%kill
+                        call arr(i)%gui_submenu%kill
+                        call arr(i)%active_flags%kill
+                        call arr(i)%exclusive_group%kill
+                        call arr(i)%cval_default%kill
                     end do
                     deallocate(arr)
                 endif

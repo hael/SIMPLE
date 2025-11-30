@@ -4,19 +4,20 @@ module simple_oris
 !$ use omp_lib_kinds
 use json_kinds
 use json_module
-use simple_srch_sort_loc
+use simple_defs
+use simple_defs_ori
 use simple_fileio
-use simple_stat
-use simple_ran_tabu
-use simple_rnd
-use simple_ori
+use simple_fileio
 use simple_is_check_assert
 use simple_math
 use simple_math_ft
-use simple_fileio
+use simple_ori
+use simple_ran_tabu
+use simple_rnd
+use simple_srch_sort_loc
+use simple_stat
+use simple_string
 use simple_string_utils
-use simple_defs
-use simple_defs_ori
 use simple_syslib
 implicit none
 
@@ -46,6 +47,7 @@ type :: oris
     procedure          :: get_ori
     procedure          :: get
     procedure          :: get_int
+    procedure          :: get_str
     procedure          :: get_static
     procedure, private :: getter_1, getter_2, getter_3
     generic            :: getter => getter_1, getter_2, getter_3
@@ -151,8 +153,8 @@ type :: oris
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
-    procedure, private :: set_1, set_2, set_3, set_4
-    generic            :: set => set_1, set_2, set_3, set_4
+    procedure, private :: set_1, set_2, set_3, set_4, set_5
+    generic            :: set => set_1, set_2, set_3, set_4, set_5
     procedure          :: set_dfx, set_dfy
     procedure          :: set_ori
     procedure          :: transfer_ori
@@ -423,11 +425,27 @@ contains
         call self%o(i)%getter(key, get_int)
     end function get_int
 
+    function get_str( self, i, key ) result( val )
+        class(oris),      intent(in) :: self
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: key
+        type(string) :: val
+        call self%getter_1(i, key, val)
+    end function get_str
+
+    pure subroutine get_static( self, i, key, val )
+        class(oris),      intent(in)  :: self
+        integer,          intent(in)  :: i
+        character(len=*), intent(in)  :: key
+        character(len=*), intent(out) :: val
+        call self%o(i)%get_static(key, val)
+    end subroutine get_static
+
     subroutine getter_1( self, i, key, val )
-        class(oris),                   intent(in)    :: self
-        integer,                       intent(in)    :: i
-        character(len=*),              intent(in)    :: key
-        character(len=:), allocatable, intent(inout) :: val
+        class(oris),      intent(in)    :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        type(string),     intent(inout) :: val
         call self%o(i)%getter(key, val)
     end subroutine getter_1
 
@@ -446,15 +464,6 @@ contains
         integer,          intent(inout) :: ival
         call self%o(i)%getter(key, ival)
     end subroutine getter_3
-
-    !>  \brief  is a getter with fixed length return string
-    function get_static( self, i, key )result( val )
-        class(oris),      intent(in) :: self
-        integer,          intent(in) :: i
-        character(len=*), intent(in) :: key
-        character(len=STDLEN)        :: val
-        val = trim(self%o(i)%get_static(key))
-    end function get_static
 
     !>  \brief  is for getting an array of 'key' values
     function get_all( self, key, fromto, nonzero ) result( arr )
@@ -1986,7 +1995,7 @@ contains
     function ori2str( self, i ) result( str )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
-        character(len=:), allocatable :: str
+        type(string) :: str
         str = self%o(i)%ori2str()
     end function ori2str
 
@@ -2246,6 +2255,14 @@ contains
         real(dp),         intent(in)    :: val
         call self%o(i)%set(key, val)
     end subroutine set_4
+    
+    subroutine set_5( self, i, key, val )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        class(string),    intent(in)    :: val
+        call self%o(i)%set(key, val)
+    end subroutine set_5
 
     subroutine set_dfx( self, i, dfx )
         class(oris), intent(inout) :: self
@@ -2829,14 +2846,14 @@ contains
     subroutine str2ori( self, i, line )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
-        character(len=*), intent(inout) :: line
+        character(len=*), intent(in)    :: line
         call self%o(i)%str2ori(line, self%o(1)%is_particle())
     end subroutine str2ori
 
     subroutine str2ori_ctfparams_state_eo( self, i, line )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
-        character(len=*), intent(inout) :: line
+        character(len=*), intent(in)    :: line
         type(ori) :: o_tmp
         call o_tmp%str2ori(line, self%o(1)%is_particle())
         if( o_tmp%isthere('smpd')    ) call self%o(i)%set('smpd',    o_tmp%get('smpd'))
@@ -2903,20 +2920,20 @@ contains
     !>  \brief  reads orientation info from file
     subroutine read( self, orifile, fromto, nst )
         class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: orifile
+        class(string),     intent(in)    :: orifile
         integer, optional, intent(in)    :: fromto(2)
         integer, optional, intent(out)   :: nst
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, istart, iend
         if( .not. file_exists(orifile) )then
-            THROW_HARD("the file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
+            THROW_HARD("the file you are trying to read: "//orifile%to_char()//' does not exist in cwd' )
         endif
-        if( trim(fname2ext(orifile)) == 'bin' )then
+        if( fname2ext(orifile) == 'bin' )then
             THROW_HARD('this method does not support binary files; read')
         endif
         io_message='No error'
         call fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message)
-        call fileiochk("oris ; read ,Error when opening file for reading: "//trim(orifile)//':'//trim(io_message), file_stat)
+        call fileiochk("oris ; read ,Error when opening file for reading: "//orifile%to_char()//':'//trim(io_message), file_stat)
         if( present(nst) ) nst = 0
         if( present(fromto) )then
             istart = fromto(1)
@@ -2939,15 +2956,15 @@ contains
 
     !>  \brief  reads CTF parameters and state info from file
     subroutine read_ctfparams_state_eo( self, ctfparamfile )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: ctfparamfile
+        class(oris),    intent(inout) :: self
+        class(string),  intent(in)    :: ctfparamfile
         logical    :: params_are_there(10)
         integer    :: i
         type(oris) :: os_tmp
         if( .not. file_exists(ctfparamfile) )then
-            THROW_HARD ("read_ctfparams_state_eo; The file you are trying to read: "//trim(ctfparamfile)//' does not exist')
+            THROW_HARD ("read_ctfparams_state_eo; The file you are trying to read: "//ctfparamfile%to_char()//' does not exist')
         endif
-        if( str_has_substr(ctfparamfile,'.bin') )then
+        if( ctfparamfile%has_substr('.bin') )then
             THROW_HARD('this method does not support binary files; read_ctfparams_state_eo')
         endif
         call os_tmp%new(self%n, self%o(1)%is_particle())
@@ -2963,15 +2980,15 @@ contains
         params_are_there(9)  = os_tmp%isthere('state')
         params_are_there(10) = os_tmp%isthere('eo')
         do i=1,self%n
-            if( params_are_there(1) )  call self%set(i, 'smpd',    os_tmp%get(i, 'smpd')   )
-            if( params_are_there(2) )  call self%set(i, 'kv',      os_tmp%get(i, 'kv')     )
-            if( params_are_there(3) )  call self%set(i, 'cs',      os_tmp%get(i, 'cs')     )
-            if( params_are_there(4) )  call self%set(i, 'fraca',   os_tmp%get(i, 'fraca')  )
-            if( params_are_there(5) )  call self%set(i, 'phshift', os_tmp%get(i, 'phshift'))
-            if( params_are_there(6) )  call self%set_dfx(i,        os_tmp%get_dfx(i)       )
-            if( params_are_there(7) )  call self%set_dfy(i,        os_tmp%get_dfy(i)       )
-            if( params_are_there(8) )  call self%set(i, 'angast',  os_tmp%get(i, 'angast') )
-            if( params_are_there(9) )  call self%set(i, 'state',   os_tmp%get(i, 'state')  )
+            if( params_are_there(1)  ) call self%set(i, 'smpd',    os_tmp%get(i, 'smpd')   )
+            if( params_are_there(2)  ) call self%set(i, 'kv',      os_tmp%get(i, 'kv')     )
+            if( params_are_there(3)  ) call self%set(i, 'cs',      os_tmp%get(i, 'cs')     )
+            if( params_are_there(4)  ) call self%set(i, 'fraca',   os_tmp%get(i, 'fraca')  )
+            if( params_are_there(5)  ) call self%set(i, 'phshift', os_tmp%get(i, 'phshift'))
+            if( params_are_there(6)  ) call self%set_dfx(i,        os_tmp%get_dfx(i)       )
+            if( params_are_there(7)  ) call self%set_dfy(i,        os_tmp%get_dfy(i)       )
+            if( params_are_there(8)  ) call self%set(i, 'angast',  os_tmp%get(i, 'angast') )
+            if( params_are_there(9)  ) call self%set(i, 'state',   os_tmp%get(i, 'state')  )
             if( params_are_there(10) ) call self%set(i, 'eo',      os_tmp%get(i, 'eo')     )
         end do
         call os_tmp%kill
@@ -2980,16 +2997,15 @@ contains
     !>  \brief  writes orientation info to file
     subroutine write_1( self, orifile, fromto )
         class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: orifile
+        class(string),     intent(in) :: orifile
         integer, optional, intent(in) :: fromto(2)
         character(len=100) :: io_message
         integer            :: file_stat, fnr, i, ffromto(2), cnt
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
-        call fopen(fnr, orifile, status='REPLACE', action='WRITE',&
-        &iostat=file_stat, iomsg=io_message)
-        call fileiochk(' Error opening file for writing: '//trim(orifile)//' ; '//trim(io_message), file_stat)
+        call fopen(fnr, orifile, status='REPLACE', action='WRITE', iostat=file_stat, iomsg=io_message)
+        call fileiochk(' Error opening file for writing: '//orifile%to_char()//' ; '//trim(io_message), file_stat)
         cnt = 0
         do i=ffromto(1),ffromto(2)
             cnt = cnt + 1
@@ -3000,23 +3016,23 @@ contains
 
     !>  \brief  writes orientation info to file
     subroutine write_2( self, i, orifile )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: orifile
-        integer,          intent(in)    :: i
+        class(oris),   intent(inout) :: self
+        class(string), intent(in)    :: orifile
+        integer,       intent(in)    :: i
         integer :: fnr, file_stat
         call fopen(fnr, orifile, status='UNKNOWN', action='WRITE', position='APPEND', iostat=file_stat)
-        call fileiochk( 'In: write_2, module: simple_oris.f90  opening '//trim(orifile), file_stat )
+        call fileiochk( 'In: write_2, module: simple_oris.f90  opening '//orifile%to_char(), file_stat )
         call self%o(i)%write(fnr)
         call fclose(fnr)
     end subroutine write_2
 
     !>  \brief  writes object to BILD Chimera readable format
     subroutine write2bild( self, file )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: file
+        class(oris),   intent(inout) :: self
+        class(string), intent(in)    :: file
         integer :: i,funit, file_stat
         call fopen(funit, file, status='REPLACE', action='WRITE',iostat=file_stat)
-        call fileiochk( 'In: write2bild, module: simple_oris.f90  opening '//trim(file), file_stat )
+        call fileiochk( 'In: write2bild, module: simple_oris.f90  opening '//file%to_char(), file_stat )
         ! header
         write(funit,'(A)')".translate 0.0 0.0 0.0"
         write(funit,'(A)')".scale 10"
@@ -4298,23 +4314,23 @@ contains
         os  = oris(100, is_ptcl=.false.)
         os2 = oris(100, is_ptcl=.false.)
         call os%rnd_oris(5.)
-        call os%write('test_oris_rndoris.txt')
-        call os2%read('test_oris_rndoris.txt')
-        call os2%write('test_oris_rndoris_copy.txt')
+        call os%write(string('test_oris_rndoris.txt'))
+        call os2%read(string('test_oris_rndoris.txt'))
+        call os2%write(string('test_oris_rndoris_copy.txt'))
         corr = os%corr_oris(os2)
         if( corr > 0.99 ) passed = .true.
         if( .not. passed ) THROW_HARD('read/write failed')
         passed = .false.
         call os%rnd_states(5)
-        call os%write('test_oris_rndoris_rndstates.txt')
+        call os%write(string('test_oris_rndoris_rndstates.txt'))
         if( os%corr_oris(os2) > 0.99 ) passed = .true.
         if( .not. passed ) THROW_HARD('statedoc read/write failed!')
         write(logfhandle,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.
         call os%rnd_lps()
-        call os%write('test_oris_rndoris_rndstates_rndlps.txt')
+        call os%write(string('test_oris_rndoris_rndstates_rndlps.txt'))
         call os%spiral
-        call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
+        call os%write(string('test_oris_rndoris_rndstates_rndlps_spiral.txt'))
         call os%rnd_corrs()
         order = os%order()
         if( doprint )then

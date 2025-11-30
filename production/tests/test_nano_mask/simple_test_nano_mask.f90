@@ -12,11 +12,11 @@ type(image), allocatable :: imgs(:)
 real,        allocatable :: diams(:), shifts(:,:)
 integer                  ::  n, i, ldim(3)
 ! read images
-call find_ldim_nptcls(STK, ldim, n)
+call find_ldim_nptcls(string(STK), ldim, n)
 allocate(imgs(n))
 do i = 1, n
     call imgs(i)%new(ldim, SMPD)
-    call imgs(i)%read(STK, i)
+    call imgs(i)%read(string(STK), i)
 end do
 ! mask
 call automask2D(imgs, NGROW, WINSZ, EDGE, diams, shifts)

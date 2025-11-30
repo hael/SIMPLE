@@ -4,10 +4,10 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 use simple_image,          only: image
-use simple_image_bin,       only: image_bin
+use simple_image_bin,      only: image_bin
 use simple_nanoparticle,   only: nanoparticle
-use simple_nanoparticle_utils
 use simple_atoms,          only: atoms
+use simple_nanoparticle_utils
 implicit none
 #include "simple_local_flags.inc"
 
@@ -123,40 +123,40 @@ contains
     subroutine exec_atoms_register( self, cline )
         class(commander_atoms_register), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
-        type(parameters)    :: params
-        real, allocatable   :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
-        character(len=100)  :: io_message
-        character(len=2048) :: line, ref_pdb, cur_pdb, params_file
-        integer :: i, j, file_stat, nl, fnr, io_stat, addr, funit
-        real    :: rot_mat(3,3), trans_vec(3), scale
+        type(parameters)   :: params
+        real, allocatable  :: matrix1(:,:), matrix2(:,:), matrix_rot(:,:)
+        character(len=100) :: io_message
+        type(string)       :: line, ref_pdb, cur_pdb, params_file
+        integer            :: i, j, file_stat, nl, fnr, io_stat, addr, funit
+        real               :: rot_mat(3,3), trans_vec(3), scale
         call params%new(cline)
         if( .not. cline%defined('maxits') )params%maxits = 5
         addr = 1 + sizeof(scale) * 9    ! rot_mat is of size 3x3
-        nl   = nlines(trim(params%fname))
+        nl   = nlines(params%fname)
         if( nl == 0 ) return
         call fopen(fnr, FILE=params%fname, STATUS='OLD', action='READ', iostat=file_stat, iomsg=io_message)
-        call fileiochk("exec_atoms_register: error when opening file for reading: "//trim(params%fname)//':'//trim(io_message), file_stat)
+        call fileiochk("exec_atoms_register: error when opening file for reading: "//params%fname%to_char()//':'//trim(io_message), file_stat)
         do i = 1, nl
-            read(fnr, fmt='(A)') line
+            call line%readline(fnr, io_stat)
             ! identity rotation matrix
             rot_mat=0.; do j=1,3 ; rot_mat(j,j)=1. ; end do
             ! zero translation
             scale       = 1.
             trans_vec   = 0.
-            cur_pdb     = trim(line)
-            params_file = trim('PARAMS_'//cur_pdb)
+            cur_pdb     = line
+            params_file = 'PARAMS_'//cur_pdb%to_char()
             if( i == 1 )then
                 ! the first one is the reference pdb
                 ref_pdb = cur_pdb
                 call read_pdb2matrix( ref_pdb, matrix1 )
-                call write_matrix2pdb( 'Pt', matrix1, 'DOCKED_'//ref_pdb )
+                call write_matrix2pdb( 'Pt', matrix1, string('DOCKED_')//ref_pdb )
             else
-                print *, 'Docking nanoparticle ', trim(cur_pdb), ' to the reference nanoparticle ', trim(ref_pdb)
+                print *, 'Docking nanoparticle ', cur_pdb%to_char(), ' to the reference nanoparticle ', ref_pdb%to_char()
                 if( allocated(matrix_rot) )deallocate(matrix_rot)
                 call read_pdb2matrix( line, matrix2 )
                 allocate(matrix_rot(3,size(matrix2,2)))
                 if( file_exists(params_file) )then
-                    print *, 'Using cached rotation matrix and translation vector from ', trim(params_file)
+                    print *, 'Using cached rotation matrix and translation vector from ', params_file%to_char()
                     call fopen(funit,params_file,access='STREAM',action='READ',status='OLD', iostat=io_stat)
                     read(unit=funit,pos=1)    rot_mat
                     read(unit=funit,pos=addr) trans_vec
@@ -168,7 +168,7 @@ contains
                     call atoms_register(matrix2, matrix1, matrix_rot, maxits=params%maxits,&
                         &out_mat=rot_mat, out_trans=trans_vec, out_scale=scale)
                 endif
-                call write_matrix2pdb( 'Pt', matrix_rot, 'DOCKED_'//trim(line) )
+                call write_matrix2pdb( 'Pt', matrix_rot, string('DOCKED_')//line )
             endif
             if( .not. file_exists(params_file) )then
                 ! write out the rotation matrix and translation vector
@@ -188,7 +188,7 @@ contains
         use simple_commanders_sim, only: commander_simulate_atoms
         class(commander_crys_score), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        character(len=LONGSTRLEN),   allocatable   :: pdbfnames(:), cmd, corenames(:)
+        type(string),                allocatable   :: pdbfnames(:), corenames(:)
         real,                        allocatable   :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:)
         integer,                     allocatable   :: cnts(:)
         logical,                     allocatable   :: l_dists(:)
@@ -196,7 +196,7 @@ contains
         type(nanoparticle)             :: nano
         type(parameters)               :: p
         type(cmdline)                  :: cline_sim_atoms
-        character(len=LONGSTRLEN)      :: t_name
+        type(string)                   :: t_name, cmd
         integer :: npdbs, ipdb, icore, ncores, Natoms, cnt, i, j, nclus
         real    :: min_dist, dist, prob, d, moldiam, a(3)
         call p%new(cline)
@@ -204,7 +204,7 @@ contains
         npdbs = size(pdbfnames)
         do ipdb = 1, npdbs
             ! finding max_dist for moldiam
-            call read_pdb2matrix( trim(p%pdbfile), mat )
+            call read_pdb2matrix( p%pdbfile, mat )
             Natoms  = size(mat,2)
             moldiam = 0.
             do i = 1, Natoms-1
@@ -223,11 +223,11 @@ contains
             call cline_sim_atoms%set('nthr',    real(p%nthr))
             call xsim_atoms%execute(cline_sim_atoms)
             ! detecting atom positions of the simulated nanoparticle
-            call nano%new('tmp.mrc')
+            call nano%new(string('tmp.mrc'))
             call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=trim(p%atom_thres).eq.'yes', l_print=.false.)
             call nano%kill
             ! generating stats for the reference lattice
-            call read_pdb2matrix( 'tmp_ATMS.pdb', mat )
+            call read_pdb2matrix(string('tmp_ATMS.pdb'), mat )
             Natoms = size(mat,2)
             if( allocated(l_dists) )deallocate(l_dists)
             if( allocated(  dists) )deallocate(  dists)
@@ -252,18 +252,18 @@ contains
             allocate(ref_stats(nclus), cur_stats(nclus), source=0.)
             call compute_stats(mat, dists_cen(1:nclus), ref_stats)
             ! generating stats for the core
-            t_name = trim(pdbfnames(ipdb))
+            t_name = pdbfnames(ipdb)
             print *, '--------------------------'
-            print *, 'Computing crystal score of cores in folder : ', trim(t_name)
-            cmd = 'ls '// trim(t_name) // '/*_core.pdb | xargs -n 1 basename > output_'//int2str(ipdb)//'.log'
-            call execute_command_line(cmd)
-            call read_filetable('output_'//int2str(ipdb)//'.log', corenames)
+            print *, 'Computing crystal score of cores in folder : ', t_name%to_char()
+            cmd = 'ls '// t_name%to_char() // '/*_core.pdb | xargs -n 1 basename > output_'//int2str(ipdb)//'.log'
+            call execute_command_line(cmd%to_char())
+            call read_filetable(string('output_'//int2str(ipdb)//'.log'), corenames)
             ncores = size(corenames)
             do icore = 1, ncores
-                call read_pdb2matrix( trim(t_name) // '/' // trim(corenames(icore)), cur_mat )
+                call read_pdb2matrix( t_name // '/' // corenames(icore), cur_mat )
                 call compute_stats(cur_mat, dists_cen(1:nclus), cur_stats)
                 call kstwo( ref_stats, nclus, cur_stats, nclus, d, prob )
-                print *, 'Core : ', trim(corenames(icore)), ' with score : ', prob
+                print *, 'Core : ', corenames(icore)%to_char(), ' with score : ', prob
             enddo
             call execute_command_line('rm largest_cc.mrc split_ccs.mrc binarized.mrc tmp* output_'//int2str(ipdb)//'.log')
             print *, '--------------------------'
@@ -421,7 +421,7 @@ contains
         call cline_pdb2mrc%set('pdbfile', params%pdbfile)
         call cline_pdb2mrc%set('smpd', params%smpd)
         call cline_pdb2mrc%set('vol_dim', params%vol_dim)
-        params%outvol = trim(get_fbody(params%pdbfile,'pdb'))//'_sim.mrc'
+        params%outvol = get_fbody(params%pdbfile,'pdb')//'_sim.mrc'
         call cline_pdb2mrc%set('outvol', params%outvol)
         call xpdb2mrc%execute(cline_pdb2mrc)
         call cline_fsc%set('prg', 'fsc')
@@ -443,9 +443,9 @@ contains
         type(image)      :: exp_vol, sim_vol
         integer          :: ldim(3), ldim_new(3), ifoo, box, box_new
         real             :: upscaling_factor, smpd_new
-        character(len=STDLEN), allocatable :: sim_vol_file, pdbout, upscale_vol_file
+        type(string)     :: sim_vol_file, pdbout, upscale_vol_file
         call params%new(cline)
-        upscale_vol_file = trim(get_fbody(params%vols(1),'mrc'))//'_upscale.mrc'
+        upscale_vol_file = get_fbody(params%vols(1),'mrc')//'_upscale.mrc'
         call find_ldim_nptcls(params%vols(1), ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', params%smpd, ' Angstrom'
         box              = ldim(1)
@@ -456,14 +456,14 @@ contains
         smpd_new         = params%smpd / upscaling_factor
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
         call molecule%new(params%pdbfile)
-        sim_vol_file     = trim(get_fbody(params%pdbfile,'pdb'))//'_sim_vol.mrc'
-        pdbout           = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
+        sim_vol_file     = get_fbody(params%pdbfile,'pdb')//'_sim_vol.mrc'
+        pdbout           = get_fbody(params%pdbfile,'pdb')//'_centered.pdb'
         call molecule%pdb2mrc( params%pdbfile, sim_vol_file, smpd_new, pdb_out=pdbout, vol_dim=ldim_new)
         call sim_vol%new([box_new, box_new, box_new], smpd_new)
         call sim_vol%read(sim_vol_file)
         call exp_vol%read_and_crop(params%vols(1), params%smpd, box_new, smpd_new)
         call exp_vol%write(upscale_vol_file)
-        call molecule%map_validation(exp_vol, sim_vol, filename='map_val_coor')
+        call molecule%map_validation(exp_vol, sim_vol)!, filename='map_val_coor')
         call molecule%kill()
         call exp_vol%kill()
         call sim_vol%kill()
@@ -504,11 +504,11 @@ contains
         call cline_sharpvol2%set('smpd', params%pdbfile)
         call cline_sharpvol2%set('nthr', params%nthr)
         call xsharpvol%execute(cline_sharpvol2)
-        params%vols(2) =  basename(add2fbody(trim(params%vols(2)),   params%ext, PPROC_SUFFIX))
-        params%vols(3) =  basename(add2fbody(trim(params%vols(3)),   params%ext, PPROC_SUFFIX))
+        params%vols(2) =  basename(add2fbody(params%vols(2), params%ext, PPROC_SUFFIX))
+        params%vols(3) =  basename(add2fbody(params%vols(3), params%ext, PPROC_SUFFIX))
         call molecule%new(params%pdbfile)
-        if( .not.cline%defined('vol2') ) params%vols(2) = trim(get_fbody(params%vols(1),'mrc'))//'_even.mrc'
-        if( .not.cline%defined('vol3') ) params%vols(3) = trim(get_fbody(params%vols(1),'mrc'))//'_odd.mrc'
+        if( .not.cline%defined('vol2') ) params%vols(2) = get_fbody(params%vols(1),'mrc')//'_even.mrc'
+        if( .not.cline%defined('vol3') ) params%vols(3) = get_fbody(params%vols(1),'mrc')//'_odd.mrc'
         call molecule%model_validation_eo(params%pdbfile, params%vols(1), params%vols(2), params%vols(3), params%smpd, params%smpd_target)
         call molecule%kill()
         ! end gracefully
@@ -524,9 +524,9 @@ contains
         call params%new(cline)
         call molecule%new(params%pdbfile)
         if( .not.cline%defined('pdbout') )then
-            params%pdbout = trim(get_fbody(params%pdbfile,'pdb'))//'_centered.pdb'
+            params%pdbout = get_fbody(params%pdbfile,'pdb')//'_centered.pdb'
         endif
-        if( .not.cline%defined('outvol') ) params%outvol = trim(get_fbody(params%pdbfile,'pdb'))//'_sim.mrc'
+        if( .not.cline%defined('outvol') ) params%outvol = get_fbody(params%pdbfile,'pdb')//'_sim.mrc'
         if( cline%defined('vol_dim') ) vol_dims(:) = params%vol_dim
         if( cline%defined('vol_dim') )then  
             if( params%center_pdb .eq. 'yes' )then
@@ -549,7 +549,7 @@ contains
     subroutine exec_tseries_atoms_rmsd( self, cline )
         class(commander_tseries_atoms_rmsd), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline !< command line input
-        character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
+        type(string),       allocatable :: pdbfnames(:)
         real,               allocatable :: pdbmat1(:,:), pdbmat2(:,:), dists(:), distmat(:,:), dists_neigh(:)
         integer,            allocatable :: inds(:), pairs(:,:), inds_neigh(:)
         type(stats_struct), allocatable :: dist_stats(:)
@@ -562,7 +562,7 @@ contains
         npdbs = size(pdbfnames)
         if( params%mkdir.eq.'yes' )then
             do ipdb = 1,npdbs
-                if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
+                if(pdbfnames(ipdb)%to_char([1,1]).ne.'/') pdbfnames(ipdb) = string('../')//pdbfnames(ipdb)
             enddo
         endif
         el     = trim(adjustl(params%element))
@@ -575,8 +575,8 @@ contains
         do i = 1, npdbs - 1
             do j = i + 1, npdbs
                 cnt = cnt + 1
-                call read_pdb2matrix(trim(pdbfnames(i)), pdbmat1)
-                call read_pdb2matrix(trim(pdbfnames(j)), pdbmat2)
+                call read_pdb2matrix(pdbfnames(i), pdbmat1)
+                call read_pdb2matrix(pdbfnames(j), pdbmat2)
                 dist_stats(cnt) = atm_rmsd_stats(pdbmat1, pdbmat2)
                 dists(cnt)      = dist_stats(cnt)%med
                 distmat(i,j)    = dist_stats(cnt)%med
@@ -604,21 +604,21 @@ contains
     subroutine exec_tseries_core_atoms_analysis( self, cline )
         class(commander_tseries_core_atoms_analysis), intent(inout) :: self
         class(cmdline),                               intent(inout) :: cline !< command line input
-        character(len=LONGSTRLEN), allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_bfac(:), pdbfnames_fringe(:)
-        type(common_atoms),        allocatable :: atms_common(:)
-        character(len=:),          allocatable :: fname1, fname2
-        real,                      allocatable :: betas(:), pdbmat(:,:)
-        logical,                   allocatable :: mask_core(:)
+        type(string),       allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_bfac(:), pdbfnames_fringe(:)
+        type(common_atoms), allocatable :: atms_common(:)
+        real,               allocatable :: betas(:), pdbmat(:,:)
+        logical,            allocatable :: mask_core(:)
         type(parameters)   :: params
         integer            :: npdbs, i, j, k, cnt, ipdb, natoms
         character(len=2)   :: el
         type(stats_struct) :: dist_stats
+        type(string)       :: fname1, fname2
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
         npdbs = size(pdbfnames)
         if( params%mkdir.eq.'yes' )then
             do ipdb = 1,npdbs
-                if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
+                if(pdbfnames(ipdb)%to_char([1,1]).ne.'/') pdbfnames(ipdb) = string('../')//pdbfnames(ipdb)
             enddo
         endif
         allocate(pdbfnames_core(npdbs), pdbfnames_bfac(npdbs), pdbfnames_fringe(npdbs))
@@ -630,7 +630,7 @@ contains
         el = trim(adjustl(params%element))
         allocate( atms_common(npdbs) )
         do i = 1, npdbs
-            call read_pdb2matrix(trim(pdbfnames(i)), pdbmat)
+            call read_pdb2matrix(pdbfnames(i), pdbmat)
             allocate(atms_common(i)%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
             allocate(atms_common(i)%coords2(3,size(pdbmat,dim=2)), source=pdbmat)
             deallocate(pdbmat)
@@ -644,7 +644,7 @@ contains
             allocate(atms_common(i)%coords2(3,atms_common(i)%ncommon), source=(atms_common(i)%common1 + atms_common(i-1)%common1)/2.)
         end do
         ! write PDB file
-        call write_matrix2pdb(el, atms_common(npdbs)%coords2, 'core.pdb')
+        call write_matrix2pdb(el, atms_common(npdbs)%coords2, string('core.pdb'))
         ! identify common atoms
         do i = 1, npdbs
             ! identify couples
@@ -662,7 +662,7 @@ contains
                 atms_common(i)%dists = dists_btw_common(atms_common(i)%common1, atms_common(i-1)%common1)
             endif
             call calc_stats(atms_common(i)%dists, dist_stats)
-            write(logfhandle,'(A)') '>>> DISTANCE STATS, COMMON ATOMS '//basename(pdbfnames(i))
+            write(logfhandle,'(A)') '>>> DISTANCE STATS, COMMON ATOMS '//pdbfnames(i)%to_char()
             write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
             write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
             write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev

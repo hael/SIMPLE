@@ -1,35 +1,34 @@
 module simple_image_afm 
 use iso_c_binding
 include 'simple_lib.f08'
+use simple_aff_prop,            only: aff_prop
+use simple_class_frcs,          only: class_frcs
+use simple_cmdline,             only: cmdline
+use simple_pftcc_shsrch_fm,     only: pftcc_shsrch_fm
+use simple_polarft_corrcalc,    only: polarft_corrcalc
+use simple_polarizer,           only: polarizer
+use simple_corrmat
+use simple_fileio
+use simple_ftiter
+use simple_gauss2Dfit
 use simple_image
-use simple_pickseg
-use simple_parameters
-use simple_segmentation
 use simple_image_bin
 use simple_neighs
-use simple_fileio
-use simple_syslib
-use simple_polarizer,           only: polarizer
-use simple_class_frcs,          only: class_frcs
-use simple_polarft_corrcalc,    only: polarft_corrcalc
-use simple_aff_prop,            only: aff_prop
-use simple_pftcc_shsrch_fm,     only: pftcc_shsrch_fm
-use simple_corrmat
-use simple_cmdline,             only: cmdline
 use simple_parameters
-use simple_ftiter
+use simple_parameters
+use simple_pickseg
+use simple_segmentation
 use simple_srch_sort_loc
-use simple_gauss2Dfit
-
+use simple_syslib
 implicit none 
 #include "simple_local_flags.inc"
 
 logical  :: L_DEBUG = .false.
 type :: image_afm
     private
-    type(image),           allocatable :: img_array(:)
-    character(len=STDLEN), allocatable :: img_names(:)
-    character(len=STDLEN)              :: stack_string
+    type(image),  allocatable :: img_array(:)
+    type(string), allocatable :: img_names(:)
+    type(string)              :: stack_string
 contains
     procedure :: align_avg
     procedure :: get_AFM
@@ -42,10 +41,10 @@ contains
 
     subroutine read_ibw( AFM, fn_in )
         class(image_afm), intent(out) :: AFM
-        character(len=*), intent(in)  :: fn_in 
-        real(kind = 4), allocatable :: Rank3_Data_4byte(:, :, :, :)
-        character(:),   allocatable :: channel_info
-        character(len = 10)         :: iteration(2), properties(4)
+        class(string),    intent(in)  :: fn_in 
+        real(kind=4), allocatable :: Rank3_Data_4byte(:, :, :, :)
+        character(len=:), allocatable :: channel_info
+        character(len=10) :: iteration(2), properties(4)
         integer :: in, check, real_type
         integer :: real_type1, data, total_bytes, bytes_read, iter_ind, prop_ind, img_ind, i
         type :: bin_header5
@@ -98,22 +97,22 @@ contains
         type(wave_header5) :: waveheader  
         iteration  = [character(len = 10) :: 'Trace', 'Retrace']
         properties = [character(len = 10) :: 'Height', 'Amplitude', 'Phase', 'ZSensor' ]
-        if( index(fn_in, '.ibw') == 0 ) THROW_HARD('Only .ibw files are supported')
-        open(newunit = check, file = fn_in, status = 'old', access='stream')
+        if( fn_in%substr_ind('.ibw') == 0 ) THROW_HARD('Only .ibw files are supported')
+        open(newunit = check, file = fn_in%to_char(), status = 'old', access='stream')
         read(check) binheader%version
         if( binheader%version > 5 )then
 #if USE_AFM
-            open(newunit = in, file = fn_in, status = 'old', access='stream', convert='swap')
+            open(newunit = in, file = fn_in%to_char(), status = 'old', access='stream', convert='swap')
 #else
-            open(newunit = in, file = fn_in, status = 'old', access='stream')
+            open(newunit = in, file = fn_in%to_char(), status = 'old', access='stream')
 #endif
         else
-            open(newunit = in, file = fn_in, status = 'old', access='stream')
+            open(newunit = in, file = fn_in%to_char(), status = 'old', access='stream')
         endif
         read(in)binheader, waveheader
         if( binheader%version /= 5 ) THROW_HARD('Only version 5 files are supported')
         allocate(Rank3_Data_4byte(waveheader%nDim(1) ,waveheader%nDim(2), 1, waveheader%nDim(3)))
-        open(newunit = data, file = fn_in, status = 'old', access='stream')
+        open(newunit = data, file = fn_in%to_char(), status = 'old', access='stream')
         read(data, pos = 385) Rank3_Data_4byte
         inquire(data, pos = bytes_read)
         allocate(character(binheader%dimLabelsSize(3)) :: channel_info)
@@ -140,7 +139,7 @@ contains
 
     subroutine pick_valid( AFM_in, outname, avg_p )
         class(image_afm), intent(inout) :: AFM_in 
-        character(*),     intent(in)    :: outname
+        class(string),    intent(in)    :: outname
         type(pickseg),    intent(inout) :: avg_p   
         integer, allocatable :: pickpos(:, :), val_center_r(:, :), val_center_t(:, :)
         real,    allocatable :: corr_final_t(:), corr_final_r(:)
@@ -160,12 +159,12 @@ contains
         call AvgHeight%norm_minmax()
         call HeightTrace%norm_minmax()
         call HeightRetrace%norm_minmax()
-        call AvgHeight%write(trim(outname)//'avg.mrc')
-        call avg_p%pick(trim(outname)//'avg.mrc',.true.)
-        call HeightTrace%write(trim(outname)//'trace.mrc')
-        call trace_p%pick(trim(outname)//'trace.mrc',.true.)
-        call HeightRetrace%write(trim(outname)//'retrace.mrc')
-        call retrace_p%pick(trim(outname)//'retrace.mrc',.true.)
+        call AvgHeight%write(outname//'avg.mrc')
+        call avg_p%pick(outname//'avg.mrc',.true.)
+        call HeightTrace%write(outname//'trace.mrc')
+        call trace_p%pick(outname//'trace.mrc',.true.)
+        call HeightRetrace%write(outname//'retrace.mrc')
+        call retrace_p%pick(outname//'retrace.mrc',.true.)
         ldim_box = [avg_p%get_boxsize(), avg_p%get_boxsize(), 1]
         smpd_box = AvgHeight%get_smpd()
         call avg_slim%new(ldim_box, smpd_box )
@@ -249,7 +248,7 @@ contains
         class(image_afm), intent(in)  :: AFM_Hash
         character(*),     intent(in)  :: key 
         type(image),      intent(out) :: image_at_key
-        image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
+        image_at_key = AFM_Hash%img_array(findloc_str(AFM_Hash%img_names, key))
     end subroutine get_AFM
 
     subroutine zero_padding( AFM_pad )
@@ -267,9 +266,9 @@ contains
     subroutine align_avg( AFM_in, Align_AFM )
         class(image_afm), intent(in)  :: AFM_in 
         class(image_afm), intent(out) :: Align_AFM
-        real,       allocatable :: shifts(:, :)
-        integer                 :: num_avg, avg_ind, prop_ind, new_size, count, num_mic, tr_ind, retr_ind, i 
-        character(len = STDLEN) :: new_name 
+        real, allocatable :: shifts(:, :)
+        integer           :: num_avg, avg_ind, prop_ind, new_size, count, num_mic, tr_ind, retr_ind, i 
+        type(string)      :: new_name 
         num_mic  = size(AFM_in%img_array)
         new_size = int(num_mic*1.5)
         allocate(Align_AFM%img_array(new_size))
@@ -310,7 +309,7 @@ contains
             retr_ind                     = avg_ind - num_mic + 1 + count
             Align_AFM%img_array(avg_ind) = Align_AFM%img_array(tr_ind) * 0.5 + Align_AFM%img_array(retr_ind) * 0.5
             new_name                     = AFM_in%img_names(tr_ind)
-            Align_AFM%img_names(avg_ind) = 'Avg'//new_name(1:len_trim(new_name)  - 5)
+            Align_AFM%img_names(avg_ind) = 'Avg'//new_name%to_char([1,new_name%strlen_trim()- 5])
             count = count + 1
         enddo 
     end subroutine align_avg
@@ -460,7 +459,7 @@ contains
         smpd   = img_in%get_smpd()
         windim = [AFM_pick%get_boxsize(), AFM_pick%get_boxsize(), 1]
         call bin_cc%new(AFM_pick%get_ldim(), AFM_pick%get_smpd_shrink())
-        call bin_cc%read('mic_shrink_lp_tv_bin_erode_cc.mrc')
+        call bin_cc%read(string('mic_shrink_lp_tv_bin_erode_cc.mrc'))
         call lines%new(ldim, smpd)
         call lines%set_rmat(hough_mask, .false.)
         ldim_pick = AFM_pick%get_ldim()

@@ -73,7 +73,7 @@ call ptcl%zero_and_unflag_ft
 call ptcl_pad%clip(ptcl)
 call ptcl%add(noise)
 iind = 1
-call ptcl%write('noisy_ptcl.mrc', iind)
+call ptcl%write(string('noisy_ptcl.mrc'), iind)
 allocate(pspec(ptcl%get_nyq()),source=0.)
 call ptcl%masscen(masscen)
 print *, 'masscen (original) = ', masscen
@@ -85,12 +85,12 @@ print *, 'power spectrum = ', pspec(1:5)
 call ptcl%shift2Dserial(masscen(1:2))
 call ptcl%ifft
 iind = iind + 1
-call ptcl%write('noisy_ptcl.mrc', iind)
+call ptcl%write(string('noisy_ptcl.mrc'), iind)
 call ptcl%masscen(masscen)
 print *, 'masscen (after ori shifted) = ', masscen
 call ptcl%roavg(10, roavg)
 iind = iind + 1
-call roavg%write('noisy_ptcl.mrc', iind)
+call roavg%write(string('noisy_ptcl.mrc'), iind)
 call roavg%fft
 call roavg%power_spectrum(pspec)
 print *, '(roavg) power spectrum = ', sum(pspec)
@@ -99,7 +99,7 @@ call ptcl%fft
 call ptcl%shift2Dserial(sh)
 call ptcl%ifft
 iind = iind + 1
-call ptcl%write('noisy_ptcl.mrc', iind)
+call ptcl%write(string('noisy_ptcl.mrc'), iind)
 call ptcl%masscen(masscen)
 call ptcl%fft
 call ptcl%power_spectrum(pspec)
@@ -110,7 +110,7 @@ call ptcl%remove_neg
 call test_center(ptcl)
 call ptcl%roavg(10, roavg)
 iind = iind + 1
-call roavg%write('noisy_ptcl.mrc', iind)
+call roavg%write(string('noisy_ptcl.mrc'), iind)
 call roavg%fft
 call roavg%power_spectrum(pspec)
 print *, '(roavg) power spectrum = ', sum(pspec)
@@ -147,7 +147,7 @@ contains
                 call win_avg%kill
                 if( cnt == 1 .or. cnt == 21 )then
                     img_ind = img_ind + 1
-                    call win_img%write('window_imgs.mrc', img_ind)
+                    call win_img%write(string('window_imgs.mrc'), img_ind)
                 endif
             enddo
         enddo

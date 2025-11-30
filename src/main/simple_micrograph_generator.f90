@@ -2,9 +2,10 @@ module simple_micrograph_generator
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,                         only: image, image_ptr
-use simple_eer_factory,                   only: eer_decoder
-use simple_motion_correct_utils,          only: correct_gain, apply_dose_weighing
+use simple_eer_factory,          only: eer_decoder
+use simple_image,                only: image, image_ptr
+use simple_motion_correct_utils, only: correct_gain, apply_dose_weighing
+use simple_string,               only: string
 use simple_starfile_wrappers
 implicit none
 ! private
@@ -17,29 +18,29 @@ real,    parameter :: NSIGMAS    = 6.0
 logical, parameter :: DEBUG_HERE = .false.
 
 type :: mic_generator
-    type(image),      allocatable :: frames(:)
-    real,             allocatable :: doses(:,:,:),weights(:), isoshifts(:,:)
-    integer,          allocatable :: hotpix_coords(:,:)
-    character(len=:), allocatable :: gainrefname, moviename, docname, convention
-    type(image)                   :: gain
-    type(eer_decoder)             :: eer
-    real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
-    real(dp)                      :: polyx_bak(POLYDIM), polyy_bak(POLYDIM)
-    real                          :: smpd, smpd_out
-    real                          :: scale
-    real                          :: total_dose, doseperframe, preexposure, kv
-    integer                       :: fromtof(2)
-    integer                       :: ldim(3), ldim_sc(3)
-    integer                       :: nframes, start_frame, nhotpix, align_frame
-    integer                       :: eer_fraction, eer_upsampling
-    logical                       :: l_doseweighing = .false.
-    logical                       :: l_scale        = .false.
-    logical                       :: l_gain         = .false.
-    logical                       :: l_eer          = .false.
-    logical                       :: l_poly         = .false.
-    logical                       :: l_nn_interp    = .false.
-    logical                       :: l_frameweights = .false.
-    logical                       :: exists         = .false.
+    type(image), allocatable :: frames(:)
+    real,        allocatable :: doses(:,:,:),weights(:), isoshifts(:,:)
+    integer,     allocatable :: hotpix_coords(:,:)
+    type(string)             :: gainrefname, moviename, docname, convention
+    type(image)              :: gain
+    type(eer_decoder)        :: eer
+    real(dp)                 :: polyx(POLYDIM), polyy(POLYDIM)
+    real(dp)                 :: polyx_bak(POLYDIM), polyy_bak(POLYDIM)
+    real                     :: smpd, smpd_out
+    real                     :: scale
+    real                     :: total_dose, doseperframe, preexposure, kv
+    integer                  :: fromtof(2)
+    integer                  :: ldim(3), ldim_sc(3)
+    integer                  :: nframes, start_frame, nhotpix, align_frame
+    integer                  :: eer_fraction, eer_upsampling
+    logical                  :: l_doseweighing = .false.
+    logical                  :: l_scale        = .false.
+    logical                  :: l_gain         = .false.
+    logical                  :: l_eer          = .false.
+    logical                  :: l_poly         = .false.
+    logical                  :: l_nn_interp    = .false.
+    logical                  :: l_frameweights = .false.
+    logical                  :: exists         = .false.
   contains
     procedure          :: new
     procedure, private :: parse_movie_metadata
@@ -62,37 +63,37 @@ contains
         character(len=*),     intent(in)    :: convention
         integer,              intent(in)    :: frames_range(2)
         logical,              intent(in)    :: bilinear_interp
-        character(len=:), allocatable :: poly_fname
-        real(dp),         allocatable :: poly(:)
-        integer  :: iframe
+        real(dp), allocatable :: poly(:)
+        type(string) :: poly_fname
+        integer      :: iframe
         call self%kill
         ! sanity checks
         if( .not. omic%isthere('mc_starfile') )then
             THROW_HARD('Movie star doc is absent 1')
         endif
-        self%docname = trim(omic%get_static('mc_starfile'))
+        self%docname = omic%get('mc_starfile')
         if( .not.file_exists(self%docname) )then
             THROW_HARD('Movie star doc is absent 2')
         endif
         self%convention = trim(convention)
         ! weights & interpolation
         self%l_nn_interp    = .not.bilinear_interp
-        select case(trim(self%convention))
-        case('simple')
-            self%l_frameweights = .true.
-        case('motioncorr','relion','cryosparc','cs')
-            self%l_frameweights = .false.
-        case DEFAULT
-            THROW_HARD('Unsupported convention!')
+        select case(self%convention%to_char())
+            case('simple')
+                self%l_frameweights = .true.
+            case('motioncorr','relion','cryosparc','cs')
+                self%l_frameweights = .false.
+            case DEFAULT
+                THROW_HARD('Unsupported convention!')
         end select
         ! get movie info
         call self%parse_movie_metadata
-        if( .not.file_exists(self%moviename) ) THROW_HARD('Movie cannot be found: '//trim(self%moviename))
+        if( .not.file_exists(self%moviename) ) THROW_HARD('Movie cannot be found: '//self%moviename%to_char())
         ! dose-weighing
         if( self%l_doseweighing )then
             self%total_dose = real(self%nframes) * self%doseperframe
         else
-            THROW_WARN('Dose-weighing metadata cannot be found in: '//trim(self%docname))
+            THROW_WARN('Dose-weighing metadata cannot be found in: '//self%docname%to_char())
         endif
         ! frames range
         if( frames_range(1) < 1 ) THROW_HARD('Invalid starting frame')
@@ -117,7 +118,7 @@ contains
         ! downscaling shifts
         self%isoshifts = self%isoshifts * self%scale
         ! polynomial coefficients
-        poly_fname = fname_new_ext(self%docname,'poly')
+        poly_fname = fname_new_ext(self%docname,string('poly'))
         if( file_exists(poly_fname) )then
             poly = file2drarr(poly_fname)
             self%polyx = poly(:POLYDIM)
@@ -158,7 +159,7 @@ contains
         ! gain correction
         if( self%l_gain )then
             if( .not.file_exists(self%gainrefname) )then
-                THROW_HARD('gain reference: '//trim(self%gainrefname)//' not found')
+                THROW_HARD('gain reference: '//self%gainrefname%to_char()//' not found')
             endif
             if( self%l_eer )then
                 call correct_gain(self%frames, self%gainrefname, self%gain, eerdecoder=self%eer, frames_range=self%fromtof)
@@ -168,11 +169,11 @@ contains
         endif
         ! outliers curation
         if( self%nhotpix > 0 )then
-            select case(trim(self%convention))
-            case('cs')
-                call self%cure_outliers_1
-            case DEFAULT
-                if( self%nhotpix > 0 ) call self%cure_outliers_2
+            select case(self%convention%to_char())
+                case('cs')
+                    call self%cure_outliers_1
+                case DEFAULT
+                    if( self%nhotpix > 0 ) call self%cure_outliers_2
             end select
         endif
         call self%gain%kill
@@ -189,27 +190,30 @@ contains
 
     subroutine parse_movie_metadata( self )
         class(mic_generator), intent(inout) :: self
-        type(str4arr), allocatable :: names(:)
-        type(starfile_table_type)  :: table
+        type(string), allocatable     :: names(:)
+        type(starfile_table_type)     :: table
+        character(len=:), allocatable :: buffer
         integer(C_long) :: num_objs, object_id
         integer         :: i,j,iframe,n,ind, motion_model
         logical         :: err
         ! parsing individual movie meta-data
         call starfile_table__new(table)
-        call starfile_table__getnames(table, trim(self%docname)//C_NULL_CHAR, names)
+        call starfile_table__getnames(table, self%docname, names)
         n = size(names)
         do i = 1,n
-            call starfile_table__read(table, trim(self%docname)//C_NULL_CHAR, names(i)%str )
-            select case(trim(names(i)%str))
+            call starfile_table__read(table, self%docname, names(i)%to_char())
+            select case(trim(names(i)%to_char()))
             case('general')
                 ! global variables, movie at original size
                 self%ldim(1)        = parse_int(table, EMDL_IMAGE_SIZE_X, err)
                 self%ldim(2)        = parse_int(table, EMDL_IMAGE_SIZE_Y, err)
                 self%ldim(3)        = 1
                 self%nframes        = parse_int(table, EMDL_IMAGE_SIZE_Z, err)
-                call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, self%moviename, err)
+                call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, buffer, err)
+                self%moviename      = buffer
                 self%l_eer          = fname2format(self%moviename) == 'K'
-                call parse_string(table, EMDL_MICROGRAPH_GAIN_NAME, self%gainrefname, err)
+                call parse_string(table, EMDL_MICROGRAPH_GAIN_NAME, buffer, err)
+                self%gainrefname    = buffer
                 self%l_gain         = .not.err
                 self%scale          = 1./ parse_double(table, EMDL_MICROGRAPH_BINNING, err)
                 self%l_scale        = (.not.err) .and. (abs(self%scale - 1.0) > 0.001)
@@ -274,7 +278,7 @@ contains
                 end do
                 self%hotpix_coords = self%hotpix_coords + 1 ! Fortran indexing!
             case DEFAULT
-                THROW_HARD('Invalid table: '//trim(names(i)%str))
+                THROW_HARD('Invalid table: '//trim(names(i)%to_char()))
             end select
         enddo
         call starfile_table__delete(table)
@@ -294,7 +298,7 @@ contains
         ldim = self%ldim_sc
         n    = self%fromtof(2)-self%fromtof(1)+1
         allocate(local_frames(self%fromtof(1):self%fromtof(2)))
-        if( trim(self%convention).eq.'cs' )then
+        if( self%convention%to_char().eq.'cs' )then
             ! Frames Stage drift
             !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
             do iframe = self%fromtof(1),self%fromtof(2)
@@ -315,7 +319,7 @@ contains
                 !$omp end parallel workshare
             end do
             ! Background
-            call micrograph_nodw%estimate_background(200., backgr, self%convention)
+            call micrograph_nodw%estimate_background(200., backgr, self%convention%to_char())
             if( present(background) ) call background%copy(backgr)
             call backgr%upsample_square_background(ldim(1:2))
             ! background subtraction
@@ -559,8 +563,8 @@ contains
         call starfile_table__setValue_int(starfile,    EMDL_IMAGE_SIZE_X, self%ldim(1))
         call starfile_table__setValue_int(starfile,    EMDL_IMAGE_SIZE_Y, self%ldim(2))
         call starfile_table__setValue_int(starfile,    EMDL_IMAGE_SIZE_Z, self%nframes)
-        call starfile_table__setValue_string(starfile, EMDL_MICROGRAPH_MOVIE_NAME, trim(self%moviename))
-        if( self%l_gain ) call starfile_table__setValue_string(starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(self%gainrefname))
+        call starfile_table__setValue_string(starfile, EMDL_MICROGRAPH_MOVIE_NAME, self%moviename%to_char())
+        if( self%l_gain ) call starfile_table__setValue_string(starfile, EMDL_MICROGRAPH_GAIN_NAME, self%gainrefname%to_char())
         call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_BINNING, 1.d0/dpscale)
         if( self%l_eer )then
             call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(self%eer%get_smpd_out(),dp))
@@ -597,11 +601,11 @@ contains
             call starfile_table__addObject(starfile)
             call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
             if( self%weights(iframe) > 0.000001 )then
-                select case(trim(self%convention))
-                case('cs')
-                    shift = isoshifts(:,iframe) - isoshifts(:,self%align_frame)
-                case DEFAULT
-                    shift = isoshifts(:,iframe) - isoshifts(:,1)
+                select case(self%convention%to_char())
+                    case('cs')
+                        shift = isoshifts(:,iframe) - isoshifts(:,self%align_frame)
+                    case DEFAULT
+                        shift = isoshifts(:,iframe) - isoshifts(:,1)
                 end select
                 call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_X, shift(1))
                 call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_Y, shift(2))
@@ -658,15 +662,15 @@ contains
     subroutine display( self )
         class(mic_generator), intent(in) :: self
         integer :: i
-        print *, 'docname         ', self%docname
+        print *, 'docname         ', self%docname%to_char()
         print *, 'nframes         ', self%nframes
         print *, 'dimensions      ', self%ldim
         print *, 'smpd            ', self%smpd
         print *, 'smpd_out        ', self%smpd_out
         print *, 'voltage         ', self%kv
         print *, 'doseperframe    ', self%doseperframe
-        print *, 'gainrefname     ', trim(self%gainrefname)
-        print *, 'moviename       ', trim(self%moviename)
+        print *, 'gainrefname     ', self%gainrefname%to_char()
+        print *, 'moviename       ', self%moviename%to_char()
         print *, 'doseweighting   ', self%l_doseweighing
         print *, 'total dose      ', self%total_dose
         print *, 'l_scale         ', self%l_scale
@@ -887,10 +891,10 @@ contains
         endif
     end subroutine cure_outliers_2
 
-    pure function get_moviename( self )result( fname )
+    function get_moviename( self )result( fname )
         class(mic_generator), intent(in)  :: self
-        character(len=:), allocatable :: fname
-        fname = trim(adjustl(self%moviename))
+        type(string) :: fname
+        fname = self%moviename
     end function get_moviename
 
     ! Utilities
@@ -915,7 +919,7 @@ contains
         class(starfile_table_type)                 :: table
         integer,                       intent(in)  :: emdl_id
         character(len=:), allocatable, intent(out) :: string
-        logical, intent(out)                       :: err
+        logical,                       intent(out) :: err
         err = .not.starfile_table__getValue_string(table, emdl_id, string)
     end subroutine parse_string
     
@@ -943,9 +947,9 @@ contains
         self%doseperframe   = 0.
         self%scale          = 1.
         self%align_frame    = 0
-        self%moviename   = ''
-        self%docname     = ''
-        self%gainrefname = ''
+        call self%moviename%kill
+        call self%docname%kill
+        call self%gainrefname%kill
         self%exists = .false.
     end subroutine kill
 

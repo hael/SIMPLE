@@ -4,7 +4,7 @@ use simple_image,    only: image
 use simple_stack_io, only: stack_io
 use simple_imgfile,  only: imgfile
 implicit none
-character(len=:), allocatable :: benchfname
+type(string)                  :: benchfname
 integer,          parameter   :: NVOLRWS   = 10
 integer,          parameter   :: NVOLS     = 4
 integer,          parameter   :: BOX       = 512
@@ -23,14 +23,14 @@ print *, 'simulating volumes'
 do i = 1, NVOLS
     call vols(i)%new([BOX,BOX,BOX], SMPD)
     call vols(i)%ran()
-    call vols(i)%write('random_vol'//int2str(i)//'.mrc')
+    call vols(i)%write(string('random_vol')//int2str(i)//'.mrc')
 end do
 
 print *, 'writing the volume '//int2str(NVOLRWS)//' times'
 t_vol_w = tic()
 do j = 1, NVOLRWS
     do i = 1, NVOLS
-        call vols(i)%write('random_vol'//int2str(i)//'.mrc')
+        call vols(i)%write(string('random_vol')//int2str(i)//'.mrc')
     end do
 end do
 rt_vol_w = toc(t_vol_w)
@@ -38,7 +38,7 @@ rt_vol_w = toc(t_vol_w)
 print *, 'writing the volume '//int2str(NVOLRWS)//' times in parallel'
 t_vol_w_para = tic()
 do i = 1, NVOLS
-    call ioimg(i)%open('random_vol'//int2str(i)//'.mrc', [BOX,BOX,BOX], SMPD, del_if_exists=.true., formatchar='M', readhead=.false., rwaction='write')
+    call ioimg(i)%open(string('random_vol')//int2str(i)//'.mrc', [BOX,BOX,BOX], SMPD, del_if_exists=.true., formatchar='M', readhead=.false., rwaction='write')
 end do
 do j = 1, NVOLRWS
     !$omp parallel do default(shared) private(i,rmat_ptr) schedule(static) num_threads(NVOLS)
@@ -57,7 +57,7 @@ print *, 'reading the volume '//int2str(NVOLRWS)//' times'
 t_vol_r = tic()
 do j = 1, NVOLRWS
     do i = 1, NVOLS
-        call vols(i)%read('random_vol'//int2str(i)//'.mrc')
+        call vols(i)%read(string('random_vol')//int2str(i)//'.mrc')
     end do
 end do
 rt_vol_r = toc(t_vol_r)
@@ -65,7 +65,7 @@ rt_vol_r = toc(t_vol_r)
 print *, 'reading the volume '//int2str(NVOLRWS)//' times, in parallel'
 t_vol_r_para = tic()
 do i = 1, NVOLS
-    call ioimg(i)%open('random_vol'//int2str(i)//'.mrc', [BOX,BOX,BOX], SMPD, formatchar='M', readhead=.false., rwaction='read')
+    call ioimg(i)%open(string('random_vol')//int2str(i)//'.mrc', [BOX,BOX,BOX], SMPD, formatchar='M', readhead=.false., rwaction='read')
 end do
 do j = 1, NVOLRWS
     !$omp parallel do default(shared) private(i,rmat_ptr) schedule(static) num_threads(NVOLS)
@@ -87,7 +87,7 @@ end do
 
 ! write benchmark stats
 benchfname = 'SIMPLE_PARALLEL_IO_BENCH.txt'
-call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
 write(fnr,'(a)') '*** TIMINGS (s) ***'
 write(fnr,'(a,1x,f9.2)') 'volume writes           : ', rt_vol_w
 write(fnr,'(a,1x,f9.2)') 'volume writes, parallel : ', rt_vol_w_para

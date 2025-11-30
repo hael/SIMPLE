@@ -17,27 +17,27 @@ integer, parameter :: SHORTTIME = 1
 
 type qsys_ctrl
     private
-    character(len=STDLEN)          :: exec_binary = ''              !< binary to execute in parallel
-    character(len=32), allocatable :: script_names(:)               !< file names of generated scripts
-    character(len=32), allocatable :: jobs_done_fnames(:)           !< touch files indicating completion
-    character(len=32), allocatable :: jobs_exit_code_fnames(:)      !< touch files containing exit codes
-    class(qsys_base),  pointer     :: myqsys     => null()          !< pointer to polymorphic qsys object
-    integer, pointer               :: parts(:,:) => null()          !< defines the fromp/top ranges for all partitions
-    class(cmdline),    allocatable :: stream_cline_stack(:)         !< stack of command lines, for streaming only
-    class(cmdline),    allocatable :: stream_cline_submitted(:)     !< stack of submitted command lines, for streaming only
-    class(cmdline),    allocatable :: stream_cline_done_stack(:)    !< stack of completed command lines, for streaming only
-    class(cmdline),    allocatable :: stream_cline_fail_stack(:)    !< stack of failed command lines, for streaming only
-    logical,           allocatable :: jobs_done(:)                  !< to indicate completion of distributed scripts
-    logical,           allocatable :: jobs_submitted(:)             !< to indicate which jobs have been submitted
-    integer                        :: fromto_part(2)         = 0    !< defines the range of partitions controlled by this instance
-    integer                        :: nparts_tot             = 0    !< total number of partitions
-    integer                        :: ncomputing_units       = 0    !< number of computing units
-    integer                        :: ncomputing_units_avail = 0    !< number of available units
-    integer                        :: numlen                 = 0    !< length of padded number string
-    integer                        :: n_stream_updates       = 0    !< counter, for streaming only
-    integer                        :: cline_stacksz          = 0    !< size of stack of command lines, for streaming only
-    logical                        :: stream    = .false.           !< stream flag
-    logical                        :: existence = .false.           !< indicates existence
+    type(string)                  :: exec_binary                   !< binary to execute in parallel
+    type(string),     allocatable :: script_names(:)               !< file names of generated scripts
+    type(string),     allocatable :: jobs_done_fnames(:)           !< touch files indicating completion
+    type(string),     allocatable :: jobs_exit_code_fnames(:)      !< touch files containing exit codes
+    class(qsys_base), pointer     :: myqsys     => null()          !< pointer to polymorphic qsys object
+    integer, pointer              :: parts(:,:) => null()          !< defines the fromp/top ranges for all partitions
+    class(cmdline),   allocatable :: stream_cline_stack(:)         !< stack of command lines, for streaming only
+    class(cmdline),   allocatable :: stream_cline_submitted(:)     !< stack of submitted command lines, for streaming only
+    class(cmdline),   allocatable :: stream_cline_done_stack(:)    !< stack of completed command lines, for streaming only
+    class(cmdline),   allocatable :: stream_cline_fail_stack(:)    !< stack of failed command lines, for streaming only
+    logical,          allocatable :: jobs_done(:)                  !< to indicate completion of distributed scripts
+    logical,          allocatable :: jobs_submitted(:)             !< to indicate which jobs have been submitted
+    integer                       :: fromto_part(2)         = 0    !< defines the range of partitions controlled by this instance
+    integer                       :: nparts_tot             = 0    !< total number of partitions
+    integer                       :: ncomputing_units       = 0    !< number of computing units
+    integer                       :: ncomputing_units_avail = 0    !< number of available units
+    integer                       :: numlen                 = 0    !< length of padded number string
+    integer                       :: n_stream_updates       = 0    !< counter, for streaming only
+    integer                       :: cline_stacksz          = 0    !< size of stack of command lines, for streaming only
+    logical                       :: stream    = .false.           !< stream flag
+    logical                       :: existence = .false.           !< indicates existence
     contains
     ! CONSTRUCTORS
     procedure          :: new
@@ -85,7 +85,7 @@ contains
     ! CONSTRUCTORS
 
     function constructor( exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream ) result( self )
-        character(len=*),         intent(in) :: exec_binary      !< the binary that we want to execute in parallel
+        class(string),            intent(in) :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in) :: qsys_obj         !< the object that defines the qeueuing system
         integer,          target, intent(in) :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges
         integer,                  intent(in) :: fromto_part(2)   !< defines the range of partitions controlled by this object
@@ -97,7 +97,7 @@ contains
 
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen )
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
-        character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
+        class(string),            intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
         integer,          target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges
         integer,                  intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
@@ -142,7 +142,7 @@ contains
         end do
         ! create jobs done flags
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            self%jobs_done_fnames(ipart) = trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,self%numlen)
+            self%jobs_done_fnames(ipart) = JOB_FINISHED_FBODY//int2str_pad(ipart,self%numlen)
             self%jobs_exit_code_fnames(ipart) = 'EXIT_CODE_JOB_'//int2str_pad(ipart,self%numlen)
         end do
         self%existence = .true.
@@ -151,8 +151,8 @@ contains
     ! GETTERS
 
     subroutine get_jobs_status( self, jobs_done, jobs_submitted )
-        class(qsys_ctrl), intent(in) :: self
-        logical, allocatable :: jobs_done(:), jobs_submitted(:)
+        class(qsys_ctrl),     intent(in)    :: self
+        logical, allocatable, intent(inout) :: jobs_done(:), jobs_submitted(:)
         if( allocated(jobs_done) )      deallocate(jobs_done)
         if( allocated(jobs_submitted) ) deallocate(jobs_submitted)
         allocate(jobs_done(size(self%jobs_done)), source=self%jobs_done)
@@ -188,7 +188,11 @@ contains
 
     subroutine clear_stack( self )
         class(qsys_ctrl), intent(inout) :: self
-        if( allocated(self%stream_cline_stack)) deallocate(self%stream_cline_stack)
+        integer :: i
+        if( allocated(self%stream_cline_stack))then
+            call self%stream_cline_stack(:)%kill
+            deallocate(self%stream_cline_stack)
+        endif
         self%cline_stacksz = 0
     end subroutine clear_stack
 
@@ -197,29 +201,29 @@ contains
     subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, extra_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
-        character(len=4),           intent(in)    :: ext
+        class(string),              intent(in)    :: ext
         class(chash),               intent(inout) :: q_descr
-        character(len=*), optional, intent(in)    :: outfile_body
+        class(string),    optional, intent(in)    :: outfile_body
         class(chash),     optional, intent(in)    :: part_params(:)
         type(parameters), optional, intent(in)    :: extra_params
-        character(len=:), allocatable :: outfile_body_local, key, val
-        integer :: ipart, iadd
-        logical :: part_params_present
-        if( present(outfile_body) ) allocate(outfile_body_local, source=trim(outfile_body))
+        type(string) :: outfile_body_local, key, val
+        integer      :: ipart, iadd
+        logical      :: part_params_present
+        if( present(outfile_body) ) outfile_body_local = outfile_body
         part_params_present = present(part_params)
         do ipart=self%fromto_part(1),self%fromto_part(2)
             call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
             call job_descr%set('top',    int2str(self%parts(ipart,2)))
             call job_descr%set('part',   int2str(ipart))
             call job_descr%set('nparts', int2str(self%nparts_tot))
-            if( allocated(outfile_body_local) )then
-                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//trim(METADATA_EXT))
+            if( outfile_body_local%is_allocated() )then
+                call job_descr%set('outfile', outfile_body_local%to_char()//int2str_pad(ipart,self%numlen)//METADATA_EXT)
             endif
             if( part_params_present  )then
                 do iadd=1,part_params(ipart)%size_of()
                     key = part_params(ipart)%get_key(iadd)
                     val = part_params(ipart)%get(iadd)
-                    call job_descr%set(key, val)
+                    call job_descr%set(key%to_char(), val)
                 end do
             endif
             if(L_USE_AUTO_MEM) call estimate_mem_usage(job_descr, q_descr, extra_params)
@@ -229,14 +233,14 @@ contains
         call job_descr%delete('top')
         call job_descr%delete('part')
         call job_descr%delete('nparts')
-        if( allocated(outfile_body_local) )then
+        if( outfile_body_local%is_allocated() )then
             call job_descr%delete('outfile')
-            deallocate(outfile_body_local)
+            call outfile_body_local%kill
         endif
         if( part_params_present )then
             do iadd=1,part_params(1)%size_of()
                 key = part_params(1)%get_key(iadd)
-                call job_descr%delete(key)
+                call job_descr%delete(key%to_char())
             end do
         endif
         ! when we generate the scripts we also reset the number of available computing units
@@ -246,11 +250,11 @@ contains
     subroutine generate_array_script( self, job_descr, ext, q_descr, outfile_body, part_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
-        character(len=4),           intent(in)    :: ext
+        class(string),              intent(in)    :: ext
         class(chash),               intent(in)    :: q_descr
-        character(len=*), optional, intent(in)    :: outfile_body
+        class(string),    optional, intent(in)    :: outfile_body
         class(chash),     optional, intent(in)    :: part_params(:)
-        character(len=:), allocatable :: outfile_body_local, key, val
+        type(string) :: outfile_body_local, key, val, job_str
         integer :: ipart, iadd, ios, funit
         logical :: part_params_present
         character(len=512) :: io_msg
@@ -262,9 +266,9 @@ contains
             class DEFAULT
                 THROW_HARD('array submission only supported by SLURM')
         end select
-        if( present(outfile_body) ) allocate(outfile_body_local, source=trim(outfile_body))
+        if( present(outfile_body) ) outfile_body_local = outfile_body
         part_params_present = present(part_params)
-        call fopen(funit, file=ARRAY_SCRIPT, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        call fopen(funit, file=string(ARRAY_SCRIPT), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_array_script; Error when opening file for writing: '//ARRAY_SCRIPT//' ; '//trim(io_msg), ios)
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
@@ -274,7 +278,7 @@ contains
         else
             call self%myqsys%write_array_instr(q_descr, self%fromto_part, fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(cwd_glob)
+        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! start partsarray definition
         write(funit,'(a)') 'partsarray=('
@@ -283,18 +287,19 @@ contains
             call job_descr%set('top',    int2str(self%parts(ipart,2)))
             call job_descr%set('part',   int2str(ipart))
             call job_descr%set('nparts', int2str(self%nparts_tot))
-            if( allocated(outfile_body_local) )then
-                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//trim(METADATA_EXT))
+            if( outfile_body_local%is_allocated() )then
+                call job_descr%set('outfile', outfile_body_local%to_char()//int2str_pad(ipart,self%numlen)//METADATA_EXT)
             endif
             if( part_params_present  )then
                 do iadd=1,part_params(ipart)%size_of()
                     key = part_params(ipart)%get_key(iadd)
                     val = part_params(ipart)%get(iadd)
-                    call job_descr%set(key, val)
+                    call job_descr%set(key%to_char(), val)
                 end do
             endif
             ! compose the command line as array element inside partsarray. achar(39) is apostrophe
-            write(funit,'(a)',advance='no') achar(39)//trim(self%exec_binary)//' '//trim(job_descr%chash2str())
+            job_str = job_descr%chash2str()
+            write(funit,'(a)',advance='no') achar(39)//self%exec_binary%to_char()//' '//job_str%to_char()
             ! direct output
             write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT//achar(39)
             write(funit,'(a)') ''
@@ -312,14 +317,14 @@ contains
         call job_descr%delete('top')
         call job_descr%delete('part')
         call job_descr%delete('nparts')
-        if( allocated(outfile_body_local) )then
+        if( outfile_body_local%is_allocated() )then
             call job_descr%delete('outfile')
-            deallocate(outfile_body_local)
+            call outfile_body_local%kill
         endif
         if( part_params_present )then
             do iadd=1,part_params(1)%size_of()
                 key = part_params(1)%get_key(iadd)
-                call job_descr%delete(key)
+                call job_descr%delete(key%to_char())
             end do
         endif
         ! when we have generated the script we also unflag jobs_submitted and jobs_done
@@ -327,7 +332,7 @@ contains
         self%jobs_submitted(:) = .false.
         ! and reset the number of available computing units
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
-        call wait_for_closure(ARRAY_SCRIPT)
+        call wait_for_closure(string(ARRAY_SCRIPT))
     end subroutine generate_array_script
 
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
@@ -336,10 +341,11 @@ contains
         integer,          intent(in)    :: ipart
         class(chash),     intent(in)    :: q_descr
         character(len=512) :: io_msg
-        integer :: ios, funit
+        type(string) :: job_str
+        integer      :: ios, funit
         call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
-                //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
+                //self%script_names(ipart)%to_char()//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write (run-time polymorphic) instructions to the qsys
@@ -348,10 +354,11 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(cwd_glob)
+        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! compose the command line
-        write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
+        job_str = job_descr%chash2str()
+        write(funit,'(a)',advance='no') self%exec_binary%to_char()//' '//job_str%to_char()
         ! direct output
         write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
         ! exit shell when done
@@ -359,10 +366,10 @@ contains
         write(funit,'(a)') 'exit'
         call fclose(funit)
         if( q_descr%get('qsys_name').eq.'local' )then
-            ios = simple_chmod(trim(self%script_names(ipart)),'+x')
+            ios = simple_chmod(self%script_names(ipart),'+x')
             if( ios .ne. 0 )then
                 write(logfhandle,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
-                write(logfhandle,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
+                write(logfhandle,'(a)') 'chmoding submit script'//self%script_names(ipart)%to_char()
                 stop
             endif
         endif
@@ -374,17 +381,18 @@ contains
 
     !>  \brief  public script generator for single jobs
     subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile, exit_code_fname )
-        class(qsys_ctrl),           intent(in) :: self
-        class(chash),               intent(in) :: job_descr
-        class(chash),               intent(in) :: q_descr
-        character(len=*),           intent(in) :: exec_bin, script_name
-        character(len=*), optional, intent(in) :: outfile
-        character(len=*), optional, intent(in) :: exit_code_fname
+        class(qsys_ctrl),        intent(in) :: self
+        class(chash),            intent(in) :: job_descr
+        class(chash),            intent(in) :: q_descr
+        class(string),           intent(in) :: exec_bin, script_name
+        class(string), optional, intent(in) :: outfile
+        class(string), optional, intent(in) :: exit_code_fname
         character(len=512) :: io_msg
-        integer :: ios, funit
+        type(string) :: job_str
+        integer      :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_script_2; Error when opening file: '//&
-            &trim(script_name)//' ; '//trim(io_msg),ios )
+            &script_name%to_char()//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write (run-time polymorphic) instructions to the qsys
@@ -393,14 +401,15 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(cwd_glob)
+        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! compose the command line
-        write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
+        job_str = job_descr%chash2str()
+        write(funit,'(a)',advance='no') exec_bin%to_char()//' '//job_str%to_char()
         ! direct output
         if( present(outfile) )then
             ! unique output
-            write(funit,'(a)') ' > '//trim(outfile)//' '//STDERR2STDOUT
+            write(funit,'(a)') ' > '//outfile%to_char()//' '//STDERR2STDOUT
         else
             ! subprocess, global output
             write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
@@ -408,18 +417,18 @@ contains
         ! exit code
         if( present(exit_code_fname) )then
             write(funit,'(a)') ''
-            write(funit,'(a)') 'echo $? > '//trim(exit_code_fname)
+            write(funit,'(a)') 'echo $? > '//exit_code_fname%to_char()
         endif
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
         call fclose(funit)
         call wait_for_closure(script_name)
-        if( trim(q_descr%get('qsys_name')).eq.'local' )then
-            ios=simple_chmod(trim(script_name),'+x')
+        if( q_descr%get('qsys_name').eq.'local' )then
+            ios=simple_chmod(script_name,'+x')
             if( ios .ne. 0 )then
                 write(logfhandle,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
-                write(logfhandle,'(a)') 'chmoding submit script'//trim(script_name)
+                write(logfhandle,'(a)') 'chmoding submit script'//script_name%to_char()
                 stop
             end if
         endif
@@ -427,17 +436,17 @@ contains
 
         !>  \brief  public script generator for single jobs
     subroutine generate_script_4( self, jobs_descr, q_descr, exec_bin, script_name, outfile, exec_bins )
-        class(qsys_ctrl),               intent(in) :: self
-        type(chash),  allocatable,       intent(in) :: jobs_descr(:)
-        class(chash),                    intent(in) :: q_descr
-        character(len=*),                intent(in) :: exec_bin, script_name, outfile
-        character(len=STDLEN), optional, intent(in) :: exec_bins(:)
-        character(len=:), allocatable :: execution_binary
+        class(qsys_ctrl),          intent(in) :: self
+        type(chash),  allocatable, intent(in) :: jobs_descr(:)
+        class(chash),              intent(in) :: q_descr
+        class(string),             intent(in) :: exec_bin, script_name, outfile
+        class(string), optional,   intent(in) :: exec_bins(:)
+        type(string) :: execution_binary, job_str
         character(len=512) :: io_msg
         integer :: ios, funit, i, njobs
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_script_4; Error when opening file: '//&
-            &trim(script_name)//' ; '//trim(io_msg),ios )
+            &script_name%to_char()//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write (run-time polymorphic) instructions to the qsys
@@ -446,7 +455,7 @@ contains
         else
             call self%myqsys%write_instr(jobs_descr(1), fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(cwd_glob)
+        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! compose the command line
         njobs = size(jobs_descr)
@@ -458,32 +467,34 @@ contains
         if( njobs > 1 )then
             do i = 1,njobs-1
                 if( present(exec_bins) )then
-                    execution_binary = trim(exec_bins(i))
+                    execution_binary = exec_bins(i)
                 else
-                    execution_binary = trim(exec_bin)
+                    execution_binary = exec_bin
                 endif
-                write(funit,'(a)',advance='no') trim(execution_binary)//' '//trim(jobs_descr(i)%chash2str())
-                write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//trim(outfile)
+                job_str = jobs_descr(i)%chash2str()
+                write(funit,'(a)',advance='no') execution_binary%to_char()//' '//job_str%to_char()
+                write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//outfile%to_char()
                 write(funit,'(a)') ''
             enddo
         endif
         if( present(exec_bins) )then
-            execution_binary = trim(exec_bins(njobs))
+            execution_binary = exec_bins(njobs)
         else
-            execution_binary = trim(exec_bin)
+            execution_binary = exec_bin
         endif
-        write(funit,'(a)',advance='no') trim(execution_binary)//' '//trim(jobs_descr(njobs)%chash2str())
-        write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//trim(outfile)
+        job_str = jobs_descr(njobs)%chash2str()
+        write(funit,'(a)',advance='no') execution_binary%to_char()//' '//job_str%to_char()
+        write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//outfile%to_char()
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
         call fclose(funit)
         call wait_for_closure(script_name)
-        if( trim(q_descr%get('qsys_name')).eq.'local' )then
-            ios=simple_chmod(trim(script_name),'+x')
+        if( q_descr%get('qsys_name').eq.'local' )then
+            ios=simple_chmod(script_name,'+x')
             if( ios .ne. 0 )then
                 write(logfhandle,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_4; Error'
-                write(logfhandle,'(a)') 'chmoding submit script'//trim(script_name)
+                write(logfhandle,'(a)') 'chmoding submit script'//script_name%to_char()
                 stop
             end if
         endif
@@ -493,16 +504,17 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         class(cmdline),   intent(in)    :: cline
         class(chash),     intent(in)    :: q_descr
-        character(len=*), intent(in)    :: script_name, prgoutput
+        class(string),    intent(in)    :: script_name, prgoutput
         type(chash)        :: job_descr
         character(len=512) :: io_msg
         integer            :: ios, funit
+        type(string)       :: job_str
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! open for write
-        call fopen(funit, file=trim(script_name), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
-        &//trim(script_name)//' ; '//trim(io_msg),ios )
+        &//script_name%to_char()//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write (run-time polymorphic) instructions to the qsys
@@ -511,25 +523,26 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(cwd_glob)
+        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! compose the command line
-        write(funit,'(a)', advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
+        job_str = job_descr%chash2str()
+        write(funit,'(a)', advance='no') self%exec_binary%to_char()//' '//job_str%to_char()
         ! direct output
-        write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//trim(prgoutput)
+        write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//prgoutput%to_char()
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
         call fclose(funit)
         if( q_descr%get('qsys_name').eq.'local' )then
-            ios = simple_chmod(trim(script_name),'+x')
+            ios = simple_chmod(script_name,'+x')
             if( ios .ne. 0 )then
                 write(logfhandle,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
-                write(logfhandle,'(a)') 'chmoding submit script'//trim(script_name)
+                write(logfhandle,'(a)') 'chmoding submit script'//script_name%to_char()
                 stop
             endif
         endif
-        call wait_for_closure(trim(script_name))
+        call wait_for_closure(script_name)
         call job_descr%kill
     end subroutine generate_script_3
 
@@ -538,8 +551,7 @@ contains
     subroutine submit_scripts( self )
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl), intent(inout) :: self
-        character(len=LONGSTRLEN) :: qsys_cmd
-        character(len=STDLEN)     :: script_name
+        type(string):: qsys_cmd, script_name
         integer :: ipart, submission_exitstat, submission_retry
         logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         ! make a submission mask
@@ -561,20 +573,20 @@ contains
         ! on the fly submission
         do ipart=self%fromto_part(1),self%fromto_part(2)
             if( submit_or_not(ipart) )then
-                script_name = filepath(PATH_HERE, trim(adjustl(self%script_names(ipart))))
-                if( .not.file_exists(trim(script_name)))then
-                    write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
+                script_name = filepath(string(PATH_HERE), self%script_names(ipart))
+                if( .not.file_exists(script_name))then
+                    write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:',script_name%to_char()
                 endif
                 select type( pmyqsys => self%myqsys )
                     class is(qsys_local)
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(script_name)//' '//SUPPRESS_MSG//'&'
+                        qsys_cmd = self%myqsys%submit_cmd()//' '//script_name%to_char()//' '//SUPPRESS_MSG//'&'
                     class DEFAULT
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(script_name)
+                        qsys_cmd = self%myqsys%submit_cmd()//' '//script_name%to_char()
                 end select
                 ! attempt to execute the command up to QSYS_SUBMISSION_RETRY_LIMIT
                 submission_exitstat = -1
                 do submission_retry = 1, QSYS_SUBMISSION_RETRY_LIMIT
-                    call exec_cmdline(trim(adjustl(qsys_cmd)), exitstat=submission_exitstat)
+                    call exec_cmdline(qsys_cmd, exitstat=submission_exitstat)
                     if(submission_exitstat == 0) then
                         exit
                     else
@@ -589,27 +601,24 @@ contains
     end subroutine submit_scripts
 
     subroutine submit_script( self, script_name )
-        use simple_qsys_local,   only: qsys_local
+        use simple_qsys_local, only: qsys_local
         class(qsys_ctrl), intent(inout) :: self
-        character(len=*), intent(in)    :: script_name
-        character(len=STDLEN) :: cmd
+        class(string),    intent(in)    :: script_name
+        type(string) :: cmd
         integer :: submission_exitstat, submission_retry
-        if( .not.file_exists(filepath(PATH_HERE,trim(script_name))))then
-            write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
+        if( .not.file_exists(filepath(string(PATH_HERE),script_name)))then
+            write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:', script_name%to_char()
         endif
         select type( pmyqsys => self%myqsys )
             type is (qsys_local)
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
-                    &filepath(trim(cwd_glob),trim(script_name))//' '//&
-                    &SUPPRESS_MSG//'&'
+                cmd = self%myqsys%submit_cmd()//' '//filepath(string(CWD_GLOB),script_name)//' '//SUPPRESS_MSG//'&'
             class DEFAULT
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
-                    &filepath(trim(cwd_glob),trim(script_name))
+                cmd = self%myqsys%submit_cmd()//' '//filepath(string(CWD_GLOB),script_name)
         end select
         ! attempt to execute the command up to QSYS_SUBMISSION_RETRY_LIMIT
         submission_exitstat = -1
         do submission_retry = 1, QSYS_SUBMISSION_RETRY_LIMIT
-            call exec_cmdline(trim(cmd), exitstat=submission_exitstat)
+            call exec_cmdline(cmd, exitstat=submission_exitstat)
             if(submission_exitstat == 0) return    
             write(logfhandle,'(A,A,A)')'qsys submission failed. Retrying in ', int2str(QSYS_SUBMISSION_RETRY_SLEEP * (QSYS_SUBMISSION_RETRY_MULTI ** submission_retry)), ' seconds'
             call sleep(QSYS_SUBMISSION_RETRY_SLEEP * (QSYS_SUBMISSION_RETRY_MULTI ** submission_retry))
@@ -669,7 +678,7 @@ contains
 
     subroutine schedule_array_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
-        call self%submit_script(ARRAY_SCRIPT)
+        call self%submit_script(string(ARRAY_SCRIPT))
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
@@ -680,17 +689,17 @@ contains
     ! STREAMING
 
     subroutine schedule_streaming( self, q_descr, path )
-        class(qsys_ctrl),            intent(inout) :: self
-        class(chash),                intent(in)    :: q_descr
-        character(len=*),  optional, intent(in)    :: path
+        class(qsys_ctrl),         intent(inout) :: self
+        class(chash),             intent(in)    :: q_descr
+        class(string),  optional, intent(in)    :: path
         type(chash)                :: job_descr
-        character(len=XLONGSTRLEN) :: cwd, cwd_old
-        integer                    :: ipart
+        type(string) :: cwd, cwd_old
+        integer      :: ipart
         if( present(path) )then
-            cwd_old = trim(cwd_glob)
-            call chdir(path)
+            cwd_old = trim(CWD_GLOB)
+            call simple_chdir(path%to_char())
             call simple_getcwd(cwd)
-            cwd_glob = trim(cwd)
+            CWD_GLOB = cwd%to_char()
         endif
         call self%update_queue
         if( self%cline_stacksz /= 0 )then
@@ -714,8 +723,8 @@ contains
             endif
         endif
         if( present(path) )then
-            call chdir(cwd_old)
-            cwd_glob = trim(cwd_old)
+            call simple_chdir(cwd_old%to_char())
+            CWD_GLOB = cwd_old%to_char()
         endif
         call job_descr%kill
         contains
@@ -742,6 +751,7 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         class(cmdline),   intent(in)    :: cline
         class(cmdline), allocatable :: tmp_stack(:)
+        integer :: i
         if( .not. allocated(self%stream_cline_stack) )then
             ! empty stack
             allocate( self%stream_cline_stack(1), source=cline)
@@ -751,8 +761,10 @@ contains
             call move_alloc(self%stream_cline_stack, tmp_stack)
             self%cline_stacksz = self%cline_stacksz + 1
             allocate(self%stream_cline_stack(self%cline_stacksz))
-            self%stream_cline_stack(1:self%cline_stacksz-1) = tmp_stack(1:self%cline_stacksz-1)
-            self%stream_cline_stack(self%cline_stacksz)     = cline
+            do i = 1,self%cline_stacksz-1
+                self%stream_cline_stack(i) = tmp_stack(i)
+            enddo
+            self%stream_cline_stack(self%cline_stacksz) = cline
             call tmp_stack(:)%kill
             deallocate(tmp_stack)
         endif
@@ -764,7 +776,7 @@ contains
         class(cmdline),              intent(in)    :: cline
         class(cmdline), allocatable, intent(inout) :: stack(:)
         class(cmdline), allocatable :: tmp_stack(:)
-        integer :: stacksz
+        integer :: stacksz, i
         if( .not.cline%defined('prg') )return
         if( .not. allocated(stack) )then
             ! empty stack
@@ -775,13 +787,14 @@ contains
             call move_alloc(stack, tmp_stack)
             stacksz = stacksz + 1
             allocate(stack(stacksz))
-            stack(1:stacksz-1) = tmp_stack(1:stacksz-1)
-            stack(stacksz)     = cline
+            do i = 1, stacksz-1
+                stack(i) = tmp_stack(i)
+            enddo
+            stack(stacksz) = cline
             call tmp_stack(:)%kill
             deallocate(tmp_stack)
         endif
     end subroutine add_to_stream_stack
-
 
     !>  \brief  is to get the streaming command-line stack of DONE jobs, which also deallocates it
     subroutine get_stream_done_stack( self, clines )
@@ -861,10 +874,21 @@ contains
             self%cline_stacksz          =  0
             deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames,&
             &self%jobs_exit_code_fnames, self%jobs_submitted)
-            if(allocated(self%stream_cline_stack))     deallocate(self%stream_cline_stack)
-            if(allocated(self%stream_cline_submitted)) deallocate(self%stream_cline_submitted)
-            if(allocated(self%stream_cline_done_stack))deallocate(self%stream_cline_done_stack)
-            if(allocated(self%stream_cline_fail_stack))deallocate(self%stream_cline_fail_stack)
+            if(allocated(self%stream_cline_stack))then
+                deallocate(self%stream_cline_stack)
+            endif
+            if(allocated(self%stream_cline_submitted))then
+                call self%stream_cline_submitted(:)%kill
+                deallocate(self%stream_cline_submitted)
+            endif
+            if(allocated(self%stream_cline_done_stack))then
+                call self%stream_cline_done_stack(:)%kill
+                deallocate(self%stream_cline_done_stack)
+            endif
+            if(allocated(self%stream_cline_fail_stack))then
+                call self%stream_cline_fail_stack(:)%kill
+                deallocate(self%stream_cline_fail_stack)
+            endif
             self%existence = .false.
         endif
     end subroutine kill

@@ -424,14 +424,12 @@ contains
 
     subroutine test_jpg_export()
         use,intrinsic :: iso_c_binding
-        implicit none
         integer, allocatable :: int32_buffer(:,:)
         real,    allocatable :: real32_buffer(:,:)
-        character(len=:), allocatable :: simple_path_str
-        character(len=:), allocatable :: testimg
-        integer :: status, bmp_size , width , height , pixel_size
-        character(len=:), allocatable :: cmd, fstr
-        type(jpg_img)                 :: jpg
+        character(len=:), allocatable :: fstr
+        type(string)  :: simple_path_str, testimg, cmd
+        integer       :: status, bmp_size , width , height , pixel_size 
+        type(jpg_img) :: jpg
         logical :: passed
         debug      = .true.
         passed     = .true.
@@ -443,15 +441,15 @@ contains
         simple_path_str = simple_getenv('SIMPLE_PATH', status)
         if(status/=0) THROW_HARD("SIMPLE_PATH not found in environment")
         write(logfhandle,*)"test_jpg_export: Starting"
-        allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")
-        allocate(cmd, source="cp "//trim(adjustl(testimg))//" ./; convert testimg.jpg -colorspace Gray  test.jpg")
+        testimg = simple_path_str%to_char()//"/bin/gui/ext/src/jpeg/testimg.jpg"
+        cmd     = "cp "//testimg%to_char()//" ./; convert testimg.jpg -colorspace Gray  test.jpg"
         if(.not. file_exists("test.jpg")) then
             if(.not. file_exists(testimg)) THROW_HARD("the jpeglib testimg needed to run test")
-            write(logfhandle,*)" Executing ", cmd
+            write(logfhandle,*)" Executing ", cmd%to_char()
             call exec_cmdline(cmd)
         end if
-        deallocate(cmd)
-        allocate(cmd, source="identify  test.jpg")
+        call cmd%kill
+        cmd ="identify  test.jpg"
         call exec_cmdline(cmd)
         write(logfhandle,*)"test_jpg_export: Testing load_jpeg_i4 "
         allocate(fstr, source="test.jpg")
@@ -521,9 +519,9 @@ contains
         if(status==1) THROW_HARD("save_jpeg real32 failed")
         if (allocated(int32_buffer)) deallocate(int32_buffer)
         if (allocated(real32_buffer)) deallocate(real32_buffer)
-        if (allocated(simple_path_str)) deallocate( simple_path_str)
-        if (allocated(testimg)) deallocate( testimg)
-        if (allocated(cmd)) deallocate(cmd)
+        call simple_path_str%kill
+        call testimg%kill
+        call cmd%kill
         if (allocated(fstr))  deallocate(fstr)
     end subroutine test_jpg_export
 

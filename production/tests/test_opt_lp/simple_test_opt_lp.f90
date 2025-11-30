@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
-use simple_commanders_volops,   only: commander_reproject
+use simple_commanders_volops,  only: commander_reproject
 use simple_image,              only: image
 use simple_butterworth,        only: butterworth_filter
 implicit none
@@ -13,7 +13,7 @@ type(image)                   :: img, noise, img_noisy, img_filt
 type(commander_reproject)     :: xreproject
 integer                       :: nptcls, rc, iptcl, find_stop, find_start, n_bin, n_vec, find_cur
 real                          :: ave, sdev, maxv, minv, noise_mean, noise_std
-character(len=:), allocatable :: cmd
+type(string)                  :: cmd
 logical                       :: mrc_exists
 real,             allocatable :: cur_fil(:), vec_noise(:), xhist(:), yest(:)
 integer,          allocatable :: yhist(:)
@@ -26,12 +26,12 @@ if( command_argument_count() < 4 )then
     if( .not. mrc_exists )then
         write(*, *) 'Downloading the example dataset...'
         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
-        call execute_command_line(cmd, exitstat=rc)
+        call execute_command_line(cmd%to_char(), exitstat=rc)
         write(*, *) 'Converting .pdb to .mrc...'
         cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
-        call execute_command_line(cmd, exitstat=rc)
+        call execute_command_line(cmd%to_char(), exitstat=rc)
         cmd = 'rm 1JYX.pdb'
-        call execute_command_line(cmd, exitstat=rc)
+        call execute_command_line(cmd%to_char(), exitstat=rc)
         write(*, *) 'Projecting 1JYX.mrc...'
         call cline_projection%set('vol1'      , '1JYX.mrc')
         call cline_projection%set('smpd'      , 1.)
@@ -81,7 +81,7 @@ do iptcl = 1, 1
     call noise%gauran(0., .2 * sdev)
     call noise%mask(1.5 * p%msk, 'soft')
     call img_noisy%add(noise)
-    call img_noisy%write('stk_noisy.mrc', iptcl)
+    call img_noisy%write(string('stk_noisy.mrc'), iptcl)
     call img_noisy%get_rmat_ptr(rmat_img_noisy)
     ! find_cur = int((find_start + find_stop)/2.)
     ! find_cur = int(find_start + 50)
@@ -92,7 +92,7 @@ do iptcl = 1, 1
         call img_filt%apply_filter(cur_fil)
         call img_filt%ifft
         call img_filt%add(img_noisy)
-        call img_filt%write('stk_filt.mrc', iptcl)
+        call img_filt%write(string('stk_filt.mrc'), iptcl)
         call img_filt%get_rmat_ptr( rmat_img_filt )
         vec_noise = [rmat_img_noisy] - [rmat_img_filt]
         call avg_sdev(vec_noise, noise_mean, noise_std)

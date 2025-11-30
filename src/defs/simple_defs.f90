@@ -39,7 +39,7 @@ complex(sp), parameter :: CMPLX_ZERO   = cmplx(0.,0.)
 complex(dp), parameter :: DCMPLX_ZERO  = cmplx(0.d0,0.d0, kind=dp)
 
 ! directory-based execution model
-character(len=:), allocatable :: cwd_glob_orig, cwd_glob
+character(len=:), allocatable :: CWD_GLOB_ORIG, CWD_GLOB
 character(len=*), parameter   :: LOGFNAME   = 'simple.log'     !< log file name
 integer                       :: logfhandle = OUTPUT_UNIT      !< log file handle, default to STDOUT
 logical, parameter            :: STDOUT2LOG = .false.
@@ -57,11 +57,6 @@ logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate m
 logical,          parameter   :: L_DEV_GLOB         = .false.  !< global development flag
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
-
-! type for arrays of allocatable strings
-type str4arr
-    character(len=:), allocatable :: str
-end type str4arr
 
 ! CTF flag type
 enum, bind(c)

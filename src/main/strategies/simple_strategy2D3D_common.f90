@@ -3,12 +3,12 @@ module simple_strategy2D3D_common
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,             only: image
-use simple_cmdline,           only: cmdline
 use simple_builder,           only: build_glob
+use simple_cmdline,           only: cmdline
+use simple_discrete_stack_io, only: dstack_io
+use simple_image,             only: image
 use simple_parameters,        only: params_glob
 use simple_stack_io,          only: stack_io
-use simple_discrete_stack_io, only: dstack_io
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
@@ -68,8 +68,8 @@ contains
     end subroutine killimgbatch
 
     subroutine read_imgbatch_1( fromptop )
-        integer,           intent(in) :: fromptop(2)
-        character(len=:), allocatable :: stkname
+        integer, intent(in) :: fromptop(2)
+        type(string) :: stkname
         integer :: iptcl, ind_in_batch, ind_in_stk
         do iptcl=fromptop(1),fromptop(2)
             ind_in_batch = iptcl - fromptop(1) + 1
@@ -86,8 +86,8 @@ contains
     end subroutine read_imgbatch_1
 
     subroutine read_imgbatch_2( n, pinds, batchlims )
-        integer,          intent(in)  :: n, pinds(n), batchlims(2)
-        character(len=:), allocatable :: stkname
+        integer, intent(in)  :: n, pinds(n), batchlims(2)
+        type(string) :: stkname
         integer :: ind_in_stk, i, ii
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
@@ -104,9 +104,9 @@ contains
     end subroutine read_imgbatch_2
 
     subroutine read_imgbatch_3( iptcl, img )
-        integer,          intent(in)    :: iptcl
-        class(image),      intent(inout) :: img
-        character(len=:), allocatable   :: stkname
+        integer,      intent(in)    :: iptcl
+        class(image), intent(inout) :: img
+        type(string) :: stkname
         integer :: ind_in_stk
         call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
         if( .not. stkio_r%stk_is_open() )then
@@ -120,9 +120,9 @@ contains
     end subroutine read_imgbatch_3
 
     subroutine discrete_read_imgbatch( n, pinds, batchlims )
-        integer,          intent(in)  :: n, pinds(n), batchlims(2)
-        type(dstack_io)               :: dstkio_r
-        character(len=:), allocatable :: stkname
+        integer, intent(in)  :: n, pinds(n), batchlims(2)
+        type(dstack_io) :: dstkio_r
+        type(string) :: stkname
         integer :: ind_in_stk, i, ii
         call dstkio_r%new(params_glob%smpd, params_glob%box)
         do i=batchlims(1),batchlims(2)
@@ -135,12 +135,12 @@ contains
 
     subroutine set_bp_range( cline )
         class(cmdline), intent(in) :: cline
-        real, allocatable     :: resarr(:), fsc_arr(:)
-        real                  :: fsc0143, fsc05
-        real                  :: mapres(params_glob%nstates)
-        integer               :: s, loc(1), lp_ind, arr_sz, fsc_sz, nyqcrop_ind
-        character(len=STDLEN) :: fsc_fname
-        logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
+        real, allocatable :: resarr(:), fsc_arr(:)
+        real              :: fsc0143, fsc05
+        real              :: mapres(params_glob%nstates)
+        integer           :: s, loc(1), lp_ind, arr_sz, fsc_sz, nyqcrop_ind
+        type(string)      :: fsc_fname
+        logical           :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         if( params_glob%l_lpset )then
             ! set Fourier index range
             params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
@@ -150,9 +150,9 @@ contains
             endif
             ! FSC values are read anyway
             do s=1,params_glob%nstates
-                fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
+                fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
                 if( file_exists(fsc_fname) )then
-                    fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
+                    fsc_arr = file2rarr(fsc_fname)
                     fsc_sz  = size(build_glob%fsc(s,:))
                     arr_sz  = size(fsc_arr)
                     if( fsc_sz == arr_sz )then
@@ -173,8 +173,8 @@ contains
             all_fsc_bin_exist = .true.
             fsc_bin_exists    = .false.
             do s=1,params_glob%nstates
-                fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
-                fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
+                fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                fsc_bin_exists( s ) = file_exists(fsc_fname)
                 if( build_glob%spproj_field%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                     & all_fsc_bin_exist = .false.
             enddo
@@ -185,8 +185,8 @@ contains
                 resarr = build_glob%img%get_res()
                 do s=1,params_glob%nstates
                     if( fsc_bin_exists(s) )then
-                        fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
-                        fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
+                        fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                        fsc_arr = file2rarr(fsc_fname)
                         fsc_sz  = size(build_glob%fsc(s,:))
                         arr_sz  = size(fsc_arr)
                         if( fsc_sz == arr_sz )then
@@ -285,10 +285,12 @@ contains
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
         type(class_sample),   allocatable   :: clssmp(:)
+        type(string) :: fname
+        fname = CLASS_SAMPLING_FILE
         if( params_glob%l_update_frac )then
             if( trim(params_glob%balance).eq.'yes' )then
-                if( file_exists(CLASS_SAMPLING_FILE) )then
-                    call read_class_samples(clssmp, CLASS_SAMPLING_FILE)
+                if( file_exists(fname) )then
+                    call read_class_samples(clssmp, fname)
                 else
                     THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exist!')
                 endif
@@ -309,6 +311,7 @@ contains
             ! we sample all state > 0
             call build_glob%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
         endif
+        call fname%kill
     end subroutine sample_ptcls4update
 
     subroutine sample_ptcls4fillin( pfromto, l_incr_sampl, nptcls2update, pinds )
@@ -407,22 +410,22 @@ contains
                 endif
             else
                 select case(trim(params_glob%center_type))
-                case('params')
-                    call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
-                    if( arg(xy_cavg) < CENTHRESH )then
-                        xyz = 0.
-                    else if( arg(xy_cavg) > MAXCENTHRESH2D )then
-                        xyz(1:2) = xy_cavg * crop_factor
-                        xyz(3)   = 0.
-                    else
+                    case('params')
+                        call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
+                        if( arg(xy_cavg) < CENTHRESH )then
+                            xyz = 0.
+                        else if( arg(xy_cavg) > MAXCENTHRESH2D )then
+                            xyz(1:2) = xy_cavg * crop_factor
+                            xyz(3)   = 0.
+                        else
+                            xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                            if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
+                        endif
+                    case('seg')
+                        call calc_cavg_offset(img_in, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
+                        xyz = [xy_cavg(1), xy_cavg(2), 0.]
+                    case('mass')
                         xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                        if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
-                    endif
-                case('seg')
-                    call calc_cavg_offset(img_in, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
-                    xyz = [xy_cavg(1), xy_cavg(2), 0.]
-                case('mass')
-                    xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                 end select
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
@@ -492,12 +495,12 @@ contains
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol
     subroutine calcrefvolshift_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz, map_shift )
-        class(cmdline),   intent(in)  :: cline
-        integer,          intent(in)  :: s
-        character(len=*), intent(in)  :: volfname
-        logical,          intent(out) :: do_center
-        real,             intent(out) :: xyz(3)
-        logical,          intent(in)  :: map_shift
+        class(cmdline), intent(in)  :: cline
+        integer,        intent(in)  :: s
+        class(string),  intent(in)  :: volfname
+        logical,        intent(out) :: do_center
+        real,           intent(out) :: xyz(3)
+        logical,        intent(in)  :: map_shift
         real    :: crop_factor
         logical :: has_been_searched
         do_center = .true.
@@ -532,8 +535,8 @@ contains
     subroutine estimate_lp_refvols( lpfromto )
         use simple_opt_filter, only: estimate_lplim
         real, optional, intent(in)    :: lpfromto(2)
-        character(len=:), allocatable :: vol_even, vol_odd, tmp
-        real,             allocatable :: res(:)
+        type(string)       :: vol_even, vol_odd, tmp
+        real, allocatable  :: res(:)
         logical, parameter :: DEBUG=.false.
         type(image) :: mskvol
         integer     :: npix, s, loc
@@ -567,7 +570,7 @@ contains
         vol_odd  = params_glob%vols_odd(loc)
         if( params_glob%l_ml_reg )then
             ! estimate low-pass limit from unfiltered volumes
-            tmp = add2fbody(vol_even,params_glob%ext,'_unfil')
+            tmp = add2fbody(vol_even, params_glob%ext,'_unfil')
             if( file_exists(tmp) ) vol_even = tmp
             tmp = add2fbody(vol_odd, params_glob%ext,'_unfil')
             if( file_exists(tmp) ) vol_even = tmp
@@ -601,9 +604,9 @@ contains
     end subroutine estimate_lp_refvols
 
     subroutine read_mask_and_filter_refvols( s )
-        integer, intent(in) :: s
-        character(len=:), allocatable :: vol_even, vol_odd, vol_avg
-        logical,          allocatable :: l_msk(:,:,:)
+        integer,  intent(in) :: s
+        type(string)         :: vol_even, vol_odd, vol_avg
+        logical, allocatable :: l_msk(:,:,:)
         real    :: cur_fil(params_glob%box_crop)
         integer :: filtsz
         ! READ
@@ -1002,7 +1005,7 @@ contains
                         call numimg%ctf_dens_correct(denomimg)
                         call numimg%ifft
                         call numimg%clip_inplace([params_glob%box_crop,params_glob%box_crop,1])
-                        call numimg%write('projdirs_even_state'//int2str(s)//'.mrc',iproj)
+                        call numimg%write(string('projdirs_even_state'//int2str(s)//'.mrc'),iproj)
                     endif
                 enddo
                 call numimg%kill
@@ -1037,10 +1040,9 @@ contains
     subroutine norm_struct_facts( cline )
         use simple_image,  only: image
         class(cmdline),    intent(inout) :: cline
-        character(len=:),  allocatable   :: recname, volname, volname_prev, volname_prev_even
-        character(len=:),  allocatable   :: volname_prev_odd, str_state, str_iter, fsc_txt_file
-        character(len=LONGSTRLEN)        :: eonames(2)
-        real,              allocatable   :: fsc(:)
+        type(string) :: recname, volname, volname_prev, volname_prev_even
+        type(string) :: volname_prev_odd, str_state, str_iter, fsc_txt_file, eonames(2)
+        real, allocatable :: fsc(:)
         type(image) :: vol_prev_even, vol_prev_odd
         integer     :: s, find4eoavg, ldim(3)
         real        :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
@@ -1069,17 +1071,16 @@ contains
             endif
             call build_glob%eorecvols(s)%compress_exp
             if( params_glob%l_distr_exec )then
-                call build_glob%eorecvols(s)%write_eos(VOL_FBODY//int2str_pad(s,2)//'_part'//&
-                    int2str_pad(params_glob%part,params_glob%numlen))
+                call build_glob%eorecvols(s)%write_eos(string(VOL_FBODY)//int2str_pad(s,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen))
             else
                 ! global volume name update
-                recname = trim(VOL_FBODY)//int2str_pad(s,2)
+                recname = VOL_FBODY//int2str_pad(s,2)
                 volname = recname//params_glob%ext
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
-                eonames(1) = trim(recname)//'_even'//params_glob%ext
-                eonames(2) = trim(recname)//'_odd'//params_glob%ext
+                eonames(1) = recname//'_even'//params_glob%ext%to_char()
+                eonames(2) = recname//'_odd'//params_glob%ext%to_char()
                 if( params_glob%l_ml_reg )then
                     ! the sum is done after regularization
                 else
@@ -1090,8 +1091,8 @@ contains
                     volname_prev      = cline%get_carg('vol'//int2str(s))
                     volname_prev_even = add2fbody(volname_prev, params_glob%ext, '_even')
                     volname_prev_odd  = add2fbody(volname_prev, params_glob%ext, '_odd')
-                    if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//trim(volname_prev_even)//' does not exist!')
-                    if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//trim(volname_prev_odd)//' does not exist!')
+                    if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
+                    if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
                     call vol_prev_even%read_and_crop(volname_prev_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
                     call vol_prev_odd %read_and_crop(volname_prev_odd,  params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
                     if( allocated(fsc) ) deallocate(fsc)
@@ -1103,9 +1104,9 @@ contains
                 str_state = int2str_pad(s,2)
                 if( cline%defined('which_iter') )then
                     str_iter     = int2str_pad(params_glob%which_iter,3)
-                    fsc_txt_file = 'RESOLUTION_STATE'//str_state//'_ITER'//str_iter
+                    fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()//'_ITER'//str_iter%to_char()
                 else
-                    fsc_txt_file = 'RESOLUTION_STATE'//str_state
+                    fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()
                 endif
                 call build_glob%eorecvols(s)%write_fsc2txt(fsc_txt_file)
                 if( params_glob%l_ml_reg )then
@@ -1166,9 +1167,9 @@ contains
         integer,                  intent(in)    :: batchsz
         integer,                  intent(in)    :: which_iter
         logical,     optional,    intent(in)    :: do_polar
-        character(len=:),         allocatable   :: fname
-        integer :: ithr, iproj, nrefs
-        logical :: l_polar
+        type(string) :: fname
+        integer      :: ithr, iproj, nrefs
+        logical      :: l_polar
         l_polar = .false.
         if( present(do_polar) ) l_polar = do_polar
         ! PREPARATION OF PFTCC AND REFERENCES
@@ -1179,8 +1180,8 @@ contains
             call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
             ! Read polar references
             call polar_cavger_new(pftcc, .true.)
-            call polar_cavger_read_all(POLAR_REFS_FBODY//trim(BIN_EXT))
-            call build_glob%clsfrcs%read(FRCS_FILE)
+            call polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
+            call build_glob%clsfrcs%read(string(FRCS_FILE))
             ! PREPARATION OF REFERENCES IN PFTCC
             !$omp parallel do default(shared) private(iproj)&
             !$omp schedule(static) proc_bind(close)

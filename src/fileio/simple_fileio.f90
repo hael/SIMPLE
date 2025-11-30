@@ -1,5 +1,6 @@
 module simple_fileio
 use simple_defs
+use simple_string
 use simple_string_utils
 use simple_error
 use simple_syslib
@@ -16,21 +17,48 @@ interface arr2txtfile
     module procedure arr2txtfile_2
 end interface arr2txtfile
 
-interface filepath
-    module procedure filepath_1
-    module procedure filepath_2
-end interface filepath
-
 interface del_files
     module procedure del_files_1
     module procedure del_files_2
 end interface del_files
 
-integer, private, parameter :: MAX_UNIT_NUMBER = 1000
+interface add2fbody
+    module procedure add2fbody_1
+    module procedure add2fbody_2
+    module procedure add2fbody_3
+end interface add2fbody
+
+interface fname_new_ext
+    module procedure fname_new_ext_1
+    module procedure fname_new_ext_2
+end interface fname_new_ext
+
+interface filepath
+    module procedure filepath_1
+    module procedure filepath_2
+    module procedure filepath_3
+    module procedure filepath_4
+end interface filepath
+
+interface append2basename
+    module procedure append2basename_1
+    module procedure append2basename_2
+end interface append2basename
+
+interface swap_suffix
+    module procedure swap_suffix_1
+    module procedure swap_suffix_2
+end interface swap_suffix
+
+interface get_fbody
+    module procedure get_fbody_1
+    module procedure get_fbody_2
+end interface get_fbody
+
 
 contains
 
-    subroutine fileiochk( message, iostat , die)
+    subroutine fileiochk( message, iostat , die )
         character(len=*),  intent(in) :: message  !< error message
         integer,           intent(in) :: iostat   !< error status
         logical, optional, intent(in) :: die      !< do you want to terminate or not
@@ -51,32 +79,31 @@ contains
     subroutine fopen(funit, file, status, action, iostat, access, form, recl, async, pad,&
         &decimal, round, delim, blank, convert, iomsg, position, errmsg)
         integer,                    intent(inout) :: funit
-        character(len=*),           intent(in)    :: file
+        class(string),              intent(in)    :: file
         integer,          optional, intent(inout) :: iostat
         integer,          optional, intent(inout) :: recl
         character(len=*), optional, intent(in)    :: status, access, async, action, &
             &blank, pad, form, decimal, round, delim, convert, iomsg, position, errmsg
         integer               :: iostat_this,  recl_this
-        character(len=STDLEN) :: filename,iomsg_this
+        character(len=STDLEN) :: iomsg_this
         character(len=30)     :: async_this, access_this, action_this, status_this,&
             &blank_this, pad_this, decimal_this, delim_this, form_this, round_this,&
             &position_this, errmsg_this
-        ! check to see if filename is empty
-        write(filename,'(A)') trim(adjustl(file))
-        if ( str_is_blank(filename) )then
+        ! check to see if file is empty
+        if( file%is_blank() )then
             write(logfhandle,*) 'simple_system::fopen filename blank'
             if(present(iomsg))  write(logfhandle,*) trim(adjustl(iomsg))
             if(present(errmsg)) write(logfhandle,*) "Message: ", trim(adjustl(errmsg))
             return
-        end if
+        endif
         errmsg_this="In simple_fileio::fopen "
         if (present(errmsg)) errmsg_this=errmsg
         if (.not. (present(iostat) .or. present(form) .or. present(recl) .or.&
             & present(async) .or. present(pad) .or. present(action) .or. present(status)&
             & .or. present(position) .or. present(access) .or. present(decimal) .or. &
             present(round) .or. present(delim) .or. present(blank) ) )then
-            open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
-            call fileiochk(trim(adjustl(errmsg_this))//" fopen basic open "//trim(filename), iostat_this,.false.)
+            open(NEWUNIT=funit, FILE=file%to_char(),IOSTAT=iostat_this)
+            call fileiochk(trim(adjustl(errmsg_this))//" fopen basic open "//file%to_char(), iostat_this,.false.)
             if(is_io(funit)) THROW_HARD( "newunit returned "//int2str(funit))
             return ! if ok
         end if
@@ -88,28 +115,28 @@ contains
         write(status_this,'(A)') 'UNKNOWN'
         write(position_this,'(A)') 'APPEND'
         if (present(status))then
-            if (strings_are_equal(status, 'OLD',.false.))     write(status_this,'(A)')  upperCase(status)
-            if (strings_are_equal(status, 'SCRATCH',.false.)) write(status_this,'(A)')  upperCase(status)
+            if (strings_are_equal(status, 'OLD',    .false.)) write(status_this, '(A)') upperCase(status)
+            if (strings_are_equal(status, 'SCRATCH',.false.)) write(status_this, '(A)') upperCase(status)
             if (strings_are_equal(status, 'REPLACE',.false.)) write(status_this ,'(A)') upperCase(status)
-            if (strings_are_equal(status, 'NEW',.false.))     write( status_this,'(A)')  upperCase(status)
+            if (strings_are_equal(status, 'NEW',    .false.)) write(status_this, '(A)') upperCase(status)
         end if
         ! ACTION: READ, WRITE, or READWRITE (default).
         if (present(action))then
-            if (strings_are_equal(action, 'WRITE',.false.)) write(action_this ,'(A)') upperCase(action)
-            if (strings_are_equal(action, 'READ',.false.))  write(action_this ,'(A)') upperCase(action)
+            if (strings_are_equal(action, 'WRITE',  .false.)) write(action_this ,'(A)') upperCase(action)
+            if (strings_are_equal(action, 'READ',   .false.)) write(action_this ,'(A)') upperCase(action)
         end if
         if ( (strings_are_equal(status_this, 'NEW',.false.))  .and. &
             (strings_are_equal(action_this, 'READ',.false.))  .and. &
-            (.not. file_exists(filename) ) )then
-            write(logfhandle,*) "::fopen incompatible status=NEW and action=READ ", trim(filename)," does not exist"
+            (.not. file_exists(file) ) )then
+            write(logfhandle,*) "::fopen incompatible status=NEW and action=READ ", file%to_char()," does not exist"
             return ! false
         end if
         if(present(position)) then
             if ( (strings_are_equal(status_this, 'OLD',.false.))  .and. &
                 (strings_are_equal(position, 'APPEND',.false.))  .and. &
-                (.not. file_exists(filename) ) )then
+                (.not. file_exists(file) ) )then
                 write(logfhandle,*) "::fopen incompatible status=OLD and position=APPEND  when ",&
-                    trim(filename)," does not exist"
+                    file%to_char()," does not exist"
                 write( status_this,'(A)')  upperCase('NEW')
             end if
         end if
@@ -131,19 +158,19 @@ contains
                 if (present(action))then
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,RECL=recl_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,RECL=recl_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
                     end if
                 else ! no action
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,RECL=recl_this,&
                             &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
                             &STATUS=status_this,ACCESS=access_this,RECL=recl_this)
                     end if
                 end if
@@ -151,24 +178,23 @@ contains
                 if (present(action))then
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
                     end if
                 else ! no action
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
                             &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
                             &STATUS=status_this,ACCESS=access_this)
                     end if
                 end if
             end if
-            ! call fileiochk(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
             if(present(iostat))iostat=iostat_this
             if(funit/=0 .and. is_io(funit)) THROW_HARD("newunit returned "//int2str(funit))
             return
@@ -210,31 +236,31 @@ contains
         if(present(iomsg)) iomsg_this=iomsg
         ! execute open under specific conditions
         if (strings_are_equal(form_this, 'FORMATTED',.false.)) then
-            open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+            open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
                 &ACTION=action_this,STATUS=status_this,ACCESS=access_this,&
                 &BLANK=blank_this,FORM='FORMATTED', ROUND=round_this,&
                 &IOMSG=iomsg_this)
         else
             if (strings_are_equal(access_this, 'DIRECT',.false.))then
-                open( NEWUNIT=funit, FILE=filename, IOSTAT=iostat_this, &
+                open( NEWUNIT=funit, FILE=file%to_char(), IOSTAT=iostat_this, &
                     &ACTION=action_this, STATUS=status_this,&
                     &ACCESS=access_this, FORM=form_this, RECL=recl_this,&
                     &IOMSG=iomsg_this)
             else
                 if (recl_this == -1)then
-                    open( NEWUNIT=funit, FILE=filename, IOSTAT=iostat_this, &
+                    open( NEWUNIT=funit, FILE=file%to_char(), IOSTAT=iostat_this, &
                         &ACTION=action_this, STATUS=status_this,&
                         &ACCESS=access_this, FORM=form_this,&
                         &IOMSG=iomsg_this)
                 else
-                    open( NEWUNIT=funit, FILE=filename, IOSTAT=iostat_this, &
+                    open( NEWUNIT=funit, FILE=file%to_char(), IOSTAT=iostat_this, &
                         &ACTION=action_this, STATUS=status_this,&
                         &ACCESS=access_this, RECL=recl_this, FORM=form_this,&
                         &IOMSG=iomsg_this)
                 end if
             end if
         end if
-        call fileiochk(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.)
+        call fileiochk(trim(adjustl(errmsg_this))//" fopen opening "//file%to_char(), iostat_this, .false.)
         if(is_io(funit)) THROW_HARD("newunit returned "//int2str(funit))
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
@@ -246,13 +272,13 @@ contains
     end subroutine fclose
 
     subroutine wait_for_closure( fname )
-        character(len=*), intent(in)  :: fname
+        class(string), intent(in) :: fname
         logical :: exists, closed
         integer :: wait_time
         wait_time = 0
         do
             if( wait_time == 60 )then
-                call simple_exception('been waiting for a minute for file: '//trim(adjustl(fname)), 'simple_fileio.f90', __LINE__,l_stop=.false.)
+                call simple_exception('been waiting for a minute for file: '//fname%to_char(), 'simple_fileio.f90', __LINE__,l_stop=.false.)
                 wait_time = 0
                 flush(OUTPUT_UNIT)
             endif
@@ -266,15 +292,12 @@ contains
     end subroutine wait_for_closure
 
     function nlines( fname ) result( n )
-        use simple_string_utils
-        character(len=*), intent(in)  :: fname !< input filename
-        character(len=:), allocatable :: tfile
+        class(string), intent(in) :: fname !< input filename
         integer          :: n, funit, ios,io_status
         character(len=1) :: junk
         if( file_exists(fname) )then
-            tfile = trim(fname)
-            call fopen(funit, tfile, status='unknown', action='read', iostat=io_status)
-            call fileiochk(":nlines error opening file "//trim(tfile), io_status)
+            call fopen(funit, fname, status='unknown', action='read', iostat=io_status)
+            call fileiochk(":nlines error opening file "//fname%to_char(), io_status)
             n = 0
             do
                 read(funit,*,IOSTAT=ios) junk
@@ -291,14 +314,14 @@ contains
     end function nlines
 
     function filelength( fname ) result( filesz )
-        character(len=*), intent(in) :: fname !< input filename
-        integer                      :: filesz, funit, ios, cnt,recl
-        character(len=1)             :: junk
+        class(string), intent(in) :: fname !< input filename
+        integer                   :: filesz, funit, ios, cnt,recl
+        character(len=1)          :: junk
         if(  file_exists(fname) )then
             recl=1
             call fopen(funit, fname, ACTION='read', IOSTAT=ios,&
                 ACCESS='direct', form='unformatted', recl=recl)
-            call fileiochk('simple_fileio :: nlines opening '//trim(fname), ios)
+            call fileiochk('simple_fileio :: nlines opening '//fname%to_char(), ios)
             cnt = 0
             filesz = 0
             do
@@ -333,6 +356,7 @@ contains
     subroutine get_open_funits( nbunits , units )
         integer, intent ( out ) :: nbunits
         integer, allocatable    :: units(:)
+        integer, parameter      :: MAX_UNIT_NUMBER = 1000
         integer :: iunit
         logical :: lopen
         integer :: step
@@ -359,158 +383,251 @@ contains
         enddo
     end subroutine get_open_funits
 
-    function add2fbody( fname, suffix, str ) result( newname )
-        character(len=*), intent(in)  :: fname, suffix, str
-        character(len=:), allocatable :: newname
+    function add2fbody_1( fname, suffix, str ) result( newname )
+        class(*),      intent(in)  :: fname
+        class(string), intent(in) ::suffix, str
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: newname
         integer :: pos
-        pos = index(trim(fname), trim(suffix)) ! position of suffix
-        allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
-    end function add2fbody
+        fname_tmp = cast_str_types(fname) 
+        pos = index(fname_tmp, suffix%to_char()) ! position of suffix
+        newname = fname_tmp(:pos-1)//str%to_char()//suffix%to_char()
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
+    end function add2fbody_1
 
-    function append2basename( fname, suffix ) result( newname )
-        character(len=*), intent(in)  :: fname, suffix
-        character(len=:), allocatable :: bname, newname
-        bname   = basename(trim(FNAME))
-        newname = add2fbody(bname, '.'//fname2ext(bname), trim(suffix))
-        deallocate(bname)
-    end function append2basename
+    function add2fbody_2( fname, suffix, str ) result( newname )
+        class(*),         intent(in)  :: fname
+        character(len=*), intent(in)  :: suffix, str
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: newname
+        integer :: pos
+        fname_tmp = cast_str_types(fname) 
+        pos = index(fname_tmp, trim(suffix)) ! position of suffix
+        newname = fname_tmp(:pos-1)//trim(str)//trim(suffix)
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
+    end function add2fbody_2
+
+    function add2fbody_3( fname, suffix, str ) result( newname )
+        class(*),         intent(in)  :: fname
+        class(string),    intent(in)  :: suffix
+        character(len=*), intent(in)  :: str
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: newname
+        integer :: pos
+        fname_tmp  = cast_str_types(fname)
+        pos = index(fname_tmp, suffix%to_char()) ! position of suffix
+        newname = fname_tmp(:pos-1)//trim(str)//suffix%to_char()
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
+    end function add2fbody_3
+
+    function append2basename_1( fname, suffix ) result( newname )
+        class(string), intent(in) :: fname, suffix 
+        type(string) :: bname, newname, ext
+        bname   = basename(fname)
+        ext     = fname2ext(bname)
+        newname = add2fbody(bname, string('.'//ext%to_char()), suffix)
+        call bname%kill
+        call ext%kill
+    end function append2basename_1
+
+    function append2basename_2( fname, suffix ) result( newname )
+        class(string),    intent(in) :: fname
+        character(len=*), intent(in) :: suffix 
+        type(string) :: bname, newname, ext
+        bname   = basename(fname)
+        ext     = fname2ext(bname)
+        newname = add2fbody(bname, string('.'//ext%to_char()), string(suffix))
+        call bname%kill
+        call ext%kill
+    end function append2basename_2
 
     function rm_from_fbody( fname, suffix, str ) result( newname )
-        character(len=*), intent(in)  :: fname, suffix, str
-        character(len=:), allocatable :: newname
+        class(*),      intent(in)  :: fname 
+        class(string), intent(in)  :: suffix, str 
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: newname
         integer :: pos
-        pos = index(trim(fname), trim(str)) ! position of str
-        allocate(newname, source=fname(:pos-1)//trim(suffix))
+        fname_tmp = cast_str_types(fname)
+        pos       = index(fname_tmp, str%to_char()) ! position of str
+        newname   = fname_tmp(:pos-1)//suffix%to_char()
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function rm_from_fbody
 
-    function swap_suffix( fname, suffix, old_suffix ) result( newname )
-        character(len=*), intent(in)  :: fname, suffix, old_suffix
-        character(len=:), allocatable :: newname
+    function swap_suffix_1( fname, suffix, old_suffix ) result( newname )
+        class(*),      intent(in)  :: fname
+        class(string), intent(in)  :: suffix, old_suffix
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: newname
         integer :: pos
-        pos = index(fname, old_suffix) ! position of old_suffix
-        allocate(newname, source=fname(:pos-1)//trim(suffix))
-    end function swap_suffix
+        fname_tmp = cast_str_types(fname)
+        pos = index(fname_tmp, old_suffix%to_char()) ! position of old_suffix
+        newname = fname_tmp(:pos-1)//suffix%to_char()
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
+    end function swap_suffix_1
 
-    function get_fbody( fname, suffix, separator ) result( fbody )
-        character(len=*), intent(in) :: fname, suffix !< file extension
-        character(len=STDLEN)        :: fbody
-        logical,            optional :: separator
+    function swap_suffix_2( fname, suffix, old_suffix ) result( newname )
+        class(*),         intent(in)  :: fname
+        character(len=*), intent(in)  :: suffix, old_suffix
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: newname
         integer :: pos
-        logical :: l_separator
+        fname_tmp = cast_str_types(fname)
+        pos = index(fname_tmp, trim(adjustl(old_suffix))) ! position of old_suffix
+        newname = fname_tmp(:pos-1)//trim(adjustl(suffix))
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
+    end function swap_suffix_2
+
+    function get_fbody_1( fname, suffix, separator ) result( fbody )
+        class(*),          intent(in) :: fname
+        class(string),     intent(in) :: suffix
+        logical, optional, intent(in) :: separator
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: fbody
+        integer      :: pos
+        logical      :: l_separator
         l_separator = .true.
         if(present(separator))l_separator = separator
+        fname_tmp = cast_str_types(fname)
         if( l_separator )then
-            pos = index(fname, '.'//suffix) ! position of suffix
+            pos = index(fname_tmp, '.'//suffix%to_char()) ! position of suffix
         else
-            pos = index(fname, suffix) ! position of suffix
+            pos = index(fname_tmp, suffix%to_char())      ! position of suffix
         endif
-        fbody = fname(:pos-1)
-    end function get_fbody
+        fbody = fname_tmp(:pos-1)
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
+    end function get_fbody_1
 
-    function fname_new_ext( fname, suffix ) result( new_fname )
-        character(len=*), intent(in)  :: fname, suffix !< filename and new file extension
-        character(len=STDLEN)         :: fbody, new_fname
-        character(len=:), allocatable :: ext
-        ext   = fname2ext(trim(fname))
-        fbody = get_fbody(trim(fname), ext)
-        new_fname = trim(fbody)//'.'//trim(suffix)
-    end function fname_new_ext
+    function get_fbody_2( fname, suffix, separator ) result( fbody )
+        class(*),          intent(in) :: fname
+        character(len=*),  intent(in) :: suffix
+        logical, optional, intent(in) :: separator
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: fbody
+        integer      :: pos
+        logical      :: l_separator
+        l_separator = .true.
+        if(present(separator))l_separator = separator
+        fname_tmp = cast_str_types(fname)
+        if( l_separator )then
+            pos = index(fname_tmp, '.'//trim(adjustl(suffix))) ! position of suffix
+        else
+            pos = index(fname_tmp, trim(adjustl(suffix)))      ! position of suffix
+        endif
+        fbody = fname_tmp(:pos-1)
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
+    end function get_fbody_2
 
-    pure function fname2ext( fname )
-        character(len=*), intent(in)  :: fname    !< filename
-        character(len=:), allocatable :: fname2ext
-        integer :: length, pos
-        length = len_trim(fname)
-        pos = scan(fname(1:length),'.',back=.true.)
+    function fname_new_ext_1( fname, suffix ) result( new_fname )
+        class(string), intent(in) :: fname, suffix
+        type(string) :: ext, fbody, new_fname
+        ext       = fname2ext(fname)
+        fbody     = get_fbody(fname, ext)
+        new_fname = fbody%to_char()//'.'//suffix%to_char()
+    end function fname_new_ext_1
+
+    function fname_new_ext_2( fname, suffix ) result( new_fname )
+        class(string),    intent(in) :: fname
+        character(len=*), intent(in) :: suffix
+        type(string) :: ext, fbody, new_fname
+        ext       = fname2ext(fname)
+        fbody     = get_fbody(fname, ext)
+        new_fname = fbody%to_char()//'.'//trim(adjustl(suffix))
+    end function fname_new_ext_2
+
+    function fname2ext( fname ) result( ext )
+        class(string),    intent(in)  :: fname
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: ext
+        integer      :: length, pos
+        length    = fname%strlen_trim()
+        fname_tmp = fname%to_char()
+        pos = scan(fname_tmp(1:length),'.',back=.true.)
         if( pos == 0 )then
-            allocate(fname2ext, source='   ')
+            ext = ''
         else
-            allocate(fname2ext, source=trim(fname(pos+1:length)))
+            ext = trim(fname_tmp(pos+1:length))
         endif
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function fname2ext
 
     integer function fname2iter( fname )
-        use simple_string_utils, only: map_str_nrs, str2int
-        character(len=*), intent(in)  :: fname
-        character(len=:), allocatable :: iter_num_ext, nrstr
+        class(string),    intent(in)  :: fname
+        character(len=:), allocatable :: iter_num_ext, nrstr, fname_tmp
         logical,          allocatable :: lnrs(:)
-        integer :: ind, i, istat
-        ind = index(fname, 'iter')
+        integer :: ind, i
+        fname_tmp = fname%to_char()
+        ind = index(fname_tmp, 'iter')
         if(ind == 0)then
             fname2iter = 0
             return
         endif
-        iter_num_ext = fname(ind:)
+        iter_num_ext = fname_tmp(ind:)
         lnrs         = map_str_nrs(iter_num_ext)
         nrstr        = ''
         do i=1,len_trim(iter_num_ext)
             if( lnrs(i) ) nrstr = nrstr//iter_num_ext(i:i)
         end do
-        fname2iter = str2int(nrstr, istat)
+        fname2iter = str2int(nrstr)
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function fname2iter
 
-    pure function basename( fname ) result( new_fname )
-        character(len=*), intent(in)  :: fname     !< abs filename
-        character(len=:), allocatable :: new_fname
-        integer :: length, pos
-        length = len_trim(fname)
-        pos = scan(fname(1:length),PATH_SEPARATOR,back=.true.)
+    ! thread-safe version of basename
+    function basename( fname ) result( new_fname)
+        class(string),    intent(in)  :: fname
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: new_fname
+        integer      :: length, pos
+        length    = fname%strlen_trim()
+        fname_tmp = fname%to_char()
+        pos = scan(fname_tmp(1:length),PATH_SEPARATOR,back=.true.)
         if( pos == 0 )then
-            allocate(new_fname, source=trim(fname))
+            new_fname = trim(fname_tmp)
         else
-            allocate(new_fname, source=trim(fname(pos+1:length)))
+            new_fname = trim(fname_tmp(pos+1:length))
         endif
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function basename
 
-    ! thread-safe version of basename
-    elemental function basename_safe( fname )result( new_fname)
-        character(len=LONGSTRLEN), intent(in) :: fname
-        character(len=LONGSTRLEN) :: new_fname
+    function stemname( fname ) result( new_fname)
+        class(string),    intent(in)  :: fname
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: new_fname
         integer :: length, pos
-        length = len_trim(fname)
-        pos = scan(fname(1:length),PATH_SEPARATOR,back=.true.)
-        if( pos == 0 )then
-            new_fname = trim(fname)
-        else
-            new_fname = trim(fname(pos+1:length))
-        endif
-    end function basename_safe
-
-    pure function stemname( fname ) result( new_fname)
-        character(len=*), intent(in)  :: fname     !< abs filename
-        character(len=:), allocatable :: new_fname
-        integer :: length, pos
-        length = len_trim(fname)
-        pos = scan(fname(1:length),PATH_SEPARATOR,back=.true.)
+        length    = fname%strlen_trim()
+        fname_tmp = fname%to_char()
+        pos       = scan(fname_tmp(1:length),PATH_SEPARATOR,back=.true.)
         if(pos == length)then !< case with trailling slash
-            pos = scan(fname(1:length-1),PATH_SEPARATOR,back=.true.)
+            pos = scan(fname_tmp(1:length-1),PATH_SEPARATOR,back=.true.)
         end if
         if( pos == 0 )then
-            allocate(new_fname, source=trim(fname))
+            new_fname = trim(fname_tmp)
         else
-            allocate(new_fname, source=trim(fname(1:pos - 1)))
+            new_fname = trim(fname_tmp(1:pos - 1))
         endif
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function stemname
 
-    pure function get_fpath( fname ) result( path )
-        character(len=*), intent(in)  :: fname !< abs filename
-        character(len=:), allocatable :: path
-        integer :: pos
-        pos = scan(fname,PATH_SEPARATOR,back=.true.)
+    function get_fpath( fname ) result( path )
+        class(string),    intent(in)  :: fname
+        character(len=:), allocatable :: fname_tmp
+        type(string) :: path
+        integer      :: pos
+        fname_tmp = fname%to_char()
+        pos       = scan(fname_tmp,PATH_SEPARATOR,back=.true.)
         if( pos == 0 )then
-            allocate(path, source=PATH_HERE)
+            path = PATH_HERE
         else
-            allocate(path, source=trim(fname(:pos)))
+            path = trim(fname_tmp(:pos))
         endif
+        if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function get_fpath
 
     !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
-        use simple_string_utils, only: int2str, int2str_pad
         character(len=*),  intent(in) :: body
         integer,           intent(in) :: n
         integer, optional, intent(in) :: numlen
-        character(len=STDLEN), allocatable :: names(:)
+        type(string), allocatable :: names(:)
         integer :: nnumlen, i
         nnumlen = len(int2str(n))
         if( present(numlen) ) nnumlen = numlen
@@ -522,12 +639,11 @@ contains
 
     !>  \brief  returns numbered file-names with 0-padded integer strings
     function make_filenames( body, n, ext, numlen, suffix ) result( names )
-        use simple_string_utils, only: int2str, int2str_pad
         character(len=*),           intent(in) :: body, ext
         integer,                    intent(in) :: n
         integer,          optional, intent(in) :: numlen
         character(len=*), optional, intent(in) :: suffix
-        character(len=STDLEN), allocatable     :: names(:)
+        type(string), allocatable :: names(:)
         integer :: nnumlen, i
         logical :: suffix_present
         nnumlen = len(int2str(n))
@@ -543,165 +659,38 @@ contains
         end do
     end function make_filenames
 
-    !> Concatenate two paths
-    !! Last character is '/'; '//' & '/./' are substituted with '/'
-    function concat_paths(p1, p2) result( fname )
-        character(len=*),  intent(in)              :: p1
-        character(len=*),  intent(in)              :: p2
-        character(len=:), allocatable :: fname
-        character(len=LONGSTRLEN) :: string1,string2
-        integer :: e1,e2,s2,l,pos
-        string1 = trim(adjustl(p1))
-        string2 = trim(adjustl(p2))
-        e1 = len_trim(string1)
-        e2 = len_trim(string2)
-        s2 = 1
-        if( e1 < 1 ) THROW_HARD("First arg too small")
-        if( e2 < 1 ) THROW_HARD("Second arg too small")
-        if( string1(e1:e1) == PATH_SEPARATOR ) e1 = e1 - 1
-        if( e1 < 1 ) THROW_HARD("First arg cannot be /")
-        if( string2(e2:e2) == PATH_SEPARATOR) e2 = e2 - 1
-        if( e2 < 1) THROW_HARD("second arg cannot be / ")
-        if( string2(1:1) == PATH_SEPARATOR) s2 = 2
-        if( e2 == s2 ) THROW_HARD("second arg cannot be "//trim(string2))
-        allocate(fname,source=string1(1:e1)//PATH_SEPARATOR//string2(s2:e2)//PATH_SEPARATOR)
-        pos = index(fname, '/./')
-        do while( pos > 0 )
-            l = len_trim(fname)
-            if( pos == 1 )then
-                fname = fname(3:l)
-            else if( pos == l-2 )then
-                fname = fname(1:pos)
-            else
-                fname = fname(1:pos)//fname(pos+3:l)
-            endif
-            pos = index(fname, '/./')
-        enddo
-        pos = index(fname, '//')
-        do while( pos > 0 )
-            l = len_trim(fname)
-            if( pos == 1 )then
-                fname = fname(2:l)
-            else if( pos == l-1 )then
-                fname = fname(1:pos)
-            else
-                fname = fname(1:pos)//fname(pos+2:l)
-            endif
-            pos = index(fname, '//')
-        enddo
-    end function concat_paths
-
     !> concatenate strings together to with '/' to create a filename
-    !! input args are restricted to STDLEN after trimming
-    !! for allocatable character results
-    !! e.g. fname = filepath('dir1',trim(dirfixed), diralloc, file//ext )
-    function filepath_1(p1, p2, p3, p4) result( fname )
-        character(len=*),  intent(in)           :: p1
-        character(len=*),  intent(in)           :: p2
-        character(len=*),  intent(in), optional :: p3
-        character(len=*),  intent(in), optional :: p4
-        character(len=:), allocatable     :: fname
-        character(len=STDLEN)      :: s1,s2,s3,s4
-        integer :: endpos1,endpos2,endpos3,endpos4,startpos2,startpos3,startpos4
-        startpos2=1;startpos3=1;startpos4=1
-        s1 = trim(adjustl(p1))
-        endpos1 = len_trim(s1)
-        ! Exceptions
-        if(endpos1<1) THROW_HARD("first arg too small")
-        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
-        if(endpos1<1) THROW_HARD("first arg cannot be /")
-        s2 = trim(adjustl(p2))
-        endpos2 = len_trim(s2)
-        if(endpos2<1) THROW_HARD("second arg too small")
-        if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
-        if(endpos2==0) THROW_HARD("second arg cannot be / ")
-        if(s2(1:1)==PATH_SEPARATOR) startpos2 = 2
-        if(endpos2-startpos2==0) THROW_HARD("second arg cannot be "//trim(s2))
-        if(present(p3))then
-            s3 = trim(adjustl(p3))
-            endpos3 = len_trim(s3)
-            if(endpos3<1) THROW_HARD("third arg too small")
-            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
-            if(endpos3<1) THROW_HARD("third arg cannot be /")
-            if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
-            if(endpos3-startpos3==0) THROW_HARD("third arg cannot be "//trim(s3))
-
-            if(present(p4))then
-                s4 = trim(adjustl(p4))
-                endpos4 = len_trim(s4)
-                if(endpos4==0) THROW_HARD("fourth arg too small")
-                if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-                if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
-                if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
-                if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
-                allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                    &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4))
-            else
-                !! Concat arg1 arg2 and arg3
-                allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                    &PATH_SEPARATOR//s3(startpos3:endpos3))
-            endif
+    function filepath_1(s1, s2, s3) result( fname )
+        class(string),           intent(in) :: s1, s2
+        class(string), optional, intent(in) :: s3
+        type(string) :: fname
+        if( present(s3) )then
+            fname = s1%to_char()//PATH_SEPARATOR//s2%to_char()//PATH_SEPARATOR//s3%to_char()
         else
-            !! Concat arg1 and arg2
-            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2))
+            fname = s1%to_char()//PATH_SEPARATOR//s2%to_char()
         endif
     end function filepath_1
 
-    !> concatenate strings together to create a filename similar to filepath_1 above
-    !! for non-allocatable character results
-    !! Third and Fourth args are optional
-    function filepath_2(p1, p2, p3, p4, nonalloc ) result(fname)
-        character(len=*),  intent(in)           :: p1
-        character(len=*),  intent(in)           :: p2
-        character(len=*),  intent(in), optional :: p3
-        character(len=*),  intent(in), optional :: p4
-        logical :: nonalloc
-        character(len=STDLEN)      :: s1,s2,s3,s4
-        character(len=LONGSTRLEN)  ::fname
-        integer :: endpos1,endpos2,endpos3,endpos4,startpos2,startpos3,startpos4
-        startpos2=1;startpos3=1;startpos4=1
-        s1 = trim(adjustl(p1))
-        endpos1 = len_trim(s1)
-        if(endpos1<1) THROW_HARD("first arg too small")
-        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
-        if(endpos1<1) THROW_HARD("first arg cannot be / ")
-        s2 = trim(adjustl(p2))
-        endpos2 = len_trim(s2)
-        if(endpos2<1) THROW_HARD("second arg too small")
-        if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
-        if(endpos2==0) THROW_HARD("second arg cannot be / ")
-        if(s2(1:1)==PATH_SEPARATOR) startpos2 = 2
-        if(endpos2-startpos2==0) THROW_HARD("second arg cannot be "//trim(s2))
-        if(present(p3))then
-            s3 = trim(adjustl(p3))
-            endpos3 = len_trim(s3)
-            if(endpos3<1) THROW_HARD("third arg too small")
-            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
-            if(endpos3<1) THROW_HARD("third arg cannot be /")
-            if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
-            if(endpos3-startpos3==0) THROW_HARD("third arg cannot be "//trim(s3))
-
-            if(present(p4))then
-                s4 = trim(adjustl(p4))
-                endpos4 = len_trim(s4)
-                if(endpos4==0) THROW_HARD("fourth arg too small")
-                if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-                if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
-                if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
-                if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
-                !! concatenate four pathnames
-                fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                    &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4)
-            else
-                !! concatenate three pathnames
-                fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                    &PATH_SEPARATOR//s3(startpos3:endpos3)
-            endif
-        else
-            !! concatenate two pathnames
-            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos4:endpos2)
-        endif
+    function filepath_2(s1, s2) result( fname )
+        class(string),    intent(in) :: s1
+        character(len=*), intent(in) :: s2
+        type(string) :: fname
+        fname = s1%to_char()//PATH_SEPARATOR//trim(adjustl(s2))
     end function filepath_2
+
+    function filepath_3(s1, s2) result( fname )
+        character(len=*), intent(in) :: s1
+        character(len=*), intent(in) :: s2
+        type(string) :: fname
+        fname = trim(adjustl(s1))//PATH_SEPARATOR//trim(adjustl(s2))
+    end function filepath_3
+
+    function filepath_4(s1, s2) result( fname )
+        character(len=*), intent(in) :: s1
+        class(string),    intent(in) :: s2
+        type(string) :: fname
+        fname = trim(adjustl(s1))//PATH_SEPARATOR//s2%to_char()
+    end function filepath_4
 
     !> \brief  is for deleting consecutively numbered files with padded number strings
     subroutine del_files_1( body, n, ext, numlen, suffix )
@@ -710,7 +699,7 @@ contains
         character(len=*), optional, intent(in) :: ext  !< input filename extension
         integer,          optional, intent(in) :: numlen !< number length
         character(len=*), optional, intent(in) :: suffix !< file suffix
-        character(len=STDLEN), allocatable :: names(:)
+        type(string), allocatable :: names(:)
         integer :: ifile
         if( present(ext) )then
             names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
@@ -723,7 +712,7 @@ contains
     end subroutine del_files_1
 
     subroutine del_files_2( list )
-        character(len=LONGSTRLEN), intent(in) :: list(:)
+        class(string), intent(in) :: list(:)
         integer :: ifile, n
         n = size(list)
         do ifile=1,n
@@ -732,9 +721,9 @@ contains
     end subroutine del_files_2
 
     subroutine move_files_in_cwd( dir, files_that_stay )
-        character(len=*),        intent(in) :: dir
-        type(str4arr), optional, intent(in) :: files_that_stay(:)
-        character(len=LONGSTRLEN), allocatable :: file_list(:)
+        class(string),           intent(in) :: dir
+        class(string), optional, intent(in) :: files_that_stay(:)
+        type(string), allocatable :: file_list(:)
         integer :: n_stay, n_move, i, j
         logical :: l_move
         n_stay = 0
@@ -744,34 +733,33 @@ contains
         call simple_list_files('*', file_list)
         n_move = 0
         if( allocated(file_list) ) n_move = size(file_list)
-        if( n_move > 0 ) call simple_mkdir(trim(dir))
+        if( n_move > 0 ) call simple_mkdir(dir)
         if( n_stay > 0 .and. n_move > 0 )then
             do i = 1, n_move
                 l_move = .true.
                 do j = 1, n_stay
-                    if( str_has_substr(trim(file_list(i)),files_that_stay(j)%str) )then
+                    if( file_list(i)%has_substr(files_that_stay(j)) )then
                         l_move = .false.
                         exit
                     endif
                 end do
-                if( l_move ) call simple_rename(trim(file_list(i)), trim(dir)//trim(file_list(i)))
+                if( l_move ) call simple_rename(file_list(i), dir//file_list(i))
             end do
         else if( n_move > 0 )then
             do i = 1, n_move
-                call simple_rename(trim(file_list(i)), trim(dir)//trim(file_list(i)))
+                call simple_rename(file_list(i), dir//file_list(i))
             end do
         endif
-        if( n_move > 0 ) deallocate(file_list)
+        if( n_move > 0 ) call file_list%kill
     end subroutine move_files_in_cwd
 
     subroutine move_files2dir( dir, file_list )
-        character(len=*),          intent(in) :: dir
-        character(len=LONGSTRLEN), intent(in) :: file_list(:)
+        class(string), intent(in) :: dir, file_list(:)
         integer :: n_move, i
         n_move = size(file_list)
         if( n_move > 0 )then
             do i = 1, n_move
-                call simple_rename(trim(file_list(i)), trim(dir)//trim(file_list(i)))
+                call simple_rename(file_list(i), dir//file_list(i))
             end do
         endif
     end subroutine move_files2dir
@@ -782,69 +770,76 @@ contains
     !!         if .img: I
     !!         if .hed: I
     !!         else: N
-    pure function fname2format( fname )
-        character(len=*), intent(in)  :: fname        !< input filename
+    function fname2format( fname )
+        class(string),    intent(in)  :: fname
         character(len=1)              :: fname2format
-        character(len=:), allocatable :: extension
+        type(string) :: extension
         extension = fname2ext(fname)
-        select case(extension)
-        case ('img','hed')
-            fname2format = 'I'
-        case ('mrc','map','ctf','mrcs')
-            fname2format = 'M'
-        case ('spi')
-            fname2format = 'S'
-        case('bin','raw','sbin')
-            fname2format = 'B'
-        case('dbin')
-            fname2format = 'D'
-        case('txt', 'asc', 'box','dat')
-            fname2format = 'T'
-        case('pdb')
-            fname2format = 'P'
-        case('simple')
-            fname2format = 'O'
-        case('star')
-            fname2format = 'R'
+        select case(extension%to_char())
+            case ('img','hed')
+                fname2format = 'I'
+            case ('mrc','map','ctf','mrcs')
+                fname2format = 'M'
+            case ('spi')
+                fname2format = 'S'
+            case('bin','raw','sbin')
+                fname2format = 'B'
+            case('dbin')
+                fname2format = 'D'
+            case('txt', 'asc', 'box','dat')
+                fname2format = 'T'
+            case('pdb')
+                fname2format = 'P'
+            case('simple')
+                fname2format = 'O'
+            case('star')
+                fname2format = 'R'
 #ifdef USING_TIFF
-        case('tif','tiff')
-            fname2format = 'J'
-        case('eer')
-            fname2format = 'K'
-        case('gain')
-            fname2format = 'L'
+            case('tif','tiff')
+                fname2format = 'J'
+            case('eer')
+                fname2format = 'K'
+            case('gain')
+                fname2format = 'L'
 #endif
-        case DEFAULT
-            fname2format = 'N'
+            case DEFAULT
+                fname2format = 'N'
         end select
     end function fname2format
 
     subroutine read_filetable( filetable, filenames )
-        character(len=*),                       intent(in)    :: filetable    !< input table filename
-        character(len=LONGSTRLEN), allocatable, intent(inout) :: filenames(:) !< array of filenames
+        class(string),             intent(in)    :: filetable    !< input table filename
+        type(string), allocatable, intent(inout) :: filenames(:) !< array of filenames
         integer :: nl, funit, iline, io_stat
-        nl = nlines(trim(filetable))
+        nl = nlines(filetable)
         if( nl == 0 ) return
         call fopen(funit, filetable, 'old', 'unknown', io_stat)
-        call fileiochk("read_filetable failed to open file "//trim(filetable), io_stat)
-        if( allocated(filenames) ) deallocate(filenames)
+        call fileiochk("read_filetable failed to open file "//filetable%to_char(), io_stat)
+        if( allocated(filenames) )then
+            call filenames%kill
+            deallocate(filenames)
+        endif
         allocate(filenames(nl))
         do iline = 1, nl
-            read(funit,'(a1024)') filenames(iline)
+            call filenames(iline)%readline(funit, io_stat)
         end do
         call fclose(funit)
     end subroutine read_filetable
 
     !>  \brief  writes a filetable array to a text file
     subroutine write_filetable( filetable, filenames )
-        character(len=*),          intent(in)  :: filetable    !< output table filename
-        character(len=LONGSTRLEN), intent(in)  :: filenames(:) !< array of filenames
-        integer :: nl, funit, iline, io_stat
+        class(string),  intent(in) :: filetable    !< output table filename
+        class(string),  intent(in) :: filenames(:) !< array of filenames
+        type(string) :: str_line
+        integer      :: nl, funit, iline, io_stat
         nl = size(filenames)
         call fopen(funit,filetable, 'replace', 'unknown', io_stat)
-        call fileiochk("write_filetable failed to open file "//filetable,io_stat )
+        call fileiochk("write_filetable failed to open file "//filetable%to_char(),io_stat )
         do iline=1,nl
-            write(funit,'(a)') simple_abspath(trim(filenames(iline)))
+            str_line = simple_abspath(filenames(iline))
+            call str_line%writeline(funit, io_stat)
+            if( io_stat /= 0 ) THROW_HARD('writing of line: '//int2str(iline)//' failed')
+            call str_line%kill
         end do
         call fclose(funit)
         call fileiochk("write_filetable failed to close",io_stat)
@@ -852,26 +847,26 @@ contains
 
     !>  \brief  (over)writes a file with a single file of text
     subroutine write_singlelineoftext( filename, text )
-        character(len=*), intent(in)  :: filename, text
+        class(string), intent(in)  :: filename, text
         integer :: funit, io_stat
-        call fopen(funit,filename, 'replace', 'unknown', io_stat)
-        call fileiochk("write_singlelineoftext failed to open file: "//filename,io_stat )
-        write(funit,'(A)')trim(text)
+        call fopen(funit, filename, 'replace', 'unknown', io_stat)
+        call fileiochk("write_singlelineoftext failed to open file: "//filename%to_char(),io_stat )
+        write(funit,'(A)') text%to_char()
         call fclose(funit)
     end subroutine write_singlelineoftext
 
     !>  \brief  read exit code from file. Format is a single integer on a one line file
     subroutine read_exit_code( filename, exit_code, err )
-        character(len=*), intent(in)  :: filename
-        integer,          intent(out) :: exit_code
-        logical,          intent(out) :: err        ! error dealing with file, unrelated to exit code
+        class(string), intent(in)  :: filename
+        integer,       intent(out) :: exit_code
+        logical,       intent(out) :: err        ! error dealing with file, unrelated to exit code
         integer :: nl, funit, io_stat
         exit_code = -1
         err       = .true.
-        nl = nlines(trim(filename))
+        nl = nlines(filename)
         if( nl /= 1 ) return
         call fopen(funit, filename, 'old', 'unknown', io_stat)
-        call fileiochk("read_exit_code failed to open file "//trim(filename), io_stat,die=.false.)
+        call fileiochk("read_exit_code failed to open file "//filename%to_char(), io_stat,die=.false.)
         err = io_stat /= 0
         if( .not.err )then
             read(funit,'(i32)') exit_code
@@ -881,14 +876,14 @@ contains
 
     !> \brief  for converting a real array 2 file
     subroutine arr2file_sp( arr, fnam )
-        real,             intent(in) :: arr(:)
-        character(len=*), intent(in) :: fnam      !< input table filename
+        real,          intent(in) :: arr(:)
+        class(string), intent(in) :: fnam      !< input table filename
         real    :: rval
         integer :: recsz, i, funit,io_stat
         inquire(iolength=recsz)rval
         rval = size(arr)
         call fopen(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz)
-        call fileiochk("arr2file_sp fopen failed "//trim(fnam),io_stat)
+        call fileiochk("arr2file_sp fopen failed "//fnam%to_char(),io_stat)
         write(funit, rec=1, iostat=io_stat) rval
         do i=1,size(arr)
             write(funit, rec=i+1) arr(i)
@@ -898,14 +893,14 @@ contains
 
     !> \brief  for converting a real array 2 file
     subroutine arr2file_dp( arr, fnam )
-        real(kind=dp),    intent(in) :: arr(:)
-        character(len=*), intent(in) :: fnam      !< input table filename
+        real(kind=dp), intent(in) :: arr(:)
+        class(string), intent(in) :: fnam      !< input table filename
         real(dp) :: rval
         integer  :: recsz, i, funit,io_stat
         inquire(iolength=recsz)rval
         rval = size(arr)
         call fopen(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz)
-        call fileiochk("arr2file_dp fopen failed "//trim(fnam),io_stat)
+        call fileiochk("arr2file_dp fopen failed "//fnam%to_char(),io_stat)
         write(funit, rec=1, iostat=io_stat) rval
         do i=1,size(arr)
             write(funit, rec=i+1) arr(i)
@@ -915,11 +910,11 @@ contains
 
     !> \brief  for writing real array
     subroutine arr2txtfile_1( arr, fnam )
-        real,             intent(in) :: arr(:)
-        character(len=*), intent(in) :: fnam
+        real,          intent(in) :: arr(:)
+        class(string), intent(in) :: fnam
         integer :: i,funit,io_stat
         call fopen(funit,fnam,'replace', 'unknown', iostat=io_stat, form='formatted')
-        call fileiochk("arr2txtfile fopen failed "//trim(fnam),io_stat)
+        call fileiochk("arr2txtfile fopen failed "//fnam%to_char(),io_stat)
         do i=1,size(arr)
             write(funit,*) arr(i)
         end do
@@ -928,11 +923,11 @@ contains
 
     !> \brief  for writing integer array
     subroutine arr2txtfile_2( arr, fnam )
-        integer,          intent(in) :: arr(:)
-        character(len=*), intent(in) :: fnam
+        integer,       intent(in) :: arr(:)
+        class(string), intent(in) :: fnam
         integer :: i,funit,io_stat
         call fopen(funit,fnam,'replace', 'unknown', iostat=io_stat, form='formatted')
-        call fileiochk("arr2txtfile fopen failed "//trim(fnam),io_stat)
+        call fileiochk("arr2txtfile fopen failed "//fnam%to_char(),io_stat)
         do i=1,size(arr)
             write(funit,*) arr(i)
         end do
@@ -941,14 +936,14 @@ contains
 
     !> \brief  for converting a file generated by arr2file_sp back to an array
     function file2rarr( fnam ) result( arr )
-        character(len=*), intent(in) :: fnam  !< input table filename
-        real, allocatable            :: arr(:)
+        class(string), intent(in) :: fnam  !< input table filename
+        real, allocatable         :: arr(:)
         real    :: rval
         integer :: recsz, i, n, funit,io_stat
-        if( file_exists(trim(fnam)) )then
+        if( file_exists(fnam) )then
             inquire(iolength=recsz) rval
-            call fopen(funit,fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
-            call fileiochk("file2rarr fopen failed "//trim(fnam),io_stat)
+            call fopen(funit, fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
+            call fileiochk("file2rarr fopen failed "//fnam%to_char(),io_stat)
             read(funit, rec=1,iostat=io_stat) rval
             n = nint(rval)
             allocate( arr(n) )
@@ -957,20 +952,20 @@ contains
             end do
             call fclose(funit)
         else
-            THROW_HARD(trim(fnam)//' does not exist')
+            THROW_HARD(fnam%to_char()//' does not exist')
         endif
     end function file2rarr
 
     !> \brief  for converting a file generated by arr2file_dp back to an array
     function file2drarr( fnam ) result( arr )
-        character(len=*), intent(in) :: fnam  !< input table filename
-        real(dp), allocatable        :: arr(:)
+        class(string), intent(in) :: fnam  !< input table filename
+        real(dp), allocatable     :: arr(:)
         real(dp) :: rval
         integer  :: recsz, i, n, funit,io_stat
-        if( file_exists(trim(fnam)) )then
+        if( file_exists(fnam) )then
             inquire(iolength=recsz) rval
             call fopen(funit,fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
-            call fileiochk("file2drarr fopen failed "//trim(fnam),io_stat)
+            call fileiochk("file2drarr fopen failed "//fnam%to_char(),io_stat)
             read(funit, rec=1,iostat=io_stat) rval
             n = nint(rval)
             allocate( arr(n) )
@@ -979,7 +974,7 @@ contains
             end do
             call fclose(funit)
         else
-            THROW_HARD(trim(fnam)//' does not exist')
+            THROW_HARD(fnam%to_char()//' does not exist')
         endif
     end function file2drarr
 
@@ -991,11 +986,11 @@ contains
     ! A    = np.fromfile(f, dtype=np.float32, count=np.prod(dims)).reshape(dims, order='F')
     ! f.close()
     subroutine rmat2file( mat, fname )
-        real,             intent(in) :: mat(:,:)    !< Input matrix
-        character(len=*), intent(in) :: fname       !< Output filename
+        real,          intent(in) :: mat(:,:)    !< Input matrix
+        class(string), intent(in) :: fname       !< Output filename
         integer :: funit,io_stat
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("mat2file fopen failed: "//trim(fname),io_stat)
+        call fileiochk("mat2file fopen failed: "//fname%to_char(),io_stat)
         write(unit=funit,pos=1) shape(mat)
         write(unit=funit,pos=(2*sizeof(funit)+1)) mat
         call fclose(funit)
@@ -1003,11 +998,11 @@ contains
 
     !> \brief  for converting a logical matrix to file
     subroutine lmat2file( mat, fname )
-        logical,          intent(in) :: mat(:,:)    !< Input matrix
-        character(len=*), intent(in) :: fname       !< Output filename
+        logical,       intent(in) :: mat(:,:)    !< Input matrix
+        class(string), intent(in) :: fname       !< Output filename
         integer :: funit,io_stat
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("lmat2file fopen failed: "//trim(fname),io_stat)
+        call fileiochk("lmat2file fopen failed: "//fname%to_char(),io_stat)
         write(unit=funit,pos=1) shape(mat)
         write(unit=funit,pos=(2*sizeof(funit)+1)) mat
         call fclose(funit)
@@ -1015,12 +1010,12 @@ contains
 
     !> \brief  for converting a file generated by rmat2file back to a matrix
     subroutine file2rmat( fname, rmat )
-        character(len=*),  intent(in)    :: fname       !< input filename
+        class(string),     intent(in)    :: fname       !< input filename
         real, allocatable, intent(inout) :: rmat(:,:)   !< output matrix
         integer :: dims(2), funit,io_stat
-        if( .not.file_exists(trim(fname)) ) THROW_HARD(trim(fname)//' does not exist')
+        if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('file2rmat; fopen failed: '//trim(fname), io_stat)
+        call fileiochk('file2rmat; fopen failed: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) dims
         if( allocated(rmat) ) deallocate(rmat)
         allocate(rmat(dims(1),dims(2)))
@@ -1030,12 +1025,12 @@ contains
 
     !> \brief  for converting a file generated by lmat2file back to a logical matrix
     subroutine file2lmat( fname, mat )
-        character(len=*),     intent(in)    :: fname    !< input filename
+        class(string),        intent(in)    :: fname    !< input filename
         logical, allocatable, intent(inout) :: mat(:,:) !< output matrix
         integer :: dims(2), funit,io_stat
-        if( .not.file_exists(trim(fname)) ) THROW_HARD(trim(fname)//' does not exist')
+        if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('file2lmat; fopen failed: '//trim(fname), io_stat)
+        call fileiochk('file2lmat; fopen failed: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) dims
         if( allocated(mat) ) deallocate(mat)
         allocate(mat(dims(1),dims(2)))
@@ -1044,20 +1039,20 @@ contains
     end subroutine file2lmat
 
     subroutine simple_copy_file(fname1, fname2, status)
-        character(len=*),  intent(in)  :: fname1, fname2 !< input filenames
+        class(string),     intent(in)  :: fname1, fname2 !< input filenames
         integer, optional, intent(out) :: status
-        integer(dp),      parameter   :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
-        character(len=1), allocatable :: byte_buffer(:)
+        integer(dp),       parameter   :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
+        character(len=1),  allocatable :: byte_buffer(:)
         integer(dp) :: sz, nchunks, leftover, bufsz, bytepos, in, out, ichunk
         integer     :: ioerr
         if( present(status) )status = 0
-        if( .not. file_exists(fname1) ) THROW_HARD('file '//trim(fname1)//' does not exist')
+        if( .not. file_exists(fname1) ) THROW_HARD('file '//fname1%to_char()//' does not exist')
         ! we need to inquire size before opening file as stream access
         ! does not allow inquire of size from file unit
-        inquire(file=trim(fname1),size=sz)
-        open(newunit=in, file=trim(fname1), status="old", action="read", access="stream", iostat=ioerr)
+        inquire(file=fname1%to_char(),size=sz)
+        open(newunit=in, file=fname1%to_char(), status="old", action="read", access="stream", iostat=ioerr)
         if( ioerr /= 0 )then
-            write(logfhandle,*) "In simple_copy_file, failed to open input file ", trim(fname1)
+            write(logfhandle,*) "In simple_copy_file, failed to open input file ", fname1%to_char()
             call simple_error_check(ioerr,"simple_copy_file input file not opened")
             if( present(status) ) status = ioerr
             return
@@ -1074,9 +1069,9 @@ contains
         ! allocate raw byte buffer
         allocate(byte_buffer(bufsz))
         ! process output file
-        open(newunit=out, file=trim(fname2), status="replace", action="write", access="stream", iostat=ioerr)
+        open(newunit=out, file=fname2%to_char(), status="replace", action="write", access="stream", iostat=ioerr)
         if( ioerr /= 0 )then
-            write(logfhandle,*)"In simple_copy_file, failed to open output file ", trim(fname2)
+            write(logfhandle,*)"In simple_copy_file, failed to open output file ", fname2%to_char()
             call simple_error_check(ioerr,"simple_copy_file output file not opened")
             if( present(status) ) status = ioerr
             return
@@ -1100,70 +1095,16 @@ contains
         close(out)
     end subroutine simple_copy_file
 
-    ! builds a relative path with respect to working directory
-    ! given absolute paths of directory and filename returns file relative path
-    ! with respect to working directory (minus execution directory, eg 1_xxx)
-    ! if the file lies outside the working directory then the absolute file path is kept
-    subroutine make_relativepath(cwd, fname, newfname, checkexists)
-        character(len=*),          intent(in)  :: cwd, fname
-        character(len=LONGSTRLEN), intent(out) :: newfname
-        logical,      optional,    intent(in)  :: checkexists
-        character(len=:), allocatable :: fname_here
-        character(LONGSTRLEN)         :: cwd_here, projdir
-        integer                       :: l_cwd, l_fname, l, slashpos_left, slashpos_right, ipos
-        logical                       :: checkexists_here
-        checkexists_here = .true.
-        if( present(checkexists) ) checkexists_here = checkexists
-        ! get absolute filename if necessary
-        if( fname(1:1).eq.'/' )then
-            ! was already absolute
-            fname_here = trim(fname)
-            if(checkexists_here .and. .not.file_exists(fname_here) )THROW_HARD('File does not exist: '//trim(fname_here))
-        else
-            fname_here = simple_abspath(fname, errmsg='simple_fileio::make_relativepath: '//trim(fname), check_exists=checkexists_here)
-        endif
-        ! remove final '/' from cwd for safety
-        l_cwd = len_trim(cwd)
-        if(cwd(l_cwd:l_cwd)=='/')then
-            cwd_here = cwd(1:l_cwd-1)
-            l_cwd = l_cwd-1
-        else
-            cwd_here = cwd(1:l_cwd)
-        endif
-        ! removes execution directory from cwd
-        slashpos_left  = scan(cwd_here,'/',back=.false.)
-        slashpos_right = scan(cwd_here,'/',back=.true.)
-        if(slashpos_right > slashpos_left)then
-            projdir = cwd_here(1:slashpos_right-1)
-        else
-            THROW_HARD('Incorrect directory structure; simple_fileio :: make_relativepath')
-        endif
-        ! builds path
-        ipos = index(trim(fname_here),trim(projdir))
-        if( ipos == 1 )then
-            ! file inside project directory, use relative path
-            l = len_trim(projdir)
-            l_fname = len_trim(fname_here)
-            if(fname_here(l+1:l+1) == '/')then
-                newfname = '..'//fname_here(l+1:l_fname)
-            else
-                newfname = '../'//fname_here(l+1:l_fname)
-            endif
-        else
-            ! file outside of project directory or weird structure, use absolute path
-            newfname = trim(fname_here)
-        endif
-    end subroutine make_relativepath
-
     function get_relative_path ( path, root, trimlength ) result ( newpath )
-        character(len=*),           intent(in)    :: path, root
-        integer,          optional, intent(inout) :: trimlength
-        integer                                   :: l_trimlength = 0
-        character(len=XLONGSTRLEN)                :: newpath
+        class(string),     intent(in)    :: path, root
+        integer, optional, intent(inout) :: trimlength
+        integer      :: l_trimlength
+        type(string) :: newpath
+        l_trimlength = 0
         if(present(trimlength)) l_trimlength = trimlength 
-        if(l_trimlength .eq. 0) l_trimlength = index(path, root)
+        if(l_trimlength .eq. 0) l_trimlength = path%substr_ind(root)
         if(l_trimlength .gt. 0) then
-            newpath = path(l_trimlength:)
+            newpath = string(path%to_char([l_trimlength,path%strlen_trim()]))
         else
             newpath = path
         end if
@@ -1171,3 +1112,5 @@ contains
     end function get_relative_path
 
 end module simple_fileio
+
+

@@ -16,15 +16,15 @@ contains
 
     subroutine segdiampick_preprocess( spproj, pcontrast, moldiam_max, outdir )
         class(sp_project), intent(inout) :: spproj
-        character(len=*),  intent(in)    :: pcontrast, outdir
+        character(len=*),  intent(in)    :: pcontrast
+        class(string),     intent(in)    :: outdir
         real,              intent(in)    :: moldiam_max
         real,              parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
         integer,           parameter     :: BOXFAC = 3, NQ_DIAMS = 10
         type(picksegdiam)                :: picker
         type(image)                      :: mic_raw, mic_shrink, mic_den
         type(image_bin)                  :: mic_bin
-        character(len=:),  allocatable   :: mic_name
-        character(len=LONGSTRLEN)        :: mic_den_name, mic_topo_name, mic_bin_name, mic_diam_name
+        type(string)  :: mic_name, mic_den_name, mic_topo_name, mic_bin_name, mic_diam_name
         integer :: ldim_raw(3), ldim(3), imic, nboxes
         real    :: scale, smpd
         logical :: l_empty
@@ -33,7 +33,7 @@ contains
         scale = smpd / SMPD_SHRINK1
         ! read the first micrograph
         if( .not. spproj%os_mic%isthere(1, 'intg')) return
-        call read_mic_subtr_backgr_shrink(trim(spproj%os_mic%get_static(1, 'intg')), smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
+        call read_mic_subtr_backgr_shrink(spproj%os_mic%get_str(1,'intg'), smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
         ! set logical dimensions
         ldim_raw = mic_raw%get_ldim()
         ldim     = mic_shrink%get_ldim()
@@ -62,8 +62,8 @@ contains
             call picker%write_diameters(mic_diam_name)
             call spproj%os_mic%set(imic, 'mic_diam', mic_diam_name)
         end do
-        call picker%kill()
-        if(allocated(mic_name)) deallocate(mic_name)
+        call picker%kill
+        call mic_name%kill
     end subroutine segdiampick_preprocess
 
     subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam )
@@ -73,15 +73,14 @@ contains
         real,              intent(in)    :: moldiam_max
         integer,           intent(out)   :: box_in_pix
         real,              intent(out)   :: mskdiam    ! estimated mask diameter
-        logical, parameter :: DEBUG = .true.
-        real,    parameter :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
-        integer, parameter :: BOXFAC = 3, NQ_DIAMS = 10
-        character(len=LONGSTRLEN)              :: boxfile
-        character(len=LONGSTRLEN), allocatable :: micnames(:), mic_den_names(:), mic_topo_names(:), mic_bin_names(:)
-        character(len=:),          allocatable :: fbody_here, ext, fname_thumb_den
-        integer,                   allocatable :: labels(:), diam_labels(:), orimap(:)
-        real,                      allocatable :: diams_arr(:), diams_arr_ts(:), tmp(:)
-        real,                      allocatable :: diam_means(:), abs_z_scores(:)
+        logical,           parameter     :: DEBUG = .true.
+        real,              parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
+        integer,           parameter     :: BOXFAC = 3, NQ_DIAMS = 10
+        type(string),      allocatable   :: micnames(:), mic_den_names(:), mic_topo_names(:), mic_bin_names(:)
+        integer,           allocatable   :: labels(:), diam_labels(:), orimap(:)
+        real,              allocatable   :: diams_arr(:), diams_arr_ts(:), tmp(:)
+        real,              allocatable   :: diam_means(:), abs_z_scores(:)
+        type(string)       :: boxfile, fbody_here, ext, fname_thumb_den, str_intg
         type(picksegdiam)  :: picker
         type(image)        :: mic_raw, mic_shrink, mic_den
         type(image_bin)    :: mic_bin
@@ -112,21 +111,25 @@ contains
             if(spproj%os_mic%isthere(orimap(imic), 'mic_den') &
                 &.and. spproj%os_mic%isthere(orimap(imic), 'mic_topo') &
                 &.and. spproj%os_mic%isthere(orimap(imic), 'mic_bin') ) then
-                    mic_den_names(imic)  = trim(spproj%os_mic%get_static(orimap(imic), 'mic_den'))
-                    mic_topo_names(imic) = trim(spproj%os_mic%get_static(orimap(imic), 'mic_topo'))
-                    mic_bin_names(imic)  = trim(spproj%os_mic%get_static(orimap(imic), 'mic_bin'))
+                    mic_den_names(imic)  = spproj%os_mic%get_str(orimap(imic), 'mic_den')
+                    mic_topo_names(imic) = spproj%os_mic%get_str(orimap(imic), 'mic_topo')
+                    mic_bin_names(imic)  = spproj%os_mic%get_str(orimap(imic), 'mic_bin')
                     if( spproj%os_mic%isthere(orimap(imic), 'mic_diam') ) then
-                        if (file_exists(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')))) then
-                            call diams_file%new(trim(spproj%os_mic%get_static(orimap(imic), 'mic_diam')), 1)
+                        if (file_exists(spproj%os_mic%get_str(orimap(imic), 'mic_diam'))) then
+                            call diams_file%new(spproj%os_mic%get_str(orimap(imic), 'mic_diam'), 1)
                             allocate(tmp(diams_file%get_nrecs_per_line()))
                             call diams_file%readNextDataLine(tmp)
-                            write(logfhandle, *) ">>> FOUND PICK-PREPROCESSING FOR MICROGRAPH "// trim(spproj%os_mic%get_static(orimap(imic), 'intg'))&
+                            str_intg = spproj%os_mic%get_str(orimap(imic), 'intg')
+                            write(logfhandle, *) ">>> FOUND PICK-PREPROCESSING FOR MICROGRAPH "//str_intg%to_char()&
                             &//". IMPORTED "//int2str(size(tmp))// " DIAMETERS"
                             call spproj%os_mic%delete_entry(orimap(imic), 'mic_diam')
+                            call str_intg%kill
                         endif
                     else
-                        write(logfhandle, *) ">>> FOUND PICK-PREPROCESSING FOR MICROGRAPH "// trim(spproj%os_mic%get_static(orimap(imic), 'intg'))&
+                        str_intg = spproj%os_mic%get_str(orimap(imic), 'intg')
+                        write(logfhandle, *) ">>> FOUND PICK-PREPROCESSING FOR MICROGRAPH "//str_intg%to_char()&
                             &//". IMPORTED 0 DIAMETERS"
+                        call str_intg%kill
                     endif
                     call spproj%os_mic%delete_entry(orimap(imic), 'mic_den')
                     call spproj%os_mic%delete_entry(orimap(imic), 'mic_topo')
@@ -205,7 +208,7 @@ contains
         print *, 'msk diam: ', mskdiam
         ! re-pick with diameter constraints applied
         do imic = 1, mic_to
-            boxfile = basename(fname_new_ext(trim(micnames(imic)),'box'))
+            boxfile = basename(fname_new_ext(micnames(imic),'box'))
             call picker%pick(ldim_raw, smpd, mic_bin_names(imic), [diam_stats%minv,diam_stats%maxv])
             nptcls = picker%get_nboxes()
             if( nptcls > 0 )then
@@ -213,11 +216,11 @@ contains
                 call spproj%set_boxfile(orimap(imic), simple_abspath(boxfile), nptcls=nptcls)
             endif
             if( file_exists(mic_den_names(imic)) )then
-                fbody_here      = basename(trim(micnames(imic)))
-                ext             = fname2ext(trim(fbody_here))
-                fbody_here      = get_fbody(trim(fbody_here), trim(ext))
-                fname_thumb_den = trim(adjustl(fbody_here))//DEN_SUFFIX//trim(JPG_EXT)
-                call read_mic(trim(mic_den_names(imic)), mic_den)
+                fbody_here      = basename(micnames(imic))
+                ext             = fname2ext(fbody_here)
+                fbody_here      = get_fbody(fbody_here, ext)
+                fname_thumb_den = fbody_here%to_char()//DEN_SUFFIX//JPG_EXT
+                call read_mic(mic_den_names(imic), mic_den)
                 call mic2thumb(mic_den, fname_thumb_den, l_neg=.true.) ! particles black
                 call spproj%os_mic%set(orimap(imic), 'thumb_den', simple_abspath(fname_thumb_den))
             endif

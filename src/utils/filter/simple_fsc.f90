@@ -64,8 +64,8 @@ contains
             do k = k_rand+2,n
                 fsc(k) = (fsc_t(k)-fsc_n(k)) / (1.-fsc_n(k))
             enddo
-            call arr2file(fsc_t, 'fsct_state'//int2str_pad(state,2)//BIN_EXT)
-            call arr2file(fsc_n, 'fscn_state'//int2str_pad(state,2)//BIN_EXT)
+            call arr2file(fsc_t, string('fsct_state'//int2str_pad(state,2)//BIN_EXT))
+            call arr2file(fsc_n, string('fscn_state'//int2str_pad(state,2)//BIN_EXT))
         endif
     end subroutine phase_rand_fsc
 
@@ -73,7 +73,7 @@ contains
         integer,           intent(in) :: n
         real,              intent(in) :: fsc(n), res(n), smpd
         character(len=*),  intent(in) :: tmpl_fname
-        type(str4arr)             :: title
+        type(string)              :: title
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
@@ -94,16 +94,16 @@ contains
         end do
         call CPlot2D__AddDataSet(plot2D, dataset)
         call CDataSet__delete(dataset)
-        title%str = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        title%str = 'Fourier Shell Correlations'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        title = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
+        title = 'Fourier Shell Correlations'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%to_char())
         call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
             &//trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_fsc
 
@@ -111,7 +111,7 @@ contains
         integer,           intent(in) :: n
         real,              intent(in) :: fsc1(n), fsc2(n), res(n), smpd
         character(len=*),  intent(in) :: tmpl_fname
-        type(str4arr)             :: title
+        type(string)              :: title
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet1
         type(CDataSet_type)       :: dataSet2
@@ -138,16 +138,16 @@ contains
         end do
         call CPlot2D__AddDataSet(plot2D, dataSet2)
         call CDataSet__delete(dataSet2)
-        title%str = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        title%str = 'Fourier Shell Correlations'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        title = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
+        title = 'Fourier Shell Correlations'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%to_char())
         call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
             &//trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_fsc2
 
@@ -155,7 +155,7 @@ contains
         integer,           intent(in) :: n
         real,              intent(in) :: fsc(n), fsc_n(n), fsc_t(n), res(n), smpd
         character(len=*),  intent(in) :: tmpl_fname
-        type(str4arr)             :: title
+        type(string)              :: title
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
@@ -195,16 +195,16 @@ contains
         end do
         call CPlot2D__AddDataSet(plot2D, dataset)
         call CDataSet__delete(dataset)
-        title%str = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        title%str = 'Fourier Shell Correlations'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        title = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
+        title = 'Fourier Shell Correlations'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%to_char())
         call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
             &//trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_phrand_fsc
 

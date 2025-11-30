@@ -11,23 +11,23 @@ use simple_parameters,         only: parameters
 use simple_particle_extractor, only: ptcl_extractor
 use simple_projfile_utils,     only: merge_chunk_projfiles
 use simple_sp_project,         only: sp_project
-use simple_stream_utils
-use simple_stream_communicator
-use simple_strategy2D_utils
-use simple_stack_io
-use simple_segmentation
-use simple_qsys_funs
-use simple_qsys_env
-use simple_progress
-use simple_nice
-use simple_moviewatcher
-use simple_micproc
-use simple_gui_utils
-use simple_commanders_project
-use simple_commanders_preprocess
-use simple_commanders_imgproc
-use simple_commanders_cluster2D_stream
 use simple_commanders_abinitio2D
+use simple_commanders_cluster2D_stream
+use simple_commanders_imgproc
+use simple_commanders_preprocess
+use simple_commanders_project
+use simple_gui_utils
+use simple_micproc
+use simple_moviewatcher
+use simple_nice
+use simple_progress
+use simple_qsys_env
+use simple_qsys_funs
+use simple_segmentation
+use simple_stack_io
+use simple_strategy2D_utils
+use simple_stream_communicator
+use simple_stream_utils
 implicit none
 
 public :: commander_stream_sieve_cavgs, commander_stream_abinitio2D, stream_test_sieve_cavgs
@@ -45,14 +45,14 @@ type, extends(commander_base) :: commander_stream_abinitio2D
 end type commander_stream_abinitio2D
 
 ! module constants
-character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for processed projects
-character(len=STDLEN), parameter :: micspproj_fname      = './streamdata.simple'
-character(len=STDLEN), parameter :: REJECTED_CLS_STACK   = './rejected_cls.mrc'
-integer,               parameter :: LONGTIME             = 60    ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME             = 10    ! movie folder watched every WAITTIME seconds
-integer(kind=dp),      parameter :: FLUSH_TIMELIMIT      = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
-integer,               parameter :: PAUSE_NITERS         = 5     ! # of iterations after which 2D analysis is paused
-integer,               parameter :: PAUSE_TIMELIMIT      = 600   ! time (secs) after which 2D analysis is paused
+character(len=*), parameter :: DIR_STREAM_COMPLETED = './spprojs_completed/' ! location for processed projects
+character(len=*), parameter :: MICSPPROJ_FNAME      = './streamdata.simple'
+character(len=*), parameter :: REJECTED_CLS_STACK   = './rejected_cls.mrc'
+integer,          parameter :: LONGTIME             = 60    ! time lag after which a movie/project is processed
+integer,          parameter :: WAITTIME             = 10    ! movie folder watched every WAITTIME seconds
+integer(kind=dp), parameter :: FLUSH_TIMELIMIT      = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
+integer,          parameter :: PAUSE_NITERS         = 5     ! # of iterations after which 2D analysis is paused
+integer,          parameter :: PAUSE_TIMELIMIT      = 600   ! time (secs) after which 2D analysis is paused
 
 contains
 
@@ -61,21 +61,20 @@ contains
     subroutine exec_sieve_cavgs( self, cline )
         class(commander_stream_sieve_cavgs), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        type(projrecord),          allocatable :: projrecords(:)
-        type(parameters)                       :: params
-        type(qsys_env)                         :: qenv
-        type(stream_http_communicator)         :: http_communicator
-        type(projs_list)                       :: chunkslist, setslist
-        type(oris)                             :: moldiamori, chunksizeori, nmicsori
-        type(moviewatcher)                     :: project_buff
-        type(sp_project)                       :: spproj_glob
-        type(json_value),          pointer     :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
-        character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=XLONGSTRLEN),allocatable :: completed_projfiles(:) 
-        character(len=STDLEN)                  :: chunk_part_env
-        character(len=:),          allocatable :: selection_jpeg, mapfileprefix
-        integer,                   allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
-        real,                      allocatable :: cls_res(:), cls_pop(:)
+        type(projrecord),  allocatable :: projrecords(:)
+        type(string),      allocatable :: projects(:), completed_projfiles(:)
+        integer,           allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
+        real,              allocatable :: cls_res(:), cls_pop(:)
+        type(parameters)               :: params
+        type(qsys_env)                 :: qenv
+        type(stream_http_communicator) :: http_communicator
+        type(projs_list)               :: chunkslist, setslist
+        type(oris)                     :: moldiamori, chunksizeori, nmicsori
+        type(moviewatcher)             :: project_buff
+        type(sp_project)               :: spproj_glob
+        type(json_value), pointer      :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
+        character(len=STDLEN)          :: chunk_part_env
+        type(string)     :: selection_jpeg, mapfileprefix
         real             :: mskdiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
@@ -121,19 +120,19 @@ contains
         l_wait_for_user        = .false.
         if(params%interactive == 'yes') l_wait_for_user = .true.
         ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver, "sieve_cavgs")
+        call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "sieve_cavgs")
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
         call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs', '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs_completed', '**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
         ! mskdiam
         if( .not. cline%defined('mskdiam') )then
             ! obtain mskdiam from moldiam ori file written by pick_extract (generated by generate_pickrefs)
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//trim(STREAM_MOLDIAM)
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//STREAM_MOLDIAM
             do i=1, 8640
-                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
+                if(file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) exit
                 call sleep(10)
                 call http_communicator%send_jobstats()
                 if( http_communicator%exit )then
@@ -144,23 +143,23 @@ contains
                     call EXIT(0)
                 endif
             end do
-            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
+            if( .not. file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) THROW_HARD('either mskdiam must be given or '// STREAM_MOLDIAM // ' exists in target_dir')
             ! read mskdiam from file
             call moldiamori%new(1, .false.)
-            call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
-            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD( 'mskdiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            call moldiamori%read(params%dir_target//'/'//STREAM_MOLDIAM)
+            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD( 'mskdiam missing from ' // params%dir_target%to_char()//'/'//STREAM_MOLDIAM)
             mskdiam = moldiamori%get(1, "mskdiam")
             ! write a copy for stream 2D downstream
-            if(file_exists(trim(STREAM_MOLDIAM))) call del_file(trim(STREAM_MOLDIAM))
-            call moldiamori%write(1, trim(STREAM_MOLDIAM))
+            if(file_exists(STREAM_MOLDIAM)) call del_file(STREAM_MOLDIAM)
+            call moldiamori%write(1, string(STREAM_MOLDIAM))
             call moldiamori%kill
             params%mskdiam = mskdiam
             call cline%set('mskdiam', params%mskdiam)
             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
             ! read nmics from file if present
-            if( file_exists( trim(params%dir_target)//'/'//trim(STREAM_NMICS)) ) then
+            if( file_exists( params%dir_target//'/'//STREAM_NMICS) ) then
                 call nmicsori%new(1, .false.)
-                call nmicsori%read( trim(params%dir_target)//'/'//trim(STREAM_NMICS) )
+                call nmicsori%read(params%dir_target//'/'//STREAM_NMICS )
                 if( nmicsori%isthere(1, "nmics" ) ) then
                     params%nmics = nmicsori%get_int(1, "nmics")
                     write(logfhandle,'(A,I6)')'>>> NMICS SET TO', params%nmics
@@ -170,9 +169,9 @@ contains
         ! Computing environment
         call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(1, exec_bin='simple_exec', qsys_partition=trim(chunk_part_env))
+            call qenv%new(1, exec_bin=string('simple_exec'), qsys_partition=string(trim(chunk_part_env)))
         else
-            call qenv%new(1, exec_bin='simple_exec')
+            call qenv%new(1, exec_bin=string('simple_exec'))
         end if
         ! Resolution based class rejection
         call set_lpthres_type("off")
@@ -184,8 +183,8 @@ contains
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! project watcher
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
-        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+        project_buff = moviewatcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
+        call simple_mkdir(PATH_HERE//DIR_STREAM_COMPLETED)
         ! Infinite loop
         nptcls_glob      = 0       ! global number of particles
         nchunks_glob     = 0       ! global number of completed chunks
@@ -200,9 +199,9 @@ contains
         time_last_import = huge(time_last_import)   ! used for flushing unprocessed particles
         do
             ! termination
-            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit ) exit
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit ) exit
             if( http_communicator%stop .or. test_repick() ) then
-                if(test_repick()) call write_repick_refs("../repick_refs.mrc")
+                if(test_repick()) call write_repick_refs(string("../repick_refs.mrc"))
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
@@ -277,7 +276,7 @@ contains
                         if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                             do i=0, size(jpg_cls_map) - 1
                                 if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
-                                    call communicator_add_cls2D_accepted(selection_jpeg,&
+                                    call communicator_add_cls2D_accepted(selection_jpeg%to_char(),&
                                         &i + 1,&
                                         &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                         &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -287,7 +286,7 @@ contains
                                         &res=cls_res(jpg_cls_map(i+1)),&
                                         &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                 else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
-                                    call communicator_add_cls2D_rejected(selection_jpeg,&
+                                    call communicator_add_cls2D_rejected(selection_jpeg%to_char(),&
                                         &i + 1,&
                                         &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                         &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -326,7 +325,7 @@ contains
                             if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                                 do i=0, size(jpg_cls_map) - 1
                                     if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
-                                        call communicator_add_cls2D_accepted(selection_jpeg,&
+                                        call communicator_add_cls2D_accepted(selection_jpeg%to_char(),&
                                             &jpg_cls_map(i + 1),&
                                             &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                             &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -335,7 +334,7 @@ contains
                                             &res=cls_res(jpg_cls_map(i+1)),&
                                             &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                     else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
-                                        call communicator_add_cls2D_rejected(selection_jpeg,&
+                                        call communicator_add_cls2D_rejected(selection_jpeg%to_char(),&
                                             &jpg_cls_map(i + 1),&
                                             &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                             &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -381,7 +380,7 @@ contains
                                 if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                                     do i=0, size(jpg_cls_map) - 1
                                         if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
-                                            call communicator_add_cls2D_accepted(selection_jpeg,&
+                                            call communicator_add_cls2D_accepted(selection_jpeg%to_char(),&
                                                 &jpg_cls_map(i + 1),&
                                                 &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                                 &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -391,7 +390,7 @@ contains
                                                 &res=cls_res(i+1),&
                                                 &pop=nint(cls_pop(i+1)))
                                         else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
-                                            call communicator_add_cls2D_rejected(selection_jpeg,&
+                                            call communicator_add_cls2D_rejected(selection_jpeg%to_char(),&
                                                 &jpg_cls_map(i + 1),&
                                                 &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                                 &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -436,29 +435,29 @@ contains
             if(.not. setslist%busy(i) .and. setslist%processed(i) .and. setslist%imported(i)) then
                 if(.not. allocated(completed_projfiles))then
                     allocate(completed_projfiles(1))
-                    completed_projfiles(1) = trim(setslist%projfiles(i))
+                    completed_projfiles(1) = setslist%projfiles(i)
                 else
-                    completed_projfiles = [completed_projfiles, trim(setslist%projfiles(i))]
+                    completed_projfiles = [completed_projfiles, setslist%projfiles(i)]
                 endif
             endif
         enddo
         if(allocated(completed_projfiles)) then
-            call merge_chunk_projfiles(completed_projfiles, './', spproj_glob, projname_out="tmp", write_proj=.false.)
-            call spproj_glob%update_projinfo(trim(cline%get_carg('projfile'))) ! update projinfo with projfile name as modified by merge_chunks
+            call merge_chunk_projfiles(completed_projfiles, string('./'), spproj_glob, projname_out=string("tmp"), write_proj=.false.)
+            call spproj_glob%update_projinfo(cline%get_carg('projfile')) ! update projinfo with projfile name as modified by merge_chunks
             deallocate(completed_projfiles)
         endif
         ! add optics
         if(cline%defined('optics_dir')) then
-            optics_map_id = get_latest_optics_map_id(trim(params%optics_dir))
+            optics_map_id = get_latest_optics_map_id(params%optics_dir)
             if(optics_map_id .gt. 0) then
-                mapfileprefix = trim(params%optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
+                mapfileprefix = params%optics_dir // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
                 call spproj_glob%import_optics_map(mapfileprefix)
             endif
         endif
         ! write project and star files (just in case you want ot import these particles/micrographs elsewhere)
         call spproj_glob%write
-        call spproj_glob%write_mics_star("micrographs.star")
-        call spproj_glob%write_ptcl2D_star("particles.star")
+        call spproj_glob%write_mics_star(string("micrographs.star"))
+        call spproj_glob%write_ptcl2D_star(string("particles.star"))
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
@@ -470,11 +469,11 @@ contains
 
             ! updates global records
             subroutine update_records_with_project( projectnames, n_imported )
-                character(len=LONGSTRLEN), allocatable, intent(in)  :: projectnames(:)
-                integer,                                intent(out) :: n_imported
-                type(sp_project),     allocatable :: spprojs(:)
-                type(projrecord),     allocatable :: old_records(:)
-                character(len=:),     allocatable :: fname, abs_fname
+                type(string), allocatable, intent(in)  :: projectnames(:)
+                integer,                   intent(out) :: n_imported
+                type(sp_project), allocatable :: spprojs(:)
+                type(projrecord), allocatable :: old_records(:)
+                type(string) :: fname, abs_fname
                 real    :: avgmicptcls, nptcls_per_cls
                 integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls, first
                 n_imported = 0
@@ -490,7 +489,7 @@ contains
                 nmics = 0
                 first = 0
                 do iproj = 1,n_spprojs
-                    call spprojs(iproj)%read_segment('mic', trim(projectnames(iproj)))
+                    call spprojs(iproj)%read_segment('mic', projectnames(iproj))
                     nmics = nmics + spprojs(iproj)%os_mic%get_noris()
                     if( (first == 0) .and. (nmics > 0) ) first = iproj
                 enddo
@@ -514,9 +513,9 @@ contains
                         irec      = irec + 1
                         nptcls    = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
                         n_ptcls   = n_ptcls + nptcls ! global update
-                        fname     = trim(projectnames(iproj))
-                        abs_fname = simple_abspath(fname, errmsg='stream_cluster2D :: update_projects_list 1')
-                        projrecords(irec)%projname   = trim(abs_fname)
+                        fname     = projectnames(iproj)
+                        abs_fname = simple_abspath(fname)
+                        projrecords(irec)%projname   = abs_fname
                         projrecords(irec)%micind     = imic
                         projrecords(irec)%nptcls     = nptcls
                         projrecords(irec)%nptcls_sel = nptcls
@@ -535,7 +534,7 @@ contains
                         params%nptcls_per_cls = int(nptcls_per_cls)
                         call cline%set('nptcls_per_cls', nptcls_per_cls)
                         params%smpd = spprojs(first)%os_mic%get(1,'smpd')
-                        call spprojs(first)%read_segment('stk', trim(projectnames(first)))
+                        call spprojs(first)%read_segment('stk', projectnames(first))
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
                         if(params%mskdiam == 0.0) then
                             params%mskdiam = 0.9 * ceiling(params%box * spprojs(first)%os_stk%get(1,'smpd'))
@@ -547,12 +546,12 @@ contains
                         ! write out for stream3d to pick up
                         call chunksizeori%new(1, .false.)
                         call chunksizeori%set(1, 'nptcls_per_cls', params%nptcls_per_cls)
-                        call chunksizeori%write(1, trim(STREAM_CHUNKSIZE))
+                        call chunksizeori%write(1, string(STREAM_CHUNKSIZE))
                         call chunksizeori%kill
                     end if
                 else if( n_old == 0 )then
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
-                    call spprojs(first)%read_segment('stk', trim(projectnames(first)))
+                    call spprojs(first)%read_segment('stk', projectnames(first))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
                     if(params%mskdiam == 0.0) then
                         params%mskdiam = 0.9 * ceiling(params%box * spprojs(first)%os_stk%get(1,'smpd'))
@@ -573,10 +572,10 @@ contains
                 use simple_euclid_sigma2, only: average_sigma2_groups
                 class(projs_list), intent(in)    :: chunks
                 class(projs_list), intent(inout) :: sets
-                type(sp_project)                       :: spproj
-                character(len=LONGSTRLEN), allocatable :: starfiles(:)
-                character(len=:),          allocatable :: tmpl
-                integer :: navail_chunks, n, iset, i, ic, ic_start, ic_end
+                type(string), allocatable :: starfiles(:)
+                type(sp_project) :: spproj
+                type(string)     :: tmpl
+                integer          :: navail_chunks, n, iset, i, ic, ic_start, ic_end
                 navail_chunks = chunks%n - sets%n * params%nchunksperset
                 n = floor(real(navail_chunks) / real(params%nchunksperset))
                 if( n < 1 )return
@@ -584,19 +583,19 @@ contains
                     ! merge chunks project into designated folder
                     ic_start = sets%n*params%nchunksperset + 1
                     ic_end   = ic_start + params%nchunksperset - 1
-                    tmpl     = trim(DIR_SET)//int2str(sets%n+1)
+                    tmpl     = DIR_SET//int2str(sets%n+1)
                     call simple_mkdir(tmpl)
                     call merge_chunk_projfiles(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
                     ! average and stash sigma2
                     allocate(starfiles(params%nchunksperset))
                     do i = 1,params%nchunksperset
                         ic = ic_start + i - 1
-                        starfiles(i) = trim(SIGMAS_DIR)//'/chunk_'//int2str(chunks%ids(ic))//trim(STAR_EXT)
+                        starfiles(i) = SIGMAS_DIR//'/chunk_'//int2str(chunks%ids(ic))//STAR_EXT
                     enddo
-                    call average_sigma2_groups(tmpl//'/'//tmpl//trim(STAR_EXT), starfiles)
+                    call average_sigma2_groups(tmpl//'/'//tmpl//STAR_EXT, starfiles)
                     deallocate(starfiles)
                     ! update global list and increment sets%n
-                    call sets%append(tmpl//'/'//tmpl//trim(METADATA_EXT), sets%n+1, .false.)
+                    call sets%append(tmpl//'/'//tmpl//METADATA_EXT, sets%n+1, .false.)
                     ! remove imported chunk
                     if( trim(params%remove_chunks).eq.'yes' )then
                         do ic = ic_start,ic_end
@@ -608,8 +607,8 @@ contains
             end subroutine generate_sets
 
             subroutine submit_cluster_cavgs
-                type(cmdline)              :: cline_cluster_cavgs
-                character(len=XLONGSTRLEN) :: cwd
+                type(cmdline) :: cline_cluster_cavgs
+                type(string)  :: cwd
                 if( setslist%n < 1 )        return  ! no sets generated yet
                 if( setslist%busy(1) )      return  ! ongoing
                 if( setslist%processed(1) ) return  ! already done
@@ -619,28 +618,28 @@ contains
                 call cline_cluster_cavgs%set('nthr',         params%nthr)
                 call cline_cluster_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_cluster_cavgs%set('verbose_exit', 'yes')
-                call chdir(stemname(setslist%projfiles(1)))
+                call simple_chdir(stemname(setslist%projfiles(1)))
                 call simple_getcwd(cwd)
-                cwd_glob = trim(cwd)
+                CWD_GLOB = cwd%to_char()
                 call qenv%exec_simple_prg_in_queue_async(cline_cluster_cavgs,&
-                    &'cluster_cavgs_script', 'cluster_cavgs.log')
-                call chdir('..')
-                call simple_getcwd(cwd_glob)
+                    &string('cluster_cavgs_script'), string('cluster_cavgs.log'))
+                call simple_chdir('..')
+                call simple_getcwd(cwd)
+                CWD_GLOB = cwd%to_char()
                 setslist%busy(1)      = .true.
                 setslist%processed(1) = .false.
                 call cline_cluster_cavgs%kill
             end subroutine submit_cluster_cavgs
 
             subroutine submit_match_cavgs
-                type(cmdline)                 :: cline_match_cavgs
-                character(len=:), allocatable :: path
-                character(len=XLONGSTRLEN)    :: cwd
+                type(cmdline) :: cline_match_cavgs
+                type(string)  :: path, cwd
                 integer :: iset
                 if( setslist%n < 2 ) return    ! not enough sets generated
                 ! any unprocessed and not being processed?
                 if( .not.any((.not.setslist%processed(2:)) .and. (.not.setslist%busy(2:))) ) return
                 call cline_match_cavgs%set('prg',          'match_cavgs')
-                call cline_match_cavgs%set('projfile',     simple_abspath(setslist%projfiles(1) ,"submit_match_cavgs"))
+                call cline_match_cavgs%set('projfile',     simple_abspath(setslist%projfiles(1)))
                 call cline_match_cavgs%set('mkdir',        'no')
                 call cline_match_cavgs%set('nthr',         params%nthr)
                 call cline_match_cavgs%set('mskdiam',      params%mskdiam)
@@ -651,13 +650,14 @@ contains
                     if( setslist%busy(iset) )      cycle ! ongoing
                     call cline_match_cavgs%set('projfile_target', basename(setslist%projfiles(iset)))
                     path = stemname(setslist%projfiles(iset))
-                    call chdir(path)
+                    call simple_chdir(path)
                     call simple_getcwd(cwd)
-                    cwd_glob = trim(cwd)
+                    CWD_GLOB = cwd%to_char()
                     call qenv%exec_simple_prg_in_queue_async(cline_match_cavgs,&
-                        &'match_cavgs_script', 'match_cavgs.log')
-                    call chdir('..')
-                    call simple_getcwd(cwd_glob)
+                        &string('match_cavgs_script'), string('match_cavgs.log'))
+                    call simple_chdir('..')
+                    call simple_getcwd(cwd)
+                    CWD_GLOB = cwd%to_char()
                     setslist%busy(iset)      = .true.   ! ongoing
                     setslist%processed(iset) = .false.  ! not complete
                 enddo
@@ -667,10 +667,10 @@ contains
             ! Check for status of individual sets
             subroutine is_set_processed( i )
                 integer, intent(in) :: i
-                character(len=:), allocatable :: fname
+                type(string) :: fname
                 if( setslist%n < 1        ) return  ! no sets generated yet
                 if( setslist%processed(i) ) return  ! already done
-                fname = trim(stemname(setslist%projfiles(i)))//'/'//trim(TASK_FINISHED)
+                fname = stemname(setslist%projfiles(i))//'/'//TASK_FINISHED
                 if( file_exists(fname) )then
                     setslist%busy(i)      = .false.
                     setslist%processed(i) = .true.  ! now ready for pool import
@@ -746,15 +746,15 @@ contains
             ! make completed project files visible to the watcher of the next application
             subroutine flag_complete_sets
                 use simple_image, only:image
-                type(sp_project)              :: spproj
-                type(image)                   :: img
-                character(len=:), allocatable :: destination, stk
+                type(sp_project) :: spproj
+                type(image)      :: img
+                type(string)     :: destination, stk
                 real    :: smpd
                 integer :: ldim(3), icls, iset, n_state_nonzero, nimgs, ncls
                 do iset = 1,setslist%n
                     if( setslist%imported(iset) ) cycle
                     if( setslist%processed(iset) )then
-                        destination = trim(DIR_STREAM_COMPLETED)//trim(DIR_SET)//int2str(iset)//trim(METADATA_EXT)
+                        destination = DIR_STREAM_COMPLETED//DIR_SET//int2str(iset)//METADATA_EXT
                         call simple_rename(setslist%projfiles(iset), destination)
                         setslist%projfiles(iset) = destination ! relocation
                         setslist%imported(iset)  = .true.
@@ -770,7 +770,7 @@ contains
                         call spproj%get_cavgs_stk(stk, ncls, smpd)
                         nimgs = 0
                         if( file_exists(REJECTED_CLS_STACK) )then
-                            call find_ldim_nptcls(REJECTED_CLS_STACK, ldim, nimgs)
+                            call find_ldim_nptcls(string(REJECTED_CLS_STACK), ldim, nimgs)
                         else
                             call find_ldim_nptcls(stk, ldim, ncls)
                         endif
@@ -782,7 +782,7 @@ contains
                             if( spproj%os_cls2D%get_state(icls) == 0 )then
                                 nimgs = nimgs+1
                                 call img%read(stk,icls)
-                                call img%write(REJECTED_CLS_STACK, nimgs)
+                                call img%write(string(REJECTED_CLS_STACK), nimgs)
                             endif
                         enddo
                         call spproj%kill
@@ -810,24 +810,26 @@ contains
 
             ! Remove previous files from folder to restart
             subroutine cleanup4restart
-                character(len=STDLEN), allocatable :: folders(:)
-                character(len=XLONGSTRLEN)         :: cwd_restart
-                logical :: l_restart
-                integer :: i
+                type(string), allocatable :: folders(:)
+                type(string) :: cwd_restart, str_dir
+                logical      :: l_restart
+                integer      :: i
                 call simple_getcwd(cwd_restart)
                 l_restart = .false.
-                if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+                if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
                     l_restart = .true.
-                    call chdir(trim(cline%get_carg('outdir')))
+                    call simple_chdir(cline%get_carg('outdir'))
                 endif
                 if(cline%defined('dir_exec')) then
                     if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                        THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+                        str_dir = cline%get_carg('dir_exec')
+                        THROW_HARD('Previous directory does not exists: '//str_dir%to_char())
+                        call str_dir%kill
                     endif
                     l_restart = .true.
                 endif
                 if( l_restart ) then
-                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
+                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", cwd_restart%to_char()
                     if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(TERM_STREAM)
                     call del_file(USER_PARAMS2D)
@@ -836,25 +838,24 @@ contains
                     folders = simple_list_dirs('.')
                     if( allocated(folders) )then
                         do i = 1,size(folders)
-                            if( str_has_substr(folders(i),trim(DIR_CHUNK)).or.&
-                                &str_has_substr(folders(i),trim(DIR_SET)) )then
+                            if( folders(i)%has_substr(DIR_CHUNK).or.folders(i)%has_substr(DIR_SET) )then
                                 call simple_rmdir(folders(i))
                             endif
                         enddo
                     endif
                 endif
-                call chdir(trim(cwd_restart))
+                call simple_chdir(cwd_restart)
             end subroutine cleanup4restart
 
             subroutine generate_selection_jpeg()
-                type(sp_project)              :: set1_proj
-                integer                       :: ncls, icls
-                real                          :: smpd, stkbox
+                type(sp_project)           :: set1_proj
+                integer                    :: ncls, icls
+                real                       :: smpd, stkbox
                 call set1_proj%read_segment('cls2D', setslist%projfiles(1))
                 call set1_proj%read_segment('out',   setslist%projfiles(1))
                 call set1_proj%read_segment('stk',   setslist%projfiles(1))
                 call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd, box=stkbox)
-                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set1_proj%get_box())))
+                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char()), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set1_proj%get_box())))
                 if(allocated(cls_res))     deallocate(cls_res)
                 if(allocated(cls_pop))     deallocate(cls_pop)
                 if(allocated(jpg_cls_map)) deallocate(jpg_cls_map)
@@ -875,18 +876,18 @@ contains
                 cls_pop = set1_proj%os_cls2D%get_all("pop")
                 call set1_proj%kill()
                 selection_jpeg_created = .true.
-                selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
+                selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char())
             end subroutine generate_selection_jpeg
 
             subroutine generate_set_jpeg()
-                type(sp_project)              :: set_proj
-                integer                       :: ncls, icls
-                real                          :: smpd, stkbox
+                type(sp_project) :: set_proj
+                integer          :: ncls, icls
+                real             :: smpd, stkbox
                 call set_proj%read_segment('cls2D', setslist%projfiles(latest_processed_set))
                 call set_proj%read_segment('out',   setslist%projfiles(latest_processed_set))
                 call set_proj%read_segment('stk',   setslist%projfiles(latest_processed_set))
                 call set_proj%get_cavgs_stk(selection_jpeg, ncls, smpd, box=stkbox)
-                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set_proj%get_box())))
+                call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char()), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set_proj%get_box())))
                 if(allocated(accepted_cls_ids)) deallocate(accepted_cls_ids)
                 if(allocated(rejected_cls_ids)) deallocate(rejected_cls_ids)
                 if(allocated(cls_res))          deallocate(cls_res)
@@ -908,7 +909,7 @@ contains
                 cls_res = set_proj%os_cls2D%get_all("res")
                 cls_pop = set_proj%os_cls2D%get_all("pop")
                 call set_proj%kill()
-                selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext)
+                selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char())
             end subroutine generate_set_jpeg
 
             subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
@@ -970,17 +971,18 @@ contains
     subroutine exec_stream_abinitio2D( self, cline )
         class(commander_stream_abinitio2D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        character(len=STDLEN),     parameter   :: micsspproj_fname = './streamdata.simple'
-        type(parameters)                       :: params
-        type(simple_nice_communicator)         :: nice_communicator
-        type(stream_http_communicator)         :: http_communicator
-        type(json_value),          pointer     :: latest_cls2D
-        type(projs_list)                       :: setslist
-        type(moviewatcher)                     :: project_buff
-        type(sp_project)                       :: spproj_glob
-        type(oris)                             :: moldiamori             
-        character(kind=CK,len=:),  allocatable :: snapshot_filename
-        character(len=LONGSTRLEN), allocatable :: projects(:)
+        character(len=*), parameter    :: MICSPPROJ_FNAME = './streamdata.simple'
+        type(parameters)               :: params
+        type(simple_nice_communicator) :: nice_communicator
+        type(stream_http_communicator) :: http_communicator
+        type(json_value), pointer      :: latest_cls2D
+        type(projs_list)               :: setslist
+        type(moviewatcher)             :: project_buff
+        type(sp_project)               :: spproj_glob
+        type(oris)                     :: moldiamori             
+        character(kind=CK,len=:), allocatable :: snapshot_filename
+        type(string), allocatable      :: projects(:)
+        type(string)                   :: str_avgs_jpeg, str_avgs_mrc
         integer(kind=dp) :: time_last_import, time_last_iter
         integer :: i, iter, nprojects, nimported, nptcls_glob, nsets_imported, pool_iter, iter_last_import
         integer :: xtile, ytile, mskdiam_update, extra_pause_iters
@@ -1022,17 +1024,17 @@ contains
         call nice_communicator%init(params%niceprocid,'')
         call nice_communicator%cycle()
         ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver, "classification_2D")
+        call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "classification_2D")
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
         call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs_completed', '**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
         ! wait for and retrieve mskdiam from sieving
         if( .not. cline%defined('mskdiam') )then
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//trim(STREAM_MOLDIAM)
+            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//STREAM_MOLDIAM
             do i=1, 8640
-                if(file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) exit
+                if(file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) exit
                 call sleep(10)
                 call http_communicator%send_jobstats()
                 if( http_communicator%exit )then
@@ -1043,11 +1045,11 @@ contains
                     call EXIT(0)
                 endif
             end do
-            if( .not. file_exists(trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM))) THROW_HARD('either mskdiam must be given or '// trim(STREAM_MOLDIAM) // ' exists in target_dir')
+            if( .not. file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) THROW_HARD('either mskdiam must be given or '// STREAM_MOLDIAM // ' exists in target_dir')
             ! read mskdiam from file
             call moldiamori%new(1, .false.)
-            call moldiamori%read( trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
-            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD( 'mskdiam missing from ' // trim(params%dir_target)//'/'//trim(STREAM_MOLDIAM) )
+            call moldiamori%read( params%dir_target//'/'//STREAM_MOLDIAM )
+            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD('mskdiam missing from '//params%dir_target%to_char()//'/'//STREAM_MOLDIAM)
             mskdiam = moldiamori%get(1, "mskdiam")
             params%mskdiam = mskdiam
             call cline%set('mskdiam', params%mskdiam)
@@ -1059,7 +1061,7 @@ contains
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! project watcher
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
+        project_buff = moviewatcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! Infinite loop
         iter              = 0
         nprojects         = 0        ! # of projects per iteration
@@ -1073,7 +1075,7 @@ contains
         extra_pause_iters = 0        ! extra iters before pause
         do
             ! termination
-            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit ) exit
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit ) exit
             iter = iter + 1
             ! detection of new projects
             call project_buff%watch(nprojects, projects)
@@ -1145,9 +1147,11 @@ contains
                 call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
                 if(allocated(pool_jpeg_map)) then
                     do i=0, size(pool_jpeg_map) - 1
+                        str_avgs_jpeg = get_pool_cavgs_jpeg()
+                        str_avgs_mrc  = string(CWD_GLOB) // '/' // get_pool_cavgs_mrc()
                         call communicator_add_cls2D(&
-                            &trim(get_pool_cavgs_jpeg()),&
-                            &trim(cwd_glob) // '/' // trim(get_pool_cavgs_mrc()),&
+                            &str_avgs_jpeg%to_char(),&
+                            &str_avgs_mrc%to_char(),&
                             &pool_jpeg_map(i + 1),&
                             &xtile * (100.0 / (get_pool_cavgs_jpeg_ntilesx() - 1)),&
                             &ytile * (100.0 / (get_pool_cavgs_jpeg_ntilesy() - 1)),&
@@ -1160,6 +1164,8 @@ contains
                             xtile = 0
                             ytile = ytile + 1
                         endif
+                        call str_avgs_jpeg%kill
+                        call str_avgs_mrc%kill
                     end do
                 endif
             endif
@@ -1172,9 +1178,9 @@ contains
                         call http_communicator%json%get(http_communicator%update_arguments, "snapshot_filename", snapshot_filename, found)
                         if(found) then
                             call write_project_stream2D(&
-                                &snapshot_projfile=trim(cwd_glob) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' //snapshot_filename,&
-                                &snapshot_starfile_base=trim(cwd_glob) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"),&
-                                &optics_dir=trim(params%optics_dir))
+                                &snapshot_projfile=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' //snapshot_filename,&
+                                &snapshot_starfile_base=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"),&
+                                &optics_dir=params%optics_dir)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_filename",  snapshot_filename)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    last_snapshot_nptcls)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_time",      stream_datestr())
@@ -1201,7 +1207,7 @@ contains
             call sleep(WAITTIME)
         enddo
         ! Cleanup and final project
-        call terminate_stream2D(optics_dir=trim(params%optics_dir))
+        call terminate_stream2D(optics_dir=params%optics_dir)
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
@@ -1220,10 +1226,10 @@ contains
             ! and initialize the clustering module
             subroutine import_sets_into_pool( nimported )
                 use simple_euclid_sigma2, only: average_sigma2_groups, sigma2_star_from_iter
-                integer,                   intent(out) :: nimported
-                type(sp_project),          allocatable :: spprojs(:)
-                character(len=LONGSTRLEN), allocatable :: sigmas(:)
-                class(sp_project),             pointer :: pool
+                integer,           intent(out) :: nimported
+                type(sp_project),  allocatable :: spprojs(:)
+                type(string),      allocatable :: sigmas(:)
+                class(sp_project), pointer     :: pool
                 integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
                 integer :: i, fromp, fromp_prev, imic, ind, iptcl, jptcl, jmic, nptcls_sel
                 nimported = 0
@@ -1314,7 +1320,7 @@ contains
                     if( .not.setslist%imported(iset) ) cycle
                     i         = i+1
                     ind       = setslist%ids(iset)
-                    sigmas(i) = trim(params%dir_target)//'/set_'//int2str(ind)//'/set_'//int2str(ind)//trim(STAR_EXT)
+                    sigmas(i) = params%dir_target//'/set_'//int2str(ind)//'/set_'//int2str(ind)//STAR_EXT
                 enddo
                 call average_sigma2_groups(sigma2_star_from_iter(get_pool_iter()+1), sigmas)
                 deallocate(sigmas)
@@ -1327,7 +1333,7 @@ contains
                         call cline%set('mskdiam', params%mskdiam)
                         write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
                     endif
-                    call init_pool_clustering(cline, spproj_glob, micsspproj_fname, reference_generation=.false.)
+                    call init_pool_clustering(cline, spproj_glob, string(MICSPPROJ_FNAME), reference_generation=.false.)
                 endif
                 ! global count
                 nptcls_glob = nptcls_glob + nptcls_sel
@@ -1341,27 +1347,29 @@ contains
 
             ! Remove previous files from folder to restart
             subroutine cleanup4restart
-                character(len=XLONGSTRLEN) :: cwd_restart
+                type(string) :: cwd_restart, str_dir
                 logical :: l_restart
                 call simple_getcwd(cwd_restart)
                 l_restart = .false.
-                if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+                if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
                     l_restart = .true.
-                    call chdir(trim(cline%get_carg('outdir')))
+                    call simple_chdir(cline%get_carg('outdir'))
                 endif
                 if(cline%defined('dir_exec')) then
                     if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                        THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+                        str_dir = cline%get_carg('dir_exec')
+                        THROW_HARD('Previous directory does not exists: '//str_dir%to_char())
+                        call str_dir%kill
                     endif
                     l_restart = .true.
                 endif
                 if( l_restart ) then
-                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", trim(cwd_restart)
+                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", cwd_restart%to_char()
                     if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(micspproj_fname)
                     call cleanup_root_folder
                 endif
-                call chdir(trim(cwd_restart))
+                call simple_chdir(cwd_restart)
             end subroutine cleanup4restart
 
             subroutine communicator_init()
@@ -1377,12 +1385,12 @@ contains
             end subroutine communicator_init
 
             subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, pop, res)
-                character(*),      intent(in)  :: path, mrcpath
-                real,              intent(in)  :: spritex, spritey
-                integer,           intent(in)  :: spriteh, spritew, mrc_idx
-                integer, optional, intent(in)  :: pop
-                real,    optional, intent(in)  :: res
-                type(json_value),  pointer     :: template
+                character(*),      intent(in) :: path, mrcpath
+                real,              intent(in) :: spritex, spritey
+                integer,           intent(in) :: spriteh, spritew, mrc_idx
+                integer, optional, intent(in) :: pop
+                real,    optional, intent(in) :: res
+                type(json_value),  pointer    :: template
                 call http_communicator%json%create_object(template, "")
                 call http_communicator%json%add(template, "path",    path)
                 call http_communicator%json%add(template, "mrcpath", mrcpath)
@@ -1412,7 +1420,7 @@ contains
         character(len=*),          parameter   :: DIR_PICKER = 'picker/'
         character(len=*),          parameter   :: DIR_PTCLS  = 'particles/'
         character(len=*),          parameter   :: PROJNAME = 'project', PROJFILE = 'project.simple'
-        character(len=LONGSTRLEN), allocatable :: micnames(:)
+        type(string),              allocatable :: micnames(:)
         type(image),               allocatable :: pickrefs(:)
         type(parameters)                       :: params
         type(ctfparams)                        :: ctfvars
@@ -1425,8 +1433,8 @@ contains
         type(commander_make_pickrefs)          :: xmakepickrefs
         type(commander_stream_sieve_cavgs)     :: xsieve_cavgs
         type(sp_project)                       :: spproj
-        character(len=LONGSTRLEN) :: boxfile, thumb_den
-        integer                   :: nmics,nboxes,imic,nptcls,nselmics,jmic,to,iproj,np
+        type(string)                           :: boxfile, thumb_den
+        integer                                :: nmics,nboxes,imic,nptcls,nselmics,jmic,to,iproj,np
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',           'yes')
         ! CTF
         if( .not. cline%defined('hp')             ) call cline%set('hp',                30.)
@@ -1444,7 +1452,7 @@ contains
         call cline_new_proj%set('dir',      PATH_HERE)
         call cline_new_proj%set('projname', PROJNAME)
         call xnew_project%execute_safe(cline_new_proj)
-        call spproj%read(PROJFILE)
+        call spproj%read(string(PROJFILE))
         ! Micrographs list
         call read_filetable(params%filetab, micnames)
         nmics = size(micnames)
@@ -1457,7 +1465,7 @@ contains
         call cline_make_pickrefs%set('pickrefs', params%pickrefs)
         call cline_make_pickrefs%set('smpd',     params%smpd)
         call xmakepickrefs%execute_safe(cline_make_pickrefs)
-        params%pickrefs = trim(PICKREFS_FBODY)//params%ext
+        params%pickrefs = string(PICKREFS_FBODY)//params%ext
         pickrefs        = read_stk_into_imgarr(params%pickrefs)
         write(*,*) 'Prepared picking references'
         ! Prep for CTF estimation, picking & extraction
@@ -1490,7 +1498,7 @@ contains
                 ! CTF estimation
                 call omic%new(is_ptcl=.false.)
                 call omic%set_state(1)
-                call ctfiter%iterate(ctfvars, micnames(jmic), omic, trim(DIR_CTF), l_gen_thumb=.true.)
+                call ctfiter%iterate(ctfvars, micnames(jmic), omic, string(DIR_CTF), l_gen_thumb=.true.)
                 call omic%set('intg',    micnames(jmic)) ! for future project import
                 call omic%set('imgkind', 'mic')
                 call omic%set('smpd',    params%smpd)
@@ -1503,7 +1511,7 @@ contains
                 ! CTFres/icefrac selection goes here
                 if( os_mic%get_state(jmic)==0 ) cycle
                 ! Picking
-                call exec_refpick( micnames(jmic), boxfile, thumb_den, params%smpd, np, pickrefs, DIR_PICKER )
+                call exec_refpick( micnames(jmic), boxfile, thumb_den, params%smpd, np, pickrefs, string(DIR_PICKER))
                 if( np > 0 )then
                     call os_mic%set(jmic, 'boxfile',   simple_abspath(boxfile))
                     call os_mic%set(jmic, 'thumb_den', simple_abspath(thumb_den))
@@ -1555,10 +1563,10 @@ contains
                 integer,        intent(inout) :: nptcls_extracted
                 type(sp_project)              :: proj
                 type(commander_extract)       :: xextract
-                character(len=:), allocatable :: fname
+                type(string)                  :: fname
                 integer                       :: nm, ns
                 iproj = iproj+1
-                fname = 'proj_'//int2str_pad(iproj,5)//trim(METADATA_EXT)
+                fname = 'proj_'//int2str_pad(iproj,5)//METADATA_EXT
                 call simple_chdir(DIR_PTCLS)
                 proj%os_mic  = os_mic%extract_subset(fromm, tomm)
                 proj%compenv = spproj%compenv
@@ -1569,7 +1577,7 @@ contains
                 call cline_extract%set('projfile', fname)
                 call xextract%execute_safe(cline_extract)
                 call proj%read_data_info(fname, nm, ns, nptcls_extracted)
-                call simple_rename(fname, '../spprojs_completed/'//fname)
+                call simple_rename(fname, string('../spprojs_completed/')//fname)
                 call del_files(JOB_FINISHED_FBODY, 1)
                 call simple_chdir('..')
                 call proj%kill

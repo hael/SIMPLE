@@ -23,9 +23,9 @@ contains
     end subroutine raise_exception_imgfile
 
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
-        character(len=*), intent(in) :: fname2copy, fname
-        real,             intent(in) :: smpd
-        integer,          intent(in) :: fromto(2)
+        class(string), intent(in) :: fname2copy, fname
+        real,          intent(in) :: smpd
+        integer,       intent(in) :: fromto(2)
         type(stack_io) :: stkio_r, stkio_w
         type(image)    :: img
         integer        :: n, i, cnt, ldim(3)
@@ -49,13 +49,13 @@ contains
     end subroutine copy_imgfile
 
     subroutine pad_imgfile( fname2pad, fname, ldim_pad, smpd )
-        character(len=*), intent(in) :: fname2pad, fname
-        integer,          intent(in) :: ldim_pad(3)
-        real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img, img_pad
-        integer                      :: n, i, ldim(3)
-        real                         :: ave, sdev, maxv, minv, med
+        class(string), intent(in) :: fname2pad, fname
+        integer,       intent(in) :: ldim_pad(3)
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img, img_pad
+        integer        :: n, i, ldim(3)
+        real           :: ave, sdev, maxv, minv, med
         call find_ldim_nptcls(fname2pad, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
@@ -85,14 +85,14 @@ contains
     end subroutine pad_imgfile
 
     subroutine scale_imgfile( fname2scale, fname, smpd, ldim_new, smpd_new, fromptop )
-        character(len=*),  intent(in)  :: fname2scale, fname
+        class(string),     intent(in)  :: fname2scale, fname
         real,              intent(in)  :: smpd
         integer,           intent(in)  :: ldim_new(3)
         real,              intent(out) :: smpd_new
         integer, optional, intent(in)  :: fromptop(2)
         type(stack_io) :: stkio_r, stkio_w
-        type(image) :: img, img_scaled
-        integer     :: n, i, ldim(3), prange(2), cnt, sz
+        type(image)    :: img, img_scaled
+        integer        :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2scale, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'scale_imgfile' )
@@ -137,12 +137,12 @@ contains
     end subroutine scale_imgfile
 
     subroutine clip_imgfile( fname2clip, fname, ldim_clip, smpd )
-        character(len=*), intent(in) :: fname2clip, fname
-        integer,          intent(in) :: ldim_clip(3)
-        real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img, img_clip
-        integer                      :: n, i, ldim(3)
+        class(string), intent(in) :: fname2clip, fname
+        integer,       intent(in) :: ldim_clip(3)
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img, img_clip
+        integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2clip, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
@@ -166,17 +166,17 @@ contains
     end subroutine clip_imgfile
 
     subroutine roavg_imgfile( fname2roavg, fname, angstep, smpd )
-        character(len=*), intent(in) :: fname2roavg, fname
-        integer,          intent(in) :: angstep
-        real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img, img_roavg
-        integer                      :: n, i, ldim(3)
+        class(string), intent(in) :: fname2roavg, fname
+        integer,       intent(in) :: angstep
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img, img_roavg
+        integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2roavg, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'roavg_imgfile' )
         call stkio_r%open(fname2roavg, smpd, 'read')
-        call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
+        call stkio_w%open(fname,       smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
         call img_roavg%new(ldim,smpd)
         write(logfhandle,'(a)') '>>> ROTATIONALLY AVERAGING IMAGES'
@@ -193,12 +193,12 @@ contains
     end subroutine roavg_imgfile
 
     subroutine mirror_imgfile( fname2mirr, fname, mirr_flag, smpd )
-        character(len=*), intent(in) :: fname2mirr, fname
+        class(string),    intent(in) :: fname2mirr, fname
         character(len=1), intent(in) :: mirr_flag
         real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: n, i, ldim(3)
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2mirr, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
@@ -218,15 +218,15 @@ contains
     end subroutine mirror_imgfile
 
     subroutine scale_and_clip_imgfile( fname2scale, fname, smpd, ldim_new, ldim_clip, smpd_new, fromptop )
-        character(len=*),  intent(in)  :: fname2scale, fname
+        class(string),     intent(in)  :: fname2scale, fname
         real,              intent(in)  :: smpd
         integer,           intent(in)  :: ldim_new(3)
         integer,           intent(in)  :: ldim_clip(3)
         real,              intent(out) :: smpd_new
         integer, optional, intent(in)  :: fromptop(2)
-        type(stack_io)                 :: stkio_r, stkio_w
-        type(image)                    :: img, img_scaled, img_clip
-        integer                        :: n, i, ldim(3), prange(2), cnt, sz
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img, img_scaled, img_clip
+        integer        :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2scale, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'scale_and_clip_imgfile' )
@@ -273,11 +273,11 @@ contains
     end subroutine scale_and_clip_imgfile
 
     subroutine norm_imgfile( fname2norm, fname, smpd )
-        character(len=*), intent(in) :: fname2norm, fname
-        real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: i, n, ldim(3)
+        class(string), intent(in) :: fname2norm, fname
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
@@ -297,13 +297,13 @@ contains
     end subroutine norm_imgfile
 
     subroutine noise_norm_imgfile( fname2norm, msk, fname, smpd )
-        character(len=*), intent(in) :: fname2norm, fname
-        real,             intent(in) :: msk, smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: i, n, ldim(3)
-        logical, allocatable         :: lmsk(:,:,:)
-        real                         :: sdev_noise
+        class(string), intent(in) :: fname2norm, fname
+        real,          intent(in) :: msk, smpd
+        type(stack_io)       :: stkio_r, stkio_w
+        type(image)          :: img
+        integer              :: i, n, ldim(3)
+        logical, allocatable :: lmsk(:,:,:)
+        real                 :: sdev_noise
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
@@ -323,11 +323,11 @@ contains
     end subroutine noise_norm_imgfile
 
     subroutine neg_imgfile( fname2neg, fname, smpd )
-        character(len=*), intent(in) :: fname2neg, fname
-        real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: i, n, ldim(3)
+        class(string), intent(in) :: fname2neg, fname
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: i, n, ldim(3)
         call find_ldim_nptcls(fname2neg, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'neg_imgfile' )
@@ -347,11 +347,11 @@ contains
     end subroutine neg_imgfile
 
     subroutine add_noise_imgfile( fname2process, fname, snr, smpd )
-        character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: snr, smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: i, n, ldim(3)
+        class(string), intent(in) :: fname2process, fname
+        real,          intent(in) :: snr, smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: i, n, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'add_noise_imgfile' )
@@ -372,7 +372,7 @@ contains
     end subroutine add_noise_imgfile
 
     subroutine noise_imgfile( fname, nimgs, box, smpd, snr )
-        character(len=*), intent(in) :: fname
+        class(string),    intent(in) :: fname
         integer,          intent(in) :: nimgs, box
         real,             intent(in) :: smpd
         real,   optional, intent(in) :: snr
@@ -396,9 +396,9 @@ contains
     end subroutine noise_imgfile
 
     subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp, width )
-        character(len=*), intent(in) :: fname2filter, fname
-        real,             intent(in) :: smpd, hp, lp
-        real, optional,   intent(in) :: width
+        class(string),  intent(in) :: fname2filter, fname
+        real,           intent(in) :: smpd, hp, lp
+        real, optional, intent(in) :: width
         type(stack_io)               :: stkio_r, stkio_w
         type(image)                  :: img
         integer                      :: n, i, ldim(3)
@@ -424,13 +424,13 @@ contains
     end subroutine bp_imgfile
 
     subroutine real_filter_imgfile( fname2filter, fname, smpd, which_filter, winsz )
-        character(len=*), intent(in) :: fname2filter, fname
+        class(string),    intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd
         character(len=*), intent(in) :: which_filter
         integer,          intent(in) :: winsz
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: n, i, ldim(3)
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'real_filter_imgfile' )
@@ -450,16 +450,16 @@ contains
     end subroutine real_filter_imgfile
 
     subroutine phase_rand_imgfile( fname2process, fname, smpd, lp )
-        character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd, lp
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: n, i, ldim(3)
+        class(string), intent(in) :: fname2process, fname
+        real,          intent(in) :: smpd, lp
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'phase_rand_imgfile' )
         call stkio_r%open(fname2process, smpd, 'read')
-        call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
+        call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
         write(logfhandle,'(a)') '>>> PHASE RANDOMIZING IMAGES'
         do i=1,n
@@ -474,12 +474,12 @@ contains
     end subroutine phase_rand_imgfile
 
     subroutine tvfilter_imgfile( fname2process, fname, smpd, lambda )
-        character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd, lambda
-        type(stack_io)               :: stkio_r, stkio_w
-        type(tvfilter)               :: tv
-        type(image)                  :: img
-        integer                      :: n, i, ldim(3)
+        class(string), intent(in) :: fname2process, fname
+        real,          intent(in) :: smpd, lambda
+        type(stack_io) :: stkio_r, stkio_w
+        type(tvfilter) :: tv
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'tvfilter_imgfile' )
@@ -501,11 +501,11 @@ contains
     end subroutine tvfilter_imgfile
 
     subroutine icm_imgfile( fname2process, fname, smpd, lambda )
-        character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd, lambda
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image), allocatable     :: imgs(:)
-        integer                      :: n, i, ldim(3)
+        class(string), intent(in) :: fname2process, fname
+        real,          intent(in) :: smpd, lambda
+        type(stack_io)            :: stkio_r, stkio_w
+        type(image), allocatable  :: imgs(:)
+        integer                   :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'icm_imgfile' )
@@ -534,9 +534,9 @@ contains
     end subroutine icm_imgfile
 
     subroutine nlmean_imgfile( fname2process, fname, smpd, noise_sdev )
-        character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd
-        real, optional,   intent(in) :: noise_sdev
+        class(string),  intent(in) :: fname2process, fname
+        real,           intent(in) :: smpd
+        real, optional, intent(in) :: noise_sdev
         type(stack_io)               :: stkio_r, stkio_w
         type(image)                  :: img
         integer                      :: n, i, ldim(3)
@@ -566,15 +566,15 @@ contains
 
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
         use simple_ctf,   only: ctf
-        character(len=*), intent(in)    :: fname2process, fname
+        class(string),    intent(in)    :: fname2process, fname
         class(oris),      intent(inout) :: o
         real,             intent(in)    :: smpd
         character(len=*), intent(in)    :: mode
         real, optional,   intent(in)    :: bfac
-        type(stack_io)                  :: stkio_r, stkio_w
-        type(image)                     :: img
-        integer                         :: i, n, ldim(3)
-        type(ctf)                       :: tfun
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: i, n, ldim(3)
+        type(ctf)      :: tfun
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3)    = 1
         call raise_exception_imgfile( n, ldim, 'apply_ctf_imgfile' )
@@ -600,15 +600,15 @@ contains
     end subroutine apply_ctf_imgfile
 
     subroutine mask_imgfile( fname2mask, fname, mskrad, smpd, inner, width, which )
-        character(len=*),           intent(in) :: fname2mask, fname
+        class(string),              intent(in) :: fname2mask, fname
         real,                       intent(in) :: mskrad
         real,                       intent(in) :: smpd
         real,             optional, intent(in) :: inner, width
         character(len=*), optional, intent(in) :: which
-        type(stack_io)                         :: stkio_r, stkio_w
-        type(image)                            :: img
-        integer                                :: n, i, ldim(3)
-        character(len=STDLEN)                  :: msktype
+        type(stack_io)        :: stkio_r, stkio_w
+        type(image)           :: img
+        integer               :: n, i, ldim(3)
+        character(len=STDLEN) :: msktype
         msktype = 'soft'
         if( present(which) )msktype=which
         call find_ldim_nptcls(fname2mask, ldim, n)
@@ -631,11 +631,11 @@ contains
     end subroutine mask_imgfile
 
     subroutine taper_edges_imgfile( fname2mask, fname, smpd)
-        character(len=*),           intent(in) :: fname2mask, fname
-        real,                       intent(in) :: smpd
-        type(stack_io)                         :: stkio_r, stkio_w
-        type(image)                            :: img
-        integer                                :: n, i, ldim(3)
+        class(string), intent(in) :: fname2mask, fname
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2mask, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'taper_edges_imgfile' )
@@ -655,13 +655,13 @@ contains
     end subroutine taper_edges_imgfile
 
     subroutine loc_sdev_imgfile( fname2proc, fname, winsz, smpd )
-        character(len=*), intent(in) :: fname2proc, fname
-        integer,          intent(in) :: winsz
-        real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img, sdevimg
-        integer                      :: n, i, ldim(3)
-        real                         :: asdev
+        class(string), intent(in) :: fname2proc, fname
+        integer,       intent(in) :: winsz
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img, sdevimg
+        integer        :: n, i, ldim(3)
+        real           :: asdev
         call find_ldim_nptcls(fname2proc, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'loc_sdev_imgfile' )
@@ -682,13 +682,13 @@ contains
     end subroutine loc_sdev_imgfile
 
     subroutine quantize_imgfile( fname2proc, fname, nquanta, smpd )
-        character(len=*), intent(in) :: fname2proc, fname
-        integer,          intent(in) :: nquanta
-        real,             intent(in) :: smpd
-        type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
-        integer                      :: n, i, ldim(3)
-        real                         :: transl_tab(nquanta)
+        class(string), intent(in) :: fname2proc, fname
+        integer,       intent(in) :: nquanta
+        real,          intent(in) :: smpd
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
+        real           :: transl_tab(nquanta)
         call find_ldim_nptcls(fname2proc, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'loc_sdev_imgfile' )
@@ -708,7 +708,7 @@ contains
     end subroutine quantize_imgfile
 
     subroutine shift_imgfile( fname2shift, fname, o, smpd, mul )
-        character(len=*),  intent(in)    :: fname2shift, fname
+        class(string),     intent(in)    :: fname2shift, fname
         class(oris),       intent(inout) :: o
         real,              intent(in)    :: smpd
         real,    optional, intent(in)    :: mul
@@ -747,16 +747,16 @@ contains
     subroutine random_selection_from_imgfile( spproj, fname, box, nran )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer,           intent(in)    :: nran, box
-        type(stack_io)                   :: stkio_w
-        type(ran_tabu)                   :: rt
-        type(image)                      :: img, img_scaled
-        character(len=:), allocatable    :: stkname
-        logical,          allocatable    :: mask(:)
-        real                             :: smpd
-        integer                          :: nptcls, box_ori, ldim(3), i, ii, ldim_scaled(3), ind
-        logical                          :: doscale
+        logical,           allocatable   :: mask(:)
+        type(string)   :: stkname
+        type(stack_io) :: stkio_w
+        type(ran_tabu) :: rt
+        type(image)    :: img, img_scaled
+        real           :: smpd
+        integer        :: nptcls, box_ori, ldim(3), i, ii, ldim_scaled(3), ind
+        logical        :: doscale
         ! dimensions
         nptcls      = spproj%get_nptcls()
         smpd        = spproj%os_stk%get(1,'smpd')
@@ -812,11 +812,11 @@ contains
     subroutine selection_from_tseries_imgfile( spproj, fname, box, nsel )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer,           intent(in)    :: nsel, box
         type(stack_io)                   :: stkio_r, stkio_w
         type(image)                      :: img, img_scaled
-        character(len=:), allocatable    :: stkname
+        type(string)                     :: stkname
         real,             allocatable    :: states(:)
         integer,          allocatable    :: inds(:), inds_packed(:)
         real                             :: smpd
@@ -886,14 +886,14 @@ contains
     subroutine random_cls_from_imgfile( spproj, fname, ncls )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer,           intent(in)    :: ncls
-        type(stack_io)                   :: stkio_r, stkio_w
-        type(image)                      :: img, img_avg
-        character(len=:), allocatable    :: stkname
-        real                             :: smpd
-        integer                          :: nptcls, ldim(3), i, j, ii, ind, box
-        integer, parameter               :: navg = 100
+        type(string)       :: stkname
+        type(stack_io)     :: stkio_r, stkio_w
+        type(image)        :: img, img_avg
+        real               :: smpd
+        integer            :: nptcls, ldim(3), i, j, ii, ind, box
+        integer, parameter :: navg = 100
         ! dimensions
         nptcls = spproj%get_nptcls()
         smpd   = spproj%os_stk%get(1,'smpd')

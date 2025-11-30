@@ -26,11 +26,11 @@ contains
     !> \brief  is a constructor
     subroutine new( self, which, ptr )
         class(qsys_factory), target, intent(inout) :: self  !< instance
-        character(len=*),            intent(in)    :: which !< which qsys
+        class(string),               intent(in)    :: which !< which qsys
         class(qsys_base),    pointer               :: ptr   !< pointer to constructed object
         ptr => null()
         call self%kill
-        select case(which)
+        select case(which%to_char())
             case('local')
                 allocate(qsys_local :: self%qsys_base_type)
             case('slurm')
@@ -42,7 +42,7 @@ contains
             case('pbs')
                 allocate(qsys_pbs   :: self%qsys_base_type)
             case DEFAULT
-                THROW_HARD('class: '//trim(which)//' unsupported in qsys_factory constructor')
+                THROW_HARD('class: '//which%to_char()//' unsupported in qsys_factory constructor')
         end select
         call self%qsys_base_type%new
         ptr => self%qsys_base_type

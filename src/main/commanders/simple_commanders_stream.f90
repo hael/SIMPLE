@@ -55,11 +55,11 @@ type, extends(commander_base) :: commander_stream_gen_pickrefs
 end type commander_stream_gen_pickrefs
 
 ! module constants
-character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spprojs/'           ! location for projects to be processed
-character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
-integer,               parameter :: LONGTIME       = 60                                          ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME       = 10                                          ! movie folder watched every WAITTIME seconds
-integer,               parameter :: SHORTWAIT      = 2                                           ! movie folder watched every SHORTTIME seconds in shmem
+character(len=*), parameter :: DIR_STREAM           = './spprojs/'           ! location for projects to be processed
+character(len=*), parameter :: DIR_STREAM_COMPLETED = './spprojs_completed/' ! location for projects processed
+integer,          parameter :: LONGTIME       = 60                           ! time lag after which a movie/project is processed
+integer,          parameter :: WAITTIME       = 10                           ! movie folder watched every WAITTIME seconds
+integer,          parameter :: SHORTWAIT      = 2                            ! movie folder watched every SHORTTIME seconds in shmem
 
 contains
 
@@ -79,9 +79,8 @@ contains
         type(moviewatcher)                                :: movie_buff
         type(sp_project)                                  :: spproj_glob    ! global project
         type(starproject_stream)                          :: starproj_stream
-        character(len=LONGSTRLEN),          allocatable   :: movies(:), dir_movies(:)
-        character(len=:),                   allocatable   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
-        character(len=:),                   allocatable   :: directory
+        type(string),                       allocatable   :: movies(:), dir_movies(:)
+        type(string)                                      :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, directory, str_dir, str_thumb
         character(len=STDLEN)                             :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         real        :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
@@ -121,13 +120,15 @@ contains
         if( envlen > 0 ) call cline%set('nparts', str2int(preproc_nparts_env))
         ! sanity check for restart
         l_restart = .false.
-        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+        if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
             l_restart = .true.
         endif
         ! below may be redundant
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+                str_dir = cline%get_carg('dir_exec')
+                THROW_HARD('Previous directory does not exists: '//str_dir%to_char())
+                call str_dir%kill
             endif
             l_restart = .true.
         endif
@@ -148,7 +149,7 @@ contains
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
         ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver, "preprocessing")
+        call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "preprocessing")
         call communicator_init()
         call http_communicator%send_jobstats()
         ! master project file
@@ -176,7 +177,7 @@ contains
             ! add a suffix & multiple folders
             call sniff_folders_SJ(params%dir_movies, l_dir_found, dir_movies )
             if( .not.l_dir_found ) THROW_HARD('Fatal error directory structure')
-            movie_buff = moviewatcher(LONGTIME, dir_movies(1), suffix_filter='_fractions')
+            movie_buff = moviewatcher(LONGTIME, dir_movies(1), suffix_filter=string('_fractions'))
             call movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
             deallocate(dir_movies)
         else
@@ -220,21 +221,21 @@ contains
             call http_communicator%send_jobstats()
         endif
         ! output directories
-        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
-        output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
+        call simple_mkdir(PATH_HERE//DIR_STREAM_COMPLETED)
+        output_dir = PATH_HERE//DIR_STREAM
         call simple_mkdir(output_dir)
-        call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
-        output_dir_ctf_estimate   = filepath(trim(PATH_HERE), trim(DIR_CTF_ESTIMATE))
-        output_dir_motion_correct = filepath(trim(PATH_HERE), trim(DIR_MOTION_CORRECT))
-        call simple_mkdir(output_dir_ctf_estimate,   errmsg="commander_stream :: exec_preprocess_stream;  ")
-        call simple_mkdir(output_dir_motion_correct, errmsg="commander_stream :: exec_preprocess_stream;  ")
+        call simple_mkdir(output_dir//STDERROUT_DIR)
+        output_dir_ctf_estimate   = filepath(PATH_HERE, DIR_CTF_ESTIMATE)
+        output_dir_motion_correct = filepath(PATH_HERE, DIR_MOTION_CORRECT)
+        call simple_mkdir(output_dir_ctf_estimate)
+        call simple_mkdir(output_dir_motion_correct)
         call cline%set('dir','../')
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PREPROC_PARTITION, preproc_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(1,stream=.true.,qsys_partition=trim(preproc_part_env))
+            call qenv%new(1,stream=.true.,qsys_partition=string(trim(preproc_part_env)))
         else
             call qenv%new(1,stream=.true.)
         end if
@@ -256,7 +257,7 @@ contains
         call cline_exec%set('fromp',1)
         call cline_exec%set('top',  STREAM_NMOVS_SET)
         do
-            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit )then
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit )then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
@@ -367,12 +368,14 @@ contains
                     call http_communicator%json%create_array(latest_micrographs, "latest_micrographs")
                     call http_communicator%json%add(http_communicator%job_json, latest_micrographs)
                     do i_thumb=0, i_max - 1
+                        str_thumb = spproj_glob%os_mic%get_str(spproj_glob%os_mic%get_noris() - i_thumb, "thumb")
                         call communicator_add_micrograph(&
-                            &trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb"))),&
+                            &str_thumb%to_char(),&
                             &dfx=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "dfx"),&
                             &dfy=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "dfy"),&
                             &ctfres=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ctfres")&
                         )
+                        call str_thumb%kill
                     end do
                 end if
                 ! update progress monitor
@@ -514,24 +517,24 @@ contains
 
             ! returns list of completed jobs
             subroutine update_projects_list( nimported )
-                integer,                   intent(out) :: nimported
-                type(sp_project),          allocatable :: streamspprojs(:)
-                character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
-                character(len=:),          allocatable :: fname, abs_fname
-                logical,                   allocatable :: mics_mask(:)
-                integer :: i, n_spprojs, n_old, j, n2import, n_completed, iproj, nmics, imic, cnt
+                integer,          intent(out) :: nimported
+                type(sp_project), allocatable :: streamspprojs(:)
+                type(string),     allocatable :: completed_fnames(:)
+                logical,          allocatable :: mics_mask(:)
+                type(string) :: fname, abs_fname
+                integer      :: i, n_spprojs, n_old, j, n2import, n_completed, iproj, nmics, imic, cnt
                 n_completed = 0
                 nimported   = 0
                 n_spprojs = size(completed_jobs_clines) ! projects to import
                 if( n_spprojs == 0 )return
-                n_old = spproj_glob%os_mic%get_noris()       ! previously processed mmovies
-                nmics = STREAM_NMOVS_SET * n_spprojs           ! incoming number of processed movies
+                n_old = spproj_glob%os_mic%get_noris()  ! previously processed mmovies
+                nmics = STREAM_NMOVS_SET * n_spprojs    ! incoming number of processed movies
                 allocate(streamspprojs(n_spprojs), completed_fnames(n_spprojs), mics_mask(nmics))
                 ! read all
                 do iproj = 1,n_spprojs
-                    fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
-                    abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
-                    completed_fnames(iproj) = trim(abs_fname)
+                    fname     = output_dir//completed_jobs_clines(iproj)%get_carg('projfile')
+                    abs_fname = simple_abspath(fname)
+                    completed_fnames(iproj) = abs_fname
                     call streamspprojs(iproj)%read_segment('mic', completed_fnames(iproj))
                     cnt = 0
                     do imic = (iproj-1)*STREAM_NMOVS_SET+1, iproj*STREAM_NMOVS_SET
@@ -570,7 +573,7 @@ contains
                 do iproj = 1,n_spprojs
                     imic = (iproj-1)*STREAM_NMOVS_SET+1
                     if( any(mics_mask(imic:imic+STREAM_NMOVS_SET-1)) )then
-                        fname = trim(DIR_STREAM_COMPLETED)//trim(basename(completed_fnames(iproj)))
+                        fname = string(DIR_STREAM_COMPLETED)//basename(completed_fnames(iproj))
                         call simple_rename(completed_fnames(iproj), fname)
                     endif
                 enddo
@@ -580,22 +583,21 @@ contains
             end subroutine update_projects_list
 
             subroutine create_movies_set_project( movie_names )
-                character(len=LONGSTRLEN), intent(in) :: movie_names(STREAM_NMOVS_SET)
-                type(sp_project)             :: spproj_here
-                type(ctfparams)              :: ctfvars
-                character(len=LONGSTRLEN)    :: projname, projfile, xmlfile, xmldir
-                character(len=XLONGSTRLEN)   :: cwd, cwd_old
+                class(string), intent(in) :: movie_names(STREAM_NMOVS_SET)
+                type(sp_project)          :: spproj_here
+                type(ctfparams)           :: ctfvars
+                type(string)              :: projname, projfile, xmlfile, xmldir, cwd, cwd_old
                 integer :: imov
-                cwd_old = trim(cwd_glob)
-                call chdir(output_dir)
+                cwd_old = CWD_GLOB
+                call simple_chdir(output_dir)
                 call simple_getcwd(cwd)
-                cwd_glob = trim(cwd)
+                CWD_GLOB = cwd%to_char()
                 ! movies set
                 movies_set_counter = movies_set_counter + 1
                 projname   = int2str_pad(movies_set_counter,params%numlen)
-                projfile   = trim(projname)//trim(METADATA_EXT)
-                call cline_exec%set('projname', trim(projname))
-                call cline_exec%set('projfile', trim(projfile))
+                projfile   = projname//METADATA_EXT
+                call cline_exec%set('projname', projname)
+                call cline_exec%set('projfile', projfile)
                 call spproj_here%update_projinfo(cline_exec)
                 spproj_here%compenv  = spproj_glob%compenv
                 spproj_here%jobproc  = spproj_glob%jobproc
@@ -622,29 +624,28 @@ contains
                             ! single folder
                             xmldir = cline%get_carg('dir_meta')
                         endif
-                        xmlfile = basename(trim(movie_names(imov)))
-                        if(index(xmlfile, '_fractions') > 0) xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
-                        if(index(xmlfile, '_EER') > 0)       xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
-                        xmlfile = trim(adjustl(xmldir))//'/'//trim(adjustl(xmlfile))//'.xml'
-                        call spproj_here%os_mic%set(imov, "meta", trim(adjustl(xmlfile)))
+                        xmlfile = basename(movie_names(imov))
+                        if(xmlfile%substr_ind('_fractions') > 0) xmlfile = xmlfile%to_char([1,xmlfile%substr_ind('_fractions') - 1])
+                        if(xmlfile%substr_ind('_EER')       > 0) xmlfile = xmlfile%to_char([1,xmlfile%substr_ind('_EER')       - 1])
+                        xmlfile = xmldir//'/'//xmlfile//'.xml'
+                        call spproj_here%os_mic%set(imov, "meta", xmlfile)
                     end if
                 enddo
                 call spproj_here%write
-                call chdir(cwd_old)
-                cwd_glob = trim(cwd_old)
+                call simple_chdir(cwd_old)
+                CWD_GLOB = cwd_old%to_char()
                 call spproj_here%kill
             end subroutine create_movies_set_project
 
             !>  import previous movies and updates global project & variables
             subroutine import_previous_projects
                 type(sp_project),          allocatable :: spprojs(:)
-                character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
-                character(len=:),          allocatable :: fname
-                logical,                   allocatable :: mics_mask(:)
-                character(len=LONGSTRLEN)              :: moviename
+                type(string), allocatable :: completed_fnames(:)
+                logical,      allocatable :: mics_mask(:)
+                type(string) :: fname, moviename
                 integer :: n_spprojs, iproj, nmics, imic, jmic, cnt, iostat,id
                 ! previously completed projects
-                call simple_list_files_regexp(DIR_STREAM_COMPLETED, '\.simple$', completed_fnames)
+                call simple_list_files_regexp(string(DIR_STREAM_COMPLETED), '\.simple$', completed_fnames)
                 if( .not.allocated(completed_fnames) )then
                     return ! nothing was previously completed
                 endif
@@ -664,7 +665,7 @@ contains
                     ! nothing to import
                     do iproj = 1,n_spprojs
                         call spprojs(iproj)%kill
-                        fname = trim(DIR_STREAM_COMPLETED)//trim(completed_fnames(iproj))
+                        fname = string(DIR_STREAM_COMPLETED)//completed_fnames(iproj)
                         call del_file(fname)
                     enddo
                     deallocate(spprojs,mics_mask)
@@ -687,8 +688,8 @@ contains
                 ! update global movie set counter
                 movies_set_counter = 0
                 do iproj = 1,n_spprojs
-                    fname = basename_safe(completed_fnames(iproj))
-                    fname = trim(get_fbody(trim(fname),trim(METADATA_EXT),separator=.false.))
+                    fname = basename(completed_fnames(iproj))
+                    fname = get_fbody(fname,METADATA_EXT,separator=.false.)
                     id    = str2int(fname)
                     if( iostat==0 ) movies_set_counter = max(movies_set_counter, id)
                 enddo
@@ -696,7 +697,7 @@ contains
                 import_counter = spproj_glob%os_mic%get_noris()
                 ! add previous movies to history
                 do imic = 1,spproj_glob%os_mic%get_noris()
-                    moviename = spproj_glob%os_mic%get_static(imic,'movie')
+                    moviename = spproj_glob%os_mic%get_str(imic,'movie')
                     call movie_buff%add2history(moviename)
                 enddo
                 ! tidy files
@@ -852,10 +853,9 @@ contains
         type(sp_project)                       :: spproj_glob, stream_spproj
         type(starproject_stream)               :: starproj_stream
         type(stream_http_communicator)         :: http_communicator
-        character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=:),          allocatable :: odir, odir_extract, odir_picker, odir_completed
-        character(len=:),          allocatable :: odir_interactive, odir_interactive_picker, odir_interactive_completed
-        character(len=LONGSTRLEN)              :: cwd_job
+        type(string),              allocatable :: projects(:)
+        type(string)                           :: odir, odir_extract, odir_picker, odir_completed, str_mic, str_box
+        type(string)                           :: odir_interactive, odir_interactive_picker, odir_interactive_completed, cwd_job, str_dir
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real                                   :: pickrefs_thumbnail_scale
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
@@ -888,12 +888,14 @@ contains
         if(envlen > 0)  call cline%set('nthr', str2int(pick_nthr_env))
         ! sanity check for restart
         l_restart = .false.
-        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+        if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
             l_restart = .true.
         endif
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+                str_dir = cline%get_carg('dir_exec')
+                THROW_HARD('Previous directory does not exists: '//str_dir%to_char())
+                call str_dir%kill
             endif
             l_restart = .true.
         endif
@@ -922,23 +924,23 @@ contains
         l_interactive = params%interactive == 'yes'
         ! http communicator init
         if(l_interactive) then
-            call http_communicator%create(params%niceprocid, params%niceserver, "initial_picking")
+            call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "initial_picking")
         else
-            call http_communicator%create(params%niceprocid, params%niceserver, "pick_extract")   
+            call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "pick_extract")   
         endif
         call communicator_init()
         call http_communicator%send_jobstats()
         ! wait if dir_target doesn't exist yet
         call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs_completed', '**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
         l_extract            = .true.
         l_templates_provided = cline%defined('pickrefs')
         if( l_templates_provided )then
             if( .not.file_exists(params%pickrefs) ) then
-                write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//trim(params%pickrefs)
+                write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//params%pickrefs%to_char()
                 do i=1, 8640
-                    if(file_exists(trim(params%pickrefs))) exit
+                    if(file_exists(params%pickrefs)) exit
                     call sleep(10)
                     call http_communicator%send_jobstats()
                     if( http_communicator%exit )then
@@ -957,7 +959,7 @@ contains
             endif
             ! test for STREAM_NMICS file in pickrefs folder and copy here if it exists
             if(file_exists(stemname(params%pickrefs) // '/' // STREAM_NMICS)) then
-                call simple_copy_file(stemname(params%pickrefs) // '/' // STREAM_NMICS, STREAM_NMICS)
+                call simple_copy_file(stemname(params%pickrefs) // '/' // STREAM_NMICS, string(STREAM_NMICS))
             endif
         else if( .not.cline%defined('moldiam') )then
             THROW_HARD('MOLDIAM required for picker=new reference-free picking')
@@ -968,15 +970,15 @@ contains
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! movie watcher init
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
+        project_buff = moviewatcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! directories structure & restart
-        odir                       = trim(DIR_STREAM)
-        odir_completed             = trim(DIR_STREAM_COMPLETED)
-        odir_picker                = trim(PATH_HERE)//trim(DIR_PICKER)
-        odir_interactive           = 'interactive/'//trim(DIR_STREAM)
-        odir_interactive_picker    = 'interactive/'//trim(DIR_PICKER)
-        odir_interactive_completed = 'interactive/'//trim(DIR_STREAM_COMPLETED)
-        odir_extract               = trim(PATH_HERE)//trim(DIR_EXTRACT)
+        odir                       = DIR_STREAM
+        odir_completed             = DIR_STREAM_COMPLETED
+        odir_picker                = PATH_HERE//DIR_PICKER
+        odir_interactive           = 'interactive/'//DIR_STREAM
+        odir_interactive_picker    = 'interactive/'//DIR_PICKER
+        odir_interactive_completed = 'interactive/'//DIR_STREAM_COMPLETED
+        odir_extract               = PATH_HERE//DIR_EXTRACT
         pick_extract_set_counter = 0    ! global counter of projects to be processed
         nptcls_glob              = 0    ! global number of particles
         nmics_rejected_glob      = 0    ! global number of micrographs rejected
@@ -1014,15 +1016,15 @@ contains
         endif
         ! make directories structure
         call simple_mkdir(odir)
-        call simple_mkdir(trim(odir)//trim(STDERROUT_DIR))
+        call simple_mkdir(odir//STDERROUT_DIR)
         call simple_mkdir(odir_completed)
         call simple_mkdir(odir_picker)
         if( l_extract ) call simple_mkdir(odir_extract)
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
         if(envlen > 0) then
-            call qenv_main%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
-            call qenv_interactive%new(1,stream=.true.,qsys_partition=trim(pick_part_env))
+            call qenv_main%new(1,stream=.true.,qsys_partition=string(trim(pick_part_env)))
+            call qenv_interactive%new(1,stream=.true.,qsys_partition=string(trim(pick_part_env)))
         else
             call qenv_main%new(1,stream=.true.)
             call qenv_interactive%new(1,stream=.true.)
@@ -1053,7 +1055,7 @@ contains
         l_once                = .true.
         pause_import          = .false.
         do
-            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit) then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
@@ -1083,13 +1085,15 @@ contains
                             call cline_make_pickrefs%set('stream','no')
                             call cline_make_pickrefs%set('smpd',  params%smpd)
                             call xmake_pickrefs%execute_safe(cline_make_pickrefs)
-                            call cline_pick_extract%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
-                            call mrc2jpeg_tiled(trim(PICKREFS_FBODY)//trim(params%ext), trim(PICKREFS_FBODY)//".jpeg", scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)
+                            call cline_pick_extract%set('pickrefs', '../'//PICKREFS_FBODY//params%ext%to_char())
+                            call mrc2jpeg_tiled(string(PICKREFS_FBODY)//params%ext, string(PICKREFS_FBODY)//".jpeg",&
+                            &scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)
                             ! http stats
                             xtile = 0
                             ytile = 0
                             do i=0, n_pickrefs - 1
-                                call communicator_add_picking_template(trim(cwd_job)//'/'//trim(PICKREFS_FBODY)//".jpeg", xtile * 100, ytile * 100, 100 * ytiles, 100 * xtiles)
+                                call communicator_add_picking_template(cwd_job%to_char()//'/'//PICKREFS_FBODY//".jpeg",&
+                                &xtile * 100, ytile * 100, 100 * ytiles, 100 * xtiles)
                                 xtile = xtile + 1
                                 if(xtile .eq. xtiles) then
                                     xtile = 0
@@ -1172,11 +1176,13 @@ contains
                         call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
                         call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
                         do i_thumb=0, i_max - 1
-                            call communicator_add_micrograph(trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "thumb_den"))),\
-                            100, 0, 100, 200,\
+                            str_mic = spproj_glob%os_mic%get_str(spproj_glob%os_mic%get_noris() - i_thumb, "thumb_den")
+                            str_box = spproj_glob%os_mic%get_str(spproj_glob%os_mic%get_noris() - i_thumb, "boxfile")
+                            call communicator_add_micrograph(str_mic, 100, 0, 100, 200,\
                             nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "xdim")),\
-                            nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ydim")),\
-                            trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris() - i_thumb, "boxfile"))))
+                            nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ydim")), str_box)
+                            call str_mic%kill
+                            call str_box%kill
                         end do
                     endif
                 end if
@@ -1220,8 +1226,8 @@ contains
         call http_communicator%send_jobstats()
         call write_project
         ! write star files (just in case you want ot import these particles/micrographs elsewhere)
-        call spproj_glob%write_mics_star("micrographs.star")
-        call spproj_glob%write_ptcl2D_star("particles.star")
+        call spproj_glob%write_mics_star(string("micrographs.star"))
+        call spproj_glob%write_ptcl2D_star(string("particles.star"))
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
@@ -1251,9 +1257,9 @@ contains
             end subroutine write_micrographs_starfile
 
             subroutine write_project()
-                integer,          allocatable :: fromps(:)
-                integer                       :: nptcls,fromp,top,i,iptcl,nmics,imic,micind,optics_map_id
-                character(len=:), allocatable :: prev_projname, mapfileprefix
+                integer, allocatable :: fromps(:)
+                integer              :: nptcls,fromp,top,i,iptcl,nmics,imic,micind,optics_map_id
+                type(string)         :: prev_projname, mapfileprefix
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
                 if( DEBUG_HERE ) t0 = tic()
                 ! micrographs
@@ -1268,10 +1274,10 @@ contains
                     top           = 0
                     prev_projname = ''
                     do imic = 1,nmics
-                        if( trim(projrecords(imic)%projname) /= trim(prev_projname) )then
+                        if( projrecords(imic)%projname /= prev_projname )then
                             call stream_spproj%kill
                             call stream_spproj%read_segment('stk', projrecords(imic)%projname)
-                            prev_projname = trim(projrecords(imic)%projname)
+                            prev_projname = projrecords(imic)%projname
                         endif
                         micind       = projrecords(imic)%micind
                         fromps(imic) = stream_spproj%os_stk%get_fromp(micind) ! fromp from individual project
@@ -1288,10 +1294,10 @@ contains
                     iptcl         = 0
                     prev_projname = ''
                     do imic = 1,nmics
-                        if( trim(projrecords(imic)%projname) /= prev_projname )then
+                        if( projrecords(imic)%projname /= prev_projname )then
                             call stream_spproj%kill
                             call stream_spproj%read_segment('ptcl2D', projrecords(imic)%projname)
-                            prev_projname = trim(projrecords(imic)%projname)
+                            prev_projname = projrecords(imic)%projname
                         endif
                         fromp = fromps(imic)
                         top   = fromp + projrecords(imic)%nptcls - 1
@@ -1311,10 +1317,10 @@ contains
                 endif
                 ! add optics
                 if(cline%defined('optics_dir')) then
-                    optics_map_id = get_latest_optics_map_id(trim(params%optics_dir))
+                    optics_map_id = get_latest_optics_map_id(params%optics_dir)
                     if(optics_map_id .gt. 0) then
-                        mapfileprefix = trim(params%optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
-                        write(logfhandle,'(A,I8)')'>>> IMPORTING OPTICS FROM : ' // mapfileprefix
+                        mapfileprefix = params%optics_dir // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
+                        write(logfhandle,'(A,I8)')'>>> IMPORTING OPTICS FROM : ' // mapfileprefix%to_char()
                         call spproj_glob%import_optics_map(mapfileprefix)
                         call spproj_glob%write_segment_inside('optics', params%projfile)
                     endif
@@ -1333,8 +1339,8 @@ contains
                 integer,                       intent(inout) :: nimported
                 type(sp_project), allocatable :: spprojs(:)
                 type(projrecord), allocatable :: old_records(:)
-                character(len=:), allocatable :: fname, abs_fname, new_fname
-                type(sp_project)              :: tmpproj
+                type(string)     :: fname, abs_fname, new_fname
+                type(sp_project) :: tmpproj
                 integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic, iproj
                 n_completed = 0
                 nimported   = 0
@@ -1380,11 +1386,11 @@ contains
                         fname = filepath(odir, completed_jobs_clines(iproj)%get_carg('projfile'))
                         new_fname = filepath(odir_completed, completed_jobs_clines(iproj)%get_carg('projfile'))
                         call simple_rename(fname, new_fname)
-                        abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
+                        abs_fname = simple_abspath(new_fname)
                         ! records & project
                         do imic = 1,spprojs(iproj)%os_mic%get_noris()
                             j = j + 1
-                            projrecords(j)%projname = trim(abs_fname)
+                            projrecords(j)%projname = abs_fname
                             projrecords(j)%micind   = imic
                             nptcls                  = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
                             nptcls_glob             = nptcls_glob + nptcls ! global update
@@ -1403,12 +1409,11 @@ contains
 
             ! prepares project for processing and performs micrograph selection
             subroutine create_individual_project( project_fname, nselected, nrejected )
-                character(len=*), intent(in)  :: project_fname
-                integer,          intent(out) :: nselected, nrejected
-                type(sp_project)              :: tmp_proj, spproj_here
-                integer,         allocatable  :: states(:)
-                character(len=STDLEN)         :: proj_fname, projname, projfile
-                character(len=LONGSTRLEN)     :: path
+                class(string), intent(in)  :: project_fname
+                integer,       intent(out) :: nselected, nrejected
+                type(sp_project)           :: tmp_proj, spproj_here
+                integer,      allocatable  :: states(:)
+                type(string) :: proj_fname, projname, projfile, path
                 integer :: imic, nmics, cnt
                 nselected = 0
                 nrejected = 0
@@ -1446,14 +1451,14 @@ contains
                     endif
                 endif
                 ! as per update_projinfo
-                path       = trim(cwd_glob)//'/'//trim(odir)
+                path       = trim(CWD_GLOB)//'/'//odir%to_char()
                 proj_fname = basename(project_fname)
-                projname   = trim(get_fbody(trim(proj_fname), trim(METADATA_EXT), separator=.false.))
-                projfile   = trim(projname)//trim(METADATA_EXT)
+                projname   = get_fbody(proj_fname, METADATA_EXT, separator=.false.)
+                projfile   = projname//METADATA_EXT
                 call spproj_here%projinfo%new(1, is_ptcl=.false.)
-                call spproj_here%projinfo%set(1,'projname', trim(projname))
-                call spproj_here%projinfo%set(1,'projfile', trim(projfile))
-                call spproj_here%projinfo%set(1,'cwd',      trim(path))
+                call spproj_here%projinfo%set(1,'projname', projname)
+                call spproj_here%projinfo%set(1,'projfile', projfile)
+                call spproj_here%projinfo%set(1,'cwd',      path)
                 ! from current global project
                 spproj_here%compenv = spproj_glob%compenv
                 spproj_here%jobproc = spproj_glob%jobproc
@@ -1479,12 +1484,12 @@ contains
                 ! update for execution
                 pick_extract_set_counter = pick_extract_set_counter + 1
                 projname = int2str_pad(pick_extract_set_counter,params%numlen)
-                projfile = trim(projname)//trim(METADATA_EXT)
-                call cline_pick_extract%set('projname', trim(projname))
-                call cline_pick_extract%set('projfile', trim(projfile))
+                projfile = projname//METADATA_EXT
+                call cline_pick_extract%set('projname', projname)
+                call cline_pick_extract%set('projfile', projfile)
                 call cline_pick_extract%set('fromp',    1)
                 call cline_pick_extract%set('top',      nselected)
-                call spproj_here%write(trim(path)//'/'//trim(projfile))
+                call spproj_here%write(path//'/'//projfile)
                 call spproj_here%kill
                 call tmp_proj%kill
             end subroutine create_individual_project
@@ -1492,11 +1497,11 @@ contains
             !>  import previous run to the current project and reselect micrographs
             subroutine import_previous_mics( records )
                 type(projrecord), allocatable, intent(inout) :: records(:)
-                type(sp_project),          allocatable :: spprojs(:)
-                character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
-                character(len=:),          allocatable :: fname
-                logical,                   allocatable :: mics_mask(:)
-                integer :: n_spprojs, iproj, nmics, imic, jmic, iostat,id, nsel_mics, irec
+                type(sp_project), allocatable :: spprojs(:)
+                type(string),     allocatable :: completed_fnames(:)
+                logical, allocatable :: mics_mask(:)
+                type(string) :: fname
+                integer      :: n_spprojs, iproj, nmics, imic, jmic, iostat,id, nsel_mics, irec
                 pick_extract_set_counter = 0
                 ! previously completed projects
                 call simple_list_files_regexp(odir_completed, '\.simple$', completed_fnames)
@@ -1554,7 +1559,7 @@ contains
                         jmic = jmic+1
                         if( mics_mask(jmic) )then
                             irec = irec + 1
-                            records(irec)%projname = trim(completed_fnames(iproj))
+                            records(irec)%projname = completed_fnames(iproj)
                             records(irec)%micind   = imic
                             records(irec)%nptcls   = spprojs(iproj)%os_mic%get_int(imic, 'nptcls')
                             call spproj_glob%os_mic%transfer_ori(irec, spprojs(iproj)%os_mic, imic)
@@ -1564,8 +1569,8 @@ contains
                 enddo
                 ! update global set counter
                 do iproj = 1,n_spprojs
-                    fname = basename_safe(completed_fnames(iproj))
-                    fname = trim(get_fbody(trim(fname),trim(METADATA_EXT),separator=.false.))
+                    fname = basename(completed_fnames(iproj))
+                    fname = get_fbody(fname,METADATA_EXT,separator=.false.)
                     id    = str2int(fname, iostat)
                     if( iostat==0 ) pick_extract_set_counter = max(pick_extract_set_counter, id)
                 enddo
@@ -1601,14 +1606,14 @@ contains
             end subroutine communicator_init
 
             subroutine communicator_add_micrograph( path, spritex, spritey, spriteh, spritew, xdim, ydim, boxfile_path )
-                character(*),     intent(in)  :: path, boxfile_path
+                class(string),     intent(in)  :: path, boxfile_path
                 integer,          intent(in)  :: spritex, spritey, spriteh, spritew, xdim, ydim
                 type(nrtxtfile)               :: boxfile
                 type(json_value), pointer     :: micrograph, boxes, box
                 real,             allocatable :: boxdata(:,:)
                 integer                       :: i, x, y
                 call http_communicator%json%create_object(micrograph, "")
-                call http_communicator%json%add(micrograph, "path",    path)
+                call http_communicator%json%add(micrograph, "path",    path%to_char())
                 call http_communicator%json%add(micrograph, "spritex", spritex)
                 call http_communicator%json%add(micrograph, "spritey", spritey)
                 call http_communicator%json%add(micrograph, "spriteh", spriteh)
@@ -1663,7 +1668,8 @@ contains
         type(starproject_stream)               :: starproj_stream
         type(json_value),          pointer     :: optics_assignments, optics_group     
         type(json_value),          pointer     :: optics_group_coordinates,  optics_group_coordinate        
-        character(len=LONGSTRLEN), allocatable :: projects(:)
+        type(string),              allocatable :: projects(:)
+        type(string)                           :: str_dir
         integer                                :: nprojects, iproj, iori, new_oris, nimported, i, j, map_count, imap
         logical                                :: found
         map_count = 0
@@ -1671,14 +1677,16 @@ contains
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
         ! sanity check for restart
-        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+        if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
             write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB"
             call del_file(TERM_STREAM)
         endif
         ! below may be redundant
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exist: '//trim(cline%get_carg('dir_exec')))
+                str_dir = cline%get_carg('dir_exec')
+                THROW_HARD('Previous directory does not exist: '//str_dir%to_char())
+                call str_dir%kill
             endif
             call del_file(TERM_STREAM)
         endif
@@ -1693,7 +1701,7 @@ contains
         ! master parameters
         call params%new(cline)
         ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver, "optics_assignment")
+        call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "optics_assignment")
         call communicator_init()
         call http_communicator%send_jobstats()
         ! master project file
@@ -1701,16 +1709,16 @@ contains
         if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(0, .false.)
         ! wait if dir_target doesn't exist yet
         call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs', '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs_completed', '**** SIMPLE_STREAM_ASSIGN_OPTICS USER STOP ****')
         ! movie watcher init
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
+        project_buff = moviewatcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! initialise progress monitor
         call progressfile_init()
         ! Infinite loop
         nimported = 0
         do
-            if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit) then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
@@ -1739,7 +1747,7 @@ contains
                 end if
                 do iproj = 1, nprojects
                     call project_buff%add2history(projects(iproj))
-                    call spproj_part%read(trim(projects(iproj)))
+                    call spproj_part%read(projects(iproj))
                     do iori = 1, STREAM_NMOVS_SET
                         nimported = nimported + 1
                         call spproj%os_mic%transfer_ori(nimported, spproj_part%os_mic, iori)
@@ -1830,8 +1838,9 @@ contains
         type(commander_shape_rank_cavgs)       :: xshape_rank
         type(oris)                             :: nmics_ori
         type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
-        character(len=LONGSTRLEN), allocatable :: projects(:)
-        character(len=:),          allocatable :: final_selection_source, cavgsstk, mapfileprefix
+        type(string),              allocatable :: projects(:)
+        character(len=:),          allocatable :: buffer
+        type(string)                           :: final_selection_source, cavgsstk, mapfileprefix, str_dir, str_thumb, str_box
         integer,                   allocatable :: cavg_inds(:)
         character(len=*),          parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
         integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
@@ -1849,14 +1858,16 @@ contains
         if( .not. cline%defined('outdir')           ) call cline%set('outdir',              '')
         if( .not. cline%defined('nmics')            ) call cline%set('nmics',              100)
         ! sanity check for restart
-        if(cline%defined('outdir') .and. dir_exists(trim(cline%get_carg('outdir')))) then
+        if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
             write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB"
             call del_file(TERM_STREAM)
         endif
         ! below may be redundant
         if( cline%defined('dir_exec') )then
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
-                THROW_HARD('Previous directory does not exist: '//trim(cline%get_carg('dir_exec')))
+                str_dir = cline%get_carg('dir_exec')
+                THROW_HARD('Previous directory does not exist: '//str_dir%to_char())
+                call str_dir%kill
             endif
             call del_file(TERM_STREAM)
         endif
@@ -1872,26 +1883,26 @@ contains
         ! master parameters
         call params%new(cline)
         ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver, "initial_picking")
-        call http_gen_pickrefs_communicator%create(params%niceprocid, params%niceserver, "generate_picking_refs")
+        call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "initial_picking")
+        call http_gen_pickrefs_communicator%create(params%niceprocid, params%niceserver%to_char(), "generate_picking_refs")
         call communicator_init_initial_picking()
         call communicator_gen_pickrefs_init()
         call send_jobstats()
         ! write nmics to file
-999     if(file_exists(trim(STREAM_NMICS))) call del_file(trim(STREAM_NMICS))
+999     if(file_exists(STREAM_NMICS)) call del_file(STREAM_NMICS)
         call nmics_ori%new(1,          .false.)
         call nmics_ori%set(1, 'nmics', params%nmics)
-        call nmics_ori%write(1, trim(STREAM_NMICS))
+        call nmics_ori%write(1, string(STREAM_NMICS))
         call nmics_ori%kill
         ! master project file
         call spproj%read( params%projfile )
         if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(1, .false.) !!!!!!!?????
         ! wait if dir_target doesn't exist yet
         call wait_for_folder(http_communicator, params%dir_target, '**** SIMPLE_GEN_PICKREFS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs', '**** SIMPLE_GEN_PICKREFS USER STOP ****')
-        call wait_for_folder(http_communicator, trim(params%dir_target)//'/spprojs_completed', '**** SIMPLE_GEN_PICKREFS USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs', '**** SIMPLE_GEN_PICKREFS USER STOP ****')
+        call wait_for_folder(http_communicator, params%dir_target//'/spprojs_completed', '**** SIMPLE_GEN_PICKREFS USER STOP ****')
         ! movie watcher init
-        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
+        project_buff = moviewatcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! import at least params%nmics micrographs - default 100
         write(logfhandle, '(A,I6,A)') '>>> IMPORTING AT LEAST', params%nmics, ' MICROGRAPHS'
         call micimporter( params%nmics )
@@ -1915,9 +1926,13 @@ contains
                 if( cnt > NTHUMB_MAX ) exit
                 if( .not.spproj%os_mic%isthere(ithumb, 'thumb_den') ) cycle
                 if( .not.spproj%os_mic%isthere(ithumb, 'boxfile') )   cycle
-                call communicator_add_micrograph(trim(spproj%os_mic%get_static(ithumb, 'thumb_den')),&
+                str_thumb = spproj%os_mic%get_str(ithumb, 'thumb_den')
+                str_box   = spproj%os_mic%get_str(ithumb, 'boxfile') 
+                call communicator_add_micrograph(str_thumb%to_char(),&
                     spproj%os_mic%get_int(ithumb, 'xdim'), spproj%os_mic%get_int(ithumb, 'ydim'),&
-                    trim(spproj%os_mic%get_static(ithumb, 'boxfile')) )
+                    str_box%to_char() )
+                call str_thumb%kill
+                call str_box%kill
                 cnt = cnt+1
             end do
             call send_jobstats()
@@ -1931,7 +1946,7 @@ contains
         call cline_extract%set('nthr',                           1)
         call cline_extract%set('projfile',   PROJFILE_GEN_PICKREFS)
         call xextract%execute_safe(cline_extract)
-        call spproj%read(PROJFILE_GEN_PICKREFS)
+        call spproj%read(string(PROJFILE_GEN_PICKREFS))
         ! join background http heartbeats
         call join_background_heartbeats()
         ! send generate pickrefs display info to gui
@@ -1967,8 +1982,9 @@ contains
         call cline_shape_rank%set('nthr',               params%nthr)
         call cline_shape_rank%set('projfile', PROJFILE_GEN_PICKREFS)
         call xshape_rank%execute_safe(cline_shape_rank)
-        call spproj%read(PROJFILE_GEN_PICKREFS)
-        call spproj%shape_ranked_cavgs2jpg(cavg_inds, "shape_ranked_" // int2str(params%nmics) // JPG_EXT, xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
+        call spproj%read(string(PROJFILE_GEN_PICKREFS))
+        call spproj%shape_ranked_cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
+        &xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
         call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
         ! join background http heartbeats
         call join_background_heartbeats()
@@ -1984,8 +2000,8 @@ contains
         call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input", .true.)
         if(allocated(cavg_inds)) then
             do i=0, size(cavg_inds) - 1
-                call communicator_add_cls2D(trim(cwd_glob) // '/' // "shape_ranked_" // int2str(params%nmics) // JPG_EXT,&
-                    cavgsstk,&
+                call communicator_add_cls2D(trim(CWD_GLOB) // '/' // "shape_ranked_" // int2str(params%nmics) // JPG_EXT,&
+                    cavgsstk%to_char(),&
                     cavg_inds(i + 1),&
                     xtile * (100.0 / (xtiles - 1)),&
                     ytile * (100.0 / (ytiles - 1)),&
@@ -2019,8 +2035,9 @@ contains
             endif
             call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection', final_selection, found)
             if(found) then
-                call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', final_selection_source, found)
+                call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', buffer, found)
                 if(found) then
+                    final_selection_source = buffer
                     call process_selected_references(final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
                     call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam", nint(mskdiam_estimate))
                     call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mskscale",  dble(box_for_extract * spproj%get_smpd()))
@@ -2029,7 +2046,7 @@ contains
                     ytile = 0
                     n_non_zero = 0
                     do i=1, size(final_selection)
-                        call communicator_add_selected_reference(trim(cwd_glob) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
+                        call communicator_add_selected_reference(trim(CWD_GLOB) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
                             &xtile * (100.0 / (xtiles - 1)),&
                             &ytile * (100.0 / (ytiles - 1)),&
                             &100 * ytiles,&
@@ -2046,6 +2063,7 @@ contains
                     end do
                     call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_accepted",  n_non_zero)
                     call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_rejected",  spproj%os_ptcl2D%get_noris() - n_non_zero)
+                    if( allocated(buffer) ) deallocate(buffer)               
                 endif
                 exit
             endif
@@ -2060,16 +2078,16 @@ contains
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
         ! add optics
         if(cline%defined('optics_dir')) then
-            optics_map_id = get_latest_optics_map_id(trim(params%optics_dir))
+            optics_map_id = get_latest_optics_map_id(params%optics_dir)
             if(optics_map_id .gt. 0) then
-                mapfileprefix = trim(params%optics_dir) // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
+                mapfileprefix = params%optics_dir//'/'//OPTICS_MAP_PREFIX//int2str(optics_map_id)
                 call spproj%import_optics_map(mapfileprefix)
             endif
         endif
         ! write project and star files (just in case you want ot import these particles/micrographs elsewhere)
         call spproj%write
-        call spproj%write_mics_star("micrographs.star")
-        call spproj%write_ptcl2D_star("particles.star")
+        call spproj%write_mics_star(string("micrographs.star"))
+        call spproj%write_ptcl2D_star(string("particles.star"))
         ! cleanup
         call spproj%kill
         ! end gracefully
@@ -2103,14 +2121,14 @@ contains
             end subroutine join_background_heartbeats
 
             subroutine cleanup_previous()
-                character(len=LONGSTRLEN), allocatable :: list(:)
+                type(string), allocatable :: list(:)
                 integer :: i
                 write(logfhandle,'(A)')'>>> CLEANING UP'
                 call spproj%kill
                 call cline%set('projfile', '')
                 call simple_list_files('*', list)
                 do i=1, size(list)
-                    call del_file(trim(list(i)))
+                    call del_file(list(i))
                 enddo
                 call cline%set('projname', PROJNAME_GEN_PICKREFS)
                 call cline%set('projfile', PROJFILE_GEN_PICKREFS)
@@ -2124,7 +2142,7 @@ contains
                 integer :: n_imported, n_new_oris, iproj, iori, imic
                 n_imported= 0
                 do
-                    if( file_exists(trim(TERM_STREAM)) .or. http_communicator%exit) then
+                    if( file_exists(TERM_STREAM) .or. http_communicator%exit) then
                         ! termination
                         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                         call spproj%kill
@@ -2150,7 +2168,7 @@ contains
                         end if
                         do iproj = 1, nprojects 
                             call project_buff%add2history(projects(iproj)) ! I got this one, so please don't give it to me again
-                            call spproj_part%read(trim(projects(iproj)))
+                            call spproj_part%read(projects(iproj))
                             do iori = 1, STREAM_NMOVS_SET
                                 n_imported = n_imported + 1
                                 ! set state=0 mics to state=-1
@@ -2236,7 +2254,7 @@ contains
                 call http_communicator%json%add(micrograph, "xdim"   , xdim)
                 call http_communicator%json%add(micrograph, "ydim",    ydim)
                 call http_communicator%json%create_array(boxes, "boxes")
-                call boxfile%new(boxfile_path, 1)
+                call boxfile%new(string(boxfile_path), 1)
                 allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
                 if(boxfile%get_nrecs_per_line() >= 4) then
                     do i=1, boxfile%get_ndatalines()

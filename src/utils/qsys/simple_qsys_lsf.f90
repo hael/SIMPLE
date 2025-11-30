@@ -37,13 +37,13 @@ contains
         call self%env%push('job_time',              '#BSUB -W')
         ! standard error & output folder
         stderrout = PATH_HERE//trim(STDERROUT_DIR)
-        call simple_mkdir(trim(stderrout),errmsg="qsys_lsf::new lsf env")
+        call simple_mkdir(trim(stderrout))
     end subroutine new_lsf_env
 
     !> getter
     function get_lsf_submit_cmd( self ) result( cmd )
         class(qsys_lsf), intent(in) :: self
-        character(len=:), allocatable :: cmd
+        type(string) :: cmd
         cmd = self%env%get('qsys_submit_cmd')
     end function get_lsf_submit_cmd
 
@@ -52,7 +52,7 @@ contains
         class(qsys_lsf),   intent(in) :: self
         class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
-        character(len=:), allocatable :: key, bsub_cmd, bsub_val, tmpstr
+        type(string) :: key, bsub_cmd, bsub_val, tmpstr
         integer :: i, which
         logical :: write2file
         write2file = .false.
@@ -66,27 +66,28 @@ contains
         endif
         do i=1,q_descr%size_of()
             key   = q_descr%get_key(i)
-            which = self%env%lookup(key)
+            which = self%env%lookup(key%to_char())
             if( which > 0 )then
                 bsub_cmd = self%env%get(which)
                 bsub_val = q_descr%get(i)
-                select case(trim(key))
+                select case(key%to_char())
                     case('job_name')
-                        tmpstr = '#BSUB -J "'//trim(adjustl(bsub_val))//'"'
+                        tmpstr = '#BSUB -J "'//bsub_val%to_char()//'"'
                     case('job_memory_per_task')
-                        tmpstr = '#BSUB -R "rusage[mem='//trim(adjustl(bsub_val))//']"'
+                        tmpstr = '#BSUB -R "rusage[mem='//bsub_val%to_char()//']"'
                     case DEFAULT
-                        tmpstr = bsub_cmd//' '//trim(adjustl(bsub_val))
+                        tmpstr = bsub_cmd//' '//bsub_val%to_char()
                 end select
                 if( write2file )then
-                    write(fhandle,'(a)') tmpstr
+                    write(fhandle,'(a)') tmpstr%to_char()
                 else
-                    write(logfhandle,'(a)') tmpstr
+                    write(logfhandle,'(a)') tmpstr%to_char()
                 endif
-                deallocate(bsub_cmd,bsub_val)
-                if(allocated(tmpstr))deallocate(tmpstr)
+                call bsub_cmd%kill
+                call bsub_val%kill
+                call tmpstr%kill
             endif
-            deallocate(key)
+            call key%kill
         end do
         ! write default instructions
         if( write2file )then

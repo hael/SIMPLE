@@ -45,7 +45,7 @@ contains
         l_err = .false.
         call ostats%new(1, is_ptcl=.false.)
         if( file_exists(STATS_FILE) )then
-            call ostats%read(STATS_FILE)
+            call ostats%read(string(STATS_FILE))
             self%iteration     = nint(ostats%get(1,'ITERATION'))
             self%score%avg     = ostats%get(1,'SCORE')
             self%frac_srch%avg = ostats%get(1,'SEARCH_SPACE_SCANNED')
@@ -191,7 +191,7 @@ contains
         call ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
         call ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
         call ostats%set(1,'SCORE',                    self%score%avg)
-        call ostats%write(STATS_FILE)
+        call ostats%write(string(STATS_FILE))
         ! destruct
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
@@ -382,7 +382,7 @@ contains
             call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION',    trail_rec_ufrac)
         endif
         
-        call ostats%write(STATS_FILE)
+        call ostats%write(string(STATS_FILE))
         call self%append_stats(ostats)
         call self%plot_projdirs(mask)
         ! destruct
@@ -397,14 +397,16 @@ contains
         class(convergence), intent(in) :: self
         class(oris),        intent(in) :: ostats
         type(oris)        :: os_prev, os
+        type(string)      :: fname
         real, allocatable :: iter(:), inpl_dist(:), proj_dist(:)
         real, allocatable :: score(:), proj_overlap(:)
         integer    :: i,nl
         if( trim(params_glob%iterstats).ne.'yes' ) return
-        if( file_exists(ITERSTATS_FILE) )then
-            nl = nlines(ITERSTATS_FILE)
+        fname = ITERSTATS_FILE
+        if( file_exists(fname) )then
+            nl = nlines(fname )
             call os_prev%new(nl,is_ptcl=.false.)
-            call os_prev%read(ITERSTATS_FILE)
+            call os_prev%read(fname)
             call os%new(nl+1,is_ptcl=.false.)
             do i =1,nl
                 call os%transfer_ori(i,os_prev,i)
@@ -416,7 +418,7 @@ contains
             nl = 1
         endif
         call os%transfer_ori(nl,ostats,1)
-        call os%write(ITERSTATS_FILE)
+        call os%write(fname)
         if( nl > 1 )then
             iter         = os%get_all('ITERATION')
             inpl_dist    = os%get_all('IN-PLANE_DIST')
@@ -431,19 +433,19 @@ contains
             endif
         endif
         call os%kill
+        call fname%kill
     end subroutine append_stats
 
     subroutine plot_projdirs( self, ptcl_mask )
         use CPlot2D_wrapper_module
         class(convergence),   intent(in) :: self
         logical, allocatable, intent(in) :: ptcl_mask(:)
-        type(str4arr)                 :: title
+        type(string)                  :: title
         type(CPlot2D_type)            :: figure
         type(CDataSet_type)           :: center, axis
         type(CDataPoint_type)         :: p
         type(oris)                    :: os
-        character(len=STDLEN)         :: titlestr
-        character(len=:), allocatable :: fname_eps, fname_pdf, ps2pdf_cmd
+        type(string)                  :: titlestr, fname_eps, fname_pdf, ps2pdf_cmd
         real,             allocatable :: phi(:), psi(:), logpops(:)
         integer,          allocatable :: pops(:), projs(:), inds(:)
         real(dp) :: color, x,y, sz
@@ -479,7 +481,7 @@ contains
             call os%set(proj,'e1',phi(proj))
             call os%set(proj,'e2',psi(proj))
         enddo
-        call os%write('projdir_pops.txt')
+        call os%write(string('projdir_pops.txt'))
         call os%kill
         ! sorting
         where( pops==0 )
@@ -496,10 +498,10 @@ contains
         call CPlot2D__SetDrawYAxisGridLines(figure, C_FALSE)
         call CPlot2D__SetXAxisSize(figure, 400._c_double)
         call CPlot2D__SetYAxisSize(figure, 400._c_double)
-        title%str = 'Phi'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(figure, title%str)
-        title%str = 'Psi'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(figure, title%str)
+        title = 'Phi'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(figure, title%to_char())
+        title = 'Psi'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(figure, title%to_char())
         call CPlot2D__SetDrawLegend(figure, C_FALSE)
         ! axes
         call CDataSet__new(axis)
@@ -538,14 +540,14 @@ contains
         enddo
         ! write
         fname_eps = 'iter_projdir_'//int2str_pad(params_glob%which_iter,3)//'.eps'//C_NULL_CHAR
-        call CPlot2D__OutputPostScriptPlot(figure, fname_eps)
+        call CPlot2D__OutputPostScriptPlot(figure, fname_eps%to_char())
         call CPlot2D__delete(figure)
-        l = len_trim(fname_eps)
-        fname_eps = fname_eps(:l-1) ! removing trailing C NULL character
+        l = fname_eps%strlen_trim()
+        fname_eps = fname_eps%to_char([1,l-1]) ! removing trailing C NULL character
         fname_pdf = 'iter_projdir_'//int2str_pad(params_glob%which_iter,3)//'.pdf'
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=512 -dDEVICEHEIGHTPOINTS=512 -sOutputFile='&
-            //trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+            //fname_pdf%to_char()//' '//fname_eps%to_char()
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_projdirs
 

@@ -89,7 +89,7 @@ contains
         ptclrange_here = merge(ptclrange, .false., present(ptclrange))
         if( read_spproj )then
             call self%spproj%read_non_data_segments(params%projfile)
-            call self%spproj%projinfo%set(1, 'cwd', trim(params%cwd))
+            call self%spproj%projinfo%set(1, 'cwd', params%cwd)
             if( ptclrange_here )then
                 call self%spproj%read_segment('ptcl2D', params%projfile, fromto=[params%fromp,params%top])
             else
@@ -196,7 +196,7 @@ contains
         if( read_spproj )then
             call self%spproj%read(params%projfile, wthreads=wthreads)
             ! update cwd of project (in case the params class changed exec dir)
-            call self%spproj%projinfo%set(1, 'cwd', trim(params%cwd))
+            call self%spproj%projinfo%set(1, 'cwd', params%cwd)
             call set_field_ptr
         else
             ! we need the oritab to override the deftab in order not to loose parameters

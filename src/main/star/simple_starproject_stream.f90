@@ -17,15 +17,15 @@ private
 #include "simple_local_flags.inc"
 
 type starproject_stream
-    type(starfile_table_type)  :: starfile
-    character(len=LONGSTRLEN)  :: starfile_name
-    character(len=LONGSTRLEN)  :: starfile_tmp
-    character(len=LONGSTRLEN)  :: rootpath
-    real                       :: shift_threshold = 0.05
-    integer                    :: group_offset = 0
-    logical                    :: nicestream   = .false.
-    logical                    :: use_beamtilt = .false.
-    logical                    :: verbose      = .false.
+    type(starfile_table_type) :: starfile
+    type(string)              :: starfile_name
+    type(string)              :: starfile_tmp
+    type(string)              :: rootpath
+    real                      :: shift_threshold = 0.05
+    integer                   :: group_offset = 0
+    logical                   :: nicestream   = .false.
+    logical                   :: use_beamtilt = .false.
+    logical                   :: verbose      = .false.
 contains
     ! export
     procedure          :: stream_export_micrographs
@@ -33,7 +33,7 @@ contains
     procedure          :: stream_export_particles_2D
     procedure          :: stream_export_pick_diameters
     procedure          :: stream_export_picking_references
-    !starfile
+    ! starfile
     procedure, private :: starfile_init
     procedure, private :: starfile_deinit
     procedure, private :: starfile_write_table
@@ -44,12 +44,11 @@ contains
     procedure, private :: starfile_set_particles2D_subtable
     procedure, private :: starfile_set_pick_diameters_table
     procedure, private :: starfile_set_clusters2D_table
-    !optics
+    ! optics
     procedure, private :: assign_optics_single
     procedure, private :: assign_optics
     procedure          :: copy_optics
     procedure          :: copy_micrographs_optics
-
 end type starproject_stream
 
 type :: starpart
@@ -58,7 +57,7 @@ type :: starpart
     integer                       :: nend
     integer                       :: length
     type(starfile_table_type)     :: startable
-    character(len=:), allocatable :: string
+    character(len=:), allocatable :: str
 end type starpart
 
 contains
@@ -66,39 +65,39 @@ contains
     ! starfiles
 
     subroutine starfile_init( self, fname, outdir, verbose)
-        class(starproject_stream),  intent(inout) :: self
-        character(len=*),           intent(in)    :: fname
-        character(len=LONGSTRLEN),  intent(in)    :: outdir
-        logical, optional,          intent(in)    :: verbose
-        character(len=XLONGSTRLEN)                :: cwd
-        character(len=:),           allocatable   :: stem
+        class(starproject_stream), intent(inout) :: self
+        class(string),             intent(in)    :: fname
+        class(string),             intent(in)    :: outdir
+        logical, optional,         intent(in)    :: verbose
+        type(string) :: cwd, stem 
         if(present(verbose)) self%verbose = verbose
         self%starfile_name = fname
         self%starfile_tmp  = fname // '.tmp'
         call simple_getcwd(cwd)
         stem = basename(stemname(cwd))
-        self%rootpath = trim(stem)
+        self%rootpath = stem
         self%nicestream = .true.
         call starfile_table__new(self%starfile)
-        if(allocated(stem)) deallocate(stem)
+        call cwd%kill
+        call stem%kill
     end subroutine starfile_init
 
     subroutine starfile_deinit( self )
-        class(starproject_stream),  intent(inout) :: self
+        class(starproject_stream), intent(inout) :: self
         call starfile_table__delete(self%starfile)
-        if(file_exists(trim(adjustl(self%starfile_tmp)))) then
-            if(file_exists(trim(adjustl(self%starfile_name)))) call del_file(trim(adjustl(self%starfile_name)))
-            call simple_rename(trim(adjustl(self%starfile_tmp)), trim(adjustl(self%starfile_name)))
+        if(file_exists(self%starfile_tmp)) then
+            if(file_exists(self%starfile_name)) call del_file(self%starfile_name)
+            call simple_rename(self%starfile_tmp, self%starfile_name)
         end if
     end subroutine starfile_deinit
 
     subroutine starfile_write_table( self, append )
-        class(starproject_stream),  intent(inout) :: self
-        logical,                    intent(in)    :: append
-        integer                                   :: append_int
+        class(starproject_stream), intent(inout) :: self
+        logical,                   intent(in)    :: append
+        integer :: append_int
         append_int = 0
         if(append) append_int = 1
-        call starfile_table__open_ofile(self%starfile, trim(self%starfile_tmp), append_int)
+        call starfile_table__open_ofile(self%starfile, self%starfile_tmp%to_char(), append_int)
         call starfile_table__write_ofile(self%starfile)
         call starfile_table__close_ofile(self%starfile)
     end subroutine starfile_write_table
@@ -106,7 +105,8 @@ contains
     subroutine starfile_set_optics_table( self, spproj )
         class(starproject_stream),  intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
-        integer                                   :: i
+        integer                    :: i
+        character(len=XLONGSTRLEN) :: str_og
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
         call starfile_table__setIsList(self%starfile, .false.)
@@ -125,15 +125,16 @@ contains
             if(spproj%os_optics%isthere(i, 'opcx'))   call starfile_table__setValue_double(self%starfile, SMPL_OPTICS_CENTROIDX, real(spproj%os_optics%get(i, 'opcx'),  dp))
             if(spproj%os_optics%isthere(i, 'opcy'))   call starfile_table__setValue_double(self%starfile, SMPL_OPTICS_CENTROIDY, real(spproj%os_optics%get(i, 'opcy'),  dp))
             ! strings
-            if(spproj%os_optics%isthere(i, 'ogname')) call starfile_table__setValue_string(self%starfile, EMDL_IMAGE_OPTICS_GROUP_NAME, trim(adjustl(spproj%os_optics%get_static(i, 'ogname'))))
+            call spproj%os_optics%get_static(i, 'ogname', str_og)
+            if(spproj%os_optics%isthere(i, 'ogname')) call starfile_table__setValue_string(self%starfile, EMDL_IMAGE_OPTICS_GROUP_NAME, trim(str_og))
         end do
     end subroutine starfile_set_optics_table
 
-    subroutine starfile_set_optics_group_table( self, spproj, ogid)
-        class(starproject_stream),  intent(inout) :: self
-        class(sp_project),          intent(inout) :: spproj
-        integer,                    intent(in)    :: ogid
-        integer                                   :: i
+    subroutine starfile_set_optics_group_table( self, spproj, ogid )
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj
+        integer,                   intent(in)    :: ogid
+        integer :: i
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
         call starfile_table__setIsList(self%starfile, .false.)
@@ -152,9 +153,9 @@ contains
     end subroutine starfile_set_optics_group_table
 
     subroutine starfile_set_pick_diameters_table( self, histogram_moldiams )
-        class(starproject_stream),  intent(inout) :: self
-        type(histogram),            intent(in)    :: histogram_moldiams
-        integer                                   :: i
+        class(starproject_stream), intent(inout) :: self
+        type(histogram),           intent(in)    :: histogram_moldiams
+        integer :: i
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
         call starfile_table__setIsList(self%starfile, .false.)
@@ -171,7 +172,8 @@ contains
     subroutine starfile_set_micrographs_table( self, spproj )
         class(starproject_stream),  intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
-        integer                                   :: i, pathtrim
+        integer               :: i, pathtrim
+        character(len=XLONGSTRLEN) :: str_mov, str_intg, str_mcs, str_boxf, str_ctfj
         pathtrim = 0
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
@@ -197,19 +199,28 @@ contains
             if(spproj%os_mic%isthere(i, 'icefrac')) call starfile_table__setValue_double(self%starfile,  SMPL_ICE_FRAC,          real(spproj%os_mic%get(i, 'icefrac'),      dp))
             if(spproj%os_mic%isthere(i, 'astig'  )) call starfile_table__setValue_double(self%starfile,  SMPL_ASTIGMATISM,       real(spproj%os_mic%get(i, 'astig'),        dp))
             ! strings
-            if(spproj%os_mic%isthere(i, 'movie'      )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_MOVIE_NAME,    trim(spproj%os_mic%get_static(i, 'movie')))
-            if(spproj%os_mic%isthere(i, 'intg'       )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME,          trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'intg'       )))))
-            if(spproj%os_mic%isthere(i, 'mc_starfile')) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_METADATA_NAME, trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'mc_starfile')))))
-            if(spproj%os_mic%isthere(i, 'boxfile'    )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_COORDINATES,   trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'boxfile'    )))))
-            if(spproj%os_mic%isthere(i, 'ctfjpg'     )) call starfile_table__setValue_string(self%starfile, EMDL_CTF_PSPEC,                trim(get_relative_path(trim(spproj%os_mic%get_static(i, 'ctfjpg'     )))))
+            call spproj%os_mic%get_static(i, 'movie',       str_mov)
+            call spproj%os_mic%get_static(i, 'intg',        str_intg)
+            call spproj%os_mic%get_static(i, 'mc_starfile', str_mcs)
+            call spproj%os_mic%get_static(i, 'boxfile',     str_boxf)
+            call spproj%os_mic%get_static(i, 'ctfjpg',      str_ctfj)
+            str_intg = get_relative_path(str_intg)
+            str_mcs  = get_relative_path(str_mcs)
+            str_boxf = get_relative_path(str_boxf)
+            str_ctfj = get_relative_path(str_ctfj)
+            if(spproj%os_mic%isthere(i, 'movie'      )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_MOVIE_NAME,    trim(str_mov))
+            if(spproj%os_mic%isthere(i, 'intg'       )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME,          trim(str_intg))
+            if(spproj%os_mic%isthere(i, 'mc_starfile')) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_METADATA_NAME, trim(str_mcs))
+            if(spproj%os_mic%isthere(i, 'boxfile'    )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_COORDINATES,   trim(str_boxf))
+            if(spproj%os_mic%isthere(i, 'ctfjpg'     )) call starfile_table__setValue_string(self%starfile, EMDL_CTF_PSPEC,                trim(str_ctfj))
         end do
 
         contains
 
             function get_relative_path ( path ) result ( newpath )
-                character(len=*),           intent(in) :: path
-                character(len=STDLEN)                  :: newpath
-                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                character(len=*), intent(in) :: path
+                character(len=XLONGSTRLEN)   :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, self%rootpath%to_char()) 
                 newpath = trim(path(pathtrim:))
             end function get_relative_path
 
@@ -218,8 +229,9 @@ contains
     subroutine starfile_set_particles2D_table( self, spproj )
         class(starproject_stream), intent(inout) :: self
         class(sp_project),         intent(inout) :: spproj
-        character(len=:),          allocatable   :: stkname
-        integer                                  :: i, ind_in_stk, stkind, pathtrim, half_boxsize
+        type(string)               :: stkname
+        character(len=XLONGSTRLEN) :: str_stk, str_mic
+        integer      :: i, ind_in_stk, stkind, pathtrim, half_boxsize
         pathtrim = 0
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
@@ -246,20 +258,22 @@ contains
             if(spproj%os_ptcl2d%isthere(i, 'x'      )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_ORIGIN_X_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'x'),                   dp))
             if(spproj%os_ptcl2d%isthere(i, 'y'      )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_ORIGIN_Y_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'y'),                   dp))
             ! strings
-            if(stkname .ne. '' .and. ind_in_stk .gt. 0) then
-                call starfile_table__setValue_string(self%starfile, EMDL_IMAGE_NAME,      int2str(ind_in_stk) // '@' // trim(get_relative_path(stkname)))
-                call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME, trim(get_relative_path(spproj%get_micname(i))))
+            if(trim(str_stk) .ne. '' .and. ind_in_stk .gt. 0) then
+                call stkname%to_static(str_stk)
+                str_stk = get_relative_path(str_stk)
+                str_mic = get_relative_path(spproj%get_micname(i))
+                call starfile_table__setValue_string(self%starfile, EMDL_IMAGE_NAME,      int2str(ind_in_stk) // '@' // trim(str_stk))
+                call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME, trim(str_mic))
             end if
 
         end do
-        if(allocated(stkname)) deallocate(stkname)
 
         contains
 
             function get_relative_path ( path ) result ( newpath )
-                character(len=*),           intent(in) :: path
-                character(len=STDLEN)                  :: newpath
-                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                character(len=*), intent(in) :: path
+                character(len=XLONGSTRLEN)   :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, self%rootpath%to_char()) 
                 newpath = trim(path(pathtrim:))
             end function get_relative_path
 
@@ -269,8 +283,9 @@ contains
         class(starproject_stream),  intent(inout)   :: self
         class(sp_project),          intent(inout)   :: spproj
         class(starpart),            intent(inout)   :: part
-        character(len=:),           allocatable     :: stkname
-        integer                                     :: i, ind_in_stk, stkind, pathtrim, half_boxsize
+        type(string)               :: stkname
+        character(len=XLONGSTRLEN) :: str_stk, str_mic
+        integer      :: i, ind_in_stk, stkind, pathtrim, half_boxsize
         pathtrim = 0
         call starfile_table__new(part%startable)
         call starfile_table__setIsList(part%startable, .false.)
@@ -281,11 +296,11 @@ contains
             call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
             stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
             half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
-    !        ! ints
+            ! ints
             if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(part%startable, EMDL_IMAGE_OPTICS_GROUP, spproj%os_ptcl2d%get_int(i, 'ogid'))
             if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(part%startable, EMDL_PARTICLE_CLASS,     spproj%os_ptcl2d%get_class(i))
             if(spproj%os_ptcl2d%isthere(i, 'gid'    )) call starfile_table__setValue_int(part%startable, EMDL_MLMODEL_GROUP_NO,   spproj%os_ptcl2d%get_int(i, 'gid'))
-    !        ! doubles
+            ! doubles
             if(spproj%os_ptcl2d%isthere(i, 'dfx'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSU,              real(spproj%os_ptcl2d%get(i, 'dfx') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'dfy'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSV,              real(spproj%os_ptcl2d%get(i, 'dfy') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'angast' )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUS_ANGLE,         real(spproj%os_ptcl2d%get(i, 'angast'),              dp))
@@ -295,23 +310,28 @@ contains
             if(spproj%os_ptcl2d%isthere(i, 'ypos'   )) call starfile_table__setValue_double(part%startable,  EMDL_IMAGE_COORD_Y,             real(spproj%os_ptcl2d%get(i, 'ypos') + half_boxsize, dp))
             if(spproj%os_ptcl2d%isthere(i, 'x'      )) call starfile_table__setValue_double(part%startable,  EMDL_ORIENT_ORIGIN_X_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'x'),                   dp))
             if(spproj%os_ptcl2d%isthere(i, 'y'      )) call starfile_table__setValue_double(part%startable,  EMDL_ORIENT_ORIGIN_Y_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'y'),                   dp))
-    !        ! strings
-            if(stkname .ne. '' .and. ind_in_stk .gt. 0) then
+            ! strings
+            if( trim(str_stk) .ne. '' .and. ind_in_stk .gt. 0) then
                 !$omp critical
-                call starfile_table__setValue_string(part%startable, EMDL_IMAGE_NAME,      int2str(ind_in_stk) // '@' // trim(get_relative_path(stkname)))
-                call starfile_table__setValue_string(part%startable, EMDL_MICROGRAPH_NAME, trim(get_relative_path(spproj%get_micname(i))))
+                call stkname%to_static(str_stk)
+                str_stk = get_relative_path(str_stk)
+                str_mic = get_relative_path(spproj%get_micname(i))
+                call starfile_table__setValue_string(part%startable, EMDL_IMAGE_NAME,      int2str(ind_in_stk) // '@' // trim(str_stk))
+                call starfile_table__setValue_string(part%startable, EMDL_MICROGRAPH_NAME, trim(str_mic))
+
+                ! if allocatable strings are used by the above subrouitnes, they need to be changed to static
+
                 !$omp end critical
             end if
 
         end do
-        if(allocated(stkname)) deallocate(stkname)
 
         contains
 
             function get_relative_path ( path ) result ( newpath )
-                character(len=*),           intent(in) :: path
-                character(len=STDLEN)                  :: newpath
-                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                character(len=*), intent(in) :: path
+                character(len=XLONGSTRLEN)   :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, self%rootpath%to_char()) 
                 newpath = trim(path(pathtrim:))
             end function get_relative_path
         
@@ -320,8 +340,8 @@ contains
     subroutine starfile_set_clusters2D_table( self, spproj )
         class(starproject_stream), intent(inout) :: self
         class(sp_project),         intent(inout) :: spproj
-        character(len=:),          allocatable   :: stkname
-        integer                                  :: i, stkind, pathtrim
+        character(len=XLONGSTRLEN) :: str_stk, stkname
+        integer                    :: i, stkind, pathtrim
         pathtrim = 0
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
@@ -338,18 +358,18 @@ contains
             ! strings
             if(spproj%os_cls2D%isthere(i, 'stkind') .and. spproj%os_cls2D%isthere(i, 'stk')) then
                 stkind  = floor(spproj%os_cls2D%get(i, 'stkind'))
-                stkname = trim(spproj%os_cls2D%get_static(i, 'stk'))
-                call starfile_table__setValue_string(self%starfile, EMDL_MLMODEL_REF_IMAGE,  int2str(stkind) // '@' // trim(get_relative_path(trim(stkname))))
+                call spproj%os_cls2D%get_static(i, 'stk', stkname)
+                str_stk = get_relative_path(stkname)
+                call starfile_table__setValue_string(self%starfile, EMDL_MLMODEL_REF_IMAGE,  int2str(stkind) // '@' // trim(str_stk))
             end if
         end do
-        if(allocated(stkname)) deallocate(stkname)
 
         contains
 
             function get_relative_path ( path ) result ( newpath )
-                character(len=*),           intent(in) :: path
-                character(len=STDLEN)                  :: newpath
-                if(pathtrim .eq. 0) pathtrim = index(path, trim(self%rootpath)) 
+                character(len=*), intent(in) :: path
+                character(len=XLONGSTRLEN)   :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, self%rootpath%to_char()) 
                 newpath = trim(path(pathtrim:))
             end function get_relative_path
 
@@ -358,11 +378,11 @@ contains
     ! export
 
     subroutine stream_export_micrographs( self, spproj, outdir, optics_set, filename)
-        class(starproject_stream),             intent(inout) :: self
-        class(sp_project),                     intent(inout) :: spproj
-        character(len=LONGSTRLEN),             intent(in)    :: outdir
-        character(len=*),           optional,  intent(in)    :: filename
-        logical,         optional,  intent(in)    :: optics_set
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj
+        class(string),             intent(in)    :: outdir
+        class(string), optional,   intent(in)    :: filename
+        logical,       optional,   intent(in)    :: optics_set
         logical  :: l_optics_set
         if( spproj%os_mic%get_noris() == 0 ) return
         l_optics_set = .false.
@@ -371,7 +391,7 @@ contains
         if(present(filename)) then
             call self%starfile_init(filename, outdir)
         else
-            call self%starfile_init('micrographs.star', outdir)
+            call self%starfile_init(string('micrographs.star'), outdir)
         endif
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
@@ -381,17 +401,17 @@ contains
     end subroutine stream_export_micrographs
  
     subroutine stream_export_optics( self, spproj, outdir )
-        class(starproject_stream),            intent(inout) :: self
-        class(sp_project),                    intent(inout) :: spproj
-        character(len=LONGSTRLEN),            intent(in)    :: outdir
-        integer                                             :: ioptics
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj
+        class(string),             intent(in)    :: outdir
+        integer :: ioptics
         if(params_glob%beamtilt .eq. 'yes') then
             self%use_beamtilt = .true.
         else
             self%use_beamtilt = .false.
         end if
         call self%assign_optics(spproj)
-        call self%starfile_init('optics.star', outdir)
+        call self%starfile_init(string('optics.star'), outdir)
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
         do ioptics = 1, spproj%os_optics%get_noris()
@@ -402,12 +422,12 @@ contains
     end subroutine stream_export_optics
 
     subroutine stream_export_particles_2D( self, spproj, outdir, optics_set, filename, verbose)
-        class(starproject_stream),            intent(inout) :: self
-        class(sp_project),                    intent(inout) :: spproj
-        character(len=LONGSTRLEN),            intent(in)    :: outdir
-        character(len=*),          optional,  intent(in)    :: filename
-        logical,                   optional,  intent(in)    :: optics_set, verbose
-        type(starpart),                       allocatable   :: starparts(:)
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj
+        class(string),             intent(in)    :: outdir
+        class(string), optional,   intent(in)    :: filename
+        logical,       optional,   intent(in)    :: optics_set, verbose
+        type(starpart), allocatable :: starparts(:)
         type(starpart)          :: newpart
         logical                 :: l_optics_set, l_verbose
         integer                 :: ioptics, i, nptcls, nbatches, fhandle, ok
@@ -424,9 +444,9 @@ contains
         if(present(filename)) then
             call self%starfile_init(filename, outdir, verbose=l_verbose)
         else
-            call self%starfile_init('particles2D.star', outdir, verbose=l_verbose)
+            call self%starfile_init(string('particles2D.star'), outdir, verbose=l_verbose)
         endif
-        if(file_exists(trim(adjustl(self%starfile_tmp)))) call del_file(trim(adjustl(self%starfile_tmp)))
+        if(file_exists(self%starfile_tmp)) call del_file(self%starfile_tmp)
         if(self%verbose) ms0 = tic()
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
@@ -449,36 +469,36 @@ contains
             allocate(starparts(nbatches))
             call omp_set_num_threads(NTHR)
             if(self%verbose) ms0 = tic()
-            !$omp parallel private(i, newpart) shared(starparts)
-                !$omp do
-                    do i=1, nbatches
-                        newpart%index  = i 
-                        newpart%nstart = 1 + ((i - 1) * BATCHSIZE)
-                        newpart%nend   = i * BATCHSIZE
-                        if(newpart%nend .gt. nptcls) newpart%nend = nptcls
-                        call self%starfile_set_particles2D_subtable(spproj, newpart)
-                        if(i .eq. 1) then
-                            call starfile_table__write_omem(newpart%startable, newpart%string, newpart%length)
-                        else
-                            call starfile_table__write_omem(newpart%startable, newpart%string, newpart%length, ignoreheader=.true.)
-                        endif
-                        call starfile_table__delete(newpart%startable)
-                        !$omp critical
-                            starparts(newpart%index) = newpart
-                        !$omp end critical
-                        if(allocated(newpart%string)) deallocate(newpart%string)
-                    end do
-                !$omp end do
-            !$omp end parallel
+            !$omp parallel do private(i, newpart) default(shared) proc_bind(close)
+            do i=1, nbatches
+                newpart%index  = i 
+                newpart%nstart = 1 + ((i - 1) * BATCHSIZE)
+                newpart%nend   = i * BATCHSIZE
+                if(newpart%nend .gt. nptcls) newpart%nend = nptcls
+                call self%starfile_set_particles2D_subtable(spproj, newpart)
+                if(i .eq. 1) then
+                    call starfile_table__write_omem(newpart%startable, newpart%str, newpart%length)
+                else
+                    call starfile_table__write_omem(newpart%startable, newpart%str, newpart%length, ignoreheader=.true.)
+                endif
+                call starfile_table__delete(newpart%startable)
+                starparts(newpart%index) = newpart
+                ! if( allocated(newpart%str) ) deallocate(newpart%str)
+
+                ! no string allocations or deallocations in OpenMP sections
+                ! if starfile_table__write_omem uses allocatable strings they need to be changed to static
+
+            end do
+            !$omp end parallel do
             if(self%verbose) then
                 ms_complete = toc(ms0)
                 print *,'particle star parts generated in :', ms_complete, 'using', NTHR, 'threads'; call flush(6)
             endif
-            if(.not. file_exists(trim(adjustl(self%starfile_tmp)))) THROW_HARD("stream_export_particles_2D: starfile headers not written")
+            if(.not. file_exists(self%starfile_tmp)) THROW_HARD("stream_export_particles_2D: starfile headers not written")
             if(self%verbose) ms0 = tic()
-            call fopen(fhandle, file=trim(adjustl(self%starfile_tmp)), position='append', iostat=ok)
+            call fopen(fhandle, file=self%starfile_tmp, position='append', iostat=ok)
             do i=1,nbatches
-                write(fhandle, '(a)', advance="no") starparts(i)%string
+                write(fhandle, '(a)', advance="no") starparts(i)%str
             end do
             !trailing empty line
             write(fhandle, '(a)')
@@ -487,21 +507,21 @@ contains
                 ms_complete = toc(ms0)
                 print *,'particle star parts written in :',  ms_complete; call flush(6)
             endif
-            if(file_exists(trim(adjustl(self%starfile_name)))) call del_file(trim(adjustl(self%starfile_name)))
-            call simple_rename(trim(adjustl(self%starfile_tmp)), trim(adjustl(self%starfile_name)))
+            if(file_exists(self%starfile_name)) call del_file(self%starfile_name)
+            call simple_rename(self%starfile_tmp, self%starfile_name)
         endif
         if(allocated(starparts)) deallocate(starparts)
     end subroutine stream_export_particles_2D
 
     subroutine stream_export_pick_diameters( self, outdir, histogram_moldiams, filename)
-        class(starproject_stream),            intent(inout) :: self
-        type(histogram),                      intent(inout) :: histogram_moldiams
-        character(len=LONGSTRLEN),            intent(in)    :: outdir
-        character(len=*),          optional,  intent(in)    :: filename
+        class(starproject_stream), intent(inout) :: self
+        type(histogram),           intent(inout) :: histogram_moldiams
+        class(string),             intent(in)    :: outdir
+        class(string), optional,   intent(in)    :: filename
         if(present(filename)) then
             call self%starfile_init(filename, outdir)
         else
-            call self%starfile_init('pick.star', outdir)
+            call self%starfile_init(string('pick.star'), outdir)
         endif
         call self%starfile_set_pick_diameters_table(histogram_moldiams)
         call self%starfile_write_table(append = .true.)
@@ -509,20 +529,19 @@ contains
     end subroutine stream_export_pick_diameters
 
     subroutine stream_export_picking_references( self, spproj, outdir, filename)
-        class(starproject_stream),            intent(inout) :: self
-        class(sp_project),                    intent(inout) :: spproj
-        character(len=LONGSTRLEN),            intent(in)    :: outdir
-        character(len=*),          optional,  intent(in)    :: filename
+        class(starproject_stream), intent(inout) :: self
+        class(sp_project),         intent(inout) :: spproj
+        class(string),             intent(in)    :: outdir
+        class(string),optional,    intent(in)    :: filename
         if(present(filename)) then
             call self%starfile_init(filename, outdir)
         else
-            call self%starfile_init('pickrefs.star', outdir)
+            call self%starfile_init(string('pickrefs.star'), outdir)
         endif
         call self%starfile_set_clusters2D_table(spproj)
         call self%starfile_write_table(append = .true.)
         call self%starfile_deinit()
     end subroutine stream_export_picking_references
-
 
     ! optics
 
@@ -806,9 +825,9 @@ contains
         if( present(verbose) ) l_verbose = verbose
         if( present(write)   ) l_write   = write
         if( (params_glob%projfile_optics .ne. '') .and.&
-           &(file_exists('../' // trim(params_glob%projfile_optics))) ) then
+           &(file_exists(string('../')//params_glob%projfile_optics)) ) then
             if( l_verbose ) ms0 = tic()
-            call spproj_optics%read('../' // trim(params_glob%projfile_optics))
+            call spproj_optics%read(string('../')//params_glob%projfile_optics)
             call self%copy_optics(spproj_dest, spproj_optics)
             call spproj_optics%kill()
             if( l_write ) call spproj_dest%write

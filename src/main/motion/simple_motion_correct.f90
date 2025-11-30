@@ -48,8 +48,8 @@ real,        allocatable :: frameweights(:)               !< array of frameweigh
 complex,     allocatable :: cmat_sum(:,:,:)               !< complex matrice
 
 ! module global variables
-character(len=:), allocatable :: patched_shift_fname      !< file name for shift plot for patched-based alignment
-integer,          allocatable :: pos_outliers(:,:)        !< positions of defects & hot pixels
+type(string)         :: patched_shift_fname               !< file name for shift plot for patched-based alignment
+integer, allocatable :: pos_outliers(:,:)                 !< positions of defects & hot pixels
 integer :: nframes        = 0                             !< number of frames used for alignement
 integer :: total_nframes  = 0                             !< total number of frames in movie
 integer :: fixed_frame    = 0                             !< fixed frame of reference for isotropic alignment (0,0)
@@ -67,7 +67,6 @@ logical :: do_scale                    = .false.          !< scale or not
 logical :: l_eer                       = .false.          !< whether eer format is in use
 logical :: motion_correct_with_patched = .false.          !< run patch-based aniso or not
 
-
 ! module global constants
 real,    parameter :: NSIGMAS          = 6.       !< Number of standard deviations for outliers detection
 logical, parameter :: FITSHIFTS        = .true.
@@ -84,11 +83,11 @@ contains
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
 
     subroutine motion_correct_init( movie_stack_fname, ctfvars, err, movie_sum, gainref )
-        character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
-        type(ctfparams),            intent(in)    :: ctfvars           !< CTF parameters
-        logical,                    intent(out)   :: err               !< error flag
-        type(image),                intent(inout) :: movie_sum
-        character(len=*), optional, intent(in)    :: gainref           !< gain reference filename
+        class(string),           intent(in)    :: movie_stack_fname !< input filename of stack
+        type(ctfparams),         intent(in)    :: ctfvars           !< CTF parameters
+        logical,                 intent(out)   :: err               !< error flag
+        type(image),             intent(inout) :: movie_sum
+        class(string), optional, intent(in)    :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
         complex,     pointer     :: pcmat(:,:,:)
         real     :: dimo4, dose_per_frame
@@ -133,7 +132,7 @@ contains
         err = .false.
         if( nframes < 2 )then
             err = .true.
-            write(logfhandle,*) 'movie: ', trim(movie_stack_fname)
+            write(logfhandle,*) 'movie: ', movie_stack_fname%to_char()
             THROW_WARN('nframes of movie < 2, aborting motion_correct')
             return
         endif
@@ -153,7 +152,7 @@ contains
             endif
             if( nframes < 2 )then
                 err = .true.
-                write(logfhandle,*) 'movie: ', trim(movie_stack_fname)
+                write(logfhandle,*) 'movie: ', movie_stack_fname%to_char()
                 THROW_WARN('nframes of movie < 2, aborting motion_correct')
                 return
             endif
@@ -185,7 +184,7 @@ contains
         ! check gain reference existence
         if( present(gainref) )then
             if( .not.file_exists(gainref) )then
-                THROW_HARD('gain reference: '//trim(gainref)//' not found; motion_correct_init')
+                THROW_HARD('gain reference: '//gainref%to_char()//' not found; motion_correct_init')
             endif
         endif
         if( L_BENCH )then
@@ -272,14 +271,14 @@ contains
 
     !> isotropic motion_correction of DDD movie
     subroutine motion_correct_iso( movie_stack_fname, ctfvars, bfactor, movie_sum, gainref_fname )
-        character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
-        type(ctfparams),            intent(inout) :: ctfvars           !< CTF params
-        real,                       intent(in)    :: bfactor           !< B-factor
-        type(image),                intent(inout) :: movie_sum
-        character(len=*), optional, intent(in)    :: gainref_fname     !< gain reference filename
-        real                                :: ave, sdev, var, minw, maxw, corr
-        logical                             :: err, err_stat
-        type(motion_align_hybrid)           :: hybrid_srch
+        class(string),           intent(in)    :: movie_stack_fname !< input filename of stack
+        type(ctfparams),         intent(inout) :: ctfvars           !< CTF params
+        real,                    intent(in)    :: bfactor           !< B-factor
+        type(image),             intent(inout) :: movie_sum
+        class(string), optional, intent(in)    :: gainref_fname     !< gain reference filename
+        real                      :: ave, sdev, var, minw, maxw, corr
+        logical                   :: err, err_stat
+        type(motion_align_hybrid) :: hybrid_srch
         ! initialise
         if( l_BENCH ) t_correct_iso_init = tic()
         call motion_correct_init(movie_stack_fname, ctfvars, err, movie_sum, gainref_fname)
@@ -310,12 +309,12 @@ contains
         if( l_BENCH ) rt_correct_iso_align = toc(t_correct_iso_align)
         ! deals with reference frame convention
         select case(trim(params_glob%mcconvention))
-        case('relion','first')
-            opt_shifts(:,1) = opt_shifts(:,1) - opt_shifts(1,1)
-            opt_shifts(:,2) = opt_shifts(:,2) - opt_shifts(1,2)
-            shifts_toplot   = opt_shifts
-        case DEFAULT
-            ! using central frame
+            case('relion','first')
+                opt_shifts(:,1) = opt_shifts(:,1) - opt_shifts(1,1)
+                opt_shifts(:,2) = opt_shifts(:,2) - opt_shifts(1,2)
+                shifts_toplot   = opt_shifts
+            case DEFAULT
+                ! using central frame
         end select
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
@@ -423,7 +422,7 @@ contains
 
     ! write polynomial coefficients
     subroutine motion_correct_write_poly( fname )
-        character(len=*),  intent(in) :: fname
+        class(string),  intent(in) :: fname
         real(dp), allocatable :: polycoeffs(:)
         if( trim(params_glob%extractfrommov).eq.'yes' )then
             call motion_patch%get_poly_coeffs(polycoeffs)
@@ -436,14 +435,15 @@ contains
     ! Write iso/aniso-tropic shifts
     subroutine motion_correct_write2star( mc_starfile_fname, moviename, writepoly, gainref_fname )
         use simple_starfile_wrappers
-        character(len=*),           intent(in) :: mc_starfile_fname, moviename
-        logical,                    intent(in) :: writepoly
-        character(len=*), optional, intent(in) :: gainref_fname
+        class(string),           intent(in) :: mc_starfile_fname, moviename
+        logical,                 intent(in) :: writepoly
+        class(string), optional, intent(in) :: gainref_fname
         real(dp),     allocatable :: poly_coeffs(:)
         type(starfile_table_type) :: mc_starfile
-        real(dp) :: dpscale
-        real     :: shift(2), doseperframe
-        integer  :: i,iframe, npoly, ndeadpixels, motion_model
+        type(string) :: moviename_abs
+        real(dp)     :: dpscale
+        real         :: shift(2), doseperframe
+        integer      :: i,iframe, npoly, ndeadpixels, motion_model
         dpscale = real(params_glob%scale_movies,dp)
         motion_model = 0
         if( writepoly )then
@@ -453,7 +453,7 @@ contains
             if( do_scale ) poly_coeffs = poly_coeffs / dpscale
         endif
         call starfile_table__new(mc_starfile)
-        call starfile_table__open_ofile(mc_starfile, mc_starfile_fname)
+        call starfile_table__open_ofile(mc_starfile, mc_starfile_fname%to_char())
         ! global fields
         call starfile_table__addObject(mc_starfile)
         call starfile_table__setIsList(mc_starfile, .true.)
@@ -461,9 +461,10 @@ contains
         call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_X, ldim_orig(1))
         call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Y, ldim_orig(2))
         call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Z, total_nframes)
-        call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_MOVIE_NAME, simple_abspath(moviename))
+        moviename_abs = simple_abspath(moviename)
+        call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_MOVIE_NAME, moviename_abs%to_char())
         if (present(gainref_fname)) then
-            call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(gainref_fname))
+            call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, gainref_fname%to_char())
         end if
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.d0/dpscale)
         if( l_eer )then
@@ -551,6 +552,7 @@ contains
         ! endif
         call starfile_table__close_ofile(mc_starfile)
         call starfile_table__delete(mc_starfile)
+        call moviename_abs%kill
     end subroutine motion_correct_write2star
 
     subroutine motion_correct_iso_kill
@@ -650,13 +652,13 @@ contains
     subroutine motion_correct_dev( movie_stack_fname, ctfvars, movie_sum, movie_sum_corrected,&
             &movie_sum_ctf, aniso_success, poly_rmsd, gainref, boxdata )
         use simple_motion_align_poly, only: motion_align_poly
-        character(len=*),           intent(in)    :: movie_stack_fname  !< input filename of stack
-        type(ctfparams),            intent(inout) :: ctfvars            !< CTF params
-        type(image),                intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        logical,                    intent(out)   :: aniso_success
-        real,                       intent(out)   :: poly_rmsd
-        character(len=*), optional, intent(in)    :: gainref            !< gain reference filename
-        real,             optional, intent(in)    :: boxdata(:,:)
+        class(string),           intent(in)    :: movie_stack_fname  !< input filename of stack
+        type(ctfparams),         intent(inout) :: ctfvars            !< CTF params
+        type(image),             intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        logical,                 intent(out)   :: aniso_success
+        real,                    intent(out)   :: poly_rmsd
+        class(string), optional, intent(in)    :: gainref            !< gain reference filename
+        real,          optional, intent(in)    :: boxdata(:,:)
         type(motion_align_poly) :: align_obj
         real, allocatable       :: iso_shifts(:,:)
         real(dp)                :: star_polyn(36)

@@ -23,26 +23,25 @@ contains
 
     subroutine exec_refpick( micname, boxfile_out, thumb_den_out, smpd, nptcls, pickrefs, dir_out, nboxes_max )
         use simple_string_utils, only: str2real, parsestr
-        character(len=*),           intent(in)    :: micname
-        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out, thumb_den_out
-        real,                       intent(in)    :: smpd    !< sampling distance in A
-        integer,                    intent(out)   :: nptcls
-        class(image),     optional, intent(inout) :: pickrefs(:)
-        character(len=*), optional, intent(in)    :: dir_out
-        integer,          optional, intent(in)    :: nboxes_max
+        class(string),           intent(in)    :: micname
+        class(string),           intent(out)   :: boxfile_out, thumb_den_out
+        real,                    intent(in)    :: smpd    !< sampling distance in A
+        integer,                 intent(out)   :: nptcls
+        class(image),  optional, intent(inout) :: pickrefs(:)
+        class(string), optional, intent(in)    :: dir_out
+        integer,       optional, intent(in)    :: nboxes_max
         type(pickref)                  :: refp, refp_refine
-        character(len=LONGSTRLEN)      :: boxfile
-        character(len=:),  allocatable :: fbody_here, ext, fname_thumb_den
+        type(string) :: boxfile, fbody_here, ext, fname_thumb_den
         real    :: maxdiam
         integer :: box
         logical :: l_roi, l_backgr_subtr
-        fbody_here      = basename(trim(micname))
-        ext             = fname2ext(trim(fbody_here))
-        fbody_here      = get_fbody(trim(fbody_here), trim(ext))
-        fname_thumb_den = trim(adjustl(fbody_here))//DEN_SUFFIX//trim(JPG_EXT)
-        boxfile         = basename(fname_new_ext(trim(micname),'box'))
-        if( present(dir_out) ) boxfile         = trim(dir_out)//'/'//trim(boxfile)
-        if( present(dir_out) ) fname_thumb_den = trim(dir_out)//'/'//trim(fname_thumb_den)
+        fbody_here      = basename(micname)
+        ext             = fname2ext(fbody_here)
+        fbody_here      = get_fbody(fbody_here, ext)
+        fname_thumb_den = fbody_here//DEN_SUFFIX//JPG_EXT
+        boxfile         = basename(fname_new_ext(micname,'box'))
+        if( present(dir_out) ) boxfile         = dir_out//'/'//boxfile%to_char()
+        if( present(dir_out) ) fname_thumb_den = dir_out//'/'//fname_thumb_den%to_char()
         l_roi           = trim(params_glob%pick_roi).eq.'yes'
         l_backgr_subtr  = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
         call read_mic_raw_pickref(micname, smpd, subtr_backgr=l_backgr_subtr)
@@ -70,16 +69,16 @@ contains
     end subroutine exec_refpick
 
     subroutine exec_segpick( micname, boxfile_out, nptcls, dir_out, moldiam, winsz )
-        character(len=*),           intent(in)  :: micname
-        character(len=LONGSTRLEN),  intent(out) :: boxfile_out
-        integer,                    intent(out) :: nptcls
-        character(len=*), optional, intent(in)  :: dir_out
-        real,             optional, intent(in)  :: moldiam
-        integer,          optional, intent(in)  :: winsz
-        character(len=LONGSTRLEN) :: boxfile
+        class(string),           intent(in)  :: micname
+        class(string),           intent(out) :: boxfile_out
+        integer,                 intent(out) :: nptcls
+        class(string), optional, intent(in)  :: dir_out
+        real,          optional, intent(in)  :: moldiam
+        integer,       optional, intent(in)  :: winsz
+        type(string)  :: boxfile
         type(pickseg) :: picker
-        boxfile = basename(fname_new_ext(trim(micname),'box'))
-        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
+        boxfile = basename(fname_new_ext(micname,'box'))
+        if( present(dir_out) ) boxfile = dir_out//'/'//boxfile%to_char()
         if( present(moldiam) )then
             call picker%pick(micname, moldiam=moldiam)
         elseif( present(winsz) )then
@@ -96,16 +95,16 @@ contains
     end subroutine exec_segpick
 
     subroutine exec_segdiampick( micname, boxfile_out, smpd, nptcls, moldiam_max, dir_out )
-        character(len=*),           intent(in)  :: micname
-        character(len=LONGSTRLEN),  intent(out) :: boxfile_out
-        real,                       intent(in)  :: smpd    !< sampling distance in A
-        integer,                    intent(out) :: nptcls
-        real,                       intent(in)  :: moldiam_max
-        character(len=*), optional, intent(in)  :: dir_out
-        character(len=LONGSTRLEN) :: boxfile
+        class(string),           intent(in)  :: micname
+        class(string),           intent(out) :: boxfile_out
+        real,                    intent(in)  :: smpd    !< sampling distance in A
+        integer,                 intent(out) :: nptcls
+        real,                    intent(in)  :: moldiam_max
+        class(string), optional, intent(in)  :: dir_out
+        type(string)      :: boxfile
         type(picksegdiam) :: picker
-        boxfile = basename(fname_new_ext(trim(micname),'box'))
-        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
+        boxfile = basename(fname_new_ext(micname,'box'))
+        if( present(dir_out) ) boxfile = dir_out//'/'//boxfile%to_char()
         call picker%pick(micname, SMPD, moldiam_max, params_glob%pcontrast)
         call picker%write_pos_and_diams(boxfile, nptcls)
         if( nptcls == 0 )then
@@ -117,24 +116,23 @@ contains
 
     subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, dir_out, nboxes_max )
         use simple_strategy2D_utils, only: alloc_imgarr, dealloc_imgarr
-        character(len=*),           intent(in)  :: micname
-        character(len=LONGSTRLEN),  intent(out) :: boxfile_out
+        class(string),              intent(in)  :: micname
+        class(string),              intent(out) :: boxfile_out
         real,                       intent(in)  :: smpd    !< sampling distance in A
         integer,                    intent(out) :: nptcls
-        character(len=*), optional, intent(in)  :: dir_out
+        class(string),    optional, intent(in)  :: dir_out
         integer,          optional, intent(in)  :: nboxes_max
         type(image),      allocatable :: pickrefs(:)
-        type(pickref)                 :: refp, refp_refine, refp_merg
         type(pickref),    allocatable :: comprefp_refine(:)
         real,             allocatable :: moldiams(:)
         character(len=4), allocatable :: moldiams_str(:)
-        character(len=STDLEN)         :: kind
-        character(len=LONGSTRLEN)     :: boxfile
-        real    :: maxdiam, sig, r, ang
-        integer :: box, i, istr, num_entries, nmoldiams, sel
-        logical :: l_roi, l_backgr_subtr, l_competitive
-        boxfile = basename(fname_new_ext(trim(micname),'box'))
-        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
+        type(pickref) :: refp, refp_refine, refp_merg
+        type(string)  :: kind, boxfile
+        real          :: maxdiam, sig, r, ang
+        integer       :: box, i, istr, num_entries, nmoldiams, sel
+        logical       :: l_roi, l_backgr_subtr, l_competitive
+        boxfile = basename(fname_new_ext(micname,'box'))
+        if( present(dir_out) ) boxfile = dir_out//'/'//boxfile%to_char()
         l_roi          = trim(params_glob%pick_roi).eq.'yes'
         l_backgr_subtr = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
         l_competitive  = .false.
@@ -188,34 +186,34 @@ contains
             endif
             box = round2even((1.0+BOX_EXP_FAC)*params_glob%moldiam/ smpd) + 2
             sig = params_glob%moldiam / (smpd * GAUSIG)
-            select case(trim(kind))
-            case('gau')
-                ! single gaussian
-                call alloc_imgarr(1, [box, box,1], smpd, pickrefs)
-                call pickrefs(1)%gauimg2D(sig, sig)
-            case('disc')
-                ! small specimen in membrane patch
-                ! 1:gaussian, 2:top view, 3-8:sideviews
-                call alloc_imgarr(8, [box, box,1], smpd, pickrefs)
-                call pickrefs(1)%gauimg2D(sig, sig)
-                r = 0.5*params_glob%moldiam/smpd - 1.0
-                pickrefs(2) = 1.
-                call pickrefs(2)%mask(r, 'soft', backgr=0.)
-                ang = 0.
-                do i = 3,8
-                    call pickrefs(i)%disc_sideview([box, box,1], smpd, r)
-                    if( ang > 0.5 ) call pickrefs(i)%rtsq(ang,0.,0.)
-                    call pickrefs(i)%mask(real(box/2-1),'hard')
-                    ang = ang + 30.0
-                enddo
-            case('ring')
-                ! TM complex/apoferritin-like shape
-                ! 1:gaussian, 2:near hollow ring
-                call alloc_imgarr(2, [box, box,1], smpd, pickrefs)
-                call pickrefs(1)%gauimg2D(sig, sig)
-                call pickrefs(2)%soft_ring([box,box,1], smpd, 0.5*params_glob%moldiam/smpd)
-            case DEFAULT
-                THROW_HARD('Unsupported picking mode: '//trim(kind))
+            select case(kind%to_char())
+                case('gau')
+                    ! single gaussian
+                    call alloc_imgarr(1, [box, box,1], smpd, pickrefs)
+                    call pickrefs(1)%gauimg2D(sig, sig)
+                case('disc')
+                    ! small specimen in membrane patch
+                    ! 1:gaussian, 2:top view, 3-8:sideviews
+                    call alloc_imgarr(8, [box, box,1], smpd, pickrefs)
+                    call pickrefs(1)%gauimg2D(sig, sig)
+                    r = 0.5*params_glob%moldiam/smpd - 1.0
+                    pickrefs(2) = 1.
+                    call pickrefs(2)%mask(r, 'soft', backgr=0.)
+                    ang = 0.
+                    do i = 3,8
+                        call pickrefs(i)%disc_sideview([box, box,1], smpd, r)
+                        if( ang > 0.5 ) call pickrefs(i)%rtsq(ang,0.,0.)
+                        call pickrefs(i)%mask(real(box/2-1),'hard')
+                        ang = ang + 30.0
+                    enddo
+                case('ring')
+                    ! TM complex/apoferritin-like shape
+                    ! 1:gaussian, 2:near hollow ring
+                    call alloc_imgarr(2, [box, box,1], smpd, pickrefs)
+                    call pickrefs(1)%gauimg2D(sig, sig)
+                    call pickrefs(2)%soft_ring([box,box,1], smpd, 0.5*params_glob%moldiam/smpd)
+                case DEFAULT
+                    THROW_HARD('Unsupported picking mode: '//kind%to_char())
             end select
         endif
         ! Effective picking

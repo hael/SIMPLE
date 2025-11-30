@@ -10,31 +10,30 @@ implicit none
 contains
 
     subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj )
-        character(len=*),           intent(in)    :: chunk_fnames(:) ! List of project files
-        character(len=*),           intent(in)    :: folder          ! output folder
-        class(sp_project),          intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
-        character(len=*), optional, intent(in)    :: projname_out    ! name for output project file
-        logical,          optional, intent(in)    :: write_proj      ! write project file
+        class(string),           intent(in)    :: chunk_fnames(:) ! List of project files
+        class(string),           intent(in)    :: folder          ! output folder
+        class(sp_project),       intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
+        class(string), optional, intent(in)    :: projname_out    ! name for output project file
+        logical,       optional, intent(in)    :: write_proj      ! write project file
         type(sp_project), allocatable :: chunks(:)
-        type(class_frcs)              :: frcs, frcs_chunk
-        type(image)                   :: img
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
-        character(len=:), allocatable :: projname, stkname, evenname, oddname, frc_fname
-        character(len=:), allocatable :: projfile_out, dir, cavgs
-        real    :: smpd
-        integer :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
-        integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
-        logical :: l_write_proj
+        type(class_frcs) :: frcs, frcs_chunk
+        type(image)      :: img
+        type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
+        real             :: smpd
+        integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
+        integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
+        logical          :: l_write_proj
         l_write_proj = .true.
         if(present(write_proj)) l_write_proj = write_proj
         nchunks = size(chunk_fnames)
         allocate(chunks(nchunks))
-        dir = trim(folder)//'/'
+        dir = folder%to_char()//'/'
         if( present(projname_out) )then
-            projfile_out = dir//trim(projname_out)//trim(METADATA_EXT)
+            projfile_out = dir%to_char()//projname_out%to_char()//trim(METADATA_EXT)
         else
-            projfile_out = dir//'set'//METADATA_EXT
+            projfile_out = dir%to_char()//'set'//METADATA_EXT
         endif
         call merged_proj%os_mic%kill
         call merged_proj%os_stk%kill
@@ -43,13 +42,13 @@ contains
         call merged_proj%os_cls2D%kill
         call merged_proj%os_cls3D%kill
         call merged_proj%os_out%kill
-        cavgs     = dir//'cavgs.mrc'
+        cavgs     = dir%to_char()//'cavgs.mrc'
         nallptcls = 0
         nallstks  = 0
         nallmics  = 0
         icls      = 0
         do ic = 1,nchunks
-            projname = trim(chunk_fnames(ic))
+            projname = chunk_fnames(ic)
             call chunks(ic)%read_data_info(projname, nmics, nstks, nptcls)
             nallmics  = nallmics  + nmics
             nallstks  = nallstks  + nstks
@@ -80,7 +79,7 @@ contains
             call merged_proj%os_mic%new(nallmics,.false.)
             j = 0
             do ic = 1,nchunks
-                projname = trim(chunk_fnames(ic))
+                projname = chunk_fnames(ic)
                 call chunks(ic)%read_segment('mic', projname)
                 do i = 1,chunks(ic)%os_mic%get_noris()
                     j = j+1
@@ -98,7 +97,7 @@ contains
         iptcl_glob = 0
         fromp_glob = 1
         do ic = 1,nchunks
-            projname = trim(chunk_fnames(ic))
+            projname = chunk_fnames(ic)
             call chunks(ic)%read_segment('stk', projname)
             call chunks(ic)%read_segment('ptcl2D',projname)
             ! classes frcs & info

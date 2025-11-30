@@ -14,11 +14,11 @@ private
 contains
 
     subroutine restarted_exec( cline, prg, executable )
-        class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(in)    :: prg, executable
-        character(len=:), allocatable :: cmd
-        type(chash) :: job_descr
-        integer     :: nrestarts, i, istart
+        class(cmdline), intent(inout) :: cline
+        class(string),  intent(in)    :: prg, executable
+        type(string) :: cmd
+        type(chash)  :: job_descr
+        integer      :: nrestarts, i, istart
         if( .not. cline%defined('nrestarts') )then
             THROW_HARD('nrestarts needs to be defined on command line for restarted_exec')
         else
@@ -32,11 +32,11 @@ contains
         if( .not. cline%defined('projfile') )then
             THROW_HARD('projfile needs to be defined on command line for restarted_exec')
         endif
-        call cline%set('prg', trim(prg))
+        call cline%set('prg', prg)
         call cline%gen_job_descr(job_descr)
         do i = istart, nrestarts
             ! compose the command line
-            cmd = trim(executable)//' '//trim(job_descr%chash2str())//' > '//uppercase(trim(prg))//'_OUTPUT_RESTART'//int2str(i)
+            cmd = executable//' '//job_descr%chash2str()//' > '//uppercase(prg%to_char())//'_OUTPUT_RESTART'//int2str(i)
             ! execute
             call exec_cmdline(cmd)
         end do
@@ -44,40 +44,40 @@ contains
     end subroutine restarted_exec
 
     subroutine async_exec( cline, executable, output )
-        class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(in)    :: executable, output
-        character(len=:), allocatable   :: cmd
-        type(chash) :: job_descr
+        class(cmdline), intent(inout) :: cline
+        class(string),  intent(in)    :: executable, output
+        type(string) :: cmd
+        type(chash)  :: job_descr
         if( .not. cline%defined('projfile') )then
             THROW_HARD('projfile needs to be defined on command line')
         endif
         call cline%gen_job_descr(job_descr)
         ! compose the command line
-        cmd = 'nohup '//trim(executable)//' '//trim(job_descr%chash2str())//' > '//trim(output)//' &'
+        cmd = string('nohup ')//executable//' '//job_descr%chash2str()//' > '//output//' &'
         ! execute asynchronously
         call exec_cmdline(cmd, waitflag=.false., suppress_errors=.true.)
         call job_descr%kill
     end subroutine async_exec
 
     function gen_exec_cmd( cline, executable, output ) result( cmd )
-        class(cmdline),             intent(inout) :: cline
-        character(len=*),           intent(in)    :: executable
-        character(len=*), optional, intent(in)    :: output
-        character(len=:), allocatable  :: cmd
-        type(chash) :: job_descr
+        class(cmdline),          intent(inout) :: cline
+        class(string),           intent(in)    :: executable
+        class(string), optional, intent(in)    :: output
+        type(string)  :: cmd
+        type(chash)   :: job_descr
         call cline%gen_job_descr(job_descr)
         if( present(output) )then
-            cmd = trim(executable)//' '//trim(job_descr%chash2str())//' > '//trim(output)
+            cmd = executable//' '//job_descr%chash2str()//' > '//output
         else
-            cmd = trim(executable)//' '//trim(job_descr%chash2str())
+            cmd = executable//' '//job_descr%chash2str()
         endif
         call job_descr%kill
     end function gen_exec_cmd
 
     subroutine script_exec( cline, prg, executable )
-        class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(in)    :: prg, executable 
-        character(len=:), allocatable   :: projfile
+        class(cmdline), intent(inout) :: cline
+        class(string),  intent(in)    :: prg, executable 
+        type(string)     :: projfile
         type(qsys_env)   :: qenv
         type(parameters) :: params
         ! generate script for queue submission?
@@ -86,17 +86,17 @@ contains
                 if( .not. cline%defined('projfile') ) THROW_HARD('script-based execution route requires a project file')
                 projfile = cline%get_carg('projfile')
                 call cline%delete('script')
-                call cline%set('prg', trim(prg))
+                call cline%set('prg', prg)
                 call cline%set('mkdir', 'no')
                 call params%new(cline)
                 call cline%delete('mkdir')
                 call cline%delete('projfile')
                 call cline%set('projfile', projfile)
-                call qenv%new(1, exec_bin=trim(executable))
+                call qenv%new(1, exec_bin=executable)
                 if( cline%defined('tag') )then
-                    call qenv%gen_script(cline, trim(prg)//'_script'//'_'//trim(params%tag), uppercase(trim(prg))//'_OUTPUT'//'_'//trim(params%tag))
+                    call qenv%gen_script(cline, prg//'_script'//'_'//trim(params%tag), string(uppercase(prg%to_char())//'_OUTPUT'//'_'//trim(params%tag)))
                 else
-                    call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT')
+                    call qenv%gen_script(cline, prg//'_script', string(uppercase(prg%to_char())//'_OUTPUT'))
                 endif
                 call exit
             endif
@@ -105,18 +105,18 @@ contains
 
     subroutine update_job_descriptions_in_project( cline )
         class(cmdline), intent(in) :: cline
-        character(len=:), allocatable :: exec, name
+        type(string)     :: exec, name
         type(chash)      :: job_descr
         type(sp_project) :: spproj
         logical          :: did_update
         if( .not. associated(params_glob)         ) return
         if( .not. associated(params_glob%ptr2prg) ) return
         exec = params_glob%ptr2prg%get_executable()
-        if( str_has_substr(exec, 'private') ) return
+        if( exec%has_substr('private') ) return
         name = params_glob%ptr2prg%get_name()
-        if( str_has_substr(name, 'print')   ) return
-        if( str_has_substr(name, 'info')    ) return
-        if( str_has_substr(name, 'report')  ) return
+        if( name%has_substr('print')   ) return
+        if( name%has_substr('info')    ) return
+        if( name%has_substr('report')  ) return
         call cline%gen_job_descr(job_descr, name)
         if( file_exists(params_glob%projfile) )then
             call spproj%read_non_data_segments(params_glob%projfile)
@@ -127,22 +127,22 @@ contains
 
     subroutine copy_project_file_to_root_dir( cline )
         class(cmdline), intent(in)    :: cline
-        character(len=:), allocatable :: exec
+        type(string) :: exec
         logical :: tests(3)
         if( .not. associated(params_glob)         ) return
         if( .not. associated(params_glob%ptr2prg) ) return
         exec = params_glob%ptr2prg%get_executable()
-        if( str_has_substr(exec, 'private') ) return
+        if( exec%has_substr('private') ) return
         tests(1) = trim(params_glob%mkdir) .eq. 'yes'
         tests(2) = params_glob%ptr2prg%requires_sp_project()
         tests(3) = file_exists(params_glob%projfile)
-        if( all(tests) ) call simple_copy_file(trim(params_glob%projfile), '../'//trim(params_glob%projfile))
+        if( all(tests) ) call simple_copy_file(params_glob%projfile, string('../')//params_glob%projfile)
     end subroutine copy_project_file_to_root_dir
 
     ! deals with # multiprocessing threads of the master process in distributed execution
-    subroutine set_master_num_threads( nthr, string )
-        integer,          intent(inout) :: nthr
-        character(len=*), intent(in)    :: string
+    subroutine set_master_num_threads( nthr, str )
+        integer,       intent(inout) :: nthr
+        class(string), intent(in)    :: str
         character(len=STDLEN) :: nthr_str
         integer               :: envlen, iostat,nthr_here
         call get_environment_variable('SLURM_CPUS_PER_TASK', nthr_str, envlen)
@@ -153,7 +153,7 @@ contains
             nthr_here = min(NTHR_SHMEM_MAX, nthr_here)
         end if
         call omp_set_num_threads(nthr_here)
-        write(logfhandle,'(A,A,A,I6)')'>>> # SHARED-MEMORY THREADS USED BY ',trim(string),' MASTER PROCESS: ', nthr_here
+        write(logfhandle,'(A,A,A,I6)')'>>> # SHARED-MEMORY THREADS USED BY ', str%to_char(),' MASTER PROCESS: ', nthr_here
         nthr = nthr_here
     end subroutine set_master_num_threads
 

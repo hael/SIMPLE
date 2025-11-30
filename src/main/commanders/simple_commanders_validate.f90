@@ -2,16 +2,16 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commanders_validate
 include 'simple_lib.f08'
-use simple_cmdline,            only: cmdline
-use simple_commander_base,     only: commander_base
-use simple_parameters,         only: parameters
-use simple_sp_project,         only: sp_project
-use simple_micproc  
-use simple_picksegdiam
-use simple_commanders_project
+use simple_sp_project,     only: sp_project
+use simple_parameters,     only: parameters
+use simple_commander_base, only: commander_base
+use simple_cmdline,        only: cmdline
 use simple_commanders_abinitio2D
 use simple_commanders_preprocess
+use simple_commanders_project
+use simple_micproc  
 use simple_mini_stream_utils
+use simple_picksegdiam
 implicit none
 #include "simple_local_flags.inc"
 
@@ -30,12 +30,11 @@ contains
     subroutine exec_mini_stream( self, cline )
         class(commander_mini_stream), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        character(len=*),          parameter   :: PROJ_MINI_STREAM     = 'proj_mini_stream'
-        character(len=*),          parameter   :: PROJFILE_MINI_STREAM = 'proj_mini_stream.simple'
-        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100
-        real,                      parameter   :: LPSTOP = 8.
-        character(len=LONGSTRLEN), allocatable :: micnames(:)
-        character(len=:),          allocatable :: output_dir
+        character(len=*), parameter        :: PROJFILE_MINI_STREAM = 'mini_stream.simple'
+        integer,          parameter        :: NCLS_MIN = 10, NCLS_MAX = 100
+        real,             parameter        :: LPSTOP = 8.
+        type(string),     allocatable      :: micnames(:)
+        type(string)                       :: output_dir
         type(parameters)                   :: params
         type(sp_project)                   :: spproj
         type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
@@ -67,8 +66,8 @@ contains
         ! output directory
         output_dir = PATH_HERE
         ! project creation
-        call cline_new_proj%set('dir',                    PATH_HERE)
-        call cline_new_proj%set('projname',        PROJ_MINI_STREAM)
+        call cline_new_proj%set('dir',                      PATH_HERE)
+        call cline_new_proj%set('projname',     string('mini_stream'))
         call xnew_project%execute_safe(cline_new_proj)
         ! movie import
         call cline_import_movies%set('prg',           'import_movies')
@@ -94,7 +93,7 @@ contains
         call cline_ctf_estimate%set('projfile', PROJFILE_MINI_STREAM)
         call xctf_estimate%execute_safe(cline_ctf_estimate)
         ! this is the actual test
-        call spproj%read(PROJFILE_MINI_STREAM)
+        call spproj%read(string(PROJFILE_MINI_STREAM))
         call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
         ! segdiampick_mics updates the project file on disk
         ! extract
@@ -105,7 +104,7 @@ contains
         call cline_extract%set('projfile',      PROJFILE_MINI_STREAM)
         call xextract%execute_safe(cline_extract)
         ! 2D analysis
-        call spproj%read(PROJFILE_MINI_STREAM)
+        call spproj%read(string(PROJFILE_MINI_STREAM))
         nptcls = spproj%os_ptcl2D%get_noris()
         ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
         call cline_abinitio2D%set('prg',                'abinitio2D')
@@ -129,14 +128,13 @@ contains
 
     subroutine exec_check_refpick( self, cline )
         class(commander_check_refpick), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        character(len=*),          parameter   :: DIR_THUMBS             = 'thumbnails/'
-        character(len=*),          parameter   :: PROJ_CHECK_REFPICK     = 'proj_check_refpick'
-        character(len=*),          parameter   :: PROJFILE_CHECK_REFPICK = 'proj_check_refpick.simple'
-        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100
-        real,                      parameter   :: LPSTOP = 8.
-        character(len=LONGSTRLEN), allocatable :: micnames(:), fnames(:)
-        character(len=:),          allocatable :: output_dir
+        class(cmdline),                 intent(inout) :: cline
+        character(len=*), parameter        :: DIR_THUMBS             = 'thumbnails/'
+        character(len=*), parameter        :: PROJFILE_CHECK_REFPICK = 'check_refpick.simple'
+        integer,          parameter        :: NCLS_MIN = 10, NCLS_MAX = 100
+        real,             parameter        :: LPSTOP = 8.
+        type(string),     allocatable      :: micnames(:), fnames(:)
+        type(string)                       :: output_dir
         type(parameters)                   :: params
         type(sp_project)                   :: spproj
         type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
@@ -169,7 +167,7 @@ contains
         output_dir = PATH_HERE
         ! project creation
         call cline_new_proj%set('dir',                         PATH_HERE)
-        call cline_new_proj%set('projname',           PROJ_CHECK_REFPICK)
+        call cline_new_proj%set('projname',      string('check_refpick'))
         call xnew_project%execute_safe(cline_new_proj)
         ! movie import
         call cline_import_movies%set('prg',              'import_movies')
@@ -204,7 +202,7 @@ contains
         ! pick and extract
         cline_pick_extract = cline
         call cline_pick_extract%set('mkdir',                        'no')
-        call cline_pick_extract%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)               
+        call cline_pick_extract%set('pickrefs', PICKREFS_FBODY//params%ext%to_char())               
         call cline_pick_extract%set('stream',                      'yes')
         call cline_pick_extract%set('extract',                     'yes')
         call cline_pick_extract%set('dir',                    output_dir)
@@ -213,7 +211,7 @@ contains
         call cline_pick_extract%set('projfile',   PROJFILE_CHECK_REFPICK)
         call xpickextract%execute_safe(cline_pick_extract)
         ! 2D analysis
-        call spproj%read(PROJFILE_CHECK_REFPICK)
+        call spproj%read(string(PROJFILE_CHECK_REFPICK))
         nptcls = spproj%os_ptcl2D%get_noris()
         ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
         call cline_abinitio2D%set('prg',                    'abinitio2D')
@@ -234,10 +232,10 @@ contains
         ! organize output in folders
         call simple_list_files('*jpg', fnames)
         call simple_mkdir(DIR_THUMBS)
-        call move_files2dir(DIR_THUMBS, fnames)
-        deallocate(fnames)
+        call move_files2dir(string(DIR_THUMBS), fnames)
         ! destruct
         call spproj%kill
+        call fnames%kill
     end subroutine exec_check_refpick
 
 end module simple_commanders_validate

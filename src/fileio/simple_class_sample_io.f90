@@ -91,7 +91,7 @@ contains
 
     subroutine write_class_samples( csarr, fname )
         type(class_sample), intent(in) :: csarr(:)
-        character(len=*),   intent(in) :: fname
+        class(string),      intent(in) :: fname
         real, allocatable :: rarr(:), rmat(:,:)
         integer :: i, nx, ny, sz_rarr
         ! turn data into 2D matrix
@@ -114,7 +114,7 @@ contains
 
     subroutine read_class_samples( csarr, fname ) 
         type(class_sample), allocatable, intent(inout) :: csarr(:)
-        character(len=*),                intent(in)    :: fname
+        class(string),                   intent(in)    :: fname
         real, allocatable :: rmat(:,:)
         integer :: i, j, nx, ny, sz_rarr, sz, cnt
         ! read matrix

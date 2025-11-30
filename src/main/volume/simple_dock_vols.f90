@@ -48,7 +48,7 @@ contains
 
     subroutine new( self, vol_ref_fname, vol_fname, smpd, hp, lp, mskdiam, mag )
         class(dock_vols),  intent(inout) :: self
-        character(len=*),  intent(in)    :: vol_ref_fname, vol_fname
+        class(string),     intent(in)    :: vol_ref_fname, vol_fname
         real,              intent(in)    :: smpd, hp, lp, mskdiam
         logical, optional, intent(in)    :: mag
         self%mag = .true.
@@ -76,7 +76,7 @@ contains
     ! (1)
     subroutine set_ref( self, vol_ref_fname, smpd, hp, lp, mskdiam )
         class(dock_vols), intent(inout) :: self
-        character(len=*), intent(in)    :: vol_ref_fname
+        class(string),    intent(in)    :: vol_ref_fname
         real,             intent(in)    :: smpd, hp, lp, mskdiam
         real    :: smpd_target, smpd_here
         integer :: ifoo
@@ -104,7 +104,7 @@ contains
     ! (2)
     subroutine set_target( self, vol_fname )
         class(dock_vols), intent(inout) :: self
-        character(len=*), intent(in)    :: vol_fname
+        class(string),    intent(in)    :: vol_fname
         real    :: smpd_here
         integer :: ldim_here(3), ifoo
         call find_ldim_nptcls(vol_fname, ldim_here, ifoo, smpd=smpd_here)
@@ -309,7 +309,7 @@ contains
 
     subroutine rotate_target( self, vol_fname, vol_rot_fname )
         class(dock_vols), intent(inout) :: self
-        character(len=*), intent(in)    :: vol_fname, vol_rot_fname
+        class(string),    intent(in)    :: vol_fname, vol_rot_fname
         type(image) :: vol_rot
         type(ori)   :: e
         real        :: smpd_here

@@ -1,9 +1,9 @@
 module simple_picksegdiam
 include 'simple_lib.f08'
-use simple_image,    only: image
+use simple_image,     only: image
 use simple_image_bin, only: image_bin
-use simple_micproc
 use simple_linked_list
+use simple_micproc
 use simple_nrtxtfile
 use simple_syslib
 implicit none
@@ -33,20 +33,20 @@ end type picksegdiam
 contains
 
     subroutine pick_1( self, micname, smpd, moldiam_max, pcontrast, denfname, topofname, binfname, empty )
-        class(picksegdiam),         intent(inout) :: self
-        character(len=*),           intent(in)    :: micname !< micrograph file name
-        real,                       intent(in)    :: smpd, moldiam_max
-        character(len=*),           intent(in)    :: pcontrast
-        character(len=*), optional, intent(in)    :: denfname, topofname, binfname
-        logical,          optional, intent(out)   :: empty
-        character(len=:), allocatable :: fname, output_dir
-        integer,          allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
-        logical,          allocatable :: picking_mask(:,:)
-        type(image)    :: mic_raw, mic_den
+        class(picksegdiam),      intent(inout) :: self
+        class(string),           intent(in)    :: micname !< micrograph file name
+        real,                    intent(in)    :: smpd, moldiam_max
+        character(len=*),        intent(in)    :: pcontrast
+        class(string), optional, intent(in)    :: denfname, topofname, binfname
+        logical,       optional, intent(out)   :: empty
+        integer, allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
+        logical, allocatable :: picking_mask(:,:)
+        type(string)    :: fname, output_dir
+        type(image)     :: mic_raw, mic_den
         type(image_bin) :: mic_shrink, mic_bin, img_cc
-        real           :: rpos(2), diam, scale
-        integer        :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
-        logical        :: l_empty
+        real            :: rpos(2), diam, scale
+        integer         :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
+        logical         :: l_empty
         call self%kill
         self%moldiam_max = moldiam_max
         scale = smpd / SMPD_SHRINK1
@@ -62,7 +62,7 @@ contains
         if( real(nmasked) > 0.98 * real(product(ldim)) ) return
         call cascade_filter_biomol( mic_shrink, mic_den )
         if( present(denfname) ) call mic_den%write(denfname)
-        write(logfhandle,'(a)')  '>>> DENOISED MICROGRAPH: '//trim(denfname)
+        write(logfhandle,'(a)')  '>>> DENOISED MICROGRAPH: '//denfname%to_char()
         if( present(topofname) ) call mic_shrink%write(topofname)
         call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
         write(logfhandle,'(a)')  '>>> BINARIZATION, CONNECTED COMPONENT IDENTIFICATION, DIAMETER ESTIMATION'
@@ -112,7 +112,7 @@ contains
         class(picksegdiam), intent(inout) :: self
         integer,            intent(in)    :: ldim_raw(3)
         real,               intent(in)    :: smpd_raw
-        character(len=*),   intent(in)    :: binmicname !< binarized micrograph file name, smpd is SMPD_SHRINK1
+        class(string),      intent(in)    :: binmicname !< binarized micrograph file name, smpd is SMPD_SHRINK1
         real,               intent(in)    :: diam_fromto(2)
         integer,  allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
         real,     allocatable :: masscens(:,:)
@@ -123,10 +123,10 @@ contains
         call self%kill
         scale = smpd_raw / SMPD_SHRINK1
         ! read binary
-        call find_ldim_nptcls(trim(binmicname), ldim, nframes)
+        call find_ldim_nptcls(binmicname, ldim, nframes)
         if( ldim(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
         call mic_bin%new_bimg(ldim, SMPD_SHRINK1)
-        call mic_bin%read_bimg(trim(binmicname), 1)
+        call mic_bin%read_bimg(binmicname, 1)
         call img_cc%new_bimg(ldim, SMPD_SHRINK1)
         ! identify connected components
         call mic_bin%find_ccs(img_cc, update_imat=.true.)
@@ -191,7 +191,7 @@ contains
     
     subroutine write_diameters( self, fname )
         class(picksegdiam), intent(in) :: self
-        character(len=*),   intent(in) :: fname
+        class(string),      intent(in) :: fname
         type(list_iterator)   :: diams_iter
         type(nrtxtfile)       :: diamsfile
         class(*), allocatable :: any
@@ -221,7 +221,7 @@ contains
     ! for writing coordinates & diameters
     subroutine write_pos_and_diams( self, fname, nptcls, box )
         class(picksegdiam), intent(in)    :: self
-        character(len=*),   intent(in)    :: fname
+        class(string),      intent(in)    :: fname
         integer,            intent(inout) :: nptcls
         integer, optional,  intent(in)    :: box
         type(list_iterator)   :: xpos_iter, ypos_iter
@@ -238,7 +238,7 @@ contains
         endif
         allocate(diams(nptcls),source=0.)
         call self%get_diameters(diams)
-        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
         xpos_iter = self%xpos%begin()
         ypos_iter = self%ypos%begin()
         i = 0

@@ -3,28 +3,28 @@ module simple_commanders_cluster2D
 include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_builder,           only: builder, build_glob
-use simple_cmdline,           only: cmdline
-use simple_commander_base,    only: commander_base
-use simple_parameters,        only: parameters, params_glob
-use simple_sp_project,        only: sp_project
-use simple_qsys_env,          only: qsys_env
-use simple_image,             only: image
-use simple_stack_io,          only: stack_io
-use simple_starproject,       only: starproject
-use simple_commanders_imgproc, only: commander_scale
-use simple_exec_helpers,      only: set_shmem_flag, set_master_num_threads
-use simple_strategy2D_utils
-use simple_commanders_cavgs
+use simple_builder,             only: builder, build_glob
+use simple_cmdline,             only: cmdline
+use simple_commander_base,      only: commander_base
+use simple_commanders_imgproc,  only: commander_scale
+use simple_exec_helpers,        only: set_shmem_flag, set_master_num_threads
+use simple_image,               only: image
+use simple_parameters,          only: parameters, params_glob
+use simple_qsys_env,            only: qsys_env
+use simple_sp_project,          only: sp_project
+use simple_stack_io,            only: stack_io
+use simple_starproject,         only: starproject
 use simple_classaverager
-use simple_euclid_sigma2
+use simple_commanders_cavgs
 use simple_commanders_euclid
-use simple_qsys_funs
+use simple_default_clines
+use simple_euclid_sigma2
+use simple_gui_utils
+use simple_nice
 use simple_procimgstk
 use simple_progress
-use simple_gui_utils
-use simple_default_clines
-use simple_nice
+use simple_qsys_funs
+use simple_strategy2D_utils
 implicit none
 #include "simple_local_flags.inc"
 
@@ -104,7 +104,7 @@ contains
             THROW_HARD('NCLS and NSPACE cannot be both defined!')
         endif
         if( cline%defined('nspace') )then
-            if( trim(cline%get_carg('oritype')).eq.'ptcl2D' )then
+            if( cline%get_carg('oritype').eq.'ptcl2D' )then
                 THROW_HARD('NSPACE & PTCL2D are incompatible!')
             endif
             call cline%set('oritype', 'ptcl3D')
@@ -117,7 +117,7 @@ contains
             l_shmem = .true.
         endif
         ! deal with # threads for the master process
-        if( .not.l_shmem ) call set_master_num_threads(nthr_here, 'CLUSTER2D')
+        if( .not.l_shmem ) call set_master_num_threads(nthr_here, string('CLUSTER2D'))
         ! parse parameters & project
         call build%init_params_and_build_spproj(cline, params)
         if( cline%defined('nspace') )then
@@ -169,7 +169,7 @@ contains
             THROW_HARD('NCLS and NSPACE cannot be both defined!')
         endif
         if( cline%defined('nspace') )then
-            if( trim(cline%get_carg('oritype')).eq.'ptcl2D' )then
+            if( cline%get_carg('oritype').eq.'ptcl2D' )then
                 THROW_HARD('NSPACE & PTCL2D are incompatible!')
             endif
             call cline%set('oritype', 'ptcl3D')
@@ -234,14 +234,14 @@ contains
             ! classdoc gen needs to be after calc of FRCs
             call cavger_gen2Dclassdoc(build%spproj)
             ! write references
-            call cavger_write(trim(params%refs),      'merged')
-            call cavger_write(trim(params%refs_even), 'even'  )
-            call cavger_write(trim(params%refs_odd),  'odd'   )
+            call cavger_write(params%refs,      'merged')
+            call cavger_write(params%refs_even, 'even'  )
+            call cavger_write(params%refs_odd,  'odd'   )
             select case(trim(params%oritype))
                 case('ptcl2D')
                     call build%spproj%write_segment_inside('cls2D', params%projfile)
-                    call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-                    call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
+                    call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
                     call build%spproj%write_segment_inside('out', params%projfile)
                 case('ptcl3D')
                     do icls = 1,params%nspace
@@ -250,11 +250,11 @@ contains
                     if( cline%defined('outfile') )then
                         call build%spproj%os_cls3D%write(params%outfile)
                     else
-                        call build%spproj%os_cls3D%write('cls3D_oris.txt')
+                        call build%spproj%os_cls3D%write(string('cls3D_oris.txt'))
                     endif
                     call build%spproj%write_segment_inside('cls3D', params%projfile)
-                    call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc3D')
-                    call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg3D')
+                    call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc3D')
+                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg3D')
                     call build%spproj%write_segment_inside('out', params%projfile)
                 case DEFAULT
                     THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
@@ -262,7 +262,7 @@ contains
         else
             ! write partial sums
             call cavger_readwrite_partial_sums('write')
-            call qsys_job_finished('simple_commanders_cluster2D :: exec_make_cavgs')
+            call qsys_job_finished(string('simple_commanders_cluster2D :: exec_make_cavgs'))
         endif
         call cavger_kill
         ! end gracefully
@@ -289,7 +289,7 @@ contains
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         type(class_frcs)                 :: frcs
-        character(len=LONGSTRLEN)        :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
+        type(string)                     :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                             :: scale_factor, lp1, lp2, cenlp, smpd_target
         integer                          :: last_iter
         logical                          :: l_scaling, l_shmem, l_euclid
@@ -330,13 +330,13 @@ contains
         call spproj%read(params%projfile)
         ! sanity checks
         if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_autoscale')
+            THROW_HARD('No particles found in project file: '//params%projfile%to_char()//'; exec_cleanup2D_autoscale')
         endif
         ! delete any previous solution
         call spproj%os_ptcl2D%delete_2Dclustering
         call spproj%write_segment_inside(params%oritype)
         ! splitting
-        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        call spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! eo partitioning
         if( spproj%os_ptcl2D%get_nevenodd() == 0 )then
             call spproj%os_ptcl2D%partition_eo
@@ -369,7 +369,7 @@ contains
         ! objfun = euclid
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
+            l_euclid = cline%get_carg('objfun').eq.'euclid'
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
@@ -421,7 +421,7 @@ contains
         ! scale references
         if( l_scaling )then
             if( cline%defined('refs') )then
-                refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                refs_sc = 'refs'//SCALE_SUFFIX//params%ext%to_char()
                 call cline_scalerefs%set('stk',    params%refs)
                 call cline_scalerefs%set('outstk', refs_sc)
                 call cline_scalerefs%set('smpd',   params%smpd)
@@ -442,8 +442,8 @@ contains
             call xcluster2D_distr%execute(cline_cluster2D1)
         endif
         last_iter  = cline_cluster2D1%get_iarg('endit')
-        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
-        if( .not. file_exists(trim(finalcavgs)) ) THROW_HARD('File '//trim(finalcavgs)//' does not exist')
+        finalcavgs = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char() 
+        if( .not. file_exists(finalcavgs) ) THROW_HARD('File '//finalcavgs%to_char()//' does not exist')
         ! execution stage 2
         if( cline%defined('maxits') )then
             if( last_iter < params%maxits )then
@@ -458,7 +458,7 @@ contains
                     call xcluster2D_distr%execute(cline_cluster2D2)
                 endif
                 last_iter  = cline_cluster2D2%get_iarg('endit')
-                finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char()
             endif
         endif
         ! update project
@@ -472,11 +472,11 @@ contains
             call spproj%read_segment('out', params%projfile)
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('cls3D', params%projfile)
-            call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
-            call frcs%read(FRCS_FILE)
+            call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg')
+            call frcs%read(string(FRCS_FILE))
             call frcs%pad(params%smpd, params%box)
-            call frcs%write(FRCS_FILE)
-            call spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
+            call frcs%write(string(FRCS_FILE))
+            call spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             call frcs%kill
             ! transfer 2D shift parameters to 3D
             call spproj%read_segment('ptcl2D', params%projfile)
@@ -491,7 +491,7 @@ contains
         endif
         call spproj%kill
         ! ranking
-        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//params%ext
+        finalcavgs_ranked = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//'_ranked'//params%ext%to_char()
         call cline_rank_cavgs%set('projfile', params%projfile)
         call cline_rank_cavgs%set('stk',      finalcavgs)
         call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
@@ -502,13 +502,13 @@ contains
         contains
 
             subroutine rescale_cavgs(cavgs)
-                character(len=*), intent(in) :: cavgs
+                class(string), intent(in) :: cavgs
                 type(image)    :: img, img_pad
                 type(stack_io) :: stkio_w
                 integer        :: icls
                 call img%new([params%box_crop,params%box_crop,1],params%smpd_crop)
                 call img_pad%new([params%box,params%box,1],params%smpd)
-                call stkio_w%open('tmp_cavgs.mrc', params%smpd, 'write', is_ft=.false., box=params%box)
+                call stkio_w%open(string('tmp_cavgs.mrc'), params%smpd, 'write', is_ft=.false., box=params%box)
                 do icls = 1,params%ncls
                     call img%read(cavgs,icls)
                     call img%fft
@@ -547,7 +547,7 @@ contains
         class(parameters), pointer :: params_ptr => null()
         type(parameters)           :: params
         type(sp_project)           :: spproj
-        character(len=LONGSTRLEN)  :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
+        type(string)               :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real     :: scale, trs_stage2, smpd_target
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: l_scaling, l_shmem, l_euclid, l_cc_iters
@@ -571,7 +571,7 @@ contains
         call spproj%read(params%projfile)
         ! sanity checks
         if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
+            THROW_HARD('No particles found in project file: '//params%projfile%to_char()//'; exec_cluster2D_autoscale')
         endif
         ! delete any previous solution
         if( .not. spproj%is_virgin_field(params%oritype) .and. trim(params%refine).ne.'inpl' )then
@@ -580,7 +580,7 @@ contains
             call spproj%write_segment_inside(params%oritype)
         endif
         ! splitting
-        if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! deal with eo partitioning
         if( spproj%os_ptcl2D%get_nevenodd() == 0 )then
             call spproj%os_ptcl2D%partition_eo
@@ -603,7 +603,7 @@ contains
         ! noise power estimates for objfun = euclid at original sampling
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
+            l_euclid = cline%get_carg('objfun').eq.'euclid'
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
@@ -622,7 +622,7 @@ contains
         if( l_scaling )then
             ! scale references
             if( cline%defined('refs') )then
-                refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                refs_sc = 'refs'//SCALE_SUFFIX//params%ext%to_char()
                 call cline_scalerefs%set('stk',    params%refs)
                 call cline_scalerefs%set('outstk', refs_sc)
                 call cline_scalerefs%set('smpd',   params%smpd)
@@ -635,7 +635,7 @@ contains
         ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
         !          improved population distribution of clusters, no incremental learning
         if( l_euclid )then
-            call cline_cluster2D_stage1%set('objfun', trim(cline%get_carg('objfun')))
+            call cline_cluster2D_stage1%set('objfun', cline%get_carg('objfun'))
         else
             call cline_cluster2D_stage1%set('objfun', 'cc') ! cc-based search in first phase
         endif
@@ -657,7 +657,7 @@ contains
             call xcluster2D_distr%execute(cline_cluster2D_stage1)
         endif
         last_iter_stage1 = cline_cluster2D_stage1%get_iarg('endit')
-        cavgs            = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//params%ext
+        cavgs            = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage1,3)//params%ext%to_char()
         ! Stage 2: refinement stage, little extremal updates, optional incremental
         !          learning for acceleration
         call cline_cluster2D_stage2%delete('cc_iters')
@@ -681,7 +681,7 @@ contains
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
         endif
         last_iter_stage2 = cline_cluster2D_stage2%get_iarg('endit')
-        finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
+        finalcavgs       = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//params%ext%to_char()
         ! Updates project and references
         if( l_scaling )then
             ! original scale references
@@ -702,8 +702,8 @@ contains
         else
             if( l_shmem )then
                 ! Write e/o at the very end
-                params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_even'//params%ext
-                params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_odd'//params%ext
+                params%refs_even = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_even'//params%ext%to_char()
+                params%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_odd'//params%ext%to_char()
                 call cavger_write(params%refs_even,'even')
                 call cavger_write(params%refs_odd, 'odd')
                 call cavger_kill
@@ -711,23 +711,23 @@ contains
         endif
         ! adding cavgs & FRCs to project
         call spproj%read( params%projfile )
-        call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-        call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
+        call spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
+        call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg')
         call spproj%write_segment_inside('out', params%projfile)
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! clean
         call spproj%kill()
         ! rank based on gold-standard resolution estimates
-        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
+        finalcavgs_ranked = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext%to_char()
         call cline_rank_cavgs%set('projfile', params%projfile)
         call cline_rank_cavgs%set('stk',      finalcavgs)
         call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
         call xrank_cavgs%execute_safe( cline_rank_cavgs )
         ! cleanup
-        call del_file('start2Drefs'//params%ext)
-        call del_file('start2Drefs_even'//params%ext)
-        call del_file('start2Drefs_odd'//params%ext)
+        call del_file('start2Drefs'//params%ext%to_char())
+        call del_file('start2Drefs_even'//params%ext%to_char())
+        call del_file('start2Drefs_odd'//params%ext%to_char())
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D_autoscale
@@ -751,13 +751,13 @@ contains
         type(cmdline) :: cline_prob_tab2D_distr
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
-        character(len=STDLEN)     :: benchfname, orig_objfun
+        type(string)              :: benchfname, orig_objfun
         ! other variables
         type(parameters)          :: params
         type(builder)             :: build
         type(qsys_env)            :: qenv
         type(chash)               :: job_descr
-        character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
+        type(string)              :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
         real                      :: frac_srch_space, smpd_refs
         integer                   :: ldim_refs(3), nthr_here, iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid, ncls
         logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg, l_scale_inirefs
@@ -766,20 +766,20 @@ contains
         ! streaming
         l_stream = .false.
         if( cline%defined('stream') )then
-            l_stream = trim(cline%get_carg('stream'))=='yes'
+            l_stream = cline%get_carg('stream')=='yes'
         endif
         call cline%set('stream','no') ! for parameters determination
         ! objective functions part 1
         l_griddingset   = cline%defined('gridding')
         l_switch2euclid = .false.
         if( cline%defined('objfun') )then
-            if( trim(cline%get_carg('objfun')).eq.'euclid' )then
-                orig_objfun     = trim(cline%get_carg('objfun'))
+            if( cline%get_carg('objfun').eq.'euclid' )then
+                orig_objfun     = cline%get_carg('objfun')
                 l_switch2euclid = .true.
             endif
         endif
         ! deal with # threads for the master process
-        call set_master_num_threads(nthr_here, 'CLUSTER2D')
+        call set_master_num_threads(nthr_here, string('CLUSTER2D'))
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
         nice_communicator%stat_root%stage = "initialising"
@@ -843,10 +843,10 @@ contains
         call cline_calc_sigma%set(  'prg', 'calc_group_sigmas')
         ! Initial references
         if( .not. cline%defined('refs') )then
-            refs             = 'start2Drefs'//params%ext
-            params%refs      = trim(refs)
-            params%refs_even = 'start2Drefs_even'//params%ext
-            params%refs_odd  = 'start2Drefs_odd'//params%ext
+            refs             = 'start2Drefs'//params%ext%to_char()
+            params%refs      = refs
+            params%refs_even = 'start2Drefs_even'//params%ext%to_char()
+            params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
             l_scale_inirefs  = .false.
             if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
                 if( params%tseries .eq. 'yes' )then
@@ -887,29 +887,29 @@ contains
                     endif
                 else
                     select case(trim(params%cls_init))
-                    case('ptcl')
-                        ! initialization from raw images
-                        call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
-                        l_scale_inirefs = .true.
-                    case('rand')
-                        ! from noise
-                        call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
-                        l_scale_inirefs = .false.
-                    case('randcls')
-                        if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS')
-                        ! initialization from random classes
-                        do iptcl=1,params%nptcls
-                            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-                            call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
-                            call build%spproj_field%set(iptcl, 'w',     1.0)
-                            call build%spproj_field%e3set(iptcl,ran3()*360.0)
-                        end do
-                        call build%spproj%write_segment_inside(params%oritype, params%projfile)
-                        call cline_make_cavgs%set('refs', params%refs)
-                        call xmake_cavgs%execute_safe(cline_make_cavgs)
-                        l_scale_inirefs = .false.
-                    case DEFAULT
-                        THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
+                        case('ptcl')
+                            ! initialization from raw images
+                            call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                            l_scale_inirefs = .true.
+                        case('rand')
+                            ! from noise
+                            call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
+                            l_scale_inirefs = .false.
+                        case('randcls')
+                            if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS')
+                            ! initialization from random classes
+                            do iptcl=1,params%nptcls
+                                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                                call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
+                                call build%spproj_field%set(iptcl, 'w',     1.0)
+                                call build%spproj_field%e3set(iptcl,ran3()*360.0)
+                            end do
+                            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+                            call cline_make_cavgs%set('refs', params%refs)
+                            call xmake_cavgs%execute_safe(cline_make_cavgs)
+                            l_scale_inirefs = .false.
+                        case DEFAULT
+                            THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
                     end select
                 endif
             else
@@ -919,7 +919,7 @@ contains
             endif
             ! scale references to box_crop
             if( l_scale_inirefs )then
-                refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                refs_sc = 'refs'//SCALE_SUFFIX//params%ext%to_char()
                 call cline_scalerefs%set('stk',    params%refs)
                 call cline_scalerefs%set('outstk', refs_sc)
                 call cline_scalerefs%set('smpd',   params%smpd)
@@ -928,10 +928,10 @@ contains
                 call xscale%execute_safe(cline_scalerefs)
                 call simple_rename(refs_sc, params%refs)
             endif
-            call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
-            call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
+            call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
+            call copy_imgfile(params%refs, params%refs_odd,  params%smpd_crop, [1,params%ncls])
         else
-            refs = trim(params%refs)
+            refs = params%refs
         endif
         ! variable neighbourhood size
         if( cline%defined('extr_iter') )then
@@ -955,8 +955,8 @@ contains
             endif
             iter = iter + 1
             params%which_iter = iter
-            call cline%set(     'which_iter', trim(int2str(params%which_iter)))
-            call job_descr%set( 'which_iter', trim(int2str(params%which_iter)))
+            call cline%set(     'which_iter', int2str(params%which_iter))
+            call job_descr%set( 'which_iter', int2str(params%which_iter))
             str_iter = int2str_pad(iter,3)
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
@@ -966,7 +966,7 @@ contains
             call nice_communicator%cycle()
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
-            call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
+            call job_descr%set('extr_iter', int2str(params%extr_iter))
             call cline%set('extr_iter', params%extr_iter)
             ! objfun function part 3: activate sigma2 calculation
             if( iter==iter_switch2euclid )then
@@ -985,16 +985,16 @@ contains
                 call xprob_tab2D_distr%execute_safe(cline_prob_tab2D_distr)
             endif
             ! updates
-            call job_descr%set('refs', trim(refs))
-            call job_descr%set('startit', trim(int2str(iter)))
+            call job_descr%set('refs', refs)
+            call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
-            call job_descr%set('frcs', trim(FRCS_FILE))
+            call job_descr%set('frcs', FRCS_FILE)
             ! schedule
             if( L_BENCH_GLOB )then
                 rt_init = toc(t_init)
                 t_scheduled = tic()
             endif
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
             call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 1')
             ! assemble alignment docs
             if( L_BENCH_GLOB )then
@@ -1008,9 +1008,9 @@ contains
             endif
             ! assemble class averages
             if( trim(params%restore_cavgs).eq.'yes' )then
-                refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // params%ext
-                refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // params%ext
-                refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
+                refs      = CAVGS_ITER_FBODY // str_iter%to_char()            // params%ext%to_char()
+                refs_even = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // params%ext%to_char()
+                refs_odd  = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // params%ext%to_char()
                 call cline_cavgassemble%set('refs', refs)
                 call cline_cavgassemble%set('nthr', nthr_here)
                 call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
@@ -1025,7 +1025,7 @@ contains
             endif
             ! print out particle parameters per iteration
             if( trim(params%print_corrs).eq.'yes' )then
-                call build%spproj_field%write('ptcl2D_'//int2str_pad(params%which_iter,2)//'.txt')
+                call build%spproj_field%write(string('ptcl2D_'//int2str_pad(params%which_iter,2)//'.txt'))
             endif
             ! check convergence
             call check_2Dconv(cline_check_2Dconv, build%spproj_field)
@@ -1056,7 +1056,7 @@ contains
                 endif
                 call job_descr%set('objfun', orig_objfun)
                 call cline_cavgassemble%set('objfun', orig_objfun)
-                params%objfun = trim(orig_objfun)
+                params%objfun = orig_objfun%to_char()
                 if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid = .false.
                 if( l_ml_reg )then
@@ -1069,7 +1069,7 @@ contains
             if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
                 benchfname = 'CLUSTER2D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
-                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
                 write(fnr,'(a,1x,f9.2)') 'scheduled jobs  : ', rt_scheduled
@@ -1087,16 +1087,16 @@ contains
                 call fclose(fnr)
             endif
             ! write jpeg image - used in gui to display image in logfile
-            call mrc2jpeg_tiled(cwd_glob // '/' // trim(CAVGS_ITER_FBODY) // trim(str_iter) // params%ext, cwd_glob // '/' // trim(CAVGS_ITER_FBODY) // trim(str_iter) // JPG_EXT)
-            write(logfhandle,'(A,A)')'>>> JPEG ', cwd_glob // '/' // trim(CAVGS_ITER_FBODY) // trim(str_iter) // JPG_EXT
+            call mrc2jpeg_tiled(string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//params%ext%to_char(), string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//JPG_EXT)
+            write(logfhandle,'(A,A)')'>>> JPEG ', CWD_GLOB//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//JPG_EXT
         end do
         nice_communicator%stat_root%stage = "terminating"
         call nice_communicator%cycle()
         ! updates os_out
         if( trim(params%restore_cavgs).eq.'yes' )then
-            finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
-            call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
-            if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
+            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
+            call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             call build%spproj%write_segment_inside('out', params%projfile)
         endif
         call qsys_cleanup
@@ -1123,7 +1123,7 @@ contains
         type(parameters)          :: params
         type(builder),     target :: build
         type(starproject)         :: starproj
-        character(len=LONGSTRLEN) :: finalcavgs, orig_objfun, refs, refs_sc, fname
+        type(string)              :: finalcavgs, orig_objfun, refs, refs_sc, fname, fname_sigma
         real,         allocatable :: corrs(:), corrs_all(:)
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
         real    :: smpd_refs
@@ -1143,7 +1143,7 @@ contains
         ! Streaming flag
         l_stream = .false.
         if( cline%defined('stream') )then
-            l_stream = trim(cline%get_carg('stream'))=='yes'
+            l_stream = cline%get_carg('stream')=='yes'
         endif
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -1159,7 +1159,7 @@ contains
             call cluster2D_exec( cline, startit, converged )
             ! end gracefully
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-            call qsys_job_finished('simple_commanders_cluster2D :: exec_cluster2D')
+            call qsys_job_finished(string('simple_commanders_cluster2D :: exec_cluster2D'))
         else
             ! Polar specifics
             if( (trim(params%polar)=='yes') .and. (trim(params%ref_type)=='comlin_hybrid') )then
@@ -1172,9 +1172,9 @@ contains
             ! Initial references
             if( .not. cline%defined('refs') )then
                 cline_make_cavgs = cline ! ncls is transferred here
-                params%refs      = 'start2Drefs'//params%ext
-                params%refs_even = 'start2Drefs_even'//params%ext
-                params%refs_odd  = 'start2Drefs_odd'//params%ext
+                params%refs      = 'start2Drefs'//params%ext%to_char()
+                params%refs_even = 'start2Drefs_even'//params%ext%to_char()
+                params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
                 l_scale_inirefs  = .false.
                 if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
                     if( params%tseries .eq. 'yes' )then
@@ -1211,34 +1211,34 @@ contains
                         endif
                     else
                         select case(trim(params%cls_init))
-                        case('ptcl')
-                            ! initialization from raw images
-                            call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
-                            l_scale_inirefs  = .true.
-                        case('rand')
-                            ! from noise
-                            call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
-                            l_scale_inirefs  = .false.
-                        case('randcls')
-                            if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS ')
-                            ! initialization from random classes
-                            do iptcl=1,params%nptcls
-                                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-                                call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
-                                call build%spproj_field%set(iptcl, 'w',     1.0)
-                                call build%spproj_field%e3set(iptcl,ran3()*360.0)
-                            end do
-                            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-                            call cline_make_cavgs%set('refs', params%refs)
-                            call xmake_cavgs%execute_safe(cline_make_cavgs)
-                            l_scale_inirefs  = .false.
-                        case DEFAULT
-                            THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
+                            case('ptcl')
+                                ! initialization from raw images
+                                call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                                l_scale_inirefs  = .true.
+                            case('rand')
+                                ! from noise
+                                call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
+                                l_scale_inirefs  = .false.
+                            case('randcls')
+                                if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS ')
+                                ! initialization from random classes
+                                do iptcl=1,params%nptcls
+                                    if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                                    call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
+                                    call build%spproj_field%set(iptcl, 'w',     1.0)
+                                    call build%spproj_field%e3set(iptcl,ran3()*360.0)
+                                end do
+                                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+                                call cline_make_cavgs%set('refs', params%refs)
+                                call xmake_cavgs%execute_safe(cline_make_cavgs)
+                                l_scale_inirefs  = .false.
+                            case DEFAULT
+                                THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
                         end select
                     endif
                     ! scale references to box_crop
                     if( l_scale_inirefs )then
-                        refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                        refs_sc = 'refs'//SCALE_SUFFIX//params%ext%to_char()
                         call cline_scalerefs%set('stk',    params%refs)
                         call cline_scalerefs%set('outstk', refs_sc)
                         call cline_scalerefs%set('smpd',   params%smpd)
@@ -1246,8 +1246,8 @@ contains
                         call xscale%execute_safe(cline_scalerefs)
                         call simple_rename(refs_sc, params%refs)
                     endif
-                    call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
-                    call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
+                    call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
+                    call copy_imgfile(params%refs, params%refs_odd,  params%smpd_crop, [1,params%ncls])
                 else
                     call cline_make_cavgs%set('refs', params%refs)
                     call xmake_cavgs%execute_safe(cline_make_cavgs)
@@ -1264,15 +1264,16 @@ contains
             endif
             ! objective functions
             l_switch2euclid = params%cc_objfun==OBJFUN_EUCLID
-            orig_objfun     = trim(cline%get_carg('objfun'))
+            orig_objfun     = cline%get_carg('objfun')
             l_griddingset   = cline%defined('gridding')
             l_ml_reg        = params%l_ml_reg
             iter_switch2euclid = -1
             if( l_switch2euclid )then
                 if( params%cc_iters < 1 )then
                     ! already performing euclidian-based optimization, no switch
-                    if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
-                        THROW_HARD('Sigma2 file does not exists: '//sigma2_star_from_iter(params%startit))
+                    fname_sigma = sigma2_star_from_iter(params%startit)
+                    if( .not.file_exists(fname_sigma) )then
+                        THROW_HARD('Sigma2 file does not exists: '//fname_sigma%to_char())
                     endif
                     iter_switch2euclid = params%startit
                     l_switch2euclid    = .false.
@@ -1335,7 +1336,7 @@ contains
                     params%which_iter = params%which_iter - 1
                 endif
                 if( l_switch2euclid .and. params%which_iter==iter_switch2euclid )then
-                    params%objfun = trim(orig_objfun)
+                    params%objfun = orig_objfun%to_char()
                     if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
                     l_switch2euclid = .false.
                     if( l_ml_reg )then
@@ -1358,9 +1359,9 @@ contains
                     call del_file(params%outfile)
                     ! update os_out
                     if( trim(params%restore_cavgs).eq.'yes' )then
-                        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
-                        call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
-                        if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
+                        finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%startit,3)//params%ext%to_char()
+                        call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+                        if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
                         call build%spproj%write_segment_inside('out', params%projfile)
                         if( trim(params%chunk).eq.'yes' )then
                             call cavger_write(params%refs_even,'even')
@@ -1401,8 +1402,8 @@ contains
                 order     = (/(j,j=1,size(corrs_all))/)
                 call hpsort(corrs_all, order)
                 fname = 'ptcls_vs_cavgs_corrs_iter'// int2str(params%which_iter) //'.csv'
-                call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
-                call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
+                call fopen(funit, fname, 'replace', 'unknown', iostat=io_stat, form='formatted')
+                call fileiochk('cluster2D fopen failed: '//fname%to_char(), io_stat)
                 write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
                 do j = 1,size(corrs_all)
                     write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs_all(j))
@@ -1423,8 +1424,8 @@ contains
                     order = (/(j,j=1,class_cnt(class_ind))/)
                     call hpsort(corrs, order)
                     fname = 'ptcls_vs_cavgs_corrs_cls_'// int2str(class_ind) //'.csv'
-                    call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
-                    call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
+                    call fopen(funit, fname, 'replace', 'unknown', iostat=io_stat, form='formatted')
+                    call fileiochk('cluster2D fopen failed: '//fname%to_char(), io_stat)
                     write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
                     do j = 1,size(corrs)
                         write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs(j))
@@ -1456,22 +1457,22 @@ contains
         if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         l_stream = .false.
         if( cline%defined('stream') )then
-            l_stream = trim(cline%get_carg('stream'))=='yes'
+            l_stream = cline%get_carg('stream')=='yes'
             call cline%set('stream','no')
         endif
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( l_stream ) params_glob%stream = 'yes'
         if( cline%defined('which_iter') )then
-            params%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
-            params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_even'//params%ext
-            params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_odd'//params%ext
+            params%refs      = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//params%ext%to_char()
+            params%refs_even = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//'_even'//params%ext%to_char()
+            params%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//'_odd'//params%ext%to_char()
         else if( .not. cline%defined('refs') )then
-            params%refs      = 'start2Drefs'//params%ext
-            params%refs_even = 'start2Drefs_even'//params%ext
-            params%refs_odd  = 'start2Drefs_odd'//params%ext
+            params%refs      = 'start2Drefs'//params%ext%to_char()
+            params%refs_even = 'start2Drefs_even'//params%ext%to_char()
+            params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
         endif
         if( trim(params%polar).eq.'yes' )then
-            call polar_cavger_dims_from_header('cavgs_even_part1'//BIN_EXT, pftsz, kfromto, ncls)
+            call polar_cavger_dims_from_header(string('cavgs_even_part1')//BIN_EXT, pftsz, kfromto, ncls)
             call pftcc%new(1, [1,1], kfromto)
             if( trim(params%ref_type)=='comlin_hybrid' )then
                 call polar_cavger_new(pftcc, .true., nrefs=params%ncls)
@@ -1490,7 +1491,7 @@ contains
             endif
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
             call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
-            call polar_cavger_writeall(POLAR_REFS_FBODY)
+            call polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
             call pftcc%kill
             call polar_cavger_gen2Dclassdoc(build_glob%spproj)
@@ -1505,18 +1506,18 @@ contains
             call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
             ! write references
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 2')
-            call cavger_write(trim(params%refs),      'merged')
-            call cavger_write(trim(params%refs_even), 'even'  )
-            call cavger_write(trim(params%refs_odd),  'odd'   )
+            call cavger_write(params%refs,      'merged')
+            call cavger_write(params%refs_even, 'even'  )
+            call cavger_write(params%refs_odd,  'odd'   )
             call cavger_kill
         endif
         ! get iteration from which_iter else from refs filename and write cavgs starfile
         if( cline%defined('which_iter') ) then
             call starproj%export_cls2D(build%spproj, params%which_iter)
-        else if( cline%defined('refs') .and. index(params%refs, trim(CAVGS_ITER_FBODY)) > 0 ) then
-            iterstr_start = index(params%refs, trim(CAVGS_ITER_FBODY)) + 10
-            iterstr_end = index(params%refs, trim(params%ext)) - 1
-            iter = str2int(params%refs(iterstr_start:iterstr_end), io_stat)
+        else if( cline%defined('refs') .and. params%refs%substr_ind(CAVGS_ITER_FBODY) > 0 ) then
+            iterstr_start = params%refs%substr_ind(CAVGS_ITER_FBODY) + 10
+            iterstr_end   = params%refs%substr_ind(params%ext) - 1
+            iter = str2int(params%refs%to_char([iterstr_start,iterstr_end]), io_stat)
             call starproj%export_cls2D(build%spproj, iter)
         end if
         ! updates project
@@ -1527,8 +1528,8 @@ contains
                 states = build%spproj%os_cls2D%get_all('state')
                 call build%spproj%os_cls3D%set_all('state',states)
                 deallocate(states)
-                call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-                call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg')
+                call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
+                call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
                 ! multiple fields updated, do a full write
                 call build%spproj%write(params%projfile)
             case('ptcl3D')
@@ -1541,10 +1542,10 @@ contains
                 if( cline%defined('outfile') )then
                     call build%spproj%os_cls3D%write(params%outfile)
                 else
-                    call build%spproj%os_cls3D%write('cls3D_oris.txt')
+                    call build%spproj%os_cls3D%write(string('cls3D_oris.txt'))
                 endif
-                call build%spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc3D')
-                call build%spproj%add_cavgs2os_out(trim(params%refs), build%spproj%get_smpd(), imgkind='cavg3D')
+                call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc3D')
+                call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg3D')
                 call build%spproj%write_segment_inside('out', params%projfile)
             case DEFAULT
                 THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
@@ -1556,7 +1557,7 @@ contains
         call build%kill_strategy2D_tbox
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        call simple_touch('CAVGASSEMBLE_FINISHED', errmsg='In: commander_rec :: eo_cavgassemble ')
+        call simple_touch('CAVGASSEMBLE_FINISHED')
     end subroutine exec_cavgassemble
 
     subroutine exec_prob_tab2D_distr( self, cline )
@@ -1580,10 +1581,10 @@ contains
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
             endif
             l_stream = .false.
-            if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
+            if(cline%defined('stream')) l_stream = cline%get_carg('stream').eq.'yes'
         else
             l_stream = .false.
-            if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
+            if(cline%defined('stream')) l_stream = cline%get_carg('stream').eq.'yes'
             call cline%set('mkdir',   'no')
             call cline%set('stream',  'no')
             call cline%set('oritype', 'ptcl2D')
@@ -1618,10 +1619,10 @@ contains
         ! perform assignment
         if( l_stream )then
             select case(trim(params_glob%refine))
-            case('prob_smpl')
-                call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
-            case DEFAULT
-                THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
+                case('prob_smpl')
+                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                case DEFAULT
+                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
             end select
         else
             if( params_glob%which_iter == 1 )then
@@ -1646,13 +1647,13 @@ contains
             endif
         endif
         ! write
-        call eulprob%write_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+        call eulprob%write_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         ! cleanup
         call eulprob%kill
         call cline_prob_tab2D%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_job_finished('simple_commanders_cluster2D :: exec_prob_tab2D_distr')
+        call qsys_job_finished(string('simple_commanders_cluster2D :: exec_prob_tab2D_distr'))
         call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_TAB2D_DISTR NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D_distr
@@ -1665,7 +1666,7 @@ contains
         class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,          allocatable :: pinds(:)
-        character(len=:), allocatable :: fname
+        type(string)                  :: fname
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
@@ -1674,7 +1675,7 @@ contains
         integer :: nptcls
         logical :: l_ctf, l_stream, l_alloc_read_cavgs
         l_stream = .false.
-        if(cline%defined('stream')) l_stream = trim(cline%get_carg('stream'))=='yes'
+        if(cline%defined('stream')) l_stream = cline%get_carg('stream') .eq.'yes'
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -1713,14 +1714,14 @@ contains
         call build_batch_particles2D(pftcc, nptcls, pinds, l_ctf)
         ! init prob table
         call eulprob%new(pinds)
-        fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        fname = DIST_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
         ! Fill probability table
         if( l_stream )then
             select case(trim(params%refine))
-            case('prob_smpl')
-                call eulprob%fill_table_smpl_stream(build%spproj_field)
-            case DEFAULT
-                THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
+                case('prob_smpl')
+                    call eulprob%fill_table_smpl_stream(build%spproj_field)
+                case DEFAULT
+                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
             end select
         else
             if( params%which_iter == 1 )then
@@ -1728,12 +1729,12 @@ contains
                 call eulprob%fill_table_greedy
             else
                 select case(trim(params%refine))
-                case('prob','prob_smpl')
-                    call eulprob%fill_table_smpl
-                case('prob_greedy')
-                    call eulprob%fill_table_greedy
-                case DEFAULT
-                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
+                    case('prob','prob_smpl')
+                        call eulprob%fill_table_smpl
+                    case('prob_greedy')
+                        call eulprob%fill_table_greedy
+                    case DEFAULT
+                        THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
                 end select
             endif
         endif
@@ -1746,7 +1747,7 @@ contains
         call eulprob%kill
         call build%kill_general_tbox
         call build%kill_strategy2D_tbox
-        call qsys_job_finished('simple_commanders_cluster2D :: exec_prob_tab')
+        call qsys_job_finished(string('simple_commanders_cluster2D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D
 
@@ -1756,7 +1757,7 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         type(image)      :: img_cavg
-        character(len=:),   allocatable :: cavgsstk, stkname, classname
+        type(string)     :: cavgsstk, classname, stkname
         type(image),        allocatable :: imgs_class(:)
         real,               allocatable :: states(:), inpls(:,:)
         integer,            allocatable :: pops(:), pinds(:)
@@ -1815,7 +1816,7 @@ contains
             end do
             !$omp end parallel do
             ! make a filename for the class
-            classname = 'class'//int2str_pad(icls,5)//trim(STK_EXT)
+            classname = 'class'//int2str_pad(icls,5)//STK_EXT
             ! write the class average first, followed by the rotated and shifted particles
             call img_cavg%write(classname, 1)
             cnt = 1
@@ -1855,8 +1856,8 @@ contains
         type(image)                   :: cavg, img, timg
         type(oris)                    :: os
         type(sp_project), target      :: spproj
-        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
-        character(len=:), allocatable :: fname_oris, fname_denoised_ori, fname_ori, fname_class_ptcls_den
+        type(string)                  :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
+        type(string)                  :: fname_oris, fname_denoised_ori, fname_ori, fname_class_ptcls_den
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
         real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
@@ -1891,7 +1892,7 @@ contains
             case DEFAULT
                 THROW_HARD('UNSUPPORTED CTF FLAG')
         end select
-        cls_inds = build%spproj_field%get_label_inds(label)
+        cls_inds = build%spproj_field%get_label_inds(label%to_char())
         if( cline%defined('class') .and. cline%defined('ncls') )then
             THROW_HARD('EITHER class OR ncls CAN BE DEFINED')
         endif
@@ -1905,7 +1906,7 @@ contains
         endif
         allocate(cls_pops(ncls), source=0)
         do i = 1, ncls
-            call build%spproj_field%get_pinds(cls_inds(i), label, pinds)
+            call build%spproj_field%get_pinds(cls_inds(i), label%to_char(), pinds)
             if( allocated(pinds) )then
                 cls_pops(i) = size(pinds)
                 nptcls = nptcls + cls_pops(i)
@@ -2001,7 +2002,7 @@ contains
             endif
             if( trim(params%projstats).eq.'yes' )then
                 call cavg%unserialize(avg_pix)
-                call cavg%write('cavgs_unserialized.mrcs', i)
+                call cavg%write(string('cavgs_unserialized.mrcs'), i)
             endif
             ! output
             call cavg%zero_and_unflag_ft
@@ -2103,7 +2104,7 @@ contains
         endif
         call os%zero_inpl
         call os%write(fname_oris)
-        if( trim(params%projstats).eq.'yes' ) call build%spproj_field%write('ptcl_field.txt')
+        if( trim(params%projstats).eq.'yes' ) call build%spproj_field%write(string('ptcl_field.txt'))
         ! cleanup
         deallocate(imgs)
         call build%kill_general_tbox
@@ -2126,7 +2127,7 @@ contains
         call params%new(cline)
         l_stream = .false.
         if( cline%defined('stream') )then
-            l_stream = trim(cline%get_carg('stream'))=='yes'
+            l_stream = cline%get_carg('stream') == 'yes'
         endif
         ! convergence check
         converged = conv%check_conv2D(cline, os, os%get_n('class'), params%msk)

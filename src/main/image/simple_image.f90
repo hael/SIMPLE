@@ -1120,7 +1120,7 @@ contains
     !>  \brief  open: for reading 2D images from stack or volumes from volume files
     subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
         class(image),               intent(inout) :: self
-        character(len=*),           intent(in)    :: fname
+        class(string),              intent(in)    :: fname
         class(imgfile),             intent(inout) :: ioimg
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
@@ -1129,7 +1129,7 @@ contains
         integer          :: mode
         if( self%existence )then
             if( .not. file_exists(fname) )then
-                write(logfhandle,*) 'file: ', trim(fname)
+                write(logfhandle,*) 'file: ', fname%to_char()
                 THROW_HARD('The file you are trying to open does not exists; open')
             endif
             if( present(formatchar) )then
@@ -1159,7 +1159,7 @@ contains
     !>  \brief read: for reading 2D images from stack or volumes from volume files
     subroutine read( self, fname, i, readhead )
         class(image),               intent(inout) :: self
-        character(len=*),           intent(in)    :: fname
+        class(string),              intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: readhead
         type(imgfile)    :: ioimg
@@ -1183,7 +1183,7 @@ contains
             case('M', 'F', 'S', 'J', 'L')
                 call self%open(fname, ioimg, form, readhead, rwaction='READ')
             case DEFAULT
-                write(logfhandle,*) 'Trying to read from file: ', trim(fname)
+                write(logfhandle,*) 'Trying to read from file: ', fname%to_char()
                 THROW_HARD('unsupported file format; read')
         end select
         if( isvol )then
@@ -1200,7 +1200,7 @@ contains
     !>  \brief  for writing any kind of images to stack or volumes to volume files
     subroutine write( self, fname, i, del_if_exists)
         class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer, optional, intent(in)    :: i
         logical, optional, intent(in)    :: del_if_exists
         real             :: dev, mean
@@ -1286,9 +1286,9 @@ contains
 
     !>  \brief  for updating header stats in a real space MRC image file only
     subroutine update_header_stats( self, fname, stats)
-        class(image),     intent(inout) :: self
-        character(len=*), intent(in)    :: fname
-        real,             intent(in)    :: stats(4) ! stats to update: min, max, mean, rms
+        class(image),  intent(inout) :: self
+        class(string), intent(in)    :: fname
+        real,          intent(in)    :: stats(4) ! stats to update: min, max, mean, rms
         type(imgfile)    :: ioimg
         character(len=1) :: form
         if( self%existence )then
@@ -1318,7 +1318,7 @@ contains
     subroutine write_jpg( self, fname, quality, colorspec, norm )
         use simple_jpg, only: jpg_img
         class(image),               intent(inout) :: self
-        character(len=*),           intent(in)    :: fname
+        class(string),              intent(in)    :: fname
         integer,          optional, intent(in)    :: quality, colorspec
         logical,          optional, intent(in)    :: norm
         type(jpg_img)     :: jpg
@@ -1328,10 +1328,10 @@ contains
         if(present(norm))norm_here = norm
         if( norm_here )call self%norm4viz
         if( self%is_2d() )then
-            status = jpg%writejpg(trim(fname), self%rmat(:self%ldim(1),:self%ldim(2),1),&
+            status = jpg%writejpg(fname%to_char(), self%rmat(:self%ldim(1),:self%ldim(2),1),&
                 &quality=quality, colorspec=colorspec)
         else
-            status = jpg%writejpg(trim(fname), self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+            status = jpg%writejpg(fname%to_char(), self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &quality=quality, colorspec=colorspec)
         endif
     end subroutine write_jpg
@@ -8204,10 +8204,10 @@ contains
     end subroutine clip_inplace
 
     subroutine read_and_crop( self, volfname, smpd, box_crop, smpd_crop )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: volfname
-        integer,           intent(in)    :: box_crop
-        real,              intent(in)    :: smpd, smpd_crop
+        class(image),   intent(inout) :: self
+        class(string),  intent(in)    :: volfname
+        integer,        intent(in)    :: box_crop
+        real,           intent(in)    :: smpd, smpd_crop
         integer :: ldim(3), ifoo, box
         call find_ldim_nptcls(volfname, ldim, ifoo)
         ! HE, I would not trust the smpd from the header
@@ -9131,15 +9131,15 @@ contains
             call img%square(20)
             ! write stacks of 5 squares
             do i=1,5
-                call img%write('squares_spider.spi',i)
-                call img%write('squares_mrc.mrc',i)
+                call img%write(string('squares_spider.spi'),i)
+                call img%write(string('squares_mrc.mrc'),i)
             end do
             ! convert the squares from SPIDER to MRC & vice versa
             do i=1,5
-                call img%read('squares_spider.spi',i)
-                call img%write('squares_spider_converted.mrc',i)
-                call img%read('squares_mrc.mrc',i)
-                call img%write('squares_mrc_converted.spi',i)
+                call img%read(string('squares_spider.spi'),i)
+                call img%write(string('squares_spider_converted.mrc'),i)
+                call img%read(string('squares_mrc.mrc'),i)
+                call img%write(string('squares_mrc_converted.spi'),i)
             end do
             ! test SPIDER vs. MRC & converted vs. nonconverted
             do i=1,20
@@ -9148,19 +9148,19 @@ contains
             cnt = 0
             do i=1,5
                 cnt = cnt+1
-                call imgs(cnt)%read('squares_spider.spi',i)
+                call imgs(cnt)%read(string('squares_spider.spi'),i)
             end do
             do i=1,5
                 cnt = cnt+1
-                call imgs(cnt)%read('squares_spider_converted.mrc',i)
+                call imgs(cnt)%read(string('squares_spider_converted.mrc'),i)
             end do
             do i=1,5
                 cnt = cnt+1
-                call imgs(cnt)%read('squares_mrc.mrc',i)
+                call imgs(cnt)%read(string('squares_mrc.mrc'),i)
             end do
             do i=1,5
                 cnt = cnt+1
-                call imgs(cnt)%read('squares_mrc_converted.spi',i)
+                call imgs(cnt)%read(string('squares_mrc_converted.spi'),i)
             end do
             do i=1,19
                 do j=i+1,20
@@ -9176,23 +9176,23 @@ contains
             call img%square(20)
             ! write volume files
             do i=1,5
-                call img%write('cube_spider.spi')
-                call img%write('cube_mrc.mrc')
+                call img%write(string('cube_spider.spi'))
+                call img%write(string('cube_mrc.mrc'))
             end do
             ! convert the cubes from SPIDER to MRC & vice versa
             do i=1,5
-                call img%read('cube_spider.spi')
-                call img%write('cube_spider_converted.mrc')
-                call img%read('cube_mrc.mrc')
-                call img%write('cube_mrc_converted.spi')
+                call img%read(string('cube_spider.spi'))
+                call img%write(string('cube_spider_converted.mrc'))
+                call img%read(string('cube_mrc.mrc'))
+                call img%write(string('cube_mrc_converted.spi'))
             end do
             ! test SPIDER vs. MRC & converted vs. nonconverted
             do i=1,4
                 call imgs(i)%new(ldim, smpd)
-                call imgs(i)%read('cube_spider.spi')
-                call imgs(i)%read('cube_spider_converted.mrc')
-                call imgs(i)%read('cube_mrc.mrc')
-                call imgs(i)%read('cube_mrc_converted.spi')
+                call imgs(i)%read(string('cube_spider.spi'))
+                call imgs(i)%read(string('cube_spider_converted.mrc'))
+                call imgs(i)%read(string('cube_mrc.mrc'))
+                call imgs(i)%read(string('cube_mrc_converted.spi'))
             end do
             do i=1,3
                 do j=i+1,4

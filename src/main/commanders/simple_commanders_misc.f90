@@ -3,13 +3,13 @@ module simple_commanders_misc
 include 'simple_lib.f08'
 include "starfile_enum.inc"
 use simple_binoris_io
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
+use simple_cmdline,          only: cmdline
+use simple_commander_base,   only: commander_base
 use simple_simple_volinterp, only: rotvol
-use simple_sp_project,     only: sp_project
-use simple_image,          only: image
-use simple_builder,        only: builder
-use simple_parameters,     only: parameters
+use simple_sp_project,       only: sp_project
+use simple_image,            only: image
+use simple_builder,          only: builder
+use simple_parameters,       only: parameters
 implicit none
 #include "simple_local_flags.inc"
 
@@ -72,25 +72,26 @@ contains
         use simple_aff_prop
         use simple_srch_sort_loc
         class(commander_afm), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(parameters), target :: params
-        type(image), allocatable      :: img_arr(:), pick_vec(:), pick_vec_ds(:), height_trace(:), height_retrace(:), ordered_pick_vec(:)
-        type(image_afm), allocatable  :: stack_afm(:)   
-        type(pickseg), allocatable   :: trace_picks(:)
+        class(cmdline),       intent(inout) :: cline
+        type(parameters), target     :: params
+        type(image),     allocatable :: img_arr(:), pick_vec(:), pick_vec_ds(:), height_trace(:), height_retrace(:), ordered_pick_vec(:)
+        type(image_afm), allocatable :: stack_afm(:)   
+        type(pickseg),   allocatable :: trace_picks(:)
+        type(image),     allocatable :: trace_pick_vec(:), retrace_pick_vec(:)
+        type(string),    allocatable :: file_list(:)
         type(pickseg)   :: pick_test 
+        type(string)    :: directory, test_file, sim_dir
         type(image) :: im_stack, sim_test(2), exp_img, test_vec_corr(4), subtract, trace_test, retrace_test
-        type(image), allocatable ::  trace_pick_vec(:), retrace_pick_vec(:)
-        character(len=LONGSTRLEN), allocatable  :: file_list(:)
-        character(len = 255)    :: directory = '/Users/atifao/Downloads/IBW_orig/'
-        character(len = 255)    :: test_file = '/Users/atifao/Downloads/MRC_T/17.mrc'
-        character(len = 255)    :: sim_dir = '/Users/atifao/Downloads/mrc_for_clus.mrc'
         integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j, cropped_dim(3), test_count, clip_len, orig_dim(3), n_picks
         integer, allocatable    :: ldim_arr(:,:), medoids(:), labels(:), clus_count(:), retrace_centers(:,:), labels_ind(:)
-        real, allocatable       :: smpd_arr(:), stack_rmat(:,:,:,:), R(:,:), X(:,:), Y(:,:), corrmat(:,:), var_mat(:,:), labels_real(:)
+        real,    allocatable    :: smpd_arr(:), stack_rmat(:,:,:,:), R(:,:), X(:,:), Y(:,:), corrmat(:,:), var_mat(:,:), labels_real(:)
         logical, allocatable    :: M(:,:), corrmat_mask(:,:)
         type(aff_prop)          :: clus
         real        :: hp = 100., lp = 10., new_smpd, sim_sum, var_test, ang, x_sh, y_sh
         logical     :: mirr
+        directory = '/Users/atifao/Downloads/IBW_orig/'
+        test_file = '/Users/atifao/Downloads/MRC_T/17.mrc'
+        sim_dir   = '/Users/atifao/Downloads/mrc_for_clus.mrc'
         params_glob => params
         params_glob%pcontrast = 'white'
         params_glob%lp  = 10.
@@ -108,57 +109,6 @@ contains
         params_glob%maxits_sh = 200
         params_glob%shbarrier = 'yes'
         call params%new(cline)
-        ! print *, '>>> READING IBW FILE'
-        ! call simple_list_files(trim(directory) // '*.ibw', file_list)
-        ! allocate(stack_afm(size(file_list)))
-        ! allocate(height_trace(size(file_list)))
-        ! allocate(height_retrace(size(file_list)))
-        ! allocate(trace_picks(size(file_list)))
-        ! n_picks = 0
-        ! do i = 1, size(file_list)
-        !     call read_ibw(stack_afm(i), file_list(i))
-        !     call get_AFM(stack_afm(i), 'HeightTrace', height_trace(i))
-        !     call get_AFM(stack_afm(i), 'HeightRetrace', height_retrace(i))
-        !     if(file_list(i) == trim(directory) // 'Cob_450007.ibw' .or. file_list(i) == trim(directory) // 'Cob_450010.ibw') then 
-        !         call height_trace(i)%clip_inplace([1024, 900, 1])
-        !         call height_retrace(i)%clip_inplace([1024, 900, 1])
-        !     end if
-        !     call height_trace(i)%norm_minmax()
-        !     call height_retrace(i)%norm_minmax()
-        !     call height_trace(i)%write(int2str(i)//'trace.mrc')
-        !     call trace_picks(i)%pick(int2str(i)//'trace.mrc',.true.)
-        !     ! remap coordinates...
-        !     n_picks = n_picks + trace_picks(i)%get_nboxes()
-        !     if(i > 0) exit
-        ! end do 
-        ! allocate(trace_pick_vec(n_picks))
-        ! allocate(retrace_pick_vec(n_picks))
-        ! print *, '>>> GETTING CORRESPONDING PICKS'
-        ! do i = 1, size(file_list)
-        !     call mask_incl_retrace(trace_picks(i), height_trace(i), height_retrace(i), trace_pick_vec, retrace_pick_vec)
-        !     if(i > 0) exit 
-        ! end do 
-        ! call find_ldim_nptcls(test_file, temp_ldim, nptcls)
-        ! call trace_test%new(temp_ldim, params%smpd)
-        ! call trace_test%read(test_file)
-        ! call retrace_test%copy(trace_test)
-        ! call trace_test%write('trace.mrc')
-        ! call pick_test%pick('trace.mrc', .true.)
-        ! call pick_search(pick_test, trace_test, retrace_test, retrace_centers)
-        ! print *, '>>> MASKING PICKS'
-        ! allocate(ldim_arr(size(file_list),3))
-        ! allocate(smpd_arr(size(file_list)))
-        ! allocate(img_arr(size(file_list)))
-        ! allocate(pick_arr(size(file_list)))
-        ! do i = 1, size(file_list)
-        !     call find_ldim_nptcls(file_list(i), ldim_arr(i,:), nptcls)
-        !     temp_ldim = ldim_arr(i,:)
-        !     call img_arr(i)%new(temp_ldim, params%smpd)
-        !     call img_arr(i)%read(file_list(i))
-        !     call img_arr(i)%write(int2str(i) // '.mrc')
-        !     call pick_arr(i)%pick(int2str(i) // '.mrc', .true.)
-        !     if(i > 1) exit 
-        ! end do
         call find_ldim_nptcls(sim_dir,temp_ldim, nptcls)
         cropped_dim = [temp_ldim(1), temp_ldim(2) , 1]
         params_glob%ldim = cropped_dim
@@ -175,31 +125,6 @@ contains
             if(i > test_count - 1) exit 
         end do
         allocate(var_mat(test_count, test_count), source = 0.)
-        ! add number of threads option to this procedue, and input option in cmdline
-        ! call calc_inplane_fast_dev(pick_vec, hp, lp, corrmat, R, X, Y, M)
-        ! print *, '>>> CALCULATING PER-PIXEL VARIANCE SQUARED'
-        ! do i = 1, size(pick_vec)
-        !     call pick_vec(i)%ifft()
-        !     do j = 1, size(pick_vec)
-        !         if(i == j .or. j > i) cycle 
-        !         ang = - R(i,j)
-        !         x_sh = X(i,j)
-        !         y_sh = Y(i,j)
-        !         mirr = M(i,j)
-        !         if(mirr) call pick_vec(j)%mirror('y')
-        !         call pick_vec(j)%ifft()
-        !         call pick_vec(j)%rtsq(ang, x_sh, y_sh)
-        !         var_mat(i,j) = per_pix_var(pick_vec(i), pick_vec(j))
-        !         call pick_vec(j)%rtsq(-ang, -x_sh, -y_sh)
-        !         var_mat(j,i) = var_mat(i,j)
-        !     end do 
-        ! end do 
-        ! where(var_mat > 1.) 
-        !     var_mat = var_mat / maxval(var_mat)
-        !     var_mat = 1 - var_mat
-        ! end where
-        ! print *, '>>> CLUSTERING WITH AFFINITY PROPAGATION'
-        ! normalization
         ! sklearn uses negative squared euclidean distance 
         corrmat = 2.*(1.-corrmat)
         where( corrmat < 0. ) corrmat = 0.
@@ -211,46 +136,16 @@ contains
         do i = 1, test_count
             labels_ind(i) = i
         end do
-
         allocate(labels_real(test_count))
         call clus%new(test_count, corrmat, pref = median(pack(corrmat, corrmat_mask) / 1.5))
         call clus%propagate(medoids, labels, sim_sum)
         labels_real = real(labels)
         call hpsort_1(labels_real, labels_ind)
-        ! now do some hierarchical stuff with a good starting state. 
-        ! allocate(clus_count(size(labels)))
-        ! print *, medoids
-        ! print *, 'number of clusters:', size(medoids)
-        ! visualize medoids
-
-        ! rotate to center 
-
-
-
         do i = 1, test_count
             call ordered_pick_vec(i)%copy(pick_vec(labels_ind(i)))
             call ordered_pick_vec(i)%ifft()
-            call ordered_pick_vec(i)%write('ordered_picks.mrc', i)
+            call ordered_pick_vec(i)%write(string('ordered_picks.mrc'), i)
         end do 
-        ! visualize specific cluster
-        ! clus_count = 0
-        ! do i = 1, size(labels)
-        !     ! do j = 1, maxval(labels)
-        !     !     if(labels(i) == j) clus_count(j) = clus_count(j) + 1
-        !     ! end do 
-        !     if(labels(i) ==  17) then 
-        !         print *, 'particle:', i, 'label', labels(i)
-        !         call pick_vec(i)%ifft
-        !         call pick_vec(i)%vis
-        !     end if
-        ! end do
-        ! call exp_img%new([temp_ldim(3), temp_ldim(3), 1], params_glob%smpd)
-        ! do i = 1, temp_ldim(3)
-        !     do j = 1, temp_ldim(3)
-        !         call exp_img%set_rmat_at(i,j,1,var_mat(i,j))
-        !     end do 
-        ! end do
-        ! call exp_img%write('var_mat.mrc')
     end subroutine exec_afm
 
     !>  for printing the binary FSC files produced by PRIME3D
@@ -259,13 +154,13 @@ contains
         use simple_class_frcs, only: class_frcs
         class(commander_print_fsc), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(parameters)      :: params
-        type(image)           :: img
-        type(class_frcs)      :: frcs
-        character(len=STDLEN) :: tmpl_fname
-        real,     allocatable :: res(:), fsc(:)
-        integer               :: k,n
-        real                  :: res0143, res05
+        real,  allocatable :: res(:), fsc(:)
+        type(parameters) :: params
+        type(image)      :: img
+        type(class_frcs) :: frcs
+        type(string)     :: tmpl_fname
+        integer          :: k,n
+        real             :: res0143, res05
         logical :: l_fsc, l_frcs
         call params%new(cline)
         l_fsc  = cline%defined('fsc')
@@ -287,13 +182,13 @@ contains
             write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
             write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
             ! plot
-            tmpl_fname = get_fbody(params%fsc,trim(BIN_EXT),separator=.false.)
-            call plot_fsc(n, fsc, res, params%smpd, tmpl_fname)
+            tmpl_fname = get_fbody(params%fsc,BIN_EXT,separator=.false.)
+            call plot_fsc(n, fsc, res, params%smpd, tmpl_fname%to_char())
             call img%kill
         endif
         if( l_frcs )then
             call frcs%read(params%frcs)
-            call frcs%plot_frcs('frcs')
+            call frcs%plot_frcs(string('frcs'))
             call frcs%kill
         endif
         ! end gracefully
@@ -435,13 +330,13 @@ contains
             call dsym_os%set_shift(i, -sh1)
             ! rotational image
             call read_img%roavg(nint(ang), roavg_img)
-            call roavg_img%write('roavg.mrc',i)
+            call roavg_img%write(string('roavg.mrc'),i)
             corrs(i) = read_img%real_corr(roavg_img, l_msk)
             ! radii
             call read_img%bp(0., params_glob%cenlp)
             call read_img%mask(params_glob%msk, 'hard')
             call otsu_robust_fast(read_img, is2d=.true., noneg=.false., thresh=thresh)
-            call read_img%write('bin.mrc',i)
+            call read_img%write(string('bin.mrc'),i)
             call read_img%mul(dist_img)
             minmax = read_img%minmax()
             radii(i) = min(params_glob%msk, minmax(2))
@@ -565,7 +460,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
@@ -584,15 +479,15 @@ contains
         class(commander_fractionate_movies), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         logical,            parameter :: L_DEBUG = .false.
-        character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname
-        character(len=:), allocatable :: mic_fbody, star_fname, background_fname
+        type(string)                  :: mic_fname,forctf_fname, ext, mov_fname
+        type(string)                  :: mic_fbody, star_fname, background_fname
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(mic_generator)           :: generator
         type(ori)                     :: o
         type(image)                   :: micrograph_dw, micrograph_nodw, mic, background
         real,             allocatable :: frc(:), res(:)
-        character(len=LONGSTRLEN)     :: abs_fname, orig_mic
+        type(string)                  :: abs_fname, orig_mic
         integer :: nmovies, imov, cnt, n
         logical :: l_bilinear_interp
         call cline%set('mkdir',   'no')
@@ -623,7 +518,7 @@ contains
             if( .not.o%isthere('intg')  ) cycle
             if( o%get_state() == 0 ) cycle
             cnt = cnt + 1
-            orig_mic = o%get_static('intg')
+            orig_mic = o%get_str('intg')
             ! new micrograph
             call generator%new(o, params%mcconvention, [params%fromf, params%tof], l_bilinear_interp)
             select case(trim(params%mcconvention))
@@ -635,22 +530,22 @@ contains
             ! file naming
             mov_fname = generator%get_moviename()
             mic_fbody = basename(mov_fname)
-            ext       = fname2ext(trim(mic_fbody))
-            mic_fbody = get_fbody(trim(mic_fbody), trim(ext))
+            ext       = fname2ext(mic_fbody)
+            mic_fbody = get_fbody(mic_fbody, ext)
             select case(trim(params%mcconvention))
             case('simple')
-                mic_fname    = trim(adjustl(mic_fbody))//INTGMOV_SUFFIX//trim(params%ext)
-                forctf_fname = trim(adjustl(mic_fbody))//FORCTF_SUFFIX //trim(params%ext)
+                mic_fname    = mic_fbody//INTGMOV_SUFFIX//params%ext%to_char()
+                forctf_fname = mic_fbody//FORCTF_SUFFIX //params%ext%to_char()
             case('motioncorr', 'relion')
-                mic_fname    = trim(adjustl(mic_fbody))//         trim(params%ext)
-                forctf_fname = trim(adjustl(mic_fbody))//'_noDW'//trim(params%ext)
+                mic_fname    = mic_fbody//params%ext%to_char()
+                forctf_fname = mic_fbody//'_noDW'//params%ext%to_char()
             case('cryosparc','cs')
-                mic_fname    = trim(adjustl(mic_fbody))//'_patch_aligned_doseweighted'//trim(params%ext)
-                forctf_fname = trim(adjustl(mic_fbody))//'_patch_aligned'             //trim(params%ext)
+                mic_fname    = mic_fbody//'_patch_aligned_doseweighted'//params%ext%to_char()
+                forctf_fname = mic_fbody//'_patch_aligned'             //params%ext%to_char()
             case DEFAULT
                 THROW_HARD('Unsupported convention!')
             end select
-            star_fname = trim(adjustl(mic_fbody))//trim(STAR_EXT)
+            star_fname = mic_fbody//STAR_EXT
             ! write
             if( .not.micrograph_dw%exists() )then
                 ! doses not defined
@@ -661,10 +556,10 @@ contains
                 call micrograph_nodw%write(forctf_fname)
             endif
             if( background%exists() )then
-                background_fname = trim(adjustl(mic_fbody))//'_background'//trim(params%ext)
+                background_fname = mic_fbody//'_background'//params%ext%to_char()
                 call background%write(background_fname)
             endif
-            call generator%write_star(star_fname)
+            call generator%write_star(star_fname%to_char())
             ! parameters update
             call o%set('intg',        simple_abspath(mic_fname))
             call o%set('forctf',      simple_abspath(forctf_fname))
@@ -682,7 +577,7 @@ contains
                 allocate(frc(n))
                 res = mic%get_res()
                 call mic%fsc(micrograph_dw, frc)
-                call plot_fsc(n, frc, res, o%get('smpd'), mic_fbody)
+                call plot_fsc(n, frc, res, o%get('smpd'), mic_fbody%to_char())
                 deallocate(frc,res)
                 call mic%kill
             endif
@@ -694,7 +589,7 @@ contains
         call generator%kill
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)
         call spproj%kill
-        call qsys_job_finished(  'simple_commander_mic :: exec_fractionate_movies' )
+        call qsys_job_finished(string('simple_commander_mic :: exec_fractionate_movies'))
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')
     end subroutine exec_fractionate_movies
 
@@ -705,17 +600,17 @@ contains
         integer, PARAMETER :: NGRID   = 25 ! has to be odd
         class(commander_comparemc), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        real,                         allocatable :: rmsds(:), gofs(:,:), avg(:), std(:), npatch(:), rmsds2(:), avg2(:), std2(:)
-        real(dp),                     allocatable :: poly1(:,:), poly2(:,:), x(:), y(:), t(:), offsets1(:,:), offsets2(:,:)
-        character(len=:),             allocatable :: movie, moviedoc
-        character(len=LONGSTRLEN),    allocatable :: projects_fnames(:), moviedocs(:)
-        integer,                      allocatable :: indextab(:,:), order(:), nxpatch(:), nypatch(:)
-        logical,                      allocatable :: mask(:)
-        type(CPlot2D_type)    :: plot
-        type(CDataSet_type)   :: dataSet
-        type(CDataPoint_type) :: point
-        type(parameters)      :: params
-        type(sp_project)      :: first_spproj, spproj, spproj2
+        real,         allocatable :: rmsds(:), gofs(:,:), avg(:), std(:), npatch(:), rmsds2(:), avg2(:), std2(:)
+        real(dp),     allocatable :: poly1(:,:), poly2(:,:), x(:), y(:), t(:), offsets1(:,:), offsets2(:,:)
+        type(string), allocatable :: projects_fnames(:), moviedocs(:)
+        integer,      allocatable :: indextab(:,:), order(:), nxpatch(:), nypatch(:)
+        logical,      allocatable :: mask(:)
+        type(string)              :: movie, moviedoc
+        type(CPlot2D_type)        :: plot
+        type(CDataSet_type)       :: dataSet
+        type(CDataPoint_type)     :: point
+        type(parameters)          :: params
+        type(sp_project)          :: first_spproj, spproj, spproj2
         real     :: smpd, binning
         integer  :: i, j, k, npoints, ldim1(3), ldim2(3), nmics, nprojects, nx, ny, nframes, funit, io_stat, cnt
         logical  :: found
@@ -729,13 +624,13 @@ contains
         nprojects = size(projects_fnames,1)
         write(logfhandle,'(A,I6)')'>>> # of project files:', nprojects
         do i = 1,nprojects
-            if( projects_fnames(i)(1:1).ne.'/' )then
+            if( projects_fnames(i)%to_char([1,1]).ne.'/' )then
                 if( trim(params%mkdir).eq.'yes')then
-                    projects_fnames(i) = '../'//trim(projects_fnames(i))
+                    projects_fnames(i) = string('../')//projects_fnames(i)
                 endif
-                projects_fnames(i) = simple_abspath(projects_fnames(i), errmsg='simple_fileio::simple_abspath: '//trim(projects_fnames(i)))
+                projects_fnames(i) = simple_abspath(projects_fnames(i))
             endif
-            if( .not.file_exists(projects_fnames(i))) THROW_HARD('Could not find: '//trim(projects_fnames(i)))
+            if( .not.file_exists(projects_fnames(i))) THROW_HARD('Could not find: '//projects_fnames(i)%to_char())
         enddo
         call first_spproj%read_segment(params%oritype, projects_fnames(1))
         nmics = first_spproj%get_nintgs()
@@ -748,7 +643,7 @@ contains
         ! working out order of movies in each project file
         do i = 1,nmics
             indextab(1,i) = i
-            moviedocs(i)  = first_spproj%os_mic%get_static(i,'mc_starfile')
+            moviedocs(i)  = first_spproj%os_mic%get_str(i,'mc_starfile')
             gofs(1,i)     = sqrt(first_spproj%os_mic%get(i,'gofx')**2.0+first_spproj%os_mic%get(i,'gofy')**2.0)
         enddo
         do i = 2,nprojects
@@ -756,8 +651,8 @@ contains
             do j = 1,nmics
                 found = .false.
                 do k = 1,nmics
-                    moviedoc = basename(spproj%os_mic%get_static(k,'mc_starfile'))
-                    if( trim(moviedoc).eq.trim(basename(moviedocs(j))) )then
+                    moviedoc = basename(spproj%os_mic%get_str(k,'mc_starfile'))
+                    if( moviedoc.eq.basename(moviedocs(j)) )then
                         indextab(i,j) = k
                         gofs(i,j) = sqrt(spproj%os_mic%get(k,'gofx')**2.0+spproj%os_mic%get(k,'gofy')**2.0)
                         found = .true.
@@ -766,7 +661,7 @@ contains
                 enddo
                 if( .not.found )then
                     indextab(:,j) = 0
-                    THROW_WARN('Could not find corresponding doc: '//trim(moviedoc))
+                    THROW_WARN('Could not find corresponding doc: '//moviedoc%to_char())
                 endif
             enddo
             nxpatch(i) = nint(spproj%os_mic%get(indextab(i,1),'nxpatch'))
@@ -785,11 +680,11 @@ contains
             std(i) = sqrt(sum((gofs(j,:)-avg(i))**2.0)/real(count(mask)))
         enddo
         ! csv output
-        call fopen(funit, 'goodnessoffit.txt', action='READWRITE', status='UNKNOWN', iostat=io_stat)
+        call fopen(funit, string('goodnessoffit.txt'), action='READWRITE', status='UNKNOWN', iostat=io_stat)
         call fileiochk('could not write goodnessoffit.txt', io_stat)
         write(funit,'(A)')'sp_project,nx,ny,npatches,gof_avg,gof_std'
         do i = 1,nprojects
-            write(funit,'(A,A1,I3,A1,I3,A1,F6.1,A1,F8.3,A1,F8.3)')trim(projects_fnames(order(i))),&
+            write(funit,'(A,A1,I3,A1,I3,A1,F6.1,A1,F8.3,A1,F8.3)') projects_fnames(order(i))%to_char(),&
                 &',',nxpatch(order(i)),',',nypatch(order(i)),',',npatch(i),',',avg(i),',',std(i)
         enddo
         call fclose(funit)
@@ -868,9 +763,9 @@ contains
             do k = 1,nmics
                 if( indextab(order(i),k) == 0 .or. indextab(order(i+1),k) == 0) cycle
                 mask(k) = .true.
-                moviedoc = trim(spproj%os_mic%get_static(indextab(order(i),k),'mc_starfile'))
+                moviedoc = spproj%os_mic%get_str(indextab(order(i),k),'mc_starfile')
                 call parse_movie_star(moviedoc, poly1, ldim1, binning, smpd)
-                moviedoc = trim(spproj2%os_mic%get_static(indextab(order(i+1),k),'mc_starfile'))
+                moviedoc = spproj2%os_mic%get_str(indextab(order(i+1),k),'mc_starfile')
                 call parse_movie_star(moviedoc, poly2, ldim2, binning, smpd)
                 call polynomial2shifts(poly1, x,y,t, offsets1)
                 call polynomial2shifts(poly2, x,y,t, offsets2)
@@ -892,7 +787,7 @@ contains
         do k = 1,nmics
             if( indextab(order(i),k) == 0) cycle
             mask(k) = .true.
-            moviedoc = trim(spproj%os_mic%get_static(indextab(order(i),k),'mc_starfile'))
+            moviedoc = spproj%os_mic%get_str(indextab(order(i),k),'mc_starfile')
             call parse_movie_star(moviedoc, poly1, ldim1, binning, smpd)
             call polynomial2shifts(poly1, x,y,t, offsets1)
             rmsds2(k) = sqrt(sum(offsets1**2.0) / real(npoints,dp))
@@ -903,17 +798,17 @@ contains
             std2(i)  = sqrt(sum((rmsds2-avg2(i))**2,mask=mask)/real(cnt))
         endif
         ! absolute rmsds
-        call fopen(funit, 'absolute_rmsd.txt', action='READWRITE', status='UNKNOWN', iostat=io_stat)
+        call fopen(funit, string('absolute_rmsd.txt'), action='READWRITE', status='UNKNOWN', iostat=io_stat)
         call fileiochk('could not write incr_rmsd.txt', io_stat)
         write(funit,'(A)')'sp_project,nx,ny,npatches,avg,std'
         do i = 1,nprojects
-            write(funit,'(A,A1,I3,A1,I3,A1,F6.1,A1,F8.3,A1,F8.3)')trim(projects_fnames(order(i))),&
+            write(funit,'(A,A1,I3,A1,I3,A1,F6.1,A1,F8.3,A1,F8.3)') projects_fnames(order(i))%to_char(),&
                 &',',nxpatch(order(i)),',',nypatch(order(i)),',',npatch(i),',',avg2(i),',',std2(i)
         enddo
         call fclose(funit)
         call write_plot('Absolute rmsd', 'n = sqrt(nx * ny)', 'shifts rmsd', nprojects, npatch, avg2, std2, 'absolute_rmsd.eps')
         ! incrementals rmsds
-        call fopen(funit, 'incremental_rmsd.txt', action='READWRITE', status='UNKNOWN', iostat=io_stat)
+        call fopen(funit, string('incremental_rmsd.txt'), action='READWRITE', status='UNKNOWN', iostat=io_stat)
         call fileiochk('could not write incr_rmsd.txt', io_stat)
         write(funit,'(A)')'index,descr,avg,std'
         do i = 1,nprojects-1
@@ -1025,58 +920,61 @@ contains
                 if(.not.l_ok) THROW_HARD('Missing value in table!')
             end function parse_double
 
-            subroutine parse_string( table, emdl_id, string )
+            subroutine parse_string( table, emdl_id, str )
                 class(starfile_table_type)                 :: table
                 integer,                       intent(in)  :: emdl_id
-                character(len=:), allocatable, intent(out) :: string
+                character(len=:), allocatable, intent(out) :: str
                 logical :: l_ok
-                l_ok = starfile_table__getValue_string(table, emdl_id, string)
+                l_ok = starfile_table__getValue_string(table, emdl_id, str)
                 if(.not.l_ok) THROW_HARD('Missing value in table!')
             end subroutine parse_string
 
             subroutine parse_movie_star( fname, polynomial, ldim, binning, smpd )
-                character(len=*),      intent(in)  :: fname
+                class(string),         intent(in)  :: fname
                 real(dp), allocatable, intent(out) :: polynomial(:,:)
                 integer,               intent(out) :: ldim(3)
                 real,                  intent(out) :: binning, smpd
-                type(str4arr),    allocatable :: names(:)
-                type(starfile_table_type)     :: table
+                type(string),    allocatable :: names(:)
+                type(starfile_table_type)    :: table
                 integer          :: i,n,ind,start_frame,motion_model
                 integer(C_long)  :: num_objs, object_id
+                character(len=:), allocatable :: buffer
                 call starfile_table__new(table)
-                call starfile_table__getnames(table, trim(fname)//C_NULL_CHAR, names)
+                call starfile_table__getnames(table, fname, names)
                 n = size(names)
                 do i =1,n
-                    call starfile_table__read(table, trim(fname)//C_NULL_CHAR, names(i)%str )
-                    select case(trim(names(i)%str))
-                    case('general')
-                        ldim(1) = parse_int(table, EMDL_IMAGE_SIZE_X)
-                        ldim(2) = parse_int(table, EMDL_IMAGE_SIZE_Y)
-                        ldim(3) = parse_int(table, EMDL_IMAGE_SIZE_Z)
-                        call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, movie)
-                        binning      = real(parse_double(table, EMDL_MICROGRAPH_BINNING))
-                        smpd         = real(parse_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE))
-                        start_frame  = parse_int(table, EMDL_MICROGRAPH_START_FRAME)
-                        motion_model = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION)
-                        if( motion_model /= 1 )then
-                            THROW_HARD('No polynomial found in: '//trim(fname))
-                        else
-                            allocate(polynomial(POLYDIM,2),source=0.d0)
-                        endif
-                    case('local_motion_model')
-                        object_id = starfile_table__firstobject(table) ! base 0
-                        num_objs  = starfile_table__numberofobjects(table)
-                        do while( (object_id < num_objs) .and. (object_id >= 0) )
-                            ind = parse_int(table, EMDL_MICROGRAPH_MOTION_COEFFS_IDX) + 1
-                            if( ind > POLYDIM )then
-                                polynomial(ind-POLYDIM,2) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF)
+                    call starfile_table__read(table, fname, names(i)%to_char() )
+                    select case(names(i)%to_char())
+                        case('general')
+                            ldim(1) = parse_int(table, EMDL_IMAGE_SIZE_X)
+                            ldim(2) = parse_int(table, EMDL_IMAGE_SIZE_Y)
+                            ldim(3) = parse_int(table, EMDL_IMAGE_SIZE_Z)
+                            call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, buffer)
+                            movie        = buffer
+                            binning      = real(parse_double(table, EMDL_MICROGRAPH_BINNING))
+                            smpd         = real(parse_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE))
+                            start_frame  = parse_int(table, EMDL_MICROGRAPH_START_FRAME)
+                            motion_model = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION)
+                            if( motion_model /= 1 )then
+                                THROW_HARD('No polynomial found in: '//fname%to_char())
                             else
-                                polynomial(ind,        1) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF)
+                                allocate(polynomial(POLYDIM,2),source=0.d0)
                             endif
-                            object_id = starfile_table__nextobject(table)
-                        end do
-                    case DEFAULT
-                        cycle
+                            if(allocated(buffer)) deallocate(buffer)
+                        case('local_motion_model')
+                            object_id = starfile_table__firstobject(table) ! base 0
+                            num_objs  = starfile_table__numberofobjects(table)
+                            do while( (object_id < num_objs) .and. (object_id >= 0) )
+                                ind = parse_int(table, EMDL_MICROGRAPH_MOTION_COEFFS_IDX) + 1
+                                if( ind > POLYDIM )then
+                                    polynomial(ind-POLYDIM,2) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF)
+                                else
+                                    polynomial(ind,        1) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF)
+                                endif
+                                object_id = starfile_table__nextobject(table)
+                            end do
+                        case DEFAULT
+                            cycle
                     end select
                 enddo
                 call starfile_table__delete(table)
@@ -1087,7 +985,7 @@ contains
     ! utility routines
 
     subroutine read_nrs_dat( filename, arr, ndat )
-        character(len=*),  intent(in)  :: filename
+        class(string),     intent(in)  :: filename
         real, allocatable, intent(out) :: arr(:)
         integer,           intent(out) :: ndat
         integer            :: ndatlines, nrecs, i, j, cnt

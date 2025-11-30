@@ -220,7 +220,7 @@ end function cast_time_char
 
    !< Setup profiling
    subroutine timer_profile_setup(nLoops, nVars, vin)
-   use simple_string_utils
+      use simple_string_utils
       integer,          intent(in)    :: nLoops
       integer,          intent(in)    :: nVars
       character(len=*), intent(inout) :: vin

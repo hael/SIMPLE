@@ -13,13 +13,13 @@ private
 
 type dstack_io
     private
-    type(image_ptr),            allocatable :: img_ptrs(:)
-    type(imgfile),              allocatable :: ioimgs(:)
-    character(len=XLONGSTRLEN), allocatable :: stknames(:)
-    integer,                    allocatable :: nptcls(:)
-    logical,                    allocatable :: fts(:), l_open(:)
-    real                                    :: smpd = 0.
-    integer                                 :: n    = 0, box = 0
+    type(image_ptr), allocatable :: img_ptrs(:)
+    type(imgfile),   allocatable :: ioimgs(:)
+    type(string),    allocatable :: stknames(:)
+    integer,         allocatable :: nptcls(:)
+    logical,         allocatable :: fts(:), l_open(:)
+    real                         :: smpd = 0.
+    integer                      :: n    = 0, box = 0
     logical :: exists = .false.
 contains
     procedure          :: new
@@ -40,7 +40,6 @@ contains
         self%n = 1
         allocate(self%stknames(self%n),self%ioimgs(self%n),self%img_ptrs(self%n),&
             &self%l_open(self%n),self%fts(self%n),self%nptcls(self%n))
-        self%stknames(:) = ''
         self%smpd        = smpd
         self%nptcls      = 0
         self%box         = box
@@ -51,15 +50,15 @@ contains
 
     subroutine read( self, stkname, ind_in_stk, img )
         class(dstack_io), intent(inout) :: self
-        character(len=*), intent(in)    :: stkname
+        class(string),    intent(in)    :: stkname
         integer,          intent(in)    :: ind_in_stk
         class(image),     intent(inout) :: img
         integer, parameter :: ithr = 1
         ! multi-threaded
         ! ithr = omp_get_thread_num() + 1
-        ! if( trim(self%stknames(ithr)).ne.trim(stkname) ) call self%open(stkname, ithr)
+        ! if( self%stknames(ithr)).ne.stkname ) call self%open(stkname, ithr)
         ! single-threaded
-        if( trim(self%stknames(ithr)).ne.trim(stkname) ) call self%open(stkname)
+        if( self%stknames(ithr).ne.stkname ) call self%open(stkname)
         if( .not. self%l_open(ithr) ) THROW_HARD('stack not opened')
         if( ind_in_stk < 1 .or. ind_in_stk > self%nptcls(ithr) )then
             THROW_HARD('index i out of range: '//int2str(ind_in_stk)//' / '//int2str(self%nptcls(ithr)))
@@ -73,24 +72,21 @@ contains
     ! single-threaded
     subroutine open_1( self, stkname )
         class(dstack_io), intent(inout) :: self
-        character(len=*), intent(in)    :: stkname
-        character(len=1) :: form ! one character file format descriptor
-        integer          :: ldim(3), mode ! FT or not in MRC file lingo
-        self%stknames(1) = trim(stkname)
-        form = fname2format(self%stknames(1))
-        if( form .ne. 'M') THROW_HARD('non MRC stacks unsupported')
+        class(string),    intent(in)    :: stkname
+        integer :: ldim(3), mode ! FT or not in MRC file lingo
+        self%stknames(1) = stkname
         call self%ioimgs(1)%close
         call find_ldim_nptcls(self%stknames(1), ldim, self%nptcls(1))
         if( (ldim(1)==self%box) .and. (ldim(2)==self%box) )then
             ldim(3) = 1
-            call self%ioimgs(1)%open(self%stknames(1), ldim, self%smpd, formatchar=form, readhead=.true., rwaction='READ')
+            call self%ioimgs(1)%open(self%stknames(1), ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
             mode = self%ioimgs(1)%getMode()
             self%fts(1)    = (mode == 3) .or. (mode == 4)
             self%l_open(1) = .true.
         else
             write(logfhandle,*) 'ldim ',ldim
             write(logfhandle,*) 'box ',self%box
-            write(logfhandle,*) 'stkname ',trim(stkname)
+            write(logfhandle,*) 'stkname ', stkname%to_char()
             THROW_HARD('Incompatible dimensions!')
         endif
     end subroutine open_1
@@ -98,18 +94,15 @@ contains
     ! multi-threaded version
     subroutine open_2( self, stkname, ithr )
         class(dstack_io), intent(inout) :: self
-        character(len=*), intent(in)    :: stkname
-        integer,          intent(in) :: ithr
-        character(len=1) :: form ! one character file format descriptor
+        class(string),    intent(in)    :: stkname
+        integer,          intent(in)    :: ithr
         integer          :: ldim(3), mode ! FT or not in MRC file lingo
-        self%stknames(ithr) = trim(stkname)
-        form  = fname2format(self%stknames(ithr))
-        if( form .ne. 'M') THROW_HARD('non MRC stacks unsupported')
+        self%stknames(ithr) = stkname
         !$omp critical
         call self%ioimgs(ithr)%close
         call find_ldim_nptcls(self%stknames(ithr), ldim, self%nptcls(ithr))
         ldim(3) = 1
-        call self%ioimgs(ithr)%open(self%stknames(ithr), ldim, self%smpd, formatchar=form, readhead=.true., rwaction='READ')
+        call self%ioimgs(ithr)%open(self%stknames(ithr), ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
         !$omp end critical
         if( (ldim(1)==self%box) .and. (ldim(2)==self%box) )then
             mode = self%ioimgs(ithr)%getMode()

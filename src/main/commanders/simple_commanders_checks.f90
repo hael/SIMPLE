@@ -149,12 +149,12 @@ contains
     subroutine exec_info_stktab( self, cline )
         class(commander_info_stktab), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        character(LONGSTRLEN), allocatable :: stkfnames(:)
+        type(string), allocatable :: stkfnames(:)
         type(parameters) :: params
         integer          :: ldim(3), box, istk, np_stk
         call params%new(cline)
         if( .not. file_exists(params%stktab) )then
-            THROW_HARD('file: '//trim(params%stktab)//' not in cwd; exec_info_stktab')
+            THROW_HARD('file: '//params%stktab%to_char()//' not in cwd; exec_info_stktab')
         endif
         call read_filetable(params%stktab, stkfnames)
         params%nmics  = size(stkfnames)
@@ -162,7 +162,7 @@ contains
         params%nptcls = 0
         do istk = 1, params%nmics
             ! get dimension of stack and # ptcls
-            call find_ldim_nptcls(trim(stkfnames(istk)), ldim, np_stk)
+            call find_ldim_nptcls(stkfnames(istk), ldim, np_stk)
             if( istk == 1 )then
                 box         = ldim(1)
                 params%ldim = ldim

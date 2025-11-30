@@ -19,10 +19,10 @@ else
     call get_command_argument(2, smpd_char)
     read(smpd_char, *) smpd
 endif
-call find_ldim_nptcls(vol_file,  ldim, ifoo)
+call find_ldim_nptcls(string(trim(vol_file)),  ldim, ifoo)
 print *, trim(vol_file), ldim
 call vol%new(ldim, smpd)
-call vol%read(trim(vol_file))
-call vol%write('vol_simple.mrc')
+call vol%read(string(trim(vol_file)))
+call vol%write(string('vol_simple.mrc'))
 call vol%kill
 end program simple_test_mrc_validation

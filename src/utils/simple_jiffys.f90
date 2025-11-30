@@ -65,7 +65,8 @@ contains
 
     !> \brief  is for pretty ending
     subroutine simple_end( str, print_simple, verbose_exit )
-        use simple_syslib,  only: simple_touch
+        use simple_syslib, only: simple_touch
+        use simple_string
         character(len=*),  intent(in) :: str
         logical, optional, intent(in) :: print_simple, verbose_exit
         logical :: pprint_simple

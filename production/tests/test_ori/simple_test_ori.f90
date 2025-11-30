@@ -19,10 +19,10 @@ type(sym)                   :: pgrpsyms
 type(chash)                 :: qdescr
 real                        :: vec(3), angle, rotmat(3,3), euls(3), shvec(2), rval, eullims(3,2)
 real(dp)                    :: rval_dp
-character(len=STDLEN)       :: key, cval, projname, projfile
+type(string)                :: key, cval, projname, projfile, str_projname, str_projrec, str_ori
 integer                     :: ival, state
 logical                     :: test_passed
-character(len=XLONGSTRLEN), allocatable :: keys(:)
+type(string), allocatable   :: keys(:)
 test_passed = .true.
 projname    = 'str_proj'
 call pgrpsyms%new('c1')
@@ -54,9 +54,11 @@ call o%append_ori(o1)
 print *, '>>> DELETE ENTRY projname'
 call o%delete_entry('projname')
 call o%set('projname', 'apoferritin')
-print *, '>>> SET PROJNAME ',trim(o%get_static('projname'))
+str_projname = o%get_str('projname')
+print *, '>>> SET PROJNAME ', str_projname%to_char()
 call o%set('projrec', 'yes')
-print *, '>>> SET PROJREC ',trim(o%get_static('projrec'))
+str_projrec = o%get_str('projrec')
+print *, '>>> SET PROJREC ', str_projrec%to_char()
 call o%set('kv', 300)
 print *, '>>> KEY kv ',o%get('kv')
 call o%set('cs', 2.7d0)
@@ -64,8 +66,9 @@ print *, '>>> KEY cs ',o%get('cs')
 print *, '>>> KEY cs is there ',o%isthere('cs')
 if(.not. o%isthere('cs')) THROW_HARD('TEST FAILED; isthere') 
 print *, '>>> KEY projname is character ',o%ischar('projname')
-if(.not. o%ischar('projname')) THROW_HARD('TEST FAILED; projname') 
-print *,'>>> ORI TO STRING ', o%ori2str()
+if(.not. o%ischar('projname')) THROW_HARD('TEST FAILED; projname')
+str_ori = o%ori2str()
+print *,'>>> ORI TO STRING ', str_ori%to_char()
 print *,'>>> ORI TO JSON'
 call o%ori2json(json_ori, .true.)
 print *,'>>> STRLEN_TRIM',o%ori_strlen_trim()
@@ -73,7 +76,7 @@ call cline%set('projname', projname)
 call cline%set('mkdir',        'no')
 call cline%check()
 call xnew_project%execute_safe(cline)
-projfile=trim(projname)//'.simple'
+projfile=projname%to_char()//'.simple'
 call spproj%read_segment('compenv', projfile)
 print *,'>>> ORI2CHASH '
 call spproj%compenv%get_ori(1, compenv_o)
