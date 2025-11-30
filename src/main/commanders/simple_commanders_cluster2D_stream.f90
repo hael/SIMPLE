@@ -2639,9 +2639,14 @@ contains
         ! sanity checks
         nstks  = spproj_glob%os_stk%get_noris()
         nptcls = spproj_glob%get_nptcls()
-        if( spproj_glob%os_mic%get_noris() /= nstks )then
-            THROW_HARD('Inconsistent # of micrographs and stacks, use prune_project.')
-        endif
+
+        ! took this out since I am running on imported stacks
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! if( spproj_glob%os_mic%get_noris() /= nstks )then
+        !     THROW_HARD('Inconsistent # of micrographs and stacks, use prune_project.')
+        ! endif
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
         if( nptcls == 0 )then
             THROW_HARD('No particles found in project file: '//params%projfile%to_char()//'; exec_cluster2d_subsets')
         endif

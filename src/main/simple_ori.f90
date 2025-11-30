@@ -257,11 +257,8 @@ contains
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer :: ind
-        if( self%htab%isthere(key) )then
-            call self%htab%delete(key)
-        else
-            call self%chtab%delete(key)
-        endif
+        call self%htab%delete(key)
+        call self%chtab%delete(key)
         ind = get_oriparam_ind(key)
         if( ind /= 0 ) self%pparms(ind) = 0. ! default value on init
     end subroutine delete_entry

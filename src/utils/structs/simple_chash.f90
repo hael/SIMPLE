@@ -317,6 +317,7 @@ contains
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer :: i, ind
+        if( .not. self%exists ) return
         ind = self%lookup( key )
         if( ind == 0 .or. ind > self%chash_index ) return
         do i=ind,self%chash_index - 1

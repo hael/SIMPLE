@@ -157,7 +157,10 @@ contains
         endif
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')
-        call self%orig_stks%kill
+        if( allocated(self%orig_stks) )then
+            call self%orig_stks%kill
+            deallocate(self%orig_stks)
+        endif
         self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .true.
@@ -641,7 +644,10 @@ contains
         self%nptcls    = 0
         self%path      = ''
         self%projfile_out = ''
-        call self%orig_stks%kill
+        if( allocated(self%orig_stks) )then
+            call self%orig_stks%kill
+            deallocate(self%orig_stks)
+        endif
         self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .false.
