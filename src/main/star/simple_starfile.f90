@@ -163,10 +163,10 @@ contains
                 call mics_oris%get_static(imic, 'mc_starfile', str_mc_starfile)
                 call mics_oris%get_static(imic, 'boxfile',     str_boxfile)
                 call mics_oris%get_static(imic, 'ctfjpg',      str_ctfjpg)
-                str_intg        = get_relative_path(str_intg)
-                str_mc_starfile = get_relative_path(str_mc_starfile)
-                str_boxfile     = get_relative_path(str_boxfile)
-                str_ctfjpg      = get_relative_path(str_ctfjpg)
+                str_intg        = get_relative_path_here(str_intg)
+                str_mc_starfile = get_relative_path_here(str_mc_starfile)
+                str_boxfile     = get_relative_path_here(str_boxfile)
+                str_ctfjpg      = get_relative_path_here(str_ctfjpg)
                 if(mics_oris%isthere(imic, 'movie'      )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_MOVIE_NAME,    trim(str_movie))
                 if(mics_oris%isthere(imic, 'intg'       )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME,          trim(str_intg))
                 if(mics_oris%isthere(imic, 'mc_starfile')) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_METADATA_NAME, trim(str_mc_starfile))
@@ -191,12 +191,12 @@ contains
 
         contains
 
-            function get_relative_path ( path ) result ( newpath )
+            function get_relative_path_here ( path ) result ( newpath )
                 character(len=*), intent(in) :: path
                 character(len=XLONGSTRLEN)   :: newpath
                 if(pathtrim .eq. 0) pathtrim = index(path, self%relroot%to_char()) 
                 newpath = trim(path(pathtrim:))
-            end function get_relative_path
+            end function get_relative_path_here
 
     end subroutine write_mics_table
 
@@ -245,14 +245,14 @@ contains
             if(stkind .gt. 0 .and. indstk .gt. 0) then
                 if(stk_oris%isthere(stkind, 'stk')) then
                     call stk_oris%get_static(stkind, 'stk', stkname)
-                    stkname = get_relative_path(stkname)
+                    stkname = get_relative_path_here(stkname)
                     stkname = int2str(indstk) // '@' // trim(stkname)
                     call starfile_table__setValue_string(ptcl_table, EMDL_IMAGE_NAME, trim(stkname))
                     if(present(mics_oris)) then
                         if(stk_oris%get_noris() .eq. mics_oris%get_noris()) then
                             if(mics_oris%isthere(stkind, 'intg')) then
                                 call mics_oris%get_static(stkind, 'intg', micname)
-                                micname = get_relative_path(micname)
+                                micname = get_relative_path_here(micname)
                                 call starfile_table__setValue_string(ptcl_table, EMDL_MICROGRAPH_NAME, trim(micname))
                             end if
                         end if
@@ -269,12 +269,12 @@ contains
 
         contains
 
-            function get_relative_path ( path ) result ( newpath )
+            function get_relative_path_here( path ) result ( newpath )
                 character(len=*), intent(in) :: path
                 character(len=XLONGSTRLEN)   :: newpath
                 if(pathtrim .eq. 0) pathtrim = index(path, self%relroot%to_char()) 
                 newpath = trim(path(pathtrim:))
-            end function get_relative_path
+            end function get_relative_path_here
 
     end subroutine write_ptcl2D_table
 
@@ -329,14 +329,14 @@ contains
                     if(stk_oris%isthere(stkind, 'stk')) then
                         !$omp critical
                         call stk_oris%get_static(stkind, 'stk', str_stk)
-                        str_stk = get_relative_path(str_stk)
+                        str_stk = get_relative_path_here(str_stk)
                         !$omp end critical
                         call starfile_table__setValue_string(part_table, EMDL_IMAGE_NAME, int2str(indstk) // '@' // trim(str_stk))
                         if(present(mics_oris)) then
                             if(stk_oris%get_noris() .eq. mics_oris%get_noris()) then
                                 if(mics_oris%isthere(stkind, 'intg')) then
                                     call mics_oris%get_static(stkind, 'intg', micname)
-                                    micname = get_relative_path(micname)
+                                    micname = get_relative_path_here(micname)
                                     call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME, trim(micname))
                                 end if
                             end if
@@ -362,12 +362,12 @@ contains
 
         contains
 
-            function get_relative_path ( path ) result ( newpath )
+            function get_relative_path_here( path ) result ( newpath )
                 character(len=*), intent(in) :: path
                 character(len=XLONGSTRLEN)   :: newpath
                 if(pathtrim .eq. 0) pathtrim = index(path, self%relroot%to_char()) 
                 newpath = trim(path(pathtrim:))
-            end function get_relative_path
+            end function get_relative_path_here
 
     end subroutine write_ptcl2D_table_parallel
 
