@@ -139,43 +139,46 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call cline%set('mkdir', 'no')
+
+        call cline%printline
+
         call params%new(cline)
         if( cline%defined('projfile') )then
-            call spproj%read(trim(params%projfile))
+            call spproj%read(params%projfile)
         endif
         if( cline%defined('projname') .and. cline%defined('dir') )then
-            if( index(params%projname, '.') > 0 ) THROW_HARD('No punctuation allowed in projname')
-            if( .not. file_exists(trim(params%dir)) )then
-                write(logfhandle,*) 'input project directory (dir): ', trim(params%dir), ' does not exist'
+            if( params%projname%substr_ind('.') > 0 ) THROW_HARD('No punctuation allowed in projname')
+            if( .not. file_exists(params%dir) )then
+                write(logfhandle,*) 'input project directory (dir): ', params%dir%to_char(), ' does not exist'
                 THROW_HARD('ABORTING... exec_new_project')
             endif
-            if( file_exists(trim(params%dir) // '/' // trim(params%projname // ".simple")) )then
-                write(logfhandle,*) 'input project file : ', trim(params%dir) // '/' // trim(params%projname) //".simple", ' already exists'
+            if( file_exists(params%dir // '/' // params%projname%to_char() // ".simple") )then
+                write(logfhandle,*) 'input project file : ', params%dir%to_char() // '/' // params%projname%to_char() //".simple", ' already exists'
                 THROW_HARD('ABORTING... exec_new_project')
             endif
             ! change to project directory
-            call simple_chdir(trim(params%dir), errmsg="commander_project :: new_project;")
-            call cline%set('projname', trim(params%projname))
+            call simple_chdir(params%dir)
+            call cline%set('projname', params%projname)
         else if( cline%defined('projname') )then
-            if( index(params%projname, '.') > 0 ) THROW_HARD('No punctuation allowed in projname')
-            if( file_exists(PATH_HERE//trim(params%projname)) )then
-                write(logfhandle,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
+            if( params%projname%substr_ind('.') > 0 ) THROW_HARD('No punctuation allowed in projname')
+            if( file_exists(string(PATH_HERE)//params%projname) )then
+                write(logfhandle,*) 'project directory: ', params%projname%to_char(), ' already exists in cwd: ', params%cwd%to_char()
                 write(logfhandle,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
                 THROW_HARD('ABORTING... exec_new_project')
             endif
             ! make project directory
-            call simple_mkdir(trim(params%projname), errmsg="commander_project :: new_project;")
+            call simple_mkdir(params%projname)
             ! change to project directory
-            call simple_chdir(trim(params%projname), errmsg="commander_project :: new_project;")
+            call simple_chdir(params%projname)
         else if( cline%defined('dir') )then
-            params%dir = simple_abspath(trim(params%dir))
-            if( .not. file_exists(trim(params%dir)) )then
-                write(logfhandle,*) 'input project directory (dir): ', trim(params%dir), ' does not exist'
+            params%dir = simple_abspath(params%dir)
+            if( .not. file_exists(params%dir) )then
+                write(logfhandle,*) 'input project directory (dir): ', params%dir%to_char(), ' does not exist'
                 THROW_HARD('ABORTING... exec_new_project')
             endif
             call cline%set('projname', basename(params%dir))
             ! change to project directory
-            call simple_chdir(trim(params%dir), errmsg="commander_project :: new_project;")
+            call simple_chdir(params%dir)
         else
             THROW_HARD('neither projname nor dir defined on comman line; exec_new_project')
         endif
@@ -209,19 +212,21 @@ contains
         class(commander_print_project_vals), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(binoris)                 :: bos_doc
-        character(len=:), allocatable :: keys, fname, oritype, str
+        type(string)                  :: keys, fname, oritype, str
         logical,          allocatable :: keys_present(:)
         character(len=STDLEN)         :: args(32)
+        character(len=STDLEN)         :: str_static
         logical    :: ischar
         type(oris) :: os
         integer    :: nargs, iseg, noris, ikey, iori, state
         real       :: rval, norm(3)
         ! parse the keys
         keys = cline%get_carg('keys')
-        if( str_has_substr(keys, ',') )then
-            call parsestr(keys, ',', args, nargs)
+        str_static = keys%to_char()
+        if( str_has_substr(str_static, ',') )then
+            call parsestr(str_static, ',', args, nargs)
         else
-            args(1) = keys
+            args(1) = keys%to_char()
             nargs   = 1
         endif
         ! open the project file
@@ -229,7 +234,7 @@ contains
         call bos_doc%open(fname)
         ! figure out which segment
         oritype = cline%get_carg('oritype')
-        iseg    = oritype2segment(oritype)
+        iseg    = oritype2segment(oritype%to_char())
         noris   = bos_doc%get_n_records(iseg)
         if( noris == 0 ) return
         ! read segment
@@ -267,7 +272,7 @@ contains
                         ischar = os%ischar(iori,trim(args(ikey)))
                         if( ischar )then
                             call os%getter(iori, trim(args(ikey)), str)
-                            write(logfhandle,'(a)',advance='no') trim(str)//' '
+                            write(logfhandle,'(a)',advance='no') str%to_char()//' '
                         else
                             call os%getter(iori, trim(args(ikey)), rval)
                             write(logfhandle,'(f12.4,a)',advance='no') rval, ' '
@@ -324,13 +329,13 @@ contains
         call nice_communicator%init(params%niceprocid, params%niceserver)
         call nice_communicator%cycle()
         ! read relevant segments
-        call spproj%read_non_data_segments(trim(params%projfile))
+        call spproj%read_non_data_segments(params%projfile)
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
         call spproj%update_compenv( cline )
         ! write the last bit of the project file
-        call spproj%write_non_data_segments(trim(params%projfile))
+        call spproj%write_non_data_segments(params%projfile)
         ! no printing for this program
         call nice_communicator%terminate()
     end subroutine exec_update_project
@@ -357,15 +362,14 @@ contains
     subroutine exec_import_movies( self, cline )
         class(commander_import_movies), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(simple_nice_communicator)         :: nice_communicator
-        type(parameters)                       :: params
-        type(sp_project)                       :: spproj
-        type(oris)                             :: deftab
-        type(ctfparams)                        :: ctfvars, prev_ctfvars
-        type(moviewatcher)                     :: movie_buff
-        character(len=:),          allocatable :: phaseplate
-        character(len=LONGSTRLEN), allocatable :: boxfnames(:), movfnames(:)
-        character(len=LONGSTRLEN)              :: boxfname
+        type(simple_nice_communicator) :: nice_communicator
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
+        type(oris)                     :: deftab
+        type(ctfparams)                :: ctfvars, prev_ctfvars
+        type(moviewatcher)             :: movie_buff
+        type(string)                   :: phaseplate, boxfname
+        type(string), allocatable      :: boxfnames(:), movfnames(:) 
         logical :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
         integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
         ! set defaults
@@ -381,8 +385,8 @@ contains
         if(.not. inputted_dir_movies .and. .not. inputted_filetab)            THROW_HARD ('either dir_movies or filetab must be given! exec_import_movies')
         if(inputted_dir_movies .and. ( inputted_deftab .or. inputted_boxtab)) THROW_HARD ('dir_movies cannot be set with a deftab or boxtab! exec_import_movies')
         ! project file management
-        if(.not. file_exists(trim(params%projfile)))then
-            THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
+        if(.not. file_exists(params%projfile))then
+            THROW_HARD('project file: '//params%projfile%to_char()//' does not exists! exec_import_movies')
         endif
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -395,7 +399,7 @@ contains
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
         else
-            allocate(phaseplate, source='no')
+            phaseplate ='no'
         endif
         ctfvars%smpd  = params%smpd
         ctfvars%kv    = params%kv
@@ -451,7 +455,7 @@ contains
         if( params%mkdir.eq.'yes' )then
             ! taking care of paths
             do i=1,nmovf
-                if(movfnames(i)(1:1).ne.'/') movfnames(i) = PATH_PARENT//trim(movfnames(i))
+                if(movfnames(i)%to_char([1,1]).ne.'/') movfnames(i) = PATH_PARENT//movfnames(i)%to_char()
             enddo
         endif
         if( inputted_deftab .and. .not. inputted_dir_movies )then
@@ -475,7 +479,7 @@ contains
             endif
             do i=1,nmovf
                 if( trim(params%mkdir).eq.'yes' )then
-                    if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
+                    if(boxfnames(i)%to_char([1,1]).ne.'/') boxfnames(i) = PATH_PARENT//boxfnames(i)%to_char()
                 endif
                 boxfname = simple_abspath(boxfnames(i))
                 if( first_import )then
@@ -498,14 +502,14 @@ contains
         type(parameters)               :: params
         type(sp_project)               :: spproj
         integer                        :: nos_mic, nboxf, i
-        character(len=LONGSTRLEN), allocatable :: boxfnames(:), boxname
-        character(len=LONGSTRLEN)              :: boxfname, intg, cwd
+        type(string), allocatable      :: boxfnames(:)
+        type(string)                   :: boxfname, intg, cwd, boxname
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call simple_getcwd(cwd)
         ! project file management
-        if( .not. file_exists(trim(params%projfile)) )then
-            THROW_HARD('project file: '//trim(params%projfile)//' does not exist! exec_import_boxes')
+        if( .not. file_exists(params%projfile) )then
+            THROW_HARD('project file: '//params%projfile%to_char()//' does not exist! exec_import_boxes')
         endif
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -513,10 +517,10 @@ contains
         if(params%reset_boxfiles .eq. 'yes') then
             call spproj%read(params%projfile)
             do i=1,spproj%os_mic%get_noris()
-                intg = spproj%os_mic%get_static(i, "intg")
+                intg = spproj%os_mic%get_str(i, "intg")
                 boxname = swap_suffix(intg, ".box", ".mrc")
-                boxfname = trim(cwd) // '/' //trim(basename_safe(boxname))
-                call spproj%os_mic%set(i, 'boxfile', trim(boxfname))
+                boxfname = cwd //'/'//basename(boxname)
+                call spproj%os_mic%set(i, 'boxfile', boxfname)
                 call spproj%os_mic%set(i, 'nptcls',  0)
             end do
             call spproj%os_stk%new(0,    is_ptcl=.false.)
@@ -525,7 +529,7 @@ contains
             call spproj%os_cls3D%new(0,  is_ptcl=.false.)
             call spproj%os_ptcl3D%new(0, is_ptcl=.true.)
             call spproj%write(params%projfile)
-            if(allocated(boxname)) deallocate(boxname)
+            call boxname%kill
         else
             call spproj%read(params%projfile)
             ! get boxfiles into os_mic
@@ -539,7 +543,7 @@ contains
             endif
             do i=1,nos_mic
                 if( params%mkdir.eq.'yes' )then
-                    if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
+                    if(boxfnames(i)%to_char([1,1]).ne.'/') boxfnames(i) = PATH_PARENT//boxfnames(i)%to_char()
                 endif
                 boxfname = simple_abspath(boxfnames(i))
                 call spproj%set_boxfile(i, boxfname)
@@ -554,10 +558,10 @@ contains
     subroutine exec_import_particles( self, cline )
         class(commander_import_particles), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        character(len=:),      allocatable :: phaseplate, ctfstr
-        character(LONGSTRLEN), allocatable :: stkfnames(:)
-        real,                  allocatable :: line(:)
+        type(string), allocatable      :: stkfnames(:)
+        real,         allocatable      :: line(:)
         type(simple_nice_communicator) :: nice_communicator
+        type(string)                   :: phaseplate, ctfstr
         type(parameters)               :: params
         type(sp_project)               :: spproj
         type(oris)                     :: os
@@ -665,8 +669,8 @@ contains
             nstks = size(stkfnames)
             if( params%mkdir.eq.'yes' )then
                 do i=1,nstks
-                    if(stkfnames(i)(1:1).ne.'/') stkfnames(i) = PATH_PARENT//trim(stkfnames(i))
-                    if( .not. file_exists(stkfnames(i)) ) THROW_HARD('modified filetable entry '//trim(stkfnames(i))//' does not exist')
+                    if(stkfnames(i)%to_char([1,1]).ne.'/') stkfnames(i) = PATH_PARENT//stkfnames(i)%to_char()
+                    if( .not. file_exists(stkfnames(i)) ) THROW_HARD('modified filetable entry '//stkfnames(i)%to_char()//' does not exist')
                 enddo
             endif
             l_stktab_per_stk_parms = (os%get_noris() == nstks)
@@ -717,7 +721,7 @@ contains
                     end do
                 endif
                 call os%getter(1, 'phaseplate', phaseplate)
-                if( trim(phaseplate) .eq. 'yes' )then
+                if( phaseplate .eq. 'yes' )then
                     if( .not. os%isthere(1,'phshift') )then
                         THROW_HARD('phaseplate .eq. yes requires phshift input, currently lacking; exec_import_particles')
                     endif
@@ -733,7 +737,7 @@ contains
                     end do
                 endif
                 call os%getter(1, 'ctf', ctfstr)
-                if( trim(ctfstr) .ne. 'no' )then
+                if( ctfstr .ne. 'no' )then
                     if( .not. os%isthere(1,'dfx') )then
                         THROW_HARD('ctf .ne. no requires dfx input, currently lacking; exec_import_particles')
                     endif
@@ -760,7 +764,7 @@ contains
                 if( cline%defined('phaseplate') )then
                     phaseplate = cline%get_carg('phaseplate')
                 else
-                    allocate(phaseplate, source='no')
+                    phaseplate ='no'
                 endif
                 ctfvars%kv           = params%kv
                 ctfvars%cs           = params%cs
@@ -815,7 +819,7 @@ contains
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
         call nice_communicator%cycle()
-        if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
+        if( file_exists(params%projfile) ) call spproj%read(params%projfile)
         call spproj%add_cavgs2os_out(params%stk, params%smpd)
         if( cline%defined('frcs') ) call spproj%add_frcs2os_out(params%frcs,'frc2D')
         call spproj%os_cls2D%set_all2single('state',1.)
@@ -836,7 +840,7 @@ contains
         type(parameters)               :: params
         type(sp_project)               :: spproj
         type(image)                    :: img
-        character(len=:),  allocatable :: cavgs_fname, stk_path
+        type(string)                   :: cavgs_fname
         logical,           allocatable :: lstates(:)
         integer :: ldim(3), icls, ncls, ncavgs, cnt
         real    :: smpd, smpd_phys
@@ -846,7 +850,7 @@ contains
         call nice_communicator%init(params%niceprocid, params%niceserver)
         call nice_communicator%cycle()
         ! read files and sanity checks
-        if( .not.file_exists(trim(params%projfile)) ) THROW_HARD('Project file does not exist!')
+        if( .not.file_exists(params%projfile) ) THROW_HARD('Project file does not exist!')
         call spproj%read_segment(params%oritype,params%projfile)
         if( spproj%os_cls2D%get_noris() == 0 ) THROW_HARD('Absent cls2D field!')
         call spproj%read_segment('out',params%projfile)
@@ -854,11 +858,6 @@ contains
         if( count(lstates) == 0 ) THROW_HARD('All class averages are deselected')
         call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd)
         if( spproj%os_cls2D%get_noris() /= ncls ) THROW_HARD('Inconsistent # of entries cls2D/out!')
-        if(.not. file_exists(trim(cavgs_fname))) then
-            !try using stkpath if present in projfile
-            call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd, stkpath=stk_path)
-            if(allocated(stk_path)) cavgs_fname = trim(stk_path)//'/'//trim(cavgs_fname)
-        endif
         call find_ldim_nptcls(cavgs_fname, ldim, ncavgs, smpd=smpd_phys)
         if(ncavgs /= ncls)    THROW_HARD('Inconsistent # of cls2D cavgs & physical cavgs!')
         if( abs(smpd-smpd_phys) > 0.001 ) THROW_HARD('Inconsistent sampling distancs in project & physical cavgs!')
@@ -888,7 +887,7 @@ contains
         real,               allocatable :: rstates(:)
         logical,            allocatable :: clustmask(:)
         type(class_sample), allocatable :: clssmp(:)
-        character(len=:),   allocatable :: projfname, fbody
+        type(string)                    :: projfname, fbody
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: noris,i,noris_in_state,ncls,icls,iclust,nclust
         integer                         :: state,nstates,nptcls,ipart
@@ -948,7 +947,7 @@ contains
                 write(logfhandle,*) '# particles in part '//int2str(ipart)//': ', count(states == ipart)
                 ! copy project
                 projfname = fbody//int2str(ipart)//'.simple'
-                call simple_copy_file(trim(params%projfile), projfname)
+                call simple_copy_file(params%projfile, projfname)
                 call spproj_part%read(projfname)
                 ! create state mapping
                 where(states == ipart)
@@ -994,7 +993,7 @@ contains
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
         integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
-        character(len=:),   allocatable :: projfname
+        type(string)                    :: projfname
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
         integer                         :: state,nstates,nptcls,ipart,n_thumbnails
@@ -1008,7 +1007,7 @@ contains
         if( .not. cline%defined('append') ) call cline%set('append', 'no')
         call params%new(cline, silent=.true.)
         ! http communicator init
-        call http_communicator%create(params%niceprocid, params%niceserver)
+        call http_communicator%create(params%niceprocid, params%niceserver%to_char())
         call http_communicator%send_heartbeat()
         if(params%append .eq. 'yes') l_append = .true.
         iseg = oritype2segment(trim(params%oritype))
@@ -1088,17 +1087,17 @@ contains
         else if( cline%defined('infile') )then
             ! selection based on text file input
             ! sanity check
-            n_lines = nlines(trim(params%infile))
+            n_lines = nlines(params%infile)
             if( cline%defined('state') ) then
                 if( spproj%get_n_insegment_state(params%oritype, cline%get_iarg("state")) /= n_lines )then
-                    write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
+                    write(logfhandle,*) '# lines in infile '//params%infile%to_char()//': ', n_lines
                     write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', spproj%get_n_insegment_state(params%oritype, cline%get_iarg("state"))
                     THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment with requested state do not match, aborting; exec_selection')
                     return
                 endif
             else
                 if( noris /= n_lines )then
-                    write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
+                    write(logfhandle,*) '# lines in infile '//params%infile%to_char()//': ', n_lines
                     write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment: ', noris
                     THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment do not match, aborting; exec_selection')
                     return
@@ -1106,7 +1105,7 @@ contains
             endif
             ! allocate states and then read the state-flags
             allocate(states(noris))
-            call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
+            call fopen(fnr, FILE=params%infile, STATUS='OLD', action='READ')
             if( cline%defined('state') ) then
                 state = cline%get_iarg("state")
                 do i=1,noris
@@ -1125,8 +1124,8 @@ contains
         else if( cline%defined('deselfile') )then
             ! selection based on text file containing indices to be deselected
             states=pos%get_all_asint("state")
-            n_lines = nlines(trim(params%deselfile))
-            call fopen(fnr, FILE=trim(params%deselfile), STATUS='OLD', action='READ')
+            n_lines = nlines(params%deselfile)
+            call fopen(fnr, FILE=params%deselfile, STATUS='OLD', action='READ')
             do i=1, n_lines
                 read(fnr,*) state
                 write(logfhandle, *) "DESELECTING INDEX", state
@@ -1161,7 +1160,7 @@ contains
                     call spproj%map2ptcls_state(append=l_append)
                 endif
                 if(params%write_imgarr .eq. 'yes') then
-                    call spproj%set_cavgs_thumb(trim(params%projfile))
+                    call spproj%set_cavgs_thumb(params%projfile)
                 end if
             case(CLS3D_SEG)
                 if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
@@ -1210,10 +1209,9 @@ contains
         class(commander_scale_project_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(chash),      allocatable :: part_params(:)
-        character(len=:), allocatable :: projfile_sc
         integer,          allocatable :: parts(:,:)
         integer,          parameter   :: MAX_NCUNITS = 64
-        character(len=XLONGSTRLEN)    :: dir_target
+        type(string)     :: dir_target, projfile_sc
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         type(cmdline)    :: cline_scale
@@ -1252,8 +1250,8 @@ contains
             ! make new project & scales
             smpd_target = max(smpd, smpd * real(box)/real(params%newbox))
             dir_target = filepath(PATH_PARENT,'stack_parts_sc')
-            if( cline%defined('dir_target') ) dir_target = trim(cline%get_carg('dir_target'))
-            call simple_mkdir(dir_target, errmsg="commander_distr_wflows::exec_scale_project_distr ")
+            if( cline%defined('dir_target') ) dir_target = cline%get_carg('dir_target')
+            call simple_mkdir(dir_target)
             call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale, dir=dir_target)
             newbox = cline_scale%get_iarg('newbox')
             if( newbox == box )then
@@ -1306,15 +1304,15 @@ contains
     subroutine exec_projops( self, cline )
         class(commander_projops),     intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(parameters)            :: params
-        type(sp_project)            :: spproj
-        type(oris)                  :: oris_backup
-        type(image)                 :: img
-        type(stack_io)              :: stksrc, stkdst
-        integer, allocatable        :: randmap(:)
-        character(len=XLONGSTRLEN)  :: cwd
-        integer                     :: i, ifoo, ldim(3)
-        logical                     :: l_randomise
+        type(parameters)     :: params
+        type(sp_project)     :: spproj
+        type(oris)           :: oris_backup
+        type(image)          :: img
+        type(stack_io)       :: stksrc, stkdst
+        integer, allocatable :: randmap(:)
+        type(string)         :: cwd, stk_str
+        integer              :: i, ifoo, ldim(3)
+        logical              :: l_randomise
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -1334,13 +1332,14 @@ contains
             enddo
             call oris_backup%kill
             write(logfhandle,'(A)')'>>> WRITING UPDATED STACK'
-            if(.not. file_exists(spproj%os_stk%get_static(1, 'stk'))) THROW_HARD('Stack file does not exist')
-            call find_ldim_nptcls(spproj%os_stk%get_static(1, 'stk'), ldim, ifoo)
+            if(.not. file_exists(spproj%os_stk%get_str(1, 'stk'))) THROW_HARD('Stack file does not exist')
+            call find_ldim_nptcls(spproj%os_stk%get_str(1, 'stk'), ldim, ifoo)
             ldim(3) = 1
             call img%new(ldim, params%smpd)
-            call stkdst%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
+            call stkdst%open(params%outstk, params%smpd, 'write', box=ldim(1))
             do i=1, spproj%os_ptcl2D%get_noris()
-                call stksrc%open(spproj%os_stk%get_static(1, 'stk'),params%smpd, 'read', bufsz=1)
+                stk_str = spproj%os_stk%get_str(1, 'stk')
+                call stksrc%open(stk_str,params%smpd, 'read', bufsz=1)
                 call stksrc%read(randmap(i), img)
                 call stkdst%write(i, img)
                 call stksrc%close
@@ -1349,7 +1348,7 @@ contains
             call stksrc%close
             call img%kill
             spproj%os_ptcl3D = spproj%os_ptcl2D
-            call spproj%os_stk%set(1,'stk', trim(cwd) // '/' // trim(params%outstk))
+            call spproj%os_stk%set(1,'stk', cwd // '/' // params%outstk%to_char())
         endif
         ! update project info
         call spproj%update_projinfo( cline )
@@ -1395,7 +1394,7 @@ contains
         type(chash),      allocatable :: part_params(:)
         integer,          allocatable :: parts(:,:), pinds(:)
         real,             allocatable :: states(:)
-        character(len=:), allocatable :: fname
+        type(string)                  :: fname
         logical,          allocatable :: part_mask(:)
         integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl
         integer :: nstks_orig,nptcls_orig,nmics_orig,i
@@ -1417,7 +1416,7 @@ contains
         else
             pinds = pack(pinds, mask=states > 0.5)
         endif
-        call arr2txtfile(pinds, 'selected_indices.txt')
+        call arr2txtfile(pinds, string('selected_indices.txt'))
         deallocate(states, pinds)
         nmics       = spproj%get_nintgs()
         nstks_orig  = nstks
@@ -1446,7 +1445,7 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)
         ! ASSEMBLY
         do ipart = 1,nparts
-            fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+            fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
             part_mask(ipart) = file_exists(fname)
         enddo
         ! copy updated micrographs
@@ -1455,7 +1454,7 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 if( .not.part_mask(ipart) ) cycle
-                fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+                fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
                 call spproj_part(ipart)%read_segment('mic',fname)
                 cnt = cnt + spproj_part(ipart)%os_mic%get_noris()
             enddo
@@ -1480,7 +1479,7 @@ contains
         cnt = 0
         do ipart = 1,nparts
             if( .not.part_mask(ipart) ) cycle
-            fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+            fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
             call spproj_part(ipart)%read_segment('stk',fname)
             cnt = cnt + spproj_part(ipart)%os_stk%get_noris()
         enddo
@@ -1501,7 +1500,7 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 if( .not.part_mask(ipart) ) cycle
-                fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+                fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
                 call spproj_part(ipart)%read_segment('ptcl2D',fname)
                 cnt = cnt + spproj_part(ipart)%os_ptcl2D%get_noris()
             enddo
@@ -1521,7 +1520,7 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 if( .not.part_mask(ipart) ) cycle
-                fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+                fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
                 call spproj_part(ipart)%read_segment('ptcl3D',fname)
                 if( spproj_part(ipart)%os_ptcl3D%get_noris() == 0 ) cycle
                 do iptcl = 1,spproj_part(ipart)%os_ptcl3D%get_noris()
@@ -1540,7 +1539,7 @@ contains
         do ipart = 1,nparts
             call part_params(ipart)%kill
             call spproj_part(ipart)%kill
-            call del_file(trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT)
+            call del_file(ALGN_FBODY//int2str(ipart)//METADATA_EXT)
         enddo
         deallocate(spproj_part,part_params)
         ! end gracefully
@@ -1553,24 +1552,24 @@ contains
         use simple_qsys_funs, only: qsys_job_finished
         class(commander_prune_project), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)              :: params
-        type(image)                   :: img
-        type(sp_project)              :: spproj, spproj_out
-        type(ori)                     :: o_stk
-        character(len=:), allocatable :: newstkname,stkname,ext
-        logical,          allocatable :: stks_mask(:), ptcls_mask(:)
-        integer,          allocatable :: stkinds(:), stk2mic_inds(:), mic2stk_inds(:)
-        character(len=LONGSTRLEN) :: absstkname, stkdir
-        real                      :: smpd
-        integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
-        integer                   :: box, nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
-        integer                   :: nstks_part, nptcls_part, stkind, nstks_prev, ptcl_glob
+        type(parameters)     :: params
+        type(image)          :: img
+        type(sp_project)     :: spproj, spproj_out
+        type(ori)            :: o_stk
+        type(string)         :: newstkname,stkname,ext
+        logical, allocatable :: stks_mask(:), ptcls_mask(:)
+        integer, allocatable :: stkinds(:), stk2mic_inds(:), mic2stk_inds(:)
+        type(string)         :: absstkname, stkdir
+        real                 :: smpd
+        integer              :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
+        integer              :: box, nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
+        integer              :: nstks_part, nptcls_part, stkind, nstks_prev, ptcl_glob
         ! init
         call params%new(cline)
         if( params%dir .eq. '' )then
             stkdir = PATH_HERE
         else
-            stkdir = trim(params%dir)
+            stkdir = params%dir
         endif
         ! particles
         call spproj%read_segment('ptcl2D', params%projfile)
@@ -1605,7 +1604,7 @@ contains
         nstks = count(stks_mask)
         nstks_part = count(stks_mask(params%fromp:params%top))
         if( nstks_part == 0 )then
-            call qsys_job_finished('simple_commanders_project :: exec_prune_project')
+            call qsys_job_finished(string('simple_commanders_project :: exec_prune_project'))
             return
         endif
         call spproj_out%os_stk%new(nstks_part, is_ptcl=.false.)
@@ -1639,7 +1638,7 @@ contains
             call spproj%os_stk%get_ori(istk, o_stk)
             call o_stk%getter('stk',stkname)
             ext        = fname2ext(stkname)
-            newstkname = trim(stkdir)//trim(get_fbody(basename(stkname),ext))//trim(STK_EXT)
+            newstkname = stkdir//get_fbody(basename(stkname),ext)//STK_EXT
             fromp = o_stk%get_fromp()
             top   = o_stk%get_top()
             fromp_glob = top_glob+1
@@ -1683,13 +1682,13 @@ contains
         spproj_out%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris() > 0 ) spproj_out%jobproc = spproj%jobproc
         call spproj%kill
-        call spproj_out%write(trim(ALGN_FBODY)//int2str(params%part)//METADATA_EXT)
+        call spproj_out%write(string(ALGN_FBODY)//int2str(params%part)//METADATA_EXT)
         ! cleanup
         call spproj_out%kill
         call img%kill
         call o_stk%kill
         ! end gracefully
-        call qsys_job_finished('simple_commanders_project :: exec_prune_project')
+        call qsys_job_finished(string('simple_commanders_project :: exec_prune_project'))
     end subroutine exec_prune_project
 
     subroutine exec_merge_projects( self, cline )
@@ -1784,17 +1783,17 @@ contains
     subroutine exec_concatenate_projects( self, cline )
         class(commander_concatenate_projects), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: fnames(:)
-        character(len=:),          allocatable :: fname
+        type(string), allocatable :: fnames(:)
+        type(string)     :: fname
         type(sp_project) :: spproj_read, spproj
         type(parameters) :: params   
         integer :: n_spprojs, iproj
         call params%new(cline)
         call read_filetable(params%filetab, fnames)
         n_spprojs = size(fnames)
-        call spproj%read(trim(fnames(1)))
+        call spproj%read(fnames(1))
         do iproj = 2,n_spprojs
-            call spproj_read%read(trim(fnames(iproj)))
+            call spproj_read%read(fnames(iproj))
             call spproj%append_project(spproj_read)
         enddo
         call spproj%write(params%projfile)
@@ -1817,19 +1816,19 @@ contains
         endif
         call spproj%write(params%projfile)
         call spproj%kill
-        call simple_end('**** split_stack NORMAL STOP ****')
+        call simple_end('**** SPLIT_STACK NORMAL STOP ****')
     end subroutine exec_split_stack
 
     subroutine exec_write_mic_filetab( self, cline )
         class(commander_write_mic_filetab), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: micstab(:)
-        integer,                   allocatable :: orimap(:)
+        type(string), allocatable :: micstab(:)
+        integer,      allocatable :: orimap(:)
         type(parameters) :: params
         type(sp_project) :: spproj
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         call params%new(cline)
-        call spproj%read(trim(params%projfile))
+        call spproj%read(params%projfile)
         call spproj%get_mics_table(micstab, orimap)
         call write_filetable(params%fname, micstab)
         call spproj%kill
@@ -1843,7 +1842,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         character(len=*), parameter      :: DEFTAB = 'subproj_deftab.txt'
         integer,          allocatable    :: pinds(:)
-        character(len=:), allocatable    :: ctfflag
+        type(string)                     :: ctfflag
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         type(commander_new_project)      :: xnew_proj
@@ -1860,7 +1859,7 @@ contains
         call spproj%write_segment_inside('projinfo')
         ! create substack
         if( .not. cline%defined('outstk') )then
-            params%outstk = trim(params%subprojname)//'.mrcs'
+            params%outstk = params%subprojname//'.mrcs'
         endif
         call spproj%write_substk([params%fromp,params%top], params%outstk)
         ! extract previous oris
@@ -1876,27 +1875,27 @@ contains
                 ctfflag = 'no'
             case DEFAULT
                 ! generate file with defocus values
-                call spproj%write_segment2txt('ptcl2D', DEFTAB, [params%fromp,params%top])
+                call spproj%write_segment2txt('ptcl2D', string(DEFTAB), [params%fromp,params%top])
                 ctfflag = spproj%get_ctfflag('ptcl2D', 1)
         end select
         ! make new project
-        call cline_new_proj%set('projname', trim(params%subprojname))
+        call cline_new_proj%set('projname', params%subprojname)
         call xnew_proj%execute_safe(cline_new_proj)
         ! import particles
         call cline_import_particles%set('prg',      'import_particles') ! needs to be here for exec_dir creation
-        call cline_import_particles%set('projfile', trim(params%subprojname)//'.simple')
+        call cline_import_particles%set('projfile', params%subprojname//'.simple')
         call cline_import_particles%set('cs',       ctfvars%cs)
         call cline_import_particles%set('fraca',    ctfvars%fraca)
         call cline_import_particles%set('kv',       ctfvars%kv)
         call cline_import_particles%set('smpd',     ctfvars%smpd)
-        call cline_import_particles%set('stk',      '../'//trim(params%outstk))
+        call cline_import_particles%set('stk',      '../'//params%outstk%to_char())
         call cline_import_particles%set('ctf',      ctfflag)
-        if( trim(ctfflag) .ne. 'no' )then
+        if( ctfflag .ne. 'no' )then
             call cline_import_particles%set('deftab', '../'//DEFTAB)
         endif
         call ximport_particles%execute_safe(cline_import_particles)
         ! transfer previous particle indices to project
-        call spproj%read(trim(params%subprojname)//'.simple')
+        call spproj%read(params%subprojname//'.simple')
         np3D = spproj%os_ptcl3D%get_noris()
         np2D = spproj%os_ptcl2D%get_noris()
         if( np3D /= n .or. np2D /= n ) THROW_HARD('Incongruent ptcl2D/ptcl3D fields')

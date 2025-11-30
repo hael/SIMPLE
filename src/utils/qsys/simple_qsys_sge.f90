@@ -43,7 +43,7 @@ contains
     !> \brief  is a getter
     function get_sge_submit_cmd( self ) result( cmd )
         class(qsys_sge), intent(in) :: self
-        character(len=:), allocatable :: cmd
+        type(string) :: cmd
         cmd = self%env%get('qsys_submit_cmd')
     end function get_sge_submit_cmd
 
@@ -52,36 +52,36 @@ contains
         class(qsys_sge), intent(in)   :: self
         class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
-        character(len=:), allocatable :: addon_line
-        character(len=:), allocatable :: key, qsub_cmd, qsub_val, bind2socket
+        type(string) :: key, qsub_cmd, qsub_val, bind2socket, addon_line
         integer :: i, which
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()
             key   = q_descr%get_key(i)
-            which = self%env%lookup(key)
+            which = self%env%lookup(key%to_char())
             if( which > 0 )then
                 qsub_cmd = self%env%get(which)
                 qsub_val = q_descr%get(i)
-                if( key .eq. 'job_addon_line' )then
-                    if( allocated(addon_line) ) deallocate(addon_line)
-                    allocate( addon_line, source=qsub_val )
+                if( key%to_char().eq. 'job_addon_line' )then
+                    call addon_line%kill
+                    addon_line = qsub_val
                     cycle
                 else
                     if( write2file )then
-                        write(fhandle,'(a)') qsub_cmd//' '//qsub_val
+                        write(fhandle,'(a)') qsub_cmd%to_char()//' '//qsub_val%to_char()
                     else
-                        write(logfhandle,'(a)') qsub_cmd//' '//qsub_val
+                        write(logfhandle,'(a)') qsub_cmd%to_char()//' '//qsub_val%to_char()
                     endif
                 endif
-                if(key .eq. 'job_cpus_per_task')then
-                    if( allocated(bind2socket) ) deallocate(bind2socket)
-                    allocate(bind2socket, source='#$ -binding linear:'//trim(qsub_val))
+                if(key%to_char() .eq. 'job_cpus_per_task')then
+                    call bind2socket%kill
+                    bind2socket = '#$ -binding linear:'//qsub_val%to_char()
                 endif
-                deallocate(qsub_cmd,qsub_val)
+                call qsub_cmd%kill
+                call qsub_val%kill
             endif
-            deallocate(key)
+            call key%kill
         end do
         ! write default instructions
         if( write2file )then
@@ -89,24 +89,22 @@ contains
             write(fhandle,'(a)') '#$ -S /bin/bash'
             write(fhandle,'(a)') '#$ -cwd'
             write(fhandle,'(a)') '#$ -o outfile -j y'
-!            write(fhandle,'(a)') '#$ -pe mpi 1'
-            if( allocated(bind2socket) )then
-                 write(fhandle,'(a)') bind2socket
+            if( bind2socket%is_allocated() )then
+                 write(fhandle,'(a)') bind2socket%to_char()
             endif
-            if( allocated(addon_line) )then
-                 write(fhandle, '(a)') addon_line
+            if( addon_line%is_allocated() )then
+                 write(fhandle, '(a)') addon_line%to_char()
             endif
         else
             write(logfhandle,'(a)') '#$ -V'
             write(logfhandle,'(a)') '#$ -S /bin/bash'
             write(logfhandle,'(a)') '#$ -cwd'
             write(logfhandle,'(a)') '#$ -o outfile -j y'
- !           write(logfhandle,'(a)') '#$ -pe mpi 1'
-            if( allocated(bind2socket) )then
-                 write(logfhandle,'(a)') bind2socket
+            if( bind2socket%is_allocated() )then
+                 write(fhandle,'(a)') bind2socket%to_char()
             endif
-            if( allocated(addon_line) )then
-                 write(logfhandle,'(a)') addon_line
+            if( addon_line%is_allocated() )then
+                 write(fhandle, '(a)') addon_line%to_char()
             endif
         endif
     end subroutine write_sge_header

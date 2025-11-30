@@ -1,7 +1,6 @@
 ! concrete commander: pre-processing routines
 module simple_commanders_preprocess
 include 'simple_lib.f08'
-use simple_binoris_io
 use simple_builder,              only: builder
 use simple_cmdline,              only: cmdline
 use simple_parameters,           only: parameters, params_glob
@@ -16,6 +15,7 @@ use simple_default_clines
 use simple_mini_stream_utils
 use simple_qsys_funs
 use simple_progress
+use simple_binoris_io
 implicit none
 #include "simple_local_flags.inc"
 
@@ -166,7 +166,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
@@ -191,10 +191,10 @@ contains
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
         type(Node), pointer           :: xmldoc, beamshiftnode, beamshiftnodex, beamshiftnodey
-        character(len=:), allocatable :: imgkind, moviename, fbody
-        character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
-        character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract, output_dir_inipick_preproc, micname_intg
-        character(len=LONGSTRLEN)     :: boxfile, eputiltgroup
+        type(string)  :: imgkind, moviename, fbody
+        type(string)  :: moviename_forctf, moviename_intg, output_dir_motion_correct
+        type(string)  :: output_dir_ctf_estimate, output_dir_extract, output_dir_inipick_preproc, micname_intg
+        type(string)  :: boxfile, eputiltgroup, str_meta
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
         logical :: l_del_forctf
         call cline%set('oritype', 'mic')
@@ -211,22 +211,22 @@ contains
         output_dir_motion_correct      = PATH_HERE
         output_dir_inipick_preproc     = PATH_HERE
         if( params%stream.eq.'yes' )then
-            output_dir_ctf_estimate    = trim(DIR_CTF_ESTIMATE)
-            output_dir_motion_correct  = trim(DIR_MOTION_CORRECT)
-            output_dir_inipick_preproc = trim(DIR_INIPICK_PREPROC)
+            output_dir_ctf_estimate    = DIR_CTF_ESTIMATE
+            output_dir_motion_correct  = DIR_MOTION_CORRECT
+            output_dir_inipick_preproc = DIR_INIPICK_PREPROC
             if( cline%defined('dir') )then
                 output_dir_ctf_estimate    = filepath(params%dir,output_dir_ctf_estimate)//'/'
                 output_dir_motion_correct  = filepath(params%dir,output_dir_motion_correct)//'/'
                 output_dir_inipick_preproc = filepath(params%dir,output_dir_inipick_preproc)//'/'
             endif
-            call simple_mkdir(output_dir_ctf_estimate, errmsg="commander_preprocess :: preprocess; ")
-            call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
+            call simple_mkdir(output_dir_ctf_estimate)
+            call simple_mkdir(output_dir_motion_correct)
             if(params%ninipick > 0) then
-                call simple_mkdir(output_dir_inipick_preproc, errmsg="commander_preprocess :: preprocess;")
+                call simple_mkdir(output_dir_inipick_preproc)
             endif
         endif
         if( cline%defined('fbody') )then
-            fbody = trim(params%fbody)
+            fbody = params%fbody
         else
             fbody = ''
         endif
@@ -263,7 +263,7 @@ contains
             if(.not.o_mov%isthere('imgkind') )cycle
             if(.not.o_mov%isthere('movie') .and. .not.o_mov%isthere('intg'))cycle
             call o_mov%getter('imgkind', imgkind)
-            select case(trim(imgkind))
+            select case(imgkind%to_char())
                 case('movie')
                     ! motion_correct
                     ctfvars = spproj%get_micparams(imovie)
@@ -294,24 +294,27 @@ contains
                 call del_file(moviename_forctf)
             endif
             ! read xml
-            if(o_mov%isthere('meta') .and. file_exists(trim(o_mov%get_static('meta')))) then
-                xmldoc => parseFile(trim(o_mov%get_static("meta")))
-                beamshiftnode  => item(getElementsByTagname(xmldoc, "BeamShift"),   0)
-                beamshiftnodex => item(getElementsByTagname(beamshiftnode, "a:_x"), 0)
-                beamshiftnodey => item(getElementsByTagname(beamshiftnode, "a:_y"), 0)
-                call o_mov%set("shiftx", str2real(getTextContent(beamshiftnodex)))
-                call o_mov%set("shifty", str2real(getTextContent(beamshiftnodey)))
-                call destroy(xmldoc)
+            if(o_mov%isthere('meta'))then
+                str_meta   = o_mov%get_str('meta') 
+                if( file_exists(str_meta) ) then
+                    xmldoc => parseFile(str_meta%to_char())
+                    beamshiftnode  => item(getElementsByTagname(xmldoc, "BeamShift"),   0)
+                    beamshiftnodex => item(getElementsByTagname(beamshiftnode, "a:_x"), 0)
+                    beamshiftnodey => item(getElementsByTagname(beamshiftnode, "a:_y"), 0)
+                    call o_mov%set("shiftx", str2real(getTextContent(beamshiftnodex)))
+                    call o_mov%set("shifty", str2real(getTextContent(beamshiftnodey)))
+                    call destroy(xmldoc)
+                endif
             end if
             ! assign beamtilt if EPU
             if(o_mov%isthere('intg')) then
                 call o_mov%getter('intg', micname_intg)
-                micname_intg = trim(basename(micname_intg))
-                if(micname_intg(:8) == 'FoilHole') then
+                micname_intg = basename(micname_intg)
+                if(micname_intg%to_char([1,8]) == 'FoilHole') then
                     ! EPU filename
-                    eputiltgroup = micname_intg(index(micname_intg, 'Data_') + 5:)
-                    eputiltgroup = eputiltgroup(:index(eputiltgroup, '_') - 1)
-                    call o_mov%set("tiltgrp", str2real(eputiltgroup))
+                    eputiltgroup = micname_intg%to_char([micname_intg%substr_ind('Data_') + 5,micname_intg%strlen_trim()])
+                    eputiltgroup = eputiltgroup%to_char([1,eputiltgroup%substr_ind('_') - 1])
+                    call o_mov%set("tiltgrp", eputiltgroup%to_real())
                 else
                     call o_mov%set("tiltgrp", 0.0)
                 end if
@@ -334,7 +337,7 @@ contains
         call o_mov%kill
         call spproj%kill
         ! end gracefully
-        call qsys_job_finished( 'simple_commanders_preprocess :: exec_preprocess' )
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_preprocess'))
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
@@ -370,7 +373,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
@@ -391,7 +394,7 @@ contains
         type(ctfparams)               :: ctfvars
         type(sp_project)              :: spproj
         type(ori)                     :: o
-        character(len=:), allocatable :: output_dir, moviename, fbody
+        type(string) :: output_dir, moviename, fbody
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, cnt
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -406,13 +409,13 @@ contains
         endif
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
-                THROW_HARD('gain reference: '//trim(params%gainref)//' not found; motion_correct')
+                THROW_HARD('gain reference: '//params%gainref%to_char()//' not found; motion_correct')
             endif
         endif
         ! output directory & names
         output_dir = PATH_HERE
         if( cline%defined('fbody') )then
-            fbody = trim(params%fbody)
+            fbody = params%fbody
         else
             fbody = ''
         endif
@@ -434,9 +437,9 @@ contains
                     call o%getter('movie', moviename)
                     ctfvars = spproj%get_micparams(imovie)
                     if( cline%defined('gainref') )then
-                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir), gainref_fname=params%gainref)
+                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, output_dir, gainref_fname=params%gainref)
                     else
-                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
+                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, output_dir)
                     endif
                     call spproj%os_mic%set_ori(imovie, o)
                     write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
@@ -447,7 +450,7 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(  'simple_commanders_preprocess :: exec_motion_correct' )
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_motion_correct'))
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
@@ -480,7 +483,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
@@ -500,7 +503,7 @@ contains
         type(pspec_thumb_iter)        :: ptiter
         type(sp_project)              :: spproj
         type(ori)                     :: o
-        character(len=:), allocatable :: output_dir, moviename_intg, imgkind
+        type(string) :: output_dir, moviename_intg, imgkind
         integer :: nintgs, fromto(2), iintg, ntot, cnt
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -532,7 +535,7 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', moviename_intg)
-                call ptiter%iterate(o, moviename_intg, trim(output_dir))
+                call ptiter%iterate(o, moviename_intg, output_dir)
                 call spproj%os_mic%set_ori(iintg, o)
                 write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the integrated movies processed'
             endif
@@ -541,7 +544,7 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished('simple_commanders_preprocess :: exec_gen_pspecs_and_thumbs')
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_gen_pspecs_and_thumbs'))
         call simple_end('**** SIMPLE_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
     end subroutine exec_gen_pspecs_and_thumbs
 
@@ -576,7 +579,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
@@ -597,7 +600,7 @@ contains
         type(ctf_estimate_iter)       :: ctfiter
         type(ctfparams)               :: ctfvars
         type(ori)                     :: o
-        character(len=:), allocatable :: intg_forctf, output_dir, imgkind
+        type(string) :: intg_forctf, output_dir, imgkind
         integer                       :: fromto(2), imic, ntot, cnt, state
         logical                       :: l_gen_thumb, l_del_forctf
         call cline%set('oritype', 'mic')
@@ -647,7 +650,7 @@ contains
                 endif
                 l_gen_thumb = .not. o%isthere('thumb')
                 ctfvars     = o%get_ctfvars()
-                call ctfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir), l_gen_thumb)
+                call ctfiter%iterate( ctfvars, intg_forctf, o, output_dir, l_gen_thumb)
                 ! delete file after estimation
                 if( l_del_forctf )then
                     call o%delete_entry('forctf')
@@ -662,7 +665,7 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(  'simple_commanders_preprocess :: exec_ctf_estimate' )
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_ctf_estimate'))
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate
 
@@ -675,9 +678,9 @@ contains
         type(image),      allocatable :: imgs_sel(:), imgs_all(:)
         integer,          allocatable :: states(:)
         real,             allocatable :: correlations(:,:)
-        character(len=:), allocatable :: cavgstk
-        integer :: iimg, isel, nall, nsel, loc(1), lfoo(3)
-        real    :: smpd
+        type(string) :: cavgstk
+        integer      :: iimg, isel, nall, nsel, loc(1), lfoo(3)
+        real         :: smpd
         call cline%set('dir_exec', 'selection')
         call cline%set('mkdir',    'yes')
         if( .not.cline%defined('prune')   ) call cline%set('prune',   'no')
@@ -689,7 +692,7 @@ contains
         ! find number of original cavgs
         if( .not. cline%defined('stk' ) )then
             call build%spproj%get_cavgs_stk(cavgstk, nall, smpd, imgkind=params%imgkind)
-            params%stk = trim(cavgstk)
+            params%stk = cavgstk
         else
             call find_ldim_nptcls(params%stk, lfoo, nall)
         endif
@@ -725,13 +728,13 @@ contains
         use simple_corrmat, only: calc_cartesian_corrmat
         class(commander_map_cavgs_states), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline !< command line input
-        type(parameters)                   :: params
-        type(builder)                      :: build
-        type(image),           allocatable :: imgs_sel(:), imgs_all(:)
-        integer,               allocatable :: states(:)
-        real,                  allocatable :: correlations(:,:)
-        character(len=:),      allocatable :: cavgstk, fname
-        character(LONGSTRLEN), allocatable :: stkfnames(:)
+        type(parameters)          :: params
+        type(builder)             :: build
+        type(image),  allocatable :: imgs_sel(:), imgs_all(:)
+        integer,      allocatable :: states(:)
+        real,         allocatable :: correlations(:,:)
+        type(string), allocatable :: stkfnames(:)
+        type(string)              :: cavgstk, fname
         integer :: iimg, isel, nall, nsel, loc(1), lfoo(3), s
         real    :: smpd
         call cline%set('dir_exec', 'state_mapping')
@@ -741,7 +744,7 @@ contains
         ! find number of original cavgs
         if( .not. cline%defined('stk' ) )then
             call build%spproj%get_cavgs_stk(cavgstk, nall, smpd)
-            params%stk = trim(cavgstk)
+            params%stk = cavgstk
         else
             call find_ldim_nptcls(params%stk, lfoo, nall)
         endif
@@ -755,7 +758,7 @@ contains
         allocate(states(nall), source=0)
         do s = 1,size(stkfnames)
             ! find number of selected cavgs
-            fname = '../'//trim(stkfnames(s))
+            fname = '../'//stkfnames(s)%to_char()
             call find_ldim_nptcls(fname, lfoo, nsel)
             ! read images
             allocate(imgs_sel(nsel))
@@ -791,7 +794,7 @@ contains
         type(cmdline)                 :: cline_make_pickrefs
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
-        character(len=:), allocatable :: which_picker
+        type(string) :: which_picker
         integer :: nmics
         logical :: templates_provided
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
@@ -803,7 +806,7 @@ contains
         if( .not. cline%defined('picker')      ) call cline%set('picker',      'new')
         if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
         which_picker = cline%get_carg('picker')
-        if( trim(which_picker) .eq. 'seg' )then
+        if( which_picker .eq. 'seg' )then
             if( .not. cline%defined('ndev')    ) call cline%set('ndev', 1.5)
         else
             if( .not. cline%defined('ndev')    ) call cline%set('ndev', 2.)
@@ -829,28 +832,28 @@ contains
         endif
         templates_provided = cline%defined('pickrefs')
         select case(trim(params%picker))
-        case('old')
-            if( .not.templates_provided ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
-        case('new')
-            if( templates_provided )then
-                ! reference-based picking
-            else if( cline%defined('moldiam') )then
-                if( cline%defined('moldiam_max') .and. cline%defined('nmoldiams') )then
-                    ! multipick with nmoldiams diameters ranging from moldiam to moldiam_max
-                    ! output is determined diameter moldiam_opt
-                else if( cline%defined('moldiam_max') .or. cline%defined('nmoldiams') )then
-                    THROW_HARD('MOLDIAM, MOLDIAM_MAX & NMOLDIAMS must be provided for determination of optimal diameter!')
+            case('old')
+                if( .not.templates_provided ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
+            case('new')
+                if( templates_provided )then
+                    ! reference-based picking
+                else if( cline%defined('moldiam') )then
+                    if( cline%defined('moldiam_max') .and. cline%defined('nmoldiams') )then
+                        ! multipick with nmoldiams diameters ranging from moldiam to moldiam_max
+                        ! output is determined diameter moldiam_opt
+                    else if( cline%defined('moldiam_max') .or. cline%defined('nmoldiams') )then
+                        THROW_HARD('MOLDIAM, MOLDIAM_MAX & NMOLDIAMS must be provided for determination of optimal diameter!')
+                    else
+                        ! reference-free single diameter picking
+                    endif
+                elseif( cline%defined('multi_moldiams') )then
+                    ! reference-free picking with inputted diameters
                 else
-                    ! reference-free single diameter picking
+                    THROW_HARD('Unsupported new picker mode')
                 endif
-            elseif( cline%defined('multi_moldiams') )then
-                ! reference-free picking with inputted diameters
-            else
-                THROW_HARD('Unsupported new picker mode')
-            endif
-        case('segdiam')
-            ! reference-free segmentation-based for diameter estimation
-            if( templates_provided ) THROW_HARD('SEGDIAM picker does not requires PICKREFS input')
+            case('segdiam')
+                ! reference-free segmentation-based for diameter estimation
+                if( templates_provided ) THROW_HARD('SEGDIAM picker does not requires PICKREFS input')
         end select
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
@@ -862,13 +865,13 @@ contains
             call cline_make_pickrefs%set('mkdir','no')
             if( trim(params%picker).eq.'old' ) call cline_make_pickrefs%set('neg','yes')
             call xmake_pickrefs%execute_safe(cline_make_pickrefs)
-            call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
+            call cline%set('pickrefs', PICKREFS_FBODY//params%ext%to_char())
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
@@ -886,8 +889,8 @@ contains
         type(sp_project)              :: spproj
         type(picker_iter)             :: piter
         type(ori)                     :: o
-        character(len=:), allocatable :: output_dir, intg_name, imgkind
-        character(len=LONGSTRLEN)     :: boxfile, thumb_den
+        type(string)                  :: output_dir, intg_name, imgkind
+        type(string)                  :: boxfile, thumb_den
         integer                       :: fromto(2), imic, ntot, nptcls_out, cnt, state
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -936,21 +939,21 @@ contains
         call spproj%kill
         call piter%kill
         ! end gracefully
-        call qsys_job_finished( 'simple_commanders_preprocess :: exec_pick' )
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_pick'))
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
     subroutine exec_extract_distr( self, cline )
         class(commander_extract_distr), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline !< command line input
+        class(cmdline),                 intent(inout) :: cline !< command line input
         type(parameters)                        :: params
         type(sp_project)                        :: spproj, spproj_part
         type(qsys_env)                          :: qenv
         type(chash)                             :: job_descr
         type(ori)                               :: o_mic, o_tmp
         type(oris)                              :: os_stk
-        character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
-        character(len=:),           allocatable :: mic_name, imgkind, boxfile_name
+        type(string),  allocatable              :: boxfiles(:), stktab(:), parts_fname(:)
+        type(string)                            :: mic_name, imgkind, boxfile_name
         real    :: dfx,dfy,ogid,gid
         integer :: boxcoords(2), lfoo(3)
         integer :: nframes,imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
@@ -982,22 +985,22 @@ contains
         call spproj%os_out%kill
         ! input directory
         if( cline%defined('dir_box') )then
-            if( params%mkdir.eq.'yes' .and. params%dir_box(1:1).ne.'/')then
-                params%dir_box = trim(filepath(PATH_PARENT,params%dir_box))
+            if( trim(params%mkdir).eq.'yes' .and. params%dir_box%to_char([1,1]).ne.'/')then
+                params%dir_box = filepath(PATH_PARENT,params%dir_box)
             endif
             params%dir_box = simple_abspath(params%dir_box)
             if( file_exists(params%dir_box) )then
                 call simple_list_files_regexp(params%dir_box,'\.box$', boxfiles)
                 if(.not.allocated(boxfiles))then
-                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commanders_preprocess::exec_extract 1'
+                    write(logfhandle,*)'No box file found in ', params%dir_box%to_char(), '; simple_commanders_preprocess::exec_extract 1'
                     THROW_HARD('No box file found; exec_extract, 1')
                 endif
                 if(size(boxfiles)==0)then
-                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commanders_preprocess::exec_extract 2'
+                    write(logfhandle,*)'No box file found in ', params%dir_box%to_char(), '; simple_commanders_preprocess::exec_extract 2'
                     THROW_HARD('No box file found; exec_extract 2')
                 endif
             else
-                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commanders_preprocess::exec_extract'
+                write(logfhandle,*)'Directory does not exist: ', params%dir_box%to_char(), 'simple_commanders_preprocess::exec_extract'
                 THROW_HARD('box directory does not exist; exec_extract')
             endif
             call cline%set('dir_box', params%dir_box)
@@ -1013,13 +1016,13 @@ contains
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
             call o_mic%getter('imgkind', imgkind)
-            if( trim(imgkind).ne.'mic') cycle
+            if( imgkind.ne.'mic') cycle
             call o_mic%getter('intg', mic_name)
             if( .not.file_exists(mic_name) )cycle
             ! box input
             if( cline%defined('dir_box') )then
                 boxfile_name = boxfile_from_mic(mic_name)
-                if(trim(boxfile_name).eq.NIL)cycle
+                if(boxfile_name.eq.NIL)cycle
             else
                 call o_mic%getter('boxfile', boxfile_name)
                 if( .not.file_exists(boxfile_name) )cycle
@@ -1039,12 +1042,12 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! ASSEMBLY
         allocate(parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
         do ipart = 1,params%nparts
-            parts_fname(ipart) = trim(ALGN_FBODY)//int2str_pad(ipart,numlen)//trim(METADATA_EXT)
+            parts_fname(ipart) = ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT
         enddo
         ! copy updated micrographs
         cnt   = 0
@@ -1073,7 +1076,7 @@ contains
                     cnt = cnt + 1
                     call spproj_part%os_stk%get_ori(istk, o_tmp)
                     call os_stk%set_ori(cnt,o_tmp)
-                    stktab(cnt) = os_stk%get_static(cnt,'stk')
+                    stktab(cnt) = os_stk%get_str(cnt,'stk')
                 enddo
                 call spproj_part%kill
             enddo
@@ -1128,15 +1131,15 @@ contains
 
         contains
 
-            character(len=LONGSTRLEN) function boxfile_from_mic(mic)
-                character(len=*), intent(in) :: mic
-                character(len=LONGSTRLEN)    :: box_from_mic
-                integer :: ibox
+            type(string) function boxfile_from_mic(mic)
+                class(string), intent(in) :: mic
+                type(string) :: box_from_mic
+                integer      :: ibox
                 box_from_mic     = fname_new_ext(basename(mic),'box')
                 boxfile_from_mic = NIL
                 do ibox=1,size(boxfiles)
-                    if(trim(basename(boxfiles(ibox))).eq.trim(box_from_mic))then
-                        boxfile_from_mic = trim(boxfiles(ibox))
+                    if(basename(boxfiles(ibox)).eq.box_from_mic)then
+                        boxfile_from_mic = boxfiles(ibox)
                         return
                     endif
                 enddo
@@ -1162,12 +1165,11 @@ contains
         type(ctfparams)                         :: ctfparms
         type(ctf_estimate_fit)                  :: ctffit
         type(stack_io)                          :: stkio_w
-        character(len=:),           allocatable :: output_dir, mic_name, imgkind
+        type(string)                            :: output_dir, mic_name, imgkind
         real,                       allocatable :: boxdata(:,:)
         integer,                    allocatable :: ptcl_inds(:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
-        character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
-        character(len=STDLEN)     :: ext
+        type(string)                            :: stack, boxfile_name, box_fname, ctfdoc, ext
         real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
         integer                   :: ldim(3), lfoo(3), fromto(2)
         integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, i, iptcl_g
@@ -1184,7 +1186,7 @@ contains
         prog_part  = .false.
         if( params%stream.eq.'yes' )then
             output_dir = DIR_EXTRACT
-            if( cline%defined('dir') ) output_dir = trim(params%dir)//'/'
+            if( cline%defined('dir') ) output_dir = params%dir//'/'
             ! read in integrated movies
             call spproj%read(params%projfile)
             nmics_tot = spproj%os_mic%get_noris()
@@ -1204,7 +1206,7 @@ contains
             call spproj%read_non_data_segments(params%projfile)
             call spproj%projinfo%set(1,'projname', get_fbody(params%outfile,METADATA_EXT,separator=.false.))
             call spproj%projinfo%set(1,'projfile', params%outfile)
-            params%projfile = trim(params%outfile)
+            params%projfile = params%outfile
             call spproj%os_mic%new(nmics_here, is_ptcl=.false.)
             cnt = 0
             do imic = fromto(1),fromto(2)
@@ -1224,7 +1226,7 @@ contains
         ! input boxes
         if( cline%defined('dir_box') )then
             if( .not.file_exists(params%dir_box) )then
-                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commanders_preprocess::exec_extract'
+                write(logfhandle,*)'Directory does not exist: ', params%dir_box%to_char(), 'simple_commanders_preprocess::exec_extract'
                 THROW_HARD('box directory does not exist; exec_extract')
             endif
         endif
@@ -1240,17 +1242,17 @@ contains
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
             call o_mic%getter('imgkind', imgkind)
-            if( trim(imgkind).ne.'mic') cycle
+            if( imgkind.ne.'mic') cycle
             call o_mic%getter('intg', mic_name)
             if( .not.file_exists(mic_name) )cycle
             ! box input
             if( cline%defined('dir_box') )then
-                box_fname = trim(params%dir_box)//'/'//fname_new_ext(basename(mic_name),'box')
+                box_fname = params%dir_box//'/'//fname_new_ext(basename(mic_name),'box')
                 if( .not.file_exists(box_fname) )cycle
                 boxfile_name = simple_abspath(box_fname, check_exists=.false.)
                 call spproj%set_boxfile(imic, boxfile_name)
             else
-                boxfile_name = trim(o_mic%get_static('boxfile'))
+                boxfile_name = o_mic%get_str('boxfile')
                 if( .not.file_exists(boxfile_name) )cycle
             endif
             ! get number of frames from stack
@@ -1295,7 +1297,7 @@ contains
                 endif
                 ! fetch micrograph
                 call spproj%os_mic%get_ori(imic, o_mic)
-                boxfile_name = trim(o_mic%get_static('boxfile'))
+                boxfile_name = o_mic%get_str('boxfile')
                 ! box file
                 nptcls = 0
                 if( nlines(boxfile_name) > 0 )then
@@ -1352,8 +1354,8 @@ contains
                 endif
                 ! output stack name
                 call o_mic%getter('intg', mic_name)
-                ext   = fname2ext(trim(basename(mic_name)))
-                stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
+                ext   = fname2ext(basename(mic_name))
+                stack = output_dir//EXTRACT_STK_FBODY//get_fbody(basename(mic_name), ext)//STK_EXT
                 ! init extraction
                 call prepimgbatch(nptcls2extract)
                 if( trim(params%extractfrommov).eq.'yes' )then
@@ -1384,19 +1386,19 @@ contains
                         &stk_min,stk_max,stk_mean,stk_sdev)
                 endif
                 ! write stack
-                call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                call stkio_w%open(stack, params%smpd, 'write', box=params%box)
                 do i = 1,nptcls2extract
                     call stkio_w%write(i, imgs(i))
                 enddo
                 call stkio_w%close
                 ! update stack stats
-                call imgs(1)%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                call imgs(1)%update_header_stats(stack, [stk_min, stk_max, stk_mean, stk_sdev])
                 ! IMPORT INTO PROJECT (with absolute path)
-                call spproj%add_stk(trim(adjustl(stack)), ctfparms)
+                call spproj%add_stk(stack, ctfparms)
                 ! add box coordinates to ptcl2D field only & updates patch-based defocus
                 l_ctfpatch = .false.
                 if( o_mic%isthere('ctfdoc') )then
-                    ctfdoc = o_mic%get_static('ctfdoc')
+                    ctfdoc = o_mic%get_str('ctfdoc')
                     if( file_exists(ctfdoc) )then
                         call ctffit%read_doc(ctfdoc)
                         l_ctfpatch = .true.
@@ -1486,7 +1488,7 @@ contains
         call o_tmp%kill
         call os_mic%kill
         ! if( prog_write ) call progressfile_update(1.0)
-        call qsys_job_finished('simple_commanders_preprocess :: exec_extract')
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_extract'))
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
         contains
 
@@ -1534,8 +1536,8 @@ contains
         type(ori)                               :: o_mic, o
         type(oris)                              :: os_stk
         type(chash),                allocatable :: part_params(:)
-        character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
-        character(len=:),           allocatable :: mic_name, imgkind
+        type(string),               allocatable :: boxfiles(:), stktab(:), parts_fname(:)
+        type(string)                            :: mic_name, imgkind
         integer,                    allocatable :: parts(:,:)
         integer :: imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart,stkind,nptcls
         if( cline%defined('ctf') )then
@@ -1571,7 +1573,7 @@ contains
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
             call o_mic%getter('imgkind', imgkind)
-            if( trim(imgkind).ne.'mic') cycle
+            if( imgkind.ne.'mic') cycle
             call o_mic%getter('intg', mic_name)
             if( .not.file_exists(mic_name) )cycle
             ! update counter
@@ -1600,12 +1602,12 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), part_params=part_params, array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), part_params=part_params, array=L_USE_SLURM_ARR)
         ! ASSEMBLY
         allocate(spproj_parts(params%nparts),parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
         do ipart = 1,params%nparts
-            parts_fname(ipart) = trim(ALGN_FBODY)//int2str_pad(ipart,numlen)//trim(METADATA_EXT)
+            parts_fname(ipart) = ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT
         enddo
         ! copy updated micrographs
         cnt   = 0
@@ -1637,7 +1639,7 @@ contains
                 do istk = 1,spproj_parts(ipart)%os_stk%get_noris()
                     cnt = cnt + 1
                     call os_stk%transfer_ori(cnt, spproj_parts(ipart)%os_stk, istk)
-                    stktab(cnt) = os_stk%get_static(cnt,'stk')
+                    stktab(cnt) = os_stk%get_str(cnt,'stk')
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
@@ -1676,15 +1678,15 @@ contains
         call simple_end('**** SIMPLE_REEXTRACT_DISTR NORMAL STOP ****')
         contains
 
-            character(len=LONGSTRLEN) function boxfile_from_mic(mic)
-                character(len=*), intent(in) :: mic
-                character(len=LONGSTRLEN)    :: box_from_mic
-                integer :: ibox
+            type(string) function boxfile_from_mic(mic)
+                class(string), intent(in) :: mic
+                type(string) :: box_from_mic
+                integer      :: ibox
                 box_from_mic     = fname_new_ext(basename(mic),'box')
                 boxfile_from_mic = NIL
                 do ibox=1,size(boxfiles)
-                    if(trim(basename(boxfiles(ibox))).eq.trim(box_from_mic))then
-                        boxfile_from_mic = trim(boxfiles(ibox))
+                    if(basename(boxfiles(ibox)).eq.box_from_mic)then
+                        boxfile_from_mic = boxfiles(ibox)
                         return
                     endif
                 enddo
@@ -1707,10 +1709,10 @@ contains
         type(ctfparams)               :: ctfparms
         type(stack_io)                :: stkio_w
         type(ptcl_extractor)          :: extractor
-        character(len=:), allocatable :: mic_name, imgkind, ext
+        type(string)                  :: mic_name, imgkind, ext
         logical,          allocatable :: mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:), mic_dims(:,:)
-        character(len=LONGSTRLEN)     :: stack
+        type(string)                  :: stack
         real    :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2), prev_center_sc(2)
         real    :: stk_min, stk_max, stk_mean, stk_sdev, scale
         integer :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
@@ -1754,7 +1756,7 @@ contains
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
             call o_mic%getter('imgkind', imgkind)
-            if( trim(imgkind).ne.'mic') cycle
+            if( imgkind.ne.'mic') cycle
             ! find next selected stack
             do istk=stk_ind,spproj_in%os_stk%get_noris()
                 stk_ind = stk_ind+1
@@ -1827,8 +1829,8 @@ contains
                 prev_box = o_stk%get_int('box')
                 fromp    = o_stk%get_fromp()
                 top      = o_stk%get_top()
-                ext      = fname2ext(trim(basename(mic_name)))
-                stack    = trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
+                ext      = fname2ext(basename(mic_name))
+                stack    = string(EXTRACT_STK_FBODY)//get_fbody(basename(mic_name), ext)//STK_EXT
                 ! updating shifts, positions, states and doc
                 if( allocated(boxcoords) ) deallocate(boxcoords)
                 allocate(boxcoords(2,fromp:top),source=0)
@@ -1959,9 +1961,9 @@ contains
                     endif
                     ! write stack
                     if( l_scale_particles )then
-                        call stkio_w%open(trim(adjustl(stack)), params%osmpd, 'write', box=params%box)
+                        call stkio_w%open(stack, params%osmpd, 'write', box=params%box)
                     else
-                        call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                        call stkio_w%open(stack, params%smpd, 'write', box=params%box)
                     endif
                     do i = 1,nptcls2extract
                         call stkio_w%write(i, build%imgbatch(i))
@@ -1969,9 +1971,9 @@ contains
                     call stkio_w%close
                     if( l_scale_particles )then
                         call spproj_in%os_stk%set(stk_ind,'smpd',params%osmpd) !!
-                        call micrograph_sc%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                        call micrograph_sc%update_header_stats(stack, [stk_min, stk_max, stk_mean, stk_sdev])
                     else
-                        call micrograph%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                        call micrograph%update_header_stats(stack, [stk_min, stk_max, stk_mean, stk_sdev])
                     endif
                     call spproj_in%os_stk%set(stk_ind,'stk',   simple_abspath(stack,check_exists=.false.))
                     call spproj_in%os_stk%set(stk_ind,'box',   params%box)
@@ -2024,7 +2026,7 @@ contains
         call spproj%write(params%outfile)
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls
         ! end gracefully
-        call qsys_job_finished('simple_commanders_preprocess :: exec_reextract')
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_reextract'))
         call build%kill_general_tbox
         call o_mic%kill
         call o_stk%kill
@@ -2044,8 +2046,8 @@ contains
         type(commander_extract)       :: xextract
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
-        character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
-        character(len=LONGSTRLEN)     :: boxfile, thumb_den
+        type(string) :: micname, output_dir_picker, fbody, output_dir_extract
+        type(string) :: boxfile, thumb_den
         integer :: fromto(2), imic, ntot, state, nvalid, i, nptcls
         logical :: l_extract
         ! set oritype
@@ -2060,36 +2062,34 @@ contains
         params%smpd = spproj%os_mic%get(1,'smpd')
         call cline%set('smpd',params%smpd)
         ! output directories
-        output_dir_picker  = trim(DIR_PICKER)
-        if( l_extract ) output_dir_extract = trim(DIR_EXTRACT)
+        output_dir_picker  = DIR_PICKER
+        if( l_extract ) output_dir_extract = DIR_EXTRACT
         if( cline%defined('dir') )then
             output_dir_picker  = filepath(params%dir,output_dir_picker)//'/'
             if( l_extract) output_dir_extract = filepath(params%dir,output_dir_extract)//'/'
         endif
-        call simple_mkdir(output_dir_picker, errmsg="commander_pick_extract; ")
-        if( l_extract ) call simple_mkdir(output_dir_extract,errmsg="commander_pick_extract; ")
+        call simple_mkdir(output_dir_picker)
+        if( l_extract ) call simple_mkdir(output_dir_extract)
         ! picker specs
         select case(trim(params%picker))
-        case('old')
-            if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
-        case('new')
-            if(cline%defined('pickrefs'))then
-            else
-                if( .not.cline%defined('moldiam') )then
-                    THROW_HARD('MOLDIAM required for picker=new')
+            case('new')
+                if(cline%defined('pickrefs'))then
+                else
+                    if( .not.cline%defined('moldiam') )then
+                        THROW_HARD('MOLDIAM required for picker=new')
+                    endif
                 endif
-            endif
-        case('segdiam')
-            if( .not.cline%defined('moldiam_max') )then
-                THROW_WARN('MOLDIAM_MAX not set on command line, falling back on default value: '//int2str(int(params%moldiam_max))//' A')
-            endif
-        case DEFAULT
-            THROW_HARD('Unsupported PICKER: '//trim(params%picker))
+            case('segdiam')
+                if( .not.cline%defined('moldiam_max') )then
+                    THROW_WARN('MOLDIAM_MAX not set on command line, falling back on default value: '//int2str(int(params%moldiam_max))//' A')
+                endif
+            case DEFAULT
+                THROW_HARD('Unsupported PICKER: '//trim(params%picker))
         end select
         ! command lines
         if( l_extract )then
             cline_extract = cline
-            call cline_extract%set('dir', trim(output_dir_extract))
+            call cline_extract%set('dir', output_dir_extract)
             call cline_extract%set('pcontrast', params%pcontrast)
             if( cline%defined('box_extract') ) call cline_extract%set('box', params%box_extract)
             call cline%delete('box')
@@ -2097,7 +2097,7 @@ contains
         endif
         ! file name
         if( cline%defined('fbody') )then
-            fbody = trim(params%fbody)
+            fbody = params%fbody
         else
             fbody = ''
         endif
@@ -2124,7 +2124,7 @@ contains
             call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, thumb_den, nptcls)
             call o_mic%set('nptcls', nptcls)
             if( nptcls > 0 )then
-                call o_mic%set('boxfile', trim(boxfile))
+                call o_mic%set('boxfile', boxfile)
                 call o_mic%set('thumb_den', thumb_den)
             else
                 call o_mic%set_state(0)
@@ -2158,7 +2158,7 @@ contains
             call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! end gracefully
-        call qsys_job_finished(  'simple_commanders_preprocess :: exec_pick_extract' )
+        call qsys_job_finished(string('simple_commanders_preprocess :: exec_pick_extract'))
         call o_mic%kill
         call piter%kill
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
@@ -2225,8 +2225,8 @@ contains
         ! write ranks to project file
         call spproj%write_segment_inside('cls2D')
         ! write class averages
-        call write_imgarr(cavg_imgs, SHAPE_RANKED_CAVGS_MRCNAME, order)
-        call spproj%shape_ranked_cavgs2jpg(cavg_inds, SHAPE_RANKED_CAVGS_JPGNAME, xtiles, ytiles)
+        call write_imgarr(cavg_imgs, string(SHAPE_RANKED_CAVGS_MRCNAME), order)
+        call spproj%shape_ranked_cavgs2jpg(cavg_inds, string(SHAPE_RANKED_CAVGS_JPGNAME), xtiles, ytiles)
         ! kill
         call spproj%kill
         call dealloc_imgarr(cavg_imgs)
@@ -2317,8 +2317,8 @@ contains
         call moldiamori%set(1, 'moldiam',         moldiam)
         call moldiamori%set(1, 'mskdiam',         mskdiam)
         call moldiamori%set(1, 'box_for_extract', box_for_extract)
-        if(file_exists(trim(STREAM_MOLDIAM))) call del_file(trim(STREAM_MOLDIAM))
-        call moldiamori%write(1, trim(STREAM_MOLDIAM))
+        if(file_exists(STREAM_MOLDIAM)) call del_file(STREAM_MOLDIAM)
+        call moldiamori%write(1, string(STREAM_MOLDIAM))
         call moldiamori%kill
         ! expand in in-plane rotation, clip and write to file
         ldim_clip = [box_for_pick, box_for_pick, 1]
@@ -2338,7 +2338,7 @@ contains
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
                     call ref2D%clip(ref2D_clip)
-                    call ref2D_clip%write(trim(PICKREFS_FBODY)//params%ext, cnt)
+                    call ref2D_clip%write(string(PICKREFS_FBODY)//params%ext, cnt)
                     rot = rot + ang
                 end do
             end do
@@ -2346,7 +2346,7 @@ contains
             ! should never happen
             do iref=1,norefs
                 call projs(iref)%clip(ref2D_clip)
-                call ref2D_clip%write(trim(PICKREFS_FBODY)//params%ext, iref)
+                call ref2D_clip%write(string(PICKREFS_FBODY)//params%ext, iref)
             end do
         endif
         ! cleanup
@@ -2358,7 +2358,7 @@ contains
         call ref2D%kill
         call ref2D_clip%kill
         ! end gracefully
-        call simple_touch('MAKE_PICKREFS_FINISHED', errmsg='In: commander_preprocess::exec_make_pickrefs')
+        call simple_touch('MAKE_PICKREFS_FINISHED')
         call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
     end subroutine exec_make_pickrefs
 

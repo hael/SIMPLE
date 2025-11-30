@@ -378,10 +378,10 @@ contains
 
     subroutine read( self, fname )
         class(class_frcs), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer          :: funit, io_stat
         call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        call fileiochk('class_frcs; read; open for read '//trim(fname), io_stat)
+        call fileiochk('class_frcs; read; open for read '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) self%file_header
         ! re-create the object according to file_header info
         call self%new(nint(self%file_header(1)), nint(self%file_header(2)), self%file_header(3), nint(self%file_header(4)))
@@ -391,10 +391,10 @@ contains
 
     subroutine write( self, fname )
         class(class_frcs), intent(in) :: self
-        character(len=*),  intent(in) :: fname
+        class(string),     intent(in) :: fname
         integer          :: funit, io_stat
         call fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        call fileiochk('class_frcs; write; open for write '//trim(fname), io_stat)
+        call fileiochk('class_frcs; write; open for write '//fname%to_char(), io_stat)
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) self%frcs
         call fclose(funit)
@@ -402,7 +402,7 @@ contains
 
     subroutine print_frcs( self, fname, state )
         class(class_frcs), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer, optional, intent(in)    :: state
         real, allocatable :: res(:)
         integer :: j, sstate, icls
@@ -423,10 +423,11 @@ contains
     subroutine plot_frcs( self, tmpl_fname )
         use simple_fsc, only: plot_fsc
         class(class_frcs), intent(inout) :: self
-        character(len=*),  intent(in)    :: tmpl_fname
-        character(len=:), allocatable :: fname, tmp, all_pdfs, cmd
+        class(string),     intent(in)    :: tmpl_fname
+        character(len=:), allocatable :: tmp, all_pdfs, cmd
         real,             allocatable :: frc(:)
-        integer :: s, icls
+        type(string) :: fname
+        integer      :: s, icls
         allocate(frc(self%filtsz))
         all_pdfs = ''
         do s = 1,self%nstates
@@ -441,8 +442,8 @@ contains
                     all_pdfs = all_pdfs//' '//tmp
                 endif
             enddo
-            fname = trim(tmpl_fname)//'_state'//int2str_pad(s,2)//'.pdf'
-            cmd   = 'gs -dNOPAUSE -q -sDEVICE=pdfwrite -sOUTPUTFILE='//fname//' -dBATCH '//all_pdfs
+            fname = tmpl_fname%to_char()//'_state'//int2str_pad(s,2)//'.pdf'
+            cmd   = 'gs -dNOPAUSE -q -sDEVICE=pdfwrite -sOUTPUTFILE='//fname%to_char()//' -dBATCH '//all_pdfs
             call execute_command_line(cmd)
             call execute_command_line('rm '//all_pdfs)
         enddo

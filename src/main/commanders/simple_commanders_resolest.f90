@@ -3,12 +3,12 @@ module simple_commanders_resolest
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
-use simple_image_msk,         only: image_msk
+use simple_image_msk,      only: image_msk
+use simple_parameters,     only: parameters
 use simple_fsc
 implicit none
 #include "simple_local_flags.inc"
@@ -64,13 +64,13 @@ contains
     subroutine exec_fsc( self, cline )
         class(commander_fsc), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
-        type(parameters)          :: params
-        type(image)               :: even, odd
-        type(image_msk)              :: mskvol
-        character(len=LONGSTRLEN) :: fsc_templ
-        real,         allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
-        integer :: j, k_hp, k_lp, nyq
-        real    :: res_fsc05, res_fsc0143
+        real, allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
+        type(parameters)  :: params
+        type(image)       :: even, odd
+        type(image_msk)   :: mskvol
+        type(string)      :: fsc_templ
+        integer           :: j, k_hp, k_lp, nyq
+        real              :: res_fsc05, res_fsc0143
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! read even/odd pair
@@ -103,12 +103,12 @@ contains
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
         call even%kill
         call odd%kill
-        fsc_templ = trim(FSC_FBODY)//int2str_pad(1,2)
-        call arr2file(fsc, trim(fsc_templ)//trim(BIN_EXT))
+        fsc_templ = FSC_FBODY//int2str_pad(1,2)
+        call arr2file(fsc, fsc_templ//BIN_EXT)
         if( params%l_filemsk )then
-            call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ)
+            call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ%to_char())
         else
-            call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ)
+            call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ%to_char())
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
@@ -151,15 +151,15 @@ contains
         call polar_cavger_merge_eos_and_norm(reforis=build%eulspace)
         ! write
         allocate(cavgs(params%nspace))
-        call polar_cavger_write('cavgs_even.bin', 'even')
-        call polar_cavger_write('cavgs_odd.bin',  'odd')
-        call polar_cavger_write('cavgs.bin',      'merged')
+        call polar_cavger_write(string('cavgs_even.bin'), 'even')
+        call polar_cavger_write(string('cavgs_odd.bin'),  'odd')
+        call polar_cavger_write(string('cavgs.bin'),     'merged')
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
-        call write_imgarr(cavgs, 'cavgs_even.mrc')
+        call write_imgarr(cavgs, string('cavgs_even.mrc'))
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
-        call write_imgarr(cavgs, 'cavgs_odd.mrc')
+        call write_imgarr(cavgs, string('cavgs_odd.mrc'))
         call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
-        call write_imgarr(cavgs, 'cavgs_merged.mrc')
+        call write_imgarr(cavgs, string('cavgs_merged.mrc'))
         call polar_cavger_kill
         call killimgbatch
         call pftcc%kill
@@ -175,7 +175,7 @@ contains
         type(parameters)  :: params
         type(image)       :: even, odd, mskvol
         logical           :: have_mask_file
-        character(len=90) :: file_tag
+        type(string)      :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -213,11 +213,11 @@ contains
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
         endif
-        call odd%write(trim(file_tag)//'_odd.mrc')
-        call even%write(trim(file_tag)//'_even.mrc')
+        call odd%write(file_tag//'_odd.mrc')
+        call even%write(file_tag//'_even.mrc')
         call odd%add(even)
         call odd%mul(0.5)
-        call odd%write(trim(file_tag)//'_avg.mrc')
+        call odd%write(file_tag//'_avg.mrc')
         ! destruct
         call odd%kill
         call even%kill
@@ -233,7 +233,7 @@ contains
         type(parameters)  :: params
         type(image)       :: even, odd, mskvol, odd_filt
         real              :: lpopt
-        character(len=90) :: file_tag
+        type(string)      :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call odd%new([params%box,params%box,params%box], params%smpd)
@@ -255,7 +255,7 @@ contains
         call  odd%mask(params%msk, 'soft')
         call estimate_lplim(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
         print *, 'found optimal low-pass limit: ', lpopt
-        call odd_filt%write('odd_filt.mrc')
+        call odd_filt%write(string('odd_filt.mrc'))
         ! destruct
         call odd%kill
         call odd_filt%kill
@@ -273,8 +273,8 @@ contains
         type(image_msk)         :: envmsk
         logical, allocatable :: l_msk(:,:,:)
         real,    allocatable :: fsc(:), res(:), pspec(:), pspec_icm(:)
-        character(len=90)    :: file_tag
-        real                 :: mskrad
+        type(string) :: file_tag
+        real         :: mskrad
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -304,9 +304,9 @@ contains
         call avg_icm%add(odd_icm)
         call avg_icm%mul(0.5)
         file_tag = 'icm_3D_filter'
-        call even_icm%write('vol2_'//trim(file_tag)//'.mrc')
-        call odd_icm%write('vol1_'//trim(file_tag)//'.mrc')
-        call avg_icm%write('vol_avg_'//trim(file_tag)//'.mrc')
+        call even_icm%write(string('vol2_')//file_tag//'.mrc')
+        call odd_icm%write(string('vol1_')//file_tag//'.mrc')
+        call avg_icm%write(string('vol_avg_')//file_tag//'.mrc')
         call even%kill
         call odd%kill
         call even_icm%kill
@@ -344,7 +344,7 @@ contains
         ! write output and destruct
         do iptcl = 1, params%nptcls
             print *, 'found optimal low-pass limit: ', iptcl, lpsopt(iptcl)
-            call odd_filt(iptcl)%write('odd_filt.mrc', iptcl)
+            call odd_filt(iptcl)%write(string('odd_filt.mrc'), iptcl)
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_FILTER2D NORMAL STOP ****')
@@ -353,9 +353,9 @@ contains
     subroutine exec_icm2D( self, cline )
         class(commander_icm2D), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
-        character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: odd(:), even(:)
-        logical,          allocatable :: mask(:)
+        type(image), allocatable :: odd(:), even(:)
+        logical,     allocatable :: mask(:)
+        type(string)     :: file_tag
         type(parameters) :: params
         real             :: minmax(2)
         integer          :: iptcl
@@ -384,11 +384,11 @@ contains
         !$omp end parallel do
         ! write output and destruct
         do iptcl = 1, params%nptcls
-            call even (iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
-            call odd  (iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
+            call even (iptcl)%write(file_tag//'_even.mrc', iptcl)
+            call odd  (iptcl)%write(file_tag//'_odd.mrc',  iptcl)
             call even (iptcl)%add(odd(iptcl))
             call even (iptcl)%mul(0.5)
-            call even (iptcl)%write(trim(file_tag)//'_avg.mrc', iptcl)
+            call even (iptcl)%write(file_tag//'_avg.mrc', iptcl)
             call odd  (iptcl)%kill()
             call even (iptcl)%kill()
         end do
@@ -506,14 +506,14 @@ contains
         if( .not. cline%defined('lp') )then
             params%lp = frcs%estimate_lp_for_align(state=1, crit0143=.false.)
         endif
-        call frcs%write(FRCS_FILE)
+        call frcs%write(string(FRCS_FILE))
         params%kfromto(1) = max(2,calc_fourier_index(params%hp, params%box, params%smpd))
         params%kfromto(2) = min(fdim(params%box)-1, calc_fourier_index(params%lp, params%box, params%smpd))
         write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT(ANGS): ', params%lp
         ! PFTCC
         call pftcc%new(params%ncls, [1,batchsz_max], params%kfromto)
         call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-        call eucl_sigma%new(SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat', params%box)
+        call eucl_sigma%new(string(SIGMA2_FBODY)//int2str_pad(params%part,params%numlen)//'.dat', params%box)
         call eucl_sigma%read_part(  build%spproj_field)
         call eucl_sigma%read_groups(build%spproj_field)
         !$omp parallel do schedule(static) default(shared) private(icls,ithr) proc_bind(close)
@@ -618,7 +618,7 @@ contains
         call pftcc%kill
         call build%spproj%write(params%projfile)
         ! Write array
-        call fopen(funit, 'scores.mat', form='UNFORMATTED', iostat=stat)
+        call fopen(funit, string('scores.mat'), form='UNFORMATTED', iostat=stat)
         write(funit) [params%ncls,nptcls]
         write(funit) pinds
         if( l_ctf) write(funit) build%spproj_field%get_all('dfx')
@@ -646,7 +646,7 @@ contains
         real, parameter  :: LPSTART_LB=10., LPSTART_DEFAULT=20.
         real, parameter  :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
         real, parameter  :: LPSTART_BOUNDS(2) = [10.,20.] 
-        character(len=:),  allocatable :: frcs_fname
+        type(string)     :: frcs_fname
         real,              allocatable :: frcs_avg(:)
         integer,           allocatable :: states(:)
         type(lp_crop_inf), allocatable :: lpinfo(:)

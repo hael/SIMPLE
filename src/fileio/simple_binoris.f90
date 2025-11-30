@@ -2,14 +2,15 @@
 module simple_binoris
 !$ use omp_lib
 use, intrinsic :: ISO_C_BINDING
-use simple_fileio
-use simple_map_reduce
-use simple_syslib
-use simple_string_utils
-use simple_ori
-use simple_oris
 use simple_defs
 use simple_defs_ori
+use simple_fileio
+use simple_map_reduce
+use simple_ori
+use simple_oris
+use simple_string
+use simple_string_utils
+use simple_syslib
 implicit none
 
 public :: binoris, binoris_seginfo
@@ -31,11 +32,11 @@ end type binoris_seginfo
 
 type binoris
     private
-    type(binoris_seginfo)         :: header(MAX_N_SEGMENTS)
-    character(len=:), allocatable :: fname
-    integer                       :: n_segments  = 0
-    integer                       :: funit       = 0
-    logical                       :: l_open      = .false.
+    type(binoris_seginfo) :: header(MAX_N_SEGMENTS)
+    type(string)          :: fname
+    integer               :: n_segments  = 0
+    integer               :: funit       = 0
+    logical               :: l_open      = .false.
   contains
     ! I/O
     procedure          :: open
@@ -76,22 +77,22 @@ contains
 
     subroutine open( self, fname, del_if_exists )
         class(binoris),    intent(inout) :: self          !< instance
-        character(len=*),  intent(in)    :: fname         !< filename
+        class(string),     intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
         integer(kind=8) :: filesz
         integer(kind(ENUM_ORISEG)) :: isegment
         if( present(del_if_exists) )then
             if( del_if_exists )then
-                call del_file(trim(fname))
+                call del_file(fname)
             endif
         endif
-        if( .not. file_exists(trim(fname)) )then
+        if( .not. file_exists(fname) )then
             call self%clear_segments
             call open_local
             return
         endif
         call open_local
-        self%fname = trim(fname)
+        self%fname = fname
         ! check size
         filesz = funit_size(self%funit)
         if( filesz == -1 )then
@@ -99,7 +100,7 @@ contains
         else if( filesz >= N_BYTES_HEADER )then
             ! ok
         else
-            THROW_HARD('size of file: '//trim(fname)//' too small to contain a header')
+            THROW_HARD('size of file: '//fname%to_char()//' too small to contain a header')
         endif
         ! clear segments before reading header
         call self%clear_segments
@@ -116,9 +117,9 @@ contains
             subroutine open_local
                 integer :: io_stat, tmpunit
                 if( .not. self%l_open )then
-                    call fopen(tmpunit, trim(fname), access='STREAM', action='READWRITE',&
+                    call fopen(tmpunit, fname, access='STREAM', action='READWRITE',&
                         &status='UNKNOWN', form='UNFORMATTED', iostat=io_stat)
-                    call fileiochk('binoris ; open_local '//trim(fname), io_stat)
+                    call fileiochk('binoris ; open_local '//fname%to_char(), io_stat)
                     self%funit  = tmpunit
                     self%l_open = .true.
                 endif
@@ -169,26 +170,26 @@ contains
     subroutine write_segment_inside_1( self, isegment, os, fromto )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris), optional,      intent(inout) :: os ! indexed from 1 to nptcls
+        class(oris),                intent(in)    :: os ! indexed from 1 to nptcls
         integer,     optional,      intent(in)    :: fromto(2)
-        character(len=:), allocatable :: str_dyn
-        integer :: i, nspaces, noris
-        integer(kind(ENUM_ORISEG)) :: iseg
-        integer(kind=8) :: end_part1, start_part3, end_part3
-        integer(kind=8) :: ibytes, first_data_byte
-        real            :: ptcl_record(N_PTCL_ORIPARAMS)
-        character(len=1), allocatable ::bytearr_part3(:)
+        type(string)                  :: str_dyn
+        integer                       :: i, nspaces, noris
+        integer(kind(ENUM_ORISEG))    :: iseg
+        integer(kind=8)               :: end_part1, start_part3, end_part3
+        integer(kind=8)               :: ibytes, first_data_byte
+        real                          :: ptcl_record(N_PTCL_ORIPARAMS)
+        character(len=1), allocatable :: bytearr_part3(:)
         noris = os%get_noris()
         if( noris == 0 ) return
         if( present(fromto) )then
             if( fromto(1) < 1 .or. fromto(2) > noris )then
-                write(logfhandle,*) 'filename',trim(self%fname)
+                write(logfhandle,*) 'filename', self%fname%to_char()
                 write(logfhandle,*) 'noris : ', noris
                 write(logfhandle,*) 'fromto: ', fromto
                 THROW_HARD('fromto out of range')
             endif
         endif
-        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! ranges and raw bytes
         call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
@@ -207,11 +208,11 @@ contains
         else
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
                 str_dyn = os%ori2str(i)
-                nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
+                nspaces = self%header(isegment)%n_bytes_per_record - str_dyn%strlen_trim()
                 if( nspaces > 0 )then
-                    write(unit=self%funit,pos=ibytes) trim(str_dyn)//spaces(nspaces)
+                    write(unit=self%funit,pos=ibytes) str_dyn%to_char()//spaces(nspaces)
                 else
-                    write(unit=self%funit,pos=ibytes) trim(str_dyn)
+                    write(unit=self%funit,pos=ibytes) str_dyn%to_char()
                 endif
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
@@ -228,7 +229,7 @@ contains
             if( first_data_byte > 0 )then
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
-                write(logfhandle,*) 'filename',trim(self%fname)
+                write(logfhandle,*) 'filename', self%fname%to_char()
                 write(logfhandle,*) 'first_data_byte: ', first_data_byte
                 THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
@@ -241,17 +242,16 @@ contains
     subroutine write_segment_inside_2( self, isegment, os_strings, fromto, strlen_max )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        type(str4arr),              intent(in)    :: os_strings(:)
+        class(string),              intent(in)    :: os_strings(:)
         integer,                    intent(in)    :: fromto(2), strlen_max
-        character(len=:), allocatable :: str_dyn
-        integer(kind(ENUM_ORISEG)) :: iseg
-        integer         :: i, nspaces, noris
-        integer(kind=8) :: end_part1, start_part3, end_part3
-        integer(kind=8) :: ibytes, first_data_byte
         character(len=1), allocatable :: bytearr_part3(:)
+        integer(kind(ENUM_ORISEG)) :: iseg
+        integer                    :: i, nspaces, noris
+        integer(kind=8)            :: end_part1, start_part3, end_part3
+        integer(kind=8)            :: ibytes, first_data_byte
         noris = size(os_strings)
         if( noris == 0 ) return
-        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! ranges and raw bytes
         call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
@@ -262,12 +262,11 @@ contains
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            str_dyn = os_strings(i)%str
-            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
+            nspaces = self%header(isegment)%n_bytes_per_record - os_strings(i)%strlen_trim()
             if( nspaces > 0 )then
-                write(unit=self%funit,pos=ibytes) trim(str_dyn)//spaces(nspaces)
+                write(unit=self%funit,pos=ibytes) os_strings(i)%to_char()//spaces(nspaces)
             else
-                write(unit=self%funit,pos=ibytes) trim(str_dyn)
+                write(unit=self%funit,pos=ibytes) os_strings(i)%to_char()
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
@@ -283,7 +282,7 @@ contains
             if( first_data_byte > 0 )then
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
-                write(logfhandle,*) 'filename',trim(self%fname)
+                write(logfhandle,*) 'filename', self%fname%to_char()
                 write(logfhandle,*) 'first_data_byte: ', first_data_byte
                 THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
@@ -332,13 +331,13 @@ contains
         integer(kind(ENUM_ORISEG)),       intent(in) :: isegment
         integer(kind=8),               intent(in)    :: end_part1, start_part3, end_part3
         character(len=1), allocatable, intent(in)    :: bytearr_part3(:)
-        integer(kind=8) :: n_bytes_part3_orig, n_bytes_part3
+        integer(kind=8)            :: n_bytes_part3_orig, n_bytes_part3
         integer(kind(ENUM_ORISEG)) :: iseg
         ! update byte ranges in header
         call self%update_byte_ranges
         ! validate byte ranges
         if( self%header(isegment)%first_data_byte - 1 /= end_part1 )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             write(logfhandle,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
             write(logfhandle,*) 'end of part 1 (bytes)     : ', end_part1
             THROW_HARD('end of part 1 of file does not match first data byte of segment')
@@ -354,7 +353,7 @@ contains
             ! compare with original
             n_bytes_part3_orig = end_part3 - start_part3 + 1
             if( n_bytes_part3_orig /= n_bytes_part3 )then
-                write(logfhandle,*) 'filename',trim(self%fname)
+                write(logfhandle,*) 'filename', self%fname%to_char()
                 write(logfhandle,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
                 write(logfhandle,*) '# bytes of part 3 in updated : ', n_bytes_part3
                 THROW_HARD('byte sizes of part3 in original and updated do not match')
@@ -367,7 +366,7 @@ contains
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),                intent(in)    :: os ! indexed from 1 to nptcls
         integer, optional,          intent(in)    :: fromto(2)
-        character(len=:), allocatable :: str_dyn
+        type(string)    :: str_dyn
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
         integer         :: i, nspaces, noris
         integer(kind=8) :: ibytes
@@ -375,13 +374,13 @@ contains
         if( noris == 0 ) return
         if( present(fromto) )then
             if( fromto(1) < 1 .or. fromto(2) > noris )then
-                write(logfhandle,*) 'filename',trim(self%fname)
+                write(logfhandle,*) 'filename', self%fname%to_char()
                 write(logfhandle,*) 'noris : ', noris
                 write(logfhandle,*) 'fromto: ', fromto
                 THROW_HARD('fromto out of range')
             endif
         endif
-        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! add segment to stack, this sets all the information needed for allocation
         call self%add_segment_1(isegment, os, fromto)
         ! update byte ranges in header
@@ -397,11 +396,11 @@ contains
         else
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
                 str_dyn = os%ori2str(i)
-                nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
+                nspaces = self%header(isegment)%n_bytes_per_record - str_dyn%strlen_trim()
                 if( nspaces > 0 )then
-                    write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
+                    write(unit=self%funit,pos=ibytes) str_dyn%to_char()//spaces(nspaces)
                 else
-                    write(unit=self%funit,pos=ibytes) str_dyn
+                    write(unit=self%funit,pos=ibytes) str_dyn%to_char()
                 endif
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
@@ -412,10 +411,10 @@ contains
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         integer,                    intent(in)    :: fromto(2), strlen_max
-        type(str4arr),              intent(inout) :: sarr(:) ! indexed from 1 to nptcls
+        class(string),              intent(inout) :: sarr(:) ! indexed from 1 to nptcls
         integer :: i, nspaces
         integer(kind=8) :: ibytes
-        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! add segment to stack
         call self%add_segment_2(isegment, fromto, strlen_max)
         ! update byte ranges in header
@@ -423,11 +422,11 @@ contains
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(sarr(i)%str)
+            nspaces = self%header(isegment)%n_bytes_per_record - sarr(i)%strlen_trim()
             if( nspaces > 0 )then
-                write(unit=self%funit,pos=ibytes) sarr(i)%str//spaces(nspaces)
+                write(unit=self%funit,pos=ibytes) sarr(i)%to_char()//spaces(nspaces)
             else
-                write(unit=self%funit,pos=ibytes) sarr(i)%str
+                write(unit=self%funit,pos=ibytes) sarr(i)%to_char()
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
@@ -441,7 +440,7 @@ contains
         integer :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
@@ -473,7 +472,7 @@ contains
         integer,                    intent(in)    :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
@@ -505,9 +504,9 @@ contains
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(ori),                 intent(inout) :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             write(logfhandle,*) 'isegment: ', isegment
             write(logfhandle,*) 'n_segments: ', self%n_segments
             THROW_HARD('isegment out of range')
@@ -527,26 +526,26 @@ contains
         class(oris),                intent(inout) :: os
         integer,          optional, intent(in)    :: fromto(2)
         logical,          optional, intent(in)    :: only_ctfparams_state_eo, wthreads
-        integer,       allocatable :: batches(:,:)
-        character(len=:), allocatable ::  tmp_string
+        integer,          allocatable :: batches(:,:)
+        character(len=:), allocatable :: tmp_string
         integer(kind=8) :: ibytes, ipos
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
         integer         :: fromto_here(2), i, irec, n, nl, nbatches, ibatch, nbatch, nthr
         logical         :: present_fromto, oonly_ctfparams_state_eo
-        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
         fromto_here = self%header(isegment)%fromto
         if( present(fromto) ) fromto_here = fromto
         if( fromto_here(1)<self%header(isegment)%fromto(1) .or. fromto_here(1)>self%header(isegment)%fromto(2) )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             THROW_HARD('Invalid fromto(1) index, out of range')
         endif
         if( fromto_here(2)<self%header(isegment)%fromto(1) .or. fromto_here(2)>self%header(isegment)%fromto(2) )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             THROW_HARD('Invalid fromto(2) index, out of range')
         endif
         nthr = 1
@@ -611,12 +610,13 @@ contains
     subroutine read_segment_2( self, isegment, sarr )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        type(str4arr),              intent(inout) :: sarr(:)
-        integer :: i
+        class(string),              intent(inout) :: sarr(:)
+        character(len=:), allocatable :: buffer
+        integer         :: i
         integer(kind=8) :: ibytes
-        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments )then
-            write(logfhandle,*) 'filename',trim(self%fname)
+            write(logfhandle,*) 'filename', self%fname%to_char()
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
@@ -624,9 +624,11 @@ contains
             ! read orientation data into array of allocatable strings
             ibytes = self%header(isegment)%first_data_byte
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-                allocate(character(len=self%header(isegment)%n_bytes_per_record) :: sarr(i)%str)
-                read(unit=self%funit,pos=ibytes) sarr(i)%str
-                ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+                allocate(character(len=self%header(isegment)%n_bytes_per_record) :: buffer)
+                read(unit=self%funit,pos=ibytes) buffer
+                sarr(i) = buffer
+                ibytes  = ibytes + self%header(isegment)%n_bytes_per_record
+                deallocate(buffer)
             end do
         else
             ! empty segment, nothing to do
@@ -637,18 +639,21 @@ contains
         class(binoris),                intent(inout) :: self
         integer(kind(ENUM_ORISEG)),    intent(in)    :: isegment
         integer(kind=8),               intent(inout) :: ibytes
-        character(len=:), allocatable, intent(inout) :: str
+        class(string),                 intent(inout) :: str
+        character(len=:), allocatable :: buffer
         type(ori) :: o
         real      :: ptcl_record(N_PTCL_ORIPARAMS)
-        if( allocated(str) ) deallocate(str)
+        call str%kill
         if( is_particle_seg(isegment) )then ! ptcl2D/3D segment, see simple_sp_project
             call o%new(is_ptcl=.true.)
             read(unit=self%funit,pos=ibytes) ptcl_record
             call o%prec2ori(ptcl_record)
             str = o%ori2str()
         else
-            allocate(character(len=self%header(isegment)%n_bytes_per_record) :: str)
-            read(unit=self%funit,pos=ibytes) str
+            allocate(character(len=self%header(isegment)%n_bytes_per_record) :: buffer)
+            read(unit=self%funit,pos=ibytes) buffer
+            str = buffer
+            deallocate(buffer)
         endif
         ibytes = ibytes + self%header(isegment)%n_bytes_per_record
     end subroutine read_record

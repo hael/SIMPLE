@@ -2,18 +2,18 @@
 
 ! src/defs
 use simple_ansi_ctrls
+use simple_defs
 use simple_defs_atoms
 use simple_defs_conv
 use simple_defs_fname
 use simple_defs_ori
 use simple_defs_stream
-use simple_defs
 use simple_fftw3
 ! src/fileio
 use simple_binoris
+use simple_class_sample_io
 use simple_error
 use simple_fileio
-use simple_class_sample_io
 use simple_imghead
 use simple_nrtxtfile
 use simple_syslib
@@ -40,7 +40,8 @@ use simple_ran_tabu
 use simple_rnd
 use simple_sauron
 use simple_srch_sort_loc
-use simple_string_utils
 use simple_stat
-use simple_timer_omp
+use simple_string
+use simple_string_utils
 use simple_timer
+use simple_timer_omp

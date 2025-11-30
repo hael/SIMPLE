@@ -9,11 +9,11 @@ use simple_moviewatcher,          only: moviewatcher
 use simple_commanders_preprocess
 use simple_sp_project
 implicit none
-real, parameter :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
-character(len=LONGSTRLEN), allocatable :: dataset_cmds(:)
-character(len=LONGSTRLEN), allocatable :: micstab(:), filetab(:), movfnames(:)
-character(len=:),          allocatable :: output_dir, imgkind
-integer,                   allocatable :: orimap(:)
+real,         parameter          :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
+type(string), allocatable        :: dataset_cmds(:)
+type(string), allocatable        :: micstab(:), filetab(:), movfnames(:)
+type(string)                     :: output_dir, imgkind
+integer,      allocatable        :: orimap(:)
 type(cmdline)                    :: cline, cline_dataset, cline_new_project, cline_import_movies, cline_preprocess
 type(cmdline)                    :: cline_select, cline_mini_stream
 type(parameters)                 :: params
@@ -25,8 +25,8 @@ type(commander_selection)        :: xsel
 type(sp_project)                 :: spproj
 type(moviewatcher)               :: movie_buff
 integer                          :: i, ndata_sets, status, n_nonzero, nmovf
-character(len=LONGSTRLEN)        :: abspath, projfile
-character(len=LONGSTRLEN)        :: filetab_file='filetab.txt'
+type(string)                     :: abspath, projfile
+character(len=*), parameter      :: filetab_file='filetab.txt'
 ! Parsing
 if( command_argument_count() < 1 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mini_stream fname=filetab.txt'
@@ -40,10 +40,10 @@ call params%new(cline)
 call read_filetable(params%fname, dataset_cmds)
 ndata_sets=size(dataset_cmds)
 ! projname=system_name smpd=1.3 cs=2.7 kv=300 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200 nram=100
-call getcwd(abspath)
-output_dir=trim(adjustl(abspath))
+call simple_getcwd(abspath)
+output_dir=abspath
 do i = 1, ndata_sets
-    call cline_dataset%read(dataset_cmds(i))
+    call cline_dataset%read(dataset_cmds(i)%to_char())
     call cline_dataset%checkvar('projname',        1)
     call cline_dataset%checkvar('smpd',            2)
     call cline_dataset%checkvar('cs',              3)
@@ -63,13 +63,13 @@ do i = 1, ndata_sets
     call cline_new_project%set('projname',  params%projname)
     call xnew_project%execute_safe(cline_new_project)
     call cline_new_project%kill()
-    projfile = trim(params%projname)//'.simple'
+    projfile = params%projname//'.simple'
     ! create filetab with a subset of overshoot randomly selected movies
     movie_buff = moviewatcher(1,params%dir_movies)
     call movie_buff%watch(nmovf, movfnames)
     call movie_buff%kill
     filetab = sample_filetab(movfnames, ceiling(real(params%nran)*OVERSHOOT))
-    call write_filetable(filetab_file, filetab)
+    call write_filetable(string(filetab_file), filetab)
     ! movie import
     call cline_import_movies%set('prg',                'import_movies')
     call cline_import_movies%set('mkdir',                        'yes')
@@ -84,11 +84,11 @@ do i = 1, ndata_sets
     ! check either movies or micrographs
     call spproj%read(projfile)
     imgkind = spproj%get_mic_kind(1)
-    if( trim(imgkind).eq.'intg' )then
+    if( imgkind.eq.'intg' )then
         ! nothing to do
     else
         ! preprocess
-        call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
+        call simple_chdir(output_dir//'/'//params%projname%to_char())
         call cline_preprocess%set('prg',                  'preprocess')
         call cline_preprocess%set('mkdir',                       'yes')
         call cline_preprocess%set('gainref',            params%gainref)
@@ -105,7 +105,7 @@ do i = 1, ndata_sets
         call cline_preprocess%kill()
     endif
     ! reject based on CTF resolution and ice score
-    call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
+    call simple_chdir(output_dir//'/'//params%projname%to_char())
     call cline_select%delete('nran')
     call cline_select%set('prg',                           'selection')
     call cline_select%set('mkdir',                               'yes')
@@ -120,7 +120,7 @@ do i = 1, ndata_sets
     n_nonzero = spproj%get_n_insegment_state('mic', 1)
     if( n_nonzero > params%nran )then
         ! make random selection
-        call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
+        call simple_chdir(output_dir//'/'//params%projname%to_char())
         call cline_select%delete('ctfresthreshold')
         call cline_select%delete('icefracthreshold')
         call cline_select%set('prg',                       'selection')
@@ -132,8 +132,8 @@ do i = 1, ndata_sets
     endif
     call spproj%read(projfile)
     call spproj%get_mics_table(micstab, orimap)
-    call simple_chdir(trim(trim(adjustl(output_dir))//'/'//params%projname))
-    call write_filetable('intgs.txt',micstab)
+    call simple_chdir(output_dir//'/'//params%projname%to_char())
+    call write_filetable(string('intgs.txt'),micstab)
     ! mini stream 
     call cline_mini_stream%set('prg',                    'mini_stream')
     call cline_mini_stream%set('mkdir',                          'yes')
@@ -152,6 +152,6 @@ do i = 1, ndata_sets
     call cline_preprocess%kill()
     call cline_mini_stream%kill()
     call cline_dataset%kill()
-    call simple_chdir(trim(adjustl(output_dir)))
+    call simple_chdir(output_dir)
 enddo
 end program simple_test_mini_stream

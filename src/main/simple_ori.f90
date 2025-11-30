@@ -2,19 +2,20 @@
 module simple_ori
 use json_kinds
 use json_module
+use simple_chash
 use simple_defs
 use simple_defs_ori
 use simple_hash
-use simple_chash
-use simple_rnd
 use simple_is_check_assert
-use simple_string_utils
 use simple_math
-use simple_stat
 use simple_nrtxtfile
+use simple_rnd
+use simple_stat
+use simple_string
+use simple_string_utils
 implicit none
 
-public :: ori, test_ori
+public :: ori
 public :: euler2m, m2euler, m2euler_fast, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
 public :: geodesic_frobdev
 private
@@ -49,8 +50,8 @@ type :: ori
     procedure          :: swape1e3
     procedure          :: set_shift
     procedure          :: set_dfx, set_dfy
-    procedure, private :: set_1, set_2, set_3, set_4
-    generic            :: set => set_1, set_2, set_3, set_4
+    procedure, private :: set_1, set_2, set_3, set_4, set_5
+    generic            :: set => set_1, set_2, set_3, set_4, set_5
     procedure          :: set_state
     procedure          :: set_class
     procedure          :: set_stkind
@@ -70,6 +71,7 @@ type :: ori
     procedure          :: get_mat
     procedure          :: get
     procedure          :: get_int
+    procedure          :: get_str
     procedure          :: get_static
     procedure, private :: getter_1, getter_2, getter_3
     generic            :: getter => getter_1, getter_2, getter_3
@@ -195,7 +197,7 @@ contains
         class(ori), intent(in)     :: self_in
         class(ori), intent(inout)  :: self_out
         character(len=KEYLEN)      :: key
-        type(str4arr), allocatable :: keys(:)
+        type(string), allocatable  :: keys(:)
         integer :: sz, i, ind
         if( self_out%existence )then
             self_out%pparms = self_in%pparms
@@ -213,9 +215,9 @@ contains
                     sz   = self_in%htab%size_of()
                     keys = self_in%htab%get_keys()
                     do i=1,sz
-                        ind = get_oriparam_ind(trim(keys(i)%str))
+                        ind = get_oriparam_ind(keys(i)%to_char())
                         if( ind /= 0 )then
-                            self_out%pparms(ind) = self_in%get(trim(keys(i)%str))
+                            self_out%pparms(ind) = self_in%get(keys(i)%to_char())
                         endif
                     end do
                 endif
@@ -231,17 +233,22 @@ contains
     subroutine append_ori( self_out, self_in )
         class(ori), intent(in)     :: self_in
         class(ori), intent(inout)  :: self_out
-        type(str4arr), allocatable :: keys(:)
+        type(string), allocatable :: keys(:)
+        type(string) :: key, val
         integer :: sz, i
         if(.not. self_out%is_ptcl .and. .not. self_in%is_ptcl) then
             sz   = self_in%htab%size_of()
             keys = self_in%htab%get_keys()
             do i=1,sz
-                call self_out%set(trim(keys(i)%str), self_in%get(trim(keys(i)%str)))
+                call self_out%set(keys(i)%to_char(), self_in%get(keys(i)%to_char()))
             end do
             sz   = self_in%chtab%size_of()
             do i=1,sz
-                call self_out%set(trim(self_in%chtab%get_key(i)), trim(self_in%chtab%get(i)))
+                key = self_in%chtab%get_key(i)
+                val = self_in%chtab%get(i)
+                call self_out%set(key%to_char(), val%to_char())
+                call key%kill
+                call val%kill
             end do
         end if
     end subroutine append_ori
@@ -509,6 +516,13 @@ contains
         call self%set_1(key, real(ival,dp))
     end subroutine set_4
 
+    subroutine set_5( self, key, cval )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        class(string),    intent(in)    :: cval
+        call self%chtab%set(key, cval%to_char())
+    end subroutine set_5
+
     subroutine set_state( self, state )
         class(ori), intent(inout) :: self
         integer,    intent(in)    :: state
@@ -704,10 +718,10 @@ contains
         endif
     end subroutine gau_rnd_shift
 
-    subroutine str2ori( self, line, is_ptcl )
+     subroutine str2ori( self, line, is_ptcl )
         use simple_sauron, only: sauron_ori_parser
         class(ori),       intent(inout) :: self
-        character(len=*), intent(inout) :: line
+        character(len=*), intent(in)    :: line
         logical,          intent(in)    :: is_ptcl
         call self%new(is_ptcl)
         if( is_ptcl )then
@@ -824,19 +838,27 @@ contains
     end function get_int
 
     !>  \brief  is a getter with fixed length return string
-    function get_static( self, key ) result( val )
+    function get_str( self, key ) result( val )
         class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
-        character(len=STDLEN)        :: val
-        val = trim(self%chtab%get_static(key))
-    end function get_static
+        type(string) :: val
+        call self%getter_1(key, val)
+    end function get_str
+
+    ! this needs to be used in openMP parallel sections
+    pure subroutine get_static( self, key, val )
+        class(ori),       intent(in)  :: self
+        character(len=*), intent(in)  :: key
+        character(len=*), intent(out) :: val
+        call self%chtab%get_static(key, val)
+    end subroutine get_static
 
     subroutine getter_1( self, key, val )
-        class(ori),                    intent(in)    :: self
-        character(len=*),              intent(in)    :: key
-        character(len=:), allocatable, intent(inout) :: val
-        if( allocated(val) ) deallocate(val)
-        allocate(val,source=trim(self%chtab%get(key)))
+        class(ori),       intent(in)    :: self
+        character(len=*), intent(in)    :: key
+        type(string),     intent(inout) :: val
+        call val%kill
+        val = self%chtab%get(key)
     end subroutine getter_1
 
     pure subroutine getter_2( self, key, val )
@@ -1039,46 +1061,46 @@ contains
         has_been_searched = .false.
     end function has_been_searched
 
-    pure function pparms2str( self ) result( str )
+    function pparms2str( self ) result( str_out )
         class(ori), intent(in)     :: self
-        character(len=XLONGSTRLEN) :: str
-        character(len=XLONGSTRLEN) :: tmpstr
-        integer :: i, cnt
-        str = repeat(' ',XLONGSTRLEN)
-        write(tmpstr,*)(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=1,N_PTCL_ORIPARAMS)
+        type(string) :: str_out
+        character(len=XLONGSTRLEN)    :: str_tmp
+        character(len=:), allocatable :: str
+        integer :: i, cnt, n
+        write(str_tmp, *)(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=1,N_PTCL_ORIPARAMS)
+        n   = len_trim(str_tmp)
+        str = repeat(' ',n)
         cnt = 0
-        do i=1,len_trim(tmpstr)
-            if( tmpstr(i:i) == ' ' ) cycle
+        do i=1,n
+            if( str_tmp(i:i) == ' ' ) cycle
             cnt = cnt + 1
-            str(cnt:cnt) = tmpstr(i:i)
+            str(cnt:cnt) = str_tmp(i:i)
         enddo
         do i=4,cnt
             if( str(i:i) == '/' ) str(i:i) = ' '
         enddo
-        str = trim(str)
+        str_out = trim(adjustl(str))
     end function pparms2str
 
     pure integer function pparms_strlen( self )
-        class(ori), intent(in)     :: self
-        character(len=XLONGSTRLEN) :: tmpstr
+        class(ori), intent(in) :: self
+         character(len=XLONGSTRLEN) :: str_tmp
         integer :: i, n
         pparms_strlen = 0
         n = N_PTCL_ORIPARAMS
-        write(tmpstr,*)(trim(get_oriparam_flag(i)), self%pparms(i), i=1,n)
-        do i=1,len_trim(tmpstr)
-            if( tmpstr(i:i) == ' ' ) cycle
+        write(str_tmp,*)(trim(get_oriparam_flag(i)), self%pparms(i), i=1,n)
+        do i=1,len_trim(str_tmp)
+            if( str_tmp(i:i) == ' ' ) cycle
             pparms_strlen = pparms_strlen + 1
         enddo
         pparms_strlen = pparms_strlen + n     ! for '=' separator
         pparms_strlen = pparms_strlen + n - 1 ! for ' ' separator
     end function pparms_strlen
 
-    pure function ori2str( self ) result( str )
-        class(ori), intent(in)        :: self
-        character(len=:), allocatable :: str
-        character(len=XLONGSTRLEN)    :: str_pparms, str_htab
-        character(len=XLONGSTRLEN)    :: str_chtab
-        integer :: sz_chash, sz_hash
+    function ori2str( self ) result( str )
+        class(ori), intent(in) :: self
+        type(string) :: str_pparms, str_htab, str_chtab, str
+        integer      :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of()
         sz_hash  = self%htab%size_of()
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
@@ -1086,21 +1108,21 @@ contains
         if( self%is_ptcl )then
             str_pparms = self%pparms2str()
             if( sz_chash > 0 .and. sz_hash > 0 )then
-                allocate( str, source=trim(str_chtab)//' '//trim(str_pparms)//' '//trim(str_htab))
+                str = str_chtab%to_char()//' '//str_pparms%to_char()//' '//str_htab%to_char()
             else if( sz_hash > 0 )then
-                allocate( str, source=trim(str_pparms)//' '//trim(str_htab))
+                str = str_pparms%to_char()//' '//str_htab%to_char()
             else if( sz_chash > 0 )then
-                allocate( str, source=trim(str_chtab)//' '//trim(str_pparms))
+                str = str_chtab%to_char()//' '//str_pparms%to_char()
             else
-                allocate( str, source=trim(str_pparms))
+                str = str_pparms
             endif
         else
             if( sz_chash > 0 .and. sz_hash > 0 )then
-                allocate( str, source=trim(str_chtab)//' '//trim(str_htab))
+                str = str_chtab%to_char()//' '//str_htab%to_char()
             else if( sz_hash > 0 )then
-                allocate( str, source=trim(str_htab))
+                str = str_htab%to_char()
             else if( sz_chash > 0 )then
-                allocate( str, source=trim(str_chtab))
+                str = str_chtab
             endif
         endif
     end function ori2str
@@ -1112,11 +1134,11 @@ contains
         type(json_core)                           :: json
         type(json_value), pointer                 :: box, boxes_array
         type(nrtxtfile)                           :: boxfile
-        character(len=XLONGSTRLEN), allocatable   :: keys(:)
-        type(str4arr),              allocatable   :: hkeys(:)
-        real,                       allocatable   :: boxdata(:,:)
-        integer :: sz_chash, sz_hash, i, j, x, y, diameter, type
-        logical :: l_boxes = .false.
+        type(string),     allocatable             :: keys(:), hkeys(:)
+        real,             allocatable             :: boxdata(:,:)
+        type(string) :: str_tmp, box_tmp
+        integer      :: sz_chash, sz_hash, i, j, x, y, diameter, type
+        logical      :: l_boxes = .false.
         if(present(boxes)) l_boxes = boxes
         sz_chash = self%chtab%size_of()
         if( self%is_ptcl )then
@@ -1126,7 +1148,7 @@ contains
             enddo
             allocate(keys(sz_chash + sz_hash))
             do i = 1,sz_chash
-                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+                keys(i) = self%chtab%get_key(i)
             end do
             j = 0
             do i = 1,N_PTCL_ORIPARAMS
@@ -1140,24 +1162,27 @@ contains
             allocate(keys(sz_chash + sz_hash))
             hkeys = self%htab%get_keys()
             do i = 1,sz_chash
-                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+                keys(i) = self%chtab%get_key(i)
             end do
             do i = 1, sz_hash
-                keys(i + sz_chash) = trim(adjustl(hkeys(i)%str))
+                keys(i + sz_chash) = hkeys(i)
             end do
-            if(allocated(hkeys)) deallocate(hkeys)
+            call hkeys%kill
         endif
         call json%create_object(json_ori, '')
         do j = 1, size(keys)
-            if(self%ischar(trim(keys(j)))) then
-                call json%add(json_ori, trim(keys(j)), trim(self%get_static(trim(keys(j))))) 
-            else
-                call json%add(json_ori, trim(keys(j)), dble(self%get(trim(keys(j))))) 
+            if(self%ischar(keys(j)%to_char())) then
+                str_tmp = self%get_str(keys(j)%to_char())
+                call json%add(json_ori, keys(j)%to_char(),str_tmp%to_char())
+                call json%add(json_ori, keys(j)%to_char(), dble(self%get(keys(j)%to_char()))) 
+                call str_tmp%kill
             end if
         end do
         if(l_boxes .and. self%isthere('boxfile')) then
             call json%create_array(boxes_array, "boxes")
-            call boxfile%new(trim(self%get_static('boxfile')), 1)
+            box_tmp = self%get('boxfile')
+            call boxfile%new(box_tmp, 1)
+            call box_tmp%kill
             allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
             if(boxfile%get_nrecs_per_line() == 5) then
                 ! standard boxfile
@@ -1222,24 +1247,30 @@ contains
     ! used by qsys_env, pparms omitted deliberatly
     function ori2chash( self ) result( ch )
         class(ori), intent(in) :: self
-        type(chash) :: ch
-        type(hash) :: h
+        type(chash)  :: ch
+        type(hash)   :: h
+        type(string) :: key
         integer :: i
         ch = self%chtab
         h  = self%htab
         if( h%size_of() >= 1 )then
             do i=1,h%size_of()
-                call ch%push(h%get_str(i), int2str(int(h%get_value_at(i))))
+                key = h%get_key(i)
+                call ch%push(key%to_char(), int2str(int(h%get_value_at(i))))
+                call key%kill
             end do
         endif
     end function ori2chash
 
     subroutine chash2ori( self, ch )
-        class(ori),   intent(inout)   :: self
-        class(chash), intent(in)      :: ch
-        character(len=:), allocatable :: line
+        class(ori),   intent(inout) :: self
+        class(chash), intent(in)    :: ch
+        type(string) :: line
+        character(len=:), allocatable :: line_buffer
         line = ch%chash2str()
-        call self%str2ori(line, is_ptcl=.false.)
+        line_buffer = line%to_char()
+        call self%str2ori(line_buffer, is_ptcl=.false.)
+        if( allocated(line_buffer) ) deallocate(line_buffer)
     end subroutine chash2ori
 
     !>  \brief  converts euler angles into BILD Chimera readable format
@@ -1256,11 +1287,11 @@ contains
     function get_ctfvars( self ) result( ctfvars )
         class(ori), intent(in) :: self
         type(ctfparams)        :: ctfvars
-        character(len=STDLEN)  :: ctfstr, phplate
+        type(string) :: ctfstr, phplate
         if( self%isthere('ctf') )then
-            ctfstr = self%get_static('ctf')
+            ctfstr = self%get_str('ctf')
             ctfvars%ctfflag = CTFFLAG_YES
-            select case( trim(ctfstr) )
+            select case(ctfstr%to_char())
                 case('no')
                     ctfvars%ctfflag = CTFFLAG_NO
                 case('yes')
@@ -1271,8 +1302,8 @@ contains
         endif
         ctfvars%l_phaseplate = .false.
         if( self%isthere('phaseplate') )then
-            phplate = self%get_static('phaseplate')
-            ctfvars%l_phaseplate = phplate .eq. 'yes'
+            phplate = self%get_str('phaseplate')
+            ctfvars%l_phaseplate = phplate%to_char() .eq. 'yes'
         endif
         ctfvars%smpd    = self%get('smpd')
         ctfvars%cs      = self%get('cs')
@@ -1282,6 +1313,8 @@ contains
         ctfvars%dfy     = self%get_dfy()
         ctfvars%angast  = self%get('angast')
         ctfvars%phshift = self%get('phshift')
+        call ctfstr%kill
+        call phplate%kill 
     end function get_ctfvars
 
     subroutine get_axis_angle( self, vec, angle )
@@ -1336,9 +1369,8 @@ contains
     end subroutine set_ctfvars
 
     function get_keys( self ) result( keys )
-        class(ori),                 intent(in)  :: self
-        type(str4arr),              allocatable :: hkeys(:)
-        character(len=XLONGSTRLEN), allocatable :: keys(:)
+        class(ori), intent(in)  :: self
+        type(string), allocatable :: hkeys(:), keys(:)
         integer :: sz_chash, sz_hash, i, j
         sz_chash = self%chtab%size_of()
         if( self%is_ptcl )then
@@ -1348,7 +1380,7 @@ contains
             enddo
             allocate(keys(sz_chash + sz_hash))
             do i = 1,sz_chash
-                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+                keys(i) = self%chtab%get_key(i)
             end do
             j = 0
             do i = 1,N_PTCL_ORIPARAMS
@@ -1362,12 +1394,12 @@ contains
             allocate(keys(sz_chash + sz_hash))
             hkeys = self%htab%get_keys()
             do i = 1,sz_chash
-                keys(i) = trim(adjustl(self%chtab%get_key(i)))
+                keys(i) = self%chtab%get_key(i)
             end do
             do i = 1, sz_hash
-                keys(i + sz_chash) = trim(adjustl(hkeys(i)%str))
+                keys(i + sz_chash) = hkeys(i)
             end do
-            if(allocated(hkeys)) deallocate(hkeys)
+            call hkeys%kill
         endif
     end function get_keys
 
@@ -1400,22 +1432,22 @@ contains
         call self%chtab%print_key_val_pairs(logfhandle)
     end subroutine print_ori
 
-    subroutine write( self, fhandle )
+    subroutine write( self, fhandle ) 
         class(ori), intent(in) :: self
         integer,    intent(in) :: fhandle
-        character(len=:), allocatable :: str
+        type(string) :: str
         str = self%ori2str()
-        if( allocated(str) ) write(fhandle,'(a)') str
+        if( str%is_allocated() ) write(fhandle,'(a)') str%to_char()
     end subroutine write
 
     subroutine read( self, fhandle )
-        class(ori), intent(inout) :: self
-        integer,    intent(in)    :: fhandle
-        character(len=2048) :: line
+        class(ori), intent(inout)  :: self
+        integer,    intent(in)     :: fhandle
+        character(len=XLONGSTRLEN) :: buffer_static 
         logical :: is_ptcl
-        read(fhandle,fmt='(A)') line
+        read(fhandle,'(A)') buffer_static
         is_ptcl = self%is_ptcl
-        call self%str2ori(line, is_ptcl)
+        call self%str2ori(trim(adjustl(buffer_static)), is_ptcl)
     end subroutine read
 
     ! CALCULATORS
@@ -2003,68 +2035,5 @@ contains
             geodesic_frobdev = 0.
         endif
     end function geodesic_frobdev
-
-    ! UNIT TEST
-
-    !>  \brief  is the unit test for the ori class
-    subroutine test_ori
-    ! this test only tests the Euler part of ori,
-    ! the rest is tested in the oris class
-        type(ori) :: e1, e2, e3
-        real      :: euls(3), normal(3), mat(3,3), normal2(3), dist
-        logical   :: passed
-        call e1%new_ori(.false.)
-        call e2%new_ori(.false.)
-        call e3%new_ori(.false.)
-        write(logfhandle,'(a)') '**info(simple_ori_unit_test: testing all functionality'
-        passed = .false.
-        call e1%set_euler([1.,2.,3.])
-        euls = e1%get_euler()
-        if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.001 )then
-            passed = .true.
-        endif
-        if( .not. passed ) THROW_HARD('Euler assignment/getters corrupt!')
-        passed = .false.
-        call e1%e1set(99.)
-        call e1%e2set(98.)
-        call e1%e3set(97.)
-        euls = e1%get_euler()
-        if( abs(euls(1)-99.+euls(2)-98.+euls(3)-97.) < 0.001 ) passed = .true.
-        if( .not. passed ) THROW_HARD('Euler e-setters corrupt!')
-        passed = .false.
-        call e1%set_euler([0.,0.,0.])
-        normal = e1%get_normal()
-        if( abs(normal(1))+abs(normal(2))+abs(normal(3)-1.)<3.*TINY ) passed = .true.
-        if( .not. passed ) THROW_HARD('Euler normal derivation corrupt!')
-        passed = .false.
-        mat    = e1%get_mat()
-        if( abs(mat(1,1)-1.)+abs(mat(2,2)-1.)+abs(mat(3,3)-1.)<3.*TINY )then
-            mat(1,1) = 0.
-            mat(2,2) = 0.
-            mat(3,3) = 0.
-            if( abs(sum(mat)) < TINY ) passed = .true.
-        endif
-        if( .not. passed ) THROW_HARD('Euler rotation matrix derivation corrupt!')
-        passed = .false.
-        call e2%set_euler([20.,20.,20.])
-        e3      = e2
-        normal  = e2%get_normal()
-        normal2 = e3%get_normal()
-        if( pearsn(normal,normal2) > 0.99 ) passed = .true.
-        passed  = .false.
-        dist    = rad2deg(e1.euldist.e2) ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
-        if( dist < 20.00001 .and. dist > 19.99999 ) passed = .true.
-        passed  = .false.
-        call e1%compeuler(e2, e3)        ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
-        euls = e3%get_euler()
-        if( euls(1) < 20.0001 .and. euls(1) > 19.9999 .and.&
-            euls(2) < 20.0001 .and. euls(2) > 19.9999 .and.&
-            euls(3) < 20.0001 .and. euls(3) > 19.9999 ) passed = .true.
-        if( .not. passed ) THROW_HARD('Euler composer corrupt!')
-        write(logfhandle,'(a)') 'SIMPLE_ORI_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-        call e1%kill
-        call e2%kill
-        call e3%kill
-    end subroutine test_ori
 
 end module simple_ori

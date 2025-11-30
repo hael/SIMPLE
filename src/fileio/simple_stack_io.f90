@@ -11,8 +11,8 @@ private
 
 type stack_io
     private
-    real(kind=c_float), pointer   :: rmat_ptr(:,:,:) => null()
-    character(len=:), allocatable :: stkname
+    real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
+    type(string)  :: stkname
     type(image)   :: buffer
     type(imgfile) :: ioimg
     integer       :: nptcls  = 0, fromp = 0, top = 0, bufsz = 0, n_in_buf = 0
@@ -37,34 +37,31 @@ contains
 
     subroutine open( self, stkname, smpd, rwaction, is_ft, box, bufsz )
         class(stack_io),   intent(inout) :: self
-        character(len=*),  intent(in)    :: stkname, rwaction
+        class(string),     intent(in)    :: stkname
+        character(len=*),  intent(in)    :: rwaction
         real,              intent(in)    :: smpd
         logical, optional, intent(in)    :: is_ft
         integer, optional, intent(in)    :: box
         integer, optional, intent(in)    :: bufsz
-        character(len=1) :: form ! one character file format descriptor
         integer          :: mode ! FT or not in MRC file lingo
         call self%close
         ! extract info about the stack file and open it
-        allocate(self%stkname, source=trim(stkname))
-        form        = fname2format(self%stkname)
-        if( form .ne. 'M') THROW_HARD('non MRC stacks unsupported')
-        self%smpd   = smpd
-        self%nptcls = 0
-        self%ft     = .false.
+        self%stkname = stkname
+        self%smpd    = smpd
+        self%nptcls  = 0
+        self%ft      = .false.
         select case(trim(rwaction))
             case('READ','read')
-                if( .not. file_exists(self%stkname) ) THROW_HARD('input stack file does not exists: '//trim(self%stkname))
                 call find_ldim_nptcls(self%stkname, self%ldim, self%nptcls)
                 self%ldim(3) = 1
-                call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar=form, readhead=.true., rwaction='READ')
+                call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
                 mode = self%ioimg%getMode()
                 if( mode == 3 .or. mode == 4 ) self%ft = .true.
                 self%l_read = .true.
             case DEFAULT
                 if( present(box) )then
                     self%ldim = [box,box,1]
-                    call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar=form, readhead=.false.)
+                    call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar='M', readhead=.false.)
                 else
                     THROW_HARD('optional box dummy argument needed to write to stack')
                 endif
@@ -99,11 +96,11 @@ contains
     end function get_ldim
 
     function same_stk( self, stkname, ldim ) result( l_same )
-        class(stack_io),  intent(in) :: self
-        character(len=*), intent(in) :: stkname
-        integer,          intent(in) :: ldim(3)
+        class(stack_io), intent(in) :: self
+        class(string),   intent(in) :: stkname
+        integer,         intent(in) :: ldim(3)
         logical :: l_same
-        l_same = (self%stkname .eq. trim(stkname)) .and. all(ldim == self%ldim)
+        l_same = (self%stkname .eq. stkname) .and. all(ldim == self%ldim)
     end function same_stk
 
     subroutine get_image( self, i, img )
@@ -207,7 +204,6 @@ contains
         if( self%l_open )then
             if( .not. self%l_read ) call self%write_buffer
             call self%ioimg%close
-            deallocate(self%stkname)
             self%nptcls   = 0
             self%fromp    = 0
             self%top      = 0

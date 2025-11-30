@@ -1,15 +1,15 @@
 module simple_sp_project
 include 'simple_lib.f08'
-use simple_cmdline,           only: cmdline
-use simple_discrete_stack_io, only: dstack_io
 use simple_map_reduce,        only: split_nobjs_even
+use simple_discrete_stack_io, only: dstack_io
+use simple_cmdline,           only: cmdline
+use json_kinds
+use json_module
 use simple_gui_utils
 use simple_histogram
 use simple_image
 use simple_stack_io
 use simple_starfile        
-use json_kinds
-use json_module
 implicit none
 
 public :: sp_project, oritype2segment
@@ -109,7 +109,10 @@ contains
     procedure          :: get_mic2stk_inds
     procedure          :: get_selected_clsinds
     ! setters
+    procedure, private :: assign
+    generic            :: assignment(=) => assign
     procedure          :: copy
+
     procedure          :: set_cavgs_thumb
     procedure          :: set_ptcl2D_thumb
     ! modifiers
@@ -205,8 +208,7 @@ contains
     subroutine update_projinfo_1( self, cline )
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        character(len=:), allocatable :: projname
-        character(len=STDLEN)         :: projfile, cwd
+        type(string) :: projname, projfile, cwd
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -215,8 +217,8 @@ contains
         ! projname & profile
         if( self%projinfo%isthere('projname').and.cline%defined('projname') )then
             projname = cline%get_carg('projname')
-            call self%projinfo%set(1, 'projname', trim(projname))
-            call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
+            call self%projinfo%set(1, 'projname', projname%to_char())
+            call self%projinfo%set(1, 'projfile', projname%to_char()//'.simple')
         else
             if( .not. cline%defined('projname') .and. .not. cline%defined('projfile') )then
                 THROW_HARD('the project needs a name, inputted via projname or projfile; update_projinfo')
@@ -225,29 +227,28 @@ contains
                 projfile = cline%get_carg('projfile')
                 select case(fname2format(projfile))
                     case('O')
-                        call self%projinfo%set(1, 'projfile', trim(projfile) )
+                        call self%projinfo%set(1, 'projfile', projfile%to_char())
                     case DEFAULT
-                        THROW_HARD('unsupported format of projfile: '//trim(projfile)//'; update_projinfo')
+                        THROW_HARD('unsupported format of projfile: '//projfile%to_char()//'; update_projinfo')
                 end select
-                projname = get_fbody(projfile, 'simple')
-                call self%projinfo%set(1, 'projname', trim(projname))
+                projname = get_fbody(projfile, string('simple'))
+                call self%projinfo%set(1, 'projname', projname%to_char())
             endif
             if( cline%defined('projname') )then
                 projname = cline%get_carg('projname')
-                call self%projinfo%set(1, 'projname', trim(projname))
-                call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
+                call self%projinfo%set(1, 'projname', projname%to_char())
+                call self%projinfo%set(1, 'projfile', projname%to_char()//'.simple')
             endif
         endif
         ! it is assumed that the project is created in the root "project directory", i.e. stash cwd
         call simple_getcwd(cwd)
-        call self%projinfo%set(1, 'cwd', trim(cwd))
+        call self%projinfo%set(1, 'cwd', cwd%to_char())
     end subroutine update_projinfo_1
 
     subroutine update_projinfo_2( self, projfile )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: projfile
-        character(len=:), allocatable    :: projname
-        character(len=STDLEN) :: cwd
+        class(string),     intent(in)    :: projfile
+        type(string) :: projname, cwd
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -256,23 +257,23 @@ contains
         ! projfile & projname
         select case(fname2format(projfile))
             case('O')
-                call self%projinfo%set(1, 'projfile', trim(projfile) )
+                call self%projinfo%set(1, 'projfile', projfile%to_char() )
             case DEFAULT
-                THROW_HARD('unsupported format of projfile: '//trim(projfile)//'; update_projinfo_2')
+                THROW_HARD('unsupported format of projfile: '//projfile%to_char()//'; update_projinfo_2')
         end select
-        projname = get_fbody(projfile, 'simple')
-        call self%projinfo%set(1, 'projname', trim(projname))
+        projname = get_fbody(projfile, string('simple'))
+        call self%projinfo%set(1, 'projname', projname%to_char())
         ! it is assumed that the project is created in the root "project directory", i.e. stash cwd
         call simple_getcwd(cwd)
-        call self%projinfo%set(1, 'cwd', trim(cwd))
+        call self%projinfo%set(1, 'cwd', cwd%to_char())
     end subroutine update_projinfo_2
 
     subroutine update_compenv( self, cline )
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        character(len=STDLEN)            :: env_var
-        character(len=:), allocatable    :: projname, qsnam
-        integer :: iostat
+        type(string) :: env_var
+        type(string) :: projname, qsnam
+        integer      :: iostat
         if( self%compenv%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -280,31 +281,31 @@ contains
         endif
         ! compenv has to be filled as strings as it is used as a string only dictionary
         ! get from environment
-        iostat  = simple_getenv('SIMPLE_PATH', env_var)
+        env_var = simple_getenv('SIMPLE_PATH', iostat)
         if( iostat /= 0 )then
             write(logfhandle,*) 'ERROR! SIMPLE_PATH is not defined in your shell environment!'
             write(logfhandle,*) 'Please refer to installation documentation for correct system configuration'
             stop
         else
-            call self%compenv%set(1, 'simple_path', trim(env_var))
+            call self%compenv%set(1, 'simple_path', env_var)
         endif
         if( cline%defined('qsys_name') )then
             qsnam = cline%get_carg('qsys_name')
-            call self%compenv%set(1, 'qsys_name', trim(qsnam))
+            call self%compenv%set(1, 'qsys_name', qsnam%to_char())
             iostat = 0
         else
-            iostat = simple_getenv('SIMPLE_QSYS', env_var)
-            if( iostat == 0 ) call self%compenv%set(1, 'qsys_name', trim(env_var))
+            env_var = simple_getenv('SIMPLE_QSYS', iostat)
+            if( iostat == 0 ) call self%compenv%set(1, 'qsys_name', env_var)
         endif
         if( iostat /= 0 ) THROW_HARD('SIMPLE_QSYS is not defined in your environment; update_compenv')
-        iostat = simple_getenv('SIMPLE_EMAIL', env_var)
+        env_var = simple_getenv('SIMPLE_EMAIL', iostat)
         if( iostat/=0 ) env_var = 'my.name@uni.edu'
         ! get from command line
-        call self%compenv%set(1, 'user_email', trim(env_var))
+        call self%compenv%set(1, 'user_email', env_var)
         if( cline%defined('user_email') )then
             call self%compenv%set(1, 'user_email', cline%get_carg('user_email'))
         else
-            call self%compenv%set(1, 'user_email', trim(env_var))
+            call self%compenv%set(1, 'user_email', env_var)
         endif
         if( cline%defined('time_per_image') )then
             call self%compenv%set(1, 'time_per_image', cline%get_iarg('time_per_image'))
@@ -329,8 +330,8 @@ contains
         if( cline%defined('qsys_partition') )then
             call self%compenv%set(1, 'qsys_partition', cline%get_carg('qsys_partition'))
         else
-            iostat = simple_getenv('SIMPLE_QSYS_PARTITION', env_var, silent=.true.)
-            if( iostat == 0 ) call self%compenv%set(1, 'qsys_partition', trim(env_var))
+            env_var = simple_getenv('SIMPLE_QSYS_PARTITION', iostat)
+            if( iostat == 0 ) call self%compenv%set(1, 'qsys_partition', env_var)
         endif
         if( cline%defined('qsys_qos') )then
             call self%compenv%set(1, 'qsys_qos', cline%get_carg('qsys_qos'))
@@ -340,7 +341,7 @@ contains
         endif
         if( .not. self%compenv%isthere('job_name') )then
             call self%projinfo%getter(1, 'projname', projname)
-            call self%compenv%set(1, 'job_name', 'simple_'//trim(projname) )
+            call self%compenv%set(1, 'job_name', 'simple_'//projname%to_char() )
         endif
         if( cline%defined('job_memory_per_task') )then
             call self%compenv%set(1, 'job_memory_per_task', cline%get_iarg('job_memory_per_task') )
@@ -409,30 +410,6 @@ contains
         ! cls2D/3D
         call self1%os_cls2D%kill
         call self1%os_cls3D%kill
-        ! the following was used to make sure this routine works
-        ! ncls2d1 = self1%os_cls2D%get_noris()
-        ! ncls2d2 = self2%os_cls2D%get_noris()
-        ! call self1%os_cls2D%append(self2%os_cls2D)
-        ! if( l_has_ptcls .and. (ncls2d1 > 0) .and. (ncls2d2 > 0) )then
-        !     ! class numbering is updated, for testing
-        !     do i = ncls2d1+1,ncls2d1+ncls2d2
-        !         if( self1%os_cls2D%get_state(i) > 0 )then
-        !             icls = self1%os_cls2D%get_class(i) + ncls2d1
-        !             call self1%os_cls2D%set_class(i, icls)
-        !         endif
-        !     enddo
-        !     do iptcl = nptcls1+1,nptcls1+nptcls2
-        !         if( self1%os_ptcl2D%isthere(iptcl, 'class') )then
-        !             icls = self1%os_ptcl2D%get_class(iptcl) + ncls2d1
-        !             call self1%os_ptcl2D%set_class(iptcl, icls)
-        !         endif
-        !     enddo
-        !     ! cls3D is wiped, states are transferred
-        !     call self1%os_cls3D%new(ncls2d1+ncls2d2, is_ptcl=.false.)
-        !     do icls = 1,ncls2d1+ncls2d2
-        !         call self1%os_cls3D%set_state(icls, self1%os_cls2D%get_state(icls))
-        !     enddo
-        ! endif
         ! out is wiped
         call self1%os_out%kill
         ! optic groups
@@ -472,10 +449,10 @@ contains
 
     subroutine append_job_descr2jobproc( self, exec_dir, job_descr, did_update )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: exec_dir
+        class(string),     intent(in)    :: exec_dir
         class(chash),      intent(inout) :: job_descr
         logical,           intent(out)   :: did_update
-        character(len=:), allocatable    :: edir
+        type(string)  :: edir
         type(ori)     :: o
         integer       :: njobs, ijob, ind
         character(8)  :: date
@@ -483,11 +460,11 @@ contains
         did_update = .true.
         njobs = self%jobproc%get_noris()
         if( njobs > 0 )then
-            if( trim(exec_dir) .ne. './')then
+            if( exec_dir%to_char() .ne. './')then
                 do ijob=1,njobs
                     if( self%jobproc%isthere(ijob, 'exec_dir') )then
                         call self%jobproc%getter(ijob, 'exec_dir', edir)
-                        if( str_has_substr(exec_dir,edir) )then
+                        if( exec_dir%has_substr(edir) )then
                             ! we already have a job description for this exec dir stored
                             did_update = .false.
                             return
@@ -498,7 +475,7 @@ contains
         endif
         ! store job description along with exec_dir & execution time
         call o%chash2ori(job_descr)
-        call o%set('exec_dir', trim(exec_dir))
+        call o%set('exec_dir', exec_dir%to_char())
         call date_and_time(date=date, time=time)
         call o%set('date', date)
         call o%set('time', time)
@@ -516,6 +493,7 @@ contains
 
     ! index management
 
+    ! static for OpenMP safety
     subroutine map_ptcl_ind2stk_ind( self, oritype, iptcl, stkind, ind_in_stk )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
@@ -621,10 +599,10 @@ contains
 
     subroutine add_single_movie( self, moviename, ctfvars )
         class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: moviename
+        class(string),             intent(in)    :: moviename
         type(ctfparams),           intent(in)    :: ctfvars
-        class(oris),      pointer     :: os_ptr
-        character(len=LONGSTRLEN)     :: abs_fname
+        class(oris), pointer :: os_ptr
+        type(string)         :: abs_fname
         integer :: n_os_mic, ldim(3), nframes
         ! oris object pointer
         os_ptr => self%os_mic
@@ -637,9 +615,9 @@ contains
         ! update ori
         call os_ptr%new(1, is_ptcl=.false.)
         abs_fname = simple_abspath(moviename)
-        call find_ldim_nptcls(trim(abs_fname), ldim, nframes)
+        call find_ldim_nptcls(abs_fname, ldim, nframes)
         if( nframes <= 0 )then
-            THROW_WARN('# frames in movie: '//trim(abs_fname)//' <= zero, omitting')
+            THROW_WARN('# frames in movie: '//abs_fname%to_char()//' <= zero, omitting')
         else if( nframes > 1 )then
             call os_ptr%set(1, 'movie',   abs_fname)
             call os_ptr%set(1, 'imgkind', 'movie')
@@ -676,16 +654,15 @@ contains
     !> Add/append movies or micrographs without ctf parameters
     subroutine add_movies( self, movies_array, ctfvars, singleframe, verbose )
         class(sp_project), target, intent(inout) :: self
-        character(LONGSTRLEN),     intent(in)    :: movies_array(:)
+        type(string),              intent(in)    :: movies_array(:)
         type(ctfparams),           intent(in)    :: ctfvars
         logical,         optional, intent(in)    :: singleframe
         logical,         optional, intent(in)    :: verbose
-        class(oris),      pointer     :: os_ptr
-        type(ctfparams)               :: prev_ctfvars
-        character(len=:), allocatable :: name
-        character(len=LONGSTRLEN)     :: abs_moviename
-        integer                       :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
-        logical                       :: is_movie, l_singleframe, l_verbose
+        class(oris), pointer :: os_ptr
+        type(ctfparams)      :: prev_ctfvars
+        type(string)         :: name, abs_moviename
+        integer :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
+        logical :: is_movie, l_singleframe, l_verbose
         l_verbose     = .true.
         if( present(verbose) ) l_verbose = verbose
         is_movie      = .true.
@@ -715,18 +692,18 @@ contains
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
             abs_moviename = simple_abspath(movies_array(cnt))
-            call find_ldim_nptcls(trim(abs_moviename), ldim, nframes)
+            call find_ldim_nptcls(abs_moviename, ldim, nframes)
             if( cnt == 1 )then
                 ldim_orig = ldim
             else
                 if( ldim(1) /= ldim_orig(1) .or. ldim(2) /= ldim_orig(2) )then
-                    write(logfhandle,*)'Inconsistent size for file: ',trim(movies_array(cnt))
+                    write(logfhandle,*)'Inconsistent size for file: ',movies_array(cnt)%to_char()
                     write(logfhandle,*)'Dimensions: ', ldim(1),'x ',ldim(2), ' vs. previous dimensions: ', ldim_orig(1),'x ',ldim_orig(2)
                     THROW_HARD('All files imported must have identical dimensions!')
                 endif
             endif
             if( nframes <= 0 )then
-                THROW_WARN('# frames in movie: '//trim(movies_array(imic))//' <= zero, omitting')
+                THROW_WARN('# frames in movie: '//movies_array(imic)%to_char()//' <= zero, omitting')
                 cycle
             else
                 if( nframes > 1 )then
@@ -747,7 +724,7 @@ contains
                     nframes_first = nframes
                 else
                     if( nframes /= nframes_first )then
-                        write(logfhandle,*) trim(abs_moviename), ' has ', nframes, ' frame(s)'
+                        write(logfhandle,*) abs_moviename%to_char(), ' has ', nframes, ' frame(s)'
                         write(logfhandle,*) 'Previous import have ', nframes_first, ' frame(s)'
                         THROW_HARD('You cannot import both micrographs and movies at the same time! add_movies')
                     endif
@@ -788,19 +765,19 @@ contains
             endif
         endif
         if( l_verbose )then
-            write(logfhandle,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
-            write(logfhandle,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
+            write(logfhandle,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', name%to_char()
+            write(logfhandle,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', name%to_char(),':',ntot
         endif
     end subroutine add_movies
 
     !> Add/append micrographs with ctf parameters
     subroutine add_intgs( self, intgs_array, os, ctfvars )
         class(sp_project), target, intent(inout) :: self
-        character(LONGSTRLEN),     intent(in)    :: intgs_array(:)
+        class(string),             intent(in)    :: intgs_array(:)
         class(oris),               intent(in)    :: os
         type(ctfparams),           intent(in)    :: ctfvars
         type(ctfparams)           :: prev_ctfvars, ctfparms
-        character(len=LONGSTRLEN) :: rel_micname
+        type(string):: rel_micname
         real                      :: intg_smpd
         integer                   :: imic,ldim(3),nframes,nintgs,nprev_intgs,nprev_mics,cnt,ntot
         nprev_mics  = self%os_mic%get_noris()
@@ -840,15 +817,15 @@ contains
         do imic=nprev_intgs+1,ntot
             cnt = cnt + 1
             rel_micname = simple_abspath(intgs_array(cnt))
-            call find_ldim_nptcls(trim(rel_micname), ldim, nframes, smpd=intg_smpd)
+            call find_ldim_nptcls(rel_micname, ldim, nframes, smpd=intg_smpd)
             if( nframes <= 0 )then
-                THROW_HARD('# frames in movie: '//trim(intgs_array(cnt))//' <= zero; add_intgs')
+                THROW_HARD('# frames in movie: '//intgs_array(cnt)%to_char()//' <= zero; add_intgs')
             else if( nframes > 1 )then
                 THROW_HARD('Not the interface for adding movies; add_intgs')
             endif
             if( nprev_intgs > 0 )then
                 if( .not.is_equal(intg_smpd,prev_ctfvars%smpd) )then
-                    THROW_HARD('Incompatible sampling distance: '//trim(intgs_array(cnt))//'; add_intgs')
+                    THROW_HARD('Incompatible sampling distance: '//intgs_array(cnt)%to_char()//'; add_intgs')
                 endif
             endif
             ! updates segment
@@ -890,9 +867,8 @@ contains
 
     ! returns list of movies regardless of 'imgkind' key as it overrides movies
     subroutine get_movies_table( self, moviestab )
-        class(sp_project),                      intent(inout) :: self
-        character(len=LONGSTRLEN), allocatable, intent(out)   :: moviestab(:)
-        character(len=:), allocatable :: mov
+        class(sp_project),         intent(inout) :: self
+        type(string), allocatable, intent(out)   :: moviestab(:)
         integer :: i,n,cnt
         if(allocated(moviestab))deallocate(moviestab)
         n = 0
@@ -908,18 +884,17 @@ contains
             if(self%os_mic%isthere(i,'movie'))then
                 if( self%os_mic%get_state(i) > 0 )then
                     cnt = cnt + 1
-                    call self%os_mic%getter(i,'movie',mov)
-                    moviestab(cnt) = trim(mov)
+                    call self%os_mic%getter(i,'movie',moviestab(cnt))
                 endif
             endif
         enddo
     end subroutine get_movies_table
 
-    subroutine get_mics_table( self, micstab, orimap )
-        class(sp_project),                      intent(inout) :: self
-        character(len=LONGSTRLEN), allocatable, intent(out)   :: micstab(:)
-        integer,                   allocatable, intent(out)   :: orimap(:)
-        character(len=:), allocatable :: imgkind, mic
+    subroutine get_mics_table( self, micstab, orimap)
+        class(sp_project),         intent(inout) :: self
+        type(string), allocatable, intent(out)   :: micstab(:)
+        integer,      allocatable, intent(out)   :: orimap(:)
+        type(string) :: imgkind
         integer :: i,n,cnt
         if(allocated(micstab)) deallocate(micstab)
         if(allocated(orimap))  deallocate(orimap)
@@ -936,8 +911,7 @@ contains
             if(self%os_mic%isthere(i,'intg'))then
                 if( self%os_mic%get_state(i) > 0 )then
                     cnt = cnt + 1
-                    call self%os_mic%getter(i,'intg',mic)
-                    micstab(cnt) = trim(mic)
+                    call self%os_mic%getter(i,'intg',micstab(cnt))
                     orimap(cnt)  = i
                 endif
             endif
@@ -955,10 +929,10 @@ contains
 
     subroutine add_stk( self, stk, ctfvars )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: stk
+        class(string),     intent(in)    :: stk
         type(ctfparams),   intent(in)    :: ctfvars ! All CTF parameters associated with stk
         type(ori)                     :: o
-        character(len=LONGSTRLEN)     :: stk_relpath, cwd
+        type(string)    :: stk_relpath, cwd
         integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer :: i, fromp, top, pind
         ! full path and existence check
@@ -995,7 +969,7 @@ contains
             top   = fromp + nptcls - 1
         endif
         ! updates oris_objects
-        call self%os_stk%set(n_os_stk, 'stk',     trim(stk_relpath))
+        call self%os_stk%set(n_os_stk, 'stk',     stk_relpath)
         call self%os_stk%set(n_os_stk, 'box',     ldim(1))
         call self%os_stk%set(n_os_stk, 'nptcls',  nptcls)
         call self%os_stk%set(n_os_stk, 'fromp',   fromp)
@@ -1030,20 +1004,20 @@ contains
 
     subroutine add_single_stk( self, stk, ctfvars, os )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: stk
+        class(string),     intent(in)    :: stk
         type(ctfparams),   intent(in)    :: ctfvars ! CTF parameters associated with stk (smpd,kv,cs,fraca,phaseplate)
         class(oris),       intent(inout) :: os      ! parameters associated with stk (dfx,dfy,angast,phshift)
-        character(len=:), allocatable :: stk_abspath, projname, fbody
-        integer                       :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls, pind
+        type(string) :: stk_abspath, projname, fbody
+        integer      :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls, pind
         call self%projinfo%getter(1, 'projname', projname)
-        if( str_has_substr(stk, 'mrc') )then
-            fbody = get_fbody(basename(stk), 'mrc')
-        else if( str_has_substr(stk, 'mrcs') )then
-            fbody = get_fbody(basename(stk), 'mrcs')
+        if( stk%has_substr('mrc') )then
+            fbody = get_fbody(basename(stk), string('mrc'))
+        else if( stk%has_substr('mrcs') )then
+            fbody = get_fbody(basename(stk), string('mrcs'))
         else
             THROW_HARD('Unsupported stack format; use *.mrc or *.mrcs for import')
         endif
-        if( str_has_substr(trim(projname), fbody) ) THROW_HARD('stack for import('//trim(stk)//') not allowed to have same name as project')
+        if( projname%has_substr(fbody) ) THROW_HARD('stack for import('//stk%to_char()//') not allowed to have same name as project')
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
@@ -1073,9 +1047,9 @@ contains
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1) ! default on import
         if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1) ! default on import
         ! full path and existence check
-        stk_abspath = simple_abspath(stk,'sp_project :: add_single_stk')
+        stk_abspath = simple_abspath(stk)
         ! find dimension of inputted stack
-        call find_ldim_nptcls(trim(stk_abspath), ldim, nptcls)
+        call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
             write(logfhandle,*) 'xdim: ', ldim(1)
             write(logfhandle,*) 'ydim: ', ldim(2)
@@ -1115,9 +1089,9 @@ contains
 
     ! adds stktab given per-stk parameters
     subroutine add_stktab_1( self, stkfnames, os )
-        class(sp_project),     intent(inout) :: self
-        character(LONGSTRLEN), intent(inout) :: stkfnames(:)
-        class(oris),           intent(inout) :: os ! parameters associated with stktab
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(inout) :: stkfnames(:)
+        class(oris),       intent(inout) :: os ! parameters associated with stktab
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
@@ -1134,7 +1108,7 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            stkfnames(istk) = trim(simple_abspath(stkfnames(istk)))
+            stkfnames(istk) = simple_abspath(stkfnames(istk))
             call os%get_ori(istk, o_stk)
             ! logical dimension management
             call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
@@ -1144,14 +1118,14 @@ contains
             else
                 if( .not. all(ldim_here == ldim) )then
                     write(logfhandle,*) 'micrograph stack #  : ', istk
-                    write(logfhandle,*) 'stk name            : ', trim(stkfnames(istk))
+                    write(logfhandle,*) 'stk name            : ', stkfnames(istk)%to_char()
                     write(logfhandle,*) 'ldim in object      : ', ldim_here
                     write(logfhandle,*) 'ldim read from stack: ', ldim
                     THROW_HARD('inconsistent logical dimensions; add_stktab')
                 endif
             endif
             if( ldim(1) /= ldim(2) )then
-                write(logfhandle,*) 'stk name: ', trim(stkfnames(istk))
+                write(logfhandle,*) 'stk name: ', stkfnames(istk)%to_char()
                 write(logfhandle,*) 'xdim:     ', ldim(1)
                 write(logfhandle,*) 'ydim:     ', ldim(2)
                 THROW_HARD('nonsquare particle images not supported; add_stktab')
@@ -1228,10 +1202,10 @@ contains
 
     ! adds stktab given per-particle parameters
     subroutine add_stktab_2( self, stkfnames, ctfvars, os )
-        class(sp_project),     intent(inout) :: self
-        character(LONGSTRLEN), intent(inout) :: stkfnames(:)
-        type(ctfparams),       intent(in)    :: ctfvars
-        class(oris),           intent(inout) :: os ! parameters associated with stktab
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(inout) :: stkfnames(:)
+        type(ctfparams),   intent(in)    :: ctfvars
+        class(oris),       intent(inout) :: os ! parameters associated with stktab
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
@@ -1242,7 +1216,7 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            stkfnames(istk) = trim(simple_abspath(stkfnames(istk)))
+            stkfnames(istk) = simple_abspath(stkfnames(istk))
             ! logical dimension management
             call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
             ldim(3) = 1
@@ -1251,14 +1225,14 @@ contains
             else
                 if( .not. all(ldim_here == ldim) )then
                     write(logfhandle,*) 'micrograph stack #  : ', istk
-                    write(logfhandle,*) 'stk name            : ', trim(stkfnames(istk))
+                    write(logfhandle,*) 'stk name            : ', stkfnames(istk)%to_char()
                     write(logfhandle,*) 'ldim in object      : ', ldim_here
                     write(logfhandle,*) 'ldim read from stack: ', ldim
                     THROW_HARD('inconsistent logical dimensions; add_stktab')
                 endif
             endif
             if( ldim(1) /= ldim(2) )then
-                write(logfhandle,*) 'stk name: ', trim(stkfnames(istk))
+                write(logfhandle,*) 'stk name: ', stkfnames(istk)%to_char()
                 write(logfhandle,*) 'xdim:     ', ldim(1)
                 write(logfhandle,*) 'ydim:     ', ldim(2)
                 THROW_HARD('nonsquare particle images not supported; add_stktab')
@@ -1361,21 +1335,19 @@ contains
     
     !>  Only commits to disk when a change to the project is made
     subroutine split_stk( self, nparts, dir )
-        class(sp_project),          intent(inout) :: self
-        integer,                    intent(in)    :: nparts
-        character(len=*), optional, intent(in)    :: dir
+        class(sp_project),       intent(inout) :: self
+        integer,                 intent(in)    :: nparts
+        class(string), optional, intent(in)    :: dir
         character(len=*), parameter   :: EXT = '.mrc'
         type(image)                   :: img
         type(ori)                     :: orig_stk
         type(stack_io)                :: stkio_w
         type(dstack_io)               :: dstkio_r
-        character(len=:), allocatable :: stk, tmp_dir, stkpart, stkkind
-        character(len=:), allocatable :: dest_stkpart
-        character(len=LONGSTRLEN) :: stk_relpath, cwd
-        real    :: smpd
-        integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
-        integer :: nptcls, nptcls_part, numlen
-        logical :: l_set_ind_in_stk
+        type(string) :: tmp_dir, stkpart, stkkind, dest_stkpart, stk_relpath, cwd, stk
+        real         :: smpd
+        integer      :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
+        integer      :: nptcls, nptcls_part, numlen
+        logical      :: l_set_ind_in_stk
         if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -1385,7 +1357,7 @@ contains
             return
         endif
         call self%os_stk%getter(1, 'stkkind', stkkind)
-        if( trim(stkkind) == 'split' ) return
+        if( stkkind%to_char() == 'split' ) return
         ! get original simple_parameters
         call self%os_stk%get_ori(1, orig_stk)
         ! copy prep
@@ -1398,18 +1370,18 @@ contains
         call img%new([box,box,1], smpd)
         call simple_getcwd(cwd)
         if( present(dir) )then
-            tmp_dir = filepath(trim(dir),'tmp_stacks')
+            tmp_dir = filepath(dir,string('tmp_stacks'))
         else
-            tmp_dir = filepath(trim(cwd),'tmp_stacks')
+            tmp_dir = filepath(cwd,string('tmp_stacks'))
         endif
-        call simple_mkdir(trim(tmp_dir),errmsg="sp_project::split_stk")
+        call simple_mkdir(tmp_dir)
         write(logfhandle,'(a)') '>>> SPLITTING STACK INTO PARTS'
         ! just to get the name of the stack to read from
         call self%get_stkname_and_ind('ptcl2D', 1, stk, ind_in_stk)
         call dstkio_r%new(smpd, box)
         do istk = 1,nparts
             call progress(istk,nparts)
-            stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
+            stkpart = filepath(tmp_dir,string('stack_part'//int2str_pad(istk,numlen)//EXT))
             call stkio_w%open(stkpart, smpd, 'write', box=box, is_ft=.false.)
             cnt = 0
             do iptcl = parts(istk,1), parts(istk,2)
@@ -1418,27 +1390,27 @@ contains
                 call dstkio_r%read(stk, ind_in_stk, img)
                 call stkio_w%write(cnt, img)
             enddo
-            deallocate(stkpart)
+            call stkpart%kill
             call stkio_w%close
         enddo
         call dstkio_r%kill
         call img%kill
         call self%os_stk%new(nparts, is_ptcl=.false.)
         if( present(dir) )then
-           call simple_mkdir(filepath(trim(dir),trim(STKPARTSDIR)),errmsg="sp_project::split_stk")
+           call simple_mkdir(filepath(dir,STKPARTSDIR))
         else
-           call simple_mkdir(trim(STKPARTSDIR),errmsg="sp_project::split_stk")
+           call simple_mkdir(STKPARTSDIR)
         endif
         l_set_ind_in_stk = self%os_ptcl2D%isthere('indstk')
         do istk = 1,nparts
             ! file stuff
-            stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
+            stkpart = filepath(tmp_dir,string('stack_part'//int2str_pad(istk,numlen)//EXT))
             if( present(dir) )then
-                dest_stkpart = filepath(trim(dir),trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+                dest_stkpart = filepath(dir,string(STKPARTFBODY//int2str_pad(istk,numlen)//EXT))
             else
-                allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+                dest_stkpart = STKPARTFBODY//int2str_pad(istk,numlen)//EXT
             endif
-            call simple_rename(trim(stkpart), trim(dest_stkpart))
+            call simple_rename(stkpart, dest_stkpart)
             stk_relpath = simple_abspath(dest_stkpart)
             nptcls_part = parts(istk,2) - parts(istk,1) + 1
             ! set original before overriding
@@ -1459,21 +1431,22 @@ contains
                     call self%os_ptcl3D%set(iptcl,'indstk', ind_in_stk)
                 endif
             enddo
-            deallocate(stkpart, dest_stkpart)
+            call stkpart%kill
+            call dest_stkpart%kill
         enddo
         call self%write
-        call simple_rmdir(tmp_dir,errmsg="sp_project::split_stk")
+        call simple_rmdir(tmp_dir)
         call orig_stk%kill
     end subroutine split_stk
 
     subroutine write_substk( self, fromto, stkout )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: fromto(2)
-        character(len=*),  intent(in)    :: stkout
-        character(len=:), allocatable    :: stk
+        class(string),     intent(in)    :: stkout
         integer         :: ind_in_stk, iptcl, n_os_stk, nptcls, box, cnt, ffromto(2)
         real            :: smpd
         type(image)     :: img
+        type(string)    :: stk
         type(ori)       :: orig_stk
         type(stack_io)  :: stkio_w
         type(dstack_io) :: dstkio_r
@@ -1509,10 +1482,11 @@ contains
         call orig_stk%kill
     end subroutine write_substk
 
+    ! static for OpenMP safety
     function get_micname( self, iptcl ) result( micname )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: iptcl
-        character(len=:), allocatable    :: micname
+        character(len=XLONGSTRLEN) :: micname
         integer :: imic
         if(iptcl < 1 .or. iptcl > self%os_ptcl2D%get_noris()) then
             write(logfhandle,*) 'iptcl : ',  iptcl
@@ -1525,16 +1499,17 @@ contains
             write(logfhandle,*) 'nmics: ', self%os_mic%get_noris()
             THROW_HARD('imic index out of range; get_micname')
         end if
-        micname = trim(self%os_mic%get_static(imic, 'intg'))
+        call self%os_mic%get_static(imic, 'intg', micname)
     end function get_micname
 
+    ! static for OpenMP safety
     function get_mic_kind( self, imic ) result( mickind )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: imic
-        character(len=:), allocatable    :: mickind
+        type(string) :: mickind
         mickind = NIL
         if( self%os_mic%isthere(imic, 'imgkind') )then
-            mickind = self%os_mic%get_static(imic, 'imgkind')
+            mickind = self%os_mic%get(imic, 'imgkind')
             return
         else
             if( self%os_mic%isthere(imic, 'movie') )then
@@ -1547,7 +1522,7 @@ contains
     subroutine set_boxfile( self, i, boxfname, nptcls )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: i
-        character(len=*),  intent(in)    :: boxfname
+        class(string),     intent(in)    :: boxfname
         integer, optional, intent(in)    :: nptcls
         type(nrtxtfile) :: boxfile
         integer         :: nptcls_here
@@ -1569,7 +1544,7 @@ contains
     function get_stkname( self, imic ) result( stkname )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: imic
-        character(len=:), allocatable    :: stkname
+        type(string) :: stkname
         integer :: nmics
         nmics = self%os_stk%get_noris()
         if( imic < 1 .or. imic > nmics )then
@@ -1577,49 +1552,47 @@ contains
             write(logfhandle,*) 'nmics: ', nmics
             THROW_HARD('imic index out of range; get_stkname')
         endif
-        stkname = trim(self%os_stk%get_static(imic, 'stk'))
+        stkname = self%os_stk%get_str(imic, 'stk')
     end function get_stkname
 
     subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind_in_stk )
-        class(sp_project), target,     intent(inout) :: self
-        character(len=*),              intent(in)    :: oritype
-        integer,                       intent(in)    :: iptcl
-        character(len=:), allocatable, intent(out)   :: stkname
-        integer,                       intent(out)   :: ind_in_stk
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        integer,                   intent(in)    :: iptcl
+        class(string),             intent(out)   :: stkname
+        integer,                   intent(out)   :: ind_in_stk
         real    :: smpd
         integer :: stkind, ncls
         ! do the index mapping
-        call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk )
+        call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk)
         ! output name
-        if( allocated(stkname) ) deallocate(stkname)
         if( trim(oritype) .eq. 'cls3D' ) then
             call self%get_cavgs_stk(stkname, ncls, smpd)
         else
-            stkname = trim(self%os_stk%get_static(stkind, 'stk'))
+            stkname = self%os_stk%get_str(stkind, 'stk')
         endif
     end subroutine get_stkname_and_ind
 
     subroutine add_scale_tag( self, dir )
-        class(sp_project),          intent(inout) :: self
-        character(len=*), optional, intent(in)    :: dir
-        character(len=:), allocatable :: ext, newname, stkname, abs_dir, nametmp, ext_out
-        integer :: imic, nmics
+        class(sp_project),       intent(inout) :: self
+        class(string), optional, intent(in)    :: dir
+        type(string) :: newname, stkname, abs_dir, nametmp, ext
+        integer      :: imic, nmics
         nmics = self%os_stk%get_noris()
         if( present(dir) )then
-            call simple_mkdir( trim(dir), errmsg="sp_project::add_scale_tag" )
-            abs_dir = simple_abspath( dir, 'sp_project :: add_scale_tag' )
+            call simple_mkdir(dir)
+            abs_dir = simple_abspath(dir)
         endif
         do imic=1,nmics
             call self%os_stk%getter(imic, 'stk', stkname)
-            ext = fname2ext(trim(stkname))
-            ext_out = '.'//ext
+            ext = fname2ext(stkname)
             if(present(dir))then
-                nametmp = basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
-                newname = filepath(trim(abs_dir), trim(nametmp))
+                nametmp = basename(add2fbody(stkname, '.'//ext%to_char(), SCALE_SUFFIX))
+                newname = filepath(abs_dir, nametmp)
             else
-                newname = add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX))
+                newname = add2fbody(stkname, '.'//ext%to_char(), SCALE_SUFFIX)
             endif
-            newname = fname_new_ext(newname, ext_out(2:))
+            newname = fname_new_ext(newname, ext)
             call self%os_stk%set(imic, 'stk', newname)
         end do
     end subroutine add_scale_tag
@@ -1628,36 +1601,35 @@ contains
 
     subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath )
         class(sp_project),          intent(inout) :: self
-        character(len=*),           intent(in)    :: stk
+        class(string),              intent(in)    :: stk
         real,                       intent(in)    :: smpd ! sampling distance of images in stk
         character(len=*), optional, intent(in)    :: imgkind
         logical,          optional, intent(in)    :: clspath
-        character(len=:), allocatable :: iimgkind
-        character(len=LONGSTRLEN)     :: abspath
-        integer                       :: ldim(3), nptcls, ind
+        type(string) :: iimgkind, abspath
+        integer      :: ldim(3), nptcls, ind
         if( present(imgkind) )then
-            allocate(iimgkind, source=trim(imgkind))
+            iimgkind = imgkind
         else
-            allocate(iimgkind, source='cavg')
+            iimgkind = 'cavg'
         endif
         ! path and existence check
         abspath = simple_abspath(stk)
         ! find dimension of inputted stack
         call find_ldim_nptcls(abspath, ldim, nptcls)
         ! add os_out entry
-        call self%add_entry2os_out(iimgkind, ind)
+        call self%add_entry2os_out(iimgkind%to_char(), ind)
         ! fill-in field
-        call self%os_out%set(ind, 'stk',     abspath)
+        call self%os_out%set(ind, 'stk',     abspath%to_char())
         call self%os_out%set(ind, 'box',     ldim(1))
         call self%os_out%set(ind, 'nptcls',  nptcls)
         call self%os_out%set(ind, 'fromp',   1)
         call self%os_out%set(ind, 'top',     nptcls)
         call self%os_out%set(ind, 'smpd',    smpd)
         call self%os_out%set(ind, 'stkkind', 'single')
-        call self%os_out%set(ind, 'imgkind', iimgkind)
+        call self%os_out%set(ind, 'imgkind', iimgkind%to_char())
         call self%os_out%set(ind, 'ctf',     'no')
         if( present(clspath) )then
-            if( clspath ) call self%os_out%set(ind, 'stkpath', trim(CWD_GLOB))
+            if( clspath ) call self%os_out%set(ind, 'stkpath', CWD_GLOB)
         else
             if(self%os_out%isthere(ind, 'stkpath')) call self%os_out%delete_entry(ind, 'stkpath')
         endif
@@ -1671,9 +1643,10 @@ contains
 
     subroutine add_frcs2os_out( self, frc, which_imgkind )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: frc, which_imgkind
-        character(len=LONGSTRLEN)        :: path
-        integer                          :: ind
+        class(string),     intent(in)    :: frc
+        character(len=*),  intent(in)    :: which_imgkind
+        type(string) :: path
+        integer      :: ind
         select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
@@ -1691,11 +1664,10 @@ contains
 
     subroutine add_fsc2os_out( self, fsc, state, box )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fsc
+        class(string),     intent(in)    :: fsc
         integer,           intent(in)    :: state, box
-        character(len=:), allocatable :: imgkind
-        character(len=LONGSTRLEN)     :: abspath
-        integer                       :: i, ind, n_os_out
+        type(string) :: imgkind, abspath
+        integer      :: i, ind, n_os_out
         ! full path and existence check
         abspath = simple_abspath(fsc)
         ! add os_out entry
@@ -1710,7 +1682,7 @@ contains
             do i=1,n_os_out
                 if( self%os_out%isthere(i,'imgkind') )then
                     call self%os_out%getter(i,'imgkind',imgkind)
-                    if(trim(imgkind).eq.'fsc')then
+                    if(imgkind.eq.'fsc')then
                         if( self%os_out%get_state(i) == state )then
                             ind = i
                             exit
@@ -1733,12 +1705,12 @@ contains
 
     subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: vol, which_imgkind
+        class(string),     intent(in)    :: vol
+        character(len=*),  intent(in)    :: which_imgkind
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: state
         integer, optional, intent(in)    :: box, pop
-        character(len=:), allocatable :: imgkind
-        character(len=LONGSTRLEN)     :: abspath
+        type(string) :: imgkind, abspath
         integer                       :: n_os_out, ind, i, ldim(3), ifoo
         select case(trim(which_imgkind))
             case('vol_cavg','vol','vol_msk')
@@ -1746,7 +1718,7 @@ contains
                 call find_ldim_nptcls(vol, ldim, ifoo)
                 if(present(box))then
                     if( ldim(1) /= box )then
-                        THROW_HARD('invalid dimensions for volume: '//trim(vol)//'; add_vol2os_out 1')
+                        THROW_HARD('invalid dimensions for volume: '//vol%to_char()//'; add_vol2os_out 1')
                     endif
                 endif
             case DEFAULT
@@ -1768,7 +1740,7 @@ contains
                     do i=1,n_os_out
                         if( self%os_out%isthere(i,'imgkind') )then
                             call self%os_out%getter(i,'imgkind',imgkind)
-                            if(trim(imgkind).eq.trim(which_imgkind))then
+                            if(imgkind.eq.which_imgkind)then
                                 ind = i
                                 exit
                             endif
@@ -1785,7 +1757,7 @@ contains
                     do i=1,n_os_out
                         if( self%os_out%isthere(i,'imgkind') )then
                             call self%os_out%getter(i,'imgkind',imgkind)
-                            if(trim(imgkind).eq.trim(which_imgkind))then
+                            if(imgkind.eq.which_imgkind)then
                                 if( self%os_out%get_state(i) == state )then
                                     ind = i
                                     exit
@@ -1813,7 +1785,7 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which_imgkind
         integer,           intent(out)   :: ind
-        character(len=:), allocatable :: imgkind
+        type(string) :: imgkind
         integer :: n_os_out, i
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
@@ -1825,8 +1797,8 @@ contains
             ind = 0
             do i=1,n_os_out
                 if( self%os_out%isthere(i,'imgkind') )then
-                    imgkind = trim(self%os_out%get_static(i,'imgkind'))
-                    if(trim(imgkind).eq.trim(which_imgkind))then
+                    imgkind = self%os_out%get_str(i,'imgkind')
+                    if(imgkind.eq.trim(which_imgkind))then
                         ind = i
                         exit
                     endif
@@ -1844,15 +1816,15 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which_imgkind
         integer,           intent(in)    :: state
-        character(len=:), allocatable :: imgkind
+        type(string) :: imgkind
         integer :: n_os_out, i, ind
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 ) return
         ind = 0
         do i = 1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
-                imgkind = trim(self%os_out%get_static(i,'imgkind'))
-                if(trim(imgkind).eq.trim(which_imgkind))then
+                imgkind = self%os_out%get_str(i,'imgkind')
+                if(imgkind.eq.trim(which_imgkind))then
                     if( self%os_out%isthere(i, 'state') )then
                         if( self%os_out%get_state(i) == state )then
                             ind = i
@@ -1870,7 +1842,7 @@ contains
         class(sp_project), intent(in) :: self
         character(len=*),  intent(in) :: which_imgkind
         integer,           intent(in) :: state
-        character(len=:), allocatable :: imgkind
+        type(string) :: imgkind
         integer :: n_os_out, i, ind
         isthere_in_osout = .false.
         n_os_out = self%os_out%get_noris()
@@ -1878,8 +1850,8 @@ contains
         ind = 0
         do i = 1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
-                imgkind = trim(self%os_out%get_static(i,'imgkind'))
-                if(trim(imgkind).eq.trim(which_imgkind))then
+                imgkind = self%os_out%get_str(i,'imgkind')
+                if(imgkind.eq.trim(which_imgkind))then
                     if( self%os_out%isthere(i, 'state') )then
                         if( self%os_out%get_state(i) == state )then
                             ind = i
@@ -1892,23 +1864,22 @@ contains
         if( ind > 0 ) isthere_in_osout = .true.
     end function isthere_in_osout
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, stkpath, out_ind, box )
-        class(sp_project),                       intent(inout) :: self
-        character(len=:), allocatable,           intent(inout) :: stkname
-        integer,                                 intent(out)   :: ncls
-        real,                                    intent(out)   :: smpd
-        character(len=:), allocatable, optional, intent(inout) :: stkpath
-        character(len=*), optional,              intent(in)    :: imgkind
-        logical,          optional,              intent(in)    :: fail
-        integer,          optional,              intent(inout) :: out_ind
-        real,             optional,              intent(inout) :: box
-        character(len=:), allocatable                          :: ikind, iimgkind
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, out_ind, box )
+        class(sp_project),          intent(inout) :: self
+        class(string),              intent(inout) :: stkname
+        integer,                    intent(out)   :: ncls
+        real,                       intent(out)   :: smpd
+        character(len=*), optional, intent(in)    :: imgkind
+        logical,          optional, intent(in)    :: fail
+        integer,          optional, intent(inout) :: out_ind
+        real,             optional, intent(inout) :: box
+        type(string) :: ikind, iimgkind, stkpath
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
         if( present(imgkind) )then
-            allocate(iimgkind, source=trim(imgkind))
+            iimgkind = trim(imgkind)
         else
-            allocate(iimgkind, source='cavg')
+            iimgkind ='cavg'
         endif
         fail_here = .true.
         if( present(fail) )fail_here = fail
@@ -1929,16 +1900,16 @@ contains
         cnt = 0
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
-                ikind = trim(self%os_out%get_static(i,'imgkind'))
-                if(trim(ikind).eq.trim(iimgkind))then
+                ikind = self%os_out%get_str(i,'imgkind')
+                if(ikind .eq. iimgkind)then
                     ind = i
                     cnt = cnt + 1
                 endif
             endif
         end do
         if( fail_here )then
-            if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind='//iimgkind//', aborting... get_cavgs_stk')
-            if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind='//iimgkind//' identified, aborting... get_cavgs_stk')
+            if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind='//iimgkind%to_char()//', aborting... get_cavgs_stk')
+            if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind='//iimgkind%to_char()//' identified, aborting... get_cavgs_stk')
         else if( cnt > 1 .or. cnt == 0 )then
             stkname = NIL
             ncls    = 0
@@ -1946,27 +1917,28 @@ contains
             return
         endif
         ! set return values
-        if( allocated(stkname) ) deallocate(stkname)
-        stkname = trim(self%os_out%get_static(ind,'stk'))
+        stkname = self%os_out%get_str(ind,'stk')
+        if( .not. file_exists(stkname) )then
+            if(self%os_out%isthere(ind, 'stkpath'))then
+                stkpath = self%os_out%get_str(ind,'stkpath')
+                stkname = stkpath%to_char()//'/'//stkname%to_char()
+            endif
+        endif
         ncls    = self%os_out%get_int(ind, 'nptcls')
         smpd    = self%os_out%get(ind, 'smpd')
-        if(present(stkpath)) then
-            if( allocated(stkpath) ) deallocate(stkpath)
-            if(self%os_out%isthere(ind, 'stkpath')) stkpath = trim(self%os_out%get_static(ind,'stkpath'))
-        endif
         if(present(out_ind)) out_ind = ind
-        if(present(box)) box = self%os_out%get(ind, 'box')
+        if(present(box)    ) box     = self%os_out%get(ind, 'box')
     end subroutine get_cavgs_stk
 
     subroutine get_vol( self, imgkind, state, vol_fname, smpd, box )
-        class(sp_project),             intent(inout) :: self
-        character(len=*),              intent(in)    :: imgkind
-        integer,                       intent(in)    :: state
-        character(len=:), allocatable, intent(inout) :: vol_fname
-        real,                          intent(out)   :: smpd
-        integer,                       intent(out)   :: box
-        character(len=:), allocatable :: imgkind_here
-        integer :: i, ind, cnt
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: imgkind
+        integer,           intent(in)    :: state
+        type(string),      intent(inout) :: vol_fname
+        real,              intent(out)   :: smpd
+        integer,           intent(out)   :: box
+        type(string) :: imgkind_here
+        integer      :: i, ind, cnt
         select case(trim(imgkind))
             case('vol_cavg','vol','vol_msk')
                 ! all good
@@ -1974,8 +1946,8 @@ contains
                 THROW_HARD('invalid VOL kind: '//trim(imgkind)//'; get_vol')
         end select
         ! defaults
-        if( allocated(vol_fname) ) deallocate(vol_fname)
-        allocate(vol_fname, source='')
+        call vol_fname%kill
+        vol_fname = ''
         box  = 0
         smpd = 0.
         ! fetch index
@@ -1986,7 +1958,7 @@ contains
                 do i=1,self%os_out%get_noris()
                     if( self%os_out%isthere(i,'imgkind') )then
                         call self%os_out%getter(i,'imgkind',imgkind_here)
-                        if(trim(imgkind).eq.trim(imgkind_here))then
+                        if(imgkind_here.eq.imgkind)then
                             ind = i
                             cnt = cnt + 1
                         endif
@@ -1996,7 +1968,7 @@ contains
                 do i=1,self%os_out%get_noris()
                     if( self%os_out%isthere(i,'imgkind') )then
                         call self%os_out%getter(i,'imgkind',imgkind_here)
-                        if(trim(imgkind).eq.trim(imgkind_here))then
+                        if(imgkind_here.eq.imgkind)then
                             if( self%os_out%get_state(i).eq.state )then
                                 ind = i
                                 cnt = cnt + 1
@@ -2015,23 +1987,23 @@ contains
         endif
         if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind=volXXX, aborting...; get_vol')
         ! set output
-        deallocate(vol_fname)
+        call vol_fname%kill
         call self%os_out%getter(ind, 'vol', vol_fname)
-        smpd = self%os_out%get(ind,  'smpd')
+        smpd = self%os_out%get(ind, 'smpd')
         box  = self%os_out%get_int(ind, 'box')
     end subroutine get_vol
 
     subroutine get_all_vols( self, orisout )
         class(sp_project), intent(inout) :: self
         type(oris),        intent(inout) :: orisout
-        character(len=:),  allocatable   :: imgkind_here
-        integer                          :: i, nvols
+        type(string) :: imgkind_here
+        integer      :: i, nvols
         nvols = 0
         call orisout%new(0, .false.)
         do i=1, self%os_out%get_noris()
             if( self%os_out%isthere(i, 'imgkind') ) then
                 call self%os_out%getter(i, 'imgkind', imgkind_here)
-                if(trim(imgkind_here) .eq. 'vol') then
+                if(imgkind_here%to_char() .eq. 'vol') then
                     nvols = nvols + 1
                     if(nvols .eq. 1) then
                         call orisout%new(1, .false.)
@@ -2042,20 +2014,20 @@ contains
                 endif
             endif
         enddo
-        if(allocated(imgkind_here)) deallocate(imgkind_here)
+        call imgkind_here%kill
     end subroutine get_all_vols
 
     subroutine get_all_fscs( self, orisout )
         class(sp_project), intent(inout) :: self
         type(oris),        intent(inout) :: orisout
-        character(len=:),  allocatable   :: imgkind_here
-        integer                          :: i, nvols
+        type(string) :: imgkind_here
+        integer      :: i, nvols
         nvols = 0
         call orisout%new(0, .false.)
         do i=1, self%os_out%get_noris()
             if( self%os_out%isthere(i, 'imgkind') ) then
                 call self%os_out%getter(i, 'imgkind', imgkind_here)
-                if(trim(imgkind_here) .eq. 'fsc') then
+                if(imgkind_here%to_char().eq.'fsc') then
                     nvols = nvols + 1
                     if(nvols .eq. 1) then
                         call orisout%new(1, .false.)
@@ -2066,26 +2038,26 @@ contains
                 endif
             endif
         enddo
-        if(allocated(imgkind_here)) deallocate(imgkind_here)
+        call imgkind_here%kill
     end subroutine get_all_fscs
 
     subroutine get_fsc( self, state, fsc_fname, box )
-        class(sp_project),             intent(inout) :: self
-        integer,                       intent(in)    :: state
-        character(len=:), allocatable, intent(inout) :: fsc_fname
-        integer,                       intent(out)   :: box
-        character(len=:), allocatable :: imgkind_here
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: state
+        class(string),     intent(inout) :: fsc_fname
+        integer,           intent(out)   :: box
+        type(string) :: imgkind_here
         integer :: i, ind, cnt
         ! defaults
-        if( allocated(fsc_fname) ) deallocate(fsc_fname)
-        allocate(fsc_fname, source=NIL)
+        call fsc_fname%kill
+        fsc_fname =NIL
         ! fetch index
         ind   = 0
         cnt   = 0
         do i=1,self%os_out%get_noris()
             if( self%os_out%isthere(i,'imgkind') )then
                 call self%os_out%getter(i,'imgkind',imgkind_here)
-                if(trim(imgkind_here).eq.'fsc')then
+                if(imgkind_here%to_char().eq.'fsc')then
                     if( self%os_out%get_state(i).eq.state )then
                         ind = i
                         cnt = cnt + 1
@@ -2096,19 +2068,19 @@ contains
         if( cnt == 0 )THROW_HARD('no os_out entry with imgkind=fsc identified, aborting...; get_fsc')
         if( cnt > 1 ) THROW_HARD('multiple os_out entries with imgkind=fsc, aborting...; get_fsc')
         ! set output
-        deallocate(fsc_fname)
+        call fsc_fname%kill
         call self%os_out%getter(ind, 'fsc', fsc_fname)
         box = self%os_out%get_int(ind, 'box')
     end subroutine get_fsc
 
     subroutine get_frcs( self, frcs, which_imgkind, fail )
-        class(sp_project),             intent(inout) :: self
-        character(len=:), allocatable, intent(inout) :: frcs
-        character(len=*),              intent(in)    :: which_imgkind
-        logical,          optional,    intent(in)    :: fail
-        character(len=:), allocatable :: imgkind
-        integer :: n_os_out, ind, i, cnt
-        logical :: fail_here, found
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(inout) :: frcs
+        character(len=*),  intent(in)    :: which_imgkind
+        logical, optional, intent(in)    :: fail
+        type(string) :: imgkind
+        integer      :: n_os_out, ind, i, cnt
+        logical      :: fail_here, found
         select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
@@ -2127,14 +2099,14 @@ contains
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
                 call self%os_out%getter(i,'imgkind',imgkind)
-                if(trim(imgkind).eq.trim(which_imgkind))then
+                if(imgkind.eq.which_imgkind)then
                     ind   = i
                     cnt   = cnt + 1
                     found = .true.
                 endif
             endif
         end do
-        if( allocated(frcs) ) deallocate(frcs)
+        call frcs%kill
         if( fail_here )then
             if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind=frcXD, aborting...; get_frcs')
             if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind=frcsXD identified, aborting...; get_frcs')
@@ -2147,11 +2119,12 @@ contains
         endif
     end subroutine get_frcs
 
+    ! static for OpenMP safety
     subroutine get_imginfo_from_osout( self, smpd, box, nptcls )
         class(sp_project), intent(inout) :: self
         real,              intent(out)   :: smpd
         integer,           intent(out)   :: box, nptcls
-        character(len=LONGSTRLEN) :: imgkind
+        character(len=STDLEN) :: imgkind
         integer :: i, nos
         nptcls = 0
         smpd   = 0.
@@ -2161,7 +2134,7 @@ contains
         ! nptcls: look for cavgs, defaults to zero for other entries (frcs, volumes)
         do i=1,nos
             if( self%os_out%isthere(i,'imgkind') )then
-                imgkind = trim(self%os_out%get_static(i,'imgkind'))
+                call self%os_out%get_static(i,'imgkind',imgkind)
                 if(trim(imgkind).eq.'cavg')then
                     if( self%os_out%isthere(i,'fromp').and.self%os_out%isthere(i,'top') )then
                         nptcls = nptcls + self%os_out%get_top(i) - self%os_out%get_fromp(i) + 1
@@ -2181,32 +2154,33 @@ contains
         end do
     end subroutine get_imginfo_from_osout
 
-    ! returns cavg/volume dimensions based on segment
+    ! static for OpenMP safety
     subroutine get_imgdims_from_osout( self, iseg, smpd, box )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: iseg
         real,              intent(out)   :: smpd
         integer,           intent(out)   :: box
-        character(len=LONGSTRLEN) :: imgkind_target
+        character(len=STDLEN) :: imgkind_target, imgkind
         integer :: i, nos
         smpd   = 0.
         box    = 0
         nos    = self%os_out%get_noris()
         if( nos == 0 )return
         select case(iseg)
-        case(PTCL2D_SEG)
-            imgkind_target = 'cavg'
-        case(CLS3D_SEG)
-            imgkind_target = 'vol_cavg'
-        case(PTCL3D_SEG)
-            imgkind_target = 'vol'
-        case DEFAULT
-            return
+            case(PTCL2D_SEG)
+                imgkind_target = 'cavg'
+            case(CLS3D_SEG)
+                imgkind_target = 'vol_cavg'
+            case(PTCL3D_SEG)
+                imgkind_target = 'vol'
+            case DEFAULT
+                return
         end select
         ! last record first
         do i = nos,1,-1
             if( self%os_out%isthere(i,'imgkind') )then
-                if( trim(self%os_out%get_static(i,'imgkind')) .eq. trim(imgkind_target))then
+                call self%os_out%get_static(i,'imgkind',imgkind)
+                if( trim(imgkind) .eq. trim(imgkind_target) )then
                     if( self%os_out%isthere(i,'smpd').and.self%os_out%isthere(i,'box') )then
                         smpd = self%os_out%get(i,'smpd')
                         box  = self%os_out%get_int(i,'box')
@@ -2355,12 +2329,12 @@ contains
 
     integer function get_nmovies( self )
         class(sp_project), target, intent(inout) :: self
-        character(len=:), allocatable :: imgkind
+        type(string) :: imgkind
         integer :: i
         get_nmovies = 0
         do i=1,self%os_mic%get_noris()
             call self%os_mic%getter(i,'imgkind',imgkind)
-            if( trim(imgkind).eq.'movie' .or. trim(imgkind).eq.'mic' ) get_nmovies = get_nmovies + 1
+            if( imgkind%to_char().eq.'movie' .or. imgkind%to_char().eq.'mic' ) get_nmovies = get_nmovies + 1
         enddo
     end function get_nmovies
 
@@ -2387,12 +2361,13 @@ contains
         get_nstks = self%os_stk%get_noris()
     end function get_nstks
 
+    ! static for OpenMP safety
     character(len=STDLEN) function get_ctfflag( self, oritype, iptcl )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         integer,         optional, intent(in)    :: iptcl
         class(oris), pointer         :: ptcl_field
-        character(len=:),allocatable :: ctfflag_str
+        type(string) :: ctfflag_str
         integer :: stkind, ind_in_stk, ind
         get_ctfflag = 'no'
         nullify(ptcl_field)
@@ -2419,14 +2394,14 @@ contains
         else
            ctfflag_str = 'no'
         endif
-        get_ctfflag = trim(ctfflag_str)
+        get_ctfflag = ctfflag_str%to_char()
     end function get_ctfflag
 
     integer(kind(ENUM_CTFFLAG)) function get_ctfflag_type( self, oritype, iptcl )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         integer,         optional, intent(in)    :: iptcl
-        character(len=:), allocatable :: ctfflag
+        character(len=STDLEN) :: ctfflag
         ctfflag = self%get_ctfflag(oritype, iptcl=iptcl)
         select case(trim(ctfflag))
             case('no')
@@ -2442,24 +2417,23 @@ contains
         end select
     end function get_ctfflag_type
 
-    ! the entire project must be phase-plate, so the 1 is
     logical function has_phaseplate( self, oritype, iptcl )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         integer,         optional, intent(in)    :: iptcl
-        character(len=:), allocatable :: phaseplate
-        integer :: ind
+        type(string) :: phaseplate
+        integer      :: ind
         has_phaseplate = .false.
         if( trim(oritype) .eq. 'cls3D' ) return
         ind = 1
         if( present(iptcl) ) ind = iptcl
         ! get info
         if( self%os_stk%isthere(ind, 'phaseplate') )then
-            phaseplate = trim(self%os_stk%get_static(ind, 'phaseplate'))
+            phaseplate = self%os_stk%get_str(ind, 'phaseplate')
         else
             phaseplate = 'no'
         endif
-        has_phaseplate = trim(phaseplate).eq.'yes'
+        has_phaseplate = phaseplate%to_char().eq.'yes'
     end function has_phaseplate
 
     logical function has_boxfile( self )
@@ -2467,6 +2441,7 @@ contains
         has_boxfile = self%os_mic%isthere('boxfile')
     end function has_boxfile
 
+    ! static for OpenMP safety
     function get_ctfparams( self, oritype, iptcl ) result( ctfvars )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
@@ -2514,7 +2489,7 @@ contains
         endif
         ! CTF flag
         if( self%os_stk%isthere(stkind, 'ctf') )then
-            ctfflag = trim(self%os_stk%get_static(stkind, 'ctf'))
+            call self%os_stk%get_static(stkind, 'ctf', ctfflag)
         else
             ctfflag = NIL
         endif
@@ -2595,7 +2570,7 @@ contains
         end select
         ! has phaseplate
         if( self%os_stk%isthere(stkind, 'phaseplate') )then
-            phaseplate = trim(self%os_stk%get_static(stkind, 'phaseplate'))
+            call self%os_stk%get_static(stkind, 'phaseplate', phaseplate)
         else
             phaseplate = 'no'
         endif
@@ -2763,9 +2738,15 @@ contains
 
     ! setters
 
+    subroutine assign( self_out, self_in )
+        class(sp_project), intent(inout) :: self_out
+        class(sp_project), intent(in)    :: self_in
+        call self_out%copy(self_in)
+    end subroutine assign
+
     subroutine copy( self_out, self_in )
-        class(sp_project), target, intent(inout) :: self_out
-        class(sp_project), target, intent(in)    :: self_in
+        class(sp_project), intent(inout) :: self_out
+        class(sp_project), intent(in)    :: self_in
         call self_out%os_mic%copy(self_in%os_mic)
         call self_out%os_stk%copy(self_in%os_stk)
         call self_out%os_ptcl2D%copy(self_in%os_ptcl2D)
@@ -2813,21 +2794,21 @@ contains
 
     subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale, dir )
         ! this probably needs an oritype input for dealing with scale class averages
-        class(sp_project),             intent(inout) :: self
-        real,                          intent(inout) :: smpd_target
-        character(len=:), allocatable, intent(out)   :: new_projfile
-        class(cmdline),                intent(inout) :: cline
-        class(cmdline),                intent(out)   :: cline_scale
-        character(len=*), optional,    intent(in)    :: dir
-        character(len=:), allocatable :: projfile, projname, new_projname
-        real    :: scale_factor, smpd_sc, smpd
-        integer :: box, box_sc, istk, n_os_stk
+        class(sp_project),       intent(inout) :: self
+        real,                    intent(inout) :: smpd_target
+        class(string),           intent(out)   :: new_projfile
+        class(cmdline),          intent(inout) :: cline
+        class(cmdline),          intent(out)   :: cline_scale
+        class(string), optional, intent(in)    :: dir
+        type(string) :: projfile, projname, new_projname, str_tmp
+        real         :: scale_factor, smpd_sc, smpd
+        integer      :: box, box_sc, istk, n_os_stk
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 ) THROW_HARD('Empty stack object! scale_projfile')
         call self%projinfo%getter(1, 'projfile', projfile)
         call self%projinfo%getter(1, 'projname', projname)
-        if( trim(projname).eq.'' )then
-            projname = get_fbody(projfile, METADATA_EXT, separator=.false.)
+        if( projname%is_blank() )then
+            projname = get_fbody(projfile, string(METADATA_EXT), separator=.false.)
         endif
         ! dimensions
         smpd = self%get_smpd()
@@ -2835,13 +2816,14 @@ contains
         call autoscale(box, smpd, smpd_target, box_sc, smpd_sc, scale_factor)
         call cline_scale%set('prg',      'scale_project')
         call cline_scale%set('scale',    scale_factor)
-        call cline_scale%set('projfile', projfile)
+        call cline_scale%set('projfile', projfile%to_char())
         call cline_scale%set('smpd',     smpd_sc)
-        if( cline%defined('mkdir') )     call cline_scale%set('mkdir', cline%get_carg('mkdir'))
-        if( present(dir) )               call cline_scale%set('dir_target',trim(dir)//path_separator)
+        str_tmp = cline%get_carg('mkdir')
+        if( cline%defined('mkdir') )     call cline_scale%set('mkdir',str_tmp%to_char())
+        if( present(dir) )               call cline_scale%set('dir_target',dir%to_char()//path_separator)
         if( box == box_sc )then
             ! no scaling
-            new_projfile = trim(projfile)
+            new_projfile = projfile
             return
         endif
         ! parameter updates
@@ -2852,13 +2834,13 @@ contains
         call self%os_ptcl2D%mul_shifts(scale_factor)
         call self%os_ptcl3D%mul_shifts(scale_factor)
         ! name changes and list for scaling job
-        new_projname = trim(projname)//SCALE_SUFFIX
-        new_projfile = trim(new_projname)//trim(METADATA_EXT)
-        call cline%set('projname', trim(new_projname))
+        new_projname = projname%to_char()//SCALE_SUFFIX
+        new_projfile = new_projname%to_char()//METADATA_EXT
+        call cline%set('projname', new_projname)
         call cline%delete('projfile')
         call self%update_projinfo(cline)
         if(present(dir))then
-            call self%add_scale_tag(dir=trim(dir)//path_separator)
+            call self%add_scale_tag(dir=dir//path_separator)
         else
             call self%add_scale_tag
         endif
@@ -2877,10 +2859,10 @@ contains
         integer,           intent(in)    :: nptcls, ndocs
         character(len=*),  intent(in)    :: oritype, fbody
         integer, optional, intent(in)    :: numlen_in
-        integer,          allocatable :: parts(:,:)
-        character(len=:), allocatable :: fname, projfile
-        type(str4arr),    allocatable :: os_strings(:)
-        class(oris),          pointer :: os => null()
+        integer,      allocatable :: parts(:,:)
+        type(string)              :: fname, projfile
+        type(string), allocatable :: os_strings(:)
+        class(oris),      pointer :: os => null()
         type(binoris) :: bos_doc
         integer       :: i, numlen, n_records, partsz, isegment, strlen_max
         numlen = len(int2str(ndocs))
@@ -2893,12 +2875,12 @@ contains
             do i=1,ndocs
                 ! read part
                 fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
-                call bos_doc%open(trim(fname))
+                call bos_doc%open(fname)
                 n_records = bos_doc%get_n_records(isegment)
                 partsz    = parts(i,2) - parts(i,1) + 1
                 if( n_records /= partsz )then
                     write(logfhandle,*) 'ERROR, # records does not match expectation'
-                    write(logfhandle,*) 'EXTRACTED FROM file: ', trim(fname)
+                    write(logfhandle,*) 'EXTRACTED FROM file: ', fname%to_char()
                     write(logfhandle,*) 'n_records: ', n_records
                     write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
                     write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
@@ -2921,12 +2903,12 @@ contains
             do i=1,ndocs
                 ! read part
                 fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
-                call bos_doc%open(trim(fname))
+                call bos_doc%open(fname)
                 n_records = bos_doc%get_n_records(isegment)
                 partsz    = parts(i,2) - parts(i,1) + 1
                 if( n_records /= partsz )then
                     write(logfhandle,*) 'ERROR, # records does not match expectation'
-                    write(logfhandle,*) 'EXTRACTED FROM file: ', trim(fname)
+                    write(logfhandle,*) 'EXTRACTED FROM file: ', fname%to_char()
                     write(logfhandle,*) 'n_records: ', n_records
                     write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
                     write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
@@ -2944,10 +2926,9 @@ contains
             ! transfer to memory & destruct
             call self%ptr2oritype(oritype, os)
             do i=1,nptcls
-                call os%str2ori(i, os_strings(i)%str)
-                if( allocated(os_strings(i)%str) ) deallocate(os_strings(i)%str)
+                call os%str2ori(i, os_strings(i)%to_char())
             end do
-            deallocate(os_strings)
+            call os_strings%kill
         endif
         if( allocated(parts) ) deallocate(parts)
         nullify(os)
@@ -3227,11 +3208,10 @@ contains
     end subroutine map_ptcls_state_to_cls
 
     subroutine replace_project( self, projfile_src, oritype )
-        class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: projfile_src
-        character(len=STDLEN), intent(in)    :: oritype
-        character(len=:), allocatable :: boxfname, stkfname, movfname, micfname, src_path
-        character(len=LONGSTRLEN)     :: absstkname, absboxname, absmicname, absmovname
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: projfile_src
+        character(len=*),  intent(in)    :: oritype
+        type(string)    :: absstkname, absboxname, absmicname, absmovname, boxfname, stkfname, movfname, micfname, src_path
         type(sp_project) :: self_src
         type(ori)        :: o, o_src
         integer          :: istk, nstks, imic, nmics, iptcl
@@ -3284,7 +3264,7 @@ contains
                 endif
                 if( o_src%isthere('stk') )then
                     call o_src%getter('stk',stkfname)
-                    if( stkfname(1:1).ne.'/' ) stkfname = trim(src_path)//'/'//trim(stkfname)
+                    if( stkfname%to_char([1,1]).ne.'/' ) stkfname = src_path%to_char()//'/'//stkfname%to_char()
                     absstkname = simple_abspath(stkfname, check_exists=.false.)
                     if( file_exists(absstkname) )then
                         call o_src%set('stk', absstkname)
@@ -3296,7 +3276,7 @@ contains
                 endif
                 if( o_src%isthere('boxfile') )then
                     call o_src%getter('boxfile',boxfname)
-                    if( boxfname(1:1).ne.'/' ) boxfname = trim(src_path)//'/'//trim(boxfname)
+                    if( boxfname%to_char([1,1]).ne.'/' ) boxfname = src_path%to_char()//'/'//boxfname%to_char()
                     absboxname = simple_abspath(boxfname, check_exists=.false.)
                     if( file_exists(absboxname) )then
                         call o_src%set('boxfile', absboxname)
@@ -3306,8 +3286,8 @@ contains
                 endif
                 if( err )then
                     call o_src%print_ori
-                    write(logfhandle,*) trim(absstkname)
-                    write(logfhandle,*) trim(absboxname)
+                    write(logfhandle,*) absstkname%to_char()
+                    write(logfhandle,*) absboxname%to_char()
                     THROW_HARD('Missing stack or boxfile!')
                 else
                     call self%os_stk%set_ori(istk,o_src)
@@ -3331,23 +3311,23 @@ contains
                 endif
                 if( o_src%isthere('movie') )then
                     call o_src%getter('movie',movfname)
-                    if( movfname(1:1).ne.'/' ) movfname = trim(src_path)//'/'//trim(movfname)
+                    if( movfname%to_char([1,1]).ne.'/' ) movfname = src_path%to_char()//'/'//movfname%to_char()
                     absmovname = simple_abspath(movfname, check_exists=.false.)
                     if( file_exists(absmovname) )then
                         call o_src%set('movie', absmovname)
                     else
-                        THROW_WARN('Movie could not be substituted: '//trim(absmovname))
+                        THROW_WARN('Movie could not be substituted: '//absmovname%to_char())
                     endif
                 endif
                 if( o_src%isthere('intg') )then
                     call o_src%getter('intg',micfname)
-                    if( micfname(1:1).ne.'/' ) micfname = trim(src_path)//'/'//trim(micfname)
+                    if( micfname%to_char([1,1]).ne.'/' ) micfname = src_path%to_char()//'/'//micfname%to_char()
                     absmicname = simple_abspath(micfname, check_exists=.false.)
                     if( file_exists(absmicname) )then
                         call o_src%set('movie', absmicname)
                     else
                         call o_src%print_ori
-                        write(logfhandle,*) trim(absmicname)
+                        write(logfhandle,*) absmicname%to_char()
                         THROW_HARD('Missing micrograph!')
                     endif
                 endif
@@ -3536,16 +3516,16 @@ contains
     ! printers
 
     subroutine print_info( self, fname )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        character(len=:),      allocatable :: projfile, record
-        type(binoris_seginfo), allocatable :: hinfo(:)
-        integer,               allocatable :: seginds(:)
+        class(sp_project),     intent(inout) :: self
+        class(string),         intent(in)    :: fname
+        type(binoris_seginfo), allocatable   :: hinfo(:)
+        integer,               allocatable   :: seginds(:)
+        type(string) :: projfile, record
         integer :: i
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info')
+            THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: print_info')
         endif
-        projfile = trim(fname)
+        projfile = fname
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             call self%bos%get_segments_info(seginds, hinfo)
@@ -3554,32 +3534,32 @@ contains
                     call self%bos%read_record(seginds(i), hinfo(i)%first_data_byte, record)
                     write(logfhandle,'(a)') format_str(format_str('SEGMENT '//int2str_pad(seginds(i),2)//' of type: '//segment2oritype(seginds(i)), C_BOLD), C_UNDERLINED)
                     write(logfhandle,'(a)') format_str(segment2info(seginds(i), hinfo(i)%n_records), C_ITALIC)
-                    write(logfhandle,'(a)') format_str('first record:', C_BOLD)//' '//trim(record)
+                    write(logfhandle,'(a)') format_str('first record:', C_BOLD)//' '//record%to_char()
                 end do
             endif
             call self%bos%close
         else
-            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info')
+            THROW_HARD('projfile: '//projfile%to_char()//' nonexistent; print_info')
         endif
     end subroutine print_info
 
     subroutine print_info_json( self, fname )
-        class(sp_project),          intent(inout)  :: self
-        character(len=*),           intent(in)     :: fname
-        character(len=:),           allocatable    :: projfile, record
-        character(len=XLONGSTRLEN), allocatable    :: keys(:)
-        type(binoris_seginfo),      allocatable    :: hinfo(:)
-        type(oris)                                 :: vol_oris
-        type(json_core)                      :: json
-        type(json_value),      pointer       :: json_root, json_seg, json_real_keys, json_char_keys
-        type(ori)                            :: seg_ori
-        logical                              :: is_ptcl = .false.
-        integer,               allocatable   :: seginds(:)
-        integer :: i, j, noris
+        class(sp_project), intent(inout)   :: self
+        class(string),     intent(in)      :: fname
+        type(string),          allocatable :: keys(:)
+        type(binoris_seginfo), allocatable :: hinfo(:)
+        integer,               allocatable :: seginds(:)
+        type(json_value),      pointer     :: json_root, json_seg, json_real_keys, json_char_keys
+        type(oris)      :: vol_oris
+        type(json_core) :: json
+        type(string)    :: projfile, record
+        type(ori)       :: seg_ori
+        logical         :: is_ptcl = .false.
+        integer         :: i, j, noris
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info_json')
+            THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: print_info_json')
         endif
-        projfile = trim(fname)
+        projfile = fname
         call json%initialize(no_whitespace=.true.)
         call json%create_object(json_root,'')
         if( file_exists(projfile) )then
@@ -3597,14 +3577,14 @@ contains
                         ! read 1st record and convert to ori
                         if(seginds(i) == PTCL2D_SEG .or. seginds(i) == PTCL3D_SEG) is_ptcl = .true.
                         call self%bos%read_record(seginds(i), hinfo(i)%first_data_byte, record)
-                        call seg_ori%str2ori(record, is_ptcl)
+                        call seg_ori%str2ori(record%to_char(), is_ptcl)
                         ! get keys and test if real or character
                         keys = seg_ori%get_keys()
                         do j = 1, size(keys)
-                            if(seg_ori%ischar(trim(keys(j)))) then
-                                call json%add(json_char_keys, '', trim(keys(j)))
+                            if(seg_ori%ischar(keys(j)%to_char())) then
+                                call json%add(json_char_keys, '', keys(j)%to_char())
                             else
-                                call json%add(json_real_keys, '', trim(keys(j)))
+                                call json%add(json_real_keys, '', keys(j)%to_char())
                             end if
                         end do 
                         ! add to json
@@ -3625,13 +3605,13 @@ contains
                         end if
                         ! clean up
                         is_ptcl = .false.
-                        if(allocated(keys)) deallocate(keys)
+                        call keys%kill
                     end if
                 end do
             endif
             call self%bos%close
         else
-            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info_json')
+            THROW_HARD('projfile: '//projfile%to_char()//' nonexistent; print_info_json')
         endif
         call json%print(json_root, logfhandle)
         write(logfhandle,*) !need a newline else the footer is on same line as json
@@ -3641,16 +3621,16 @@ contains
 
     subroutine read( self, fname, wthreads )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         logical, optional, intent(in)    :: wthreads
-        character(len=:), allocatable :: projfile
+        type(string) :: projfile
         integer :: isegment
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('format of: '//trim(fname)//' not supported; read')
+            THROW_HARD('format of: '//fname%to_char()//' not supported; read')
         endif
-        projfile = trim(fname)
-        if( .not. file_exists(trim(projfile)) )then
-            THROW_HARD('file: '// trim(projfile)//' does not exist; read')
+        projfile = fname
+        if( .not. file_exists(projfile) )then
+            THROW_HARD('file: '// projfile%to_char() //' does not exist; read')
         endif
         call self%bos%open(projfile)
         do isegment=1,self%bos%get_n_segments()
@@ -3663,13 +3643,13 @@ contains
 
     subroutine read_non_data_segments( self, fname )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        character(len=:), allocatable :: projfile
+        class(string),     intent(in)    :: fname
+        type(string) :: projfile
         integer :: iseg
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('file format of: '//trim(fname)//' not supported; read_non_data_segments')
+            THROW_HARD('file format of: '//fname%to_char()//' not supported; read_non_data_segments')
         endif
-        projfile = trim(fname)
+        projfile = fname
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             do iseg=11,MAXN_OS_SEG
@@ -3677,19 +3657,19 @@ contains
             end do
             call self%bos%close
         else
-            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; read_non_data_segments')
+            THROW_HARD('projfile: '// projfile%to_char() //' nonexistent; read_non_data_segments')
         endif
     end subroutine read_non_data_segments
 
     subroutine read_ctfparams_state_eo( self, fname )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer :: isegment
-        if( .not. file_exists(trim(fname)) )then
-            THROW_HARD('inputted file: '//trim(fname)//' does not exist; read_ctfparams_state_eo')
+        if( .not. file_exists(fname) )then
+            THROW_HARD('inputted file: '//fname%to_char()//' does not exist; read_ctfparams_state_eo')
         endif
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('file format of: '//trim(fname)//' not supported; read_ctfparams_state_eo')
+            THROW_HARD('file format of: '//fname%to_char()//' not supported; read_ctfparams_state_eo')
         endif
         call self%bos%open(fname)
         do isegment=1,self%bos%get_n_segments()
@@ -3700,15 +3680,15 @@ contains
 
     subroutine read_mic_stk_ptcl2D_segments( self, fname, wthreads )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         logical, optional, intent(in)    :: wthreads
-        character(len=:), allocatable :: projfile
+        type(string) :: projfile
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('format of: '//trim(fname)//' not supported; read')
+            THROW_HARD('format of: '//fname%to_char()//' not supported; read')
         endif
-        projfile = trim(fname)
-        if( .not. file_exists(trim(projfile)) )then
-            THROW_HARD('file: '// trim(projfile)//' does not exist; read')
+        projfile = fname
+        if( .not. file_exists(projfile) )then
+            THROW_HARD('file: '// projfile%to_char()//' does not exist; read')
         endif
         call self%bos%open(projfile)
         call self%segreader(MIC_SEG, wthreads=wthreads)
@@ -3720,12 +3700,12 @@ contains
     subroutine read_segment( self, oritype, fname, fromto, wthreads )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: oritype
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
         logical, optional, intent(in)    :: wthreads
         integer :: isegment
-        if( .not. file_exists(trim(fname)) )then
-            THROW_HARD('inputted file: '//trim(fname)//' does not exist; read_segment')
+        if( .not. file_exists(fname) )then
+            THROW_HARD('inputted file: '//fname%to_char()//' does not exist; read_segment')
         endif
         select case(fname2format(fname))
             case('O')
@@ -3763,7 +3743,7 @@ contains
                         THROW_HARD('unsupported oritype flag; read_segment')
                 end select
             case DEFAULT
-                THROW_HARD('file format of: '//trim(fname)//' not supported; read_segment')
+                THROW_HARD('file format of: '//fname%to_char()//' not supported; read_segment')
         end select
     end subroutine read_segment
 
@@ -3813,27 +3793,27 @@ contains
 
     subroutine read_segments_info( self, fname, seginds, seginfos )
         class(sp_project),                  intent(inout) :: self
-        character(len=*),                   intent(in)  :: fname
+        class(string),                      intent(in)  :: fname
         type(binoris_seginfo), allocatable, intent(out) :: seginfos(:)
         integer,               allocatable, intent(out) :: seginds(:)
-        character(len=:), allocatable :: projfile
+        type(string) :: projfile
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: read_segments_info')
+            THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: read_segments_info')
         endif
-        projfile = trim(fname)
+        projfile = fname
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             call self%bos%get_segments_info(seginds, seginfos)
             call self%bos%close
         else
-            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info')
+            THROW_HARD('projfile: '//projfile%to_char()//' nonexistent; print_info')
         endif
     end subroutine read_segments_info
 
     !>  Convenience funtion for checking # of movies/mics, stacks and particles
     subroutine read_data_info( self, fname, nmics, nstks, nptcls )
         class(sp_project),   intent(inout) :: self
-        character(len=*),    intent(in)    :: fname
+        class(string),       intent(in)    :: fname
         integer,             intent(out)   :: nmics, nstks, nptcls
         type(binoris_seginfo), allocatable :: seginfos(:)
         integer,               allocatable :: seginds(:)
@@ -3865,25 +3845,25 @@ contains
 
     subroutine write( self, fname, fromto, isegment, tempfile )
         class(sp_project),                    intent(inout) :: self
-        character(len=*),           optional, intent(in)    :: fname
+        class(string),              optional, intent(in)    :: fname
         integer,                    optional, intent(in)    :: fromto(2)
         integer(kind(ENUM_ORISEG)), optional, intent(in)    :: isegment
         logical,                    optional, intent(in)    :: tempfile
-        character(len=:), allocatable :: projfile, tmpfile
+        type(string) :: projfile, tmpfile
         integer(kind(ENUM_ORISEG))    :: iseg
         logical :: l_tmp
         l_tmp = .false.
         if( present(tempfile) ) l_tmp = tempfile
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('file format of: '//trim(fname)//' not supported; write')
+                THROW_HARD('file format of: '//fname%to_char()//' not supported; write')
             endif
-            projfile = trim(fname)
+            projfile = fname
         else
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
         if( l_tmp )then
-            tmpfile = swap_suffix(projfile, METADATA_EXT, '.tmp')
+            tmpfile = swap_suffix(projfile, string(METADATA_EXT), string('.tmp'))
             call self%bos%open(tmpfile, del_if_exists=.true.)
         else
             call self%bos%open(projfile, del_if_exists=.true.)
@@ -3904,15 +3884,15 @@ contains
     subroutine write_segment_inside( self, oritype, fname, fromto )
         class(sp_project),          intent(inout) :: self
         character(len=*),           intent(in)    :: oritype
-        character(len=*), optional, intent(in)    :: fname
+        class(string),    optional, intent(in)    :: fname
         integer,          optional, intent(in)    :: fromto(2)
-        character(len=:), allocatable :: projfile
+        type(string) :: projfile
         integer(kind(ENUM_ORISEG)) :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write')
+                THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: write')
             endif
-            projfile = trim(fname)
+            projfile = fname
         else
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
@@ -3929,13 +3909,13 @@ contains
 
     subroutine write_non_data_segments( self, fname )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        character(len=:), allocatable :: projfile
+        class(string),     intent(in)    :: fname
+        type(string) :: projfile
         integer :: iseg
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write_non_data_segments')
+            THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: write_non_data_segments')
         endif
-        projfile = trim(fname)
+        projfile = fname
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             do iseg=11,MAXN_OS_SEG
@@ -3945,14 +3925,14 @@ contains
             call self%bos%write_header
             call self%bos%close
         else
-            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; write_non_data_segments')
+            THROW_HARD('projfile: '//projfile%to_char()//' nonexistent; write_non_data_segments')
         endif
     end subroutine write_non_data_segments
 
     subroutine write_segment2txt( self, oritype, fname, fromto )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: oritype
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
         select case(fname2format(fname))
             case('O')
@@ -4030,7 +4010,7 @@ contains
                         THROW_HARD('unsupported oritype flag; write_segment2txt')
                 end select
             case DEFAULT
-                THROW_HARD('file format of: '//trim(fname)//'not supported; write_segment2txt')
+                THROW_HARD('file format of: '//fname%to_char()//'not supported; write_segment2txt')
         end select
     end subroutine write_segment2txt
 
@@ -4038,8 +4018,9 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: oritype
         integer, optional, intent(in)    :: fromto(2)
-        integer :: ffromto(2), iori, noris
-        logical :: fromto_present
+        type(string) :: str
+        integer      :: ffromto(2), iori, noris
+        logical      :: fromto_present
         fromto_present = present(fromto)
         if( fromto_present ) ffromto = fromto
         select case(trim(oritype))
@@ -4048,7 +4029,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_mic%ori2str(iori)
+                        str = self%os_mic%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No mic-type oris available to print; sp_project :: print_segment'
@@ -4058,7 +4041,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_stk%ori2str(iori)
+                        str = self%os_stk%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No stk-type oris available to print; sp_project :: print_segment'
@@ -4068,7 +4053,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_ptcl2D%ori2str(iori)
+                        str = self%os_ptcl2D%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No ptcl2D-type oris available to print; sp_project :: print_segment'
@@ -4078,7 +4065,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_cls2D%ori2str(iori)
+                        str = self%os_cls2D%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No cls2D-type oris available to print; sp_project :: print_segment'
@@ -4088,7 +4077,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_cls3D%ori2str(iori)
+                        str = self%os_cls3D%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No cls3D-type oris available to print; sp_project :: print_segment'
@@ -4098,7 +4089,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_ptcl3D%ori2str(iori)
+                        str = self%os_ptcl3D%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No ptcl3D-type oris available to print; sp_project :: print_segment'
@@ -4108,7 +4101,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_out%ori2str(iori)
+                        str = self%os_out%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No out-type oris available to print; sp_project :: print_segment'
@@ -4118,7 +4113,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%os_optics%ori2str(iori)
+                        str = self%os_optics%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No optics-type oris available to print; sp_project :: print_segment'
@@ -4128,7 +4125,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%projinfo%ori2str(iori)
+                        str = self%projinfo%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No projinfo-type oris available to print; sp_project :: print_segment'
@@ -4138,7 +4137,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%jobproc%ori2str(iori)
+                        str = self%jobproc%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No jobproc-type oris available to print; sp_project :: print_segment'
@@ -4148,7 +4149,9 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(logfhandle,'(a)') self%compenv%ori2str(iori)
+                        str = self%compenv%ori2str(iori)
+                        write(logfhandle,'(a)') str%to_char()
+                        call str%kill
                     end do
                 else
                     write(logfhandle,*) 'No compenv-type oris available to print; sp_project :: print_segment'
@@ -4160,7 +4163,8 @@ contains
 
     subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist, nran, boxes, plot_key )
         class(sp_project),           intent(inout) :: self
-        character(len=*),            intent(in)    :: oritype, projfile
+        character(len=*),            intent(in)    :: oritype
+        class(string),               intent(in)    :: projfile
         character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist, plot_key
         integer,           optional, intent(in)    :: fromto(2), nran
         logical,           optional, intent(in)    :: boxes
@@ -4168,8 +4172,7 @@ contains
         type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori, json_pre, json_post, json_plot
         type(oris)                                 :: vol_oris, fsc_oris
         type(ori)                                  :: tmp_ori
-        character(len=:),  allocatable             :: stkname
-        character(len=STDLEN)                      :: stkjpeg
+        type(string)                               :: stkname, stkjpeg
         integer,           allocatable             :: indices(:), pinds(:), indices_pre(:), indices_post(:)
         integer                                    :: ffromto(2), iori, noris, ncls, isprite, boxsize
         logical,           allocatable             :: l_mask(:)
@@ -4289,8 +4292,8 @@ contains
                     if(.not. self%os_cls2D%isthere(1, "thumb")) then
                         ! create thumb
                         call self%read_segment('out', projfile)
-                        call self%set_cavgs_thumb(trim(projfile))
-                        call self%write_segment_inside('cls2D', fname=trim(projfile))
+                        call self%set_cavgs_thumb(projfile)
+                        call self%write_segment_inside('cls2D', fname=projfile)
                     end if
                     call calculate_indices(self%os_cls2D)
                     do iori=1, size(indices)
@@ -4554,7 +4557,7 @@ contains
             subroutine add_fsc( iori_l )
                 integer,          intent(in)  :: iori_l
                 type(json_value), pointer     :: fsc_json, datasets, dataset, data, labels
-                character(len=:), allocatable :: fscfile
+                type(string) :: fscfile
                 real,             allocatable :: fsc(:), res(:)
                 real                          :: smpd_l, box_l, fsc05, fsc0143
                 integer                       :: ifsc, fsc05_crossed_bin, fsc0143_crossed_bin
@@ -4610,7 +4613,7 @@ contains
                 call json%add(json_ori, 'fsc0143', dble(fsc0143))
                 call json%add(json_ori, 'fsc05bin',   fsc05_crossed_bin)
                 call json%add(json_ori, 'fsc0143bin', fsc0143_crossed_bin)
-                if(allocated(fscfile)) deallocate(fscfile)
+                call fscfile%kill
             end subroutine add_fsc
 
             subroutine add_oriplot( iori_l )
@@ -4681,7 +4684,6 @@ contains
                 deallocate(sort_vals)
             end function sort_oris
 
-
             subroutine get_projections( noris_l )
                 integer, intent(in) :: noris_l
                 real                :: minproj, maxproj, e1, e2
@@ -4716,15 +4718,15 @@ contains
 
     subroutine set_cavgs_thumb( self, projfile )
         class(sp_project),  intent(inout) :: self
-        character(len=*),   intent(in)    :: projfile
-        character(len=:),   allocatable   :: stkname
+        class(string),      intent(in)    :: projfile
         integer,            allocatable   :: clsinds(:)
         logical,            allocatable   :: clsmsk(:)
+        type(string)                      :: cavgsstk
         integer                           :: ncls, n_thumbnails, out_ind, iori, ithumb, nxtiles, nytiles
         real                              :: smpd, thumbnail_scale
-        call self%get_cavgs_stk(stkname, ncls, smpd, out_ind=out_ind)
+        call self%get_cavgs_stk(cavgsstk, ncls, smpd, out_ind=out_ind)
         call self%os_cls2D%mask_from_state( 1, clsmsk, clsinds )
-        call mrc2jpeg_tiled(trim(stkname), stemname(projfile) //"/thumb2D.jpeg", scale=thumbnail_scale, ntiles=n_thumbnails, msk=clsmsk, n_xtiles=nxtiles, n_ytiles=nytiles)
+        call mrc2jpeg_tiled(cavgsstk, stemname(projfile) //"/thumb2D.jpeg", scale=thumbnail_scale, ntiles=n_thumbnails, msk=clsmsk, n_xtiles=nxtiles, n_ytiles=nytiles)
         ithumb = 1
         do iori=1, self%os_cls2D%get_noris()
             call self%os_cls2D%set(iori, "thumb",    stemname(projfile) //"/thumb2D.jpeg")
@@ -4737,21 +4739,23 @@ contains
                 ithumb = ithumb + 1
             end if
         end do
+        call cavgsstk%kill
     end subroutine set_cavgs_thumb
 
     subroutine set_ptcl2D_thumb( self, projfile, indices, boxsize )
-        class(sp_project),               intent(inout) :: self
-        character(len=*),                intent(in)    :: projfile
-        integer,            allocatable, intent(in)    :: indices(:)
-        integer,                         intent(out)   :: boxsize
-        character(len=:),   allocatable   :: thumbfile, tmpfile, stkname
-        integer,            allocatable   :: arr(:)
-        real,               allocatable   :: sort_vals(:)
-        type(image)                       :: stkimg
-        type(stack_io)                    :: stkio_w
-        integer                           :: iori, iidx, idx, ldim_stk(3), nptcls
-        real                              :: smpd
-        logical                           :: first = .true.
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: projfile
+        integer,           intent(in)    :: indices(:)
+        integer,           intent(out)   :: boxsize
+        type(string)          :: thumbfile, tmpfile
+        type(string)          :: stkname
+        integer, allocatable  :: arr(:)
+        real,    allocatable  :: sort_vals(:)
+        type(image)           :: stkimg
+        type(stack_io)        :: stkio_w
+        integer               :: iori, iidx, idx, ldim_stk(3), nptcls
+        real                  :: smpd
+        logical               :: first = .true.
         thumbfile = stemname(projfile) // "/thumbptcl2D.jpeg"
         ! always recreate
         if(file_exists(thumbfile)) call del_file(thumbfile)
@@ -4760,14 +4764,14 @@ contains
         do iidx=1, size(indices)
             iori = indices(iidx)
             call self%get_stkname_and_ind('ptcl2D', iori, stkname, idx)
-            call find_ldim_nptcls(trim(stkname), ldim_stk, nptcls, smpd)
+            call find_ldim_nptcls(stkname, ldim_stk, nptcls, smpd)
             call stkimg%new([ldim_stk(1), ldim_stk(1), 1], smpd)
             if(first) then
                 call stkio_w%open(tmpfile, smpd, 'write', box=ldim_stk(1))
                 boxsize = ldim_stk(1)
                 first = .false.
             end if
-            call stkimg%read(trim(stkname), idx)
+            call stkimg%read(stkname, idx)
             call stkimg%fft()
             call stkimg%bpgau2D(0.0, 4.0)
             call stkimg%ifft()
@@ -4780,16 +4784,15 @@ contains
         call del_file(tmpfile)
         if(allocated(sort_vals)) deallocate(sort_vals)
         if(allocated(arr))       deallocate(arr)
-        if(allocated(thumbfile)) deallocate(thumbfile)
-        if(allocated(tmpfile))   deallocate(tmpfile)
-        if(allocated(stkname))   deallocate(stkname)
+        call thumbfile%kill
+        call tmpfile%kill
     end subroutine set_ptcl2D_thumb
 
     subroutine write_mics_star( self, fname )
-        class(sp_project),             intent(inout) :: self
-        character(len=*),   optional,  intent(in)    :: fname
-        type(starfile)                               :: star
-        character(len=:), allocatable                :: l_fname
+        class(sp_project),       intent(inout) :: self
+        class(string), optional, intent(in)    :: fname
+        type(starfile) :: star
+        type(string)   :: l_fname
         if( self%os_mic%get_noris() == 0 ) return
         if(present(fname)) then 
             l_fname = fname
@@ -4803,10 +4806,10 @@ contains
     end subroutine write_mics_star
 
     subroutine write_ptcl2D_star( self, fname )
-        class(sp_project),             intent(inout) :: self
-        character(len=*),   optional,  intent(in)    :: fname
-        type(starfile)                               :: star
-        character(len=:), allocatable                :: l_fname
+        class(sp_project),       intent(inout) :: self
+        class(string), optional, intent(in)    :: fname
+        type(starfile) :: star
+        type(string)   :: l_fname
         if( self%os_mic%get_noris() == 0 ) return
         if(present(fname)) then 
             l_fname = fname
@@ -4819,26 +4822,26 @@ contains
         call star%complete()
     end subroutine write_ptcl2D_star
 
-    subroutine import_optics_map( self, mapfileprefix )
-        class(sp_project),             intent(inout) :: self
-        character(len=:), allocatable, intent(in)    :: mapfileprefix
-        type(nrtxtfile)                              :: mapfile
-        real,             allocatable                :: map_entries(:,:)
-        integer,          allocatable                :: mics_optics_map(:)
-        real                                         :: min_importind, max_importind
-        integer                                      :: il, nl, imic, iptcl, importind, stkind
+     subroutine import_optics_map( self, mapfileprefix )
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: mapfileprefix
+        type(nrtxtfile)      :: mapfile
+        real,    allocatable :: map_entries(:,:)
+        integer, allocatable :: mics_optics_map(:)
+        real                 :: min_importind, max_importind
+        integer              :: il, nl, imic, iptcl, importind, stkind
         if(self%os_mic%get_noris() .eq. 0)                return
         if(.not.file_exists(mapfileprefix//METADATA_EXT)) then
-            write(logfhandle, '(A)') mapfileprefix//METADATA_EXT // " does not exist"
+            write(logfhandle, '(A)') mapfileprefix%to_char()//METADATA_EXT // " does not exist"
             return
         endif
         if(.not.file_exists(mapfileprefix//TXT_EXT)) then
-            write(logfhandle, '(A)') mapfileprefix//TXT_EXT // " does not exist"
+            write(logfhandle, '(A)') mapfileprefix%to_char()//TXT_EXT // " does not exist"
             return
         endif
         call mapfile%new(mapfileprefix//TXT_EXT, 1)
         if( mapfile%get_nrecs_per_line() /= 2 )then
-            THROW_WARN('INVALID FORMAT FOR: '//trim(mapfileprefix//TXT_EXT))
+            THROW_WARN('INVALID FORMAT FOR: '//mapfileprefix%to_char()//TXT_EXT)
             call mapfile%kill
         endif
         nl = mapfile%get_ndatalines()
@@ -4880,7 +4883,7 @@ contains
         type(nrtxtfile)                           :: map_file
         real                                      :: mapline(2)
         integer                                   :: imic
-        call map_file%new(fname_prefix//TXT_EXT, 2, 2)
+        call map_file%new(string(fname_prefix//TXT_EXT), 2, 2)
         do imic=1, self%os_mic%get_noris()
             if(self%os_mic%isthere(imic, 'importind') .and. self%os_mic%isthere(imic, 'ogid')) then
                mapline(1) = self%os_mic%get_int(imic, 'importind')
@@ -4890,8 +4893,7 @@ contains
         end do
         call map_file%kill()
         call spproj_optics%os_optics%copy(self%os_optics, is_ptcl=.false.)
-        call spproj_optics%write(fname_prefix//METADATA_EXT)
-        !call self%segwriter('optics', fname_prefix//TXT_EXT)
+        call spproj_optics%write(string(fname_prefix//METADATA_EXT))
     end subroutine write_optics_map
 
     subroutine segwriter( self, isegment, fromto )
@@ -4925,9 +4927,11 @@ contains
     end subroutine segwriter
 
     subroutine segwriter_inside( self, isegment, fromto )
-        class(sp_project), intent(inout) :: self
+        class(sp_project),          intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer, optional, intent(in)    :: fromto(2)
+        integer, optional,          intent(in)    :: fromto(2)
+        type(string) :: str
+        integer :: i
         select case(isegment)
             case(MIC_SEG)
                 call self%bos%write_segment_inside(isegment, self%os_mic, fromto)
@@ -4957,10 +4961,10 @@ contains
     subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles )
         class(sp_project),    intent(inout) :: self
         integer, allocatable, intent(inout) :: cavg_inds(:)
-        character(len=*),     intent(in)    :: jpgname
+        class(string),        intent(in)    :: jpgname
         integer,              intent(out)   :: xtiles, ytiles
-        logical,          allocatable :: cls_mask(:)
-        character(len=:), allocatable :: cavgsstk, stkpath
+        logical, allocatable       :: cls_mask(:)
+        type(string)   :: cavgsstk
         type(image)    :: img, jpegimg
         type(stack_io) :: stkio_r
         integer        :: i, icls, isel, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
@@ -4977,11 +4981,10 @@ contains
         enddo
         ncls_sel = count(cls_mask)
         if( ncls_sel == 0 ) return
-        call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg', stkpath=stkpath)
-        if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
+        call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg')
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
         if( ncls /= ncls_stk ) THROW_HARD('Inconsistent # cavgs in spproj and stack file')
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        call stkio_r%open(cavgsstk, smpd, 'read', bufsz=ncls)
         ldim_read    = stkio_r%get_ldim()
         ldim_read(3) = 1
         call stkio_r%read_whole
@@ -5020,9 +5023,9 @@ contains
     end subroutine cavgs2jpg
 
     subroutine cavgs2mrc( self )
-        class(sp_project),    intent(inout) :: self
-        logical,                allocatable :: cls_mask(:)
-        character(len=:),       allocatable :: cavgsstk
+        class(sp_project), intent(inout) :: self
+        logical, allocatable       :: cls_mask(:)
+        type(string)   :: cavgsstk
         type(image)    :: img
         type(stack_io) :: stkio_r, stkio_w
         integer        :: icls, ncls, ncls_stk, isel, ldim_read(3), ncls_sel
@@ -5039,11 +5042,11 @@ contains
         call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg')
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
         if( ncls /= ncls_stk ) THROW_HARD('Inconsistent # cavgs in spproj and stack file')
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        call stkio_r%open(cavgsstk, smpd, 'read', bufsz=ncls)
         ldim_read    = stkio_r%get_ldim()
         ldim_read(3) = 1
         call stkio_r%read_whole
-        call stkio_w%open("cls2D_selected.mrcs", smpd, 'write', box=ldim_read(1), bufsz=ncls_sel)
+        call stkio_w%open(string("cls2D_selected.mrcs"), smpd, 'write', box=ldim_read(1), bufsz=ncls_sel)
         isel = 0
         do icls = 1,ncls
             if( cls_mask(icls) ) then
@@ -5057,17 +5060,16 @@ contains
         call stkio_w%close
         call img%kill
         if(allocated(cls_mask)) deallocate(cls_mask)
-        if(allocated(cavgsstk)) deallocate(cavgsstk)
     end subroutine cavgs2mrc
 
     subroutine shape_ranked_cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, mskdiam_px )
         class(sp_project),    intent(inout) :: self
         integer, allocatable, intent(inout) :: cavg_inds(:)
-        character(len=*),     intent(in)    :: jpgname
+        class(string),        intent(in)    :: jpgname
         integer,              intent(out)   :: xtiles, ytiles
         integer, optional,    intent(in)    :: mskdiam_px
         integer,          allocatable :: shape_ranks(:)
-        character(len=:), allocatable :: cavgsstk, stkpath
+        type(string)   :: cavgsstk
         type(image)    :: img, jpegimg
         type(stack_io) :: stkio_r
         integer        :: i, icls, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
@@ -5084,11 +5086,10 @@ contains
         cavg_inds   = pack(cavg_inds,   mask=shape_ranks > 0)
         shape_ranks = pack(shape_ranks, mask=shape_ranks > 0)
         call hpsort(shape_ranks, cavg_inds)
-        call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg', stkpath=stkpath)
-        if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
+        call self%get_cavgs_stk(cavgsstk, ncls_stk, smpd, imgkind='cavg')
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
         if( ncls /= ncls_stk ) THROW_HARD('Inconsistent # cavgs in spproj and stack file')
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=ncls)
+        call stkio_r%open(cavgsstk, smpd, 'read', bufsz=ncls)
         ldim_read    = stkio_r%get_ldim()
         ldim_read(3) = 1
         call stkio_r%read_whole
@@ -5145,7 +5146,7 @@ contains
     ! private supporting subroutines / functions
 
     integer(kind(ENUM_ORISEG)) function oritype2segment( oritype )
-        character(len=*),  intent(in) :: oritype
+        character(len=*), intent(in) :: oritype
         select case(trim(oritype))
             case('mic')
                 oritype2segment = MIC_SEG

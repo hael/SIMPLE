@@ -73,7 +73,7 @@ end type
 contains
 
     subroutine read_mic_raw_pickref( micname, smpd, subtr_backgr )
-        character(len=*),  intent(in) :: micname !< micrograph file name
+        class(string),     intent(in) :: micname !< micrograph file name
         real,              intent(in) :: smpd    !< sampling distance in A
         logical, optional, intent(in) :: subtr_backgr
         integer :: nframes
@@ -373,48 +373,6 @@ contains
         deallocate(tmp)
     end subroutine detect_peaks
 
-    ! subroutine detect_peaks( self )
-    !     class(pickref), intent(inout) :: self
-    !     real, allocatable :: tmp(:)
-    !     integer :: n
-    !     ! select peak targests > 0
-    !     tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
-    !     n   = 0
-    !     if( allocated(tmp) ) n = size(tmp)
-    !     if( n == 0 )then
-    !         self%npeaks = 0
-    !         return
-    !     endif
-    !     ! detect peaks with level 1 otsu
-    !     call detect_peak_thres(n, 1, tmp, self%t)
-    !     where( self%box_scores >= self%t )
-    !         ! there's a peak
-    !     elsewhere
-    !         self%box_scores = -1.
-    !     end where
-    !     ! apply distance filter
-    !     call self%distance_filter
-    !     ! 2nd peak detection
-    !     deallocate(tmp)
-    !     tmp = pack(self%box_scores, mask=(self%box_scores > 0.))
-    !     n   = 0
-    !     if( allocated(tmp) ) n = size(tmp)
-    !     if( n == 0 )then
-    !         self%npeaks = 0
-    !         return
-    !     endif
-    !     call detect_peak_thres_sortmeans(n, self%peak_thres_level, tmp, self%t)
-    !     where( self%box_scores >= self%t )
-    !         ! there's a peak
-    !     elsewhere
-    !         self%box_scores = -1.
-    !     end where
-    !     self%npeaks = count(self%box_scores >= self%t)
-    !     write(logfhandle,'(a,1x,f5.2)') 'peak threshold identified:             ', self%t
-    !     write(logfhandle,'(a,1x,I5)'  ) '# peaks detected:                      ', self%npeaks
-    !     deallocate(tmp)
-    ! end subroutine detect_peaks
-
     subroutine distance_filter( self )
         class(pickref), intent(inout) :: self
         integer, allocatable :: pos_inds(:), order(:)
@@ -613,12 +571,12 @@ contains
 
     ! for writing boxes with picking box size
     subroutine write_boxfile( self, fname )
-        class(pickref),   intent(in) :: self
-        character(len=*), intent(in) :: fname
+        class(pickref), intent(in) :: self
+        class(string),  intent(in) :: fname
         integer, allocatable :: pos(:,:)
         integer :: funit, ibox, iostat
         call self%get_positions(pos)
-        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
         call fileiochk('simple_pickref; write_boxfile ', iostat)
         do ibox = 1,size(pos,dim=1)
             write(funit,'(I7,I7,I7,I7,I7)') pos(ibox,1), pos(ibox,2), self%ldim_box(1), self%ldim_box(1), -3
@@ -629,19 +587,19 @@ contains
     subroutine report_thumb_den( self, fname_thumb_den )
         use simple_micproc,   only: tv_filter_biomol
         use simple_gui_utils, only: mic2thumb
-        class(pickref),   intent(inout) :: self
-        character(len=*), intent(in)    :: fname_thumb_den 
+        class(pickref), intent(inout) :: self
+        class(string),  intent(in)    :: fname_thumb_den 
         call tv_filter_biomol(self%mic_copy)
         call mic2thumb(self%mic_copy, fname_thumb_den, l_neg=self%l_black_ptcls_input) ! particles black
     end subroutine report_thumb_den
     
     ! for writing boxes with arbitrary box size
     subroutine report_boxfile( self, box, smpd, fname, nptcls )
-        class(pickref),            intent(in)  :: self
-        integer,                   intent(in)  :: box
-        real,                      intent(in)  :: smpd
-        character(len=LONGSTRLEN), intent(in)  :: fname
-        integer,                   intent(out) :: nptcls
+        class(pickref), intent(in)  :: self
+        integer,        intent(in)  :: box
+        real,           intent(in)  :: smpd
+        class(string),  intent(in)  :: fname
+        integer,        intent(out) :: nptcls
         logical,   parameter :: l_write_outside = .false.
         integer, allocatable :: pos(:,:), updated_pos(:,:)
         logical, allocatable :: mask(:)
@@ -690,7 +648,7 @@ contains
         if( nptcls == 0 )then
             return
         else
-            call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
             call fileiochk('simple_pickref; report_boxfile ', iostat)
             do i = 1,nptcls
                 write(funit,'(I7,I7,I7,I7,I7)')updated_pos(i,1),updated_pos(i,2),box,box,-3

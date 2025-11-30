@@ -1,7 +1,6 @@
 module simple_starfile
 include 'simple_lib.f08'
 !$ use omp_lib
-
 use simple_starfile_wrappers
 implicit none
 
@@ -10,10 +9,10 @@ private
 #include "simple_local_flags.inc"
 
 type starfile
-    character(len=LONGSTRLEN)     :: fname
-    character(len=LONGSTRLEN)     :: ftmp
-    character(len=:), allocatable :: relroot
-    logical                       :: verbose = .false.
+    type(string) :: fname
+    type(string) :: ftmp
+    type(string) :: relroot
+    logical      :: verbose = .false.
   contains
     procedure :: init
     procedure :: complete
@@ -25,23 +24,23 @@ end type starfile
 contains
 
     subroutine init( self, fname, verbose)
-        class(starfile),            intent(inout) :: self
-        character(len=*),           intent(in)    :: fname
-        logical, optional,          intent(in)    :: verbose
-        character(len=XLONGSTRLEN)                :: cwd
+        class(starfile),   intent(inout) :: self
+        class(string),     intent(in)    :: fname
+        logical, optional, intent(in)    :: verbose
+        type(string) :: cwd
         call simple_getcwd(cwd)
         if(present(verbose)) self%verbose = verbose
         self%fname   = fname
-        self%ftmp    = fname // '.tmp'
+        self%ftmp    = fname%to_char() // '.tmp'
         self%relroot = basename(stemname(cwd))
-        if(file_exists(trim(adjustl(self%ftmp)))) call del_file(trim(adjustl(self%ftmp)))
+        if(file_exists(self%ftmp)) call del_file(self%ftmp)
     end subroutine init
 
     subroutine complete( self )
         class(starfile),  intent(inout) :: self
-        if(file_exists(trim(adjustl(self%ftmp)))) then
-            if(file_exists(trim(adjustl(self%fname)))) call del_file(trim(adjustl(self%fname)))
-            call simple_rename(trim(adjustl(self%ftmp)), trim(adjustl(self%fname)))
+        if( file_exists(self%ftmp) ) then
+            if( file_exists(self%fname) ) call del_file(self%fname)
+            call simple_rename(self%ftmp, self%fname)
         end if
     end subroutine complete
 
@@ -49,11 +48,7 @@ contains
         integer, allocatable, intent(inout) :: part_boundaries(:,:)
         integer,              intent(in)    :: n
         integer                             :: nparts, batchdelta, batchbase, nstart, nend, part
-        !$omp parallel
-            !$omp master
-                nparts = omp_get_num_threads()
-            !$omp end master
-        !$omp end parallel
+        nparts = omp_get_num_threads()
         allocate(part_boundaries(nparts, 2))
         batchdelta = ceiling(real(n) / (real(nparts) * real(nparts - 1)))
         batchbase  = ceiling(real(n) / (real(nparts) * 2))
@@ -76,9 +71,10 @@ contains
         integer                                   :: ipart, igrp
         integer(timer_int_kind)                   :: ms0
         real(timer_int_kind)                      :: ms_complete
+        character(len=XLONGSTRLEN)                :: str_ogname
         if (self%verbose) ms0 = tic()
         call calc_part_boundaries(part_boundaries, optics_oris%get_noris())
-        !$omp parallel private(ipart, igrp, part_table)
+        !$omp parallel private(ipart, igrp, part_table, str_ogname)
         !$omp do ordered
         do ipart=1, size(part_boundaries, 1)
             call starfile_table__new(part_table)
@@ -99,10 +95,13 @@ contains
                 if(optics_oris%isthere(igrp, 'opcx'))   call starfile_table__setValue_double(part_table, SMPL_OPTICS_CENTROIDX, real(optics_oris%get(igrp, 'opcx'),  dp))
                 if(optics_oris%isthere(igrp, 'opcy'))   call starfile_table__setValue_double(part_table, SMPL_OPTICS_CENTROIDY, real(optics_oris%get(igrp, 'opcy'),  dp))
                 ! strings
-                if(optics_oris%isthere(igrp, 'ogname')) call starfile_table__setValue_string(part_table, EMDL_IMAGE_OPTICS_GROUP_NAME, trim(adjustl(optics_oris%get_static(igrp, 'ogname'))))
+                if(optics_oris%isthere(igrp, 'ogname'))then
+                    call optics_oris%get_static(igrp, 'ogname', str_ogname)
+                    call starfile_table__setValue_string(part_table, EMDL_IMAGE_OPTICS_GROUP_NAME, trim(str_ogname))
+                endif
             end do
             !$omp ordered
-            call starfile_table__open_ofile(part_table, trim(self%ftmp), 1)
+            call starfile_table__open_ofile(part_table, self%ftmp%to_char(), 1)
             if(ipart == 1) then
                 call starfile_table__write_ofile(part_table, tableend=.false.)
             else
@@ -129,10 +128,10 @@ contains
         integer                                   :: ipart, imic, pathtrim
         integer(timer_int_kind)                   :: ms0
         real(timer_int_kind)                      :: ms_complete
+        character(len=XLONGSTRLEN) :: str_movie, str_intg, str_mc_starfile, str_boxfile, str_ctfjpg  
         ms0 = tic()
         call calc_part_boundaries(part_boundaries, mics_oris%get_noris())
-        !$omp parallel private(ipart, imic, part_table, ms0, ms_complete, pathtrim)
-        !$omp do ordered
+        !$omp parallel do ordered private(ipart, imic, part_table, ms0, ms_complete, pathtrim) default(shared) proc_bind(close)
         do ipart=1, size(part_boundaries, 1)
             call starfile_table__new(part_table)
             call starfile_table__setIsList(part_table, .false.)
@@ -159,14 +158,23 @@ contains
                 if(mics_oris%isthere(imic, 'icefrac')) call starfile_table__setValue_double(part_table,  SMPL_ICE_FRAC,          real(mics_oris%get(imic, 'icefrac'),      dp))
                 if(mics_oris%isthere(imic, 'astig'  )) call starfile_table__setValue_double(part_table,  SMPL_ASTIGMATISM,       real(mics_oris%get(imic, 'astig'),        dp))
                 ! strings
-                if(mics_oris%isthere(imic, 'movie'      )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_MOVIE_NAME,    trim(mics_oris%get_static(imic, 'movie')))
-                if(mics_oris%isthere(imic, 'intg'       )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME,          trim(get_relative_path(trim(mics_oris%get_static(imic, 'intg')),        self%relroot, pathtrim)))
-                if(mics_oris%isthere(imic, 'mc_starfile')) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_METADATA_NAME, trim(get_relative_path(trim(mics_oris%get_static(imic, 'mc_starfile')), self%relroot, pathtrim)))
-                if(mics_oris%isthere(imic, 'boxfile'    )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_COORDINATES,   trim(get_relative_path(trim(mics_oris%get_static(imic, 'boxfile'    )), self%relroot, pathtrim)))
-                if(mics_oris%isthere(imic, 'ctfjpg'     )) call starfile_table__setValue_string(part_table, EMDL_CTF_PSPEC,                trim(get_relative_path(trim(mics_oris%get_static(imic, 'ctfjpg'     )), self%relroot, pathtrim)))
+                call mics_oris%get_static(imic, 'movie',       str_movie)
+                call mics_oris%get_static(imic, 'intg',        str_intg)
+                call mics_oris%get_static(imic, 'mc_starfile', str_mc_starfile)
+                call mics_oris%get_static(imic, 'boxfile',     str_boxfile)
+                call mics_oris%get_static(imic, 'ctfjpg',      str_ctfjpg)
+                str_intg        = get_relative_path(str_intg)
+                str_mc_starfile = get_relative_path(str_mc_starfile)
+                str_boxfile     = get_relative_path(str_boxfile)
+                str_ctfjpg      = get_relative_path(str_ctfjpg)
+                if(mics_oris%isthere(imic, 'movie'      )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_MOVIE_NAME,    trim(str_movie))
+                if(mics_oris%isthere(imic, 'intg'       )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME,          trim(str_intg))
+                if(mics_oris%isthere(imic, 'mc_starfile')) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_METADATA_NAME, trim(str_mc_starfile))
+                if(mics_oris%isthere(imic, 'boxfile'    )) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_COORDINATES,   trim(str_boxfile))
+                if(mics_oris%isthere(imic, 'ctfjpg'     )) call starfile_table__setValue_string(part_table, EMDL_CTF_PSPEC,                trim(str_ctfjpg))
             end do
             !$omp ordered
-            call starfile_table__open_ofile(part_table, trim(self%ftmp), 1)
+            call starfile_table__open_ofile(part_table, self%ftmp%to_char(), 1)
             if(ipart == 1) then
                 call starfile_table__write_ofile(part_table, tableend=.false.)
             else
@@ -176,11 +184,20 @@ contains
             call starfile_table__delete(part_table)
             !$omp end ordered
         end do
-        !$omp end do
-        !$omp end parallel
+        !$omp end parallel do
         if(allocated(part_boundaries)) deallocate(part_boundaries)
         ms_complete = toc(ms0)
         if (self%verbose) print *,'wrote micrographs table in: ', ms_complete; call flush(6)
+
+        contains
+
+            function get_relative_path ( path ) result ( newpath )
+                character(len=*), intent(in) :: path
+                character(len=XLONGSTRLEN)   :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, self%relroot%to_char()) 
+                newpath = trim(path(pathtrim:))
+            end function get_relative_path
+
     end subroutine write_mics_table
 
     subroutine write_ptcl2D_table(self, ptcl2d_oris, stk_oris, mics_oris)
@@ -188,8 +205,8 @@ contains
         class(oris),                intent(in)    :: ptcl2d_oris, stk_oris
         class(oris), optional,      intent(in)    :: mics_oris
         type(starfile_table_type)                 :: ptcl_table
-        character(len=XLONGSTRLEN)                :: stkname, micname
         integer                                   :: iptcl, pathtrim, half_boxsize, stkind, indstk, fromp, top
+        character(len=XLONGSTRLEN)                :: stkname, micname
         integer(timer_int_kind)                   :: ms0
         real(timer_int_kind)                      :: ms_complete
         ms0 = tic()
@@ -227,12 +244,15 @@ contains
             ! strings
             if(stkind .gt. 0 .and. indstk .gt. 0) then
                 if(stk_oris%isthere(stkind, 'stk')) then
-                    stkname = int2str(indstk) // '@' // trim(get_relative_path(trim(stk_oris%get_static(stkind, 'stk')), self%relroot, pathtrim))
+                    call stk_oris%get_static(stkind, 'stk', stkname)
+                    stkname = get_relative_path(stkname)
+                    stkname = int2str(indstk) // '@' // trim(stkname)
                     call starfile_table__setValue_string(ptcl_table, EMDL_IMAGE_NAME, trim(stkname))
                     if(present(mics_oris)) then
                         if(stk_oris%get_noris() .eq. mics_oris%get_noris()) then
                             if(mics_oris%isthere(stkind, 'intg')) then
-                                micname = trim(get_relative_path(trim(mics_oris%get_static(stkind, 'intg')), self%relroot, pathtrim))
+                                call mics_oris%get_static(stkind, 'intg', micname)
+                                micname = get_relative_path(micname)
                                 call starfile_table__setValue_string(ptcl_table, EMDL_MICROGRAPH_NAME, trim(micname))
                             end if
                         end if
@@ -240,12 +260,22 @@ contains
                 end if
             end if
         end do
-        call starfile_table__open_ofile(ptcl_table, trim(self%ftmp), 1)
+        call starfile_table__open_ofile(ptcl_table, self%ftmp%to_char(), 1)
         call starfile_table__write_ofile(ptcl_table, tableend=.true.)
         call starfile_table__close_ofile(ptcl_table)
         call starfile_table__delete(ptcl_table)
         ms_complete = toc(ms0)
         if (self%verbose) print *,'wrote particles2D table in: ', ms_complete; call flush(6)
+
+        contains
+
+            function get_relative_path ( path ) result ( newpath )
+                character(len=*), intent(in) :: path
+                character(len=XLONGSTRLEN)   :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, self%relroot%to_char()) 
+                newpath = trim(path(pathtrim:))
+            end function get_relative_path
+
     end subroutine write_ptcl2D_table
 
     subroutine write_ptcl2D_table_parallel(self, ptcl2d_oris, stk_oris, mics_oris)
@@ -254,14 +284,13 @@ contains
         class(oris), optional,      intent(in)    :: mics_oris
         type(starfile_table_type)                 :: part_table
         integer,                    allocatable   :: part_boundaries(:,:)
-        character(len=XLONGSTRLEN)                :: stkname, micname
+        character(len=XLONGSTRLEN)                :: micname, str_stk
         integer                                   :: ipart, iptcl, pathtrim, half_boxsize, stkind, indstk, fromp, top
         integer(timer_int_kind)                   :: ms0
         real(timer_int_kind)                      :: ms_complete
         ms0 = tic()
         call calc_part_boundaries(part_boundaries, ptcl2d_oris%get_noris())
-        !$omp parallel private(ipart, iptcl, part_table, half_boxsize, stkind, indstk, fromp, top, ms0, ms_complete, pathtrim, stkname, micname) 
-        !$omp do ordered
+        !$omp parallel do ordered default(shared) private(ipart, iptcl, part_table, half_boxsize, stkind, indstk, fromp, top, ms0, ms_complete, pathtrim, str_stk, micname) proc_bind(close)
         do ipart=1, size(part_boundaries, 1)
             call starfile_table__new(part_table)
             call starfile_table__setIsList(part_table, .false.)
@@ -271,7 +300,6 @@ contains
             do iptcl=part_boundaries(ipart,1), part_boundaries(ipart,2)
                 if(ptcl2d_oris%get_state(iptcl) .eq. 0 ) cycle
                 call starfile_table__addObject(part_table)
-            !     call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
                 stkind = ptcl2d_oris%get_int(iptcl, 'stkind')
                 if( ptcl2d_oris%isthere(iptcl, 'indstk') ) then
                     indstk = ptcl2d_oris%get_int(iptcl, 'indstk')
@@ -300,13 +328,15 @@ contains
                 if(stkind .gt. 0 .and. indstk .gt. 0) then
                     if(stk_oris%isthere(stkind, 'stk')) then
                         !$omp critical
-                        stkname = int2str(indstk) // '@' // trim(get_relative_path(trim(stk_oris%get_static(stkind, 'stk')), self%relroot, pathtrim))
+                        call stk_oris%get_static(stkind, 'stk', str_stk)
+                        str_stk = get_relative_path(str_stk)
                         !$omp end critical
-                        call starfile_table__setValue_string(part_table, EMDL_IMAGE_NAME, trim(stkname))
+                        call starfile_table__setValue_string(part_table, EMDL_IMAGE_NAME, int2str(indstk) // '@' // trim(str_stk))
                         if(present(mics_oris)) then
                             if(stk_oris%get_noris() .eq. mics_oris%get_noris()) then
                                 if(mics_oris%isthere(stkind, 'intg')) then
-                                    micname = trim(get_relative_path(trim(mics_oris%get_static(stkind, 'intg')), self%relroot, pathtrim))
+                                    call mics_oris%get_static(stkind, 'intg', micname)
+                                    micname = get_relative_path(micname)
                                     call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME, trim(micname))
                                 end if
                             end if
@@ -315,7 +345,7 @@ contains
                 end if
             end do
             !$omp ordered
-            call starfile_table__open_ofile(part_table, trim(self%ftmp), 1)
+            call starfile_table__open_ofile(part_table, self%ftmp%to_char(), 1)
             if(ipart == 1) then
                 call starfile_table__write_ofile(part_table, tableend=.false.)
             else
@@ -325,11 +355,20 @@ contains
             call starfile_table__delete(part_table)
             !$omp end ordered
         end do
-        !$omp end do
-        !$omp end parallel
+        !$omp end parallel do
         if(allocated(part_boundaries)) deallocate(part_boundaries)
         ms_complete = toc(ms0)
         if (self%verbose) print *,'wrote particles2D table in: ', ms_complete; call flush(6)
+
+        contains
+
+            function get_relative_path ( path ) result ( newpath )
+                character(len=*), intent(in) :: path
+                character(len=XLONGSTRLEN)   :: newpath
+                if(pathtrim .eq. 0) pathtrim = index(path, self%relroot%to_char()) 
+                newpath = trim(path(pathtrim:))
+            end function get_relative_path
+
     end subroutine write_ptcl2D_table_parallel
 
 end module simple_starfile

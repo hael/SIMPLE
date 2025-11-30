@@ -6,7 +6,7 @@ use simple_parameters,   only: params_glob
 use simple_image,        only: image
 use simple_tvfilter,     only: tvfilter
 use simple_segmentation, only: otsu_img, sauvola
-use simple_image_bin,     only: image_bin
+use simple_image_bin,    only: image_bin
 use simple_syslib
 implicit none
 
@@ -21,10 +21,10 @@ logical, parameter :: L_WRITE  = .true.
 logical, parameter :: L_DEBUG  = .true.
 
 ! class variables
-integer                       :: ldim_raw(3)
-real                          :: smpd_raw
-type(image)                   :: mic_raw
-character(len=:), allocatable :: fbody
+integer      :: ldim_raw(3)
+real         :: smpd_raw
+type(image)  :: mic_raw
+type(string) :: fbody
 
 ! instance
 type pickseg
@@ -32,7 +32,7 @@ type pickseg
     real               :: smpd_shrink = 0.
     integer            :: ldim(3), nboxes = 0, box_raw = 0
     real, allocatable  :: masscens(:,:)
-    type(image_bin)     :: mic_shrink, img_cc
+    type(image_bin)    :: mic_shrink, img_cc
     type(stats_struct) :: sz_stats, diam_stats
     logical            :: exists = .false.
 contains
@@ -48,13 +48,13 @@ end type pickseg
 contains
 
     subroutine pick( self, micname, is_AFM, moldiam, winsz )
-        class(pickseg),   intent(inout) :: self
-        character(len=*), intent(in)    :: micname !< micrograph file name
+        class(pickseg), intent(inout) :: self
+        class(string),  intent(in)    :: micname !< micrograph file name
         real,             allocatable :: diams(:)
         integer,          allocatable :: sz(:)
-        character(len=:), allocatable :: ext
-        type(tvfilter) :: tvf
-        type(image)    :: img_win
+        type(string)    :: ext
+        type(tvfilter)  :: tvf
+        type(image)     :: img_win
         type(image_bin) :: img_sdevs
         real    :: px(3), otsu_t
         integer :: i, boxcoord(2), sz_max, sz_min, nframes, box
@@ -74,8 +74,8 @@ contains
         call mic_raw%new(ldim_raw, smpd_raw)
         call mic_raw%read(micname)
         ! set fbody
-        ext   = fname2ext(trim(micname))
-        fbody = trim(get_fbody(basename(trim(micname)), ext))
+        ext   = fname2ext(micname)
+        fbody = get_fbody(basename(micname), ext)
         ! shrink micrograph
         self%ldim(1)     = round2even(real(ldim_raw(1))/SHRINK)
         self%ldim(2)     = round2even(real(ldim_raw(2))/SHRINK)
@@ -266,7 +266,7 @@ contains
     ! for writing boxes with arbitrary box size
     subroutine report_boxfile( self, fname, nptcls, box )
         class(pickseg),    intent(in) :: self
-        character(len=*),  intent(in) :: fname
+        class(string),     intent(in) :: fname
         integer,           intent(out):: nptcls
         integer, optional, intent(in) :: box
         integer, allocatable :: pos(:,:)
@@ -274,7 +274,7 @@ contains
         nptcls = self%nboxes
         if( nptcls == 0 ) return
         call self%get_positions(pos, box)
-        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
         call fileiochk('simple_pickseg; write_boxfile ', iostat)
         do ibox = 1,size(pos,dim=1)
             write(funit,'(I7,I7,I7,I7,I7)') pos(ibox,1), pos(ibox,2), self%box_raw, self%box_raw, -3

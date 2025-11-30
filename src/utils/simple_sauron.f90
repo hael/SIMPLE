@@ -20,7 +20,6 @@ contains
 
     !> whether a string represents a double precision real (and its value) or characters
     subroutine str2realdp_local( str, isreal, rvar)
-        use simple_string_utils, only: char_is_a_letter
         character(len=*), intent(in)  :: str
         logical,          intent(out) :: isreal
         real(dp),         intent(out) :: rvar
@@ -47,7 +46,7 @@ contains
     !> This parser is optimised for real/character output types.
     !  Refer to sauron_ori_parser_old for more generic cases
     subroutine sauron_ori_parser_1( line, htab, chtab )
-        character(len=*), intent(inout) :: line
+        character(len=*), intent(in)    :: line
         class(hash),      intent(inout) :: htab
         class(chash),     intent(inout) :: chtab
         logical               :: is_real(196)
@@ -55,7 +54,6 @@ contains
         character(len=STDLEN) :: args(196), vals(196), arg
         real(dp)              :: rvals(196)
         integer               :: eq_pos(196), nargs, iarg, lenstr, ipos, ipos_prev, nreals, i
-        call compact(line)
         lenstr = len_trim(line)
         if(lenstr == 0) return
         ! split entries
@@ -100,7 +98,7 @@ contains
     end subroutine sauron_ori_parser_1
 
     subroutine sauron_ori_parser_2( line, pparms, htab, chtab )
-        character(len=*), intent(inout) :: line
+        character(len=*), intent(in)    :: line
         real,             intent(inout) :: pparms(N_PTCL_ORIPARAMS)
         class(hash),      intent(inout) :: htab
         class(chash),     intent(inout) :: chtab
@@ -109,7 +107,6 @@ contains
         character(len=STDLEN) :: args(96), vals(96), arg
         real(dp)              :: rvals(96)
         integer               :: eq_pos(96), nargs, iarg, lenstr, ipos, ipos_prev, nreals, i, ind
-        call compact(line)
         lenstr = len_trim(line)
         if( lenstr == 0 ) return
         ! split entries

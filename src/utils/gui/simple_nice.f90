@@ -1,219 +1,220 @@
 module simple_nice
-    use, intrinsic :: iso_c_binding 
-    include 'simple_lib.f08'
-    use simple_sp_project,         only: sp_project
-    use simple_socket_comm
-    use simple_histogram
-    use json_kinds
-    use json_module
-    use unix, only : c_pthread_t, c_pthread_mutex_t 
-    use unix, only : c_pthread_create, c_pthread_join
-    use unix, only : c_pthread_mutex_init, c_pthread_mutex_destroy
-    use unix, only : c_pthread_mutex_lock, c_pthread_mutex_unlock
-    implicit none
+use, intrinsic :: iso_c_binding 
+include 'simple_lib.f08'
+use simple_sp_project, only: sp_project
+use simple_socket_comm
+use simple_histogram
+use json_kinds
+use json_module
+use unix, only : c_pthread_t, c_pthread_mutex_t 
+use unix, only : c_pthread_create, c_pthread_join
+use unix, only : c_pthread_mutex_init, c_pthread_mutex_destroy
+use unix, only : c_pthread_mutex_lock, c_pthread_mutex_unlock
+implicit none
 
-    real, parameter, dimension(21)  :: astig_hist_bins = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
-    real, parameter, dimension(19)  :: ctf_res_bins    = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
-    real, parameter, dimension(21)  :: ice_score_bins  = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
-    real, parameter, dimension(15)  :: res_2d_bins     = [2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0]
+real, parameter, dimension(21)  :: astig_hist_bins = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
+real, parameter, dimension(19)  :: ctf_res_bins    = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
+real, parameter, dimension(21)  :: ice_score_bins  = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
+real, parameter, dimension(15)  :: res_2d_bins     = [2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0]
 
-    type, private :: nice_thread_comm_message
-        type(c_pthread_mutex_t)               :: lock
-        logical                               :: terminate
-        integer                               :: msg_len, procid
-        integer(kind=c_int16_t)               :: port
-        character(len=39)                     :: ip
-        character(kind=CK,len=:), allocatable :: msg_str
-        type(json_value),         pointer     :: answer_json
-    end type nice_thread_comm_message
+type, private :: nice_thread_comm_message
+    type(c_pthread_mutex_t)               :: lock
+    logical                               :: terminate
+    integer                               :: msg_len, procid
+    integer(kind=c_int16_t)               :: port
+    character(len=39)                     :: ip
+    character(kind=CK,len=:), allocatable :: msg_str
+    type(json_value),         pointer     :: answer_json
+end type nice_thread_comm_message
 
-    type(nice_thread_comm_message), target, private, save :: nice_thread_comm
+type(nice_thread_comm_message), target, private, save :: nice_thread_comm
 
-    type, private :: nice_stat_root
-        character(len=:), allocatable :: status
-        character(len=:), allocatable :: stage
-        integer                       :: procid
-        logical                       :: user_input = .false.
-    end type nice_stat_root
+type, private :: nice_stat_root
+    character(len=:), allocatable :: status
+    character(len=:), allocatable :: stage
+    integer                       :: procid
+    logical                       :: user_input = .false.
+end type nice_stat_root
 
-    type, private :: nice_stat_thumb_image
-        character(len=:),                 allocatable :: path
-        character(len=:),                 allocatable :: boxfile
-        character(len=:),                 allocatable :: uid
-        logical                                       :: grid      = .false.
-        integer                                       :: spritedim = 0
-        integer                                       :: spriten   = 0
-        integer                                       :: id        = 0
-        integer                                       :: static_id = 0
-        real                                          :: scale     = 0.0
-        type(nice_stat_thumb_image_meta), allocatable :: metadata(:)
-    end type nice_stat_thumb_image
+type, private :: nice_stat_thumb_image
+    character(len=:),                 allocatable :: path
+    character(len=:),                 allocatable :: boxfile
+    character(len=:),                 allocatable :: uid
+    logical                                       :: grid      = .false.
+    integer                                       :: spritedim = 0
+    integer                                       :: spriten   = 0
+    integer                                       :: id        = 0
+    integer                                       :: static_id = 0
+    real                                          :: scale     = 0.0
+    type(nice_stat_thumb_image_meta), allocatable :: metadata(:)
+end type nice_stat_thumb_image
 
-    type, private :: nice_stat_thumb_image_meta
-        character(len=64)             :: label
-        integer                       :: type = 0 ! 1:integer, 2:real
-        integer                       :: dp   = 1 
-        integer,          allocatable :: data_int(:)
-        real,             allocatable :: data_real(:)
-    end type nice_stat_thumb_image_meta
+type, private :: nice_stat_thumb_image_meta
+    character(len=64)             :: label
+    integer                       :: type = 0 ! 1:integer, 2:real
+    integer                       :: dp   = 1 
+    integer,          allocatable :: data_int(:)
+    real,             allocatable :: data_real(:)
+end type nice_stat_thumb_image_meta
 
-    type, private :: nice_plot_doughnut
-        character(len=64), allocatable :: labels(:)
-        character(len=64), allocatable :: colours(:)
-        integer,           allocatable :: data(:)
-    end type nice_plot_doughnut
+type, private :: nice_plot_doughnut
+    character(len=64), allocatable :: labels(:)
+    character(len=64), allocatable :: colours(:)
+    integer,           allocatable :: data(:)
+end type nice_plot_doughnut
 
-    type, private :: nice_plot_bar
-        character(len=64), allocatable :: labels(:)
-        character(len=64), allocatable :: colours(:)
-        integer,           allocatable :: data(:)
-    end type nice_plot_bar
+type, private :: nice_plot_bar
+    character(len=64), allocatable :: labels(:)
+    character(len=64), allocatable :: colours(:)
+    integer,           allocatable :: data(:)
+end type nice_plot_bar
 
-    type, private :: nice_view_micrographs
-        logical :: active               = .false.
-        integer :: movies_imported      = -1
-        integer :: movies_processed     = -1
-        integer :: micrographs          = -1
-        integer :: micrographs_rejected = -1
-        integer :: compute_in_use       = -1
-        real    :: avg_ctf_resolution   = 0.0
-        real    :: avg_ice_score        = 0.0
-        real    :: avg_astigmatism      = 0.0
-        real    :: cutoff_ctf_res       = 0.0
-        real    :: cutoff_ice_score     = 0.0
-        real    :: cutoff_astigmatism   = 0.0
-        character(16) :: last_movie_imported = ""
-        type(nice_stat_thumb_image) :: thumbnail
-        type(nice_stat_thumb_image), allocatable :: thumbnail_carousel(:)
-        logical,                     allocatable :: thumbnail_carousel_mask(:)
-        type(histogram)             :: ctf_res_histogram
-        type(histogram)             :: astig_histogram
-        type(histogram)             :: ice_score_histogram
-        type(ori)                   :: plot_ori
-    end type nice_view_micrographs
+type, private :: nice_view_micrographs
+    logical :: active               = .false.
+    integer :: movies_imported      = -1
+    integer :: movies_processed     = -1
+    integer :: micrographs          = -1
+    integer :: micrographs_rejected = -1
+    integer :: compute_in_use       = -1
+    real    :: avg_ctf_resolution   = 0.0
+    real    :: avg_ice_score        = 0.0
+    real    :: avg_astigmatism      = 0.0
+    real    :: cutoff_ctf_res       = 0.0
+    real    :: cutoff_ice_score     = 0.0
+    real    :: cutoff_astigmatism   = 0.0
+    character(16) :: last_movie_imported = ""
+    type(nice_stat_thumb_image) :: thumbnail
+    type(nice_stat_thumb_image), allocatable :: thumbnail_carousel(:)
+    logical,                     allocatable :: thumbnail_carousel_mask(:)
+    type(histogram)             :: ctf_res_histogram
+    type(histogram)             :: astig_histogram
+    type(histogram)             :: ice_score_histogram
+    type(ori)                   :: plot_ori
+end type nice_view_micrographs
 
-    type, private :: nice_view_optics
-        logical :: active               = .false.
-        integer :: micrographs          = 0
-        integer :: micrographs_rejected = 0
-        integer :: opticsgroups         = 0
-        character(16) :: last_micrograph_imported = ""
-        real,  allocatable :: opc(:,:)
-    end type nice_view_optics
+type, private :: nice_view_optics
+    logical :: active               = .false.
+    integer :: micrographs          = 0
+    integer :: micrographs_rejected = 0
+    integer :: opticsgroups         = 0
+    character(16) :: last_micrograph_imported = ""
+    real,  allocatable :: opc(:,:)
+end type nice_view_optics
 
-    type, private :: nice_view_pick
-        logical :: active               = .false.
-        integer :: micrographs_imported = 0
-        integer :: micrographs_rejected = 0
-        integer :: micrographs_picked   = 0
-        integer :: gaussian_diameter    = 0
-        integer :: suggested_diameter   = 0
-        character(16) :: last_micrograph_imported = ""
-        integer, allocatable        :: active_search_diameters(:)
-        integer, allocatable        :: refined_search_diameters(:)
-        integer, allocatable        :: complete_search_diameters(:)
-        type(nice_stat_thumb_image) :: thumbnail
-        type(nice_stat_thumb_image) :: pickrefs_thumbnail
-        type(nice_stat_thumb_image), allocatable :: thumbnail_carousel(:)
-        logical,                     allocatable :: thumbnail_carousel_mask(:)
-        real,  allocatable :: coords(:,:)
-    end type nice_view_pick
+type, private :: nice_view_pick
+    logical :: active               = .false.
+    integer :: micrographs_imported = 0
+    integer :: micrographs_rejected = 0
+    integer :: micrographs_picked   = 0
+    integer :: gaussian_diameter    = 0
+    integer :: suggested_diameter   = 0
+    character(16) :: last_micrograph_imported = ""
+    integer, allocatable        :: active_search_diameters(:)
+    integer, allocatable        :: refined_search_diameters(:)
+    integer, allocatable        :: complete_search_diameters(:)
+    type(nice_stat_thumb_image) :: thumbnail
+    type(nice_stat_thumb_image) :: pickrefs_thumbnail
+    type(nice_stat_thumb_image), allocatable :: thumbnail_carousel(:)
+    logical,                     allocatable :: thumbnail_carousel_mask(:)
+    real,  allocatable :: coords(:,:)
+end type nice_view_pick
 
-    type, private :: nice_view_cls2D
-        logical :: active                    = .false.
-        integer :: particles_extracted       = -1
-        integer :: particles_imported        = -1
-        integer :: iteration                 = -1
-        integer :: number_classes            = -1
-        integer :: number_classes_rejected   = -1
-        integer :: number_particles_assigned = -1
-        integer :: number_particles_rejected = -1
-        integer :: snapshot_id               = -1
-        integer :: boxsizea                  = -1
-        real    :: maximum_resolution        = 0.0
-        real    :: cutoff_res                = 0.0
-        real    :: mskdiam                   = 0.0
-        real    :: rejection_params(3)       = 0.0
-        character(16) :: last_particles_imported = ""
-        character(16) :: last_iteration          = ""
-        character(16) :: snapshot_time           = ""
-        character(6)  :: cutoff_type             = ""
-        type(nice_stat_thumb_image) :: thumbnail
-        type(nice_stat_thumb_image) :: pool_rejected_thumbnail
-        type(nice_stat_thumb_image) :: chunk_rejected_thumbnail
-        type(histogram)             :: res_histogram
-        type(histogram)             :: ndev_histogram
-        type(ori)                   :: plot_ori
-        type(json_value),  pointer  :: snapshot_json
-    end type nice_view_cls2D
+type, private :: nice_view_cls2D
+    logical :: active                    = .false.
+    integer :: particles_extracted       = -1
+    integer :: particles_imported        = -1
+    integer :: iteration                 = -1
+    integer :: number_classes            = -1
+    integer :: number_classes_rejected   = -1
+    integer :: number_particles_assigned = -1
+    integer :: number_particles_rejected = -1
+    integer :: snapshot_id               = -1
+    integer :: boxsizea                  = -1
+    real    :: maximum_resolution        = 0.0
+    real    :: cutoff_res                = 0.0
+    real    :: mskdiam                   = 0.0
+    real    :: rejection_params(3)       = 0.0
+    character(16) :: last_particles_imported = ""
+    character(16) :: last_iteration          = ""
+    character(16) :: snapshot_time           = ""
+    character(6)  :: cutoff_type             = ""
+    type(nice_stat_thumb_image) :: thumbnail
+    type(nice_stat_thumb_image) :: pool_rejected_thumbnail
+    type(nice_stat_thumb_image) :: chunk_rejected_thumbnail
+    type(histogram)             :: res_histogram
+    type(histogram)             :: ndev_histogram
+    type(ori)                   :: plot_ori
+    type(json_value),  pointer  :: snapshot_json
+end type nice_view_cls2D
 
-    type, private :: nice_view_ini3D
-        logical       :: active        = .false.
-        integer       :: stage         = -1
-        integer       :: number_states = -1
-        real          :: lp            = 0.0
-        character(16) :: last_stage_completed = ""
-        type(oris)    :: vol_oris
-        type(oris)    :: fsc_oris
-    end type nice_view_ini3D
+type, private :: nice_view_ini3D
+    logical       :: active        = .false.
+    integer       :: stage         = -1
+    integer       :: number_states = -1
+    real          :: lp            = 0.0
+    character(16) :: last_stage_completed = ""
+    type(oris)    :: vol_oris
+    type(oris)    :: fsc_oris
+end type nice_view_ini3D
 
-    type, private :: nice_view_vols
-        logical   :: active      = .false.
-        integer   :: number_vols = -1
-        type(ori) :: plot_ori
-    end type nice_view_vols
+type, private :: nice_view_vols
+    logical   :: active      = .false.
+    integer   :: number_vols = -1
+    type(ori) :: plot_ori
+end type nice_view_vols
 
-    type, public :: simple_nice_communicator
-        integer,                        public  :: pid, current_checksum
-        logical,                        private :: remote_active
-        integer,                        private :: port
-        character(len=39),              private :: ip
-        type(simple_socket),            private :: socket
-        type(json_core),                private :: stat_json
-        type(json_value),   pointer,    private :: stat_json_root
-        type(c_pthread_t),              private :: comm_thread
-        logical,                        public  :: exit, stop
-        type(nice_stat_root),           public  :: stat_root
-        type(nice_view_micrographs),    public  :: view_micrographs
-        type(nice_view_optics),         public  :: view_optics
-        type(nice_view_pick),           public  :: view_pick
-        type(nice_view_cls2D),          public  :: view_cls2D
-        type(nice_view_ini3D),          public  :: view_ini3D
-        type(nice_view_vols),           public  :: view_vols
-        type(json_value),   pointer,    public  :: update_arguments
+type, public :: simple_nice_communicator
+    integer,                        public  :: pid, current_checksum
+    logical,                        private :: remote_active
+    integer,                        private :: port
+    character(len=39),              private :: ip
+    type(simple_socket),            private :: socket
+    type(json_core),                private :: stat_json
+    type(json_value),   pointer,    private :: stat_json_root
+    type(c_pthread_t),              private :: comm_thread
+    logical,                        public  :: exit, stop
+    type(nice_stat_root),           public  :: stat_root
+    type(nice_view_micrographs),    public  :: view_micrographs
+    type(nice_view_optics),         public  :: view_optics
+    type(nice_view_pick),           public  :: view_pick
+    type(nice_view_cls2D),          public  :: view_cls2D
+    type(nice_view_ini3D),          public  :: view_ini3D
+    type(nice_view_vols),           public  :: view_vols
+    type(json_value),   pointer,    public  :: update_arguments
 
-        contains
-            procedure, public  :: init
-            procedure, public  :: terminate
-            procedure, public  :: cycle
-            procedure, private :: start_comm_thread
-            procedure, private :: terminate_comm_thread
-            procedure, private :: generate_stat_json
-            procedure, private :: text_data_object_1 
-            procedure, private :: text_data_object_2
-            procedure, private :: text_data_object_3
-            generic            :: text_data_object => text_data_object_1, text_data_object_2, text_data_object_3
-            procedure, private :: doughnut_plot_object
-            procedure, private :: bar_plot_object
-            generic            :: plot_object => doughnut_plot_object, bar_plot_object
-            procedure, private :: fsc_object
-            procedure, private :: image_thumbnail_object
-            procedure, private :: calculate_checksum
-            procedure, public  :: update_micrographs
-            procedure, public  :: update_optics
-            procedure, public  :: update_pick
-            procedure, public  :: update_cls2D
-            procedure, public  :: update_ini3D
-            procedure, public  :: update_vols
-            procedure, public  :: update_from_project
-            procedure, public  :: get_real_keys_json
-            procedure, public  :: get_stat_json
+    contains
+        procedure, private :: init_1, init_2
+        generic            :: init => init_1, init_2
+        procedure, public  :: terminate
+        procedure, public  :: cycle
+        procedure, private :: start_comm_thread
+        procedure, private :: terminate_comm_thread
+        procedure, private :: generate_stat_json
+        procedure, private :: text_data_object_1 
+        procedure, private :: text_data_object_2
+        procedure, private :: text_data_object_3
+        generic            :: text_data_object => text_data_object_1, text_data_object_2, text_data_object_3
+        procedure, private :: doughnut_plot_object
+        procedure, private :: bar_plot_object
+        generic            :: plot_object => doughnut_plot_object, bar_plot_object
+        procedure, private :: fsc_object
+        procedure, private :: image_thumbnail_object
+        procedure, private :: calculate_checksum
+        procedure, public  :: update_micrographs
+        procedure, public  :: update_optics
+        procedure, public  :: update_pick
+        procedure, public  :: update_cls2D
+        procedure, public  :: update_ini3D
+        procedure, public  :: update_vols
+        procedure, public  :: update_from_project
+        procedure, public  :: get_real_keys_json
+        procedure, public  :: get_stat_json
 
-    end type simple_nice_communicator
+end type simple_nice_communicator
 
     contains
 
-    subroutine init(this, procid, serveraddr)
+    subroutine init_1(this, procid, serveraddr)
         class(simple_nice_communicator), intent(inout) :: this
         character(*),                    intent(in)    :: serveraddr
         integer,                         intent(in)    :: procid
@@ -262,7 +263,14 @@ module simple_nice
         if(this%remote_active) then
             call this%start_comm_thread()
         end if
-    end subroutine init
+    end subroutine init_1
+
+    subroutine init_2(this, procid, serveraddr)
+        class(simple_nice_communicator), intent(inout) :: this
+        class(string),                   intent(in)    :: serveraddr
+        integer,                         intent(in)    :: procid
+        call this%init_1(procid, serveraddr%to_char())
+    end subroutine init_2
 
     subroutine terminate(this, stop, failed, export_project)
         class(simple_nice_communicator), intent(inout) :: this
@@ -1133,7 +1141,7 @@ module simple_nice
         type(oris),                      intent(in)    :: vol_oris, fsc_oris
         real,                            intent(out)   :: fsc05, fsc0143
         type(json_value), pointer     :: datasets, dataset, data, labels !fsc_json
-        character(len=:), allocatable :: fscfile
+        type(string)                  :: fscfile
         real,             allocatable :: fsc(:), res(:)
         real                          :: smpd_l, box_l
         integer                       :: ifsc
@@ -1182,7 +1190,7 @@ module simple_nice
         call this%stat_json%add(datasets, dataset)
         call this%stat_json%add(fsc_json, datasets)
         call this%stat_json%add(fsc_json, labels)
-        if(allocated(fscfile)) deallocate(fscfile)
+        call fscfile%kill
     end subroutine fsc_object
 
     subroutine update_micrographs(this, movies_imported, movies_processed, last_movie_imported, micrographs, micrographs_rejected, compute_in_use,&
@@ -1717,14 +1725,14 @@ module simple_nice
         class(simple_nice_communicator), intent(inout) :: this
         type(json_value), pointer,       intent(inout) :: ptr
         type(ori),                       intent(in)    :: seg_ori
-        character(len=XLONGSTRLEN),     allocatable    :: keys(:)
-        logical                                        :: is_ptcl = .false.
-        integer                                        :: j
+        type(string), allocatable :: keys(:)
+        logical :: is_ptcl = .false.
+        integer :: j
         call this%stat_json%create_array(ptr, 'keys')
         keys = seg_ori%get_keys()
         do j = 1, size(keys)
-            if(.not. seg_ori%ischar(trim(keys(j)))) then
-                call this%stat_json%add(ptr, '', trim(keys(j)))
+            if(.not. seg_ori%ischar(keys(j)%to_char())) then
+                call this%stat_json%add(ptr, '', keys(j)%to_char())
             end if
         end do
         call this%stat_json%add(ptr, '', 'n')

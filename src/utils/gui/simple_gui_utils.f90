@@ -8,7 +8,7 @@ contains
 
     subroutine mic2thumb( mic, jpgname, l_neg )
         class(image),      intent(inout) :: mic
-        character(len=*),  intent(in)    :: jpgname
+        class(string),     intent(in)    :: jpgname
         logical, optional, intent(in)    :: l_neg
         type(image) :: thumb, padded
         real, parameter :: BACKGR = 128. ! taken as centre of [0.255] for jpegs
@@ -41,7 +41,7 @@ contains
 
     ! write tiled jpeg of mrc file
     subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles, mskdiam_px)
-        character(len=*),               intent(in)  :: mrcfile, outfile
+        class(string),                  intent(in)  :: mrcfile, outfile
         real,    optional,              intent(out) :: scale
         integer, optional,              intent(out) :: ntiles, n_xtiles, n_ytiles
         logical, optional, allocatable, intent(in)  :: msk(:)
@@ -52,14 +52,14 @@ contains
         integer        :: ncls_here, xtiles, ytiles, icls, ix, iy, l_ntiles
         real           :: smpd
         smpd = 1.0
-        if(.not. file_exists(trim(mrcfile))) return
-        call find_ldim_nptcls(trim(mrcfile), ldim_stk, ncls_here)
+        if(.not. file_exists(mrcfile)) return
+        call find_ldim_nptcls(mrcfile, ldim_stk, ncls_here)
         xtiles = floor(sqrt(real(ncls_here)))
         ytiles = ceiling(real(ncls_here) / real(xtiles))
         call img%new([ldim_stk(1), ldim_stk(1), 1], smpd)
         call img_pad%new([JPEG_DIM, JPEG_DIM, 1], smpd)
         call img_jpeg%new([xtiles * JPEG_DIM, ytiles * JPEG_DIM, 1], smpd)
-        call stkio_r%open(trim(mrcfile), smpd, 'read', bufsz=ncls_here)
+        call stkio_r%open(mrcfile, smpd, 'read', bufsz=ncls_here)
         call stkio_r%read_whole
         ix = 1
         iy = 1
@@ -87,8 +87,8 @@ contains
             end if
         enddo
         call stkio_r%close()
-        call img_jpeg%write_jpg(trim(outfile) // ".tmp")
-        call simple_rename(trim(outfile) // ".tmp", trim(outfile), overwrite=.true.)
+        call img_jpeg%write_jpg(string(outfile%to_char() // ".tmp"))
+        call simple_rename(outfile%to_char()// ".tmp", outfile, overwrite=.true.)
         if(present(scale))  scale  = real(JPEG_DIM) / ldim_stk(1)
         if(present(ntiles)) ntiles = l_ntiles
         if(present(n_xtiles)) n_xtiles = xtiles

@@ -1,19 +1,19 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commanders_refine3D
 include 'simple_lib.f08'
-use simple_builder,          only: builder, build_glob
-use simple_cmdline,          only: cmdline
-use simple_commander_base,   only: commander_base
-use simple_parameters,       only: parameters, params_glob
-use simple_sigma2_binfile,   only: sigma2_binfile
-use simple_qsys_env,         only: qsys_env
-use simple_cluster_seed,     only: gen_labelling
+use simple_builder,           only: builder, build_glob
+use simple_cmdline,           only: cmdline
+use simple_commander_base,    only: commander_base
+use simple_parameters,        only: parameters, params_glob
+use simple_sigma2_binfile,    only: sigma2_binfile
+use simple_qsys_env,          only: qsys_env
+use simple_cluster_seed,      only: gen_labelling
 use simple_commanders_volops, only: commander_postprocess
 use simple_commanders_mask,   only: commander_automask
-use simple_decay_funs,       only: inv_cos_decay, cos_decay
-use simple_image,            only: image
-use simple_image_msk,           only: image_msk
-use simple_exec_helpers,     only: set_master_num_threads
+use simple_decay_funs,        only: inv_cos_decay, cos_decay
+use simple_image,             only: image
+use simple_image_msk,         only: image_msk
+use simple_exec_helpers,      only: set_master_num_threads
 use simple_commanders_euclid
 use simple_qsys_funs
 implicit none
@@ -91,10 +91,10 @@ contains
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
         integer, parameter :: NPDIRS4BAL       = 300
-        character(len=:),   allocatable :: str_state
-        real             :: smpd_target, smpd_crop, scale, trslim
-        integer          :: box_crop, maxits_phase1, maxits_phase2, iter
-        logical          :: l_autoscale
+        type(string) :: str_state
+        real         :: smpd_target, smpd_crop, scale, trslim
+        integer      :: box_crop, maxits_phase1, maxits_phase2, iter
+        logical      :: l_autoscale
         ! commanders
         type(commander_reconstruct3D_distr) :: xreconstruct3D_distr
         type(commander_refine3D_distr)      :: xrefine3D_distr
@@ -169,7 +169,7 @@ contains
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
         ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
-        call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
+        call cline%set('vol1', string(VOL_FBODY)//str_state//params_glob%ext)
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('prg',                'refine3D')
@@ -188,13 +188,13 @@ contains
         call cline_reconstruct3D_distr%set('mskfile', MSKVOL_FILE)
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
         ! 3D refinement, phase2
-        call cline%set('vol1', VOL_FBODY//str_state//params_glob%ext)
+        call cline%set('vol1', string(VOL_FBODY)//str_state//params_glob%ext)
         params%mskfile = MSKVOL_FILE
-        call cline%set('mskfile',           MSKVOL_FILE)
-        call cline%set('maxits',          maxits_phase1)
-        call cline%set('lp_auto',  trim(params%lp_auto))
-        call cline%set('startit',                  iter)
-        call cline%set('which_iter',               iter)
+        call cline%set('mskfile',    MSKVOL_FILE)
+        call cline%set('maxits',   maxits_phase1)
+        call cline%set('lp_auto', params%lp_auto)
+        call cline%set('startit',           iter)
+        call cline%set('which_iter',        iter)
         call xrefine3D_distr%execute_safe(cline)
         ! re-reconstruct from all particle images
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
@@ -246,14 +246,13 @@ contains
         type(builder)    :: build
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
-        type(image_msk)     :: mskvol
+        type(image_msk)  :: mskvol
         type(image)      :: vol_e, vol_o
-        character(len=:),          allocatable :: prev_refine_path, target_name, fname_vol, fname_even, fname_odd
-        character(len=LONGSTRLEN), allocatable :: list(:)
-        integer,                   allocatable :: state_pops(:)
-        real,                      allocatable :: res(:), fsc(:)
-        character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
-        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
+        type(string)     :: prev_refine_path, target_name, fname_vol, fname_even, fname_odd, vol, vol_iter
+        type(string)     :: str, str_iter, fsc_templ, vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
+        type(string), allocatable :: list(:)
+        integer,      allocatable :: state_pops(:)
+        real,         allocatable :: res(:), fsc(:) 
         logical :: err, vol_defined, have_oris, converged, fall_over, l_multistates, l_automsk
         logical :: l_combine_eo, l_griddingset, do_automsk, l_polar
         real    :: corr, smpd
@@ -264,7 +263,7 @@ contains
             return
         endif
         ! deal with # threads for the master process
-        call set_master_num_threads( nthr_here, 'REFINE3D' )
+        call set_master_num_threads(nthr_here, string('REFINE3D'))
         ! local options & flags
         l_multistates = cline%defined('nstates')
         l_griddingset = cline%defined('gridding')
@@ -304,7 +303,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! splitting
-        if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
         cline_calc_pspec_distr    = cline
@@ -325,8 +324,8 @@ contains
         ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,params%nstates
             vol = 'vol'//int2str( state )
-            call cline_check_3Dconv%delete( vol )
-            call cline_postprocess%delete( vol )
+            call cline_check_3Dconv%delete(vol%to_char())
+            call cline_postprocess%delete(vol%to_char())
         enddo
         if( trim(params%objfun).eq.'euclid' ) call cline%set('needs_sigma','yes')
         ! E/O PARTITIONING
@@ -353,19 +352,19 @@ contains
                 else
                     call build%spproj%get_vol('vol', state, fname_vol, smpd, box)
                 endif
-                call cline%set(trim(vol), fname_vol)
+                call cline%set(vol%to_char(), fname_vol)
                 params%vols(state) = fname_vol
             end do
             prev_refine_path = get_fpath(fname_vol)
-            if( trim(simple_abspath(prev_refine_path,check_exists=.false.)) .eq. trim(cwd_glob) )then
+            if( simple_abspath(prev_refine_path,check_exists=.false.) .eq. CWD_GLOB )then
                 ! ...unless we operate in the same folder
                 do state=1,params%nstates
                     str_state = int2str_pad(state,2)
-                    fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                    if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//trim(fsc_file))
+                    fsc_file  = FSC_FBODY//str_state%to_char()//BIN_EXT
+                    if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//fsc_file%to_char())
                 end do
                 if( params%l_update_frac )then
-                    call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
+                    call simple_list_files(prev_refine_path%to_char()//'*recvol_state*part*', list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
                     if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -375,7 +374,7 @@ contains
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
                     if( .not.l_griddingset ) call cline%set('gridding','yes')
-                    call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
+                    call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
                     deallocate(list)
@@ -385,20 +384,20 @@ contains
                 ! one FSC file per state
                 do state=1,params%nstates
                     str_state = int2str_pad(state,2)
-                    fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                    call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
+                    fsc_file  = FSC_FBODY//str_state%to_char()//BIN_EXT
+                    call simple_copy_file(prev_refine_path//fsc_file, fsc_file)
                 end do
                 ! if we are doing objfun=euclid the sigma estimates need to be carried over
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
                     if( .not.l_griddingset ) call cline%set('gridding','yes')
-                    call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
+                    call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
                     do i=1,nfiles
-                        target_name = PATH_HERE//basename(trim(list(i)))
-                        call simple_copy_file(trim(list(i)), target_name)
+                        target_name = string(PATH_HERE)//basename(list(i))
+                        call simple_copy_file(list(i), target_name)
                     end do
                     deallocate(list)
                 endif
@@ -425,7 +424,7 @@ contains
                 ! performs reconstruction only if polar references
                 ! are absent and a volume is not provided
                 if( .not.vol_defined )then
-                    if( file_exists(POLAR_REFS_FBODY//trim(BIN_EXT)) )then
+                    if( file_exists(POLAR_REFS_FBODY//BIN_EXT) )then
                         vol_defined = .true.
                     endif
                 endif
@@ -442,23 +441,23 @@ contains
                 do state = 1,params%nstates
                     ! rename volumes and update cline
                     str_state = int2str_pad(state,2)
-                    vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
-                    str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
-                    call      simple_rename( trim(vol), trim(str) )
+                    vol       = string(VOL_FBODY)//str_state//params%ext
+                    str       = string(STARTVOL_FBODY)//str_state//params%ext
+                    call      simple_rename(vol, str)
                     ! update command line
-                    params%vols(state) = trim(str)
-                    vol       = 'vol'//trim(int2str(state))
-                    call      cline%set( trim(vol), trim(str) )
-                    vol_even  = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
-                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even_unfil'//params%ext
-                    call      simple_copy_file( trim(vol_even), trim(str) )
-                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
-                    call      simple_rename( trim(vol_even), trim(str) )
-                    vol_odd   = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
-                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd_unfil'//params%ext
-                    call      simple_copy_file( trim(vol_odd), trim(str) )
-                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
-                    call      simple_rename( trim(vol_odd), trim(str) )
+                    params%vols(state) = str
+                    vol       = 'vol'//int2str(state)
+                    call      cline%set(vol%to_char(), str )
+                    vol_even  = string(VOL_FBODY)//str_state//'_even'//params%ext
+                    str       = string(STARTVOL_FBODY)//str_state//'_even_unfil'//params%ext
+                    call      simple_copy_file( vol_even, str )
+                    str       = string(STARTVOL_FBODY)//str_state//'_even'//params%ext
+                    call      simple_rename(vol_even, str)
+                    vol_odd   = string(VOL_FBODY)//str_state//'_odd' //params%ext
+                    str       = string(STARTVOL_FBODY)//str_state//'_odd_unfil'//params%ext
+                    call      simple_copy_file(vol_odd, str)
+                    str       = string(STARTVOL_FBODY)//str_state//'_odd'//params%ext
+                    call      simple_rename(vol_odd, str)
                 enddo
                 vol_defined = .true.
             endif
@@ -516,16 +515,16 @@ contains
                 call cline_prob_align_distr%set('startit',    iter)
                 call xprob_align_distr%execute_safe( cline_prob_align_distr )
             endif
-            call job_descr%set( 'which_iter', trim(int2str(params%which_iter)))
+            call job_descr%set( 'which_iter', int2str(params%which_iter))
             call cline%set(     'which_iter', params%which_iter)
-            call job_descr%set( 'startit',    trim(int2str(iter)))
+            call job_descr%set( 'startit',    int2str(iter))
             call cline%set(     'startit',    iter)
             ! schedule
             if( L_BENCH_GLOB )then
                 rt_init = toc(t_init)
                 t_scheduled = tic()
             endif
-            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
             ! assemble alignment docs
             if( L_BENCH_GLOB )then
                 rt_scheduled = toc(t_scheduled)
@@ -564,9 +563,9 @@ contains
                             str_state = int2str_pad(state,2)
                             if( state_pops(state) == 0 )then
                                 ! cleanup for empty state
-                                vol = 'vol'//trim(int2str(state))
-                                call cline%delete( vol )
-                                call job_descr%delete( vol )
+                                vol = 'vol'//int2str(state)
+                                call cline%delete(vol%to_char())
+                                call job_descr%delete(vol%to_char() )
                                 if( trim(params%oritype).eq.'cls3D' )then
                                     call build%spproj%remove_entry_from_osout('vol_cavg', state)
                                 else
@@ -575,15 +574,15 @@ contains
                                 call build%spproj%remove_entry_from_osout('fsc', state)
                             else
                                 ! rename state volume
-                                vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
-                                vol_iter  = trim(vol)
-                                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                                vol       = string(VOL_FBODY)//str_state//params%ext
+                                vol_iter  = vol
+                                fsc_file  = string(FSC_FBODY)//str_state//BIN_EXT
                                 call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
                                 ! generate FSC pdf
                                 res       = get_resarr(params%box_crop, params%smpd_crop)
                                 fsc       = file2rarr(fsc_file)
-                                fsc_templ = 'fsc_state'//trim(str_state)//'_iter'//trim(str_iter)
-                                call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ)
+                                fsc_templ = 'fsc_state'//str_state%to_char()//'_iter'//str_iter%to_char()
+                                call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ%to_char())
                                 ! add state volume to os_out
                                 if( trim(params%oritype).eq.'cls3D' )then
                                     call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
@@ -591,15 +590,15 @@ contains
                                     call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
                                 endif
                                 ! updates cmdlines & job description
-                                vol = 'vol'//trim(int2str(state))
+                                vol = 'vol'//int2str(state)
                                 call job_descr%set( vol, vol_iter )
                                 call cline%set(vol, vol_iter)
                             endif
                         enddo
                         ! volume mask, one for all states
                         if( cline%defined('mskfile') )then
-                            if( file_exists(trim(params%mskfile)) )then
-                                call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                            if( file_exists(params%mskfile) )then
+                                call build%spproj%add_vol2os_out(params%mskfile, params%smpd, 1, 'vol_msk')
                             endif
                         endif
                         ! writes os_out
@@ -612,8 +611,8 @@ contains
                             call cline_postprocess%set('nthr', nthr_here)
                             if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
                             call xpostprocess%execute_safe(cline_postprocess)
-                            volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
-                            vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
+                            volpproc = string(VOL_FBODY)//str_state//PPROC_SUFFIX//params%ext%to_char()
+                            vollp    = string(VOL_FBODY)//str_state//LP_SUFFIX//params%ext%to_char()
                             if( l_automsk )then
                                 do_automsk = .false.
                                 if( niters == 1 .and. .not.params%l_filemsk )then
@@ -623,8 +622,8 @@ contains
                                 endif
                                 if( do_automsk )then
                                     call build%spproj%get_vol('vol', state, fname_vol, smpd, box)
-                                    fname_even = add2fbody(trim(fname_vol), params%ext, '_even')
-                                    fname_odd  = add2fbody(trim(fname_vol), params%ext, '_odd' )
+                                    fname_even = add2fbody(fname_vol, params%ext, '_even')
+                                    fname_odd  = add2fbody(fname_vol, params%ext, '_odd' )
                                     call vol_e%new([box,box,box], smpd)
                                     call vol_e%read(fname_even)
                                     call vol_o%new([box,box,box], smpd)
@@ -634,24 +633,24 @@ contains
                                     else
                                         call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight')
                                     endif
-                                    call mskvol%write(MSKVOL_FILE)
+                                    call mskvol%write(string(MSKVOL_FILE))
                                     params%mskfile   = MSKVOL_FILE
                                     params%l_filemsk = .true.
-                                    call cline%set('mskfile', MSKVOL_FILE)
-                                    call job_descr%set('mskfile', MSKVOL_FILE)
+                                    call cline%set('mskfile', string(MSKVOL_FILE))
+                                    call job_descr%set('mskfile', string(MSKVOL_FILE))
                                     call mskvol%kill_bimg
                                     call vol_e%kill
                                     call vol_o%kill
                                 endif
                             endif
-                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
+                            vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext%to_char()
                             call simple_copy_file(volpproc, vol_iter)
-                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
+                            vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext%to_char()
                             call simple_copy_file(vollp, vol_iter)
                             if( iter > 1 .and. params%keepvol.eq.'no' )then
-                                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
+                                vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext%to_char()
                                 call del_file(vol_iter)
-                                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext
+                                vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext%to_char()
                                 call del_file(vol_iter)
                             endif
                         enddo
@@ -659,19 +658,19 @@ contains
             endif
             if( l_polar )then
                 ! Assemble polar references
-                params%refs = trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
+                params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
                 call polar_cavger_new(pftcc, .true., nrefs=params%nspace)
                 call polar_cavger_calc_pops(build%spproj)
                 call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
-                call polar_cavger_calc_and_write_frcs_and_eoavg(FRCS_FILE, cline)
-                call polar_cavger_writeall(POLAR_REFS_FBODY)
+                call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+                call polar_cavger_writeall(string(POLAR_REFS_FBODY))
                 call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
                 call polar_cavger_kill
                 call job_descr%delete('vol1')
                 call cline%delete('vol1')
                 if( iter > 1 .and. params%keepvol.eq.'no' )then
-                    vol_iter = trim(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext
+                    vol_iter = string(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext%to_char()
                     call del_file(vol_iter)
                 endif
             endif
@@ -708,7 +707,7 @@ contains
             if( cline_check_3Dconv%defined('trs') .and. .not.job_descr%isthere('trs') )then
                 ! activates shift search if frac_srch >= 90
                 str = real2str(cline_check_3Dconv%get_rarg('trs'))
-                call job_descr%set( 'trs', trim(str) )
+                call job_descr%set( 'trs', str )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
         end do
@@ -736,7 +735,7 @@ contains
         type(builder)                         :: build
         type(cmdline)                         :: cline_calc_group_sigmas, cline_prob_align
         type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
-        character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
+        type(string)                          :: str_state, fsc_file, vol, vol_iter
         integer                               :: startit, i, state
         real                                  :: corr
         logical                               :: converged, l_sigma
@@ -762,7 +761,7 @@ contains
                         THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
                     endif
                 else
-                    if( .not.file_exists(POLAR_REFS_FBODY//trim(BIN_EXT)) ) then
+                    if( .not.file_exists(POLAR_REFS_FBODY//BIN_EXT) ) then
                         THROW_HARD('polar references are required when VOL1 not provided')
                     endif
                 endif
@@ -782,7 +781,7 @@ contains
                 call cline%set('needs_sigma','yes')
                 params%l_needs_sigma    = .true.
                 cline_calc_group_sigmas = cline
-                if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//trim(STAR_EXT)) )then
+                if( file_exists(SIGMA2_GROUP_FBODY//int2str(params%which_iter)//STAR_EXT) )then
                     ! it is assumed that we already have precalculated sigmas2 and all corresponding flags have been set
                 else
                     ! sigma2 not provided & are calculated
@@ -864,10 +863,10 @@ contains
                             else
                                 ! add state volume, fsc to os_out
                                 str_state = int2str_pad(state,2)
-                                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                                fsc_file  = string(FSC_FBODY)//str_state//BIN_EXT
                                 call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
-                                vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
-                                vol_iter  = trim(vol)
+                                vol       = string(VOL_FBODY)//str_state//params%ext
+                                vol_iter  = vol
                                 if( trim(params%oritype).eq.'cls3D' )then
                                     call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
                                 else
@@ -876,7 +875,7 @@ contains
                             endif
                         end do
                         ! volume mask, one for all states
-                        if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                        if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(params%mskfile, params%smpd, 1, 'vol_msk')
                         call build%spproj%write_segment_inside('out')
                     endif
                     if( l_sigma )then
@@ -917,8 +916,8 @@ contains
         if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
         if( .not.cline%defined('vol1') )then
             if( cline%defined('polar') )then
-                if( trim(cline%get_carg('polar')).eq.'yes' )then
-                    if( .not.file_exists(POLAR_REFS_FBODY//trim(BIN_EXT)) )then
+                if( cline%get_carg('polar').eq.'yes' )then
+                    if( .not.file_exists(POLAR_REFS_FBODY//BIN_EXT) )then
                         THROW_HARD('starting polar references are needed for first sigma estimation')
                     endif
                 else
@@ -958,7 +957,7 @@ contains
             ! prepare job description
             call cline_first_sigmas%gen_job_descr(job_descr)
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
             ! assemble
             call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
             ! end gracefully
@@ -1012,7 +1011,7 @@ contains
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:)
-        character(len=:), allocatable :: fname
+        type(string)                  :: fname
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
@@ -1037,7 +1036,7 @@ contains
         call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(pinds)
-        fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
             call eulprob_obj_part%fill_tab_state_only(pftcc)
             call eulprob_obj_part%write_state_tab(fname)
@@ -1049,7 +1048,7 @@ contains
         call killimgbatch
         call pftcc%kill
         call build%kill_general_tbox
-        call qsys_job_finished('simple_commanders_refine3D :: exec_prob_tab')
+        call qsys_job_finished(string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
 
@@ -1061,7 +1060,7 @@ contains
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,            allocatable :: pinds(:)
-        character(len=:),   allocatable :: fname
+        type(string)                    :: fname
         type(builder)                   :: build
         type(parameters)                :: params
         type(commander_prob_tab)        :: xprob_tab
@@ -1106,26 +1105,26 @@ contains
         ! reading corrs from all parts
         if( str_has_substr(params%refine, 'prob_state') )then
             do ipart = 1, params_glob%nparts
-                fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+                fname = string(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
                 call eulprob_obj_glob%read_state_tab(fname)
             enddo
             call eulprob_obj_glob%state_assign
         else
             do ipart = 1, params_glob%nparts
-                fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+                fname = string(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
                 call eulprob_obj_glob%read_tab_to_glob(fname)
             enddo
             call eulprob_obj_glob%ref_assign
         endif
         ! write the iptcl->(iref,istate) assignment
-        fname = trim(ASSIGNMENT_FBODY)//'.dat'
+        fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_job_finished('simple_commanders_refine3D :: exec_prob_align')
+        call qsys_job_finished(string('simple_commanders_refine3D :: exec_prob_align'))
         call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align

@@ -499,11 +499,11 @@ contains
 
     subroutine starfile_table__read(this, fname, name)
         type(starfile_table_type),  intent(inout) :: this
-        character(len=*),           intent(in)    :: fname
+        class(string),              intent(in)    :: fname
         character(len=*), optional, intent(in)    :: name
         character(len=:), allocatable :: str_fname
         character(len=:), allocatable :: str_name
-        str_fname = fname // C_NULL_CHAR
+        str_fname = fname%to_char() // C_NULL_CHAR
         if( present(name) ) then
             str_name = name // C_NULL_CHAR
         else
@@ -580,10 +580,10 @@ contains
     end function starfile_table__nextobject
 
     subroutine starfile_table__getnames(this, fname, names)
-        type(starfile_table_type),  intent(inout) :: this
-        character(len=*),           intent(in)    :: fname
-        type(str4arr), allocatable, intent(out)   :: names(:)
-        character(len=:), allocatable :: fname2
+        type(starfile_table_type), intent(inout) :: this
+        class(string),             intent(in)    :: fname
+        type(string), allocatable, intent(out)   :: names(:)
+        character(len=:), allocatable :: fname2, buffer
         integer(C_int) :: count
         integer(C_int) :: nr
         integer(C_int) :: alen
@@ -591,18 +591,20 @@ contains
         integer        :: i
         character(len=1,kind=C_char), dimension(:), pointer :: f_str
         ! first determine number of names
-        fname2 = fname // C_NULL_CHAR
+        fname2 = fname%to_char() // C_NULL_CHAR
         call C_starfile_table__getnames_cnt(this%object, fname2, count)
         allocate(names(count))
         ! now get the names one-by-ony
         do nr = 1, count
             call C_starfile_table__getnames_nr(this%object, nr, c_str, alen)
             ! allocate memory for the ffortran string
-            allocate( character(len=alen) :: names(nr)%str)
+            allocate( character(len=alen) :: buffer ) 
             call c_f_pointer(c_str, f_str, [alen]) ! cast c-pointer to fortran pointer
             do i = 1, alen
-                names(nr)%str(i:i) = f_str(i)      ! copy over the data
+                buffer(i:i) = f_str(i)             ! copy over the data
             end do
+            names(nr) = buffer                     ! set string
+            deallocate(buffer)
             call C_dealloc_str(c_str)              ! free c-pointer to avoid memory leak
         end do
     end subroutine starfile_table__getnames

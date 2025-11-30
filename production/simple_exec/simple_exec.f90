@@ -1,32 +1,32 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
 include 'simple_lib.f08'
-use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_exec_helpers
-use simple_commanders_project
-use simple_commanders_starproject
+use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
+use simple_commanders_abinitio
+use simple_commanders_abinitio2D
+use simple_commanders_atoms
+use simple_commanders_cavgs
 use simple_commanders_checks
+use simple_commanders_cluster2D
+use simple_commanders_cluster2D_stream
 use simple_commanders_distr
+use simple_commanders_euclid
 use simple_commanders_imgproc
 use simple_commanders_mask
 use simple_commanders_misc
 use simple_commanders_oris
 use simple_commanders_preprocess
-use simple_commanders_cluster2D
-use simple_commanders_cluster2D_stream
-use simple_commanders_cavgs
-use simple_commanders_abinitio
-use simple_commanders_abinitio2D
-use simple_commanders_refine3D
+use simple_commanders_project
 use simple_commanders_rec
+use simple_commanders_refine3D
 use simple_commanders_relion
-use simple_commanders_sim
-use simple_commanders_volops
 use simple_commanders_resolest
-use simple_commanders_euclid
-use simple_commanders_atoms
+use simple_commanders_sim
+use simple_commanders_starproject
 use simple_commanders_validate
+use simple_commanders_volops
+use simple_exec_helpers
 implicit none
 #include "simple_local_flags.inc"
 
@@ -103,7 +103,7 @@ type(commander_fractionate_movies_distr)    :: xfractionate_movies
 type(commander_comparemc)                   :: xcomparemc
 
 ! VALIDATION WORKFLOWS
-type(commander_mini_stream)                  :: xmini_stream
+type(commander_mini_stream)                 :: xmini_stream
 type(commander_check_refpick)               :: xcheck_refpick
 
 ! IMAGE PROCESSING PROGRAMS
@@ -173,7 +173,8 @@ type(commander_mkdir)                       :: xmkdir
 type(commander_split)                       :: xsplit
 
 ! OTHER DECLARATIONS
-character(len=STDLEN)                       :: xarg, prg, entire_line
+character(len=STDLEN)                       :: xarg, prg
+character(len=XLONGSTRLEN)                  :: entire_line
 type(cmdline)                               :: cline
 integer                                     :: cmdstat, cmdlen, pos
 integer(timer_int_kind)                     :: t0
@@ -197,7 +198,7 @@ endif
 ! parse command line into cline object
 call cline%parse
 ! generate script for queue submission?
-call script_exec(cline, trim(prg), 'simple_exec')
+call script_exec(cline, string(trim(prg)), string('simple_exec'))
 l_silent = .false.
 select case(trim(prg))
 
@@ -260,7 +261,7 @@ select case(trim(prg))
         call xmake_cavgs_distr%execute(cline)
     case( 'abinitio2D' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'abinitio2D', 'simple_exec')
+            call restarted_exec(cline, string('abinitio2D'), string('simple_exec'))
         else
             call xabinitio2D%execute(cline)
         endif
@@ -302,19 +303,19 @@ select case(trim(prg))
         call xnoisevol%execute(cline)
     case( 'abinitio3D_cavgs' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'abinitio3D_cavgs', 'simple_exec')
+            call restarted_exec(cline, string('abinitio3D_cavgs'), string('simple_exec'))
         else
             call xabinitio3D_cavgs%execute(cline)
         endif
     case( 'abinitio3D_cavgs_fast' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'abinitio3D_cavgs_fast', 'simple_exec')
+            call restarted_exec(cline, string('abinitio3D_cavgs_fast'), string('simple_exec'))
         else
             call xabinitio3D_cavgs_fast%execute(cline)
         endif
     case( 'abinitio3D' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'abinitio3D', 'simple_exec')
+            call restarted_exec(cline, string('abinitio3D'), string('simple_exec'))
         else
             call xabinitio3D%execute(cline)
         endif
@@ -326,13 +327,13 @@ select case(trim(prg))
         call xcalc_pspec_distr%execute(cline)
     case( 'refine3D' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'refine3D', 'simple_exec')
+            call restarted_exec(cline, string('refine3D'), string('simple_exec'))
         else
             call xrefine3D_distr%execute(cline)
         endif
     case( 'refine3D_auto' )
         if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, 'refine3D_auto', 'simple_exec')
+            call restarted_exec(cline, string('refine3D_auto'), string('simple_exec'))
         else
             call xrefine3D_auto%execute(cline)
         endif
@@ -497,7 +498,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('b7566bf1')
+    call simple_print_git_version('0a778afd')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

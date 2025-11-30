@@ -1,10 +1,11 @@
 ! routines for distributed SIMPLE execution
 module simple_map_reduce
 use simple_defs
-use simple_string_utils, only: int2str, int2str_pad
-use simple_fileio,  only: fopen, fileiochk, fclose, file2rarr
-use simple_jiffys,  only: progress
+use simple_fileio
+use simple_jiffys
 use simple_srch_sort_loc
+use simple_string
+use simple_string_utils
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -52,7 +53,7 @@ contains
         integer              :: npairs, cnt, funit, i, j
         integer              :: ipart, io_stat, numlen
         integer, allocatable :: pairs(:,:), parts(:,:)
-        character(len=:), allocatable :: fname
+        type(string) :: fname
         ! generate all pairs
         npairs = (nobjs*(nobjs-1))/2
         allocate( pairs(npairs,2))
@@ -70,15 +71,15 @@ contains
         ! write the partitions
         do ipart=1,nparts
             call progress(ipart,nparts)
-            allocate(fname, source='pairs_part' // int2str_pad(ipart,numlen) // '.bin')
+            fname = 'pairs_part' // int2str_pad(ipart,numlen) // '.bin'
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM',iostat=io_stat)
-            call fileiochk('mapreduce ;split_pairs_in_parts '//trim(fname), io_stat)
+            call fileiochk('mapreduce ;split_pairs_in_parts '//fname%to_char(), io_stat)
             write(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)
             ! Check if the write was successful
             if( io_stat .ne. 0 )&
-                call fileiochk('mapreduce ;split_pairs_in_parts writing to '//trim(fname), io_stat)
+                call fileiochk('mapreduce ;split_pairs_in_parts writing to '//fname%to_char(), io_stat)
             call fclose(funit)
-            deallocate(fname)
+            call fname%kill
         end do
         deallocate(pairs, parts)
     end subroutine split_pairs_in_parts

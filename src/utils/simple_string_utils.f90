@@ -2,27 +2,12 @@
 ! adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
 ! modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_string_utils
+use simple_error,  only: simple_exception
+use simple_string, only: string
 use simple_defs
-use simple_error, only: simple_exception
+use simple_defs_string
 use, intrinsic :: iso_c_binding
 implicit none
-
-character(len=*),             parameter :: LOWER_CASE_LETTERS = 'abcdefghijklmnopqrstuvwxyz'
-character(len=*),             parameter :: UPPER_CASE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-character(len=*),             parameter :: INTEGERS = '1234567890'
-character(kind=c_char,len=*), parameter :: NEW_LINES_C = C_FORM_FEED // C_NEW_LINE // C_CARRIAGE_RETURN // C_VERTICAL_TAB
-character(kind=c_char,len=*), parameter :: BLANK_C_CHARACTERS = C_NULL_CHAR // C_HORIZONTAL_TAB
-character(len=*),             parameter :: BLANK_CHARACTERS =  ' '//BLANK_C_CHARACTERS
-character(len=*),             parameter :: BLANKS_AND_NEW_LINES = BLANK_CHARACTERS // NEW_LINES_C
-
-private :: LOWER_CASE_LETTERS, UPPER_CASE_LETTERS, INTEGERS, NEW_LINES_C, BLANK_C_CHARACTERS,&
-BLANK_CHARACTERS, BLANKS_AND_NEW_LINES
-public
-
-interface real2str
-    module procedure realsp2str
-    module procedure realdp2str
-end interface real2str
 
 interface str2format
     module procedure str2format_1
@@ -32,7 +17,29 @@ end interface str2format
 interface str2int
     module procedure str2int_1
     module procedure str2int_2
+    module procedure str2int_3
+    module procedure str2int_4
 end interface str2int
+
+interface str2real
+    module procedure str2real_1
+    module procedure str2real_2
+end interface str2real
+
+interface real2str
+    module procedure realsp2str
+    module procedure realdp2str
+end interface real2str
+
+interface split
+    module procedure split_1
+    module procedure split_2
+end interface split
+
+interface findloc_str
+    module procedure findloc_str_1
+    module procedure findloc_str_2
+end interface findloc_str
 
 contains
 
@@ -43,6 +50,19 @@ contains
         allocate(character(len=n) :: str)
         str(:) = ' '
     end function spaces
+
+    function cast_str_types( str ) result( str_tmp )
+        class(*), intent(in) :: str
+        character(len=:), allocatable :: str_tmp
+        select type(str)
+            type is (string)
+                str_tmp = str%to_char()
+            type is (character(*))
+                str_tmp = trim(str)
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
+    end function cast_str_types
 
     !> \brief  assesses whether a string represents a filename
     subroutine str2format_1( str, format, rvar, ivar )
@@ -188,7 +208,7 @@ contains
     !!         the string 'str'. The characters before the found delimiter are
     !!         output in 'before'. The characters after the found delimiter are
     !!         output in 'str'.
-    subroutine split( str, delim, before )
+    subroutine split_1( str, delim, before )
         character(len=*), intent(inout) :: str
         character(len=*), intent(in)    :: delim
         character(len=*), intent(out)   :: before
@@ -225,7 +245,50 @@ contains
         if(i >= lenstr) str=''
         str=adjustl(str)      ! remove initial spaces
         return
-    end subroutine split
+    end subroutine split_1
+
+    subroutine split_2( str_, delim, before_ )
+        class(string),    intent(inout) :: str_
+        character(len=*), intent(in)    :: delim
+        class(string),    intent(out)   :: before_
+        character             :: ch,cha
+        integer               :: lenstr, k, iposa, i, ipos
+        character(len=STDLEN) :: str, before
+        str = str_%to_char()
+        str=adjustl(str)
+        call compact(str)
+        lenstr=len_trim(str)
+        if(lenstr == 0) return ! string str is empty
+        k=0
+        before=''
+        do i=1,lenstr
+            ch=str(i:i)
+            ipos=index(delim,ch)
+            if(ipos == 0)then ! character is not a delimiter
+                k=k+1
+                before(k:k)=ch
+                cycle
+            end if
+            if(ch /= ' ')then ! character is a delimiter that is not a space
+                str=str(i+1:)
+                exit
+            end if
+            cha=str(i+1:i+1)  ! character is a space delimiter
+            iposa=index(delim,cha)
+            if(iposa > 0)then ! next character is a delimiter
+                str=str(i+2:)
+                exit
+            else
+                str=str(i+1:)
+                exit
+            end if
+        end do
+        if(i >= lenstr) str=''
+        str     = adjustl(str)      ! remove initial spaces
+        str_    = trim(adjustl(str))
+        before_ = trim(adjustl(before))
+        return
+    end subroutine split_2
 
     function list_of_ints2arr( listofints ) result( iarr )
         character(len=*), intent(in) :: listofints
@@ -236,7 +299,7 @@ contains
         index = scan(str, ',')
         if( index == 0 )then
             allocate(iarr(1), source=0)
-            iarr(1) = str2int(str, iostat)
+            iarr(1) = str2int(str)
             return
         endif
         ! first, count commas
@@ -258,11 +321,11 @@ contains
             index = scan(str, ',')
             if( index == 0 )then
                 str       = adjustl(str(index+1:))
-                iarr(cnt) = str2int(str, iostat)
+                iarr(cnt) = str2int(str)
                 exit
             else
                 before    = adjustl(trim(str(1:index-1)))
-                iarr(cnt) = str2int(before, iostat)
+                iarr(cnt) = str2int(before)
                 str       = adjustl(str(index+1:))
             endif    
         end do
@@ -324,79 +387,69 @@ contains
         str=adjustl(outstr)
     end subroutine removesp
 
-    !> \brief  converts number string to a single precision real number
-    function str2real( str ) result( rval )
+    function str2real_1( str ) result( rval )
         character(len=*), intent(in) :: str
-        real    :: rval
-        integer :: io_stat
-        character(len=100) :: io_msg
-        read(str, *, iostat=io_stat, iomsg=io_msg) rval
-        if( io_stat .ne. 0 )then
-            call simple_exception('I/O: '//trim(io_msg)//'; str2real', __FILENAME__ , __LINE__)
-        endif
-    end function str2real
+        type(string) :: str_cast
+        real         :: rval
+        str_cast = trim(adjustl(str))
+        rval = str_cast%to_real()
+        call str_cast%kill
+    end function str2real_1
+
+    function str2real_2( str ) result( rval )
+        class(string), intent(in) :: str
+        real :: rval
+        rval = str%to_real()
+    end function str2real_2
 
     !> \brief  converts a real number to a string
-    pure function realsp2str(rval) result(str)
+    function realsp2str(rval) result(str)
         real, intent(in)  :: rval
         character(len=32) :: str
-        write(str,*) rval
-        call removesp(str)
+        type(string)      :: str_cast
+        str_cast = string(rval)
+        str = str_cast%to_char()
+        call str_cast%kill
     end function realsp2str
 
     !> \brief  converts a real number to a string
-    pure function realdp2str( rval ) result( str )
+    function realdp2str( rval ) result( str )
         real(kind=dp), intent(in) :: rval
         character(len=32)         :: str
-        write(str,*) rval
-        call removesp(str)
+        type(string)              :: str_cast
+        str_cast = string(rval)
+        str = str_cast%to_char()
+        call str_cast%kill
     end function realdp2str
 
     !>  \brief  turn integer variable into character variable
-    !! - now supports negative values
-    pure function int2str( intg ) result( string )
-        integer, intent(in)           :: intg
-        character(len=:), allocatable :: string
-        integer :: ndigs_int, intg_this
-        logical :: isnegative
-        isnegative=.false.
-        intg_this=intg
-        if( intg < 0 )then
-            isnegative=.true.
-            intg_this =  -intg
-        end if
-        if (intg_this .eq. 0) then
-            ndigs_int = 1
-        else
-            ndigs_int = int(log10(real(intg_this))) + 1
-        endif
-        if (isnegative) ndigs_int = ndigs_int + 1
-        allocate(character(len=ndigs_int) :: string)
-        if (isnegative)then
-            write(string,'(a1,i0)') '-',intg_this
-        else
-            write(string,'(i0)') intg_this
-        end if
+    function int2str( intg ) result( str )
+        integer, intent(in) :: intg
+        character(len=:), allocatable :: str
+        type(string) :: str_cast
+        str_cast = string(intg)
+        str = str_cast%to_char()
+        call str_cast%kill
     end function int2str
 
     !>  \brief  turn integer variable into zero padded character variable
-    function int2str_pad( intg, numlen ) result( string )
+    function int2str_pad( intg, numlen ) result( str )
         integer, intent(in)           :: intg, numlen
-        character(len=:), allocatable :: string, str_tmp, str_tmp2
+        character(len=:), allocatable :: str, str_tmp, str_tmp2
         integer :: slen
         if( numlen == 0 )then
-            string = int2str(intg)
+            str = int2str(intg)
             return
         endif
         str_tmp = int2str(intg)
         slen    = len(str_tmp)
         if( slen >= numlen )then
-            allocate(string, source=str_tmp)
+            allocate(str, source=str_tmp)
         else
             do while( len(str_tmp) < numlen )
                 allocate(str_tmp2, source='0'//str_tmp)
-                if( allocated(string) ) deallocate(string)
-                allocate(string, source=str_tmp2)
+                if( allocated(str) ) deallocate(str)
+                allocate(str, source=str_tmp2)
                 deallocate(str_tmp)
                 allocate(str_tmp, source=str_tmp2)
                 deallocate(str_tmp2)
@@ -404,6 +457,34 @@ contains
         endif
         deallocate(str_tmp)
     end function int2str_pad
+
+    integer function str2int_1( str )
+        character(len=*), intent(in) :: str
+        type(string) :: str_cast
+        str_cast  = trim(adjustl(str))
+        str2int_1 = str_cast%to_int()
+        call str_cast%kill
+    end function str2int_1
+
+    integer function str2int_2( str )
+        class(string), intent(in) :: str
+        str2int_2 = str%to_int()
+    end function str2int_2
+
+    integer function str2int_3( str, io_stat )
+        class(string), intent(in)  :: str
+        integer,       intent(out) :: io_stat
+        str2int_3 = str%to_int(io_stat)
+    end function str2int_3
+
+    integer function str2int_4( str, io_stat )
+        character(len=*), intent(in)  :: str
+        integer,          intent(out) :: io_stat
+        type(string) :: str_cast
+        str_cast  = trim(adjustl(str))
+        str2int_4 = str_cast%to_int(io_stat)
+        call str_cast%kill
+    end function str2int_4
 
     !>  \brief  pad string with spaces
     function str_pad( str_in, len_padded ) result( str_out )
@@ -419,22 +500,9 @@ contains
         endif
     end function str_pad
 
-    !>  \brief  turns a string into an integer variable
-    integer function str2int_1( string )
-        character(len=*), intent(in)  :: string
-        read(string,*) str2int_1
-    end function str2int_1
-
-        !>  \brief  turns a string into an integer variable
-    integer function str2int_2( string, io_stat )
-        character(len=*), intent(in)  :: string
-        integer,          intent(out) :: io_stat
-        read(string,*, iostat=io_stat) str2int_2
-    end function str2int_2
-
     !>  \brief  maps out the number characters in a string
     !!          .true. means is number, .false. means is not
-    pure function map_str_nrs( str ) result( map )
+    function map_str_nrs( str ) result( map )
         character(len=*), intent(in) :: str
         logical, allocatable :: map(:)
         integer :: lstr, i, j, ind
@@ -459,46 +527,6 @@ contains
         character(len=*), intent(in) :: str, substr
         str_has_substr = .not. (index(str, substr) == 0)
     end function str_has_substr
-
-    !>  \brief  check for presence of substring at the end of another
-    logical function str_ends_with_substr( str, substr )
-        character(len=*), intent(in) :: str, substr
-        integer :: start_substr, lenstr
-        str_ends_with_substr = .false.
-        lenstr              = len_trim(str)
-        start_substr        = lenstr - len_trim(substr) + 1
-        if( start_substr >= 1 )then
-            str_ends_with_substr = str(start_substr:lenstr) == trim(substr)
-        endif
-    end function str_ends_with_substr
-
-    !>  \brief  removes occurrences of substr in str into str_out
-    subroutine remove_substr( str, substr, str_out )
-        character(len=*), intent(in)                 :: str, substr
-        character(len=:), allocatable, intent(inout) :: str_out
-        integer :: l, lout, pos
-        str_out = trim(str)
-        l = len_trim(substr)
-        if( l == 0 )return
-        if( .not.str_has_substr(str_out, substr) )return
-        pos = index(str_out, substr)
-        do while( pos > 0 )
-            lout = len_trim(str_out)
-            if( (pos==1) .and. (lout==l) )then
-                str_out = ''
-                return
-            else if( pos == 1)then
-                str_out = str_out(pos+l:lout)
-            else
-                if( pos+l-1 == lout )then
-                    str_out = str_out(1:pos-1)
-                else
-                    str_out = str_out(1:pos-1)//str_out(pos+l:lout)
-                endif
-            endif
-            pos = index(str_out, substr)
-        end do
-    end subroutine remove_substr
 
     !>  \brief  Convert string to lower case
     pure function lowercase( str )
@@ -529,7 +557,7 @@ contains
         character(len=*), intent(in)  ::  line
         integer ::  pos1,linelen
         str_is_comment = .false.
-        if(str_is_empty(line)) return
+        if(str_is_blank(line)) return
         pos1 = first_non_blank(line)
         ! if we didn't find a non-blank character, then the line must be blank!
         if( pos1 .eq. 0 ) return
@@ -541,41 +569,29 @@ contains
     end function str_is_comment
 
     !>  \brief works out whether a character string is blank
-    pure logical function str_is_empty( line )
-        character(len=*),   intent(in)  ::  line
-        if( len_trim(line) == 0 )then
-             str_is_empty = .true.
-         else
-             str_is_empty = .false.
-         end if
-    end function str_is_empty
-
-    !>  \brief works out whether a character string is blank
     pure logical function str_is_blank( line )
         character(len=*),   intent(in)  ::  line
-        if( trim(line) .eq. '' )then
+        if( len_trim(line) == 0 )then
              str_is_blank = .true.
-        else if( first_non_blank(line) .eq. 0 )then
-             str_is_blank = .true.
-        else
+         else
              str_is_blank = .false.
-        endif
+         end if
     end function str_is_blank
 
     !>  \brief  Find the first non-blank character in a string and return its position.
-    pure integer function first_non_blank( string, back )
-        character(len=*), intent(in)  :: string !< input string
+    pure integer function first_non_blank( str, back )
+        character(len=*), intent(in)  :: str !< input string
         logical, optional, intent(in) :: back !<  if .true., we'll look for the last non-blank character in the string
         logical ::  bback
         ! reverse?
         bback = .false.
         if (present(back)) bback = back
-        first_non_blank = verify(string,BLANKS_AND_NEW_LINES,back=bback)
+        first_non_blank = verify(str,BLANKS_AND_NEW_LINES,back=bback)
     end function first_non_blank
 
     !>  \brief  find the first blank character in a string and return its position.
-    pure integer function first_blank( string, back )
-        character(len=*), intent(in)  :: string !< input string
+    pure integer function first_blank( str, back )
+        character(len=*), intent(in)  :: str !< input string
         logical, optional, intent(in) :: back !<  if .true., we'll look for the last blank character in the string
         logical ::  bback
         ! reverse?
@@ -584,7 +600,7 @@ contains
         else
             bback = .false.
         endif
-        first_blank = scan(string,BLANKS_AND_NEW_LINES,back=bback)
+        first_blank = scan(str,BLANKS_AND_NEW_LINES,back=bback)
     end function first_blank
 
     !>  \brief  test whether two strings are equal, ignoring blank characters
@@ -667,6 +683,32 @@ contains
             enddo
         endif
     end function cnt_recs_per_line
+
+    pure function findloc_str_1( str_arr, str ) result( pos )
+        class(string), intent(in) :: str_arr(:)
+        class(string), intent(in) :: str 
+        integer :: i, pos
+        pos = 0
+        do i = 1, size(str_arr)
+            if( str_arr(i) .eq. str )then
+                pos = i
+                return
+            endif
+        end do
+    end function findloc_str_1 
+
+    pure function findloc_str_2( str_arr, str ) result( pos )
+        class(string),    intent(in) :: str_arr(:)
+        character(len=*), intent(in) :: str 
+        integer :: i, pos
+        pos = 0
+        do i = 1, size(str_arr)
+            if( str_arr(i) .eq. trim(adjustl(str)) )then
+                pos = i
+                return
+            endif
+        end do
+    end function findloc_str_2
 
     !> \brief  Lexographical sort.
     !> \param strArr is a one-dimensional array of character strings to be  sorted in ascending lexical order.
@@ -777,49 +819,5 @@ contains
         enddo
         c_string(n+1) = C_NULL_CHAR
     end function to_cstring
-
-    !>  Replace all occurrences of s1 in str with s2
-    !!  Optionally one occurence (one=.true.) and
-    !!  optionally starting from end of string (back=.true.)
-    pure subroutine replace_substr( str, s1, s2, one, back )
-        character(len=:), allocatable, intent(inout) :: str
-        character(len=*),              intent(in)    :: s1, s2
-        logical,             optional, intent(in)    :: one, back
-        character(len=:), allocatable :: tmp
-        integer :: i, n, ilen, ilen1
-        logical :: l_one, l_back
-        l_one  = .false.
-        l_back = .false.
-        if( present(one) ) l_one = one
-        if( l_one )then
-            if( present(back) ) l_back = back
-        endif
-        if ( len(str) > 0 ) then
-            tmp   = ''
-            ilen1 = len(s1)
-            do
-                ilen = len(str)
-                i    = index(str,s1,back=l_back)
-                if (i>0) then
-                    if (i>1) tmp = tmp//str(1:i-1)
-                    tmp = tmp//s2
-                    n   = i+ilen1
-                    if (n<=ilen) then
-                        str = str(n:ilen)
-                    else
-                        exit
-                    end if
-                    if( l_one )then
-                        tmp = tmp//str
-                        exit
-                    endif
-                else
-                    tmp = tmp//str
-                    exit
-                end if
-            end do
-            str = tmp
-        end if
-    end subroutine replace_substr
 
 end module simple_string_utils

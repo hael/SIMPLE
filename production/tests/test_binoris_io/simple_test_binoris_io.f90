@@ -11,7 +11,7 @@ type(binoris)               :: bos
 type(oris)                  :: o
 type(sp_project)            :: spproj 
 logical                     :: test_passed
-character(len=STDLEN)       :: fname, projname
+type(string)                :: fname, projname
 integer                     :: fromto(2)
 #include "simple_local_flags.inc"
 test_passed = .true.

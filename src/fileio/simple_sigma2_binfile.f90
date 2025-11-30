@@ -8,14 +8,14 @@ private
 
 type sigma2_binfile
     private
-    character(len=:), allocatable :: fname
-    integer :: file_header(4) = 0
-    integer :: fromp          = 0
-    integer :: top            = 0
-    integer :: kfromto(2)     = 0
-    integer :: headsz         = 0
-    integer :: sigmassz       = 0
-    logical :: exists         = .false.
+    type(string) :: fname
+    integer      :: file_header(4) = 0
+    integer      :: fromp          = 0
+    integer      :: top            = 0
+    integer      :: kfromto(2)     = 0
+    integer      :: headsz         = 0
+    integer      :: sigmassz       = 0
+    logical      :: exists         = .false.
 contains
     ! constructor
     procedure          :: new
@@ -36,12 +36,12 @@ end type sigma2_binfile
 contains
 
     subroutine new( self, fname, fromp, top, kfromto )
-        class(sigma2_binfile),         intent(inout) :: self
-        character(len=:), allocatable, intent(in)    :: fname
-        integer,                       intent(in)    :: fromp, top, kfromto(2)
+        class(sigma2_binfile),  intent(inout) :: self
+        class(string),          intent(in)    :: fname
+        integer,                intent(in)    :: fromp, top, kfromto(2)
         real(sp) :: r
         call self%kill
-        self%fname            = trim(fname)
+        self%fname            = fname
         self%fromp            = fromp
         self%top              = top
         self%kfromto          = kfromto
@@ -54,14 +54,14 @@ contains
     end subroutine new
 
     subroutine new_from_file( self, fname )
-        class(sigma2_binfile),         intent(inout) :: self
-        character(len=:), allocatable, intent(in)    :: fname
+        class(sigma2_binfile), intent(inout) :: self
+        class(string),         intent(in)    :: fname
         real(sp) :: r
         call self%kill
         if (.not. file_exists(fname)) then
-            THROW_HARD('sigma2_binfile: new_from_file; file ' // trim(fname) // ' does not exist')
+            THROW_HARD('sigma2_binfile: new_from_file; file ' // fname%to_char() // ' does not exist')
         end if
-        self%fname = trim(fname)
+        self%fname            = fname
         call self%read_header
         self%file_header(1)   = self%fromp
         self%file_header(2)   = self%top
@@ -138,16 +138,16 @@ contains
         logical :: success
         integer :: io_stat
         integer :: fromp_here, top_here, kfromto_here(2)
-        if( .not. file_exists(trim(self%fname)) )then
+        if( .not. file_exists(self%fname) )then
             success = .false.
             return
         end if
         if( readonly )then
-            call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            call fopen(funit,self%fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
         else
-            call fopen(funit,trim(self%fname),access='STREAM',status='OLD', iostat=io_stat)
+            call fopen(funit,self%fname,access='STREAM',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('sigma2_binfile; open_and_check_header; file: '//trim(self%fname), io_stat)
+        call fileiochk('sigma2_binfile; open_and_check_header; file: '//self%fname%to_char(), io_stat)
         read(unit=funit,pos=1) self%file_header
         fromp_here      = self%file_header(1)
         top_here        = self%file_header(2)
@@ -171,8 +171,8 @@ contains
         integer :: fromp_here, top_here, kfromto_here(2)
         integer :: funit, io_stat
         integer :: file_header(4)
-        call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        call fileiochk('sigma2_binfile; read_header; file: '//trim(self%fname), io_stat)
+        call fopen(funit,self%fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
+        call fileiochk('sigma2_binfile; read_header; file: '//self%fname%to_char(), io_stat)
         read(unit=funit,pos=1) file_header
         fromp_here      = file_header(1)
         top_here        = file_header(2)
@@ -195,7 +195,7 @@ contains
         integer  :: io_stat
         real(sp) :: sigmas_empty(self%kfromto(1):self%kfromto(2), self%fromp:self%top)
         sigmas_empty = 0.
-        call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        call fopen(funit,self%fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) sigmas_empty
     end subroutine create_empty
@@ -218,7 +218,7 @@ contains
         self%kfromto      = 0
         self%fromp        = 0
         self%top          = 0
-        if( allocated(self%fname) ) deallocate(self%fname)
+        call self%fname%kill
         self%exists       = .false.
     end subroutine kill
 

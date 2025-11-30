@@ -10,12 +10,12 @@ private
 contains
 
     subroutine binread_oritab( fname, spproj, a, fromto )
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         class(sp_project), intent(inout) :: spproj
         class(oris),       intent(inout) :: a
         integer,           intent(in)    :: fromto(2)
         if( .not. file_exists(fname) )then
-            THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
+            THROW_HARD('file: '//fname%to_char()//' does not exist in cwd')
         endif
         select case(fname2format(fname))
             case('O')
@@ -28,12 +28,12 @@ contains
     end subroutine binread_oritab
 
     subroutine binread_ctfparams_state_eo( fname, spproj, a, fromto )
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         class(sp_project), intent(inout) :: spproj
         class(oris),       intent(inout) :: a
-        integer,           intent(in), optional :: fromto(2)
+        integer, optional, intent(in)    :: fromto(2)
         if( .not. file_exists(fname) )then
-            THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
+            THROW_HARD('file: '//fname%to_char()//' does not exist in cwd')
         endif
         select case(fname2format(fname))
             case('O')
@@ -41,18 +41,18 @@ contains
             case('T')
                 call a%read_ctfparams_state_eo(fname)
             case DEFAULT
-                THROW_HARD('format of file: '//trim(fname)//' unsupported')
+                THROW_HARD('format of file: '//fname%to_char()//' unsupported')
         end select
     end subroutine binread_ctfparams_state_eo
 
     function binread_nlines( fname ) result( nl )
         use simple_parameters, only: params_glob
-        character(len=*), intent(in) :: fname
+        class(string), intent(in) :: fname
         integer       :: nl
         type(binoris) :: bos
         nl = -1
         if( .not. file_exists(fname) )then
-            THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
+            THROW_HARD('file: '//fname%to_char()//' does not exist in cwd')
         endif
         select case(fname2format(fname))
         case('O')
@@ -62,12 +62,12 @@ contains
         case('T')
             nl = nlines(fname)
         case DEFAULT
-            THROW_HARD('format of file: '//trim(fname)//' unsupported')
+            THROW_HARD('format of file: '//fname%to_char()//' unsupported')
         end select
     end function binread_nlines
 
     subroutine binwrite_oritab( fname, spproj, a, fromto, isegment )
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         class(sp_project), intent(inout) :: spproj
         class(oris),       intent(inout) :: a
         integer,           intent(in)    :: fromto(2)
@@ -78,7 +78,7 @@ contains
             case('T')
                 call a%write(fname, fromto)
             case DEFAULT
-                THROW_HARD('format of file: '//trim(fname)//' unsupported')
+                THROW_HARD('format of file: '//fname%to_char()//' unsupported')
         end select
     end subroutine binwrite_oritab
 

@@ -22,7 +22,7 @@ type :: ptcl_extractor
     real,             allocatable :: doses(:,:,:),weights(:), isoshifts(:,:)
     integer,          allocatable :: hotpix_coords(:,:)
     logical,          allocatable :: particle_mask(:,:,:)
-    character(len=:), allocatable :: gainrefname, moviename, docname
+    type(string)                  :: gainrefname, moviename, docname
     type(image)                   :: gain
     type(eer_decoder)             :: eer
     real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
@@ -67,16 +67,16 @@ contains
         class(ori),            intent(in)    :: omic
         integer,               intent(in)    :: box
         logical,               intent(in)    :: neg
-        character(len=:), allocatable :: poly_fname
-        real(dp),         allocatable :: poly(:)
-        integer  :: i,iframe
+        real(dp), allocatable :: poly(:)
+        type(string) :: poly_fname
+        integer      :: i,iframe
         call self%kill
         if( .not. omic%isthere('mc_starfile') )then
             THROW_HARD('Movie star doc is absent 1, reverting to micrograph extraction')
             self%l_mov = .false.
         endif
         self%l_mov   = .true.
-        self%docname = trim(omic%get_static('mc_starfile'))
+        self%docname = omic%get('mc_starfile')
         self%l_neg   = neg
         self%box     = box
         if( .not.file_exists(self%docname) )then
@@ -98,7 +98,7 @@ contains
                 ! downscaling shifts
                 self%isoshifts = self%isoshifts * self%scale
                 ! polynomial coefficients
-                poly_fname = fname_new_ext(self%docname,'poly')
+                poly_fname = fname_new_ext(self%docname,string('poly'))
                 if( file_exists(poly_fname) )then
                     poly = file2drarr(poly_fname)
                     self%polyx = poly(:POLYDIM)
@@ -141,7 +141,7 @@ contains
                 ! gain correction
                 if( self%l_gain )then
                     if( .not.file_exists(self%gainrefname) )then
-                        THROW_HARD('gain reference: '//trim(self%gainrefname)//' not found')
+                        THROW_HARD('gain reference: '//self%gainrefname%to_char()//' not found')
                     endif
                     if( self%l_eer )then
                         call correct_gain(self%frames, self%gainrefname, self%gain, eerdecoder=self%eer)
@@ -198,7 +198,7 @@ contains
     subroutine init_mask( self )
         class(ptcl_extractor), intent(inout) :: self
         type(image) :: tmp
-        real :: radius
+        real        :: radius
         if( allocated(self%particle_mask) ) deallocate(self%particle_mask)
         radius = RADFRAC_NORM_EXTRACT * real(self%box/2)
         call tmp%disc([self%box,self%box,1], 1., radius, self%particle_mask)
@@ -207,27 +207,30 @@ contains
 
     subroutine parse_movie_metadata( self )
         class(ptcl_extractor), intent(inout) :: self
-        type(str4arr), allocatable :: names(:)
-        type(starfile_table_type)  :: table
+        type(string), allocatable     :: names(:)
+        type(starfile_table_type)     :: table
+        character(len=:), allocatable :: buffer
         integer(C_long) :: num_objs, object_id
         integer         :: i,j,iframe,n,ind, motion_model
         logical         :: err
         ! parsing individual movie meta-data
         call starfile_table__new(table)
-        call starfile_table__getnames(table, trim(self%docname)//C_NULL_CHAR, names)
+        call starfile_table__getnames(table, self%docname, names)
         n = size(names)
         do i = 1,n
-            call starfile_table__read(table, trim(self%docname)//C_NULL_CHAR, names(i)%str )
-            select case(trim(names(i)%str))
+            call starfile_table__read(table, self%docname, names(i)%to_char() )
+            select case(trim(names(i)%to_char()))
             case('general')
                 ! global variables, movie at original size
                 self%ldim(1)        = parse_int(table, EMDL_IMAGE_SIZE_X, err)
                 self%ldim(2)        = parse_int(table, EMDL_IMAGE_SIZE_Y, err)
                 self%ldim(3)        = 1
                 self%nframes        = parse_int(table, EMDL_IMAGE_SIZE_Z, err)
-                call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, self%moviename, err)
+                call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, buffer, err)
+                self%moviename      = buffer
                 self%l_eer          = fname2format(self%moviename) == 'K'
-                call parse_string(table, EMDL_MICROGRAPH_GAIN_NAME, self%gainrefname, err)
+                call parse_string(table, EMDL_MICROGRAPH_GAIN_NAME, buffer, err)
+                self%gainrefname    = buffer
                 self%l_gain         = .not.err
                 self%scale          = 1./ parse_double(table, EMDL_MICROGRAPH_BINNING, err)
                 self%l_scale        = (.not.err) .and. (abs(self%scale - 1.0) > 0.001)
@@ -289,7 +292,7 @@ contains
                     object_id = starfile_table__nextobject(table)
                 end do
             case DEFAULT
-                THROW_HARD('Invalid table: '//trim(names(i)%str))
+                THROW_HARD('Invalid table: '//trim(names(i)%to_char()))
             end select
         enddo
         call starfile_table__delete(table)
@@ -299,7 +302,7 @@ contains
     subroutine display( self )
         class(ptcl_extractor), intent(in) :: self
         integer :: i
-        print *, 'docname        ', self%docname
+        print *, 'docname        ', self%docname%to_char()
         print *, 'nframes        ', self%nframes
         print *, 'dimensions     ', self%ldim
         print *, 'smpd           ', self%smpd
@@ -308,8 +311,8 @@ contains
         print *, 'box_pd         ', self%box_pd
         print *, 'voltage        ', self%kv
         print *, 'doseperframe   ', self%doseperframe
-        print *, 'gainrefname    ', trim(self%gainrefname)
-        print *, 'moviename      ', trim(self%moviename)
+        print *, 'gainrefname    ', self%gainrefname%to_char()
+        print *, 'moviename      ', self%moviename%to_char()
         print *, 'doseweighting  ', self%l_doseweighing
         print *, 'total dose     ', self%total_dose
         print *, 'l_scale        ', self%l_scale
@@ -328,11 +331,6 @@ contains
         do i = 1,POLYDIM
             print *,'polycoeffs    ',i,self%polyx(i),self%polyy(i)
         enddo
-        ! if( self%nhotpix > 0 )then
-        !     do i = 1,self%nhotpix
-        !         print *,'hotpix    ',i,self%hotpix_coords(:,i)
-        !     enddo
-        ! endif
     end subroutine display
 
     subroutine extract_particles( self, pinds, coords, particles, vmin, vmax, vmean, vsdev )
@@ -693,7 +691,7 @@ contains
         class(starfile_table_type)                 :: table
         integer,                       intent(in)  :: emdl_id
         character(len=:), allocatable, intent(out) :: string
-        logical, intent(out)                       :: err
+        logical,                       intent(out) :: err
         err = .not.starfile_table__getValue_string(table, emdl_id, string)
     end subroutine parse_string
     
@@ -728,9 +726,9 @@ contains
         self%doseperframe   = 0.
         self%scale          = 1.
         self%align_frame    = 0
-        self%moviename   = ''
-        self%docname     = ''
-        self%gainrefname = ''
+        call self%moviename%kill
+        call self%docname%kill
+        call self%gainrefname%kill
         self%exists = .false.
     end subroutine kill
 

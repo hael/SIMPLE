@@ -312,7 +312,7 @@ contains
                 allocate(clustering(noris), clustszs(NSPACE_REDUCED))
                 call osubspace%new(NSPACE_REDUCED, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(osubspace)
-                call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_REDUCED])
+                call osubspace%write(string('even_pdirs'//TXT_EXT), [1,NSPACE_REDUCED])
                 do iptcl=1,build%spproj_field%get_noris()
                     if( ptcl_mask(iptcl) )then
                         call build%spproj_field%get_ori(iptcl, o_single)
@@ -367,8 +367,8 @@ contains
         class(commander_oriconsensus), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(sp_project),          allocatable :: spprojs(:)
-        character(len=LONGSTRLEN), allocatable :: projfnames(:)
-        integer,                   allocatable :: states(:,:), states_consensus(:)
+        type(string), allocatable :: projfnames(:)
+        integer,      allocatable :: states(:,:), states_consensus(:)
         type(parameters) :: params
         integer          :: nprojs, iproj, noris1, noris2, ngood, nbad, iori
         real             :: overlap
@@ -445,7 +445,7 @@ contains
         else
             THROW_HARD('Need infile defined on command line: text file with 9 records per line defining a rotation matrix (11) (12) (13) (21) etc.')
         endif
-        if( fname2format(trim(params%outfile)) .eq. '.simple' )then
+        if( fname2format(params%outfile) .eq. '.simple' )then
             THROW_HARD('*.simple outfile not supported; rotmats2oris')
         endif
         nrecs_per_line = rotmats%get_nrecs_per_line()
@@ -480,16 +480,16 @@ contains
         type(ori)             :: o, o_prev
         real,    allocatable  :: euldists(:)
         integer, allocatable  :: pops(:)
-        character(len=STDLEN) :: fname, ext
+        type(string)          :: fname, ext
         integer               :: i, n, maxpop, funit, closest,io_stat
         real                  :: radius, maxradius, ang, scale, col, avg_geodist,avg_euldist,geodist
         real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3)
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         n = build%spproj_field%get_noris()
         if( .not.cline%defined('fbody') )then
-            fname = basename(trim(adjustl(params%oritab)))
-            ext   = trim(fname2ext(fname))
-            params%fbody = trim(get_fbody(trim(fname), trim(ext)))
+            fname = basename(params%oritab)
+            ext   = fname2ext(fname)
+            params%fbody = get_fbody(fname, ext)
         endif
         if( params%tseries.eq.'no' )then
             ! Discretization of the projection directions
@@ -510,9 +510,9 @@ contains
             write(logfhandle,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
             write(logfhandle,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
             ! output
-            fname = trim(params%fbody)//'.bild'
-            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname),iostat=io_stat)
-             if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            fname = params%fbody//'.bild'
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
+             if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed "//fname%to_char(), io_stat)
             ! header
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 10"
@@ -549,9 +549,9 @@ contains
         else
             ! time series
             ! unit sphere tracking
-            fname  = trim(params%fbody)//'_motion.bild'
+            fname  = params%fbody//'_motion.bild'
             radius = 0.02
-            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
              if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed ", io_stat)
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
@@ -584,9 +584,9 @@ contains
             avg_geodist = 0.
             avg_euldist = 0.
             allocate(euldists(n))
-            fname  = trim(params%fbody)//'_motion.csv'
-            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            fname  = params%fbody//'_motion.csv'
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
+            if(io_stat/=0)call fileiochk("simple_commanders_oris::exec_vizoris fopen failed "//fname%to_char(), io_stat)
             do i = 1, n
                 call build%spproj_field%get_ori(i, o)
                 if( i==1 )then
@@ -696,23 +696,23 @@ contains
       contains
 
         subroutine read_state_order( fname, order )
-            character(len=*), intent(in)  :: fname
-            integer,          intent(out) :: order(nstates)
+            class(string), intent(in)  :: fname
+            integer,       intent(out) :: order(nstates)
             character(len=100)  :: io_message
-            character(len=2048) :: line
+            type(string) :: line
             integer :: file_stat, fnr, i, io_stat
             if( .not. file_exists(fname) )then
-                THROW_HARD("the file you are trying to read: "//trim(fname)//' does not exist in cwd' )
+                THROW_HARD("the file you are trying to read: "//fname%to_char()//' does not exist in cwd' )
             endif
-            if( trim(fname2ext(fname)) == 'bin' )then
+            if( fname2ext(fname) == 'bin' )then
                 THROW_HARD('this method does not support binary files; read')
             endif
             io_message='No error'
             call fopen(fnr, FILE=fname, STATUS='OLD', action='READ', iostat=file_stat, iomsg=io_message)
-            call fileiochk("read_state_order ; read ,Error when opening file for reading: "//trim(fname)//':'//trim(io_message), file_stat)
+            call fileiochk("read_state_order ; read ,Error when opening file for reading: "//fname%to_char()//':'//trim(io_message), file_stat)
             do i = 1, nstates
-                read(fnr, fmt='(A)') line
-                order(i) = str2int( trim(line), io_stat )
+                call line%readline(fnr, io_stat)
+                order(i) = line%to_int()
             enddo
             call fclose(fnr)
         end subroutine read_state_order

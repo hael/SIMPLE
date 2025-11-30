@@ -645,11 +645,11 @@ contains
     ! write the partition-wise (or global) dist value table to a binary file
     subroutine write_table( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self
-        character(len=*),      intent(in) :: binfname
+        class(string),         intent(in) :: binfname
         integer :: funit, addr, io_stat, file_header(2)
         file_header(1) = self%ncls
         file_header(2) = self%nptcls
-        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) file_header
         addr = sizeof(file_header) + 1
         write(funit,pos=addr) self%loc_tab
@@ -660,16 +660,16 @@ contains
     ! particles indices are assumed in increasing order
     subroutine read_table_parts_to_glob( self )
         class(eul_prob_tab2D), intent(inout) :: self
-        character(len=STDLEN) :: fname
+        type(string) :: fname
         integer :: funit, addr, io_stat, file_header(2), nptcls, ncls, ipart, istart, iend
         istart = 1
         do ipart = 1,params_glob%nparts
-            fname = trim(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
-            if( file_exists(trim(fname)) )then
-                call fopen(funit,trim(fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-                call fileiochk('simple_eul_prob_tab2D; read_table_parts_to_glob; file: '//trim(fname), io_stat)
+            fname = DIST_FBODY//int2str_pad(ipart,params_glob%numlen)//'.dat'
+            if( file_exists(fname) )then
+                call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
+                call fileiochk('simple_eul_prob_tab2D; read_table_parts_to_glob; file: '//fname%to_char(), io_stat)
             else
-                THROW_HARD('Missing file: '//trim(fname))
+                THROW_HARD('Missing file: '//fname%to_char())
             endif
             ! reading header
             read(unit=funit,pos=1) file_header
@@ -689,10 +689,10 @@ contains
     ! write a global assignment map to binary file
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self
-        character(len=*),      intent(in) :: binfname
+        class(string),         intent(in) :: binfname
         integer :: funit, io_stat, headsz
         headsz = sizeof(self%nptcls)
-        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1)          self%nptcls
         write(unit=funit,pos=headsz + 1) self%assgn_map
         call fclose(funit)
@@ -701,16 +701,16 @@ contains
     ! read from the global assignment map to local partition for shift search and further refinement
     subroutine read_assignment( self, binfname )
         class(eul_prob_tab2D), intent(inout) :: self
-        character(len=*),      intent(in)    :: binfname
+        class(string),         intent(in)    :: binfname
         type(ptcl_rec), allocatable :: assgn_glob(:)
         integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
         headsz = sizeof(nptcls_glob)
-        if( .not. file_exists(trim(binfname)) )then
-            THROW_HARD('file '//trim(binfname)//' does not exists!')
+        if( .not. file_exists(binfname) )then
+            THROW_HARD('file '//binfname%to_char()//' does not exists!')
         else
-            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('simple_eul_prob_tab2D; read_assignment; file: '//trim(binfname), io_stat)
+        call fileiochk('simple_eul_prob_tab2D; read_assignment; file: '//binfname%to_char(), io_stat)
         read(unit=funit,pos=1) nptcls_glob
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit,pos=headsz + 1) assgn_glob

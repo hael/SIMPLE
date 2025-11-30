@@ -212,28 +212,27 @@ contains
     !>Write reconstructed image
     subroutine write_rho( self, kernam )
         class(reconstructor), intent(in) :: self   !< this instance
-        character(len=*),     intent(in) :: kernam !< kernel name
+        class(string),        intent(in) :: kernam !< kernel name
         integer :: filnum, ierr
-        call del_file(trim(kernam))
-        call fopen(filnum, trim(kernam), status='NEW', action='WRITE', access='STREAM', iostat=ierr)
-        call fileiochk( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
+        call del_file(kernam)
+        call fopen(filnum, kernam, status='NEW', action='WRITE', access='STREAM', iostat=ierr)
+        call fileiochk( 'simple_reconstructor ; write rho '//kernam%to_char(), ierr)
         write(filnum, pos=1, iostat=ierr) self%rho
         if( ierr .ne. 0 ) &
-            call fileiochk('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
+            call fileiochk('read_rho; simple_reconstructor writing '//kernam%to_char(), ierr)
         call fclose(filnum)
     end subroutine write_rho
 
     !> Read sampling density matrix
     subroutine read_rho( self, kernam )
         class(reconstructor), intent(inout) :: self !< this instance
-        character(len=*),     intent(in)    :: kernam !< kernel name
+        class(string),        intent(in)    :: kernam !< kernel name
         integer :: filnum, ierr
-        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM', iostat=ierr)
-        call fileiochk('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
+        call fopen(filnum, file=kernam, status='OLD', action='READ', access='STREAM', iostat=ierr)
+        call fileiochk('read_rho; simple_reconstructor opening '//kernam%to_char(), ierr)
         read(filnum, pos=1, iostat=ierr) self%rho
         if( ierr .ne. 0 ) &
-            call fileiochk('simple_reconstructor::read_rho; simple_reconstructor reading '&
-            &// trim(kernam), ierr)
+            call fileiochk('simple_reconstructor::read_rho; simple_reconstructor reading '//kernam%to_char(), ierr)
         call fclose(filnum)
     end subroutine read_rho
 
@@ -700,7 +699,7 @@ contains
 
     subroutine write_rho_as_mrc( self, fname )
         class(reconstructor), intent(inout) :: self
-        character(len=*), intent(in) :: fname
+        class(string),        intent(in)    :: fname
         type(image) :: img
         integer :: c,phys(3),h,k,m
         call img%new([self%rho_shape(2),self%rho_shape(2),self%rho_shape(2)], 1.0)
@@ -729,7 +728,7 @@ contains
 
     subroutine write_absfc_as_mrc( self, fname )
         class(reconstructor), intent(inout) :: self
-        character(len=*), intent(in) :: fname
+        class(string),        intent(in)    :: fname
         type(image) :: img
         integer :: c,phys(3),h,k,m
         call img%new([self%rho_shape(2),self%rho_shape(2),self%rho_shape(2)], 1.0)

@@ -6,11 +6,14 @@ implicit none
 contains
 
     subroutine progressfile_init()
-        integer :: progress_fhandle, ok
-        if( file_exists('.progress') ) call del_file('.progress')
-        call fopen(progress_fhandle,file='.progress', status='new', iostat=ok)
+        integer      :: progress_fhandle, ok
+        type(string) :: fname
+        fname = '.progress'
+        if( file_exists(fname) ) call del_file(fname)
+        call fopen(progress_fhandle,file=fname, status='new', iostat=ok)
         write(progress_fhandle, '(RD,F4.2)') 0.0
         call fclose(progress_fhandle)
+        call fname%kill
     end subroutine progressfile_init
     
     subroutine progressfile_init_parts(nparts)
@@ -24,17 +27,22 @@ contains
     subroutine progressfile_init_part(part)
         integer, intent(in) :: part
         integer             :: progress_fhandle, ok
-        if( file_exists('.progress_' // trim(adjustl(int2str(part)))) ) call del_file('.progress_'// trim(adjustl(int2str(part))))
-        call fopen(progress_fhandle,file='.progress_'// trim(adjustl(int2str(part))), status='new', iostat=ok)
+        type(string) :: fname
+        fname = '.progress_' // trim(adjustl(int2str(part)))
+        if( file_exists(fname) ) call del_file(fname)
+        call fopen(progress_fhandle,file=fname, status='new', iostat=ok)
         write(progress_fhandle, '(RD,F4.2)') 0.0
         call fclose(progress_fhandle)
+        call fname%kill
     end subroutine progressfile_init_part
     
     subroutine progressfile_update(progress)
         real, intent(in) :: progress
         integer          :: progress_fhandle, ok
-        if( file_exists('.progress') ) call del_file('.progress')
-        call fopen(progress_fhandle,file='.progress', status='new', iostat=ok)
+        type(string) :: fname
+        fname = '.progress'
+        if( file_exists(fname) ) call del_file(fname)
+        call fopen(progress_fhandle,file=fname, status='new', iostat=ok)
         if(progress > 1.0) then
             write(progress_fhandle, '(RD,F4.2)') 1.0
         else if(progress < 0.0) then
@@ -43,14 +51,17 @@ contains
             write(progress_fhandle, '(RD,F4.2)') progress
         endif
         call fclose(progress_fhandle)
+        call fname%kill
     end subroutine progressfile_update
     
     subroutine progressfile_update_part(part, progress)
-        real, intent(in)    :: progress
+        real,    intent(in) :: progress
         integer, intent(in) :: part
         integer             :: progress_fhandle, ok
-        if( file_exists('.progress_' // trim(adjustl(int2str(part)))) ) call del_file('.progress_'// trim(adjustl(int2str(part))))
-        call fopen(progress_fhandle,file='.progress_' // trim(adjustl(int2str(part))), status='new', iostat=ok)
+        type(string)        :: fname
+        fname = '.progress_' // trim(adjustl(int2str(part)))
+        if( file_exists(fname) ) call del_file(fname)
+        call fopen(progress_fhandle,file=fname, status='new', iostat=ok)
         if(progress > 1.0) then
             write(progress_fhandle, '(RD,F4.2)') 1.0
         else if(progress < 0.0) then
@@ -59,16 +70,20 @@ contains
             write(progress_fhandle, '(RD,F4.2)') progress
         endif
         call fclose(progress_fhandle)
+        call fname%kill
     end subroutine progressfile_update_part
     
     subroutine progressfile_complete_parts(nparts)
         integer, intent(in) :: nparts
         integer             :: ipart
+        type(string)        :: fname
+        fname = '.progress_' // trim(adjustl(int2str(ipart)))
         do ipart = 1, nparts
-            if( file_exists('.progress_' // trim(adjustl(int2str(ipart)))) ) call del_file('.progress_'// trim(adjustl(int2str(ipart))))
+            if( file_exists(fname) ) call del_file(fname)
         enddo
         call progressfile_init()
         call progressfile_update(1.0)
+        call fname%kill
     end subroutine progressfile_complete_parts
     
     function progress_estimate_preprocess_stream(n_imported, n_added) result(progress)
@@ -119,7 +134,8 @@ contains
     end function progress_estimate_2D
     
     subroutine lastfoundfile_update()
-        integer :: lastfound_fhandle, ok
+        integer       :: lastfound_fhandle, ok
+        type(string)  :: fname
         character(8)  :: date
         character(10) :: time
         character(5)  :: zone
@@ -130,8 +146,9 @@ contains
         call date_and_time(DATE=date,ZONE=zone)
         call date_and_time(TIME=time)
         call date_and_time(VALUES=values)
-        if( file_exists('.lastfound') ) call del_file('.lastfound')
-        call fopen(lastfound_fhandle,file='.lastfound', status='new', iostat=ok)
+        fname = '.lastfound'
+        if( file_exists(fname) ) call del_file(fname)
+        call fopen(lastfound_fhandle,file=fname, status='new', iostat=ok)
         write(lastfound_fhandle, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
         call fclose(lastfound_fhandle)
     end subroutine lastfoundfile_update

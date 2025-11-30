@@ -28,7 +28,7 @@ integer,       parameter :: TIFF_SAMPLEFORMAT_COMPLEXIEEEFP = 6
 type imgfile
     private
     class(ImgHead), allocatable :: overall_head              !< Overall image head object
-    character(len=STDLEN)       :: fname          = ''       !< Filename
+    type(string)                :: fname                     !< Filename
     character(len=1)            :: head_format    = ''       !< 'M' (MRC), 'S' (SPIDER) file format
     integer                     :: funit          = 0        !< Unit number
     logical                     :: was_written_to = .false.  !< Indicates whether data was written to the file since it was opened
@@ -66,7 +66,7 @@ contains
 
     subroutine open( self, fname, ldim, smpd, del_if_exists, formatchar, readhead, rwaction )
         class(imgfile),             intent(inout) :: self          !< Imagefile object to be created
-        character(len=*),           intent(in)    :: fname         !< Filename
+        class(string),              intent(in)    :: fname         !< Filename
         integer,                    intent(in)    :: ldim(3)       !< logical dimension of image/stack
         real,                       intent(in)    :: smpd          !< Pixel size of image data (in Angstroms)
         logical,          optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace it
@@ -82,7 +82,7 @@ contains
             if( rwaction .eq. 'READ' ) write_enabled = .false.
         endif
         ! set file name
-        self%fname = trim(adjustl(fname))
+        self%fname = fname
         ! work out which file format to use
         if( present(formatchar) )then
             format_descriptor = formatchar
@@ -162,7 +162,7 @@ contains
             endif
             ! Get an IO unit number
             call fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,status=stat_str,iostat=ios)
-            call fileiochk("imgfile::open_local fopen error: "//trim(self%fname),ios)
+            call fileiochk("imgfile::open_local fopen error: "//self%fname%to_char(),ios)
         endif
         self%was_written_to = .false.
     end subroutine open_local
@@ -359,14 +359,14 @@ contains
                 case(4)
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
                 case DEFAULT
-                    write(logfhandle,'(2a)') 'fname: ', trim(self%fname)
+                    write(logfhandle,'(2a)') 'fname: ', self%fname%to_char()
                     write(logfhandle,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
                     THROW_HARD('unsupported bit-depth')
             end select
         endif
         ! Check the read was successful
         if( io_stat .ne. 0 )then
-            write(logfhandle,'(a,i0,2a)') '**ERROR(rSlices): I/O error ', io_stat, ' when reading from: ', trim(self%fname)
+            write(logfhandle,'(a,i0,2a)') '**ERROR(rSlices): I/O error ', io_stat, ' when reading from: ', self%fname%to_char()
             write(logfhandle,'(2a)') 'IO error message was: ', trim(io_message)
             THROW_HARD('I/O')
         endif
@@ -600,7 +600,7 @@ contains
         write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
         ! Check the write was successful
         if( io_stat .ne. 0 )then
-            write(logfhandle,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
+            write(logfhandle,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', self%fname%to_char()
             THROW_HARD('I/O')
         endif
         ! May need to update file dims
@@ -676,7 +676,7 @@ contains
         write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
         ! Check the write was successful
         if( io_stat .ne. 0 )then
-            write(logfhandle,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
+            write(logfhandle,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', self%fname%to_char()
             THROW_HARD('I/O')
         endif
         ! May need to update file dims

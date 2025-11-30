@@ -25,43 +25,43 @@ integer,  parameter :: LBFGSB_MAXITS = 60, MAXITS = 3    ! Iterations parameters
 
 type :: motion_align_poly
     private
-    type(image),            pointer :: frames_orig(:)                    !< pointer to frames
-    type(image),        allocatable :: tiles(:,:,:), tiles_sh(:,:,:)
-    type(image),        allocatable :: tmp_imgs(:)
+    type(image),              pointer :: frames_orig(:)                    !< pointer to frames
+    type(image),          allocatable :: tiles(:,:,:), tiles_sh(:,:,:)
+    type(image),          allocatable :: tmp_imgs(:)
     type(ft_expanded_dp), allocatable :: ftexp_tiles(:,:,:), ftexp_tiles_sh(:,:)
     type(ft_expanded_dp), allocatable :: ftexp_R(:), ftexp_dR(:,:)
     type(ft_expanded_dp), allocatable :: ftexp_Rhat(:), ftexp_dRhat(:,:), ftexp_Rhat2(:)
-    integer,           allocatable :: lims_tiles(:,:,:,:)
-    real,              allocatable :: tile_centers(:,:,:)
-    real,              allocatable :: patch_pos(:,:,:)
-    real(dp),          allocatable :: patch_coords(:,:,:)
-    real,              allocatable :: shifts(:,:,:,:)                   !< global shifts
-    real,              allocatable :: iso_shifts(:,:,:,:)               !< isotropic shifts
-    real,              allocatable :: aniso_shifts(:,:,:,:)             !< anisotropic shifts
-    real,              allocatable :: patch_shifts(:,:,:,:)             !< anisotropic shifts for display only
-    real,              allocatable :: frameweights(:)                   !< array of frameweights
-    real,              allocatable :: corrs(:)                          !< per-frame correlations
-    logical,           allocatable :: tiles_mask(:,:)
-    logical,           allocatable :: resolution_mask(:,:,:)
-    real(dp)                       :: fit_poly_coeffs(POLYDIM,2)        !< fitted polynomial coefficients
-    real(dp)                       :: poly_coeffs(POLYDIM,2)            !< optimized polynomial coefficients
-    real                           :: hp=-1.,      lp=-1.               !< high/low pass value
-    real                           :: bfactor        = 0.              !< b-factor for alignment weights
-    real                           :: corr           = -1.              !< correlation
-    real                           :: smpd           = 0.               !< sampling distance
-    real                           :: smpd_tile      = 0.               !< sampling distance
-    real                           :: scale_factor   = 1.               !< local frame scaling
-    real                           :: trs            = 20.              !< half correlation disrete search bound
-    integer                        :: tilesz         = 768
-    integer                        :: nthr           = 1
-    integer                        :: nxpatch = 0, nypatch = 0
-    integer                        :: ldim(3) = 0, ldim_sc(3) = 0       !< frame dimensions
-    integer                        :: ldim_tile(3)   = 0
-    integer                        :: nframes        = 0                !< number of frames
-    integer                        :: align_frame    = 1                !< reference frame for alignement
-    integer                        :: fixed_frame    = 1                !< reference frame for interpolation
-    logical                        :: l_aniso_success  = .false.
-    logical                        :: existence        = .false.
+    integer,              allocatable :: lims_tiles(:,:,:,:)
+    real,                 allocatable :: tile_centers(:,:,:)
+    real,                 allocatable :: patch_pos(:,:,:)
+    real(dp),             allocatable :: patch_coords(:,:,:)
+    real,                 allocatable :: shifts(:,:,:,:)                   !< global shifts
+    real,                 allocatable :: iso_shifts(:,:,:,:)               !< isotropic shifts
+    real,                 allocatable :: aniso_shifts(:,:,:,:)             !< anisotropic shifts
+    real,                 allocatable :: patch_shifts(:,:,:,:)             !< anisotropic shifts for display only
+    real,                 allocatable :: frameweights(:)                   !< array of frameweights
+    real,                 allocatable :: corrs(:)                          !< per-frame correlations
+    logical,              allocatable :: tiles_mask(:,:)
+    logical,              allocatable :: resolution_mask(:,:,:)
+    real(dp)                          :: fit_poly_coeffs(POLYDIM,2)        !< fitted polynomial coefficients
+    real(dp)                          :: poly_coeffs(POLYDIM,2)            !< optimized polynomial coefficients
+    real                              :: hp=-1.,       lp=-1.              !< high/low pass value
+    real                              :: bfactor         = 0.              !< b-factor for alignment weights
+    real                              :: corr            = -1.             !< correlation
+    real                              :: smpd            = 0.              !< sampling distance
+    real                              :: smpd_tile       = 0.              !< sampling distance
+    real                              :: scale_factor    = 1.              !< local frame scaling
+    real                              :: trs             = 20.             !< half correlation disrete search bound
+    integer                           :: tilesz          = 768
+    integer                           :: nthr            = 1
+    integer                           :: nxpatch = 0, nypatch = 0
+    integer                           :: ldim(3) = 0, ldim_sc(3) = 0       !< frame dimensions
+    integer                           :: ldim_tile(3)    = 0
+    integer                           :: nframes         = 0                !< number of frames
+    integer                           :: align_frame     = 1                !< reference frame for alignement
+    integer                           :: fixed_frame     = 1                !< reference frame for interpolation
+    logical                           :: l_aniso_success = .false.
+    logical                           :: existence       = .false.
 
 contains
     ! Constructor
@@ -867,17 +867,18 @@ contains
 
     subroutine plot_shifts( self, ofname )
         class(motion_align_poly), intent(inout) :: self
-        character(len=*),        intent(inout) :: ofname
-        real, parameter           :: SCALE = 40.
-        type(str4arr)             :: title
-        type(CPlot2D_type)        :: plot2D
-        type(CDataSet_type)       :: dataSet
-        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, ps2jpeg_cmd, fname_jpeg
+        class(string),            intent(inout) :: ofname
+        real, parameter               :: SCALE = 40.
+        type(string)                  :: title
+        type(CPlot2D_type)            :: plot2D
+        type(CDataSet_type)           :: dataSet
+        type(string)                  :: fname_pdf, fname_jpeg
+        character(len=:), allocatable :: ps2pdf_cmd, ps2jpeg_cmd
         real(dp) :: tt
         real     :: shifts(self%nxpatch,self%nypatch,self%nframes,2), ref_shift(2)
         real     :: x,y,cx,cy
         integer  :: i, t, j, iostat
-        call CPlot2D__new(plot2D, trim(ofname)//C_NULL_CHAR)
+        call CPlot2D__new(plot2D, ofname%to_char()//C_NULL_CHAR)
         call CPlot2D__SetXAxisSize(plot2D, 600.d0)
         call CPlot2D__SetYAxisSize(plot2D, 600.d0)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
@@ -980,26 +981,26 @@ contains
                 enddo
             enddo
         endif
-        title%str = 'X (in pixels; trajectory scaled by '//trim(int2str(nint(SCALE)))//')'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        title%str(1:1) = 'Y'
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
-        call CPlot2D__OutputPostScriptPlot(plot2D, trim(ofname)//C_NULL_CHAR)
+        title = 'X (in pixels; trajectory scaled by '//int2str(nint(SCALE))//')'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
+        title = 'Y (in pixels; trajectory scaled by '//int2str(nint(SCALE))//')'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%to_char())
+        call CPlot2D__OutputPostScriptPlot(plot2D, ofname%to_char()//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
         ! conversion to JPEG
-        fname_jpeg  = trim(get_fbody(ofname,'eps'))//'.jpeg'
+        fname_jpeg  = get_fbody(ofname,string('eps'))//'.jpeg'
         ps2jpeg_cmd = 'gs -q -sDEVICE=jpeg -dJPEGQ=98 -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
-            //trim(fname_jpeg)//' '//trim(ofname)
-        call exec_cmdline(trim(adjustl(ps2jpeg_cmd)), suppress_errors=.true., exitstat=iostat)
+            //fname_jpeg%to_char()//' '//ofname%to_char()
+        call exec_cmdline(ps2jpeg_cmd, suppress_errors=.true., exitstat=iostat)
         ! conversion to PDF
-        fname_pdf  = trim(get_fbody(ofname,'eps'))//'.pdf'
+        fname_pdf  = get_fbody(ofname,string('eps'))//'.pdf'
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
-            //trim(fname_pdf)//' '//trim(ofname)
-        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+            //fname_pdf%to_char()//' '//ofname%to_char()
+        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         ! update name
         if( iostat == 0 )then
             call del_file(ofname)
-            ofname = trim(fname_pdf)
+            ofname = fname_pdf
         endif
     end subroutine plot_shifts
 

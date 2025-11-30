@@ -12,9 +12,9 @@ private
 
 type :: pspec_thumb_iter
     private
-    character(len=4)      :: speckind = 'sqrt'
-    character(len=STDLEN) :: moviename_thumb, moviename_pspec
-    type(image)           :: moviesum, pspec, thumbnail
+    character(len=4) :: speckind = 'sqrt'
+    type(string)     :: moviename_thumb, moviename_pspec
+    type(image)      :: moviesum, pspec, thumbnail
   contains
     procedure :: iterate
 end type pspec_thumb_iter
@@ -24,28 +24,28 @@ contains
     subroutine iterate( self, orientation, moviename_intg, dir_out )
         class(pspec_thumb_iter), intent(inout) :: self
         class(ori),              intent(inout) :: orientation
-        character(len=*),        intent(in)    :: moviename_intg, dir_out
-        character(len=:), allocatable :: fbody_here, ext
-        type(image)    :: img_jpg
-        integer        :: ldim(3), ldim_thumb(3), nframes
-        real           :: scale, smpd
+        class(string),           intent(in)    :: moviename_intg, dir_out
+        type(string) :: fbody_here, ext
+        type(image)  :: img_jpg
+        integer      :: ldim(3), ldim_thumb(3), nframes
+        real         :: scale, smpd
         ! check, increment counter & print
         if( .not. file_exists(moviename_intg) )then
-            write(logfhandle,*) 'inputted integrated movie does not exist: ', trim(moviename_intg)
+            write(logfhandle,*) 'inputted integrated movie does not exist: ', moviename_intg%to_char()
         endif
         ! make filenames
-        fbody_here = basename(trim(moviename_intg))
-        ext        = fname2ext(trim(fbody_here))
-        fbody_here = get_fbody(trim(fbody_here), trim(ext))
-        self%moviename_pspec = trim(dir_out)//trim(adjustl(fbody_here))//POWSPEC_SUFFIX//trim(params_glob%ext)
-        self%moviename_thumb = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
-        write(logfhandle,'(a,1x,a)') '>>> PROCESSING INTEGRATED MOVIE:', trim(moviename_intg)
-        call find_ldim_nptcls(trim(moviename_intg), ldim, nframes)
+        fbody_here = basename(moviename_intg)
+        ext        = fname2ext(fbody_here)
+        fbody_here = get_fbody(fbody_here, ext)
+        self%moviename_pspec = dir_out%to_char()//fbody_here%to_char()//POWSPEC_SUFFIX//params_glob%ext%to_char()
+        self%moviename_thumb = dir_out%to_char()//fbody_here%to_char()//THUMBNAIL_SUFFIX//JPG_EXT
+        write(logfhandle,'(a,1x,a)') '>>> PROCESSING INTEGRATED MOVIE:', moviename_intg%to_char()
+        call find_ldim_nptcls(moviename_intg, ldim, nframes)
         if( nframes /= 1 ) THROW_HARD('imported movie assumed to be integrated but nframes /= 1, aborting; simple_pspec_thumb_iter :: iterate')
         if( .not. orientation%isthere('smpd') ) THROW_HARD('smpd assumed to be set in input orientation, aborting; simple_pspec_thumb_iter :: iterate')
         smpd = orientation%get('smpd')
         call self%moviesum%new(ldim, smpd)
-        call self%moviesum%read(trim(moviename_intg))
+        call self%moviesum%read(moviename_intg)
         ! generate power-spectra
         call self%moviesum%mic2spec(params_glob%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec)
         call self%pspec%write(self%moviename_pspec)

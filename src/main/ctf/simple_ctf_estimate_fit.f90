@@ -9,7 +9,6 @@ use simple_parameters,        only: params_glob
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 use simple_timer
-
 implicit none
 
 public :: ctf_estimate_fit
@@ -24,47 +23,47 @@ integer            :: glob_count = 0 ! debug only
 
 type ctf_estimate_fit
     private
-    class(image),    pointer  :: micrograph
-    type(image), allocatable  :: tiles(:,:)              ! for storing all tiles used to build power spectra
-    type(image), allocatable  :: pspec_patch(:,:)        ! patches micrograph powerspec
-    type(image)               :: pspec                   ! all micrograph powerspec
-    type(image)               :: pspec_ctf               ! CTF powerspec
-    type(image)               :: pspec4ctfres            ! powerspec for CTFres calculation
-    type(ctf)                 :: tfun                    ! transfer function object
-    type(ctfparams)           :: parms                   ! for storing ctf parameters
-    type(ctfparams), allocatable  :: parms_patch(:,:)    ! for storing patch ctf parameters
-    type(ctf_estimate_cost2D)     :: cost2D              ! 2D discrete optimization object
-    type(ctf_estimate_cost4Dcont) :: costcont            ! 4D continuous optimization object
-    real,    allocatable      :: roavg_spec1d(:)         ! 1D rotational average spectrum
-    integer, allocatable      :: inds_msk(:,:)           ! indices of pixels within resolution mask
-    integer, allocatable      :: tiles_centers(:,:,:)    ! location of tiles centers
-    logical, allocatable      :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
-    logical, allocatable      :: resmsk1D(:)             ! 1D resolution mask
-    real(dp)                  :: polyx(POLYDIM), polyy(POLYDIM)
-    integer, allocatable      :: centers(:,:,:)
-    real                      :: smpd         = 0.
-    real                      :: df_lims(2)   = [DFMIN_DEFAULT, DFMAX_DEFAULT]! defocus range
-    real                      :: df_step      = 0.05     ! defocus step for grid search
-    real                      :: astigtol     = 0.05     ! tolerated astigmatism
-    real                      :: hp           = 0.       ! high-pass limit
-    real                      :: lp           = 0.       ! low-pass limit
-    real                      :: cc_fit       = -1.
-    real                      :: ctfres       = -1.
-    real                      :: icefrac      = 0.
-    integer                   :: box          = 0        ! box size
-    integer                   :: ntiles(2)    = 0        ! # tiles along x/y
-    integer                   :: ntotpatch    = 0
-    integer                   :: npatches(2)  = 0
-    integer                   :: flims(3,2)   = 0        ! fourier dimensions
-    integer                   :: flims1d(2)   = 0        ! fourier dimensions
-    integer                   :: freslims1d(2)= 0        ! fourier dimensions
-    integer                   :: ldim_box(3)  = 0        ! box logical dimensions
-    integer                   :: ldim_mic(3)  = 0        ! logical dimensions
-    integer                   :: npix_msk     = 0        ! # pixels in non-redudant resolution mask
-    logical                   :: l_nano       = .false.
-    logical                   :: exists       = .false.
-    integer(timer_int_kind)   :: t, t_tot
-    real(timer_int_kind)      :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch, rt_icefrac
+    class(image),        pointer  :: micrograph
+    type(image),     allocatable  :: tiles(:,:)              ! for storing all tiles used to build power spectra
+    type(image),     allocatable  :: pspec_patch(:,:)        ! patches micrograph powerspec
+    type(image)                   :: pspec                   ! all micrograph powerspec
+    type(image)                   :: pspec_ctf               ! CTF powerspec
+    type(image)                   :: pspec4ctfres            ! powerspec for CTFres calculation
+    type(ctf)                     :: tfun                    ! transfer function object
+    type(ctfparams)               :: parms                   ! for storing ctf parameters
+    type(ctfparams), allocatable  :: parms_patch(:,:)        ! for storing patch ctf parameters
+    type(ctf_estimate_cost2D)     :: cost2D                  ! 2D discrete optimization object
+    type(ctf_estimate_cost4Dcont) :: costcont                ! 4D continuous optimization object
+    real,            allocatable  :: roavg_spec1d(:)         ! 1D rotational average spectrum
+    integer,         allocatable  :: inds_msk(:,:)           ! indices of pixels within resolution mask
+    integer,         allocatable  :: tiles_centers(:,:,:)    ! location of tiles centers
+    logical,         allocatable  :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
+    logical,         allocatable  :: resmsk1D(:)             ! 1D resolution mask 
+    integer,         allocatable  :: centers(:,:,:)
+    real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
+    real                          :: smpd         = 0.
+    real                          :: df_lims(2)   = [DFMIN_DEFAULT, DFMAX_DEFAULT]! defocus range
+    real                          :: df_step      = 0.05     ! defocus step for grid search
+    real                          :: astigtol     = 0.05     ! tolerated astigmatism
+    real                          :: hp           = 0.       ! high-pass limit
+    real                          :: lp           = 0.       ! low-pass limit
+    real                          :: cc_fit       = -1.
+    real                          :: ctfres       = -1.
+    real                          :: icefrac      = 0.
+    integer                       :: box          = 0        ! box size
+    integer                       :: ntiles(2)    = 0        ! # tiles along x/y
+    integer                       :: ntotpatch    = 0
+    integer                       :: npatches(2)  = 0
+    integer                       :: flims(3,2)   = 0        ! fourier dimensions
+    integer                       :: flims1d(2)   = 0        ! fourier dimensions
+    integer                       :: freslims1d(2)= 0        ! fourier dimensions
+    integer                       :: ldim_box(3)  = 0        ! box logical dimensions
+    integer                       :: ldim_mic(3)  = 0        ! logical dimensions
+    integer                       :: npix_msk     = 0        ! # pixels in non-redudant resolution mask
+    logical                       :: l_nano       = .false.
+    logical                       :: exists       = .false.
+    integer(timer_int_kind)       :: t, t_tot
+    real(timer_int_kind)          :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch, rt_icefrac
 contains
     ! constructor
     procedure          :: new
@@ -207,7 +206,7 @@ contains
     ! constructs & fit
     subroutine fit_nano( self, forctf, box, parms, dfrange, resrange, astigtol_in)
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),        intent(inout) :: forctf ! background average spectrum
+        class(string),           intent(inout) :: forctf      ! background average spectrum
         integer,                 intent(in)    :: box
         class(ctfparams),        intent(inout) :: parms
         real,                    intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
@@ -223,7 +222,7 @@ contains
         self%parms%kv           = parms%kV
         self%parms%fraca        = parms%fraca
         self%parms%l_phaseplate = parms%l_phaseplate
-        if(.not.file_exists(forctf)) THROW_HARD('Could not find file:'//trim(forctf)//'; new_nano')
+        if(.not.file_exists(forctf)) THROW_HARD('Could not find file:'//forctf%to_char()//'; new_nano')
         self%box      = box
         self%ldim_box = [self%box,self%box,1]
         self%ldim_mic = self%ldim_box
@@ -232,10 +231,10 @@ contains
         if( foo(1) /= box .or. foo(2) /= box )then
             THROW_WARN('Image    dimensions: '//int2str(foo(1))//' x '//int2str(foo(1)))
             THROW_WARN('Provided dimension:  '//int2str(box))
-            THROW_HARD('Inconsistent dimensions in '//trim(forctf)//'; new_nano')
+            THROW_HARD('Inconsistent dimensions in '//forctf%to_char()//'; new_nano')
         endif
         if( nimgs > 1 )then
-            THROW_HARD('More than one image in '//trim(forctf)//'; new_nano')
+            THROW_HARD('More than one image in '//forctf%to_char()//'; new_nano')
         endif
         if( resrange(1) > resrange(2) )then
             self%hp = resrange(1)
@@ -287,10 +286,10 @@ contains
     ! with routine pix2polyvals
     subroutine read_doc( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),        intent(in)    :: fname
-        type(oris)            :: os
-        character(len=STDLEN) :: phaseplate
-        integer               :: i
+        class(string),           intent(in)    :: fname
+        type(oris)   :: os
+        type(string) :: phaseplate
+        integer      :: i
         if( nlines(fname) /= 3 ) THROW_HARD('Invalid document; read_doc')
         call os%new(3, is_ptcl=.false.)
         call os%read(fname)
@@ -302,8 +301,8 @@ contains
         self%parms%dfy     = os%get_dfy(1)
         self%parms%angast  = os%get(1,'angast')
         self%parms%phshift = os%get(1,'phshift')
-        phaseplate         = os%get_static(1,'phaseplate')
-        self%parms%l_phaseplate = trim(phaseplate).eq.'yes'
+        phaseplate         = os%get_str(1,'phaseplate')
+        self%parms%l_phaseplate = phaseplate%to_char().eq.'yes'
         self%ntotpatch     = os%get_int(1,'npatch')
         self%ldim_mic      = [os%get_int(1,'xdim'), os%get_int(1,'ydim'), 1]
         ! polynomes
@@ -730,7 +729,7 @@ contains
     ! make & write half-n-half diagnostic
     subroutine write_diagnostic( self, diagfname, nano )
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),        intent(in)    :: diagfname
+        class(string),           intent(in)    :: diagfname
         logical,       optional, intent(in)    :: nano
         type(image) :: pspec_half_n_half, tmp
         logical     :: l_msk(1:self%box,1:self%box,1), l_nano
@@ -764,7 +763,7 @@ contains
             call tmp%kill
         endif
         call pspec_half_n_half%ifft
-        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=92)
+        call pspec_half_n_half%write_jpg(diagfname, norm=.true., quality=92)
         call pspec_half_n_half%kill
     end subroutine write_diagnostic
 
@@ -993,7 +992,7 @@ contains
         hp_rad = real(self%box)/scale * self%smpd/self%hp 
         lp_rad = real(self%box)/scale * self%smpd/self%lp
         if( DEBUG_HERE )then
-            call pspec%write('pspec_resampled.mrc')
+            call pspec%write(string('pspec_resampled.mrc'))
             print *,'hp_rad   ', hp_rad
             print *,'lp_rad   ', lp_rad
         endif
@@ -1025,7 +1024,7 @@ contains
             if( sdev < TINY )sdev = 1.
             call pspec%mul(1./sdev)
             call pspec%add(ave)
-            if( DEBUG_HERE ) call pspec%write('pspec_prepped.mrc')
+            if( DEBUG_HERE ) call pspec%write(string('pspec_prepped.mrc'))
         endif
         ! builds 1D/2D profiles
         nshells = floor(sqrt(2.)*real(self%box/2))
@@ -1055,7 +1054,7 @@ contains
         call rank_spec
         if( DEBUG_HERE )then
             glob_count = glob_count + 1
-            call self%plot_ctf(int2str(glob_count)//'_ctf_rank.eps', nshells, abs(ctf1d), spec1d, spec1d_rank, smpd_sc)
+            call self%plot_ctf(string(int2str(glob_count)//'_ctf_rank.eps'), nshells, abs(ctf1d), spec1d, spec1d_rank, smpd_sc)
         endif
         ! FRC
         call calc_frc
@@ -1064,7 +1063,7 @@ contains
         if( self%ctfres > self%hp-0.001 ) self%ctfres = params_glob%ctfresthreshold
         if( DEBUG_HERE )then
             print *,'self%ctfres ',glob_count, self%ctfres, sh
-            call self%plot_ctf(int2str(glob_count)//'_ctf.eps', nshells, abs(ctf1d), spec1d_rank, frc, smpd_sc)
+            call self%plot_ctf(string(int2str(glob_count)//'_ctf.eps'), nshells, abs(ctf1d), spec1d_rank, frc, smpd_sc)
         endif
         self%pspec4ctfres = pspec
         ! cleanup
@@ -1453,6 +1452,7 @@ contains
         call self%pix2poly(real(xin,dp),real(yin,dp), xp,yp)
         dfx = real(poly2val(self%polyx,xp,yp))
         dfy = real(poly2val(self%polyy,xp,yp))
+
         contains
 
             real(dp) function poly2val(p,x,y)
@@ -1464,16 +1464,16 @@ contains
 
     subroutine plot_ctf( self, fname, n, ctf_th, ctf_fit, frc, smpd )
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),        intent(in)    :: fname
+        class(string),           intent(in)    :: fname
         integer,                 intent(in)    :: n
         real,                    intent(in)    :: ctf_th(n), ctf_fit(n), frc(n), smpd
-        type(str4arr)         :: title
+        type(string)          :: title
         type(CPlot2D_type)    :: plot2D
         type(CDataSet_type)   :: dataset1, dataset2, dataset3
         type(CDataPoint_type) :: point
         real                  :: f,g
         integer               :: i
-        call CPlot2D__new(plot2D, fname)
+        call CPlot2D__new(plot2D, fname%to_char())
         call CPlot2D__SetXAxisSize(plot2D, 320._c_double)
         call CPlot2D__SetYAxisSize(plot2D, 240._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
@@ -1510,15 +1510,15 @@ contains
         call CDataSet__delete(dataset1)
         call CDataSet__delete(dataset2)
         call CDataSet__delete(dataset3)
-        title%str = 'Spectral Resolution (1/Ang)'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname)//c_null_char)
+        title = 'Spectral Resolution (1/Ang)'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
+        call CPlot2D__OutputPostScriptPlot(plot2D, fname%to_char()//c_null_char)
         call CPlot2D__delete(plot2D)
     end subroutine plot_ctf
 
     subroutine write_doc( self, moviename, fname )
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),        intent(in)    :: moviename, fname
+        class(string),           intent(in)    :: moviename, fname
         type(oris) :: os
         real(dp)   :: x,y
         integer    :: i,pi,pj,cnt
@@ -1576,18 +1576,20 @@ contains
 
     subroutine write_star( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),        intent(in)    :: fname
+        class(string),           intent(in)    :: fname
         type(starfile_table_type) :: mc_starfile
+        type(string)              :: fname_abs
         integer :: i
         call starfile_table__new( mc_starfile )
-        call starfile_table__open_ofile(mc_starfile, fname)
+        call starfile_table__open_ofile(mc_starfile, fname%to_char())
         call starfile_table__addObject(mc_starfile)
         call starfile_table__setIsList(mc_starfile, .true.)
         call starfile_table__setname(mc_starfile, "general")
         call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_X, self%ldim_mic(1))
         call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_Y, self%ldim_mic(2))
         call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_Z, self%ldim_mic(3))
-        call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_NAME, simple_abspath(fname))
+        fname_abs = simple_abspath(fname)
+        call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_NAME, fname_abs%to_char())
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(self%parms%smpd, dp))
         ! whole micrograph model
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_CS,            real(self%parms%cs, dp))
@@ -1612,6 +1614,7 @@ contains
         ! close & clean
         call starfile_table__close_ofile(mc_starfile)
         call starfile_table__delete(mc_starfile)
+        call fname_abs%kill
     end subroutine write_star
 
     ! DESTRUCTOR

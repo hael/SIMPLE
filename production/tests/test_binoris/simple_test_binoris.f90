@@ -11,7 +11,7 @@ type(cmdline)               :: cline
 type(binoris)               :: bos
 type(sp_project)            :: spproj 
 logical                     :: mask(5), test_passed
-character(len=STDLEN)       :: fname, projname
+type(string)                :: fname, projname
 #include "simple_local_flags.inc"
 test_passed = .true.
 fname       = 'spproject.simple'
@@ -19,21 +19,21 @@ projname    = 'spproject'
 mask        = [.true.,.false.,.true.,.false.,.true.]
 call a1%new(5, is_ptcl=.false.)
 call a1%rnd_oris
-call a1%write('oris1_facit.txt')
+call a1%write(string('oris1_facit.txt'))
 call os_peak1%new(3, is_ptcl=.false.)
 call os_peak1%rnd_oris()
 call os_peak1%rnd_states(2)
 call os_peak1%rnd_corrs()
 call os_peak1%set_all2single('ow', 0.3)
 call os_peak1%set_all2single('proj', 3.0)
-call os_peak1%write('os_peak1_facit.txt')
+call os_peak1%write(string('os_peak1_facit.txt'))
 call os_peak2%new(5, is_ptcl=.false.)
 call os_peak2%rnd_oris()
 call os_peak2%rnd_states(2)
 call os_peak2%rnd_corrs()
 call os_peak2%set_all2single('ow', 0.5)
 call os_peak2%set_all2single('proj', 5.0)
-call os_peak2%write('os_peak2_facit.txt')
+call os_peak2%write(string('os_peak2_facit.txt'))
 call cline%set('projname', projname)
 call cline%set('mkdir',        'no')
 call cline%check()

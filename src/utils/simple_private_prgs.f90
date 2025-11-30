@@ -9,10 +9,10 @@ private
 ! private program instance
 type simple_private_prg
     private
-    character(len=:), allocatable :: name
-    character(len=KEYLEN)         :: keys_required(MAXNKEYS)
-    character(len=KEYLEN)         :: keys_optional(MAXNKEYS)
-    integer                       :: nreq=0, nopt=0
+    type(string)          :: name
+    character(len=KEYLEN) :: keys_required(MAXNKEYS)
+    character(len=KEYLEN) :: keys_optional(MAXNKEYS)
+    integer               :: nreq=0, nopt=0
   contains
     procedure :: set_name
     procedure :: push_req_key
@@ -36,7 +36,7 @@ contains
     subroutine set_name( self, name )
         class(simple_private_prg), intent(inout) :: self
         character(len=*),          intent(in)    :: name
-        allocate(self%name, source=trim(name))
+        self%name = trim(name)
     end subroutine set_name
 
     subroutine push_req_key( self, key )
@@ -66,7 +66,7 @@ contains
         nreq = 0
         iprg = 0
         do i=1,n_private_prgs
-            if( trim(prg) .eq. private_prgs(i)%name )then
+            if( trim(prg) .eq. private_prgs(i)%name%to_char() )then
                 iprg = i
                 exit
             endif
@@ -77,11 +77,11 @@ contains
 
     function get_private_keys_required( prg ) result( keys_required )
         character(len=*), intent(in)  :: prg
-        type(str4arr), allocatable    :: keys_required(:)
+        type(string), allocatable     :: keys_required(:)
         integer :: iprg, i, nreq
         iprg = 0
         do i=1,n_private_prgs
-            if( trim(prg) .eq. private_prgs(i)%name )then
+            if( trim(prg) .eq. private_prgs(i)%name%to_char() )then
                 iprg = i
                 exit
             endif
@@ -91,7 +91,7 @@ contains
         if( nreq == 0 ) return
         allocate(keys_required(nreq))
         do i=1,nreq
-            allocate(keys_required(i)%str, source=trim(private_prgs(iprg)%keys_required(i)))
+            keys_required(i) =trim(private_prgs(iprg)%keys_required(i))
         end do
     end function get_private_keys_required
 
@@ -100,7 +100,7 @@ contains
         integer :: nopt, iprg, i
         iprg = 0
         do i=1,n_private_prgs
-            if( trim(prg) .eq. private_prgs(i)%name )then
+            if( trim(prg) .eq. private_prgs(i)%name%to_char() )then
                 iprg = i
                 exit
             endif
@@ -112,11 +112,11 @@ contains
     function get_private_keys_optional( prg, nopt ) result( keys_optional )
         character(len=*), intent(in)  :: prg
         integer,          intent(out) :: nopt
-        type(str4arr), allocatable    :: keys_optional(:)
+        type(string),     allocatable :: keys_optional(:)
         integer :: iprg, i
         iprg = 0
         do i=1,n_private_prgs
-            if( trim(prg) .eq. private_prgs(i)%name )then
+            if( trim(prg) .eq. private_prgs(i)%name%to_char() )then
                 iprg = i
                 exit
             endif
@@ -126,7 +126,7 @@ contains
         if( nopt == 0 ) return
         allocate(keys_optional(nopt))
         do i=1,nopt
-            allocate(keys_optional(i)%str, source=trim(private_prgs(iprg)%keys_optional(i)))
+            keys_optional(i) = trim(private_prgs(iprg)%keys_optional(i))
         end do
     end function get_private_keys_optional
 
@@ -136,7 +136,7 @@ contains
         integer :: iprg, i, nreq, nopt
         iprg = 0
         do i=1,n_private_prgs
-            if( trim(prg) .eq. private_prgs(i)%name )then
+            if( trim(prg) .eq. private_prgs(i)%name%to_char() )then
                 iprg = i
                 exit
             endif

@@ -4,8 +4,9 @@ implicit none
 
 character(len=*), parameter   :: FNAME = '/Users/elmlundho/src/SIMPLE/build/CTestTestfile.cmake'
 character(len=*), parameter   :: HELLO_SUFFIX = '_hello'
-character(len=:), allocatable :: bname
+type(string) :: new_name
 
-print *, append2basename(FNAME, HELLO_SUFFIX)
+new_name = append2basename(string(FNAME), string(HELLO_SUFFIX))
+print *, new_name%to_char()
 
 end program simple_test_file_rename

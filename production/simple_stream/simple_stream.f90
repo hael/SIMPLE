@@ -19,7 +19,8 @@ type(commander_stream_sieve_cavgs)      :: xsieve_cavgs
 type(commander_stream_abinitio2D)       :: xabinitio2D_stream
 
 ! OTHER DECLARATIONS
-character(len=STDLEN)                   :: xarg, prg, entire_line
+character(len=STDLEN)                   :: xarg, prg
+character(len=XLONGSTRLEN)              :: entire_line
 type(cmdline)                           :: cline
 integer                                 :: cmdstat, cmdlen, pos
 integer(timer_int_kind)                 :: t0
@@ -42,7 +43,7 @@ endif
 ! parse command line into cline object
 call cline%parse
 ! generate script for queue submission?
-call script_exec(cline, trim(prg), 'simple_stream')
+call script_exec(cline, string(trim(prg)), string('simple_stream'))
 select case(trim(prg))
     case( 'gen_pickrefs' )
         call xgen_pickrefs%execute(cline)
@@ -64,7 +65,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b7566bf1')
+call simple_print_git_version('0a778afd')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

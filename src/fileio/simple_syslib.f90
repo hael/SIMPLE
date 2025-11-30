@@ -1,9 +1,8 @@
 module simple_syslib
-#ifdef IFX
-  use IFPORT
-#endif
 use simple_defs
 use simple_error
+use simple_string
+use simple_string_utils
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 implicit none
@@ -144,15 +143,10 @@ interface
 
 end interface
 
-interface simple_getenv
-    module procedure simple_getenv_1
-    module procedure simple_getenv_2
-end interface
-
 contains
 
     subroutine exec_cmdline( cmdline, waitflag, suppress_errors, exitstat)
-        character(len=*),  intent(in)  :: cmdline
+        class(*),          intent(in)  :: cmdline
         logical, optional, intent(in)  :: waitflag, suppress_errors
         integer, optional, intent(out) :: exitstat
         character(len=:), allocatable  :: cmdstr
@@ -164,178 +158,193 @@ contains
         l_suppress_errors = .false.
         if( present(waitflag)        ) wwait = waitflag
         if( present(suppress_errors) ) l_suppress_errors = suppress_errors
-        if( l_suppress_errors )then
-            allocate(cmdstr, source=trim(adjustl(cmdline))//' '//SUPPRESS_MSG)
-        else
-            allocate(cmdstr, source=trim(adjustl(cmdline)))
-        endif
-        call execute_command_line(trim(adjustl(cmdstr)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=errmsg)
+        select type(cmdline)
+            type is (string)
+                if( l_suppress_errors )then
+                    allocate(cmdstr, source=cmdline%to_char()//' '//SUPPRESS_MSG)
+                else
+                    allocate(cmdstr, source=cmdline%to_char())
+                endif
+            type is (character(*))
+                if( l_suppress_errors )then
+                    allocate(cmdstr, source=trim(adjustl(cmdline))//' '//SUPPRESS_MSG)
+                else
+                    allocate(cmdstr, source=trim(adjustl(cmdline)))
+                endif
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
+        call execute_command_line(cmdstr, wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=errmsg)
         if( .not. l_suppress_errors ) call raise_sys_error( cmdstr, exec_stat, cstat, errmsg )
         if( l_doprint )then
             write(logfhandle,*) 'command            : ', cmdstr
             write(logfhandle,*) 'status of execution: ', exec_stat
         endif
         if(present(exitstat))exitstat=exec_stat
+
+        contains
+
+            !>  Handles error from system call
+            subroutine raise_sys_error( cmd, exit_status, cmdstat, cmdmsg )
+                integer,          intent(in) :: exit_status, cmdstat
+                character(len=*), intent(in) :: cmd
+                character(len=*), intent(in) :: cmdmsg
+                logical :: err
+                err = .false.
+                if( exit_status /= 0 )then
+                    write(logfhandle,*)'System error', exit_status,' for command: ', trim(adjustl(cmd))
+                    err = .true.
+                endif
+                if( cmdstat /= 0 )then
+                    write(logfhandle,*)cmdmsg
+                    call simple_error_check(cmdstat,' command could not be executed: '//trim(adjustl(cmd)))
+                    write(logfhandle,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
+                    err = .true.
+                endif
+            end subroutine raise_sys_error
+
     end subroutine exec_cmdline
 
-    !>  Handles error from system call
-    subroutine raise_sys_error( cmd, exit_status, cmdstat, cmdmsg )
-        integer,          intent(in) :: exit_status, cmdstat
-        character(len=*), intent(in) :: cmd
-        character(len=*), intent(in) :: cmdmsg
-        logical :: err
-        err = .false.
-        if( exit_status /= 0 )then
-            write(logfhandle,*)'System error', exit_status,' for command: ', trim(adjustl(cmd))
-            err = .true.
-        endif
-        if( cmdstat /= 0 )then
-            write(logfhandle,*)cmdmsg
-            call simple_error_check(cmdstat,' command could not be executed: '//trim(adjustl(cmd)))
-            write(logfhandle,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
-            err = .true.
-        endif
-    end subroutine raise_sys_error
-
-    !> isenv; return 0 if environment variable is present
-    logical function simple_isenv( name )
-        character(len=*), intent(in) :: name
-        integer                      :: status
-        simple_isenv=.false.
-        status=1
-        call get_environment_variable( trim(adjustl(name)), status=status)
-        if(status==0) simple_isenv=.true.
-    end function simple_isenv
-
-    !> simple_getenv gets the environment variable string and returns status
-    function simple_getenv_1( name , retval, allowfail, silent)  result( status )
-        character(len=*),      intent(in)  :: name
-        character(len=*),      intent(out) :: retval
-        logical,     optional, intent(in)  :: allowfail
-        logical,     optional, intent(in)  :: silent
-        integer                            :: length, status
-        logical                            :: l_silent
-        l_silent = .false.
-        if(present(silent)) l_silent = silent
-        call get_environment_variable( trim(name), value=retval, length=length, status=status)
-        if( status == -1 ) write(logfhandle,*) 'value string too short; simple_syslib :: simple_getenv_1'
-        if( status ==  1 )then
-            if(.not. l_silent) write(logfhandle,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_1'
-            retval = 'undefined'
-            return
-        endif
-        if( status ==  2 ) write(logfhandle,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_1'
-        if( length ==  0 .or. status /= 0 )then
-            retval = ""
-            return
-        end if
-    end function simple_getenv_1
-
-    !> simple_getenv gets the environment variable string and returns status
-    function simple_getenv_2( name , status, allowfail)  result( envval )
-        character(len=*),      intent(in)  :: name
-        integer, intent(out)               :: status
-        logical,     optional, intent(in)  :: allowfail
-        character(len=:), allocatable      :: envval
-        character(len=STDLEN)              :: retval
-        integer                            :: length
-        call get_environment_variable( trim(name), value=retval, length=length, status=status)
+    function simple_getenv( name , status )  result( envval )
+        character(len=*),  intent(in)  :: name
+        integer,           intent(out) :: status
+        type(string)               :: envval
+        character(len=XLONGSTRLEN) :: retval
+        integer                    :: length
+        call get_environment_variable( trim(adjustl(name)), value=retval, length=length, status=status)
         if( status == -1 ) write(logfhandle,*) 'value string too short; simple_syslib :: simple_getenv_2'
         if( status ==  1 )then
-            write(logfhandle,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_2'
-            envval = 'undefined'
+            write(logfhandle,*) 'environment variable: ', trim(adjustl(name)), ' is not defined; simple_syslib :: simple_getenv_'
+            envval = NIL
             return
         endif
-        if( status ==  2 ) write(logfhandle,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_2'
+        if( status ==  2 ) write(logfhandle,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
         if( length ==  0 .or. status /= 0 )then
-            envval = ""
+            envval = NIL
             return
         end if
-        envval = trim(retval)
-    end function simple_getenv_2
+        envval = trim(adjustl(retval))
+    end function simple_getenv
 
     !> \brief Touch file, create file if necessary
-    subroutine simple_touch( fname , errmsg, status)
-        character(len=*), intent(in)           :: fname !< input filename
-        character(len=*), intent(in), optional :: errmsg
-        integer, intent(out), optional :: status
+    subroutine simple_touch( fname, status )
+        class(*),          intent(in)  :: fname
+        integer, optional, intent(out) :: status
         integer :: iostat
-        iostat  = touch(trim(adjustl(fname)), len_trim(adjustl(fname)))
+        select type(fname)
+            type is (string)
+                iostat  = touch(fname%to_char(), fname%strlen_trim())
+            type is (character(*))
+                iostat  = touch(fname, len_trim(fname))
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
         if(iostat/=0)then
-            call simple_error_check(iostat, "In simple_touch  msg:"//trim(errmsg))
+            call simple_error_check(iostat, "simple_touch")
         endif
         if(present(status))status=iostat
     end subroutine simple_touch
 
     !> \brief Soft link file
-    subroutine syslib_symlink( f1, f2 , errmsg, status)
-        character(len=*), intent(in)           :: f1, f2 !< input filename
-        character(len=*), intent(in), optional :: errmsg
-        integer, intent(out), optional :: status
+    subroutine syslib_symlink( f1, f2, status)
+        class(*),          intent(in)  :: f1, f2
+        integer, optional, intent(out) :: status
         integer :: iostat
-        iostat  = symlink(trim(adjustl(f1))//achar(0), trim(adjustl(f2))//achar(0))
+         select type(f1)
+            type is (string)
+                select type(f2)
+                    type is (string)
+                        iostat = symlink(f1%to_char()//achar(0), f2%to_char()//achar(0))
+                    type is (character(*))
+                        iostat = symlink(f1%to_char()//achar(0), trim(adjustl(f2))//achar(0))
+                    class default
+                        call simple_exception('Incompatible type, f2 ', __FILENAME__ , __LINE__)
+                end select
+            type is (character(*))
+                 select type(f2)
+                    type is (string)
+                        iostat = symlink(trim(adjustl(f1))//achar(0), f2%to_char()//achar(0))
+                    type is (character(*))
+                        iostat = symlink(trim(adjustl(f1))//achar(0), trim(adjustl(f2))//achar(0))
+                    class default
+                        call simple_exception('Incompatible type, f2 ', __FILENAME__ , __LINE__)
+                end select
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
         if(iostat/=0)then
-            call simple_error_check(iostat, "In syslib_symlink  msg:"//trim(errmsg))
+            call simple_error_check(iostat, "In syslib_symlink")
         endif
         if(present(status))status=iostat
     end subroutine syslib_symlink
 
     !> \brief  Rename or move file
-    subroutine simple_rename( filein, fileout, overwrite, errmsg )
-        character(len=*), intent(in)               :: filein, fileout !< input filename
-        logical,          intent(in),     optional :: overwrite       !< default true
-        character(len=*), intent(in),     optional :: errmsg          !< message
+    subroutine simple_rename( filein, fileout, overwrite )
+        class(*),          intent(in) :: filein, fileout !< input filename
+        logical, optional, intent(in) :: overwrite       !< default true
         character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=:),              allocatable :: msg, errormsg
-        integer :: file_status
+        character(len=:),              allocatable :: msg
         logical :: force_overwrite
-        if( present(errmsg) )then
-            allocate(errormsg, source=". Message: "//trim(errmsg))
-        else
-            allocate(errormsg, source=". ")
-        end if
-        if( .not. file_exists(filein) ) THROW_ERROR("designated input file doesn't exist "//trim(filein)//trim(errormsg))
+        integer :: file_status
+        if( .not. file_exists(filein) ) THROW_ERROR("designated input file does not exist")
         force_overwrite = .true.
         if( present(overwrite) ) force_overwrite=overwrite
-        if( file_exists(trim(fileout)) .and. (force_overwrite) ) call del_file(trim(fileout))
-        allocate(f1, source=trim(adjustl(filein))//achar(0))
-        allocate(f2, source=trim(adjustl(fileout))//achar(0))
+        if( file_exists(fileout) .and. (force_overwrite) ) call del_file(fileout)
+        select type(filein)
+            type is(string)
+                allocate(f1, source=filein%to_char()//achar(0))
+            type is(character(*))
+                allocate(f1, source=trim(adjustl(filein))//achar(0))
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
+        select type(fileout)
+            type is(string)
+                allocate(f2, source=fileout%to_char()//achar(0))
+            type is(character(*))
+                allocate(f2, source=trim(adjustl(fileout))//achar(0))
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
         file_status = rename(trim(f1), trim(f2))
         if( file_status /= 0 )then
-            allocate(msg,source="simple_rename failed to rename file "//trim(filein)//trim(errormsg))
+            allocate(msg,source="simple_rename failed to rename file "//f1)
             call simple_error_check(file_status, trim(msg))
             deallocate(msg)
         endif
-        deallocate(f1,f2,errormsg)
+        deallocate(f1,f2)
     end subroutine simple_rename
 
-    function simple_chmod(pathname, mode ) result( status )
-        character(len=*), intent(in) :: pathname, mode
-        integer :: status, imode
-        imode = INT(o'000') ! convert symbolic to octal
-        if ( index(mode, 'x') /=0) imode=IOR(imode,INT(o'111'))
-        if ( index(mode, 'w') /=0) imode=IOR(imode,INT(o'222'))
-        if ( index(mode, 'r') /=0) imode=IOR(imode,INT(o'444'))
-        status = chmod(pathname, mode) !! intrinsic GNU
-        if( status/=0 ) call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname))
+    function simple_chmod( pathname, mode ) result( status )
+        class(*),         intent(in) :: pathname
+        character(len=*), intent(in) :: mode
+        integer :: status
+        select type(pathname)
+            type is(string)
+                status = chmod(pathname%to_char(), mode) !! intrinsic GNU
+                if( status/=0 ) call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//pathname%to_char())
+            type is(character(*))
+                status = chmod(trim(adjustl(pathname)), mode) !! intrinsic GNU
+                if( status/=0 ) call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(adjustl(pathname)))
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
     end function simple_chmod
 
     !>  Wrapper for POSIX system call stat
-    subroutine simple_file_stat( filename, status, buffer, doprint )
-        character(len=*),     intent(in)    :: filename
+    subroutine simple_file_stat( filename, status, buffer)
+        class(*),             intent(in)    :: filename
         integer,              intent(inout) :: status
         integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
-        logical, optional,    intent(in)    :: doprint
-        logical :: l_print, currently_opened
-        l_print = .false.
-        currently_opened=.false.
         allocate(buffer(13), source=0)
-        status = stat(trim(adjustl(filename)), buffer)
-        if( present(doprint) )l_print = doprint
-        if( l_print )then
-            write(logfhandle,*) 'command: stat ', trim(adjustl(filename))
-            write(logfhandle,*) 'status of execution: ', status
-        endif
+        select type(filename)
+            type is(string)
+                status = stat(filename%to_char(), buffer)
+            type is(character(*))
+                status = stat(trim(adjustl(filename)), buffer)
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
     end subroutine simple_file_stat
 
     logical function is_io(unit)
@@ -362,34 +371,45 @@ contains
     !>  \brief  check if a file exists on disk
     !! return logical true=dir exists, false=dir does not exist
     logical function dir_exists( dname )
-        character(len=*), intent(in) :: dname
+        class(*), intent(in) :: dname
         integer :: status
         integer, allocatable :: buffer(:)
         character(kind=c_char, len=:), allocatable :: d1
         dir_exists=.false.
-        allocate(d1,source=trim(adjustl(dname))//achar(0))
+        select type(dname)
+            type is(string)
+                allocate(d1,source=dname%to_char()//achar(0))
+            type is(character(*))
+                allocate(d1,source=trim(adjustl(dname))//achar(0))
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
         status = isdir(trim(d1), len_trim(d1))
         deallocate(d1)
-        if (status == 1) then
-            dir_exists = .true.
-            call simple_file_stat( trim(adjustl(dname)), status, buffer, .false. )
-        endif
+        if (status == 1) dir_exists = .true.
     end function dir_exists
 
     !>  \brief  check if a file exists on disk
     !! return logical true=FILE exists, false=FILE does not exist
     logical function file_exists( fname )
-        character(len=*), intent(in) :: fname
-        inquire(file=trim(adjustl(fname)), exist = file_exists)
+        class(*), intent(in) :: fname
+        select type(fname)
+            type is(string)
+                inquire(file=fname%to_char(),      exist = file_exists)
+            type is(character(*))
+                inquire(file=trim(adjustl(fname)), exist = file_exists)
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
     end function file_exists
 
     !>  \brief  check whether a file is currently opened
     logical function is_file_open( fname )
-        character(len=*), intent(in)  :: fname
-        integer               :: io_status
-        character(len=STDLEN) :: io_message
+        class(string), intent(in) :: fname
+        integer                   :: io_status
+        character(len=STDLEN)     :: io_message
         io_status = 0
-        inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
+        inquire(file=fname%to_char(), opened=is_file_open,iostat=io_status,iomsg=io_message)
         if (io_status .ne. 0) then
             THROW_ERROR('I/O '//trim(adjustl(io_message)))
         endif
@@ -397,71 +417,69 @@ contains
 
     !> \brief  Get current working directory
     subroutine simple_getcwd( cwd )
-        character(len=*), intent(inout) :: cwd   !< output pathname
+        class(string), intent(inout) :: cwd
+        character(len=XLONGSTRLEN)    :: cwd_tmp
         integer :: io_status
-        io_status = getcwd(cwd)
-        if(io_status /= 0) call simple_error_check(io_status, &
-            "syslib:: simple_getcwd failed to get path "//trim(cwd))
+        io_status = getcwd(cwd_tmp)
+        if(io_status /= 0)then
+            call simple_error_check(io_status, "syslib:: simple_getcwd failed to get path "//trim(cwd_tmp))
+        else
+            cwd = trim(adjustl(cwd_tmp))
+        endif
     end subroutine simple_getcwd
 
     !> \brief  Change working directory
     !! return optional status 0=success
-    subroutine simple_chdir( newd, oldd, status, errmsg )
-        character(len=*),           intent(in)  :: newd   !< target pathname
-        character(len=*), optional, intent(out) :: oldd
-        integer,          optional, intent(out) :: status
-        character(len=*), optional, intent(in)  :: errmsg
-        character(len=LONGSTRLEN)               :: olddir
-        character(len=300) :: eemsg
-        character(len=:), allocatable :: targetdir
-        integer :: io_status
-        logical :: dir_e, check_exists
+    subroutine simple_chdir( newd, status )
+        class(*),          intent(in)  :: newd   !< target pathname
+        integer, optional, intent(out) :: status
+        type(string) :: targetdir
+        integer      :: io_status
+        logical      :: dir_e
         if(present(status)) status = 1
-        if(present(oldd))then
-            call simple_getcwd(olddir)
-            oldd = trim(olddir)
-        endif
-        if(allocated(targetdir))deallocate(targetdir)
-        check_exists=.true.
-        targetdir = simple_abspath(trim(newd), errmsg=eemsg, check_exists=check_exists)
-        inquire(file=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
+        targetdir = simple_abspath(newd, check_exists=.true.)
+        inquire(file=targetdir%to_char(), EXIST=dir_e, IOSTAT=io_status)
         if(dir_e) then
-            io_status = chdir(trim(targetdir))
+            io_status = chdir(targetdir%to_char())
             if(io_status /= 0)then
-                if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 select case (io_status)
                 case (2)  ! ENOENT
-                    write (*,*)'The directory '//TRIM(targetdir)//' does not exist'
+                    write (*,*)'The directory '//targetdir%to_char()//' does not exist'
                 case (20) ! ENOTDIR
-                    write (*,*) TRIM(targetdir)//' is not a directory'
+                    write (*,*) targetdir%to_char()//' is not a directory'
                 case default
                     write (*,*)'Error with code ', io_status
                 end select
                 call simple_error_check(io_status, &
-                    "syslib:: simple_chdir failed to change path "//trim(targetdir))
+                    "syslib:: simple_chdir failed to change path "//targetdir%to_char())
             endif
         else
-            if(present(errmsg))write (*,*) trim(errmsg)
             THROW_ERROR("directory does not exist")
         endif
         if(present(status)) status = io_status
-        deallocate(targetdir)
+        call targetdir%kill
     end subroutine simple_chdir
 
     !> \brief  Make directory
-    subroutine simple_mkdir( dir, errmsg, verbose )
-        character(len=*),           intent(in) :: dir
-        character(len=*), optional, intent(in) :: errmsg
-        logical,          optional, intent(in) :: verbose
+    subroutine simple_mkdir( dir, verbose )
+        class(*),          intent(in) :: dir
+        logical, optional, intent(in) :: verbose
         logical, parameter :: ignore_here = .false.
         character(kind=c_char, len=:), allocatable :: path
-        character(len=STDLEN) :: tmpdir
-        integer :: io_status, lenstr
-        logical :: l_verbose
+        character(len=:), allocatable :: tmpdir
+        type(string) :: tmpdir_str, path_str
+        integer      :: io_status, lenstr
+        logical      :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
-        ! check input arg
-        tmpdir = trim(adjustl(dir))
+        select type(dir)
+            type is(string)
+                tmpdir = dir%to_char()
+            type is(character(*))
+                tmpdir = trim(adjustl(dir))
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
         lenstr = len_trim(tmpdir)
         if( lenstr==0 ) then
             if( l_verbose )write(logfhandle,*)"syslib:: simple_mkdir arg empty "//trim(tmpdir)
@@ -471,12 +489,13 @@ contains
             if( l_verbose )write(logfhandle,*)"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
         endif
         io_status = 0
-        if(.not. dir_exists(trim(adjustl(tmpdir)))) then
+        tmpdir_str = trim(adjustl(tmpdir))
+        if(.not. dir_exists(tmpdir_str)) then
             ! prepare path for C function
             allocate(path, source=trim(tmpdir)//c_null_char)
             io_status = makedir(trim(adjustl(path)), len_trim(tmpdir))
-            if(.not. dir_exists(trim(adjustl(path)))) then
-                if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
+            path_str = trim(adjustl(path))
+            if(.not. dir_exists(path_str)) then
                 if( l_verbose )write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
                 if(.not. ignore_here)then
                     if(io_status /= 0) call simple_error_check(io_status, &
@@ -485,31 +504,42 @@ contains
             endif
             deallocate(path)
         end if
+        call tmpdir_str%kill
+        call path_str%kill
     end subroutine simple_mkdir
 
     !> \brief  Remove directory
     !! return status 0=success for directory exists or directory created
     !! return error status for other removedir results
-    subroutine simple_rmdir( d , status, errmsg )
-        character(len=*),intent(in)              :: d
-        integer,         intent(out), optional   :: status
-        character(len=*),intent(in),  optional   :: errmsg
+    subroutine simple_rmdir( d, status )
+        class(*),          intent(in)  :: d
+        integer, optional, intent(out) :: status
         character(kind=c_char,len=:), allocatable :: path
-        integer                                   :: io_status
-        logical                                   :: dir_e
-        integer :: err, length, count
+        integer :: io_status, err, length, count
+        logical :: dir_e
+        dir_e = .false.
+        select type(d)
+            type is(string)
+                inquire(file=d%to_char(), exist=dir_e)
+                if(dir_e) then
+                    allocate(path, source=d%to_char()//c_null_char)
+                endif
+            type is(character(*))
+                inquire(file=trim(adjustl(d)), exist=dir_e)
+                if(dir_e) then
+                    allocate(path, source=trim(adjustl(d))//c_null_char)
+                endif
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
         io_status=0
-        inquire(file=trim(adjustl(d)), exist=dir_e)
-        if(dir_e) then
-            count=0
-            allocate(path, source=trim(adjustl(d))//c_null_char)
+        count=0
+        if(dir_e)then
             length = len_trim(adjustl(path))
             io_status = removedir(trim(adjustl(path)), length, count)
             if(io_status /= 0)then
-                if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 err = int(IERRNO(), kind=4 )
-                call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
-                io_status=0
+                call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(adjustl(path)))
             endif
             deallocate(path)
         end if
@@ -527,13 +557,12 @@ contains
     end subroutine syslib_c2fortran_string
 
     function find_next_int_dir_prefix( dir2list, last_prev_dir ) result( next_int_dir_prefix )
-        use simple_string_utils, only: char_is_a_number, map_str_nrs, str2int
-        character(len=*),                        intent(in)  :: dir2list
-        character(len=:), allocatable, optional, intent(out) :: last_prev_dir
-        character(len=STDLEN)              :: str
-        character(len=STDLEN), allocatable :: dirs(:)
-        logical,               allocatable :: nrmap(:)
-        integer,               allocatable :: dirinds(:)
+        class(string),           intent(in)  :: dir2list
+        class(string), optional, intent(out) :: last_prev_dir
+        character(len=:), allocatable :: str
+        type(string),     allocatable :: dirs(:)
+        logical,          allocatable :: nrmap(:)
+        integer,          allocatable :: dirinds(:)
         integer :: i, j, last_nr_ind, io_stat
         integer :: next_int_dir_prefix, ndirs, loc(1)
         dirs = simple_list_dirs(dir2list)
@@ -546,7 +575,7 @@ contains
         endif
         allocate(dirinds(ndirs), source=0)
         do i=1,ndirs
-            str = trim(dirs(i))
+            str = dirs(i)%to_char()
             if( char_is_a_number(str(1:1)) )then
                 nrmap = map_str_nrs(trim(str))
                 do j=1,size(nrmap)
@@ -556,35 +585,43 @@ contains
                         exit
                     endif
                 enddo
-                dirinds(i) = str2int(str(1:last_nr_ind), io_stat)
+                dirinds(i) = str2int(str(1:last_nr_ind))
             endif
         end do
         if( any(dirinds > 0) )then
             loc = maxloc(dirinds)
             next_int_dir_prefix = dirinds(loc(1)) + 1
-            if( present(last_prev_dir) ) allocate(last_prev_dir, source=trim(dirs(loc(1))))
+            if( present(last_prev_dir) ) last_prev_dir = dirs(loc(1))
         else
             next_int_dir_prefix = 1
         endif
     end function find_next_int_dir_prefix
 
     function simple_list_dirs( path, status ) result( list )
-        use simple_string_utils, only: int2str
-        character(len=*),             intent(in)  :: path
-        integer,            optional, intent(out) :: status
-        character(len=LONGSTRLEN),    allocatable :: list(:)
+        class(*),          intent(in)  :: path
+        integer, optional, intent(out) :: status
+        type(string),                 allocatable :: list(:)
         character(kind=c_char,len=:), allocatable :: pathhere
-        character(len=LONGSTRLEN) :: list_fname
-        integer :: stat, i,num_dirs, luntmp, pid
-        allocate(pathhere, source=trim(adjustl(path))//c_null_char)
+        character(len=XLONGSTRLEN) :: buffer
+        type(string) :: list_fname
+        integer      :: stat, i,num_dirs, luntmp, pid
+        select type(path)
+            type is(string)
+                allocate(pathhere, source=path%to_char()//c_null_char)
+            type is(character(*))
+                allocate(pathhere, source=trim(adjustl(path))//c_null_char)
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
         pid        = getpid()
         list_fname =  '__simple_dirlist_'//int2str(part_glob)//'_'//int2str(pid)//'__'
-        stat       = list_dirs(trim(pathhere),len_trim(pathhere), trim(list_fname), len_trim(list_fname), num_dirs)
+        stat       = list_dirs(trim(pathhere),len_trim(pathhere), list_fname%to_char(), list_fname%strlen_trim(), num_dirs)
         if( stat /= 0 )THROW_ERROR("failed to process list_dirs "//trim(pathhere))
-        open(newunit=luntmp, file=trim(list_fname))
+        open(newunit=luntmp, file=list_fname%to_char())
         allocate(list(num_dirs))
         do i = 1,num_dirs
-            read(luntmp, '(a)') list(i)
+            read(luntmp, '(a)') buffer
+            list(i) = trim(adjustl(buffer))
         enddo
         close(luntmp)
         call del_file(list_fname)
@@ -593,21 +630,20 @@ contains
     end function simple_list_dirs
 
     subroutine simple_list_files( pattern, list )
-        use simple_string_utils, only: int2str
-        character(len=*),                       intent(in)    :: pattern
-        character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
-        character(len=LONGSTRLEN) :: cmd
-        character(len=LONGSTRLEN) :: tmpfile
-        character(len=1) :: junk
-        integer :: sz, funit, ios, i, nlines, pid
-        pid = getpid()
+        character(len=*),          intent(in)    :: pattern
+        type(string), allocatable, intent(inout) :: list(:)
+        character(len=XLONGSTRLEN) :: buffer
+        type(string)               :: cmd, tmpfile
+        character(len=1)           :: junk
+        integer                    :: sz, funit, ios, i, nlines, pid
+        pid     = getpid()
         tmpfile = '__simple_filelist_'//int2str(pid)//'__'
-        cmd = 'ls -1f '//trim(pattern)//' > '//trim(tmpfile)
+        cmd     = 'ls -1f '//trim(pattern)//' > '//tmpfile%to_char()
         call exec_cmdline( cmd, suppress_errors=.true.)
-        inquire(file=trim(tmpfile), size=sz)
+        inquire(file=tmpfile%to_char(), size=sz)
         if( allocated(list) ) deallocate(list)
         if( sz > 0 )then
-            open(newunit=funit, file=trim(tmpfile))
+            open(newunit=funit, file=tmpfile%to_char())
             nlines = 0
             do
                 read(funit,*,iostat=ios) junk
@@ -620,24 +656,24 @@ contains
             rewind(funit)
             allocate( list(nlines) )
             do i=1,nlines
-                read(funit, '(a)') list(i)
+                read(funit, '(a)') buffer
+                list(i) = trim(adjustl(buffer))
             enddo
             close(funit, status='delete')
         else
-            open(newunit=funit, file=trim(tmpfile))
+            open(newunit=funit, file=tmpfile%to_char())
             close(funit, status='delete')
         endif
     end subroutine simple_list_files
 
     subroutine simple_list_files_regexp( dir, regexp, list, chronological )
-        use simple_string_utils, only: int2str
-        character(len=*),                       intent(in)    :: dir
-        character(len=*),                       intent(in)    :: regexp
-        character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
-        logical,                   optional,    intent(in)    :: chronological
-        character(len=LONGSTRLEN) :: cmd
-        character(len=LONGSTRLEN) :: tmpfile
-        character(len=1) :: junk
+        class(string),             intent(in)    :: dir
+        character(len=*),          intent(in)    :: regexp
+        type(string), allocatable, intent(inout) :: list(:)
+        logical, optional,         intent(in)    :: chronological
+        type(string)                  :: cmd, tmpfile
+        character(len=1)              :: junk
+        character(len=XLONGSTRLEN)    :: buffer
         integer :: sz, funit, ios, i, nlines
         logical :: l_chrono
         if( len_trim(adjustl(regexp)) == 0) return
@@ -646,15 +682,15 @@ contains
         tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
         ! builds command
         if( l_chrono )then
-            cmd = 'ls -1f -rt '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
+            cmd = 'ls -1f -rt '//dir%to_char()//' | grep -E '''//adjustl(trim(regexp))//''' > '//tmpfile%to_char()
         else
-            cmd = 'ls -1f '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
+            cmd = 'ls -1f '//dir%to_char()//' | grep -E '''//adjustl(trim(regexp))//''' > '//tmpfile%to_char()
         endif
-        call exec_cmdline( cmd, suppress_errors=.true.)
-        inquire(file=trim(tmpfile), size=sz)
+        call exec_cmdline(cmd, suppress_errors=.true.)
+        inquire(file=tmpfile%to_char(), size=sz)
         if( allocated(list) ) deallocate(list)
         if( sz > 0 )then
-            open(newunit=funit, file=trim(tmpfile))
+            open(newunit=funit, file=tmpfile%to_char())
             nlines = 0
             do
                 read(funit,*,iostat=ios) junk
@@ -667,283 +703,86 @@ contains
             rewind(funit)
             allocate( list(nlines) )
             do i=1,nlines
-                read(funit, '(a)') list(i)
-                list(i) = adjustl(trim(dir))//'/'//trim(list(i))
+                read(funit, '(a)') buffer
+                list(i) = dir%to_char()//'/'//trim(adjustl(buffer))
             enddo
             close(funit, status='delete')
         else
-            open(newunit=funit, file=trim(tmpfile))
+            open(newunit=funit, file=tmpfile%to_char())
             close(funit, status='delete')
         endif
     end subroutine simple_list_files_regexp
 
     !> \brief  is for deleting a file
     subroutine del_file( file )
-        character(len=*), intent(in) :: file !< input filename
+        class(*), intent(in) :: file !< input filename
         integer :: fnr, file_status
         if( file_exists(file) )then
-            open(newunit=fnr,file=file,STATUS='OLD',IOSTAT=file_status)
-            if( file_status == 0 )then
-                close(fnr, status='delete',IOSTAT=file_status)
-                if(file_status /=0) THROW_ERROR("failed to close file "//trim(file))
-            end if
+            select type(file)
+                type is(string)
+                    open(newunit=fnr,file=file%to_char(),STATUS='OLD',IOSTAT=file_status)
+                    if( file_status == 0 )then
+                        close(fnr, status='delete',IOSTAT=file_status)
+                        if(file_status /=0) THROW_ERROR("failed to close file "//file%to_char())
+                    end if
+                type is(character(*))
+                     open(newunit=fnr,file=trim(adjustl(file)),STATUS='OLD',IOSTAT=file_status)
+                    if( file_status == 0 )then
+                        close(fnr, status='delete',IOSTAT=file_status)
+                        if(file_status /=0) THROW_ERROR("failed to close file "//trim(adjustl(file)))
+                    end if
+                class default
+                    call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+            end select
         endif
     end subroutine del_file
-
-    !> simple_timestamp prints time stamp (based on John Burkardt's website code)
-    subroutine simple_timestamp( )
-        character(len= 8) :: ampm
-        integer (kind=sp) :: d
-        integer (kind=sp) :: h
-        integer (kind=sp) :: m
-        integer (kind=sp) :: mm
-        character (len=9 ), parameter, dimension(12) :: month = (/ &
-            'January  ', 'February ', 'March    ', 'April    ', &
-            'May      ', 'June     ', 'July     ', 'August   ', &
-            'September', 'October  ', 'November ', 'December ' /)
-        integer    :: n, s, y, values(8)
-        call date_and_time(values=values)
-        y = values(1)
-        m = values(2)
-        d = values(3)
-        h = values(5)
-        n = values(6)
-        s = values(7)
-        mm = values(8)
-        if ( h < 12 ) then
-            ampm = 'AM'
-        else if ( h == 12 ) then
-            if ( n == 0 .and. s == 0 ) then
-                ampm = 'Noon'
-            else
-                ampm = 'PM'
-            end if
-        else
-            h = h - 12
-            if ( h < 12 ) then
-                ampm = 'PM'
-            else if ( h == 12 ) then
-                if ( n == 0 .and. s == 0 ) then
-                    ampm = 'Midnight'
-                else
-                    ampm = 'AM'
-                end if
-            end if
-        end if
-        write ( *, '(i2.2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3,1x,a)' ) &
-            d, trim ( month(m) ), y, h, ':', n, ':', s, '.', mm, trim ( ampm )
-    end subroutine simple_timestamp
-
-    function cpu_usage()
-        real    :: cpu_usage
-        integer :: ios, i
-        integer :: unit,oldidle, oldsum, sumtimes
-        real    :: percent
-        character(len = 4) lineID ! 'cpu '
-        integer, dimension(9) :: times
-        cpu_usage=0.0
-        sumtimes = 0; oldsum=0
-        oldidle=0
-        times = 0
-        percent = 0.
-        write(logfhandle,'(a)') 'CPU Usage'
-        open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
-        if (ios /= 0) then
-            THROW_ERROR('opening /proc/stat')
-        else
-            read(unit, fmt = *, iostat = ios) lineID, (times(i), i = 1, 9)
-            if (ios /= 0)         THROW_ERROR('reading /proc/stat')
-            close(unit, iostat = ios)
-            if (ios /= 0)         THROW_ERROR('closing /proc/stat')
-            if (lineID /= 'cpu ') THROW_ERROR('reading /proc/stat')
-            sumtimes = sum(times)
-            percent = (1. - real((times(4) - oldidle)) / real((sumtimes - oldsum))) * 100.
-            write(logfhandle, fmt = '(F6.2,A2)') percent, '%'
-            oldidle = times(4)
-            oldsum = sumtimes
-        end if
-        cpu_usage=percent
-    end function cpu_usage
 
     integer(4) function get_process_id( )
         get_process_id = getpid()
     end function get_process_id
 
-    integer(4) function get_login_id( )
-        get_login_id = getuid()
-    end function get_login_id
-
-    subroutine print_compiler_info( file_unit )
-        integer, intent (in), optional :: file_unit
-        integer  :: file_unit_op
-        character(len=:), allocatable :: compilation_cmd, compiler_ver
-        if (present(file_unit)) then
-            file_unit_op = file_unit
-        else
-            file_unit_op = OUTPUT_UNIT
-        end if
-        write( file_unit_op, '(A,A)' ) 'CMAKE Fortran COMPILER VERSION ',&
-            trim(FC_COMPILER_CMAKE_VERSION)
-        compilation_cmd = COMPILER_OPTIONS()
-        compiler_ver = COMPILER_VERSION()
-        if(allocated(compiler_ver))then
-            if(len(compiler_ver) <= 0) THROW_ERROR('simple_syslib compiler_version str le 0')
-
-            write( file_unit_op, '(A,A,A,A)' ) &
-                ' This file was compiled by ', trim(adjustl(compiler_ver)), &
-                ' using the options ', trim(adjustl(compilation_cmd))
-            deallocate (compilation_cmd, compiler_ver)
-        endif
-    end subroutine print_compiler_info
-
-    subroutine simple_sysinfo_usage( valueRSS, valuePeak, valueSize, valueHWM)
-        integer(kind=8), intent(out) :: valueRSS
-        integer(kind=8), intent(out) :: valuePeak
-        integer(kind=8), intent(out) :: valueSize
-        integer(kind=8), intent(out) :: valueHWM
-        integer :: stat
-        integer(c_long) :: HWM, totRAM, shRAM, bufRAM, peakBuf
-        stat = get_sysinfo( HWM, totRAM, shRAM, bufRAM, peakBuf)
-        if (stat /= 0 ) THROW_ERROR("failed to get sysinfo")
-        valueRSS = bufRAM
-        valuePeak = totRAM
-        valueSize = shRAM
-        valueHWM = HWM
-    end subroutine simple_sysinfo_usage
-
-    ! Suggestion from https://stackoverflow.com/a/30241280
-    subroutine simple_mem_usage( valueRSS, valuePeak, valueSize, valueHWM )
-        implicit none
-        integer(kind=8), intent(out) :: valueRSS
-        integer(kind=8), intent(out), optional :: valuePeak
-        integer(kind=8), intent(out), optional :: valueSize
-        integer(kind=8), intent(out), optional :: valueHWM
-        character(len=200) :: filename=' '
-        character(len=80)  :: line
-        character(len=8)   :: pid_char=' '
-        integer            :: pid,unit
-        logical            :: ifxst
-        valueRSS=-1    ! return negative number if not found
-        if(present(valuePeak))valuePeak=-1
-        if(present(valueSize))valueSize=-1
-        if(present(valueHWM))valueHWM=-1
-        !--- get process ID
-        pid=getpid()
-        write(pid_char,'(I8)') pid
-        filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        !--- read system file
-        inquire (file=trim(filename),exist=ifxst)
-        if (.not.ifxst) then
-            write (*,*) 'system file does not exist'
-            return
-        endif
-        open(newunit=unit, file=filename, action='read')
-        ! the order of the following do loops is dependent on cat /proc/PID/status listing
-        if(present(valuePeak))then
-            do
-                read (unit,'(a)',end=110) line
-                if (line(1:7).eq.'VmPeak:') then
-                    read (line(8:),*) valuePeak
-                    exit
-                endif
-            enddo
-110         continue
-        endif
-        if(present(valueSize))then
-            do
-                read (unit,'(a)',end=120) line
-                if (line(1:7).eq.'VmSize:') then
-                    read (line(8:),*) valueSize
-                    exit
-                endif
-            enddo
-120         continue
-        endif
-        if(present(valueHWM))then
-            do
-                read (unit,'(a)',end=130) line
-                if (line(1:6).eq.'VmHWM:') then
-                    read (line(7:),*) valueHWM
-                    exit
-                endif
-            enddo
-130         continue
-        endif
-        do
-            read (unit,'(a)',end=140) line
-            if (line(1:6).eq.'VmRSS:') then
-                read (line(7:),*) valueRSS
-                exit
-            endif
-        enddo
-140     continue
-        close(unit)
-        return
-    end subroutine simple_mem_usage
-
-    subroutine simple_dump_mem_usage( dump_file )
-        character(len=*), intent(inout), optional :: dump_file
-        character(len=200)    :: filename=' '
-        character(len=8)      :: pid_char=' '
-        character(len=STDLEN) :: command
-        integer               :: pid
-#ifdef MACOSX
-        write(logfhandle,*)" simple_dump_mem_usage cannot run on MacOSX"
-        return
-#endif
-        pid=getpid()
-        write(pid_char,'(I8)') pid
-        filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        command = 'grep -E "^(VmPeak|VmSize|VmHWM|VmRSS):"<'//trim(filename)//'|awk "{a[NR-1]=\$2}END{print a[0],a[1],a[2],a[3]}" '
-        if(present(dump_file)) command = trim(command)//' >> '//trim(dump_file)
-        call exec_cmdline(trim(command))
-    end subroutine simple_dump_mem_usage
-
-    function simple_abspath( infile, errmsg, status, check_exists ) result( absolute_name )
-        character(len=*),              intent(in)    :: infile
-        integer,          optional,    intent(out)   :: status
-        character(len=*), optional,    intent(in)    :: errmsg
-        logical,          optional,    intent(in)    :: check_exists
-        character(len=:), allocatable :: absolute_name
-        type(c_ptr)                          :: cstring
-        character(len=LINE_MAX_LEN), target  :: fstr
-        character(kind=c_char,len=LONGSTRLEN):: infilename_c
-        character(kind=c_char,len=LONGSTRLEN):: outfilename_c
-        integer :: lengthin,  lengthout, status_here
-        logical :: check_exists_here
+    function simple_abspath( infile, status, check_exists ) result( absolute_name )
+        class(*),          intent(in)  :: infile
+        integer, optional, intent(out) :: status
+        logical, optional, intent(in)  :: check_exists
+        character(kind=c_char,len=XLONGSTRLEN) :: infilename_c
+        character(kind=c_char,len=XLONGSTRLEN) :: outfilename_c
+        type(string) :: absolute_name
+        integer      :: lengthin,  lengthout, status_here
+        logical      :: check_exists_here
         check_exists_here = .true.
         if( present(check_exists) )check_exists_here = check_exists
-        if( check_exists_here )then
-            if( .not.file_exists(trim(infile)) )then
-                write(logfhandle,*) errmsg
-                write(logfhandle,*)' cwd: '//trim(CWD_GLOB)
-                THROW_ERROR('file: '//trim(infile)//' does not exist')
-            endif
-        endif
-        lengthin     = len_trim(infile)
-        cstring      = c_loc(fstr)
-        infilename_c = trim(infile)//achar(0)
-        status_here  = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout)
+        select type(infile)
+            type is(string)
+                if( check_exists_here )then
+                    if( .not.file_exists(infile) )then
+                        write(logfhandle,*)' cwd: '//trim(CWD_GLOB)
+                        THROW_ERROR('input file: '//infile%to_char()//' does not exist')
+                    endif
+                endif
+                lengthin     = infile%strlen_trim()
+                infilename_c = infile%to_char()//achar(0)
+            type is(character(*))
+                if( check_exists_here )then
+                    if( .not.file_exists(infile) )then
+                        write(logfhandle,*)' cwd: '//trim(CWD_GLOB)
+                        THROW_ERROR('input file: '//trim(infile)//' does not exist')
+                    endif
+                endif
+                lengthin     = len_trim(adjustl(infile))
+                infilename_c = trim(adjustl(infile))//achar(0)
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
+        status_here = get_absolute_pathname(infilename_c, lengthin, outfilename_c, lengthout)
         call syslib_c2fortran_string(outfilename_c)
-        if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
-            allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))
+            absolute_name = trim(outfilename_c(1:lengthout))
         else
-            allocate(absolute_name, source=trim(infile))
+            absolute_name = infile
         end if
         if(present(status))status = status_here
     end function simple_abspath
-
-    integer function RE_match( source, regex )
-        character(len=*),              intent(in)  :: source,regex
-        integer(c_int) :: res
-        character(kind=c_char,len=STDLEN)  :: source_c  !> input string
-        character(kind=c_char,len=STDLEN)  :: regex_c   !> input RE string
-        source_c = trim(source)//achar(0)
-        regex_c = trim(regex)//achar(0)
-        res = regexp_match(source_c,len_trim(source),  regex_c, len_trim(regex))
-        RE_match = INT(res)
-    end function RE_match
 
     subroutine print_slurm_env()
         character(len=255) :: env_value
@@ -967,7 +806,7 @@ contains
                 write(logfhandle,*) "############################"
                 write(logfhandle,*) ""
         endif
-        deallocate (env_vars)
+        deallocate(env_vars)
     end subroutine print_slurm_env
 
 end module simple_syslib

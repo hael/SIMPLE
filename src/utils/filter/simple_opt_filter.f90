@@ -24,21 +24,21 @@ contains
         class(image),           intent(inout) :: odd, even
         class(image), optional, intent(inout) :: mskimg
         real,         optional, intent(in)    :: lpstop
-        type(image)                   :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
-                                        &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
-        integer                       :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
-        integer                       :: filtsz, cutoff_find, lb(3), ub(3), smooth_ext
-        real                          :: rad, find_stepsz, val, smpd
-        type(image_ptr)               :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights
-        integer,          parameter   :: CHUNKSZ = 20
-        real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
-        real,             allocatable :: fsc(:), cur_fil(:)
-        character(len=:), allocatable :: fsc_fname
+        type(image)          :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
+                               &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
+        integer              :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
+        integer              :: filtsz, cutoff_find, lb(3), ub(3), smooth_ext
+        real                 :: rad, find_stepsz, val, smpd
+        type(image_ptr)      :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights
+        integer, parameter   :: CHUNKSZ = 20
+        real,    pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
+        real,    allocatable :: fsc(:), cur_fil(:)
+        type(string) :: fsc_fname
         ldim       = odd%get_ldim()
         filtsz     = odd%get_filtsz()
         smooth_ext = params_glob%smooth_ext
         box        = ldim(1)
-        fsc_fname  = trim(params_glob%fsc)
+        fsc_fname  = params_glob%fsc
         smpd       = even%get_smpd()
         find_start = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stop  = find_start
@@ -47,7 +47,7 @@ contains
         else
             ! calculate Fourier index low-pass limit for search based on FSC
             if( .not.file_exists(fsc_fname) ) then
-                THROW_HARD('FSC file: '//fsc_fname//' not found')
+                THROW_HARD('FSC file: '//fsc_fname%to_char()//' not found')
             else
                 ! retrieve FSC and calculate low-pass limit
                 fsc       = file2rarr(fsc_fname)

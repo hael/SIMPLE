@@ -15,7 +15,7 @@ contains
     ! gain correction, calculate image sum and identify outliers
     subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder, frames_range )
         type(image),     allocatable, intent(inout) :: frames_here(:)
-        character(len=*),             intent(in)    :: gainref_fname
+        class(string),                intent(in)    :: gainref_fname
         class(image),                 intent(inout) :: gainimg
         class(eer_decoder), optional, intent(in)    :: eerdecoder
         integer,            optional, intent(in)    :: frames_range(2)
@@ -56,9 +56,10 @@ contains
     subroutine flip_gain( cline, gainref_fname, mode )
         use simple_cmdline, only: cmdline
         class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(inout) :: gainref_fname, mode
-        type(image)                   :: gain
-        character(len=:), allocatable :: new_fname
+        class(string),    intent(inout) :: gainref_fname
+        character(len=*),  intent(in)   :: mode
+        type(image)  :: gain
+        type(string) :: new_fname, ext
         real    :: smpd
         integer :: ldim(3), n
         if( .not.cline%defined('gainref') ) return
@@ -72,7 +73,7 @@ contains
             THROW_HARD('UNSUPPORTED GAIN REFERENCE FLIPPING MODE: '//trim(mode))
         end select
         if( .not.file_exists(gainref_fname) )then
-            THROW_HARD('Could not find gain reference: '//trim(gainref_fname))
+            THROW_HARD('Could not find gain reference: '//gainref_fname%to_char())
         endif
         call find_ldim_nptcls(gainref_fname, ldim, n, smpd=smpd)
         ldim(3) = 1
@@ -80,14 +81,16 @@ contains
         call gain%read(gainref_fname)
         call gain%flip(mode)
         gainref_fname = basename(gainref_fname)
-        gainref_fname = get_fbody(gainref_fname, trim(fname2ext(gainref_fname)), separator=.true.)
-        gainref_fname = './'//trim(gainref_fname)//'_flip'//trim(uppercase(mode))//'.mrc'
+        ext           = fname2ext(gainref_fname)
+        gainref_fname = get_fbody(gainref_fname, ext, separator=.true.)
+        gainref_fname = './'//gainref_fname%to_char()//'_flip'//trim(uppercase(mode))//'.mrc'
         call gain%write(gainref_fname)
         new_fname     = simple_abspath(gainref_fname)
-        gainref_fname = trim(new_fname)
-        call cline%set('gainref', gainref_fname)
+        gainref_fname = new_fname%to_char()
+        call cline%set('gainref', gainref_fname%to_char())
         call gain%kill
-        deallocate(new_fname)
+        call new_fname%kill
+        call ext%kill
     end subroutine flip_gain
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980

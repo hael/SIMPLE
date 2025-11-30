@@ -1,8 +1,8 @@
 module simple_imgarr_utils
 include 'simple_lib.f08'
-use simple_image,             only: image
-use simple_sp_project,        only: sp_project
-use simple_stack_io,          only: stack_io
+use simple_image,      only: image
+use simple_sp_project, only: sp_project
+use simple_stack_io,   only: stack_io
 implicit none
 #include "simple_local_flags.inc"
 
@@ -82,14 +82,13 @@ contains
         class(sp_project), intent(inout) :: spproj
         logical, optional, intent(in)    :: mask(:)
         type(image),       allocatable   :: imgs(:)
-        character(len=:),  allocatable   :: cavgsstk, stkpath
+        type(string)   :: cavgsstk
         type(stack_io) :: stkio_r
         integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
         real    :: smpd
-        call spproj%get_cavgs_stk(cavgsstk, ncls, smpd, imgkind='cavg', stkpath=stkpath)
-        if(.not. file_exists(cavgsstk)) cavgsstk = trim(stkpath) // '/' // trim(cavgsstk)
+        call spproj%get_cavgs_stk(cavgsstk, ncls, smpd, imgkind='cavg')
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
-        call stkio_r%open(trim(cavgsstk), smpd, 'read', bufsz=min(1024,ncls))
+        call stkio_r%open(cavgsstk, smpd, 'read', bufsz=min(1024,ncls))
         ldim_read    = stkio_r%get_ldim()
         ldim_read(3) = 1
         if( present(mask) )then
@@ -115,7 +114,7 @@ contains
     end function read_cavgs_into_imgarr
 
     function read_stk_into_imgarr( stkname, mask ) result( imgs )
-        character(len=*),  intent(in)  :: stkname
+        class(string),     intent(in)  :: stkname
         logical, optional, intent(in)  :: mask(:)
         type(image),       allocatable :: imgs(:)
         type(stack_io) :: stkio_r
@@ -124,7 +123,7 @@ contains
         if(.not. file_exists(stkname)) THROW_HARD('stk stk does not exist')
         call find_ldim_nptcls(stkname, ldim_read, ncls, smpd)
         ldim_read(3) = 1
-        call stkio_r%open(trim(stkname), smpd, 'read', bufsz=min(1024,ncls))
+        call stkio_r%open(stkname, smpd, 'read', bufsz=min(1024,ncls))
         if( present(mask) )then
             if( size(mask) /= ncls ) THROW_HARD('Nonconforming mask size')
             ncls_sel = count(mask)
@@ -152,9 +151,9 @@ contains
         class(image),     intent(inout) :: imgs(n)
         integer,          intent(in)    :: labels(n)
         character(len=*), intent(in)    :: fbody, ext
-        character(len=:), allocatable   :: fname
-        integer,          allocatable   :: cnts(:)
-        integer :: i, maxlab, pad_len
+        integer, allocatable :: cnts(:)
+        type(string) :: fname 
+        integer      :: i, maxlab, pad_len
         maxlab = maxval(labels)
         allocate(cnts(maxlab), source=0)
         pad_len = 2
@@ -170,8 +169,8 @@ contains
     end subroutine write_imgarr_1
 
     subroutine write_imgarr_2( imgs, fname )
-        class(image),     intent(inout) :: imgs(:)
-        character(len=*), intent(in)    :: fname
+        class(image),  intent(inout) :: imgs(:)
+        class(string), intent(in)    :: fname
         integer :: n, i
         n = size(imgs)
         do i = 1, n
@@ -180,9 +179,9 @@ contains
     end subroutine write_imgarr_2
 
     subroutine write_imgarr_3( imgs, fname, inds )
-        class(image),     intent(inout) :: imgs(:)
-        character(len=*), intent(in)    :: fname
-        integer,          intent(in)    :: inds(:)
+        class(image),  intent(inout) :: imgs(:)
+        class(string), intent(in)    :: fname
+        integer,       intent(in)    :: inds(:)
         integer :: n, i, ni, cnt, ind
         n   = size(imgs)
         ni  = size(inds)
@@ -200,7 +199,7 @@ contains
         class(image),     intent(inout) :: imgs(n)
         integer,          intent(in)    :: labels(n)
         character(len=*), intent(in)    :: ext
-        character(len=:), allocatable   :: fname
+        type(string) :: fname
         integer :: i, cnt
         cnt = 0
         do i = 1, n
@@ -217,9 +216,9 @@ contains
         class(image),      intent(inout) :: imgs(n)
         integer,           intent(in)    :: labels(n)
         character(len=*),  intent(in)    :: ext
-        character(len=:), allocatable    :: fname
-        integer,          allocatable    :: cnt(:)
-        integer :: i, maxlab
+        integer, allocatable :: cnt(:)
+        type(string) :: fname 
+        integer      :: i, maxlab
         maxlab = maxval(labels)
         allocate(cnt(0:maxlab), source=0)
         cnt = 0

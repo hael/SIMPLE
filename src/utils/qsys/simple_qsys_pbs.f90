@@ -48,7 +48,7 @@ contains
     !> \brief  is a getter
     function get_pbs_submit_cmd( self ) result( cmd )
         class(qsys_pbs),   intent(in) :: self
-        character(len=:), allocatable :: cmd
+        type(string) :: cmd
         cmd = self%env%get('qsys_submit_cmd')
     end function get_pbs_submit_cmd
 
@@ -57,34 +57,34 @@ contains
         class(qsys_pbs),   intent(in) :: self
         class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
-        character(len=:), allocatable :: key, pbs_cmd, pbs_val
+        type(string) :: key, pbs_cmd, pbs_val
         real    :: rval
         integer :: i, which
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()
-            if(allocated(key))deallocate(key)
+            call key%kill
             key     = q_descr%get_key(i)
-            which   = self%env%lookup(key)
+            which   = self%env%lookup(key%to_char())
             if(which == 0)cycle
             pbs_cmd = self%env%get(which)
             pbs_val = q_descr%get(i)
-            select case(key)
+            select case(key%to_char())
                 case('job_time', 'job_cpus_per_task', 'qsys_qos')
-                    call write_formatted(pbs_cmd, pbs_val, '=')
+                    call write_formatted(pbs_cmd%to_char(), pbs_val%to_char(), '=')
                 case('job_memory_per_task')
                     ! memory in kilobytes
-                    rval    = str2real(pbs_val) / 1024.
+                    rval    = str2real(pbs_val%to_char()) / 1024.
                     pbs_val = trim(int2str(ceiling(rval)))//'kb'
-                    call write_formatted(pbs_cmd, pbs_val, '=')
+                    call write_formatted(pbs_cmd%to_char(), pbs_val%to_char(), '=')
                 case DEFAULT
-                    call write_formatted(pbs_cmd, pbs_val)
+                    call write_formatted(pbs_cmd%to_char(), pbs_val%to_char())
             end select
-            if(allocated(pbs_cmd))deallocate(pbs_cmd)
-            if(allocated(pbs_val))deallocate(pbs_val)
+            call pbs_cmd%kill
+            call pbs_val%kill
         end do
-        if(allocated(key))deallocate(key)
+        call key%kill
         ! write default instructions
         if( write2file )then
             write(fhandle,'(a)') '#PBS -V'  ! environment copy

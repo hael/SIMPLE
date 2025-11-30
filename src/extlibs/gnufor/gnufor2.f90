@@ -8,7 +8,6 @@
 !! http://orion.math.iastate.edu/burkardt/g_src/gnufor/gnufor.html
 !***********************************************************************************
 module gnufor2
-    use simple_syslib, only: simple_isenv
     implicit none
 
     ! these are default parameters which control linewidth, colors and terminal
@@ -64,11 +63,6 @@ contains
         character(len=*),intent(in) :: terminal
         integer, parameter  :: Nc=35
         character(len=Nc)  :: f_result
-
-        if(.not.simple_isenv('DISPLAY')) then
-            f_result = 'dumb'
-            return
-        endif
 
         select case(terminal)
         case('ps')

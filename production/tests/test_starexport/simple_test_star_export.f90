@@ -21,10 +21,10 @@ real(timer_int_kind)        :: ms_complete
 
 !call params%new(cline)
 
-if(.not. file_exists(projfile)) THROW_HARD(projfile // " does not exist")
+if(.not. file_exists(string(projfile))) THROW_HARD(projfile // " does not exist")
 
 ms0 = tic()
-call spproj%read(projfile)
+call spproj%read(string(projfile))
 ms_complete = toc(ms0)
 print *,'read project file in : ', ms_complete; call flush(6)
 

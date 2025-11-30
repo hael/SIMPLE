@@ -41,10 +41,10 @@ contains
         call del_files('distr_simple_script_', np)
         ! optionally deletes 2D analysis temporary files
         if( .not.l_keep2D )then
-            call del_files('cavgs_even_part',     np, ext=params_glob%ext)
-            call del_files('cavgs_odd_part',      np, ext=params_glob%ext)
-            call del_files('ctfsqsums_even_part', np, ext=params_glob%ext)
-            call del_files('ctfsqsums_odd_part',  np, ext=params_glob%ext)
+            call del_files('cavgs_even_part',     np, ext=params_glob%ext%to_char())
+            call del_files('cavgs_odd_part',      np, ext=params_glob%ext%to_char())
+            call del_files('ctfsqsums_even_part', np, ext=params_glob%ext%to_char())
+            call del_files('ctfsqsums_odd_part',  np, ext=params_glob%ext%to_char())
         endif
         ! flush the log filehandle to avoid delayed printing
         call flush(logfhandle)
@@ -55,22 +55,22 @@ contains
         use simple_parameters, only: params_glob
         ! generation of this file marks completion of the partition
         ! this file is empty 4 now but may contain run stats etc.
-        character(len=*), intent(in) :: source
+        class(string), intent(in) :: source
         if( params_glob%l_distr_exec .or. params_glob%stream.eq.'yes' )then
-            call simple_touch(trim(JOB_FINISHED_FBODY)//int2str_pad(params_glob%part,params_glob%numlen), errmsg="qsys_job_finished")
+            call simple_touch(JOB_FINISHED_FBODY//int2str_pad(params_glob%part,params_glob%numlen))
         endif
     end subroutine qsys_job_finished
 
     !>  returns when the inputted file exists in cwd
     subroutine qsys_watcher_1( fname, wtime )
-        character(len=*),  intent(in) :: fname
+        class(string),     intent(in) :: fname
         integer, optional, intent(in) :: wtime
         integer :: wwtime
         logical :: there
         wwtime = SHORTTIME
         if( present(wtime) ) wwtime = wtime
         do
-            there = file_exists(trim(fname))
+            there = file_exists(fname)
             if( there ) exit
             call sleep(wwtime)
         end do
@@ -78,8 +78,8 @@ contains
 
     !>  returns when the inputted files exist in cwd
     subroutine qsys_watcher_2( fnames, wtime )
-        character(len=STDLEN), intent(in)    :: fnames(:)
-        integer, optional,     intent(in)    :: wtime
+        class(string),     intent(in) :: fnames(:)
+        integer, optional, intent(in) :: wtime
         integer, parameter   :: MAXITS=20000
         integer              :: wwtime, nfiles, ifile, i
         logical              :: doreturn, fexists
@@ -89,7 +89,7 @@ contains
         do i=1,MAXITS
             doreturn = .true.
             do ifile=1,nfiles
-                fexists = file_exists(trim(fnames(ifile)))
+                fexists = file_exists(fnames(ifile))
                 if( .not. fexists ) doreturn = .false.
             end do
             if( doreturn )then

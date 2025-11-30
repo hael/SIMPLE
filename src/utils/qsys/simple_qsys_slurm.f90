@@ -44,13 +44,13 @@ contains
         call self%env%push('job_time',              '#SBATCH --time')
         ! standard error & output folder
         stderrout = PATH_HERE//trim(STDERROUT_DIR)
-        call simple_mkdir(trim(stderrout),errmsg="qsys_slurm::new slurm env")
+        call simple_mkdir(trim(stderrout))
     end subroutine new_slurm_env
 
     !> \brief  is a getter
     function get_slurm_submit_cmd( self ) result( cmd )
         class(qsys_slurm), intent(in) :: self
-        character(len=:), allocatable :: cmd
+        type(string) :: cmd
         cmd = self%env%get('qsys_submit_cmd')
     end function get_slurm_submit_cmd
 
@@ -59,25 +59,26 @@ contains
         class(qsys_slurm), intent(in) :: self
         class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
-        character(len=:), allocatable :: key, sbatch_cmd, sbatch_val
+        type(string) :: key, sbatch_cmd, sbatch_val
         integer :: i, which
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()
             key   = q_descr%get_key(i)
-            which = self%env%lookup(key)
+            which = self%env%lookup(key%to_char())
             if( which > 0 )then
                 sbatch_cmd = self%env%get(which)
                 sbatch_val = q_descr%get(i)
                 if( write2file )then
-                    write(fhandle,'(a)') sbatch_cmd//'='//sbatch_val
+                    write(fhandle,'(a)') sbatch_cmd%to_char()//'='//sbatch_val%to_char()
                 else
-                    write(logfhandle,'(a)') sbatch_cmd//'='//sbatch_val
+                    write(logfhandle,'(a)') sbatch_cmd%to_char()//'='//sbatch_val%to_char()
                 endif
-                deallocate(sbatch_cmd,sbatch_val)
+                call sbatch_cmd%kill
+                call sbatch_val%kill
             endif
-            deallocate(key)
+            call key%kill
         end do
         ! write default instructions
         if( write2file )then
@@ -97,25 +98,26 @@ contains
         class(chash),      intent(in) :: q_descr
         integer,           intent(in) :: parts_fromto(2)
         integer, optional, intent(in) :: fhandle, nactive
-        character(len=:), allocatable :: key, sbatch_cmd, sbatch_val
+        type(string) :: key, sbatch_cmd, sbatch_val
         integer :: i, which
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()
             key   = q_descr%get_key(i)
-            which = self%env%lookup(key)
+            which = self%env%lookup(key%to_char())
             if( which > 0 )then
                 sbatch_cmd = self%env%get(which)
                 sbatch_val = q_descr%get(i)
                 if( write2file )then
-                    write(fhandle,'(a)') sbatch_cmd//'='//sbatch_val
+                    write(fhandle,'(a)') sbatch_cmd%to_char()//'='//sbatch_val%to_char()
                 else
-                    write(logfhandle,'(a)') sbatch_cmd//'='//sbatch_val
+                    write(logfhandle,'(a)') sbatch_cmd%to_char()//'='//sbatch_val%to_char()
                 endif
-                deallocate(sbatch_cmd,sbatch_val)
+                call sbatch_cmd%kill
+                call sbatch_val%kill
             endif
-            deallocate(key)
+            call key%kill
         end do
         ! write default instructions
         if( write2file )then

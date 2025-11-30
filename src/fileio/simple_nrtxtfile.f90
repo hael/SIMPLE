@@ -2,9 +2,10 @@
 module simple_nrtxtfile
 use simple_defs
 use simple_error
-use simple_string_utils, only: str_is_comment, cnt_recs_per_line, str_is_blank
-use simple_fileio,  only: fopen, fclose, fileiochk
-use simple_syslib,  only: is_open
+use simple_fileio
+use simple_string
+use simple_string_utils
+use simple_syslib
 implicit none
 
 public :: nrtxtfile
@@ -16,11 +17,11 @@ integer, parameter :: OPEN_TO_WRITE = 2
 
 type :: nrtxtfile
     private
-    integer               :: funit              !< FILE*
-    character(len=STDLEN) :: fname              !< filename
-    integer               :: recs_per_line = 0  !< recordings per line
-    integer               :: ndatalines    = 0  !< # lines
-    integer               :: access_type        !< read/write
+    integer      :: funit              !< FILE*
+    type(string) :: fname              !< filename
+    integer      :: recs_per_line = 0  !< recordings per line
+    integer      :: ndatalines    = 0  !< # lines
+    integer      :: access_type        !< read/write
 contains
     procedure          :: new
     procedure          :: readNextDataLine
@@ -37,7 +38,7 @@ contains
 
     subroutine new( self, fname, access_type, wanted_recs_per_line )
         class(nrtxtfile),  intent(inout) :: self
-        character(len=*),  intent(in)    :: fname       !< filename
+        class(string),     intent(in)    :: fname       !< filename
         integer,           intent(in)    :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
         integer, optional, intent(in)    :: wanted_recs_per_line
         character(len=LINE_MAX_LEN)      :: buffer      !< will hold a line from the file
@@ -55,7 +56,7 @@ contains
         ! if we are opening to read, work out the file details..
         if( self%access_type .eq. OPEN_TO_READ )then
             call fopen(tmpunit, file=self%fname, iostat=ios, status='old')
-            call fileiochk("simple_nrtxtfile::new; Error when opening file for reading "//trim(self%fname),ios)
+            call fileiochk("simple_nrtxtfile::new; Error when opening file for reading "//self%fname%to_char(),ios)
             self%funit = tmpunit
             do
                 ! work out records per line, and number_of_lines
@@ -88,7 +89,7 @@ contains
         else if (self%access_type .eq. OPEN_TO_WRITE) then
             call fopen(self%funit, file=self%fname, iostat=ios, status='replace',iomsg=io_msg)
             call fileiochk("nrtxt::new Error when opening file "&
-                          //trim(self%fname)//' ; '//trim(io_msg),ios)
+                          //self%fname%to_char()//' ; '//trim(io_msg),ios)
             if (present(wanted_recs_per_line)) then
                 self%recs_per_line = wanted_recs_per_line
             else

@@ -20,12 +20,12 @@ real                        :: effective_patch_fit_threshold = PATCH_FIT_THRESHO
 type :: motion_correct_iter
     private
     ! these image objects are part of the instance to avoid excessive memory re-allocations
-    type(image)       :: moviesum, moviesum_corrected
-    type(image)       :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
-    type(image)       :: pspec_half_n_half, thumbnail
+    type(image)   :: moviesum, moviesum_corrected
+    type(image)  :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
+    type(image)  :: pspec_half_n_half, thumbnail
     ! these strings are part of the instance for reporting purposes
-    character(len=STDLEN) :: moviename, moviename_intg
-    character(len=STDLEN) :: moviename_forctf, moviename_thumb
+    type(string) :: moviename, moviename_intg
+    type(string) :: moviename_forctf, moviename_thumb
   contains
     procedure :: iterate
     procedure :: get_moviename
@@ -39,21 +39,21 @@ contains
         type(ctfparams),            intent(inout) :: ctfvars
         class(ori),                 intent(inout) :: orientation
         integer,                    intent(inout) :: frame_counter
-        character(len=*),           intent(in)    :: moviename, fbody, dir_out
-        character(len=*), optional, intent(in)    :: gainref_fname
+        class(string),              intent(in)    :: moviename, fbody, dir_out
+        class(string),    optional, intent(in)    :: gainref_fname
         character(len=*), optional, intent(in)    :: tseries
         type(nrtxtfile)               :: boxfile
         real,             allocatable :: boxdata(:,:)
-        character(len=:), allocatable :: fbody_here, ext, star_fname, poly_fname
-        real    :: goodnessoffit(2), scale, bfac_here, bid
-        integer :: ldim(3), ldim_thumb(3), iptcl, nxpatch, nypatch
-        logical :: patch_success, l_tseries
+        type(string) :: fbody_here, ext, star_fname, poly_fname
+        real         :: goodnessoffit(2), scale, bfac_here, bid
+        integer      :: ldim(3), ldim_thumb(3), iptcl, nxpatch, nypatch
+        logical      :: patch_success, l_tseries
         patch_success = .false.
         l_tseries     = .false.
         if( present(tseries) ) l_tseries = tseries.eq.'yes'
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
-            write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
+            write(logfhandle,*) 'inputted movie stack does not exist: ', moviename%to_char()
         endif
         ! sanity check
         if( fname2format(moviename) .eq. 'K' )then
@@ -63,29 +63,30 @@ contains
             endif
         endif
         ! make filenames
-        fbody_here = basename(trim(moviename))
-        ext        = fname2ext(trim(fbody_here))
+        fbody_here = basename(moviename)
+        ext        = fname2ext(fbody_here)
         if( l_tseries )then
-            fbody_here = trim(fbody)
+            fbody_here = fbody
         else if( fbody.ne.'' )then
-            fbody_here = trim(fbody)//'_'//get_fbody(trim(fbody_here), trim(ext))
+            fbody_here = get_fbody(fbody_here, ext)
+            fbody_here = fbody%to_char()//'_'//fbody_here%to_char()
         else
-            fbody_here = get_fbody(trim(fbody_here), trim(ext))
+            fbody_here = get_fbody(fbody_here, ext)
         endif
         ! shifts & star output
-        patched_shift_fname   = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
-        star_fname            = trim(dir_out)//trim(adjustl(fbody_here))//trim(STAR_EXT)
-        poly_fname            = trim(dir_out)//trim(adjustl(fbody_here))//'.poly'
+        patched_shift_fname   = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
+        star_fname            = dir_out%to_char()//fbody_here%to_char()//STAR_EXT
+        poly_fname            = dir_out%to_char()//fbody_here%to_char()//'.poly'
         ! isotropic ones
-        self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
-        self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)
-        self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
+        self%moviename_intg   = dir_out%to_char()//fbody_here%to_char()//INTGMOV_SUFFIX//params_glob%ext%to_char()
+        self%moviename_forctf = dir_out%to_char()//fbody_here%to_char()//FORCTF_SUFFIX//params_glob%ext%to_char()
+        self%moviename_thumb  = dir_out%to_char()//fbody_here%to_char()//THUMBNAIL_SUFFIX//JPG_EXT
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( params_glob%nframesgrp > 0 )then
-            self%moviename = 'tmpnframesgrpmovie'//params_glob%ext
-            call frameavg_stack(trim(moviename), trim(self%moviename), params_glob%nframesgrp, ctfvars%smpd)
+            self%moviename = 'tmpnframesgrpmovie'//params_glob%ext%to_char()
+            call frameavg_stack(moviename, self%moviename, params_glob%nframesgrp, ctfvars%smpd)
         else
-            self%moviename = trim(moviename)
+            self%moviename = moviename
         endif
         ! determines whether to perform patch-based step & patch size
         call calc_npatches(self%moviename, ctfvars%smpd, cline, orientation)
@@ -94,7 +95,7 @@ contains
         ! ALIGNEMENT
         select case(params_glob%algorithm)
         case('wpatch','poly')
-            write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
+            write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', moviename%to_char()
             if( cline%defined('boxfile') )then
                 if( file_exists(params_glob%boxfile) )then
                     if( nlines(params_glob%boxfile) > 0 )then
@@ -129,7 +130,7 @@ contains
             bfac_here = -1.
             if( cline%defined('bfac') ) bfac_here = params_glob%bfac
             ! check, increment counter & print
-            write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
+            write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', moviename%to_char()
             ! execute the motion_correction
             call motion_correct_iso(self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
             call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
@@ -143,12 +144,12 @@ contains
             ! Patch based approach
             if( motion_correct_with_patched ) then
                 select case(trim(params_glob%mcconvention))
-                case('first','relion')
-                    ! the threshold is slighly increased because goodness of fit is always higher
-                    ! when calculated with reference to the first frame
-                    effective_patch_fit_threshold = PATCH_FIT_THRESHOLD + 1.0
-                case DEFAULT
-                    effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
+                    case('first','relion')
+                        ! the threshold is slighly increased because goodness of fit is always higher
+                        ! when calculated with reference to the first frame
+                        effective_patch_fit_threshold = PATCH_FIT_THRESHOLD + 1.0
+                    case DEFAULT
+                        effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
                 end select
                 nxpatch = params_glob%nxpatch
                 nypatch = params_glob%nypatch
@@ -167,7 +168,7 @@ contains
                         nxpatch = max(1,nint(real(nxpatch)/2.))
                         nypatch = max(1,nint(real(nypatch)/2.))
                         if( nxpatch * nypatch >= 2 )then
-                            patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
+                            patched_shift_fname = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
                             call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
                             patch_success = all(goodnessoffit < effective_patch_fit_threshold)
                         endif
@@ -242,10 +243,10 @@ contains
     end subroutine iterate
 
     subroutine calc_npatches( moviename, smpd, cline, o )
-        character(len=*), intent(in)    :: moviename
-        real,             intent(in)    :: smpd
-        class(cmdline),   intent(inout) :: cline
-        class(ori),       intent(inout) :: o
+        class(string),  intent(in)    :: moviename
+        real,           intent(in)    :: smpd
+        class(cmdline), intent(inout) :: cline
+        class(ori),     intent(inout) :: o
         integer :: patchsz(2),pixsz(2),nx,ny
         real    :: physz(2)
         if( trim(params_glob%mcpatch).eq.'yes' )then
@@ -278,14 +279,14 @@ contains
     function get_moviename( self, which ) result( moviename )
         class(motion_correct_iter), intent(in) :: self
         character(len=*),           intent(in) :: which
-        character(len=:), allocatable  :: moviename
+        type(string) :: moviename
         select case( which )
             case('intg')
-                allocate(moviename, source=trim(self%moviename_intg))
+                moviename = self%moviename_intg
             case('forctf')
-                allocate(moviename, source=trim(self%moviename_forctf))
+                moviename = self%moviename_forctf
             case('thumb')
-                allocate(moviename, source=trim(self%moviename_thumb))
+                moviename = self%moviename_thumb
             case DEFAULT
                 THROW_HARD('unsupported which flag; get_self%moviename')
         end select

@@ -497,7 +497,6 @@ contains
         end do
     end subroutine fill_r_3d
 
-
     !>  TEST ROUTINE
     subroutine test_tvfilter( ldim, smpd, lambda )
         integer, intent(in) :: ldim(3)
@@ -517,10 +516,10 @@ contains
         call img_ref%add(img_tmp)
         call img_ref%add_gauran(0.5)
         call img_tmp%kill
-        call img_ref%write('test_tvfilter.mrc')
+        call img_ref%write(string('test_tvfilter.mrc'))
         img_filt = img_ref
         call tv%apply_filter(img_filt, lambda)
-        call img_filt%write('test_tvfilter_filt.mrc')
+        call img_filt%write(string('test_tvfilter_filt.mrc'))
         in = 10
         jn = 10
         do j=1,jn
@@ -532,7 +531,7 @@ contains
                 cc = img_filt%real_corr(img_tmp)
                 if( cc < 0.99 )then
                     write(logfhandle,*)'*** Fail at trial: ',i,' - ',j
-                    call img_tmp%write('test_tvfilter_filt_'//int2str(i)//'_'//int2str(j)//'.mrc')
+                    call img_tmp%write(string('test_tvfilter_filt_'//int2str(i)//'_'//int2str(j)//'.mrc'))
                 endif
             enddo
             call tv%kill
@@ -558,10 +557,10 @@ contains
         call img_ref%add(img_tmp)
         call img_ref%add_gauran(0.5)
         call img_tmp%kill
-        call img_ref%write('test_tvfilter.mrc')
+        call img_ref%write(string('test_tvfilter.mrc'))
         img_filt = img_ref
         call tv%apply_filter_3d(img_filt, lambda)
-        call img_filt%write('test_tvfilter_filt_3d.mrc')
+        call img_filt%write(string('test_tvfilter_filt_3d.mrc'))
         in = 10
         jn = 10
         do j=1,jn
@@ -573,7 +572,7 @@ contains
                 cc = img_filt%real_corr(img_tmp)
                 if( cc < 0.99 )then
                     write(logfhandle,*)'*** Fail at trial: ',i,' - ',j
-                    call img_tmp%write('test_tvfilter_filt_3d_'//int2str(i)//'_'//int2str(j)//'.mrc')
+                    call img_tmp%write(string('test_tvfilter_filt_3d_'//int2str(i)//'_'//int2str(j)//'.mrc'))
                 endif
             enddo
             call tv%kill

@@ -787,43 +787,45 @@ contains
         integer,                 intent(in)    :: ibatch
         logical,                 intent(inout) :: success
         integer :: funit,io_stat
-        character(len=LONGSTRLEN) :: fname
+        type(string) :: fname
         success = .true.
-        fname   = trim(POLARIZED_PTCLS)//'_'//int2str(ibatch)//BIN_EXT
-        if( .not.file_exists(trim(fname)) )then
+        fname   = POLARIZED_PTCLS//'_'//int2str(ibatch)//BIN_EXT
+        if( .not.file_exists(fname) )then
             success = .false.
             return
         endif
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('read_pft_array; fopen failed: '//trim(fname), io_stat)
+        call fileiochk('read_pft_array; fopen failed: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) self%pfts_ptcls
         call fclose(funit)
-        fname = trim(POLARIZED_CTFS)//'_'//int2str(ibatch)//BIN_EXT
-        if( .not.file_exists(trim(fname)) )then
+        fname = POLARIZED_CTFS//'_'//int2str(ibatch)//BIN_EXT
+        if( .not.file_exists(fname) )then
             success = .false.
             return
         endif
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('read_pft_array; fopen failed: '//trim(fname), io_stat)
+        call fileiochk('read_pft_array; fopen failed: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) self%ctfmats
         call fclose(funit)
+        call fname%kill
     end subroutine read_ptcls_ctfs
 
     subroutine write_ptcls_ctfs( self, ibatch )
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: ibatch
-        integer :: funit,io_stat
-        character(len=LONGSTRLEN) :: fname
-        fname = trim(POLARIZED_PTCLS)//'_'//int2str(ibatch)//BIN_EXT
+        integer      :: funit,io_stat
+        type(string) :: fname
+        fname = POLARIZED_PTCLS//'_'//int2str(ibatch)//BIN_EXT
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("write_pft_array: "//trim(fname),io_stat)
+        call fileiochk("write_pft_array: "//fname%to_char(),io_stat)
         write(unit=funit,pos=1) self%pfts_ptcls
         call fclose(funit)
-        fname = trim(POLARIZED_CTFS)//'_'//int2str(ibatch)//BIN_EXT
+        fname = POLARIZED_CTFS//'_'//int2str(ibatch)//BIN_EXT
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("write_pft_array: "//trim(fname),io_stat)
+        call fileiochk("write_pft_array: "//fname%to_char(),io_stat)
         write(unit=funit,pos=1) self%ctfmats
         call fclose(funit)
+        call fname%kill
     end subroutine write_ptcls_ctfs
 
     subroutine print( self )

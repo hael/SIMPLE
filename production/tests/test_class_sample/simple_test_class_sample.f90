@@ -15,8 +15,8 @@ call print_class_sample(cs(3))
 
 print *, '*********************'
 
-call write_class_samples(cs, 'clssmp.bin')
-call read_class_samples(cs2, 'clssmp.bin')
+call write_class_samples(cs, string('clssmp.bin'))
+call read_class_samples(cs2, string('clssmp.bin'))
 
 print *, class_samples_same(cs(1), cs2(1))
 print *, class_samples_same(cs(2), cs2(2))

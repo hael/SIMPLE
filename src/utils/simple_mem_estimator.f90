@@ -10,10 +10,10 @@ contains
         class(chash),               intent(inout) :: q_descr
         class(chash),               intent(in)    :: job_descr
         type(parameters), optional, intent(in)    :: extra_params
-        character(len=:), allocatable             :: prg
-        integer :: top, fromp, np, part, io_stat      
+        type(string) :: prg
+        integer      :: top, fromp, np, part, io_stat      
         if(job_descr%isthere("prg")) then
-            prg = job_descr%get("prg")
+            prg   = job_descr%get("prg")
             top   = 0
             fromp = 0
             part  = 1
@@ -21,7 +21,7 @@ contains
             if(job_descr%isthere("fromp")) fromp = str2int(job_descr%get("fromp"), io_stat)
             if(job_descr%isthere("part"))  part  = str2int(job_descr%get("part"),  io_stat)
             np = top - fromp + 1
-            select case(prg)
+            select case(prg%to_char())
                 case("calc_pspec")
                     write(logfhandle,'(A)') "MEMPSPEC " // int2str(extra_params%box)
                     if(present(extra_params) .and. extra_params%box > 0) then
@@ -53,9 +53,8 @@ contains
                         call q_descr%set('job_memory_per_task', int2str(estimate_mem_usage_scale(part, extra_params%box, extra_params%nthr)))
                     endif
             end select
-            deallocate(prg)
+            call prg%kill
         endif
-        
     end subroutine estimate_mem_usage
     
     function estimate_mem_usage_2D(part, boxsize, nptcls, ncls, nthr) result (memusagerounded)

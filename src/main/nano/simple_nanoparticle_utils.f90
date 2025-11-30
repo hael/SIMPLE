@@ -481,7 +481,7 @@ contains
                 latensor(2,:) = d110/norm2(d110)
                 latensor(3,:) = d111/norm2(d111)
                 do i=1,3
-                    call fopen(funit, file=NNBDL_FILE(i), iostat=ios, status='replace', iomsg=io_msg)
+                    call fopen(funit, file=string(NNBDL_FILE(i)), iostat=ios, status='replace', iomsg=io_msg)
                     call fileiochk("simple_nanoparticle_utils :: nnl_lat; ERROR when opening file "//NNBDL_FILE(i)//'; '//trim(io_msg),ios)
                     ! write header
                     write(funit,'(a)') NNBDL_HEAD
@@ -740,7 +740,7 @@ contains
             list_displacement(i,6) = Uz_local
         enddo
         if( DEBUG )then
-            call fopen(filnum, file='displacement.txt')
+            call fopen(filnum, file=string('displacement.txt'))
             do i = 1, natoms
                 write(filnum,*) list_displacement(i,:)
             enddo
@@ -971,12 +971,12 @@ contains
             strain_array(i,6) = list_eXZ(i,4)
         enddo
         ! output PDB files
-        call Exx_strain%writepdb('Exx_strain.pdb')
-        call Eyy_strain%writepdb('Eyy_strain.pdb')
-        call Ezz_strain%writepdb('Ezz_strain.pdb')
-        call Exy_strain%writepdb('Exy_strain.pdb')
-        call Eyz_strain%writepdb('Eyz_strain.pdb')
-        call Exz_strain%writepdb('Exz_strain.pdb')
+        call Exx_strain%writepdb(string('Exx_strain.pdb'))
+        call Eyy_strain%writepdb(string('Eyy_strain.pdb'))
+        call Ezz_strain%writepdb(string('Ezz_strain.pdb'))
+        call Exy_strain%writepdb(string('Exy_strain.pdb'))
+        call Eyz_strain%writepdb(string('Eyz_strain.pdb'))
+        call Exz_strain%writepdb(string('Exz_strain.pdb'))
         ! Output ideal lattice for visualization
         call write_ideal_lattice_pdb(element, modelFromABC)
         ! kill
@@ -1060,7 +1060,7 @@ contains
             strain_array(i,7) = list_eRR(i,4)
         enddo
         ! output PDB file
-        call Err_strain%writepdb('radial_strain.pdb')
+        call Err_strain%writepdb(string('radial_strain.pdb'))
         call Err_strain%kill
         allocate(list_Ux(natoms,4), list_Uy(natoms,4), list_Uz(natoms,4), source = 0.)
         call Ux_atoms%new(natoms, dummy=.true.)
@@ -1102,23 +1102,23 @@ contains
         enddo
         if( DEBUG )then
             ! PDB files
-            call Ux_atoms%writepdb('Ux.pdb')
-            call Uy_atoms%writepdb('Uy.pdb')
-            call Uz_atoms%writepdb('Uz.pdb')
+            call Ux_atoms%writepdb(string('Ux.pdb'))
+            call Uy_atoms%writepdb(string('Uy.pdb'))
+            call Uz_atoms%writepdb(string('Uz.pdb'))
            ! CSV files
-           call fopen(filnum, file='Ux.csv', iostat=io_stat)
+           call fopen(filnum, file=string('Ux.csv'), iostat=io_stat)
            write (filnum,*) 'ux'
            do i = 1, natoms
                write (filnum,'(A)', advance='yes') trim(real2str(list_Ux(i,4)))
            end do
            call fclose(filnum)
-           call fopen(filnum, file='Uy.csv', iostat=io_stat)
+           call fopen(filnum, file=string('Uy.csv'), iostat=io_stat)
            write (filnum,*) 'uy'
            do i = 1, natoms
                write (filnum,'(A)', advance='yes') trim(real2str(list_Uy(i,4)))
            end do
            call fclose(filnum)
-           call fopen(filnum, file='Uz.csv', iostat=io_stat)
+           call fopen(filnum, file=string('Uz.csv'), iostat=io_stat)
            write (filnum,*) 'uz'
            do i = 1, natoms
                write (filnum,'(A)', advance='yes') trim(real2str(list_Uz(i,4)))
@@ -1146,7 +1146,7 @@ contains
     ! NANOPARTICLE PDB UTILS
 
     subroutine read_pdb2matrix( pdbfile, matrix )
-        character(len=*),  intent(in)    :: pdbfile
+        class(string),     intent(in)    :: pdbfile
         real, allocatable, intent(inout) :: matrix(:,:)
         integer     :: n, i
         type(atoms) :: a
@@ -1165,7 +1165,7 @@ contains
     subroutine write_matrix2pdb( element, matrix, pdbfile, betas )
         character(len=2), intent(in) :: element
         real,             intent(in) :: matrix(:,:)
-        character(len=*), intent(in) :: pdbfile
+        class(string),    intent(in) :: pdbfile
         real, optional,   intent(in) :: betas(size(matrix, dim=2))
         character(len=4) :: atom_name
         integer     :: n, i
@@ -1205,7 +1205,7 @@ contains
         logical     :: betas_present
         betas_present = present(betas)
         ! check that the file extension is .pdb
-        if( fname2ext(pdbfile) .ne. 'pdb' ) THROW_HARD('Wrong extension input file! Should be pdb')
+        if( fname2ext(string(pdbfile)) .ne. 'pdb' ) THROW_HARD('Wrong extension input file! Should be pdb')
         atom_name = trim(adjustl(element))//'  '
         n = size(lattice, dim=1)
         call a%new(n)
@@ -1221,7 +1221,7 @@ contains
             if( betas_present ) call a%set_beta(i, betas(i))
         enddo
         ! write PDB
-        call a%writepdb(pdbfile)
+        call a%writepdb(string(pdbfile))
         call a%kill
     end subroutine write_ideal_lattice_pdb
 

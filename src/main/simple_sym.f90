@@ -1,10 +1,10 @@
 ! defines protein point-group symmetries
 module simple_sym
-! include 'simple_lib.f08'
+use simple_math
 use simple_ori
 use simple_oris
-use simple_math
 use simple_rnd
+use simple_string
 use simple_string_utils
 implicit none
 
@@ -2035,8 +2035,8 @@ contains
         write(logfhandle,'(A)')'>>> SPIRAL'
         call os%new(1000, is_ptcl=.false.)
         call se%build_refspiral(os)
-        call os%write(pgrp//'.txt')
-        call os%write2bild(pgrp//'.bild')
+        call os%write(string(pgrp//'.txt'))
+        call os%write2bild(string(pgrp//'.bild'))
         ! redundancy
         n = 0
         call oj%new(is_ptcl=.false.)

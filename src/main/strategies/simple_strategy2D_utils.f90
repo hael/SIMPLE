@@ -39,13 +39,13 @@ contains
         real,        allocatable, intent(inout) :: mm(:,:)
         real,              parameter  :: LP_BIN = 20.
         logical,           parameter  :: DEBUG = .true.
-        character(len=:), allocatable :: frcs_fname
-        real,             allocatable :: frcs(:,:), filter(:)
-        logical,          allocatable :: l_msk(:,:,:)
-        type(image)                   :: img_msk
-        type(class_frcs)              :: clsfrcs
-        integer                       :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
-        real                          :: smpd, mskrad
+        real,    allocatable :: frcs(:,:), filter(:)
+        logical, allocatable :: l_msk(:,:,:)
+        type(string)         :: frcs_fname
+        type(image)          :: img_msk
+        type(class_frcs)     :: clsfrcs
+        integer              :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
+        real                 :: smpd, mskrad
         call dealloc_imgarr(cavg_imgs)
         ncls      = spproj%os_cls2D%get_noris()
         cavg_imgs = read_cavgs_into_imgarr(spproj)
@@ -62,7 +62,7 @@ contains
             call clsfrcs%read(frcs_fname)
             filtsz = clsfrcs%get_filtsz()
         else
-            THROW_HARD('FRC file: '//trim(frcs_fname)//' does not exist!')
+            THROW_HARD('FRC file: '//frcs_fname%to_char()//' does not exist!')
         endif
         if( allocated(l_non_junk) ) deallocate(l_non_junk)
         call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
@@ -71,7 +71,7 @@ contains
             do i = 1, ncls
                 if( .not. l_non_junk(i) )then
                     cnt = cnt + 1
-                    call cavg_imgs(i)%write('cavgs_junk.mrc', cnt)
+                    call cavg_imgs(i)%write(string('cavgs_junk.mrc'), cnt)
                 endif
             enddo
         endif
@@ -114,11 +114,6 @@ contains
             mm(i,:) = cavg_imgs(i)%minmax(mskrad)
         end do
         !$omp end parallel do
-        ! if( DEBUG )then
-        !     do i = 1, ncls_sel
-        !         call cavg_imgs(i)%write('cavgs_prepped.mrc', i)
-        !     enddo
-        ! endif
         call clsfrcs%kill
     end subroutine prep_cavgs4clustering
 
@@ -578,7 +573,7 @@ contains
             if( clust_info_arr(iclust)%pop == 0 ) cycle
             cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
             call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
-            call write_imgarr(cluster_imgs, trim(fbody)//int2str_pad(iclust,2)//trim(ext))
+            call write_imgarr(cluster_imgs, string(trim(fbody)//int2str_pad(iclust,2)//trim(ext)))
             call dealloc_imgarr(cluster_imgs)
         end do
     end subroutine write_aligned_cavgs

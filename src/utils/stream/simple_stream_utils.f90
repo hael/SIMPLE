@@ -26,40 +26,40 @@ public :: wait_for_folder
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter   :: PROJNAME_CHUNK     = 'chunk'
-character(len=STDLEN), parameter   :: CLS_CHUNK_REJECTED = 'cls_rejected_chunks.mrc'
-logical,               parameter   :: DEBUG_HERE         = .false.
-integer                            :: ncls_rejected_glob = 0 ! counter of rejected classes
+character(len=*), parameter :: PROJNAME_CHUNK     = 'chunk'
+character(len=*), parameter :: CLS_CHUNK_REJECTED = 'cls_rejected_chunks.mrc'
+logical,          parameter :: DEBUG_HERE         = .false.
+integer                     :: ncls_rejected_glob = 0 ! counter of rejected classes
 
 ! Convenience type to hold information about individual project files
 type projrecord
-    character(len=:), allocatable :: projname               ! project file name
-    integer                       :: micind     = 0         ! index of micrograph in project
-    integer                       :: nptcls     = 0         ! # of particles
-    integer                       :: nptcls_sel = 0         ! # of particles (state=1)
-    logical                       :: included   = .false.   ! whether record has been imported
+    type(string) :: projname               ! project file name
+    integer      :: micind     = 0         ! index of micrograph in project
+    integer      :: nptcls     = 0         ! # of particles
+    integer      :: nptcls_sel = 0         ! # of particles (state=1)
+    logical      :: included   = .false.   ! whether record has been imported
 end type projrecord
 
 ! Convenience type to hold information about processes
 type procrecord
-    character(len=:), allocatable :: id                     ! unique ID
-    character(len=:), allocatable :: folder                 ! location
-    character(len=:), allocatable :: projfile               ! filename
-    character(len=:), allocatable :: volume                 ! volume filename
-    character(len=:), allocatable :: alnvolume              ! aligned volume filename
-    logical                       :: submitted = .false.    ! process has been submitted (running)
-    logical                       :: complete  = .false.    ! is complete
-    logical                       :: included  = .false.    ! has been post-processed/analyzed
+    type(string) :: id                     ! unique ID
+    type(string) :: folder                 ! location
+    type(string) :: projfile               ! filename
+    type(string) :: volume                 ! volume filename
+    type(string) :: alnvolume              ! aligned volume filename
+    logical      :: submitted = .false.    ! process has been submitted (running)
+    logical      :: complete  = .false.    ! is complete
+    logical      :: included  = .false.    ! has been post-processed/analyzed
 end type procrecord
 
 ! Convenience type to keep track of converged chunks
 type projs_list
-    integer                                :: n = 0         ! # of elements in list
-    character(len=LONGSTRLEN), allocatable :: projfiles(:)  ! project file filenames
-    integer,                   allocatable :: ids(:)        ! unique ID
-    logical,                   allocatable :: busy(:)       ! true after submission and until completion is detected
-    logical,                   allocatable :: processed(:)  ! chunk: has converged; set: has been clustered/selected/matched
-    logical,                   allocatable :: imported(:)   ! whether the set has been imported into the pool
+    integer                   :: n = 0         ! # of elements in list
+    type(string), allocatable :: projfiles(:)  ! project file filenames
+    integer,      allocatable :: ids(:)        ! unique ID
+    logical,      allocatable :: busy(:)       ! true after submission and until completion is detected
+    logical,      allocatable :: processed(:)  ! chunk: has converged; set: has been clustered/selected/matched
+    logical,      allocatable :: imported(:)   ! whether the set has been imported into the pool
   contains
     procedure :: append
     procedure :: kill_list
@@ -67,18 +67,18 @@ end type projs_list
 
 ! Type to handle a single chunk
 type stream_chunk
-    type(sp_project)                       :: spproj                ! master project
-    type(qsys_env)                         :: qenv                  ! submission handler
-    type(cmdline)                          :: cline
-    character(len=LONGSTRLEN), allocatable :: orig_stks(:)          ! list of stacks
-    character(len=LONGSTRLEN)              :: path, projfile_out    ! physical location
-    integer                                :: id                    ! unique id
-    integer                                :: it                    ! # of iterations performed
-    integer                                :: nmics                 ! # of micrographs
-    integer                                :: nptcls                ! # number of particles
-    logical                                :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
-    logical                                :: converged  = .false.  ! whether 2D analysis is over
-    logical                                :: available  = .true.   ! has been initialized but no 2D analysis peformed
+    type(sp_project)          :: spproj                ! master project
+    type(qsys_env)            :: qenv                  ! submission handler
+    type(cmdline)             :: cline
+    type(string), allocatable :: orig_stks(:)          ! list of stacks
+    type(string)              :: path, projfile_out    ! physical location
+    integer                   :: id                    ! unique id
+    integer                   :: it                    ! # of iterations performed
+    integer                   :: nmics                 ! # of micrographs
+    integer                   :: nptcls                ! # number of particles
+    logical                   :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
+    logical                   :: converged  = .false.  ! whether 2D analysis is over
+    logical                   :: available  = .true.   ! has been initialized but no 2D analysis peformed
   contains
     procedure          :: init_chunk
     procedure, private :: copy
@@ -121,15 +121,16 @@ contains
         class(cmdline),      intent(in)    :: cline
         integer,             intent(in)    :: id
         class(sp_project),   intent(in)    :: master_spproj
-        character(len=STDLEN)              :: chunk_part_env, exec
-        integer                            :: envlen
+        type(string)          :: exec, str_prg
+        character(len=STDLEN) :: chunk_part_env
+        integer               :: envlen
         call debug_print('in chunk%init '//int2str(id))
         call self%spproj%kill
         self%id     = id
         self%it     = 0
         self%nmics  = 0 ! # of micrographs & stacks in chunk
         self%nptcls = 0
-        self%path   = './'//trim(DIR_CHUNK)//int2str(id)//'/'
+        self%path   = './'//DIR_CHUNK//int2str(id)//'/'
         self%cline  = cline
         if( .not.cline%defined('box') )      THROW_HARD('Missing BOX on chunk command-line')
         if( .not.cline%defined('box_crop') ) THROW_HARD('Missing BOX_CROP on chunk command-line')
@@ -138,27 +139,29 @@ contains
         self%projfile_out    = ''
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
-        if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
+        str_prg              = self%cline%get_carg('prg')
+        if( str_prg%has_substr('abinitio') )then
             exec = 'simple_exec'
         else
             exec = 'simple_private_exec'
         endif
         if( params_glob%nparts_chunk == 1 )then
             ! shared memory
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin=trim(exec), qsys_nthr=params_glob%nthr2D)
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin=exec, qsys_nthr=params_glob%nthr2D)
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin=trim(exec), qsys_name='local')
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin=exec, qsys_name=string('local'))
             call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
-            if(envlen > 0) call self%spproj%compenv%set(1,'qsys_partition',trim(chunk_part_env))
+            if(envlen > 0) call self%spproj%compenv%set(1,'qsys_partition', trim(chunk_part_env))
         endif
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')
-        if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
+        call self%orig_stks%kill
         self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .true.
+        call str_prg%kill
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init_chunk
 
@@ -170,13 +173,13 @@ contains
         dest%qenv         = src%qenv
         dest%cline        = src%cline
         dest%orig_stks    = src%orig_stks(:)
-        dest%path         = trim(src%path)
-        dest%projfile_out = trim(src%projfile_out)
+        dest%path         = src%path
+        dest%projfile_out = src%projfile_out
         dest%id           = src%id
         dest%it           = src%it
         dest%nmics        = src%nmics
         dest%nptcls       = src%nptcls
-        dest%toanalyze2D   = src%toanalyze2D
+        dest%toanalyze2D  = src%toanalyze2D
         dest%converged    = src%converged
         dest%available    = src%available
     end subroutine copy
@@ -212,8 +215,8 @@ contains
 
     function get_projfile_fname( self )result( fname )
         class(stream_chunk), intent(in) :: self
-        character(len=LONGSTRLEN) :: fname
-        fname = trim(self%path)//trim(self%projfile_out)
+        type(string) :: fname
+        fname = self%path//self%projfile_out
     end function get_projfile_fname
 
     ! Initiates 2D analysis
@@ -221,26 +224,27 @@ contains
         class(stream_chunk), intent(inout) :: self
         logical,             intent(in)    :: calc_pspec
         logical,   optional, intent(in)    :: makecavgs
-        character(len=STDLEN), allocatable :: bins(:)
-        type(cmdline),         allocatable :: clines(:)
-        type(cmdline)              :: cline_pspec
-        character(len=XLONGSTRLEN) :: cwd
-        integer                    :: nptcls_sel, nclines
-        logical                    :: l_makecavgs
+        type(string),  allocatable :: bins(:)
+        type(cmdline), allocatable :: clines(:)
+        type(cmdline) :: cline_pspec
+        type(string)  :: cwd, str_prg
+        integer       :: nptcls_sel, nclines
+        logical       :: l_makecavgs
         call debug_print('in chunk%analyze2D '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
         l_makecavgs = .false.
         if( present(makecavgs) )l_makecavgs = makecavgs
         call simple_mkdir(self%path)
-        call chdir(self%path)
+        call simple_chdir(self%path)
         call simple_getcwd(cwd)
-        cwd_glob    = trim(cwd)
-        self%projfile_out = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
+        CWD_GLOB    = cwd%to_char()
+        self%projfile_out = PROJNAME_CHUNK//METADATA_EXT
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         nclines = 1
-        if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
+        str_prg = self%cline%get_carg('prg')
+        if( str_prg%has_substr('abinitio') )then
             allocate(clines(nclines))
         else
             if( calc_pspec ) nclines = nclines + 1
@@ -259,7 +263,7 @@ contains
             endif
         endif
         call self%cline%set('projfile', self%projfile_out)
-        call self%cline%set('projname', trim(PROJNAME_CHUNK))
+        call self%cline%set('projname', PROJNAME_CHUNK)
         call self%spproj%update_projinfo(self%cline)
         call self%spproj%write()
         ! 2D analysis
@@ -270,21 +274,23 @@ contains
             ! submission
             nclines = nclines+1
             allocate(bins(nclines))
-            bins(1:nclines-1) = trim(self%qenv%get_exec_bin())
+            bins(1:nclines-1) = self%qenv%get_exec_bin()
             bins(nclines)     = 'simple_exec'
-            call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d', exec_bins=bins(:))
+            call self%qenv%exec_simple_prgs_in_queue_async(clines, string('./distr_chunk2D'), string('simple_log_chunk2d'), exec_bins=bins(:))
         else
             ! submission
-            call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d')
+            call self%qenv%exec_simple_prgs_in_queue_async(clines, string('./distr_chunk2D'), string('simple_log_chunk2d'))
         endif
-        call chdir('..')
-        call simple_getcwd(cwd_glob)
+        call simple_chdir('..')
+        call simple_getcwd(cwd)
+        CWD_GLOB = cwd%to_char()
         ! cleanup
         call self%spproj%kill
         call cline_pspec%kill
         call clines(:)%kill
         deallocate(clines)
         call self%qenv%kill
+        call str_prg%kill
         ! chunk is now busy
         self%available = .false.
         self%converged = .false.
@@ -297,18 +303,18 @@ contains
         class(stream_chunk), intent(inout) :: self
         class(cmdline),      intent(in)    :: cline_analyze2D
         logical,             intent(in)    :: need_sigma
-        type(cmdline)                 :: cline_pspec
-        character(len=XLONGSTRLEN)    :: cwd
-        character(len=:), allocatable :: exec
+        type(cmdline) :: cline_pspec
+        type(string)  :: cwd
+        type(string)  :: exec
         integer :: nptcls_sel
         call debug_print('in calc_sigma2 '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
         call simple_mkdir(self%path)
-        call chdir(self%path)
+        call simple_chdir(self%path)
         call simple_getcwd(cwd)
-        cwd_glob    = trim(cwd)
-        self%projfile_out = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
+        CWD_GLOB    = cwd%to_char()
+        self%projfile_out = PROJNAME_CHUNK//METADATA_EXT
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         call cline_pspec%set('prg',      'calc_pspec_distr')
@@ -318,7 +324,7 @@ contains
         call cline_pspec%set('nparts',   1)
         if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
         call cline_pspec%set('projfile', self%projfile_out)
-        call cline_pspec%set('projname', trim(PROJNAME_CHUNK))
+        call cline_pspec%set('projname', PROJNAME_CHUNK)
         call self%spproj%update_projinfo(cline_pspec)
         call self%spproj%write()
         self%available  = .false.
@@ -326,17 +332,18 @@ contains
         self%it         = 1
         if( need_sigma )then
             ! making sure the executable is *always* simple_private_exec
-            exec = trim(self%qenv%get_exec_bin())
-            call replace_substr(exec,'/simple_exec','/simple_private_exec',one=.true.,back=.true.)
+            exec = self%qenv%get_exec_bin()
+            call exec%substr_replace('/simple_exec','/simple_private_exec',one=.true.,back=.true.)
             ! submission
             self%converged  = .false.
-            call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, './distr_chunk2D', 'simple_log_chunk2d', exec_bin=exec)
+            call self%qenv%exec_simple_prg_in_queue_async(cline_pspec, string('./distr_chunk2D'), string('simple_log_chunk2d'), exec_bin=exec)
             write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED SIGMA2 CALCULATION WITH ',nptcls_sel,' PARTICLES'
         else
             self%converged  = .true. ! nothing to calculate
         endif
-        call chdir('..')
-        call simple_getcwd(cwd_glob)
+        call simple_chdir('..')
+        call simple_getcwd(cwd)
+        CWD_GLOB = cwd%to_char()
         ! cleanup
         call self%spproj%kill
         call cline_pspec%kill
@@ -348,21 +355,21 @@ contains
     subroutine read( self, box )
         class(stream_chunk), intent(inout) :: self
         integer,             intent(in)    :: box
-        type(image)                :: img, avg
-        character(len=XLONGSTRLEN) :: projfile
+        type(image)  :: img, avg
+        type(string) :: projfile
         call debug_print('in chunk%read '//int2str(self%id))
         if( .not.self%converged )THROW_HARD('cannot read chunk prior to convergence')
         ! doc & parameters
-        projfile = trim(self%path)//trim(self%projfile_out)
+        projfile = self%path//self%projfile_out
         call self%spproj%read(projfile)
         ! classes, to account for nparts /= nparts_chunk
         if( self%toanalyze2D )then
             call img%new([box,box,1],1.0)
             call avg%new([box,box,1],1.0)
-            call average_into(trim(self%path)//'cavgs_even_part')
-            call average_into(trim(self%path)//'cavgs_odd_part')
-            call average_into(trim(self%path)//'ctfsqsums_even_part')
-            call average_into(trim(self%path)//'ctfsqsums_odd_part')
+            call average_into(self%path//'cavgs_even_part')
+            call average_into(self%path//'cavgs_odd_part')
+            call average_into(self%path//'ctfsqsums_even_part')
+            call average_into(self%path//'ctfsqsums_odd_part')
             call img%kill
             call avg%kill
         endif
@@ -370,25 +377,25 @@ contains
         contains
 
             subroutine average_into(tmpl)
-                character(len=*), intent(in) :: tmpl
-                character(len=XLONGSTRLEN)   :: fname
-                integer                      :: icls, ipart, numlen_chunk, iostat
+                class(string), intent(in) :: tmpl
+                type(string) :: fname
+                integer      :: icls, ipart, numlen_chunk, iostat
                 if( params_glob%nparts_chunk > 1  )then
                     numlen_chunk = len(int2str(params_glob%nparts_chunk)) ! as per parameters
                     call img%zero_and_flag_ft
                     do icls = 1,params_glob%ncls_start
                         call avg%zero_and_flag_ft
                         do ipart = 1,params_glob%nparts_chunk
-                            fname = trim(tmpl)//int2str_pad(ipart,numlen_chunk)//trim(params_glob%ext)
+                            fname = tmpl//int2str_pad(ipart,numlen_chunk)//params_glob%ext%to_char()
                             call img%read(fname,icls)
                             call avg%add(img)
                         enddo
                         call avg%div(real(params_glob%nparts_chunk))
-                        call avg%write(trim(tmpl)//trim(params_glob%ext),icls)
+                        call avg%write(tmpl//params_glob%ext%to_char(),icls)
                     enddo
                 else
-                    fname = trim(tmpl)//'1'//trim(params_glob%ext)
-                    iostat = rename(fname,trim(tmpl)//trim(params_glob%ext))
+                    fname = tmpl//'1'//params_glob%ext%to_char()
+                    call simple_rename(fname,tmpl//params_glob%ext)
                 endif
             end subroutine average_into
 
@@ -397,11 +404,11 @@ contains
     ! split sigmas into individually named per stack documents
     subroutine split_sigmas_into( self, folder )
         use simple_euclid_sigma2, only: split_sigma2_into_groups, sigma2_star_from_iter
-        class(stream_chunk),        intent(in) :: self
-        character(len=*),           intent(in) :: folder
-        character(len=LONGSTRLEN), allocatable :: stks(:)
-        character(len=:),          allocatable :: ext, fbody, fname, dest
-        integer :: i
+        class(stream_chunk), intent(in) :: self
+        class(string),       intent(in) :: folder
+        type(string), allocatable :: stks(:)
+        type(string) :: ext, fbody, fname, dest
+        integer      :: i
         if( trim(params_glob%sigma_est).eq.'group' )then
             ! one star file with # of micrograph/stack groups -> # of micrograph groups files
             allocate(stks(self%nmics))
@@ -409,15 +416,15 @@ contains
                 fname   = basename(self%orig_stks(i))
                 ext     = fname2ext(fname)
                 fbody   = get_fbody(fname, ext)
-                stks(i) = trim(folder)//'/'//trim(fbody)//trim(STAR_EXT)
+                stks(i) = folder//'/'//fbody//STAR_EXT
             enddo
-            fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
+            fname = self%path//sigma2_star_from_iter(self%it)
             call split_sigma2_into_groups(fname, stks)
             deallocate(stks)
         else
             ! one star file
-            fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
-            dest  = trim(folder)//'/chunk_'//int2str(self%id)//trim(STAR_EXT)
+            fname = self%path//sigma2_star_from_iter(self%it)
+            dest  = folder//'/chunk_'//int2str(self%id)//STAR_EXT
             call simple_copy_file(fname,dest)
         endif
     end subroutine split_sigmas_into
@@ -428,8 +435,8 @@ contains
         type(cmdline),  allocatable, intent(inout) :: clines(:)
         type(cmdline),    allocatable :: tmp(:)
         type(cmdline)                 :: cline_make_cavgs
-        character(len=:), allocatable :: finalcavgs
-        integer :: n
+        type(string) :: finalcavgs
+        integer :: n, i
         if( .not.allocated(clines) ) THROW_HARD('Fatal error gen_final_cavgs')
         finalcavgs = 'final_cavgs.mrc'
         call cline_make_cavgs%set('prg',        'make_cavgs')
@@ -447,7 +454,9 @@ contains
         n = size(clines)
         allocate(tmp(1:n),source=clines(1:n))
         call clines(:)%kill; deallocate(clines); allocate(clines(n+1))
-        clines(1:n) = tmp(1:n)
+        do i = 1, n
+            clines(i) = tmp(i)
+        end do
         clines(n+1) = cline_make_cavgs
         call tmp(:)%kill; call cline_make_cavgs%kill; deallocate(tmp)
     end subroutine gen_final_cavgs
@@ -464,33 +473,34 @@ contains
     ! to interrupt processing
     subroutine terminate_chunk( self )
         class(stream_chunk), intent(inout) :: self
-        character(len=XLONGSTRLEN)  :: cwd
-        integer                     :: ipart, numlen
+        type(string) :: cwd
+        integer      :: ipart, numlen
         if( self%id == 0 )   return
         if( file_exists(self%path) )then
             numlen = len(int2str(params_glob%nparts_chunk))
-            call chdir(self%path)
+            call simple_chdir(self%path)
             call simple_getcwd(cwd)
-            cwd_glob = trim(cwd)
+            CWD_GLOB = cwd%to_char()
             call qsys_cleanup(keep2D=.false.)
             do ipart = 1,params_glob%nparts_chunk
-                call simple_touch(trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen),errmsg="chunk%terminate_chunk")
+                call simple_touch(JOB_FINISHED_FBODY//int2str_pad(ipart,numlen))
             enddo
-            call simple_touch('CAVGASSEMBLE_FINISHED',errmsg="chunk%terminate_chunk")
-            call chdir('..')
-            call simple_getcwd(cwd_glob)
+            call simple_touch('CAVGASSEMBLE_FINISHED')
+            call simple_chdir('..')
+            call simple_getcwd(cwd)
+            CWD_GLOB = cwd%to_char()
         endif
     end subroutine terminate_chunk
 
     ! get & display convergence stats
     subroutine display_iter( self )
         class(stream_chunk), intent(inout) :: self
-        type(oris)                 :: os
-        character(len=XLONGSTRLEN) :: fname
-        real                       :: mi_class,frac,corr
-        integer                    :: it
-        fname = trim(self%path)//trim(STATS_FILE)
-        call debug_print('in chunk%display_iter '//int2str(self%id)//' '//trim(fname))
+        type(oris)   :: os
+        type(string) :: fname
+        real         :: mi_class,frac,corr
+        integer      :: it
+        fname = self%path//STATS_FILE
+        call debug_print('in chunk%display_iter '//int2str(self%id)//' '//fname%to_char())
         if( file_exists(fname) )then
             call os%new(1,is_ptcl=.false.)
             call os%read(fname)
@@ -511,15 +521,18 @@ contains
     ! Whether 2D analysis is complete
     logical function has_converged( self )
         class(stream_chunk), intent(inout) :: self
+        type(string) :: str_prg
         if( .not.self%converged )then
             if( self%toanalyze2D )then
-                if( str_has_substr(self%cline%get_carg('prg'), 'abinitio') )then
-                    self%converged = file_exists(trim(self%path)//trim(ABINITIO2D_FINISHED))
+                str_prg = self%cline%get_carg('prg')
+                if( str_prg%has_substr('abinitio') )then
+                    self%converged = file_exists(self%path//ABINITIO2D_FINISHED)
                 else
-                    self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
+                    self%converged = file_exists(self%path//CLUSTER2D_FINISHED)
                 endif
+                call str_prg%kill
             else
-                self%converged = file_exists(trim(self%path)//trim(CALCPSPEC_FINISHED))
+                self%converged = file_exists(self%path//CALCPSPEC_FINISHED)
             endif
         endif
         has_converged  = self%converged
@@ -529,22 +542,21 @@ contains
     subroutine reject( self, res_thresh, ndev)
         class(stream_chunk), intent(inout) :: self
         real,                intent(in)    :: res_thresh, ndev
-        type(image)                   :: img
-        logical,          allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
-        integer,          allocatable :: pops(:)
-        character(len=:), allocatable :: cavgs
-        character(len=XLONGSTRLEN)    :: projfile
-        real                  :: smpd_here
-        integer               :: nptcls_rejected, ncls_rejected, iptcl, box
-        integer               :: icls, ncls, ncls_rejected_populated, ncls_populated
+        logical, allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
+        integer, allocatable :: pops(:)
+        type(image)  :: img
+        type(string) :: cavgs, projfile
+        real         :: smpd_here
+        integer      :: nptcls_rejected, ncls_rejected, iptcl, box
+        integer      :: icls, ncls, ncls_rejected_populated, ncls_populated
         call debug_print('in chunk%reject '//int2str(self%id))
-        projfile        = trim(self%path)//self%projfile_out
+        projfile        = self%path//self%projfile_out
         ncls_rejected   = 0
         nptcls_rejected = 0
         call self%spproj%read_segment('cls2D',projfile)
         call self%spproj%read_segment('out',  projfile)
         call self%spproj%get_cavgs_stk(cavgs, ncls, smpd_here)
-        cavgs = trim(self%path)//basename(cavgs)
+        cavgs = self%path//basename(cavgs)
         box   = self%cline%get_iarg('box_crop')
         allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
         allocate(pops(ncls),source=nint(self%spproj%os_cls2D%get_all('pop')))
@@ -586,7 +598,7 @@ contains
                     ! update to global counter, does not include empty classes
                     ncls_rejected_glob = ncls_rejected_glob + 1
                     call img%read(cavgs,icls)
-                    call img%write(CLS_CHUNK_REJECTED,ncls_rejected_glob)
+                    call img%write(string(CLS_CHUNK_REJECTED),ncls_rejected_glob)
                 endif
             enddo
             call img%kill
@@ -610,7 +622,7 @@ contains
     subroutine print_info( self )
         class(stream_chunk), intent(inout) :: self
         print *,'self%id           : ',self%id
-        print *,'self%path         : ',trim(self%path)
+        print *,'self%path         : ',self%path%to_char()
         print *,'self%it           : ',self%it
         print *,'self%nmics        : ',self%nmics
         print *,'self%nptcls       : ',self%nptcls
@@ -629,7 +641,7 @@ contains
         self%nptcls    = 0
         self%path      = ''
         self%projfile_out = ''
-        if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
+        call self%orig_stks%kill
         self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .false.
@@ -639,17 +651,17 @@ contains
 
     subroutine append( self, fname, id, processed )
         class(projs_list), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(string),     intent(in)    :: fname
         integer,           intent(in)    :: id
         logical,           intent(in)    :: processed
-        character(len=LONGSTRLEN), allocatable :: tmpstr(:)
-        integer,                   allocatable :: tmpint(:)
-        logical,                   allocatable :: tmplog(:)
+        type(string), allocatable :: tmpstr(:)
+        integer,      allocatable :: tmpint(:)
+        logical,      allocatable :: tmplog(:)
         integer :: ind
         if( self%n == 0 )then
             allocate(self%projfiles(1),self%ids(1),self%busy(1),&
                 &self%processed(1),self%imported(1))
-            self%projfiles(1) = trim(fname)
+            self%projfiles(1) = fname
             self%ids(1)       = id
             self%busy(1)      = .false.
             self%processed(1) = processed
@@ -662,7 +674,7 @@ contains
             call move_alloc(self%processed, tmplog)
             allocate(self%projfiles(ind), self%ids(ind),self%processed(ind))
             self%projfiles(1:self%n) = tmpstr(:)
-            self%projfiles(ind)      = trim(fname)
+            self%projfiles(ind)      = fname
             self%ids(1:self%n)       = tmpint(:)
             self%ids(ind)            = id
             self%processed(1:self%n) = tmplog(:)
@@ -694,7 +706,7 @@ contains
 
     elemental subroutine kill_projrecord( rec )
         type(projrecord), intent(inout) :: rec
-        if( allocated(rec%projname) ) deallocate(rec%projname)
+        call rec%projname%kill
     end subroutine kill_projrecord
 
     subroutine kill_projrecords( recs )
@@ -711,7 +723,7 @@ contains
         class(projrecord), intent(in)    :: records(:)
         class(sp_project), intent(inout) :: spproj
         type(sp_project)              :: tmpproj
-        character(len=:), allocatable :: stack_name, projname, prev_projname
+        type(string) :: stack_name, projname, prev_projname
         integer :: iptcl, fromp, ifromp, itop, jptcl, nptcls_tot
         integer :: nrecs, nmics, nptcls, imic, micind
         logical :: has_ptcl
@@ -732,11 +744,11 @@ contains
         fromp = 1
         do imic = 1,nmics
             ! read individual project (up to STREAM_NMOVS_SET entries)
-            projname = trim(records(imic)%projname)
-            if( trim(projname) /= trim(prev_projname) )then
+            projname = records(imic)%projname
+            if( projname /= prev_projname )then
                 call tmpproj%kill
                 call tmpproj%read_mic_stk_ptcl2D_segments(projname)
-                prev_projname = trim(projname)
+                prev_projname = projname
             endif
             ! mic
             micind = records(imic)%micind
@@ -746,14 +758,14 @@ contains
             if( nptcls == 0 )cycle
             call spproj%os_stk%transfer_ori(imic, tmpproj%os_stk, micind)
             ! update stack path to absolute
-            stack_name = trim(spproj%get_stkname(imic))
-            if( stack_name(1:1) == '/' )then
+            stack_name = spproj%get_stkname(imic)
+            if( stack_name%to_char([1,1]) == '/' )then
                 ! already absolute path, should always be the case
-            else if( stack_name(1:3) == '../' )then
-                stack_name = simple_abspath(trim(stack_name))
+            else if( stack_name%to_char([1,3]) == '../' )then
+                stack_name = simple_abspath(stack_name)
                 call spproj%os_stk%set(imic, 'stk', stack_name)
             else
-                THROW_HARD('Unexpected file path format for: '//trim(stack_name))
+                THROW_HARD('Unexpected file path format for: '//stack_name%to_char())
             endif
             ! particles
             ifromp = spproj%os_stk%get_fromp(imic)
@@ -775,11 +787,11 @@ contains
 
     subroutine append_procrecord( records, id, folder, projfile )
         type(procrecord), allocatable, intent(inout) :: records(:)
-        character(len=*),              intent(in)    :: id, folder, projfile
+        class(string),                 intent(in)    :: id, folder, projfile
         type(procrecord) :: record
-        record%id        = trim(id)
-        record%folder    = trim(folder)
-        record%projfile  = trim(projfile)
+        record%id        = id
+        record%folder    = folder
+        record%projfile  = projfile
         record%volume    = ''
         record%alnvolume = ''
         record%submitted = .false.
@@ -795,7 +807,11 @@ contains
 
     elemental subroutine kill_procrecord( rec )
         type(procrecord), intent(inout) :: rec
-        if( allocated(rec%id) ) deallocate(rec%id,rec%folder,rec%projfile,rec%volume,rec%alnvolume)
+        call rec%id%kill
+        call rec%folder%kill
+        call rec%projfile%kill
+        call rec%volume%kill
+        call rec%alnvolume%kill
     end subroutine kill_procrecord
 
     subroutine kill_procrecords( recs )
@@ -822,7 +838,7 @@ contains
         logical    :: found
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
-            call os%read(USER_PARAMS)
+            call os%read(string(USER_PARAMS))
             if( os%isthere(1,'tilt_thres') ) then
                 tilt_thres = os%get(1,'tilt_thres')
                 if( abs(tilt_thres-params_glob%tilt_thres) > 0.001) then
@@ -967,16 +983,16 @@ contains
                 ! interactive
                 call json%get(update_arguments, 'interactive', interactive, found)
                 if(found) then
-                    params_glob%interactive = trim(interactive)
+                    params_glob%interactive = interactive
                     params_glob%updated        = 'yes'
-                    write(logfhandle,'(A,A)')'>>> INTERACTIVE UPDATED TO: ', trim(interactive)
+                    write(logfhandle,'(A,A)')'>>> INTERACTIVE UPDATED TO: ', interactive
                 end if
                 ! ring
                 call json%get(update_arguments, 'ring', ring, found)
                 if(found) then
-                    params_glob%ring = trim(ring)
+                    params_glob%ring = ring
                     params_glob%updated        = 'yes'
-                    write(logfhandle,'(A,A)')'>>> RING UPDATED TO: ', trim(ring)
+                    write(logfhandle,'(A,A)')'>>> RING UPDATED TO: ', ring
                 end if
                 ! astigthreshold
                 call json%get(update_arguments, 'astigthreshold', astigthreshold_int, found)
@@ -1013,14 +1029,15 @@ contains
     subroutine wait_for_folder( httpcom, folder, stopmsg )
         use simple_stream_communicator, only:stream_http_communicator
         class(stream_http_communicator), intent(inout) :: httpcom
-        character(len=*),                intent(in)    :: folder, stopmsg
+        class(string),                   intent(in)    :: folder
+        character(len=*),                intent(in)    :: stopmsg
         integer :: i
-        if(.not. dir_exists(trim(folder))) then
-            write(logfhandle, *) ">>> WAITING FOR ", trim(folder), " TO BE GENERATED"
+        if(.not. dir_exists(folder)) then
+            write(logfhandle, *) ">>> WAITING FOR ", folder%to_char(), " TO BE GENERATED"
             ! wait up to 24 hours
             do i = 1, 8640
-                if(dir_exists(trim(folder))) then
-                    write(logfhandle, *) ">>> ", trim(folder), " FOUND"
+                if(dir_exists(folder)) then
+                    write(logfhandle, *) ">>> ", folder%to_char(), " FOUND"
                     exit
                 endif
                 call sleep(10)
@@ -1029,7 +1046,7 @@ contains
                     ! termination
                     write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                     call httpcom%term()
-                    call simple_end(stopmsg)
+                    call simple_end(trim(stopmsg))
                     call EXIT(0)
                 endif
             end do
@@ -1144,7 +1161,7 @@ contains
     end function stream_datestr
 
     subroutine process_selected_references(imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles)
-        character(*),    intent(in)    :: imgfile
+        class(string),   intent(in)    :: imgfile
         real,            intent(in)    :: smpd
         integer,         intent(in)    :: selection(:)
         real,            intent(out)   :: mskdiam
@@ -1174,7 +1191,7 @@ contains
         params%msk  = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
         params%smpd = smpd                              ! for automasking
         if( DEBUG )then
-            print *, 'imgfile:              ', trim(imgfile)
+            print *, 'imgfile:              ', imgfile%to_char()
             print *, 'file_exists(imgfile): ', file_exists(imgfile)
             print *, 'ldim:                 ', ldim(1), ldim(2), ldim(3)
             print *, 'ncls:                 ', ncls
@@ -1204,7 +1221,7 @@ contains
             print *, 'mskrad_in_pix:   ', mskrad_in_pix
             print *, 'box_for_extract: ', box_for_extract
         endif
-        call stkio_w%open(STREAM_SELECTED_REFS//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=nsel)
+        call stkio_w%open(string(STREAM_SELECTED_REFS)//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=nsel)
         do icls=1, nsel
             call stkio_r%get_image(selection(icls), cavgs(icls))
             if( ldim(1) > box_for_extract ) then
@@ -1220,27 +1237,30 @@ contains
         call stkio_w%close
         call stkio_r%close
         ! write jpeg
-        call mrc2jpeg_tiled(STREAM_SELECTED_REFS//STK_EXT, STREAM_SELECTED_REFS//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
+        call mrc2jpeg_tiled(string(STREAM_SELECTED_REFS)//STK_EXT, string(STREAM_SELECTED_REFS)//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
         ! put back pointer to params_glob
         params_glob => params_ptr
         nullify(params_ptr)
     end subroutine process_selected_references
     
     function get_latest_optics_map_id(optics_dir) result (lastmap)
-        character(len=*), optional, intent(in)   :: optics_dir
-        character(len=LONGSTRLEN), allocatable   :: map_list(:)
-        character(len=:),          allocatable   :: map_i_str
-        integer                                  :: imap, prefix_len, testmap, lastmap
+        class(string), optional, intent(in)   :: optics_dir
+        type(string), allocatable :: map_list(:)
+        type(string) :: map_str, map_i_str
+        integer      :: imap, prefix_len, testmap, lastmap
         lastmap = 0
         if(optics_dir .ne. "") then
-            if(dir_exists(optics_dir)) call simple_list_files(optics_dir // '/' // OPTICS_MAP_PREFIX //'*' // TXT_EXT, map_list)
+            if(dir_exists(optics_dir)) call simple_list_files(optics_dir%to_char()//'/'// OPTICS_MAP_PREFIX //'*'//TXT_EXT, map_list)
         endif
         if(allocated(map_list)) then
-            prefix_len = len(optics_dir // '/' // OPTICS_MAP_PREFIX) + 1
+            prefix_len = len(optics_dir%to_char() // '/' // OPTICS_MAP_PREFIX) + 1
             do imap=1, size(map_list)
-                map_i_str = swap_suffix(map_list(imap)(prefix_len:), "", TXT_EXT)
-                testmap = str2int(map_i_str)
+                map_str   = map_list(imap)%to_char([prefix_len,map_list(imap)%strlen_trim()])
+                map_i_str = swap_suffix(map_str, "", TXT_EXT)
+                testmap   = map_i_str%to_int()
                 if(testmap > lastmap) lastmap = testmap
+                call map_str%kill
+                call map_i_str%kill
             enddo
             deallocate(map_list)
         endif

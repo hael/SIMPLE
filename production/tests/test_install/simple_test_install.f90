@@ -33,7 +33,7 @@ call cube%square( nint(real(box)/10.) )
 call cube%shift([4.,-16.,0.])
 call img%add( cube )
 call cube%kill
-call img%write( 'cubes.mrc' )
+call img%write(string('cubes.mrc'))
 call img%kill
 write(logfhandle,*)'>>> WROTE TEST VOLUME cubes.mrc'
 ! test units

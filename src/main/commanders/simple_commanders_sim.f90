@@ -46,7 +46,7 @@ contains
         integer :: i, cnt, ntot
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        if( .not. cline%defined('outstk') ) params%outstk = 'simulated_noise'//params%ext
+        if( .not. cline%defined('outstk') ) params%outstk = string('simulated_noise')//params%ext
         cnt  = 0
         ntot = params%top-params%fromp+1
         do i=params%fromp,params%top
@@ -54,7 +54,7 @@ contains
             call progress(cnt,ntot)
             call build%img%ran
             if( cline%defined('part') )then
-                call build%img%write('simulate_noise_part'//int2str_pad(params%part,params%numlen)//params%ext, cnt)
+                call build%img%write(string('simulate_noise_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char(), cnt)
             else
                 call build%img%write(params%outstk, i)
             endif
@@ -89,7 +89,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params)
         apply_ctf     = trim(params%ctf) .eq. 'yes'
         l_ptcl_frames = cline%defined('nframes') .and. (params%nframes > 1)
-        if( .not. cline%defined('outstk') ) params%outstk = 'simulated_particles'//params%ext
+        if( .not. cline%defined('outstk') ) params%outstk = string('simulated_particles')//params%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
         else
@@ -168,7 +168,7 @@ contains
                 do j = 1,params%nframes
                     call build%img_pad%add(build%imgbatch(j))
                     call build%imgbatch(j)%clip(build%img)
-                    call build%img%write('simulated_particle_frame_'//int2str_pad(i,6)//params%ext, j)
+                    call build%img%write(string('simulated_particle_frame_')//int2str_pad(i,6)//params%ext%to_char(), j)
                 enddo
                 call build%img_pad%clip(build%img)
                 call build%img%write(params%outstk, cnt)
@@ -190,7 +190,7 @@ contains
                 call build%img_pad%clip(build%img)
                 ! write to stack
                 if( cline%defined('part') )then
-                    call build%img%write('simulated_particles_part'//int2str_pad(params%part,params%numlen)//params%ext, cnt)
+                    call build%img%write(string('simulated_particles_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char(), cnt)
                 else
                     call build%img%write(params%outstk, cnt)
                 endif
@@ -333,7 +333,7 @@ contains
             call shifted_base_image%norm
             call shifted_base_image%add_gauran(snr_detector)
             if( params%vis .eq. 'yes' ) call shifted_base_image%vis()
-            call shifted_base_image%write('simulate_movie'//params%ext, i)
+            call shifted_base_image%write(string('simulate_movie')//params%ext, i)
             ! set orientation parameters in object
             call build%spproj_field%set_dfx(1,       dfx)
             call build%spproj_field%set_dfy(1,       dfy)
@@ -344,17 +344,17 @@ contains
         write(logfhandle,'(a)') '>>> GENERATING OPTIMAL AVERAGE'
         do i=1,params%nframes
             call progress(i,params%nframes)
-            call shifted_base_image%read('simulate_movie'//params%ext, i)
+            call shifted_base_image%read(string('simulate_movie')//params%ext, i)
             x = build%spproj_field%get(1, 'x'//int2str(i))
             y = build%spproj_field%get(1, 'y'//int2str(i))
             call shifted_base_image%shift([-x,-y,0.])
             call base_image%add(shifted_base_image)
         end do
         call base_image%div(real(params%nframes))
-        call base_image%write('optimal_movie_average'//params%ext, 1)
+        call base_image%write(string('optimal_movie_average')//params%ext, 1)
         if( params%vis .eq. 'yes' ) call base_image%vis()
         ! output orientations
-        call build%spproj_field%write('simulate_movie_params'//trim(TXT_EXT), [1,build%spproj_field%get_noris()])
+        call build%spproj_field%write(string('simulate_movie_params')//TXT_EXT, [1,build%spproj_field%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_MOVIE NORMAL STOP ****')
 
@@ -424,7 +424,7 @@ contains
         do iptcl=1,params%nptcls
             call o%rnd_ori
             vol_rot = rotvol(build%vol, o)
-            call vol_rot%write('subtomo'//int2str_pad(iptcl,numlen)//params%ext)
+            call vol_rot%write(string('subtomo')//int2str_pad(iptcl,numlen)//params%ext%to_char())
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_SUBTOMOGRAM NORMAL STOP ****')
@@ -447,7 +447,7 @@ contains
         if( .not.is_even(params%box) ) THROW_HARD('BOX must be even')
         call vol%new([params%box,params%box,params%box], params%smpd)
         if( cline%defined('pdbfile') )then
-            if( .not.file_exists(params%pdbfile) ) THROW_HARD('Could not find: '//trim(params%pdbfile))
+            if( .not.file_exists(params%pdbfile) ) THROW_HARD('Could not find: '//params%pdbfile%to_char())
             call atoms_obj%new(params%pdbfile)
             cutoff = NPIX_CUTOFF * params%smpd
         else if( cline%defined('element') )then

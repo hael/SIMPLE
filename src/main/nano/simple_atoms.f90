@@ -127,28 +127,28 @@ contains
     ! CONSTRUCTORS
 
     subroutine new_from_pdb( self, fname )
-        class(atoms),     intent(inout) :: self
-        character(len=*), intent(in)    :: fname
+        class(atoms),  intent(inout) :: self
+        class(string), intent(in)    :: fname
         character(len=STDLEN) :: line
         character(len=11)     :: elevenfirst
         character(len=6)      :: atom_field
         integer               :: i, l, nl, filnum, io_stat, n, num
         call self%kill
-        nl = nlines(trim(fname))
+        nl = nlines(fname)
         if(nl == 0 .or. .not.file_exists(fname))then
-            THROW_HARD('I/O, file: '//trim(fname)//'; new_from_pdb')
+            THROW_HARD('I/O, file: '//fname%to_char()//'; new_from_pdb')
         endif
         call fopen(filnum, status='OLD', action='READ', file=fname, iostat=io_stat)
-        call fileiochk('new_from_pdb; simple_atoms opening '//trim(fname), io_stat)
+        call fileiochk('new_from_pdb; simple_atoms opening '//fname%to_char(), io_stat)
         ! first pass
         n = 0
         do i = 1, nl
             read(filnum,'(A11)')elevenfirst
             if( .not.is_valid_entry(elevenfirst(1:6)) )cycle
             ! support for over 100000 entries
-            num = str2int(elevenfirst(7:11), io_stat )
-            if( io_stat .ne. 0 )num = str2int(elevenfirst(6:11), io_stat )
-            if( io_stat .ne. 0 )num = str2int(elevenfirst(5:11), io_stat )
+            num = str2int(elevenfirst(7:11))
+            if( io_stat .ne. 0 )num = str2int(elevenfirst(6:11))
+            if( io_stat .ne. 0 )num = str2int(elevenfirst(5:11))
             if( io_stat .ne. 0 )cycle
             n = n + 1
         enddo
@@ -162,9 +162,9 @@ contains
         do l = 1, nl
             read(filnum,'(A)')line
             if( .not.is_valid_entry(line(1:6)) )cycle
-            num = str2int(line(7:11), io_stat)
-            if( io_stat .ne. 0 )num = str2int(line(6:11), io_stat)
-            if( io_stat .ne. 0 )num = str2int(line(5:11), io_stat)
+            num = str2int(line(7:11))
+            if( io_stat .ne. 0 )num = str2int(line(6:11))
+            if( io_stat .ne. 0 )num = str2int(line(5:11))
             if( io_stat .ne. 0 )cycle
             i = i + 1
             if( len_trim(line) < 68 )then
@@ -177,23 +177,14 @@ contains
                 &self%occupancy(i), self%beta(i), self%element(i)
             endif
             self%num(i) = num
-            call fileiochk('new_from_pdb; simple_atoms error reading line '//trim(fname), io_stat)
+            call fileiochk('new_from_pdb; simple_atoms error reading line '//fname%to_char(), io_stat)
             self%het(i) = atom_field == 'HETATM'
         enddo
         call self%guess_element
         ! done
         call fclose(filnum)
-        contains
 
-            ! elemental character function element_pdbparser( name ) result( element_name )
-            !     character(len=4), intent(in) :: name
-            !     element_name = '  '
-            !     if( len_trim(trim(adjustl(name))) == 4 )then
-            !         element_name = name(1:1)//' '
-            !     else
-            !         element_name = ((adjustl(name(1:2))))
-            !     endif
-            ! end function element_pdbparser
+        contains
 
             elemental logical function is_valid_entry( str )
                 character(len=6), intent(in) :: str
@@ -509,17 +500,15 @@ contains
 
     ! I/O
 
-    subroutine writepdb( self, fbody )
-        class(atoms),     intent(in) :: self
-        character(len=*), intent(in) :: fbody
-        character(len=LONGSTRLEN) :: fname
-        integer          :: i, funit, io_stat
-        logical          :: long
-        fname = trim(adjustl(fbody))
+    subroutine writepdb( self, fname )
+        class(atoms),  intent(in) :: self
+        class(string), intent(in) :: fname
+        integer      :: i, funit, io_stat
+        logical      :: long
         long  = self%n >= 99999
         if(.not.self%exists) THROW_HARD('Cannot write non existent atoms type; writePDB')
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
-        call fileiochk('writepdb; simple_atoms opening '//trim(fname), io_stat)
+        call fileiochk('writepdb; simple_atoms opening '//fname%to_char(), io_stat)
         do i = 1, self%n
             if(self%het(i))then
                 write(funit,pdbfmt)'HETATM',self%num(i),self%name(i),self%altloc(i),&
@@ -541,16 +530,14 @@ contains
     end subroutine writepdb
 
     ! Write a pdb file with ANISOU format for the input anisotropic B Factor matrices aniso.
-    subroutine writepdb_aniso( self, fbody, aniso)
-        class(atoms),     intent(in) :: self
-        character(len=*), intent(in) :: fbody
-        real,             intent(in) :: aniso(3, 3, self%n) ! Each matrix is 3x3 real symmetric
-        character(len=LONGSTRLEN) :: fname
-        integer          :: i, funit, io_stat, aniso_out(3, 3)
-        fname = trim(adjustl(fbody))
+    subroutine writepdb_aniso( self, fname, aniso)
+        class(atoms),  intent(in) :: self
+        class(string), intent(in) :: fname
+        real,          intent(in) :: aniso(3, 3, self%n) ! Each matrix is 3x3 real symmetric
+        integer :: i, funit, io_stat, aniso_out(3, 3)
         if(.not.self%exists) THROW_HARD('Cannot write non existent atoms type; writePDB')
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
-        call fileiochk('writepdb; simple_atoms opening '//trim(fname), io_stat)
+        call fileiochk('writepdb; simple_atoms opening '//fname%to_char(), io_stat)
         do i = 1, self%n
             if(self%het(i))then
                 write(funit,pdbfmt)'HETATM',self%num(i),self%name(i),self%altloc(i),&
@@ -972,6 +959,7 @@ contains
         !$omp end parallel do
         call vol%set_rmat(rmat,.false.)
         deallocate(rmat)
+
     contains
     
         ! potential assuming static atoms (eq B.6)
@@ -991,7 +979,7 @@ contains
 
     subroutine geometry_analysis_pdb( self, pdbfile, thresh )
         class(atoms),     intent(inout) :: self
-        character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
+        class(string),    intent(in)    :: pdbfile   ! all the atomic positions
         real, optional,   intent(in)    :: thresh    ! for belonging
         character(len=2)     :: element
         type(atoms)          :: init_atoms, final_atoms
@@ -1052,7 +1040,7 @@ contains
                     call final_atoms%set_beta(cnt_intersect,self%beta(i))
                 endif
             enddo
-            call final_atoms%writePDB('AtomColumn.pdb')
+            call final_atoms%writePDB(string('AtomColumn.pdb'))
             call final_atoms%kill
             ! Find the line that best fits the atoms
             allocate(points(3,count(flag)), source = 0.)
@@ -1093,13 +1081,13 @@ contains
                 radii(i)               = euclid(points(:,i), m)
             enddo
             ! it's already in A
-            call fopen(filnum, file='Radii.csv', iostat=io_stat)
+            call fopen(filnum, file=string('Radii.csv'), iostat=io_stat)
             write(filnum,*) 'r'
             do i = 1, cnt
                 write(filnum,'(A)', advance='yes') trim(real2str(radii(i)))
             enddo
             call fclose(filnum)
-            call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
+            call fopen(filnum, file=string('DistancesToTheLine.csv'),iostat=io_stat)
             write(filnum,*) 'd'
             do i = 1, cnt
                 write(filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
@@ -1144,7 +1132,7 @@ contains
                     call final_atoms%set_beta(cnt_intersect,self%beta(i))
                 endif
             enddo
-            call final_atoms%writePDB('AtomPlane.pdb')
+            call final_atoms%writePDB(string('AtomPlane.pdb'))
             call final_atoms%kill
             allocate(points(3, count(flag)), source = 0.)
             ! calculate center of mass of the points
@@ -1171,13 +1159,13 @@ contains
                 endif
             enddo
             ! it's already in A
-            call fopen(filnum, file='Radii.csv', iostat=io_stat)
+            call fopen(filnum, file=string('Radii.csv'), iostat=io_stat)
             write(filnum,*) 'r'
             do i = 1, cnt
                 write(filnum,'(A)', advance='yes') trim(real2str(radii(i)))
             enddo
             call fclose(filnum)
-            call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
+            call fopen(filnum, file=string('DistancesToThePlane.csv'),iostat=io_stat)
             write(filnum,*) 'd'
             do i = 1, cnt
                 write(filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
@@ -1200,13 +1188,6 @@ contains
         m = m / real(self%n)
     end function find_masscen
 
-    ! subroutine shift2masscen( self, m )
-    !     class(atoms), intent(in) :: self
-    !     real, intent(in)         :: m(3)
-    !     call translate(m)
-    !
-    ! end subroutine shift2masscen
-
     !>brief compute average volume-model atomic cross correlation by residue
     function cc_res( self, resnum ) result(cc)
         class(atoms), intent(in) :: self
@@ -1223,38 +1204,23 @@ contains
         cc = cc / real(cnt)
     end function cc_res
 
-    ! ! calculate list of neighbor atoms
-    ! subroutine neighbors( iatom, max_dist )
-    !     class(atoms), intent(inout) :: self
-    !     integer,      intent(in)    :: iatom
-    !     real,         intent(in)    :: max_dist
-    !     integer :: i_atom, j_atom
-    !     max_dist = 0.
-    !     do i_atom = 1, self%n
-    !         do j_atom = i_atom + 1, self%n
-    !             dist = euclid( self%xyz(i_atom,:), self%xyz(j_atom,:) )
-    !             if( dist <= max_dist ) 
-    !         enddo
-    !     enddo
-    ! end subroutine neighbors
-
     subroutine pdb2mrc( self, pdb_file, vol_file, smpd, center_pdb, pdb_out, vol_dim )
         use simple_image, only: image
-        class(atoms),           intent(inout) :: self
-        real,                   intent(in)    :: smpd
-        character(*),           intent(in)    :: pdb_file, vol_file
-        character(*), optional, intent(in)    :: pdb_out
-        logical,      optional, intent(in)    :: center_pdb
-        integer,      optional, intent(in)    :: vol_dim(3)
-        character(:), allocatable :: pdbfile_centered
-        type(image)               :: vol
-        real                      :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
-        integer                   :: ldim(3), i_atom, j_atom
-        logical                   :: use_center = .false.
+        class(atoms),            intent(inout) :: self
+        real,                    intent(in)    :: smpd
+        type(string),            intent(in)    :: pdb_file, vol_file
+        class(string), optional, intent(in)    :: pdb_out
+        logical,       optional, intent(in)    :: center_pdb
+        integer,       optional, intent(in)    :: vol_dim(3)
+        type(string) :: pdbfile_centered
+        type(image)  :: vol
+        real         :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
+        integer      :: ldim(3), i_atom, j_atom
+        logical      :: use_center = .false.
         if( present(pdb_out) )then
-            pdbfile_centered = trim(pdb_out)
+            pdbfile_centered = pdb_out
         else
-            pdbfile_centered = trim(get_fbody(pdb_file,'pdb'))//'_centered.pdb'
+            pdbfile_centered = get_fbody(pdb_file,string('pdb'))//'_centered.pdb'
         endif
         if( present(center_pdb) )then
             if( center_pdb ) use_center = .true.
@@ -1313,9 +1279,9 @@ contains
 
     subroutine map_validation( self, vol1, vol2, filename )
         use simple_image, only: image
-        class(atoms),               intent(inout) :: self
-        type(image),                intent(in)    :: vol1, vol2
-        character(len=*), optional, intent(in)    :: filename
+        class(atoms),            intent(inout) :: self
+        type(image),             intent(in)    :: vol1, vol2
+        class(string), optional, intent(in)    :: filename
         type(image) :: vol_at1, vol_at2
         type(atoms) :: atom
         integer     :: i_atom, atom_box, center(3), i_res, funit
@@ -1324,7 +1290,7 @@ contains
         logical, allocatable :: mask_byres(:)
         smpd = vol1%get_smpd()
         if( present(filename) )then
-            call fopen(funit, FILE=trim(filename//".csv"), STATUS='NEW', action='WRITE')
+            call fopen(funit, FILE=filename//".csv", STATUS='NEW', action='WRITE')
         endif
         do i_atom = 1, self%n
             atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
@@ -1367,7 +1333,7 @@ contains
             write(funit,'(a,f10.3)')         'Global CC Score [-1 1]:', cc_score
             write(logfhandle,'(a,f10.3)') 'Global CC Score [-1 1]:', cc_score
             close(funit)
-            call self%writepdb(trim(filename)//'.pdb')
+            call self%writepdb(filename//'.pdb')
         endif
         if(present(filename))then
             call fclose(funit)
@@ -1376,13 +1342,13 @@ contains
 
     subroutine model_validation_eo( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
         use simple_image, only: image
-        class(atoms), intent(inout) :: self
-        real,         intent(in)    :: smpd, smpd_target
-        character(*), intent(in)    :: pdb_file, exp_vol_file, even_vol_file, odd_vol_file
-        type(image)           :: exp_vol, even_vol, odd_vol
-        real                  :: smpd_new, upscaling_factor, beta
-        real,     allocatable :: beta_map_model(:), beta_even_odd(:)
-        integer               :: ifoo, ldim(3), ldim_new(3), box, box_new, i, natoms
+        class(atoms),  intent(inout) :: self
+        real,          intent(in)    :: smpd, smpd_target
+        class(string), intent(in)    :: pdb_file, exp_vol_file, even_vol_file, odd_vol_file
+        type(image)       :: exp_vol, even_vol, odd_vol
+        real              :: smpd_new, upscaling_factor, beta
+        real, allocatable :: beta_map_model(:), beta_even_odd(:)
+        integer           :: ifoo, ldim(3), ldim_new(3), box, box_new, i, natoms
         natoms = self%n; allocate(beta_map_model(natoms),beta_even_odd(natoms))
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
@@ -1401,9 +1367,9 @@ contains
         call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
         call even_vol%read_and_crop(even_vol_file, smpd, box_new, smpd_new)
         call odd_vol%read_and_crop(odd_vol_file, smpd, box_new, smpd_new)
-        call self%atom_validation(exp_vol, 'experimental')
-        call self%atom_validation(even_vol, 'exp-even')
-        call self%atom_validation(odd_vol, 'exp-odd')
+        call self%atom_validation(exp_vol, string('experimental'))
+        call self%atom_validation(even_vol, string('exp-even'))
+        call self%atom_validation(odd_vol, string('exp-odd'))
         call exp_vol%kill
         call even_vol%kill
         call odd_vol%kill
@@ -1411,14 +1377,14 @@ contains
 
     subroutine model_validation( self, pdb_file, exp_vol_file, smpd, smpd_target )
         use simple_image, only: image
-        class(atoms), intent(inout) :: self
-        real,         intent(in)    :: smpd, smpd_target
-        character(*), intent(in)    :: pdb_file, exp_vol_file
-        character(len=STDLEN) :: upscale_vol_file
-        type(image)           :: exp_vol
-        real                  :: smpd_new, upscaling_factor
-        integer               :: ifoo, ldim(3), ldim_new(3), box, box_new     
-        upscale_vol_file = trim(get_fbody(exp_vol_file,'mrc'))//'_upscale.mrc'
+        class(atoms),  intent(inout) :: self
+        class(string), intent(in)    :: pdb_file, exp_vol_file
+        real,          intent(in)    :: smpd, smpd_target
+        type(string) :: upscale_vol_file
+        type(image)  :: exp_vol
+        real         :: smpd_new, upscaling_factor
+        integer      :: ifoo, ldim(3), ldim_new(3), box, box_new     
+        upscale_vol_file = get_fbody(exp_vol_file,string('mrc'))//'_upscale.mrc'
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
         box              = ldim(1)
@@ -1435,15 +1401,15 @@ contains
         endif
         call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
         call exp_vol%write(upscale_vol_file)
-        call self%atom_validation(exp_vol, 'model_val_corr')
+        call self%atom_validation(exp_vol, string('model_val_corr'))
         call exp_vol%kill()
     end subroutine model_validation
 
     subroutine atom_validation( self, vol, filename )
         use simple_image, only: image
-        class(atoms),               intent(inout) :: self
-        type(image),                intent(in)    :: vol
-        character(len=*), optional, intent(in)    :: filename
+        class(atoms),            intent(inout) :: self
+        type(image),             intent(in)    :: vol
+        class(string), optional, intent(in)    :: filename
         type(image) :: vol_atom, vol_at
         type(atoms) :: atom
         integer     :: i_atom, atom_box, center(3), i_res, funit
@@ -1453,7 +1419,7 @@ contains
         cc_score = 0.
         smpd     = vol%get_smpd()
         if(present(filename))then
-            call fopen(funit, FILE=trim(filename//".csv"), STATUS='NEW', action='WRITE')
+            call fopen(funit, FILE=filename//".csv", STATUS='NEW', action='WRITE')
         endif
         do i_atom = 1, self%n
             atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
@@ -1498,7 +1464,7 @@ contains
             write(funit,'(a,f10.3)')      'Global CC Score [-1 1]:', cc_score
             write(logfhandle,'(a,f10.3)') 'Global CC Score [-1 1]:', cc_score
             call fclose(funit)
-            call self%writepdb(trim(filename)//'.pdb')
+            call self%writepdb(filename//'.pdb')
         endif
     end subroutine atom_validation
 
@@ -1529,21 +1495,21 @@ contains
     ! DESTRUCTOR
     subroutine kill( self )
         class(atoms), intent(inout) :: self
-        if( allocated(self%name) )deallocate(self%name)
-        if( allocated(self%altloc) )deallocate(self%altloc)
-        if( allocated(self%chain) )deallocate(self%chain)
-        if( allocated(self%icode) )deallocate(self%icode)
-        if( allocated(self%resname) )deallocate(self%resname)
-        if( allocated(self%xyz) )deallocate(self%xyz)
-        if( allocated(self%mw) )deallocate(self%mw)
+        if( allocated(self%name)      )deallocate(self%name)
+        if( allocated(self%altloc)    )deallocate(self%altloc)
+        if( allocated(self%chain)     )deallocate(self%chain)
+        if( allocated(self%icode)     )deallocate(self%icode)
+        if( allocated(self%resname)   )deallocate(self%resname)
+        if( allocated(self%xyz)       )deallocate(self%xyz)
+        if( allocated(self%mw)        )deallocate(self%mw)
         if( allocated(self%occupancy) )deallocate(self%occupancy)
-        if( allocated(self%beta) )deallocate(self%beta)
-        if( allocated(self%num) )deallocate(self%num)
-        if( allocated(self%resnum) )deallocate(self%resnum)
-        if( allocated(self%Z) )deallocate(self%Z)
-        if( allocated(self%het) )deallocate(self%het)
-        if( allocated(self%element) )deallocate(self%element)
-        if( allocated(self%radius) )deallocate(self%radius)
+        if( allocated(self%beta)      )deallocate(self%beta)
+        if( allocated(self%num)       )deallocate(self%num)
+        if( allocated(self%resnum)    )deallocate(self%resnum)
+        if( allocated(self%Z)         )deallocate(self%Z)
+        if( allocated(self%het)       )deallocate(self%het)
+        if( allocated(self%element)   )deallocate(self%element)
+        if( allocated(self%radius)    )deallocate(self%radius)
         if( allocated(self%atom_corr) )deallocate(self%atom_corr)
         self%n      = 0
         self%exists = .false.

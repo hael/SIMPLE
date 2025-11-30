@@ -24,7 +24,7 @@ type euclid_sigma2
     integer                       :: fromp
     integer                       :: top
     integer                       :: kfromto(2) = 0
-    character(len=:), allocatable :: binfname
+    type(string)                  :: binfname
     logical                       :: exists     = .false.
 contains
     ! constructor
@@ -53,7 +53,7 @@ contains
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
         ! set up fields for fast access to sigmas
         class(euclid_sigma2), target, intent(inout) :: self
-        character(len=*),             intent(in)    :: binfname
+        class(string),                intent(in)    :: binfname
         integer,                      intent(in)    :: box
         call self%kill
         self%kfromto = [1, fdim(box)-1]
@@ -63,7 +63,7 @@ contains
             call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
             call pftcc_glob%get_pinds(self%pinds)
         endif
-        self%binfname     =  trim(binfname)
+        self%binfname     =  binfname
         self%fromp        =  params_glob%fromp
         self%top          =  params_glob%top
         self%sigma2_noise =  0.
@@ -125,17 +125,17 @@ contains
     !>  This is a minimal constructor to allow I/O of groups
     subroutine init_from_group_header( self, fname )
         class(euclid_sigma2), target, intent(inout) :: self
-        character(len=*),             intent(in)    :: fname
-        type(str4arr), allocatable :: names(:)
+        class(string),                intent(in)    :: fname
+        type(string), allocatable  :: names(:)
         type(starfile_table_type)  :: table
         integer                    :: kfromto(2), ngroups
         logical                    :: l
         if (.not. file_exists(fname)) then
-            THROW_HARD('euclid_sigma2_starfile: init_from_group_header; file does not exists: ' // trim(fname))
+            THROW_HARD('euclid_sigma2_starfile: init_from_group_header; file does not exists: ' // fname%to_char())
         end if
         call starfile_table__new(table)
-        call starfile_table__getnames(table, trim(fname), names)
-        call starfile_table__read( table, trim(fname), names(1)%str )
+        call starfile_table__getnames(table, fname, names)
+        call starfile_table__read( table, fname, names(1)%to_char() )
         l = starfile_table__getValue_int(table, EMDL_MLMODEL_NR_GROUPS, ngroups)
         l = starfile_table__getValue_int(table, EMDL_SPECTRAL_IDX,  kfromto(1))
         l = starfile_table__getValue_int(table, EMDL_SPECTRAL_IDX2, kfromto(2))
@@ -228,14 +228,14 @@ contains
     end subroutine write_sigma2
 
     subroutine write_groups_starfile( fname, group_pspecs, ngroups )
-        character(len=*),  intent(in) :: fname
+        class(string),     intent(in) :: fname
         real,              intent(in) :: group_pspecs(:,:,:)
         integer,           intent(in) :: ngroups
-        character(len=:), allocatable :: stmp
+        type(string)                  :: stmp
         integer                       :: kfromto(2), eo, igroup, idx
         type(starfile_table_type)     :: ostar
         call starfile_table__new(ostar)
-        call starfile_table__open_ofile(ostar, trim(fname))
+        call starfile_table__open_ofile(ostar, fname%to_char())
         ! global fields
         kfromto(1) = lbound(group_pspecs,3)
         kfromto(2) = ubound(group_pspecs,3)
@@ -255,7 +255,7 @@ contains
             end if
             do igroup = 1, ngroups
                 call starfile_table__clear(ostar)
-                call starfile_table__setComment(ostar, stmp // ', group ' // trim(int2str(igroup)) )
+                call starfile_table__setComment(ostar, stmp%to_char() // ', group ' // trim(int2str(igroup)) )
                 call starfile_table__setName(ostar, trim(int2str(eo)) // '_group_' // trim(int2str(igroup)) )
                 call starfile_table__setIsList(ostar, .false.)
                 do idx = kfromto(1), kfromto(2)
@@ -277,27 +277,27 @@ contains
         integer,                       intent(in)    :: iter
         real,             allocatable, intent(out)   :: group_pspecs(:,:,:)
         integer,                       intent(out)   :: ngroups
-        character(len=*), optional,    intent(in)    :: fname
-        type(str4arr),    allocatable :: names(:)
+        class(string),    optional,    intent(in)    :: fname
+        type(string),     allocatable :: names(:)
         type(starfile_table_type)     :: istarfile
-        character(len=:), allocatable :: starfile_fname
+        type(string)                  :: starfile_fname
         character                     :: eo_char
         real(dp)                      :: val
         integer(C_long)               :: num_objs, object_id
         integer                       :: kfromto(2), stat, spec_idx, eo, igroup, idx
         logical                       :: l
         if( present(fname) )then
-            starfile_fname = trim(fname)
+            starfile_fname = fname
         else
             starfile_fname = sigma2_star_from_iter(iter)
         endif
         if (.not. file_exists(starfile_fname)) then
-            THROW_HARD('euclid_sigma2: read_groups_starfile; file does not exists: ' // starfile_fname)
+            THROW_HARD('euclid_sigma2: read_groups_starfile; file does not exists: ' // starfile_fname%to_char())
         end if
         call starfile_table__new(istarfile)
         ! read header
         call starfile_table__getnames(istarfile, starfile_fname, names)
-        call starfile_table__read( istarfile, starfile_fname, names(1)%str )
+        call starfile_table__read( istarfile, starfile_fname, names(1)%to_char() )
         l = starfile_table__getValue_int(istarfile, EMDL_MLMODEL_NR_GROUPS, ngroups)
         l = starfile_table__getValue_int(istarfile, EMDL_SPECTRAL_IDX, kfromto(1))
         l = starfile_table__getValue_int(istarfile, EMDL_SPECTRAL_IDX2, kfromto(2))
@@ -309,16 +309,16 @@ contains
         allocate(group_pspecs(2,ngroups,self%kfromto(1):self%kfromto(2)))
         call starfile_table__getnames(istarfile, starfile_fname, names)
         do idx = 1, size(names)
-            if( len(names(idx)%str) < len('1_group_')+1 )cycle
-            if( names(idx)%str(2:8) .ne. '_group_' ) cycle
-            eo_char = names(idx)%str(1:1)
+            if( names(idx)%strlen() < len('1_group_')+1 )cycle
+            if( names(idx)%to_char([2,8]) .ne. '_group_' ) cycle
+            eo_char = names(idx)%to_char([1,1])
             if ((eo_char .ne. '1').and.(eo_char .ne. '2')) cycle
             eo = 1
             if (eo_char == '2') eo = 2
-            igroup = str2int( names(idx)%str(9:len_trim(names(idx)%str)), stat )
+            igroup = str2int( names(idx)%to_char([9,names(idx)%strlen_trim()]), stat )
             if( stat > 0 ) cycle
             if( (igroup < 1).or.(igroup>ngroups) ) cycle
-            call starfile_table__read( istarfile, starfile_fname, names(idx)%str )
+            call starfile_table__read( istarfile, starfile_fname, names(idx)%to_char() )
             object_id = starfile_table__firstobject(istarfile)
             num_objs  = starfile_table__numberofobjects(istarfile)
             do while( (object_id < num_objs) .and. (object_id >= 0) )
@@ -345,28 +345,28 @@ contains
         integer,                       intent(in)    :: iter
         real,             allocatable, intent(out)   :: pspecs(:,:,:)
         integer,                       intent(out)   :: ngroups
-        character(len=*), optional,    intent(in)    :: filename
+        class(string),    optional,    intent(in)    :: filename
         character(len=LENSTR), allocatable :: strings(:)
-        character(len=:),      allocatable :: fname
+        type(string) :: fname
         character(len=LENSTR) :: line, string
         real(dp) :: dval
         integer  :: kfromto(2), i, l, funit, iostat, group, eo, idx, igroup, ieo
         if( present(filename) )then
-            fname = trim(filename)
+            fname = filename
         else
             fname = sigma2_star_from_iter(iter)
         endif
         if(.not.file_exists(fname))then
-            THROW_HARD('File: '//trim(fname)//' Does not exists; read_sigma2_groups')
+            THROW_HARD('File: '//fname%to_char()//' Does not exists; read_sigma2_groups')
         endif
-        call fopen(funit, trim(fname), action='READ',status='OLD', form='FORMATTED', iostat=iostat)
-        call fileiochk('read_sigma2_groups: '//trim(fname), iostat)
+        call fopen(funit, fname, action='READ',status='OLD', form='FORMATTED', iostat=iostat)
+        call fileiochk('read_sigma2_groups: '//fname%to_char(), iostat)
         ! read header
         ! # of groups
         read(funit,fmt='(A)') line
         read(funit,fmt='(A)') line
         if( trim(line).ne.'data_general' )then
-            THROW_HARD('Unrecognized formatting: '//trim(fname)//'; read_sigma2_groups')
+            THROW_HARD('Unrecognized formatting: '//fname%to_char()//'; read_sigma2_groups')
         endif
         read(funit,fmt='(A)') line
         read(funit,fmt='(A)') line
@@ -455,9 +455,9 @@ contains
 
     ! Updates the lowest resolution info of the file with most frequencies with the other & overwrites it
     subroutine fill_sigma2_before_nyq( fname1, fname2 )
-        character(len=*), intent(in)  :: fname1, fname2
-        type(euclid_sigma2)           :: sigma2_1, sigma2_2
-        integer                       :: ngroups1, ngroups2, k0
+        class(string), intent(in)  :: fname1, fname2
+        type(euclid_sigma2)        :: sigma2_1, sigma2_2
+        integer                    :: ngroups1, ngroups2, k0
         call sigma2_1%init_from_group_header(fname1)
         call sigma2_2%init_from_group_header(fname2)
         call sigma2_1%read_sigma2_groups(0, sigma2_1%sigma2_groups, ngroups1, filename=fname1)
@@ -480,8 +480,7 @@ contains
 
     !> Split a sigma2 doc into individual docs
     subroutine split_sigma2_into_groups( fname, fnames )
-        character(len=*),                        intent(in) :: fname
-        character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
+        class(string), intent(in) :: fname, fnames(:)
         type(euclid_sigma2)           :: euclidsigma2
         real,             allocatable :: sigma2_group(:,:,:)
         integer                       :: igroup, ngroups
@@ -499,8 +498,7 @@ contains
 
     ! the reverse of split_sigma2_into_groups
     subroutine consolidate_sigma2_groups( fname, fnames )
-        character(len=*),                        intent(in) :: fname
-        character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
+        class(string), intent(in) :: fname, fnames(:)
         type(euclid_sigma2) :: euclidsigma2
         real,   allocatable :: sigma2_group(:,:,:)
         integer             :: igroup, ngroups, n
@@ -520,8 +518,7 @@ contains
     end subroutine consolidate_sigma2_groups
 
     subroutine average_sigma2_groups( fname, fnames )
-        character(len=*),                        intent(in) :: fname
-        character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
+        class(string), intent(in) :: fname, fnames(:)
         type(euclid_sigma2) :: euclidsigma2
         real,   allocatable :: sigma2_group(:,:,:)
         integer             :: i, ngroups, n, nfiles, j
@@ -550,7 +547,7 @@ contains
 
     function sigma2_star_from_iter( iter )
         integer, intent(in) :: iter
-        character(len=:), allocatable :: sigma2_star_from_iter
+        type(string) :: sigma2_star_from_iter
         sigma2_star_from_iter = trim(SIGMA2_GROUP_FBODY)//trim(int2str(iter))//trim(STAR_EXT)
     end function sigma2_star_from_iter
 
@@ -577,9 +574,9 @@ contains
         integer, parameter :: kfromto(2) = [1,128]
         integer, parameter :: iter       = 7
         real,    parameter :: scale      = 0.3
-        type(euclid_sigma2)           :: euclidsigma2
-        character(len=LONGSTRLEN)     :: fname, fname1, fname2
-        character(len=LONGSTRLEN), allocatable :: fnames(:)
+        type(euclid_sigma2)       :: euclidsigma2
+        type(string)              :: fname, fname1, fname2
+        type(string), allocatable :: fnames(:)
         real,                      allocatable :: sigma2(:,:,:)
         integer :: igroup, ng
         logical :: l_err

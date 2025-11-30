@@ -18,33 +18,33 @@ real,    parameter :: TVLAMBDA = 10.
 real,    parameter :: BFACTOR  = 5.
 integer, parameter :: NNN      = 8
 
-type(image),               allocatable :: ptcls(:), ptcls_saved(:)
-type(tvfilter),            allocatable :: tv(:)
-real,                      allocatable :: particle_locations(:,:)
-character(len=LONGSTRLEN), pointer     :: intg_names(:), frame_names(:)
-character(len=:),          allocatable :: dir, fbody, fbody_raw
-type(image)               :: frame_img      ! individual frame image
-type(image)               :: frame_avg      ! average over time window
-type(image)               :: reference, ptcl_target, pspec, pspec_nn
-type(image)               :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
-character(len=LONGSTRLEN) :: neighstknames(NNN), stkname, stkframes_name
-real                      :: msk
-integer                   :: ldim(3), nframes, track_freq
-logical                   :: l_neg
+type(image),      allocatable :: ptcls(:), ptcls_saved(:)
+type(tvfilter),   allocatable :: tv(:)
+real,             allocatable :: particle_locations(:,:)
+type(string),     pointer     :: intg_names(:), frame_names(:)
+type(string)                  :: dir, fbody, fbody_raw
+type(image)                   :: frame_img      ! individual frame image
+type(image)                   :: frame_avg      ! average over time window
+type(image)                   :: reference, ptcl_target, pspec, pspec_nn
+type(image)                   :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
+type(string)                  :: neighstknames(NNN), stkname, stkframes_name
+real                          :: msk
+integer                       :: ldim(3), nframes, track_freq
+logical                       :: l_neg
 
 contains
 
     subroutine init_tracker( boxcoord, intg_fnames, frame_fnames, dir_in, fbody_in )
-        integer,                           intent(in) :: boxcoord(2)
-        character(len=LONGSTRLEN), target, intent(in) :: intg_fnames(:), frame_fnames(:)
-        character(len=*),                  intent(in) :: dir_in, fbody_in
-        character(len=:), allocatable :: fname
+        integer,               intent(in) :: boxcoord(2)
+        class(string), target, intent(in) :: intg_fnames(:), frame_fnames(:)
+        class(string),         intent(in) :: dir_in, fbody_in
+        type(string) :: fname
         integer :: n, i
         ! set constants
-        dir       = trim(dir_in)
-        fbody     = trim(fbody_in)
-        fbody_raw = trim(fbody_in)//'_frames'
-        l_neg  = .false.
+        dir        = dir_in
+        fbody      = fbody_in
+        fbody_raw  = fbody_in//'_frames'
+        l_neg      = .false.
         track_freq = max(1,nint(real(params_glob%nframesgrp/2)))
         if( trim(params_glob%neg) .eq. 'yes' ) l_neg = .true.
         select case(trim(params_glob%filter))
@@ -59,7 +59,7 @@ contains
                 THROW_HARD('Unsupported filter in init_tracker!')
         end select
         ! names & dimensions
-        nframes = size(intg_fnames)
+        nframes     =  size(intg_fnames)
         intg_names  => intg_fnames(:)
         frame_names => frame_fnames(:)
         call find_ldim_nptcls(intg_names(1),ldim,n)
@@ -83,8 +83,8 @@ contains
             call neigh_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
             call backgr_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
             call tmp_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
-            fname = trim(dir)//'/'//trim(fbody)//'_background_nn'//int2str(i)//trim(STK_EXT)
-            neighstknames(i) = trim(fname)
+            fname = dir%to_char()//'/'//fbody%to_char()//'_background_nn'//int2str(i)//trim(STK_EXT)
+            neighstknames(i) = fname
         end do
         allocate(ptcls(params_glob%nframesgrp),ptcls_saved(params_glob%nframesgrp))
         do i=1,params_glob%nframesgrp
@@ -97,11 +97,11 @@ contains
 
     subroutine track_particle( fname_forctf, frame_start )
         use simple_motion_align_nano, only: motion_align_nano
-        character(len=:), allocatable, intent(inout) :: fname_forctf
-        integer, optional,             intent(in)    :: frame_start
-        type(motion_align_nano)       :: aligner
-        character(len=:), allocatable :: fname
-        real,             allocatable :: opt_shifts(:,:)
+        class(string),     intent(inout) :: fname_forctf
+        integer, optional, intent(in)    :: frame_start
+        type(motion_align_nano) :: aligner
+        type(string)            :: fname
+        real, allocatable       :: opt_shifts(:,:)
         integer :: first_pos(3), funit2, funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside, fstart
         real    :: xyz(3), pos(2)
         ! init neigh counter
@@ -194,7 +194,7 @@ contains
             particle_locations(last_frame+1:,1) = particle_locations(last_frame,1)
             particle_locations(last_frame+1:,2) = particle_locations(last_frame,2)
             if( mod(iframe-1,5*track_freq) == 0 )then
-                write(logfhandle,'(A,A,A,I6,A)') ">>> ",trim(fbody)," : ",iframe," FRAMES PROCESSED"
+                write(logfhandle,'(A,A,A,I6,A)') ">>> ",fbody%to_char()," : ",iframe," FRAMES PROCESSED"
                 call flush(6)
             endif
         enddo
@@ -203,14 +203,14 @@ contains
         ! Second pass write box file, tracked particles, neighbours & update spectrum
         call pspec%zero_and_unflag_ft
         call ptcl_target%zero_and_unflag_ft
-        fname = trim(dir)//'/'//trim(fbody)//'.box'
+        fname = dir%to_char()//'/'//fbody%to_char()//'.box'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
-        fname = trim(dir)//'/'//trim(fbody)//'.xy'
+        fname = dir%to_char()//'/'//fbody%to_char()//'.xy'
         call fopen(funit2, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
-        stkname = trim(dir)//'/'//trim(fbody)//'.mrc'
-        stkframes_name = trim(dir)//'/'//trim(fbody_raw)//'.mrc'
+        stkname = dir%to_char()//'/'//fbody%to_char()//'.mrc'
+        stkframes_name = dir%to_char()//'/'//fbody_raw%to_char()//'.mrc'
         cnt = 0
         do iframe=fstart,nframes
             cnt = cnt + 1
@@ -235,7 +235,7 @@ contains
             ! neighbors & spectrum
             call update_background_pspec(iframe, [xind,yind])
             call pspec%add(pspec_nn,w=1./real(nframes))
-            call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',cnt)
+            call pspec_nn%write(string(dir%to_char()//'/'//fbody%to_char()//'_background_pspec.mrc'),cnt)
             ! read frame & write particle frame
             call frame_img%read(frame_names(iframe),1)
             noutside = 0
@@ -247,7 +247,7 @@ contains
         call fclose(funit)
         call fclose(funit2)
         ! average and write power spectrum for CTF estimation
-        fname_forctf = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
+        fname_forctf = dir%to_char()//'/'//fbody%to_char()//'_pspec4ctf_estimation.mrc'
         call pspec%dampen_pspec_central_cross
         call pspec%write(fname_forctf)
         ! trajectory
@@ -276,7 +276,7 @@ contains
                 enddo
             endif
         enddo
-        call frame_avg%write(trim(dir)//'/'//trim(fbody)//'_trajectory.mrc')
+        call frame_avg%write(string(dir%to_char()//'/'//fbody%to_char()//'_trajectory.mrc'))
     end subroutine write_trajectory
 
     subroutine update_background_pspec( iframe, pos )
@@ -410,14 +410,14 @@ contains
         tracker_get_nnn = NNN
     end function tracker_get_nnn
 
-    character(len=LONGSTRLEN) function tracker_get_nnfname(i)
+    type(string) function tracker_get_nnfname(i)
         integer, intent(in) :: i
         if( i<1 .or. i>NNN )THROW_HARD('neighbour index out of range')
-        tracker_get_nnfname = trim(neighstknames(i))
+        tracker_get_nnfname = neighstknames(i)
     end function tracker_get_nnfname
 
-    character(len=LONGSTRLEN) function tracker_get_stkname()
-        tracker_get_stkname = trim(stkname)
+    type(string) function tracker_get_stkname()
+        tracker_get_stkname = stkname
     end function tracker_get_stkname
 
     subroutine kill_tracker

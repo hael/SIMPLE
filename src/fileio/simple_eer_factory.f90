@@ -18,21 +18,21 @@ integer, parameter :: TIFF_COMPRESSION_EER7bit = 65001
 
 type eer_decoder
     private
-    type(c_ptr)                   :: fhandle = c_null_ptr       !< File handle
-    character(len=:), allocatable :: fname                      !< File name
-    integer(kind=1),  allocatable :: raw_bytes(:)               !< parsed raw bytes
+    type(c_ptr)                   :: fhandle = c_null_ptr          !< File handle
+    type(string)                  :: fname                         !< File name
+    integer(kind=1),  allocatable :: raw_bytes(:)                  !< parsed raw bytes
     integer(kind=8),  allocatable :: frames_start(:), frames_sz(:) !< temporal dimensions
-    real                          :: smpd          = 0.         !< physical pixel size
-    real                          :: osmpd         = 0.         !< output pixel size
-    integer(kind=8)               :: filesz        = 0          !< file size, upper bound to # of electrons
-    integer                       :: nx, ny        = 0          !< base dimensions
-    integer                       :: onx, ony      = 0          !< physical output dimensions
-    integer                       :: upsampling    = 1          !< desired sampling: 1=4K, 2=8K
-    integer                       :: nframes       = 0          !< # of frames
-    integer(kind=8)               :: nmax_el       = 0          !< max # of electrons
-    logical                       :: l_hasbeenread = .false.    !< whether file has been parsed
-    logical                       :: l_7bit        = .false.    !< compression
-    logical                       :: l_exists      = .false.    !< whether object exists
+    real                          :: smpd          = 0.            !< physical pixel size
+    real                          :: osmpd         = 0.            !< output pixel size
+    integer(kind=8)               :: filesz        = 0             !< file size, upper bound to # of electrons
+    integer                       :: nx, ny        = 0             !< base dimensions
+    integer                       :: onx, ony      = 0             !< physical output dimensions
+    integer                       :: upsampling    = 1             !< desired sampling: 1=4K, 2=8K
+    integer                       :: nframes       = 0             !< # of frames
+    integer(kind=8)               :: nmax_el       = 0             !< max # of electrons
+    logical                       :: l_hasbeenread = .false.       !< whether file has been parsed
+    logical                       :: l_7bit        = .false.       !< compression
+    logical                       :: l_exists      = .false.       !< whether object exists
 contains
     ! Constructor
     procedure          :: new
@@ -57,18 +57,18 @@ contains
     !>  Constructor & parsing
     subroutine new( self, fname, smpd, upsampling)
         class(eer_decoder), intent(inout) :: self
-        character(len=*),   intent(in)    :: fname
+        class(string),      intent(in)    :: fname
         real,               intent(in)    :: smpd       ! always refers to physical pixel size
         integer,            intent(in)    :: upsampling
         integer :: compression
         call self%kill
 #ifdef USING_TIFF
-        if( .not.file_exists(fname) ) THROW_HARD('File could not be found: '//trim(fname))
-        self%fname = trim(fname)
-        inquire(file=self%fname,size=self%filesz)
+        if( .not.file_exists(fname) ) THROW_HARD('File could not be found: '//fname%to_char())
+        self%fname = fname
+        inquire(file=self%fname%to_char(),size=self%filesz)
         ! open
         call TIFFMuteWarnings
-        self%fhandle = TIFFOpen(to_cstring(self%fname),to_cstring('r'))
+        self%fhandle = TIFFOpen(to_cstring(self%fname%to_char()),to_cstring('r'))
         call TIFFUnMuteWarnings
         ! header
         self%nx      = TIFFGetWidth(self%fhandle)
@@ -293,7 +293,7 @@ contains
 
     subroutine prep_gainref( self, fname, gain )
         class(eer_decoder), intent(in)    :: self
-        character(len=*),   intent(in)    :: fname
+        class(string),      intent(in)    :: fname
         class(image),       intent(inout) :: gain
         type(image)   :: tmp
         real, pointer :: prmat(:,:,:)
@@ -383,7 +383,7 @@ contains
     subroutine kill( self )
         class(eer_decoder), intent(inout) :: self
         self%fhandle = c_null_ptr
-        if( allocated(self%fname) )        deallocate(self%fname)
+        call self%fname%kill
         if( allocated(self%raw_bytes) )    deallocate(self%raw_bytes)
         if( allocated(self%frames_start) ) deallocate(self%frames_start)
         if( allocated(self%frames_sz) )    deallocate(self%frames_sz)
