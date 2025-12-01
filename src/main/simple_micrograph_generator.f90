@@ -8,7 +8,7 @@ use simple_motion_correct_utils, only: correct_gain, apply_dose_weighing
 use simple_string,               only: string
 use simple_starfile_wrappers
 implicit none
-! private
+private
 #include "simple_local_flags.inc"
 
 public :: mic_generator

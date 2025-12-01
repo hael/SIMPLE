@@ -84,7 +84,7 @@ contains
         character(len=STDLEN)                             :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         real        :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
-        integer     :: movies_set_counter, import_counter, nwaits
+        integer     :: movies_set_counter, import_counter, nwaits, nmovs2importperiter
         integer     :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer     :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
         logical     :: l_movies_left, l_haschanged, l_restart, SJ_directory_structure, l_dir_found
@@ -249,6 +249,7 @@ contains
         l_movies_left  = .false.
         l_haschanged   = .false.
         cline_exec     = cline
+        nmovs2importperiter    = 2*params%nparts*STREAM_NMOVS_SET
         stat_dfx_threshold     = 0.
         stat_dfy_threshold     = 0.
         stat_astig_threshold   = 0.
@@ -280,7 +281,7 @@ contains
             call http_communicator%json%update(http_communicator%job_json, "movies_rate",         movie_buff%rate,                     found)
             ! detection of new folders & movies
             call movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
-            call movie_buff%watch( nmovies, movies, max_nmovies=4*params%nparts*STREAM_NMOVS_SET )
+            call movie_buff%watch( nmovies, movies, max_nmovies=nmovs2importperiter )
             ! append movies to processing stack
             if( nmovies >= STREAM_NMOVS_SET )then
                 nsets = floor(real(nmovies) / real(STREAM_NMOVS_SET))
@@ -295,7 +296,7 @@ contains
                         cnt     = cnt     + 1
                         n_added = n_added + 1 ! global number of movie sets
                     enddo
-                    if( cnt == min(params%nparts*STREAM_NMOVS_SET,nmovies) ) exit
+                    if( cnt == min(nmovs2importperiter,nmovies) ) exit
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
@@ -583,7 +584,7 @@ contains
             end subroutine update_projects_list
 
             subroutine create_movies_set_project( movie_names )
-                class(string), intent(in) :: movie_names(STREAM_NMOVS_SET)
+                type(string),  intent(in) :: movie_names(STREAM_NMOVS_SET)
                 type(sp_project)          :: spproj_here
                 type(ctfparams)           :: ctfvars
                 type(string)              :: projname, projfile, xmlfile, xmldir, cwd, cwd_old
