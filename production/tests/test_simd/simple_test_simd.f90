@@ -1,17 +1,14 @@
 program simple_test_simd
 use simple_timer
 implicit none
-integer, parameter :: N=1000000000
-real :: a(N), b(N), c(N), t1, t2
+integer, parameter      :: N=1000000000
+real                    :: a(N), b(N), c(N), t1, t2
 integer(timer_int_kind) :: t_loop, t_loop_simd
 real(timer_int_kind)    :: rt_loop, rt_loop_simd
-
-
 integer :: i
 a = 0.
 b = 0.
 c = 0.
-
 ! t_loop = tic()
 ! do i=1,N
 !     a(i) = b(i) + c(i)
@@ -28,7 +25,6 @@ c = 0.
 ! rt_loop_simd = toc(t_loop_simd)
 ! print *, 'time(loop_simd): ', rt_loop_simd
 ! print *, 'speedup with simd: ', rt_loop / rt_loop_simd
-
 t_loop = tic()
 do i=1,N
     t1 = func1(b(i), c(i))

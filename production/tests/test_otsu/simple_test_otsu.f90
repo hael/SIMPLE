@@ -21,8 +21,6 @@ n1   = size(dat1)
 n2   = size(dat2)
 avg1 = sum(dat1) / real(n1)
 avg2 = sum(dat2) / real(n2)
-d = abs(avg1 - avg2)
+d    = abs(avg1 - avg2)
 print *, 'd = ', d ! increases with variance
-
-
 end program simple_test_otsu

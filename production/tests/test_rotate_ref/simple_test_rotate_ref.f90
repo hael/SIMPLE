@@ -28,7 +28,9 @@ print *, '-----------'
 print *, 'improved timing = ', fast_all
 print *, '-----------'
 print *, 'PASSED'
+
 contains
+
     subroutine rotate_ref( ref_in, irot, ref_rot_out )
         complex, intent(in)  :: ref_in(NP, NK)
         integer, intent(in)  :: irot
@@ -103,5 +105,6 @@ contains
             ref_rot_out(      1:irot-NP-1,:) =        ref_in(mid+1:NP, :)
         endif
     end subroutine fast_rotate_ref
+
 end program simple_test_rotate_ref
     

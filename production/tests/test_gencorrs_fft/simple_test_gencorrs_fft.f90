@@ -40,7 +40,6 @@ allocate(cc(pftcc%get_nrots()), cc_fft(pftcc%get_nrots()))
 
 !### TIMING
 
-
 tfft = tic()
 do iptcl=1,p%nptcls - 1
     do jptcl=iptcl + 1, p%nptcls

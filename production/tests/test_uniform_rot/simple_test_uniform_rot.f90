@@ -35,7 +35,9 @@ do i = 1, N_ARR
     ! print *, mat(2,:)
     ! print *, mat(3,:)
 enddo
+
 contains
+
     ! Box—Muller method
     subroutine rgauss( sig, y1, y2 )
         real, intent(in)    :: sig
@@ -51,4 +53,5 @@ contains
         y1 = x1 * w
         y2 = x2 * w
     end subroutine rgauss
+
 end program simple_test_uniform_rot

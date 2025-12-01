@@ -1,8 +1,8 @@
 program simple_test_lbfgsb_cosine
     include 'simple_lib.f08'
-    use simple_optimizer,            only: optimizer
-    use simple_opt_factory,          only: opt_factory
-    use simple_opt_spec,             only: opt_spec
+    use simple_optimizer,   only: optimizer
+    use simple_opt_factory, only: opt_factory
+    use simple_opt_spec,    only: opt_spec
     implicit none
     class(optimizer), pointer   :: opt_ptr=>null()      ! the generic optimizer object
     integer,          parameter :: NDIM=2, NRESTARTS=10

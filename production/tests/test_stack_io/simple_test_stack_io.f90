@@ -3,11 +3,11 @@ include 'simple_lib.f08'
 use simple_stack_io, only: stack_io
 use simple_image,    only: image
 implicit none
-type(stack_io) :: stkio_r, stkio_w
-type(image)    :: img
+type(stack_io)              :: stkio_r, stkio_w
+type(image)                 :: img
 character(len=*), parameter :: stkname = 'cavgs_iter030_ranked.mrc'
 real,             parameter :: smpd    = 1.3
-integer :: nptcls, iptcl, ldim(3)
+integer                     :: nptcls, iptcl, ldim(3)
 call stkio_r%open(string(stkname), smpd, 'read', bufsz=100)
 call stkio_w%open(string('outstk_written.mrc'), smpd, 'write', box=256, is_ft=.false.)
 nptcls = stkio_r%get_nptcls()

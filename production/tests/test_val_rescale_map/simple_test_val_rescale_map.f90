@@ -109,8 +109,3 @@ program simple_test_val_rescale_map
 ! call fclose(filnum)
 ! call molecule%kill()
 end program simple_test_val_rescale_map
-
-
-
-
-

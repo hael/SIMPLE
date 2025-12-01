@@ -36,13 +36,11 @@ call cline%checkvar('gainref',         8)
 call cline%checkvar('nparts',          9)
 call cline%checkvar('nthr',           10)
 call cline%checkvar('moldiam_max',    11)
-if(.not. cline%defined('projname'))    test_passed=.false.
-if(.not. cline%defined('smpd'))        test_passed=.false.
-if(.not. cline%defined('dir_movies'))  test_passed=.false.
-if(.not. cline%defined('gainref'))     test_passed=.false.
-if(.not. cline%defined('moldiam_max')) test_passed=.false.
-
-print *, '**************TST PASS: ', test_passed
+if( .not. cline%defined('projname')   ) test_passed=.false.
+if( .not. cline%defined('smpd')       ) test_passed=.false.
+if( .not. cline%defined('dir_movies') ) test_passed=.false.
+if( .not. cline%defined('gainref')    ) test_passed=.false.
+if( .not. cline%defined('moldiam_max')) test_passed=.false.
 call cline%check()
 call cline%gen_job_descr(job_descr)
 call job_descr%set('prg',      'scale')

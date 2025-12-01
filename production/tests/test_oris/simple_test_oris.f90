@@ -28,12 +28,6 @@ print *,'>>> ORIS READ'
 call o2%read(string('test_oris_rndoris.txt'))
 print *,'>>> ORIS WRITE 2'
 call o2%write(string('test_oris_rndoris_copy.txt'))
-! call o%getter( 1, key='projname', val=valstr)
-! print *, valstr
-! string=o%ori2str(1)
-! call o%set_all_2(which, vals(:))
-! o%get_static(key=)
-! call get_class_sample_stats()
 call o%kill()
 call o1%kill()
 call o_subset%kill()

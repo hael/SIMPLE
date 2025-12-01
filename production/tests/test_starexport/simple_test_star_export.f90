@@ -5,21 +5,16 @@ use simple_sp_project
 use simple_starfile
 use simple_parameters
 use simple_cmdline
-
 implicit none
 #include "simple_local_flags.inc"
-
 character(len=*), parameter :: projfile   = 'test.simple'
 character(len=*), parameter :: opticsfile = 'optics.simple'
-
 type(parameters)            :: params
 type(cmdline)               :: cline
 type(sp_project)            :: spproj
 type(starfile)              :: spproj_starfile
 integer(timer_int_kind)     :: ms0
 real(timer_int_kind)        :: ms_complete
-
-!call params%new(cline)
 
 if(.not. file_exists(string(projfile))) THROW_HARD(projfile // " does not exist")
 
@@ -37,6 +32,5 @@ ms0 = tic()
 call spproj%write_ptcl2D_star()
 ms_complete = toc(ms0)
 print *,'write_ptcl2D_table file in : ', ms_complete; call flush(6)
-
 
 end program simple_test_star_export

@@ -5,11 +5,11 @@ use simple_starproject_tester
 use, intrinsic :: ISO_C_Binding, only: C_long
 use simple_starfile_wrappers
 implicit none
-type(starfile_table_type) :: sfile
-logical :: aresult
+type(starfile_table_type)     :: sfile
+logical                       :: aresult
 character(len=:), allocatable :: retrieved_string
-real(kind=8) :: amt, aml
-integer(C_long) :: object_id, num_objects
+real(kind=8)                  :: amt, aml
+integer(C_long)               :: object_id, num_objects
 ! step 1: write star-file
 ! alloc and open output file
 call starfile_table__new(sfile)

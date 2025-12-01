@@ -4,11 +4,11 @@ use simple_image,   only: image
 use simple_imgfile, only: imgfile
 implicit none
 #include "simple_local_flags.inc"
-integer       :: ldim(3), i, j
-real          :: smpd=2., corr
-type(image)   :: img
-type(image)   :: imgs(20)
-logical       :: ft=.false.
+integer     :: ldim(3), i, j
+real        :: smpd=2., corr
+type(image) :: img
+type(image) :: imgs(20)
+logical     :: ft=.false.
 
 ! SELF-CONSISTENCY TESTS
 

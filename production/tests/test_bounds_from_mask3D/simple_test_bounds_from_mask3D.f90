@@ -2,11 +2,11 @@ program simple_test_bounds_from_mask3D
 include 'simple_lib.f08'
 use simple_image
 implicit none
-integer, parameter :: BOX=256, RAD=50
-real,    parameter :: SMPD=1.
-type(image) :: cube
+type(image)          :: cube
+integer, parameter   :: BOX=256, RAD=50
+real,    parameter   :: SMPD=1.
 logical, allocatable :: mask(:,:,:)
-integer :: lb(3), ub(3)
+integer              :: lb(3), ub(3)
 call cube%new([BOX,BOX,BOX], SMPD)
 call cube%square(RAD)
 call cube%write(string('cube.mrc'))

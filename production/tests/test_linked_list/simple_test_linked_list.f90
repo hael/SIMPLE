@@ -1,11 +1,11 @@
 program simple_test_linked_list
 use simple_linked_list
 implicit none
-type(linked_list) :: lst
-type(list_iterator) :: it
-class(*), allocatable :: any
-integer :: i
+type(linked_list)         :: lst
+type(list_iterator)       :: it
+class(*),     allocatable :: any
 character(:), allocatable :: s
+integer                   :: i
 
 call lst%push_back(42)              ! integer
 call lst%push_back(3.14159d0)       ! real(8)

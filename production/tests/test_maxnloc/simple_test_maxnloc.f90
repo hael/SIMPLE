@@ -2,9 +2,9 @@ program simple_test_maxnloc
 include 'simple_lib.f08'
 implicit none
 integer, parameter :: NNRS = 1000, NSEL = 10, NTST=100000
-real    :: arr(NNRS), arr_copy(NNRS), arr_tmp(NNRS)
-integer :: indxarr(NNRS), i, loc(NSEL)
-type(ran_tabu) :: rt
+real               :: arr(NNRS), arr_copy(NNRS), arr_tmp(NNRS)
+integer            :: indxarr(NNRS), i, loc(NSEL)
+type(ran_tabu)     :: rt
 rt = ran_tabu(NNRS)
 do i = 1, NNRS
     arr(i) = real(i)
