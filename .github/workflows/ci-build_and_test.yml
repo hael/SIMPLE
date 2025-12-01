@@ -23,7 +23,9 @@ jobs:
              sudo add-apt-repository ppa:ubuntu-toolchain-r/test
              sudo apt-get update
              sudo apt-get install gcc-14 g++-14 
-             sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 60 --slave /usr/bin/g++ g++ /usr/bin/g++-14
+             sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+             sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+             sudo update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-14 100 
              echo "Install FFTW"
              wget ftp://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
              tar zxvf fftw-3.3.8.tar.gz
