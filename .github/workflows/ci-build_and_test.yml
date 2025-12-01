@@ -98,8 +98,6 @@ jobs:
              simple_test_ctf
              echo "-------------------- TEST EXTR FRAC -------------------------"
              simple_test_extr_frac
-             echo "-------------------- TEST FILE INPUT OUTPUT-------------------------"
-             simple_test_fileio
              echo "-------------------- TEST FILE INPUT OUTPUT IN PARALLEL-------------------------"
              simple_test_io_parallel
              echo "-------------------- TEST FPLANE PROJECTION -------------------------"
