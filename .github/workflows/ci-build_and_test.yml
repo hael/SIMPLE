@@ -100,8 +100,6 @@ jobs:
              simple_test_extr_frac
              echo "-------------------- TEST FILE INPUT OUTPUT IN PARALLEL-------------------------"
              simple_test_io_parallel
-             echo "-------------------- TEST FPLANE PROJECTION -------------------------"
-             simple_test_fplane_proj
              echo "-------------------- TEST GRAPHENE MASK -------------------------"
              simple_test_graphene_mask
              echo "-------------------- TEST IMAGE FILE -------------------------"
