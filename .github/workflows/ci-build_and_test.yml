@@ -17,7 +17,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
+             sudo apt-get -y install cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev gcc-15
              echo "Install FFTW"
              wget ftp://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
              tar zxvf fftw-3.3.8.tar.gz
