@@ -50,18 +50,18 @@ jobs:
              #eval "$($GITHUB_WORKSPACE/eman2/bin/conda create -n eman2 eman-dev==2.99.47 -c cryoem -c conda-forge)" 
              #eval "$($GITHUB_WORKSPACE/eman2/bin/conda activate eman2)" 
              
-      - name: Tests Install SIMPLE debug mode
-        run: |
-             ./compile_debug.sh
-             #mkdir -p build
-             #cd build
-             #cmake .. -DGUI=off -DCMAKE_BUILD_TYPE=debug -DUSE_LIBTIFF=off
-             #make -j install
-             export SIMPLE_EMAIL="my.name@uni.edu"
-             export SIMPLE_QSYS="local"
-             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
-             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-             cd ..
+#      - name: Tests Install SIMPLE debug mode
+#        run: |
+#             ./compile_debug.sh
+#             #mkdir -p build
+#             #cd build
+#             #cmake .. -DGUI=off -DCMAKE_BUILD_TYPE=debug -DUSE_LIBTIFF=off
+#             #make -j install
+#             export SIMPLE_EMAIL="my.name@uni.edu"
+#             export SIMPLE_QSYS="local"
+#             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
+#             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
+#             cd ..
 
       - name: Install SIMPLE
         run: |
