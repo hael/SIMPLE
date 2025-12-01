@@ -139,9 +139,6 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call cline%set('mkdir', 'no')
-
-        call cline%printline
-
         call params%new(cline)
         if( cline%defined('projfile') )then
             call spproj%read(params%projfile)

@@ -28,7 +28,7 @@ character(len=*),parameter :: FC_COMPILER= "GNU gfortran"
 integer :: FC_COMPILER_VERSION(3) = (/ __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__ /)
 integer, parameter :: FORTRAN_COMPILER = FC_GNU_COMPILER
 #else
-# error 'Compiler must be GNU, IntelLLVM or PGI'
+# error 'Compiler must be GNU'
 #endif
 character,        parameter :: PATH_SEPARATOR = "/"
 character(len=2), parameter :: PATH_HERE      = "./"
