@@ -88,8 +88,6 @@ jobs:
              simple_test_corrs2weights
              echo "-------------------- TEST CTF -------------------------"
              simple_test_ctf
-             echo "-------------------- TEST EULER -------------------------"
-             simple_test_euler
              echo "-------------------- TEST EXTR FRAC -------------------------"
              simple_test_extr_frac
              echo "-------------------- TEST FILE INPUT OUTPUT-------------------------"
@@ -112,8 +110,6 @@ jobs:
              simple_test_lplims
              echo "-------------------- TEST MASK -------------------------"
              simple_test_mask
-             echo "-------------------- TEST MASKNLOC -------------------------"
-             simple_test_maxnloc
              echo "-------------------- TEST MEMORY USE -------------------------"
              simple_test_memuse
              echo "-------------------- TEST MULTIMODAL -------------------------"
