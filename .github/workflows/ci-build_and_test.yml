@@ -19,23 +19,11 @@ jobs:
              echo "Install Basic Dependencies"
              sudo apt-get -y install cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
              echo "Install GCC 15.2"
-             sudo apt install -y build-essential git make gawk flex bison libgmp-dev libmpfr-dev libmpc-dev python3 binutils perl libisl-dev libzstd-dev tar gzip bzip2
-             git clone https://gcc.gnu.org/git/gcc.git 
-             cd gcc 
-             git checkout releases/gcc-15.2.0 # Or the desired release/tag
-             mkdir build
-             ./contrib/download_prerequisites 
-             cd build
-             ../configure --enable-languages=c,c++,fortran,go,objc,obj-c++ --with-system-zlib --disable-multilib --prefix=/opt/gcc-15 # Customize prefix as needed
-             sudo make -j # Use all available CPU cores for faster compilation
-             sudo make install
-             sudo update-alternatives --install /usr/bin/gcc gcc /opt/gcc-15/bin/gcc 100
-             sudo update-alternatives --install /usr/bin/g++ g++ /opt/gcc-15/bin/g++ 100
-             #sudo apt install software-properties-common
-             #sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-             #sudo apt-get update
-             #sudo apt-get install gcc-15 g++-15 
-             #sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 60 --slave /usr/bin/g++ g++ /usr/bin/g++-15
+             sudo apt install software-properties-common
+             sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+             sudo apt-get update
+             sudo apt-get install gcc-14 g++-14 
+             sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 60 --slave /usr/bin/g++ g++ /usr/bin/g++-14
              echo "Install FFTW"
              wget ftp://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
              tar zxvf fftw-3.3.8.tar.gz
