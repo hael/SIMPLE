@@ -2,9 +2,9 @@ program simple_test_class_sample
 include 'simple_lib.f08'
 implicit none
 type(class_sample), allocatable :: cs(:), cs2(:)
-type(class_sample) :: cs_entry 
-real, allocatable  :: rarr(:)
-integer :: recsz, funit, io_stat
+type(class_sample)              :: cs_entry 
+real,               allocatable :: rarr(:)
+integer                         :: recsz, funit, io_stat
 
 call make_cs(cs)
 call make_cs(cs2)

@@ -48,8 +48,3 @@ program simple_test_val_per_atom
 ! call molecule%kill
 ! call vol%kill
 end program simple_test_val_per_atom 
-
-
-
-
-

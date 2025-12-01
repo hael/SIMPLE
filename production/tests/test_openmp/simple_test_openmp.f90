@@ -5,9 +5,7 @@ include 'simple_lib.f08'
 use simple_image
 implicit none
 #include "simple_local_flags.inc"
-
 integer :: vals(100), i,j, counts(10), correct_counts(10)
-
 ! reference, no openmp
 vals    = 0
 counts  = 0
@@ -22,7 +20,6 @@ do j=1,10
     enddo
 enddo
 correct_counts = counts
-
 ! safe
 vals    = 0
 counts  = 0
@@ -42,13 +39,11 @@ do j=1,10
 enddo
 !$omp end do
 !$omp end parallel
-
 if(all(counts==correct_counts))then
     print *,'passed scenario one'
 else
     print *,'failed scenario one'
 endif
-
 ! unsafe, nowait
 vals    = 0
 counts  = 0

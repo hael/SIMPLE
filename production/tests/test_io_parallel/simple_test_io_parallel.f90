@@ -4,19 +4,19 @@ use simple_image,    only: image
 use simple_stack_io, only: stack_io
 use simple_imgfile,  only: imgfile
 implicit none
-type(string)                  :: benchfname
-integer,          parameter   :: NVOLRWS   = 10
-integer,          parameter   :: NVOLS     = 4
-integer,          parameter   :: BOX       = 512
-integer,          parameter   :: ONE_M     = 1024**2
-integer(kind=8),  parameter   :: NVOLBYTES = NVOLRWS * BOX * BOX * BOX * 4
-real,             parameter   :: SMPD      = 1.0
-real(kind=c_float),            pointer :: rmat_ptr(:,:,:)=>null()  !< image pixels/voxels (in data)
+type(string)                 :: benchfname
+integer,          parameter  :: NVOLRWS   = 10
+integer,          parameter  :: NVOLS     = 4
+integer,          parameter  :: BOX       = 512
+integer,          parameter  :: ONE_M     = 1024**2
+integer(kind=8),  parameter  :: NVOLBYTES = NVOLRWS * BOX * BOX * BOX * 4
+real,             parameter  :: SMPD      = 1.0
+real(kind=c_float), pointer  :: rmat_ptr(:,:,:)=>null()  !< image pixels/voxels (in data)
 !complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)=>null()  !< Fourier components
-type(image)                   :: vols(NVOLS)
-type(imgfile)                 :: ioimg(NVOLS)
-integer(timer_int_kind)       ::  t_vol_w,  t_vol_w_para,  t_vol_r,  t_vol_r_para
-real(timer_int_kind)          :: rt_vol_w, rt_vol_w_para, rt_vol_r, rt_vol_r_para
+type(image)                  :: vols(NVOLS)
+type(imgfile)                :: ioimg(NVOLS)
+integer(timer_int_kind)      ::  t_vol_w,  t_vol_w_para,  t_vol_r,  t_vol_r_para
+real(timer_int_kind)         :: rt_vol_w, rt_vol_w_para, rt_vol_r, rt_vol_r_para
 integer :: i, j, fnr
 
 print *, 'simulating volumes'

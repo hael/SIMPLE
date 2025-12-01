@@ -5,7 +5,7 @@ use simple_stackops
 use simple_ppca
 implicit none
 type(image)          :: img, img_msk, img_rev
-real, allocatable    :: pcavec(:)
+real,    allocatable :: pcavec(:)
 logical, allocatable :: l_mask(:,:,:)
 integer, parameter   :: box = 256
 call img%new([box,box,1], 1.0)

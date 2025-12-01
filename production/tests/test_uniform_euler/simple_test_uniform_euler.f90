@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_sym
 use simple_ori
 implicit none
-integer, parameter  :: N_SAMPLES = 2000
+integer, parameter :: N_SAMPLES = 2000
 type(sym)   :: pgrpsyms
 type(ori)   :: o
 integer     :: i

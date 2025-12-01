@@ -83,7 +83,4 @@ do j = 1, 1
     print *, imgs(5,:,1)
 enddo
 
-contains
-
-
 end program simple_test_pca_imgvar

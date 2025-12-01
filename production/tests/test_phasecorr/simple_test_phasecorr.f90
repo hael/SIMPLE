@@ -3,29 +3,27 @@
 ! Phase-correlations: FT^-1{ FT{A} * FT{B} }
 
 module mod_phasecorr
-    use simple_image
+use simple_image
+real,    parameter :: smpd = 1.0
+integer, parameter :: Nx   = 1000      ! size of image
+integer, parameter :: Ny   = 1000      ! size of image
+real,    parameter :: center_A_x = 100.   ! center of half-circle A
+real,    parameter :: center_A_y = 100.   ! center of half-circle A
+real,    parameter :: center_B_x = 200.   ! center of half-circle B
+real,    parameter :: center_B_y = 200.   ! center of half-circle B
+real,    parameter :: radius     =  80.   ! radius of half-circles
 
-    real,    parameter :: smpd = 1.0
-    integer, parameter :: Nx   = 1000      ! size of image
-    integer, parameter :: Ny   = 1000      ! size of image
-    real, parameter :: center_A_x = 100.   ! center of half-circle A
-    real, parameter :: center_A_y = 100.   ! center of half-circle A
-    real, parameter :: center_B_x = 200.   ! center of half-circle B
-    real, parameter :: center_B_y = 200.   ! center of half-circle B
-    real, parameter :: radius     =  80.   ! radius of half-circles
-
-    type :: t_phasecorr
-        type(image) :: imgA, imgB          ! images to determine phase-correlations from
-        type(image) :: imgC                ! used for calculation
-    contains
-        procedure :: new
-        procedure :: run
-        procedure :: kill
-
-        procedure :: alloc
-        procedure :: gen_images            ! generate images (two half-circles)
-        procedure :: vis_imgs
-    end type t_phasecorr
+type :: t_phasecorr
+    type(image) :: imgA, imgB          ! images to determine phase-correlations from
+    type(image) :: imgC                ! used for calculation
+contains
+    procedure :: new
+    procedure :: run
+    procedure :: kill
+    procedure :: alloc
+    procedure :: gen_images            ! generate images (two half-circles)
+    procedure :: vis_imgs
+end type t_phasecorr
 
 contains
 
@@ -129,8 +127,8 @@ end module mod_phasecorr
 program test_phasecorr
     use mod_phasecorr
     implicit none
-
     type(t_phasecorr) :: tphasecorr
+
     call tphasecorr%new
     call tphasecorr%run
     call tphasecorr%kill

@@ -1,10 +1,10 @@
 program simple_test_order_corr
 include 'simple_lib.f08'
 implicit none
-type(oris) :: os
-type(ori)  :: o
+type(oris)           :: os
+type(ori)            :: o
 integer, allocatable :: order(:)
-integer :: i
+integer              :: i
 call seed_rnd
 call os%new(11, is_ptcl=.false.)
 call os%set_all2single('state',1.)

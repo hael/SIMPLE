@@ -1,9 +1,8 @@
 program simple_test_angres
 include 'simple_lib.f08'
 implicit none
-
-integer    :: i
 type(oris) :: os
+integer    :: i
 
 do i=500,20000,500
     call os%new(i, is_ptcl=.false.)

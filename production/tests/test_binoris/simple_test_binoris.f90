@@ -77,7 +77,6 @@ if( test_passed )then
 else
     THROW_HARD('>>> TEST FAILED')
 endif
-
 ! do i=1,5
 !     call psrch3D(i)%set_o_peaks(os_peak1)
 ! end do
@@ -136,8 +135,6 @@ endif
 ! call a2%new(10)
 ! call binread_oritab('oris_full_fill_in.bin', a2, [1,10], psrch3D)
 ! call a2%write('oris_full_fill_in.txt')
-
-
 ! parts = split_nobjs_even(10,5)
 ! do ipart=1,5
 !     call bos%new(a, parts(ipart,:))

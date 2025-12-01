@@ -6,7 +6,7 @@ implicit none
 integer, parameter :: NMICS = 87
 integer, parameter :: NPTCLS = 5646
 type(sp_project)   :: project1, project2, project3
-type(string) :: template, str1, str2
+type(string)       :: template, str1, str2
 real    :: eullims(3,2)
 integer :: i
 call seed_rnd
