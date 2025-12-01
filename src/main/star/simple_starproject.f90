@@ -41,7 +41,7 @@ contains
     procedure, private :: export_stardata
     ! tilt
     procedure, private :: assign_initial_tiltgroups
-    procedure, private :: assign_xml_tiltinfo
+    procedure          :: assign_xml_tiltinfo
     procedure, private :: cluster_tiltinfo
     ! optics
     procedure          :: assign_optics
