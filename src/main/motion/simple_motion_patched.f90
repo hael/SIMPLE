@@ -734,7 +734,7 @@ contains
         self%shift_fname = self%shift_fname%to_char([1,l-1]) ! removing trailing C NULL character
         fname_pdf        = get_fbody(self%shift_fname,string('eps'))//'.pdf'
         ps2pdf_cmd       = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760&
-        &-dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
+        & -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
             //fname_pdf%to_char()//' '//self%shift_fname%to_char()
         call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         ! update name

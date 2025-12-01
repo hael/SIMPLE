@@ -292,9 +292,9 @@ contains
 
     subroutine detect_and_add_dirs( self, rootdir, SJdirstruct )
         class(moviewatcher), intent(inout) :: self
-        class(string),       intent(in)    :: rootdir
+        type(string),        intent(in)    :: rootdir
         logical,             intent(in)    :: SJdirstruct
-        class(string), allocatable :: dir_movies(:)
+        type(string), allocatable :: dir_movies(:)
         integer :: i
         logical :: l_new_dir
         if( SJdirstruct )then
@@ -372,11 +372,9 @@ contains
             if( allocated(farray) )then
                 n_newfiles = size(tmp_farr)
                 nfiles     = size(farray)
-                allocate(tmp_farr2(nfiles))
-                do i = 1, nfiles
-                    tmp_farr2(i) = farray(i)
-                enddo
-                call farray%kill
+                allocate(tmp_farr2(nfiles), source=farray)
+                call farray(:)%kill
+                deallocate(farray)
                 allocate(farray(nfiles+n_newfiles))
                 do i = 1, nfiles
                     farray(i) = tmp_farr2(i) 
@@ -386,12 +384,15 @@ contains
                     cnt = cnt + 1
                     farray(i) = tmp_farr(cnt)
                 enddo
+                call tmp_farr2(:)%kill
+                deallocate(tmp_farr2)
             else
-                allocate(farray(size(tmp_farr)))
+                allocate(farray(size(tmp_farr)), source=tmp_farr)
                 do i = 1, size(tmp_farr)
                     farray(i) = tmp_farr(i)
                 enddo
             endif
+            call tmp_farr(:)%kill
         enddo
     end subroutine watchdirs
 
@@ -419,11 +420,11 @@ contains
 
     ! List all directories following the so-called SJ format: directory/xxx/Data
     subroutine sniff_folders_SJ( directory, SJdirstruct, found_directories )
-        class(string),             intent(in)    :: directory
+        type(string),              intent(in)    :: directory
         logical,                   intent(inout) :: SJdirstruct
         type(string), allocatable, intent(inout) :: found_directories(:)
         type(string)              :: dir, absdirectory, subdir
-        type(string), allocatable :: dirs(:), subdirs(:), tmp(:)
+        type(string), allocatable :: dirs(:), subdirs(:)
         integer :: i, j, nfound
         SJdirstruct  = .false.
         nfound       = 0
@@ -433,7 +434,6 @@ contains
         dirs = simple_list_dirs(absdirectory)
         if( .not.allocated(dirs) ) return
         ! subdirectories, depth=2
-        allocate(found_directories(0))
         do i = 1,size(dirs)
             dir     = absdirectory//'/'//dirs(i)
             subdirs = simple_list_dirs(dir)
@@ -442,15 +442,16 @@ contains
                 subdir = dir//'/'//subdirs(j)
                 if( subdirs(j) == 'Data' )then
                     nfound = nfound + 1
-                    call move_alloc(found_directories, tmp)
-                    allocate(found_directories(nfound))
-                    found_directories(1:nfound-1) = tmp(:)
-                    found_directories(nfound)     = subdir
-                    deallocate(tmp)
+                    if( .not.allocated(found_directories) )then
+                        allocate(found_directories(1), source=[subdir])
+                    else
+                        found_directories = [found_directories(1:nfound-1), subdir]
+                    endif
                 endif
             enddo
             deallocate(subdirs)
         enddo
+        deallocate(dirs)
         SJdirstruct = nfound > 0
     end subroutine sniff_folders_SJ
 

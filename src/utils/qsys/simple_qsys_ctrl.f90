@@ -188,7 +188,6 @@ contains
 
     subroutine clear_stack( self )
         class(qsys_ctrl), intent(inout) :: self
-        integer :: i
         if( allocated(self%stream_cline_stack))then
             call self%stream_cline_stack(:)%kill
             deallocate(self%stream_cline_stack)
@@ -689,15 +688,15 @@ contains
     ! STREAMING
 
     subroutine schedule_streaming( self, q_descr, path )
-        class(qsys_ctrl),         intent(inout) :: self
-        class(chash),             intent(in)    :: q_descr
-        class(string),  optional, intent(in)    :: path
+        class(qsys_ctrl),        intent(inout) :: self
+        class(chash),            intent(in)    :: q_descr
+        type(string),  optional, intent(in)    :: path
         type(chash)                :: job_descr
         type(string) :: cwd, cwd_old
         integer      :: ipart
         if( present(path) )then
             cwd_old = trim(CWD_GLOB)
-            call simple_chdir(path%to_char())
+            call simple_chdir(path)
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
         endif
@@ -723,7 +722,7 @@ contains
             endif
         endif
         if( present(path) )then
-            call simple_chdir(cwd_old%to_char())
+            call simple_chdir(cwd_old)
             CWD_GLOB = cwd_old%to_char()
         endif
         call job_descr%kill
