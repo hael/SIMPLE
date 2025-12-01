@@ -1,6 +1,7 @@
 ! just write out a few fields into a starfile and retrieve one string
 program simple_test_starfile
 include 'simple_lib.f08'
+use simple_starproject_tester
 use, intrinsic :: ISO_C_Binding, only: C_long
 use simple_starfile_wrappers
 implicit none
@@ -90,4 +91,6 @@ aresult = starfile_table__getValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LA
 write (*,*) 'aresult = ', aresult, ' ; aml = ', aml
 ! deallocate
 call starfile_table__delete(sfile)
+! chatgpt generated tests
+call run_all_starproject_tests
 end program simple_test_starfile
