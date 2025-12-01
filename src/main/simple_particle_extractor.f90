@@ -7,7 +7,7 @@ use simple_eer_factory,                   only: eer_decoder
 use simple_motion_correct_utils,          only: correct_gain
 use simple_starfile_wrappers
 implicit none
-! private
+private
 #include "simple_local_flags.inc"
 
 public :: ptcl_extractor

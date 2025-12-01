@@ -8,7 +8,7 @@ private
 #include "simple_local_flags.inc"
 
 type :: histogram
-    ! private
+    private
     real,    allocatable :: x(:)
     real,    allocatable :: counts(:)
     integer              :: nbins = 0
