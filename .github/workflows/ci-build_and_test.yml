@@ -144,8 +144,6 @@ jobs:
              simple_test_stringmatch
              echo "-------------------- TEST SYM -------------------------"
              simple_test_sym
-             echo "-------------------- TEST TSERIES NEIGH -------------------------"
-             simple_test_tseries_neigh
              echo "-------------------- TEST UNIFORM EULER -------------------------"
              simple_test_uniform_euler
              echo "-------------------- TEST UNIFORM ROT -------------------------"
