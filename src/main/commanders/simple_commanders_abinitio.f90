@@ -78,6 +78,7 @@ integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! wh
 integer,          parameter :: GAUREF_LAST_STAGE     = PHASES(1)            ! When to stop using gaussian filtering of the references with polar=yes
 integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, PROBREFINE_STAGE, NSTAGES]
 integer,          parameter :: NSPACE_POLAR(3)       = [500,             1000,    1500]
+integer,          parameter :: MAXITS_BETWEEN        = 10                   ! Development
 
 ! class variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
@@ -545,6 +546,7 @@ contains
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                 'comlin_noself')
         if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
+        if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',            MAXITS_BETWEEN)
         ! adjust cartesian/polar options
         if( cline%get_carg('polar')=='yes' )then
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
@@ -567,6 +569,8 @@ contains
         call cline%delete('stream')
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        call cline%delete('algorithm')
+        call cline%delete('maxits_between')
         ! Multiple states
         nstates_glob = params%nstates
         select case(trim(params%multivol_mode))
@@ -1249,6 +1253,32 @@ contains
         ! projection directions
         if( cline_refine3D%defined('nspace_max') )then
             inspace = min(inspace, params_glob%nspace_max)
+        endif
+        ! Development
+        if( trim(params_glob%algorithm).eq.'mimic2D' )then
+            imaxits  = params_glob%maxits_between   ! # of iterations
+            inspace  = min(inspace, 2000)           ! nspace
+            refine   = 'snhc_smpl'                  ! refinement
+            sh_first = 'no'                         ! not implemented
+            prob_sh  = 'no'
+            lp_auto  = 'no'
+            icm      = 'no'                         ! icm filter off
+            if( istage <= params_glob%gauref_last_stage )then
+             gaufreq = lpinfo(istage)%lp            ! gaussian on, ML off
+             ml_reg  = 'no'
+            else
+             gaufreq = -1.0                         ! gaussian off, ML on
+             ml_reg  = 'yes'
+            endif
+            call cline_refine3D%set('extr_lim', (NSTAGES-1)*imaxits)
+            if( istage <= 1 )then
+                call cline_refine3D%set('extr_iter', 1)
+            elseif( istage < NSTAGES )then
+                call cline_refine3D%set('extr_iter', (istage-1)*imaxits+1)
+            else
+                call cline_refine3D%delete('extr_iter')
+                call cline_refine3D%delete('extr_lim')
+            endif
         endif
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')

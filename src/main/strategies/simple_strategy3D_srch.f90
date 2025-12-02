@@ -21,6 +21,7 @@ end type strategy3D_spec
 type strategy3D_srch
     character(len=:), allocatable :: refine                !< 3D refinement flag
     type(pftcc_shsrch_grad) :: grad_shsrch_obj             !< origin shift search object, L-BFGS with gradient
+    type(pftcc_shsrch_grad) :: grad_shsrch_obj2            !<
     type(pftcc_shsrch_grad) :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
     type(ori)               :: o_prev                      !< previous orientation
     type(oris)              :: opeaks                      !< peak orientations to consider for refinement
@@ -98,6 +99,8 @@ contains
         self%nrots = pftcc_glob%get_nrots()
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
         &maxits=params_glob%maxits_sh, opt_angle=.true.)
+        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh,&
+        &shbarrier=params_glob%shbarrier, opt_angle=.false.)
         call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
         &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
         self%exists = .true.
@@ -236,6 +239,7 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
+        call self%grad_shsrch_obj2%kill
         call self%grad_shsrch_first_obj%kill
         call self%opeaks%kill
         call self%o_prev%kill
