@@ -110,18 +110,19 @@ contains
         use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
         class(commander_calc_pspec), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters)     :: params
-        type(image)          :: sum_img
-        type(builder)        :: build
-        type(sigma2_binfile) :: binfile
-        complex, pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
-        integer, allocatable :: pinds(:)
-        real,    allocatable :: pspec(:), sigma2(:,:)
-        type(string) :: binfname
-        real         :: sdev_noise
-        integer      :: batchlims(2),kfromto(2)
-        integer      :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
-        logical      :: l_scale_update_frac
+        type(parameters)         :: params
+        type(image)              :: sum_img
+        type(builder)            :: build
+        type(sigma2_binfile)     :: binfile
+        type(string)             :: binfname
+        complex,     pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
+        integer,     allocatable :: pinds(:)
+        real,        allocatable :: pspec(:), sigma2(:,:)
+        complex(dp), allocatable :: cmat_thr_sum(:,:,:)
+        real    :: sdev_noise
+        integer :: batchlims(2),kfromto(2)
+        integer :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
+        logical :: l_scale_update_frac
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -145,12 +146,14 @@ contains
         call sum_img%new([params%box,params%box,1],params%smpd)
         call sum_img%zero_and_flag_ft
         call sum_img%get_cmat_ptr(cmat_sum)
+        allocate(cmat_thr_sum(size(cmat_sum,dim=1),size(cmat_sum,dim=2),1))
         do i = 1,nptcls_part_sel,batchsz_max
             batchlims = [i, min(i+batchsz_max-1,nptcls_part_sel)]
             nbatch    = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
-            !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
-            !$omp schedule(static) proc_bind(close)
+            cmat_thr_sum = dcmplx(0.d0,0.d0)
+            !$omp parallel do default(shared) private(iptcl,imatch,pspec,cmat)&
+            !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
             do imatch = 1,nbatch
                 iptcl = pinds(batchlims(1)+imatch-1)
                 ! normalize
@@ -174,20 +177,17 @@ contains
                 else
                     sigma2(:,iptcl) = pspec / 2.0
                 endif
+                ! thread average
+                call build%imgbatch(imatch)%get_cmat_ptr(cmat)
+                cmat_thr_sum(:,:,:) = cmat_thr_sum(:,:,:) + cmplx(cmat(:,:,:),kind=dp)
             end do
             !$omp end parallel do
             ! global average
-            do imatch = 1,nbatch
-                call build%imgbatch(imatch)%get_cmat_ptr(cmat)
-                !$omp workshare
-                cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmat(:,:,:)
-                !$omp end workshare
-            enddo
+            cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:),kind=sp)
         end do
         call sum_img%write(string('sum_img_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char())
         ! write to disk
-        kfromto(1) = 1
-        kfromto(2) = nyq
+        kfromto  = [1, nyq]
         binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
