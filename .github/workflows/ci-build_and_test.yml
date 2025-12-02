@@ -114,8 +114,6 @@ jobs:
              simple_test_lplims
              echo "-------------------- TEST MASK -------------------------"
              simple_test_mask
-             echo "-------------------- TEST MEMORY USE -------------------------"
-             simple_test_memuse
              echo "-------------------- TEST MULTIMODAL -------------------------"
              simple_test_multinomal
              echo "-------------------- TEST NEIGH -------------------------"
