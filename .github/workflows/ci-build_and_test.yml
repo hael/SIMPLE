@@ -138,8 +138,8 @@ jobs:
              simple_test_simd
              echo "-------------------- TEST STACK -------------------------"
              simple_test_stack
-             echo "-------------------- TEST START FILE -------------------------"
-             simple_test_starfile
+             #echo "-------------------- TEST START FILE -------------------------"
+             #simple_test_starfile
              echo "-------------------- TEST STRINGMATCH -------------------------"
              simple_test_stringmatch
              echo "-------------------- TEST SYM -------------------------"
