@@ -255,7 +255,7 @@ contains
         real,         allocatable :: res(:), fsc(:) 
         logical :: err, vol_defined, have_oris, converged, fall_over, l_multistates, l_automsk
         logical :: l_combine_eo, l_griddingset, do_automsk, l_polar
-        real    :: corr, smpd
+        real    :: smpd
         integer :: i, state, iter, box, nfiles, niters, nthr_here
         601 format(A,1X,F12.3)
         if( .not. cline%defined('nparts') )then
@@ -481,7 +481,7 @@ contains
         ! MAIN LOOP
         niters = 0
         iter   = params%startit - 1
-        corr   = -1.
+        if( .not.cline%defined('extr_iter') ) params%extr_iter = iter
         do
             if( L_BENCH_GLOB )then
                 t_init = tic()
@@ -490,6 +490,7 @@ contains
             niters            = niters + 1
             iter              = iter + 1
             params%which_iter = iter
+            params%extr_iter  = params%extr_iter + 1
             str_iter          = int2str_pad(iter,3)
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
@@ -517,6 +518,8 @@ contains
             endif
             call job_descr%set( 'which_iter', int2str(params%which_iter))
             call cline%set(     'which_iter', params%which_iter)
+            call job_descr%set( 'extr_iter',  int2str(params%extr_iter))
+            call cline%set(     'extr_iter',  params%extr_iter)
             call job_descr%set( 'startit',    int2str(iter))
             call cline%set(     'startit',    iter)
             ! schedule
@@ -737,7 +740,6 @@ contains
         type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
         type(string)                          :: str_state, fsc_file, vol, vol_iter
         integer                               :: startit, i, state
-        real                                  :: corr
         logical                               :: converged, l_sigma
         601 format(A,1X,F12.3)
         call build%init_params_and_build_strategy3D_tbox(cline,params)
@@ -807,10 +809,11 @@ contains
                     endif
                 endif
             endif
+            ! variable neighbourhood size
             params%startit    = startit
             params%which_iter = params%startit
             params%outfile    = 'algndoc'//METADATA_EXT
-            corr              = -1.
+            if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
             do i = 1, params%maxits
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
@@ -887,6 +890,8 @@ contains
                 endif
                 ! update iteration counter
                 params%which_iter = params%which_iter + 1
+                ! cooling of the randomization rate
+                params%extr_iter = params%extr_iter + 1
             end do
         endif
         ! end gracefully

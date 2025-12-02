@@ -2,8 +2,8 @@ module simple_decay_funs
 include 'simple_lib.f08'
 implicit none
 
-public :: calc_update_frac, calc_update_frac_dyn, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto, inv_cos_decay, extremal_decay2D
-public :: cos_decay
+public :: calc_update_frac, calc_update_frac_dyn, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto
+public :: cos_decay, inv_cos_decay, extremal_decay2D, extremal_decay
 private
 #include "simple_local_flags.inc"
 
@@ -80,7 +80,7 @@ contains
         endif
     end function calc_nsampl_fromto
 
-    real function extremal_decay2D( extr_iter, extr_lim )
+    pure real function extremal_decay2D( extr_iter, extr_lim )
         integer, intent(in) :: extr_iter, extr_lim
         real :: power
         ! factorial decay, -2 because first step is always greedy
@@ -88,6 +88,21 @@ contains
         extremal_decay2D = SNHC2D_INITFRAC * (1.-SNHC2D_DECAY)**power
         extremal_decay2D = min(SNHC2D_INITFRAC, max(0.,extremal_decay2D))
     end function extremal_decay2D
+
+    ! is cosine decay with updated bounds
+    pure real function extremal_decay( it, maxits )
+        integer, intent(in) :: it, maxits
+        if( it <=  2 )then
+            ! because first iteration is greedy
+            extremal_decay = 0.5
+        else if( it <= maxits )then
+            ! cosine
+            extremal_decay = 0.5**2 * (1.0 + cos(real(it)*PI / real(maxits)))
+        else
+            ! off
+            extremal_decay = 0.0
+        endif
+    end function extremal_decay
 
 end module simple_decay_funs
 
