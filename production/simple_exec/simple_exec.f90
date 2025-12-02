@@ -75,7 +75,6 @@ type(commander_match_stacks)                :: xmatch_stacks
 type(commander_score_ptcls)                 :: xscore_ptcls
 type(commander_write_classes)               :: xwrite_classes
 type(commander_write_mic_filetab)           :: xwrite_mic_filetab
-type(commander_consolidate_chunks)          :: xconsolidate_chunks
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(commander_estimate_lpstages)           :: xestimate_lpstages
@@ -293,8 +292,6 @@ select case(trim(prg))
         call xwrite_classes%execute(cline)
     case( 'write_mic_filetab' )
         call xwrite_mic_filetab%execute(cline)
-    case('consolidate_chunks')
-        call xconsolidate_chunks%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case('estimate_lpstages')
@@ -498,7 +495,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('b8245709')
+    call simple_print_git_version('3aae3624')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

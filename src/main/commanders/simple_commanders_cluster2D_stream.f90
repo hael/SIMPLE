@@ -35,8 +35,8 @@ public :: all_chunks_available, get_chunk_rejected_jpeg, get_chunk_rejected_jpeg
 public :: get_nchunks, memoize_chunks
 ! Utilities
 public :: cleanup_root_folder, write_project_stream2D, test_repick, write_repick_refs
-! Cluster2D subsets
-public :: commander_cluster2D_subsets, commander_consolidate_chunks
+! Commander: Cluster2D subsets
+public :: commander_cluster2D_subsets
 
 private
 #include "simple_local_flags.inc"
@@ -45,11 +45,6 @@ type, extends(commander_base) :: commander_cluster2D_subsets
   contains
     procedure :: execute      => exec_cluster2D_subsets
 end type commander_cluster2D_subsets
-
-type, extends(commander_base) :: commander_consolidate_chunks
-  contains
-    procedure :: execute      => exec_consolidate_chunks
-end type commander_consolidate_chunks
 
 type scaled_dims
     real    :: smpd=0., msk=0.
@@ -2639,14 +2634,11 @@ contains
         ! sanity checks
         nstks  = spproj_glob%os_stk%get_noris()
         nptcls = spproj_glob%get_nptcls()
-
-        ! took this out since I am running on imported stacks
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! if( spproj_glob%os_mic%get_noris() /= nstks )then
-        !     THROW_HARD('Inconsistent # of micrographs and stacks, use prune_project.')
-        ! endif
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        
+        if( spproj_glob%os_mic%get_noris() > 0 )then
+            if( spproj_glob%os_mic%get_noris() /= nstks )then
+                THROW_HARD('Inconsistent # of micrographs and stacks, use prune_project.')
+            endif
+        endif
         if( nptcls == 0 )then
             THROW_HARD('No particles found in project file: '//params%projfile%to_char()//'; exec_cluster2d_subsets')
         endif
@@ -2959,57 +2951,6 @@ contains
         end subroutine match_sets
 
     end subroutine exec_cluster2D_subsets
-
-    subroutine exec_consolidate_chunks( self, cline )
-        class(commander_consolidate_chunks), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        type(string), allocatable :: folders(:), projfiles(:)
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(string)     :: tmpl, finished, frc_fname, projname
-        integer          :: i,j,k,nchunks,n
-        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        call cline%set('mkdir','no')
-        call spproj%read(params%projfile)
-        ! identify completed chunks
-        folders = simple_list_dirs(params%dir_target)
-        n       = size(folders)
-        if( n == 0 ) THROW_HARD('Could not find chunks in current folder! 1')
-        nchunks = 0
-        allocate(projfiles(n))
-        do i = 1,n
-            projname  = params%dir_target//'/'//folders(i)%to_char()//'/chunk.simple'
-            frc_fname = params%dir_target//'/'//folders(i)%to_char()//'/'//FRCS_FILE
-            finished  = params%dir_target//'/'//folders(i)%to_char()//'/'//CLUSTER2D_FINISHED
-            if( file_exists(projname) .and. file_exists(frc_fname) .and. file_exists(finished) )then
-                nchunks      = nchunks+1
-                projfiles(i) = projname
-            else
-                projfiles(i) = NIL
-            endif
-        enddo
-        if( nchunks == 0 ) THROW_HARD('Could not find chunks in current folder! 2')
-        folders   = pack(folders,   mask=projfiles/=NIL)
-        projfiles = pack(projfiles, mask=projfiles/=NIL)
-        ! consolidate all
-        projname = get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.)
-        call merge_chunk_projfiles(projfiles, string('./'), spproj, projname_out=projname)
-        ! optionally consolidate chunks into sets
-        if( cline%defined('nchunksperset') )then
-            j = 0
-            do i = 1,nchunks,params%nchunksperset
-                j    = j + 1
-                k    = min(i+params%nchunksperset-1,nchunks)
-                tmpl = DIR_SET//int2str(j)
-                call simple_mkdir(tmpl)
-                call merge_chunk_projfiles(projfiles(i:k), tmpl, spproj, projname_out=tmpl)
-                write(*,'(A,I4,A,I8,A)')'>>> GENERATED SET',j,' WITH',spproj%get_nptcls(),' PARTICLES'
-            enddo
-        endif
-        call spproj%kill
-        call simple_end('**** SIMPLE_CONSOLIDATE_CHUNKS NORMAL STOP ****')
-    end subroutine exec_consolidate_chunks
 
     ! Handles user inputted class rejection
     subroutine write_repick_refs(refsout)
