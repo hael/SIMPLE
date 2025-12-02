@@ -105,7 +105,6 @@ type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: cluster_stack
 type(simple_program), target :: comparemc
-type(simple_program), target :: consolidate_chunks
 type(simple_program), target :: conv_atom_denoise
 type(simple_program), target :: convert
 type(simple_program), target :: crys_score
@@ -443,7 +442,6 @@ contains
         call new_cluster_cavgs
         call new_cluster_stack
         call new_comparemc
-        call new_consolidate_chunks
         call new_conv_atom_denoise
         call new_convert
         call new_crys_score
@@ -599,7 +597,6 @@ contains
         call push2prg_ptr_array(cluster_cavgs)
         call push2prg_ptr_array(cluster_stack)
         call push2prg_ptr_array(comparemc)
-        call push2prg_ptr_array(consolidate_chunks)
         call push2prg_ptr_array(conv_atom_denoise)
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(crys_score)
@@ -764,7 +761,6 @@ contains
             case('cluster_cavgs');               ptr2prg => cluster_cavgs
             case('cluster_stack');               ptr2prg => cluster_stack
             case('comparemc');                   ptr2prg => comparemc
-            case('consolidate_chunks');          ptr2prg => consolidate_chunks
             case('conv_atom_denoise');           ptr2prg => conv_atom_denoise
             case('convert');                     ptr2prg => convert
             case('crys_score');                  ptr2prg => crys_score
@@ -911,7 +907,6 @@ contains
         write(logfhandle,'(A)') cluster_cavgs%name%to_char()
         write(logfhandle,'(A)') cluster_stack%name%to_char()
         write(logfhandle,'(A)') comparemc%name%to_char()
-        write(logfhandle,'(A)') consolidate_chunks%name%to_char()
         write(logfhandle,'(A)') convert%name%to_char()
         write(logfhandle,'(A)') ctf_estimate%name%to_char()
         write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
@@ -1841,33 +1836,6 @@ contains
         ! computer controls
         call check_states%set_input('comp_ctrls', 1, nthr)
     end subroutine new_check_states
-
-    subroutine new_consolidate_chunks
-        ! PROGRAM SPECIFICATION
-        call consolidate_chunks%new(&
-        &'consolidate_chunks',&                            ! name
-        &'Consolidates all chunk classes into one set of cavgs',&! descr_short
-        &'Consolidates all chunk classes into one set of cavgs',&! descr_long
-        &'simple_exec',&                                         ! executable
-        &0, 2, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call consolidate_chunks%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the chunks have been generated', 'e.g. 1_cluster2D_subsets', .true., '')
-        call consolidate_chunks%set_input('parm_ios', 2, nchunksperset, gui_advanced=.false.)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_consolidate_chunks
 
     subroutine new_conv_atom_denoise
         ! PROGRAM SPECIFICATION
