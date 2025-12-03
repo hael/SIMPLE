@@ -1,4 +1,40 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
+
+! For consideration:
+
+! 1. Memoization + thread pools should be isolated and reusable
+! Right now heap_vars has many duplicated arrays. Many can be:
+! allocated once, reused across calls
+! replaced with a scratch allocator
+! stored in a thread-local pool to avoid repeated malloc/free overhead
+! Refactoring isolates memo routines → easy to replace with better memory management.
+
+! 2. FFT plan creation can move into allocate_refs_memoization / constructor
+! Instead of creating FFTW plans multiple times or destroying them manually, encapsulate plan lifetimes cleanly:
+! create plan on first call
+! reuse across all operations (FFT reuse = major speedup)
+! destroy only in kill
+! A dedicated FFT submodule makes this easy.
+
+! 4. Correlation routines are highly redundant
+! You have dozens of near-identical kernels:
+! gen_corrs_cc
+! gen_corrs_shifted_cc
+! gen_corrs_weighted_cc
+! gen_corrs_shifted_weighted_cc
+! gen_corr_for_rot_8_*
+! calc_corr_rot_shift
+! many more
+! These can be unified into:
+! shared template functions
+! macro-generated variants (if you want)
+! or a strategy pattern (function pointers)
+! After refactor, these functions live together → easier to unify performance-critical kernels.
+
+! 5. Opportunity for GPU offload
+! If/when you consider GPU acceleration, the new submodules naturally isolate the FFT and kernel operations.
+! The correlation kernels in particular are highly parallelizable.
+
 module simple_polarft_calc
 !$ use omp_lib
 !$ use omp_lib_kinds
