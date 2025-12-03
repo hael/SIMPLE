@@ -3,7 +3,7 @@ module simple_strategy3D_alloc
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
 use simple_builder,          only: build_glob
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 implicit none
 
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
@@ -81,10 +81,10 @@ contains
                 srch_order_allocated = .false.
             case DEFAULT
                 allocate(s3D%srch_order(nrefs,nthr_glob), s3D%srch_order_sub(nrefs_sub,nthr_glob),&
-                &s3D%rts(nthr_glob),s3D%rts_inpl(nthr_glob), s3D%rts_sub(nthr_glob), s3D%inpl_order(pftcc_glob%get_nrots(),nthr_glob))
+                &s3D%rts(nthr_glob),s3D%rts_inpl(nthr_glob), s3D%rts_sub(nthr_glob), s3D%inpl_order(pftc_glob%get_nrots(),nthr_glob))
                 do ithr=1,nthr_glob
                     s3D%rts(ithr)      = ran_tabu(nrefs)
-                    s3D%rts_inpl(ithr) = ran_tabu(pftcc_glob%get_nrots())
+                    s3D%rts_inpl(ithr) = ran_tabu(pftc_glob%get_nrots())
                     s3D%rts_sub(ithr)  = ran_tabu(nrefs_sub)
                 end do
                 srch_order_allocated = .true.

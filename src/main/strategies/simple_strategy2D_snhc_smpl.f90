@@ -4,7 +4,7 @@ use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 use simple_eul_prob_tab2D,   only: power_sampling
 implicit none
 
@@ -53,9 +53,9 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! In-plane sampling
                 if( self%s%l_sh_first )then
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    call pftc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                 else
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    call pftc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                 endif
                 call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
                                     &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
@@ -77,14 +77,14 @@ contains
                         cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
                         if( inpl_ind == 0 )then
                             inpl_ind = cls_inpl_inds(iref)
-                            cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
+                            cxy(1)   = real(pftc_glob%gencorr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
                             cxy(2:3) = self%s%xy_first_rot
                         endif
                     else
                         cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
                         if( inpl_ind == 0 )then
                             inpl_ind = cls_inpl_inds(iref)
-                            cxy      = [real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
+                            cxy      = [real(pftc_glob%gencorr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
                         endif
                     endif
                     cls_corrs(iref) = cxy(1)

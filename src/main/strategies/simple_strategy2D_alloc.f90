@@ -3,7 +3,7 @@ module simple_strategy2D_alloc
 include 'simple_lib.f08'
 use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D, neighfrac2nsmpl
 implicit none
 
@@ -77,13 +77,13 @@ contains
         s2D%snhc_nrefs_bound = max(2, s2D%snhc_nrefs_bound)
         ! snhc_smpl
         s2D%snhc_smpl_ncls  = neighfrac2nsmpl(neigh_frac, params_glob%ncls)
-        s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, pftcc_glob%get_nrots())
+        s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, pftc_glob%get_nrots())
         select case(trim(params_glob%refine))
         case('greedy_smpl','inpl_smpl')
             overlap        = build_glob%spproj_field%get_avg('mi_class', state=1)
             avg_dist_inpl  = calc_athres('dist_inpl', state=1)
             avg_dist_inpl  = avg_dist_inpl * (1.-overlap)
-            s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftcc_glob%get_nrots())/180.))
+            s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftc_glob%get_nrots())/180.))
             s2D%smpl_ncls  = nint(real(params_glob%ncls) * (1.-overlap)**2)
             s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
         end select
@@ -98,9 +98,9 @@ contains
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
-    subroutine prep_strategy2D_batch( pftcc, which_iter, nptcls, pinds )
+    subroutine prep_strategy2D_batch( pftc, which_iter, nptcls, pinds )
         use simple_polarft_calc, only: polarft_corrcalc
-        type(polarft_corrcalc), intent(in) :: pftcc
+        type(polarft_corrcalc), intent(in) :: pftc
         integer,                intent(in) :: which_iter
         integer,                intent(in) :: nptcls        ! # of particles in batch
         integer,                intent(in) :: pinds(nptcls)

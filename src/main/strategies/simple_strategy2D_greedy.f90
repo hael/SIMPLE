@@ -4,7 +4,7 @@ use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 use simple_parameters,       only: params_glob
 implicit none
 
@@ -44,9 +44,9 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! class best
                 if( self%s%l_sh_first )then
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, corrs)
+                    call pftc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, corrs)
                 else
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
+                    call pftc_glob%gencorrs(iref, self%s%iptcl, corrs)
                 endif
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
@@ -61,9 +61,9 @@ contains
             if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
                 ! back-calculating in-plane angle with k-weighing
                 if( self%s%l_sh_first )then
-                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                    call pftc_glob%gencorrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
                 else
-                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                    call pftc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
                 endif
                 self%s%best_rot  = maxloc(corrs, dim=1)
                 self%s%best_corr = corrs(inpl_ind)

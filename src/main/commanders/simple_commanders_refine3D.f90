@@ -229,7 +229,7 @@ contains
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
         type(commander_prob_align)            :: xprob_align_distr
         type(commander_volassemble)           :: xvolassemble
-        type(polarft_corrcalc)                :: pftcc
+        type(polarft_corrcalc)                :: pftc
         ! command lines
         type(cmdline) :: cline_reconstruct3D_distr
         type(cmdline) :: cline_calc_pspec_distr
@@ -275,7 +275,7 @@ contains
         l_polar = trim(params%polar).eq.'yes'
         if( l_polar )then
             call build%build_general_tbox(params, cline, do3d=.true.)
-            call pftcc%new(1, [1,1], params%kfromto)
+            call pftc%new(1, [1,1], params%kfromto)
         endif
         ! sanity check
         fall_over = .false.
@@ -662,13 +662,13 @@ contains
             if( l_polar )then
                 ! Assemble polar references
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
-                call polar_cavger_new(pftcc, .true., nrefs=params%nspace)
+                call polar_cavger_new(pftc, .true., nrefs=params%nspace)
                 call polar_cavger_calc_pops(build%spproj)
                 call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
                 call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
                 call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
+                call polar_cavger_write_cartrefs(pftc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
                 call polar_cavger_kill
                 call job_descr%delete('vol1')
                 call cline%delete('vol1')
@@ -720,7 +720,7 @@ contains
         call cline%set('endit', real(iter))
         ! end gracefully
         call build%kill_general_tbox
-        call pftcc%kill
+        call pftc%kill
         call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D_distr
 
@@ -1017,7 +1017,7 @@ contains
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:)
         type(string)                  :: fname
-        type(polarft_corrcalc)        :: pftcc
+        type(polarft_corrcalc)        :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab)            :: eulprob_obj_part
@@ -1035,23 +1035,23 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
-        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, tmp_imgs, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, tmp_imgs, nptcls, params%which_iter,&
                                         do_polar=((trim(params%polar).eq.'yes') .and. (.not.cline%defined('vol1'))) )
         ! Build polar particle images
-        call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
-            call eulprob_obj_part%fill_tab_state_only(pftcc)
+            call eulprob_obj_part%fill_tab_state_only(pftc)
             call eulprob_obj_part%write_state_tab(fname)
         else
-            call eulprob_obj_part%fill_tab(pftcc)
+            call eulprob_obj_part%fill_tab(pftc)
             call eulprob_obj_part%write_tab(fname)
         endif
         call eulprob_obj_part%kill
         call killimgbatch
-        call pftcc%kill
+        call pftc%kill
         call build%kill_general_tbox
         call qsys_job_finished(string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)

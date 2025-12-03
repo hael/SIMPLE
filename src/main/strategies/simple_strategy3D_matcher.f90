@@ -39,7 +39,7 @@ integer,       allocatable :: pinds(:)
 type(string)               :: fname
 integer                    :: nptcls2update
 type(euclid_sigma2)        :: eucl_sigma
-type(polarft_corrcalc)     :: pftcc
+type(polarft_corrcalc)     :: pftc
 ! benchmarking
 integer(timer_int_kind)    :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
 integer(timer_int_kind)    :: t_prepare_polar_references
@@ -122,15 +122,15 @@ contains
             rt_init                    = toc(t_init)
             t_prepare_polar_references = tic()
         endif
-        call prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter,&
+        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter,&
                                         &do_polar=(l_polar .and. .not.cline%defined('vol1')) )
         if( l_polar .and. l_restore )then
             ! for restoration
             if( cline%defined('vol1') )then
-                call polar_cavger_new(pftcc, .true.)
+                call polar_cavger_new(pftc, .true.)
                 if( params_glob%l_trail_rec )then
                     ! In the first iteration the polarized cartesian references are written down
-                    call polar_cavger_writeall_pftccrefs(string(POLAR_REFS_FBODY))
+                    call polar_cavger_writeall_pftcrefs(string(POLAR_REFS_FBODY))
                 endif
             endif
             call polar_cavger_zero_pft_refs
@@ -171,9 +171,9 @@ contains
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            ! Prep particles in pftcc
+            ! Prep particles in pftc
             if( L_BENCH_GLOB ) t_build_batch_particles = tic()
-            call build_batch_particles(pftcc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs)
+            call build_batch_particles(pftc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs)
             if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -244,7 +244,7 @@ contains
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
-                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
+                    call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'proj')
                 end if
             enddo ! Particles loop
             !$omp end parallel do
@@ -253,7 +253,7 @@ contains
             if( l_polar .and. l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
                 call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build_glob%spproj, pftcc, incr_shifts(:,1:batchsz), is3D=.true.)
+                    &build_glob%spproj, pftc, incr_shifts(:,1:batchsz), is3D=.true.)
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo
@@ -328,10 +328,10 @@ contains
                 else
                     call polar_restoration
                 endif
-                call pftcc%kill
+                call pftc%kill
             else
                 ! Cartesian volume
-                call pftcc%kill
+                call pftc%kill
                 if( trim(params_glob%volrec).eq.'yes' )then
                     if( trim(params_glob%projrec).eq.'yes' )then
                         call calc_projdir3Drec( cline, nptcls2update, pinds )
@@ -347,7 +347,7 @@ contains
             ! cleanup
             call killimgbatch
             call eucl_sigma%kill
-            call pftcc%kill
+            call pftc%kill
         endif
 
         ! REPORT CONVERGENCE
@@ -393,7 +393,7 @@ contains
             call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
             call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
             call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
+            call polar_cavger_write_cartrefs(pftc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
             call polar_cavger_kill
         end subroutine polar_restoration
 

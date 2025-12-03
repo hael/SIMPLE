@@ -1,16 +1,16 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
-module simple_pftcc_shsrch_fm
+module simple_pftc_shsrch_fm
 include 'simple_lib.f08'
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 use simple_parameters,       only: params_glob
 use simple_image,            only: image, image_ptr
 implicit none
 
-public :: pftcc_shsrch_fm
+public :: pftc_shsrch_fm
 private
 #include "simple_local_flags.inc"
 
-type :: pftcc_shsrch_fm
+type :: pftc_shsrch_fm
     private
     real, allocatable :: scores(:)              !< Objective function
     real, allocatable :: coords(:)              !< Offset in pixels
@@ -30,12 +30,12 @@ contains
     procedure, private :: interpolate_peak
     procedure          :: kill
 
-end type pftcc_shsrch_fm
+end type pftc_shsrch_fm
 
 contains
 
     subroutine new( self, trslim, trsstep, opt_angle )
-        class(pftcc_shsrch_fm), intent(inout) :: self     !< instance
+        class(pftc_shsrch_fm), intent(inout) :: self     !< instance
         real,                   intent(in)    :: trslim   !< limits for barrier constraint
         real,                   intent(in)    :: trsstep  !<
         logical,      optional, intent(in)    :: opt_angle
@@ -44,8 +44,8 @@ contains
         self%trslim  = trslim
         self%hn      = ceiling(self%trslim/trsstep)
         self%trsincr = self%trslim / real(self%hn)
-        self%nrots = pftcc_glob%get_nrots()
-        self%pftsz = pftcc_glob%get_pftsz()
+        self%nrots = pftc_glob%get_nrots()
+        self%pftsz = pftc_glob%get_pftsz()
         self%opt_angle = .true.
         if( present(opt_angle) ) self%opt_angle = opt_angle
         allocate(self%grid1(-self%hn:self%hn,-self%hn:self%hn), self%grid2(-self%hn:self%hn,-self%hn:self%hn),&
@@ -55,7 +55,7 @@ contains
 
     !> minimisation routine based on identification of in-plane rotation via shift invariant metric
     subroutine minimize( self, iref, iptcl, irot, score, offset )
-        class(pftcc_shsrch_fm), intent(inout) :: self
+        class(pftc_shsrch_fm), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
         integer,                intent(inout) :: irot
         real,                   intent(out)   :: score
@@ -72,7 +72,7 @@ contains
             irot2 = irot + self%pftsz
         endif
         ! Grid search of both orientations
-        call pftcc_glob%bidirectional_shift_search(self%ref, self%ptcl, irot1, self%hn, self%coords, self%grid1, self%grid2)
+        call pftc_glob%bidirectional_shift_search(self%ref, self%ptcl, irot1, self%hn, self%coords, self%grid1, self%grid2)
         ! Maxima
         call self%interpolate_peak(self%grid1, irot1, shift1, score1)
         call self%interpolate_peak(self%grid2, irot2, shift2, score2)
@@ -85,7 +85,7 @@ contains
             offset = shift2
         endif
         ! Particle shift
-        call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+        call rotmat2d(pftc_glob%get_rot(irot), rotmat)
         offset = matmul(offset, rotmat)
     end subroutine minimize
 
@@ -110,8 +110,8 @@ contains
     !     shift = -matmul(shift, rotmat)
     ! endif
     subroutine calc_phasecorr( self, ind1, ind2, img1, img2, imgcc1, imgcc2, cc, mirror, rotang, shift )
-        class(pftcc_shsrch_fm), intent(inout) :: self
-        integer,                intent(in)    :: ind1, ind2     ! iref,iptcl indices for pftcc
+        class(pftc_shsrch_fm), intent(inout) :: self
+        integer,                intent(in)    :: ind1, ind2     ! iref,iptcl indices for pftc
         class(image),           intent(in)    :: img1, img2     ! ref,ptcl corresponding images
         class(image),           intent(inout) :: imgcc1, imgcc2 ! temporary correlation images
         real,                   intent(out)   :: cc
@@ -121,18 +121,18 @@ contains
         complex  :: fcomp1, fcomp2, fcompl, fcompll
         real(dp) :: var1, var2
         real     :: corrs(self%pftsz),rmat(2,2),dist(2),loc(2),offset1(2),offset2(2),offset(2)
-        real     :: kw, norm, pftcc_ang, cc1,cc2, ang
+        real     :: kw, norm, pftc_ang, cc1,cc2, ang
         integer  :: logilims(3,2), cyclims(3,2), cyclimsR(2,2), win(2), phys(2)
         integer  :: irot,h,k,l,ll,m,mm,sh,c,shlim, kfromto(2)
         logical  :: l_mirr
         l_mirr = .false.
         if( present(mirror) ) l_mirr = mirror
         ! evaluate best orientation from rotational correlation of image magnitudes
-        call pftcc_glob%gencorrs_mag_cc(ind1, ind2, corrs, kweight=.true.)
+        call pftc_glob%gencorrs_mag_cc(ind1, ind2, corrs, kweight=.true.)
         irot      = maxloc(corrs, dim=1) ! one solution in [0;pi]
-        pftcc_ang = pftcc_glob%get_rot(irot)
+        pftc_ang = pftc_glob%get_rot(irot)
         ! phase correlations of image rotated by irot & irot+pi
-        call rotmat2d(pftcc_ang, rmat)
+        call rotmat2d(pftc_ang, rmat)
         call img1%get_cmat_ptr(p1%cmat)
         call img2%get_cmat_ptr(p2%cmat)
         logilims      = img1%loop_lims(2)
@@ -143,7 +143,7 @@ contains
         imgcc2 = cmplx(0.,0.)
         var1   = 0.d0
         var2   = 0.d0
-        kfromto = pftcc_glob%get_kfromto()
+        kfromto = pftc_glob%get_kfromto()
         do h = logilims(1,1),logilims(1,2)
             do k = logilims(2,1),logilims(2,2)
                 sh = nint(hyp(h,k))
@@ -206,11 +206,11 @@ contains
         call interpolate_offset_peak(pcc2, irot+self%pftsz, offset2, cc2)
         if( cc1 > cc2 )then
             offset = offset1
-            ang    = 360.-pftcc_ang
+            ang    = 360.-pftc_ang
             cc     = cc1
         else
             offset = offset2
-            ang    = 180.-pftcc_ang
+            ang    = 180.-pftc_ang
             cc     = cc2
             irot   = irot + self%pftsz
         endif
@@ -249,9 +249,9 @@ contains
                     offset(2) = -offset(2)
                 endif
                 ! on-grid
-                cc  = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(tmp,dp),   rotind))
+                cc  = real(pftc_glob%gencorr_for_rot_8(ind1,ind2,real(tmp,dp),   rotind))
                 ! off-grid
-                cci = real(pftcc_glob%gencorr_for_rot_8(ind1,ind2,real(offset,dp),rotind))
+                cci = real(pftc_glob%gencorr_for_rot_8(ind1,ind2,real(offset,dp),rotind))
                 if( cci > cc )then
                     cc = cci
                 else
@@ -263,7 +263,7 @@ contains
 
     ! exhaustive coarse grid search flowed by peak interpolation
     subroutine exhaustive_search( self, iref, iptcl, irot, score, offset )
-        class(pftcc_shsrch_fm), intent(inout) :: self
+        class(pftc_shsrch_fm), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
         integer,                intent(inout) :: irot
         real,                   intent(out)   :: score
@@ -283,7 +283,7 @@ contains
             do i = -self%hn,self%hn
                 do j = -self%hn,self%hn
                     shift = [self%coords(i), self%coords(j)]
-                    call pftcc_glob%gencorrs(self%ref, self%ptcl, shift, self%scores, kweight=params_glob%l_kweight_rot)
+                    call pftc_glob%gencorrs(self%ref, self%ptcl, shift, self%scores, kweight=params_glob%l_kweight_rot)
                     loc = maxloc(self%scores, dim=1)
                     if( self%scores(loc) > score )then
                         score  = self%scores(loc)
@@ -296,7 +296,7 @@ contains
             do i = max(-self%hn,ii-1), min(self%hn,ii+1)
                 do j = max(-self%hn,jj-1), min(self%hn,jj+1)
                     shift = [self%coords(i), self%coords(j)]
-                    self%grid1(i,j) = real(pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
+                    self%grid1(i,j) = real(pftc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
                 enddo
             enddo
         else
@@ -307,19 +307,19 @@ contains
             do i = -self%hn,self%hn
                 do j = -self%hn,self%hn
                     shift = [self%coords(i), self%coords(j)]
-                    self%grid1(i,j) = real(pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
+                    self%grid1(i,j) = real(pftc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
                 enddo
             enddo
         endif
         ! peak interpolation
         call self%interpolate_peak(self%grid1, irot, offset, score)
         ! Particle shift
-        call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+        call rotmat2d(pftc_glob%get_rot(irot), rotmat)
         offset = matmul(offset, rotmat)
     end subroutine exhaustive_search
 
     subroutine interpolate_peak( self, grid, irot, offset, score )
-        class(pftcc_shsrch_fm), intent(in) :: self
+        class(pftc_shsrch_fm), intent(in) :: self
         real,    intent(in)  :: grid(-self%hn:self%hn,-self%hn:self%hn)
         integer, intent(in)  :: irot
         real,    intent(out) :: offset(2), score
@@ -347,7 +347,7 @@ contains
                 if( abs(denom) > TINY ) offset(2) = offset(2) + self%trsincr * 0.5 * (alpha-gamma) / denom
             endif
         endif
-        score = real(pftcc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(offset,dp), irot))
+        score = real(pftc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(offset,dp), irot))
         if( score < beta )then
             ! fallback
             offset = [self%coords(i), self%coords(j)]
@@ -356,7 +356,7 @@ contains
     end subroutine interpolate_peak
 
     subroutine kill( self )
-        class(pftcc_shsrch_fm), intent(inout) :: self
+        class(pftc_shsrch_fm), intent(inout) :: self
         if( allocated(self%scores) )then
             deallocate(self%scores,self%coords,self%grid1,self%grid2)
         endif
@@ -370,4 +370,4 @@ contains
         self%opt_angle = .true.
     end subroutine kill
 
-end module simple_pftcc_shsrch_fm
+end module simple_pftc_shsrch_fm

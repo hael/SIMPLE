@@ -17,7 +17,7 @@ real, parameter :: REMOVAL_HWIDTH1 = 3.       ! pixels, obscuring half-width 1
 real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.) ! obscuring half-width 2
 real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.) ! obscuring half-width 3
 
-type(polarft_corrcalc) :: pftcc
+type(polarft_corrcalc) :: pftc
 type(polarizer)        :: pspec_img
 type(image)            :: filter_img
 type(parameters)       :: params
@@ -114,7 +114,7 @@ contains
             enddo
         enddo
         call pspec_img%mul(filter_img)
-        ! pftcc
+        ! pftc
         call cline%set('prg',      'dummy')
         call cline%set('smpd',     smpd)
         call cline%set('box',      box)
@@ -123,14 +123,14 @@ contains
         call params%new(cline, silent=.true.)
         params_glob%kfromto(1) = 5
         params_glob%kfromto(2) = nyq-1
-        call pftcc%new(1,[1,1], params_glob%kfromto)
-        angstep = abs(pftcc%get_rot(2)-pftcc%get_rot(1))
-        nrots   = pftcc%get_nrots()
+        call pftc%new(1,[1,1], params_glob%kfromto)
+        angstep = abs(pftc%get_rot(2)-pftc%get_rot(1))
+        nrots   = pftc%get_nrots()
         ! reference polar coordinates
-        call pspec_img%init_polarizer(pftcc, KBALPHA)
+        call pspec_img%init_polarizer(pftc, KBALPHA)
         call pspec_img%fft
-        call pspec_img%polarize(pftcc,1, .false., .true.)
-        call pftcc%memoize_refs
+        call pspec_img%polarize(pftc,1, .false., .true.)
+        call pftc%memoize_refs
         ! cleanup
         call sheet%kill
         call cline%kill
@@ -149,10 +149,10 @@ contains
         call pspec_img%mul(filter_img)
         ! polar coordinates
         call pspec_img%fft()
-        call pspec_img%polarize(pftcc,1,.true.,.true.)
+        call pspec_img%polarize(pftc,1,.true.,.true.)
         ! rotational correlations
-        call pftcc%memoize_ptcls
-        call pftcc%gencorrs(1,1,corrs)
+        call pftc%memoize_ptcls
+        call pftc%gencorrs(1,1,corrs)
         ! mask out non peak-shape values
         do i = 1,nrots
             il = i-1
@@ -172,7 +172,7 @@ contains
         end do
         ! mask out first peak
         do i = 1,nrots
-            rot = 360.-pftcc%get_rot(i)
+            rot = 360.-pftc%get_rot(i)
             do j = 0,5
                 ang = ang1 + real(j)*60.
                 diffang = abs(rot-ang)
@@ -218,10 +218,10 @@ contains
                 beta   = corrs(maxind)
                 ind    = merge(nrots, maxind-1, maxind==1)
                 alpha  = corrs(ind)
-                ind    = merge(1, maxind+1, maxind==pftcc%get_nrots())
+                ind    = merge(1, maxind+1, maxind==pftc%get_nrots())
                 gamma  = corrs(ind)
                 corr   = beta
-                ang    = 360.-pftcc%get_rot(maxind)
+                ang    = 360.-pftc%get_rot(maxind)
                 denom  = alpha+gamma-2.*beta
                 if( abs(denom) < TINY )return
                 drot = 0.5 * (alpha-gamma) / denom
@@ -339,7 +339,7 @@ contains
     ! DESTRUCTOR
 
     subroutine kill_graphene_subtr
-        call pftcc%kill
+        call pftc%kill
         call pspec_img%kill
         call filter_img%kill
         angstep = 0.

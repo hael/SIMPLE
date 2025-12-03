@@ -4,11 +4,11 @@ use simple_polarft_calc,    only: polarft_corrcalc
 use simple_cmdline,             only: cmdline
 use simple_builder,             only: builder
 use simple_parameters,          only: parameters
-use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_strategy2D3D_common, only: set_bp_range
 implicit none
 type(parameters)         :: p
-type(polarft_corrcalc)   :: pftcc
+type(polarft_corrcalc)   :: pftc
 type(cmdline)            :: cline
 type(builder)            :: b
 type(ori)                :: o
@@ -16,7 +16,7 @@ real                     :: shvec(2), shift_err, ang_err, lims(2,2), cxy(3)
 real, allocatable        :: cc_fft(:)
 integer(timer_int_kind)  :: tfft
 integer                  :: loc
-type(pftcc_shsrch_grad)  :: grad_shsrch_obj
+type(pftc_shsrch_grad)  :: grad_shsrch_obj
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_eval_polarftcc vol1=xx mskdiam=xx lp=xx'
     write(logfhandle,'(a)') ' smpd=xx>'
@@ -41,22 +41,22 @@ call o%print_ori
 print *,'Shift= 0.0 0.0'
 print *,'---------------------'
 
-call pftcc%new(p%nptcls, [1, p%nptcls], p%kfromto)
+call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
 call b%vol%read(p%vols(1))
 call b%vol%mask(p%msk,'soft')
 if( p%gridding.eq.'yes' ) call b%vol%div_w_instrfun(p%interpfun, alpha=p%alpha)
 call b%vol%fft()
 call b%vol%expand_cmat(p%alpha,norm4proj=.true.)
-call b%vol%fproject_polar(1, o, pftcc,       iseven=.true., mask=b%l_resmsk)
-call pftcc%cp_even_ref2ptcl(1,1)
-call pftcc%set_eo(1, .true. )
+call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)
+call pftc%cp_even_ref2ptcl(1,1)
+call pftc%set_eo(1, .true. )
 
 if( o%e3get() < 0.)then
     call o%e3set(o%e3get() - 29.5)
 else
     call o%e3set(o%e3get() + 29.5)
 endif
-call b%vol%fproject_polar(1, o, pftcc,       iseven=.true., mask=b%l_resmsk)
+call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)
 shvec(1) = -2.
 shvec(2) =  2.
 print *,'Ref orientation:'
@@ -64,16 +64,16 @@ call o%print_ori
 print *,'Shift= ',shvec
 print *,'---------------------'
 
-call pftcc%shift_ptcl(1,shvec)
-call pftcc%memoize_ptcls
+call pftc%shift_ptcl(1,shvec)
+call pftc%memoize_ptcls
 
 !### TIMING
-allocate(cc_fft(pftcc%get_nrots()))
+allocate(cc_fft(pftc%get_nrots()))
 tfft = tic()
-call pftcc%gencorrs(1, 1, cc_fft)
+call pftc%gencorrs(1, 1, cc_fft)
 print *, 'time of gencorrs (no cache): ', toc(tfft)
 loc = maxloc(cc_fft, dim=1)
-print *, pftcc%get_rot(loc)
+print *, pftc%get_rot(loc)
 
 ! searching
 lims(:,1) = -5.
@@ -84,5 +84,5 @@ loc = 1
 tfft = tic()
 cxy = grad_shsrch_obj%minimize(irot=loc)
 print *, 'time of shift_search: ', toc(tfft)
-print *, cxy, pftcc%get_rot(loc)
+print *, cxy, pftc%get_rot(loc)
 end program simple_test_eval_polarftcc

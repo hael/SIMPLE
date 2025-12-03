@@ -8,8 +8,8 @@ program simple_test_shiftinvariant
 ! use simple_image,             only: image
 ! use simple_parameters,        only: parameters
 ! use simple_polarizer,         only: polarizer
-! use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-! use simple_pftcc_shsrch_fm
+! use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
+! use simple_pftc_shsrch_fm
 ! use simple_strategy2D3D_common
 ! use simple_simulator
 ! use simple_ctf
@@ -20,10 +20,10 @@ program simple_test_shiftinvariant
 ! type(cmdline)            :: cline
 ! type(builder)            :: b
 ! type(parameters)         :: p
-! type(polarft_corrcalc)   :: pftcc
+! type(polarft_corrcalc)   :: pftc
 ! type(polarizer)          :: img_copy
-! type(pftcc_shsrch_grad)  :: grad_shsrch_obj
-! type(pftcc_shsrch_fm)    :: grad_shsrch_fm_obj
+! type(pftc_shsrch_grad)  :: grad_shsrch_obj
+! type(pftc_shsrch_fm)    :: grad_shsrch_fm_obj
 ! type(ori)                :: o
 ! type(oris)               :: os
 ! type(ctfparams)          :: ctfparms
@@ -124,16 +124,16 @@ program simple_test_shiftinvariant
 ! call b%spproj_field%partition_eo
 ! call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, .true.)
 
-! ! pftcc
-! call pftcc%new(p%nptcls, [1,p%nptcls], p%kfromto)
+! ! pftc
+! call pftc%new(p%nptcls, [1,p%nptcls], p%kfromto)
 ! call eucl%new('dummy.dat', p%box)
 ! call eucl%allocate_ptcls
 ! allocate(match_imgs(p%ncls),ptcl_match_imgs(nthr_glob))
-! call pftcc%reallocate_ptcls(p%nptcls, pinds)
+! call pftc%reallocate_ptcls(p%nptcls, pinds)
 ! do ithr = 1,nthr_glob
 !     call ptcl_match_imgs(ithr)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
 ! enddo
-! allocate(scores3(pftcc%get_nrots()),scores(pftcc%get_nrots()),scores2(pftcc%get_pftsz()),source=0.)
+! allocate(scores3(pftc%get_nrots()),scores(pftc%get_nrots()),scores2(pftc%get_pftsz()),source=0.)
 
 ! ! references
 ! ! call restore_read_polarize_cavgs(0)
@@ -145,12 +145,12 @@ program simple_test_shiftinvariant
 ! do iptcl = 1,p%nptcls
 !     ithr  = omp_get_thread_num() + 1
 !     call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
-!     call b%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
-!     call pftcc%set_eo(iptcl, nint(b%spproj_field%get(iptcl,'eo'))<=0 )
+!     call b%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
+!     call pftc%set_eo(iptcl, nint(b%spproj_field%get(iptcl,'eo'))<=0 )
 ! end do
 ! !$omp end parallel do
-! call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
-! call pftcc%memoize_ptcls
+! call pftc%create_polar_absctfmats(b%spproj, 'ptcl2D')
+! call pftc%memoize_ptcls
 
 ! ! initial sigma2
 ! allocate( sigma2_group(2,1,1:fdim(p%box)-1), source=0. )
@@ -158,8 +158,8 @@ program simple_test_shiftinvariant
 ! no = 0
 ! do iptcl = p%fromp,p%top
 !     call b%spproj_field%get_ori(iptcl, o)
-!     ! call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
-!     call eucl%calc_sigma2(pftcc, iptcl, o, 'proj')
+!     ! call eucl%calc_sigma2(pftc, iptcl, o, 'class')
+!     call eucl%calc_sigma2(pftc, iptcl, o, 'proj')
 !     if( o%get_eo() == 0 )then
 !         ne = ne+1
 !         sigma2_group(1,1,:) = sigma2_group(1,1,:) + eucl%sigma2_part(:,iptcl)
@@ -182,11 +182,11 @@ program simple_test_shiftinvariant
 !     call ptcl_match_imgs(ithr)%ifft
 !     call ptcl_match_imgs(ithr)%write('prepped_particles.mrc', iptcl)
 !     call ptcl_match_imgs(ithr)%fft
-!     call b%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
+!     call b%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
 ! enddo
 ! ! memoize again
-! call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
-! call pftcc%memoize_ptcls
+! call pftc%create_polar_absctfmats(b%spproj, 'ptcl2D')
+! call pftc%memoize_ptcls
 
 
 ! ! nfound = 0
@@ -196,11 +196,11 @@ program simple_test_shiftinvariant
 ! !     do iref = p%fromp,p%top
 ! !         if( trim(p%sh_inv).eq.'yes')then
 ! !             scores = -1.0
-! !             call pftcc%gencorrs_mag_cc(iref,iptcl,scores3(1:pftcc%get_pftsz()),.true.)
+! !             call pftc%gencorrs_mag_cc(iref,iptcl,scores3(1:pftc%get_pftsz()),.true.)
 ! !         else
-! !             call pftcc%gencorrs(iref,iptcl,scores3)
+! !             call pftc%gencorrs(iref,iptcl,scores3)
 ! !         endif
-! !         ! call pftcc%gencorrs_mag(iptcl,p%iptcl,scores(1:pftcc%pftsz),kweight=.true.)
+! !         ! call pftc%gencorrs_mag(iptcl,p%iptcl,scores(1:pftc%pftsz),kweight=.true.)
 ! !         vals(iref) = maxval(scores3)
 ! !         ! print *,iptcl,maxval(scores3), maxval(scores), orishifts(p%iptcl,:)
 ! !     enddo
@@ -211,13 +211,13 @@ program simple_test_shiftinvariant
 ! ! stop
 
 ! ! iptcl = 1
-! ! call pftcc%gencorrs(p%iptcl,iptcl,scores3)
-! ! call pftcc%gencorrs_abs(p%iptcl,iptcl,scores(1:pftcc%pftsz),kweight=.false.)
-! ! call pftcc%gencorrs_mag(p%iptcl,iptcl,scores2,kweight=.false.)
-! ! do irot =1,pftcc%get_pftsz()
-! !     print *,irot,scores3(irot), pftcc%calc_corr_rot_shift(p%iptcl,iptcl,[0.0,0.0],irot,.false.),scores(irot), pftcc%calc_abscorr_rot(p%iptcl,iptcl,irot,.false.), scores2(irot), pftcc%calc_magcorr_rot(p%iptcl,iptcl,irot,.false.)
+! ! call pftc%gencorrs(p%iptcl,iptcl,scores3)
+! ! call pftc%gencorrs_abs(p%iptcl,iptcl,scores(1:pftc%pftsz),kweight=.false.)
+! ! call pftc%gencorrs_mag(p%iptcl,iptcl,scores2,kweight=.false.)
+! ! do irot =1,pftc%get_pftsz()
+! !     print *,irot,scores3(irot), pftc%calc_corr_rot_shift(p%iptcl,iptcl,[0.0,0.0],irot,.false.),scores(irot), pftc%calc_abscorr_rot(p%iptcl,iptcl,irot,.false.), scores2(irot), pftc%calc_magcorr_rot(p%iptcl,iptcl,irot,.false.)
 ! ! enddo
-! ! ! print *, arg(orishifts(iptcl,:)),pftcc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftcc%get_pftsz()
+! ! ! print *, arg(orishifts(iptcl,:)),pftc%get_roind(360.-b%spproj_field%e3get(iptcl)), maxloc(scores,dim=1), maxloc(scores2,dim=1),maxloc(scores2,dim=1)+pftc%get_pftsz()
 ! ! stop
 
 ! ! shift search
@@ -232,10 +232,10 @@ program simple_test_shiftinvariant
 ! do iptcl = p%fromp,p%top
 !     if( trim(p%sh_inv).eq.'yes')then
 !             call grad_shsrch_fm_obj%new(p%trs, 1.)
-!             call pftcc%gencorrs_mag_cc(p%iptcl,iptcl,scores2,kweight=.false.)
+!             call pftc%gencorrs_mag_cc(p%iptcl,iptcl,scores2,kweight=.false.)
 !             irot = maxloc(scores2,dim=1)
 !             call grad_shsrch_fm_obj%minimize(p%iptcl, iptcl, irot, cxy(1), cxy(2:3))
-!             e3 = 360. - pftcc%get_rot(irot)
+!             e3 = 360. - pftc%get_rot(irot)
 !             aerr = abs(b%spproj_field%e3get(iptcl)-e3)
 !             if( aerr > 180. ) aerr = 360.-aerr
 !             angerr = angerr + aerr
@@ -246,11 +246,11 @@ program simple_test_shiftinvariant
 !     else
 !         call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
 !         call grad_shsrch_obj%set_indices(p%iptcl, iptcl)
-!         call pftcc%gencorrs(p%iptcl,iptcl,scores)
+!         call pftc%gencorrs(p%iptcl,iptcl,scores)
 !         irot0 = maxloc(scores,dim=1)
 !         cxy = grad_shsrch_obj%minimize(irot)
 !         if( irot > 0 )then
-!             e3 = 360. - pftcc%get_rot(irot)
+!             e3 = 360. - pftc%get_rot(irot)
 !             aerr = abs(b%spproj_field%e3get(iptcl)-e3)
 !             if( aerr > 180. ) aerr = 360.-aerr
 !             angerr = angerr + aerr
@@ -259,7 +259,7 @@ program simple_test_shiftinvariant
 !             call b%spproj_field%set_shift(iptcl, b%spproj_field%get_2Dshift(iptcl)+cxy(2:3))
 !             print *,iptcl,'found', aerr,arg(cxy(2:3)-orishifts(iptcl,:)),cxy(2:3),orishifts(iptcl,:)
 !         else
-!             e3 = 360. - pftcc%get_rot(irot0)
+!             e3 = 360. - pftc%get_rot(irot0)
 !             aerr = abs(b%spproj_field%e3get(iptcl)-e3)
 !             if( aerr > 180. ) aerr = 360.-aerr
 !             angerr = angerr + aerr
@@ -280,17 +280,17 @@ program simple_test_shiftinvariant
 !         integer, intent(in) :: iter
 !         p%which_iter = iter
 !         ! call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
-!         call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+!         call b%img_crop_polarizer%init_polarizer(pftc, p%alpha)
 !         do iptcl = p%fromp,p%top
 !             call b%img%read(p%stk, iptcl)
 !             call b%img%div(2.)
 !             call b%img%mask(p%msk, 'soft')
 !             call b%img%write('prepped_refs.mrc',iptcl)
 !             call b%img%fft
-!             call b%img_crop_polarizer%polarize(pftcc, b%img, iptcl, isptcl=.false., iseven=.true.)
-!             call b%img_crop_polarizer%polarize(pftcc, b%img, iptcl, isptcl=.false., iseven=.false.)
+!             call b%img_crop_polarizer%polarize(pftc, b%img, iptcl, isptcl=.false., iseven=.true.)
+!             call b%img_crop_polarizer%polarize(pftc, b%img, iptcl, isptcl=.false., iseven=.false.)
 !         enddo
-!         call pftcc%memoize_refs
+!         call pftc%memoize_refs
 !     end subroutine read_polarize_refs
 
 !     subroutine restore_read_polarize_cavgs( iter )
@@ -311,13 +311,13 @@ program simple_test_shiftinvariant
 !         call b%clsfrcs%read(FRCS_FILE)
 !         call cavger_read(trim(p%refs_even), 'even' )
 !         call cavger_read(trim(p%refs_even), 'odd' )
-!         call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+!         call b%img_crop_polarizer%init_polarizer(pftc, p%alpha)
 !         call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
 !         call prep2Dref(cavgs_even(1), match_imgs(1), 1, center=.false.)
-!         call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.true.)
+!         call b%img_crop_polarizer%polarize(pftc, match_imgs(1), 1, isptcl=.false., iseven=.true.)
 !         call prep2Dref(cavgs_odd(1), match_imgs(1), 1, center=.false.)
-!         call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.false.)
-!         call pftcc%memoize_refs
+!         call b%img_crop_polarizer%polarize(pftc, match_imgs(1), 1, isptcl=.false., iseven=.false.)
+!         call pftc%memoize_refs
 !     end subroutine restore_read_polarize_cavgs
 
 end program simple_test_shiftinvariant

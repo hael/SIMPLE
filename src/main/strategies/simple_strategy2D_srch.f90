@@ -3,8 +3,8 @@ module simple_strategy2D_srch
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_polarft_calc,  only: pftcc_glob
-use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
+use simple_polarft_calc,  only: pftc_glob
+use simple_pftc_shsrch_grad, only: pftc_shsrch_grad ! gradient-based angle and shift search
 use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob
 use simple_eul_prob_tab2D,    only: eul_prob_tab2D
@@ -24,9 +24,9 @@ type strategy2D_spec
 end type strategy2D_spec
 
 type strategy2D_srch
-    type(pftcc_shsrch_grad) :: grad_shsrch_obj        !< origin shift search object, L-BFGS with gradient
-    type(pftcc_shsrch_grad) :: grad_shsrch_obj2       !< origin shift search object, L-BFGS with gradient, no call back
-    type(pftcc_shsrch_grad) :: grad_shsrch_first_obj  !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    type(pftc_shsrch_grad) :: grad_shsrch_obj        !< origin shift search object, L-BFGS with gradient
+    type(pftc_shsrch_grad) :: grad_shsrch_obj2       !< origin shift search object, L-BFGS with gradient, no call back
+    type(pftc_shsrch_grad) :: grad_shsrch_first_obj  !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
     integer                 :: nrefs           =  0   !< number of references
     integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
     integer                 :: nrefs_eval      =  0   !< nr of references evaluated
@@ -67,7 +67,7 @@ contains
         self%iptcl_batch = spec%iptcl_batch
         self%iptcl_map   = spec%iptcl_map
         self%nrefs       = params_glob%ncls
-        self%nrots       = pftcc_glob%get_nrots()
+        self%nrots       = pftc_glob%get_nrots()
         self%nrefs_eval  = 0
         ! construct composites
         self%trs        =  params_glob%trs
@@ -92,12 +92,12 @@ contains
 
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
-        real    :: corrs(pftcc_glob%get_nrots())
+        real    :: corrs(pftc_glob%get_nrots())
         self%nrefs_eval = 0
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
-        self%prev_rot   = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
+        self%prev_rot   = pftc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
         self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
         self%best_shvec = 0.
         if( self%prev_class > 0 )then
@@ -121,7 +121,7 @@ contains
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
-        call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
+        call pftc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
         if( params_glob%cc_objfun == OBJFUN_CC )then
             self%prev_corr  = max(0., corrs(self%prev_rot))
         else
@@ -153,7 +153,7 @@ contains
         self%xy_first_rot = 0.
         if( irot > 0 )then
             ! rotate the shift vector to the frame of reference
-            call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+            call rotmat2d(pftc_glob%get_rot(irot), rotmat)
             self%xy_first_rot = matmul(cxy(2:3), rotmat)
             ! update best
             self%best_corr  = cxy(1)
@@ -195,7 +195,7 @@ contains
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         real :: e3, mi_class, frac, w
         ! get in-plane angle
-        e3   = 360. - pftcc_glob%get_rot(self%best_rot) ! change sgn to fit convention
+        e3   = 360. - pftc_glob%get_rot(self%best_rot) ! change sgn to fit convention
         ! calculate in-plane rot dist (radians)
         u(1) = 0.
         u(2) = 1.

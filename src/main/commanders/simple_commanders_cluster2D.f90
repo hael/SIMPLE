@@ -1448,7 +1448,7 @@ contains
         type(parameters)       :: params
         type(builder)          :: build
         type(starproject)      :: starproj
-        type(polarft_corrcalc) :: pftcc
+        type(polarft_corrcalc) :: pftc
         real, allocatable :: states(:)
         real              :: clw
         integer           :: iterstr_start, iterstr_end, iter, io_stat, icls
@@ -1473,9 +1473,9 @@ contains
         endif
         if( trim(params%polar).eq.'yes' )then
             call polar_cavger_dims_from_header(string('cavgs_even_part1')//BIN_EXT, pftsz, kfromto, ncls)
-            call pftcc%new(1, [1,1], kfromto)
+            call pftc%new(1, [1,1], kfromto)
             if( trim(params%ref_type)=='comlin_hybrid' )then
-                call polar_cavger_new(pftcc, .true., nrefs=params%ncls)
+                call polar_cavger_new(pftc, .true., nrefs=params%ncls)
                 call polar_cavger_calc_pops(build%spproj)
                 call build%pgrpsyms%new('c1')
                 params%nsym    = build%pgrpsyms%get_nsym()
@@ -1485,15 +1485,15 @@ contains
                 clw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
                 call polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, clin_anneal=clw)
             else
-                call polar_cavger_new(pftcc, .false., nrefs=params%ncls)
+                call polar_cavger_new(pftc, .false., nrefs=params%ncls)
                 call polar_cavger_calc_pops(build%spproj)
                 call polar_cavger_assemble_sums_from_parts
             endif
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
             call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
             call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call polar_cavger_write_cartrefs(pftcc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
-            call pftcc%kill
+            call polar_cavger_write_cartrefs(pftc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
+            call pftc%kill
             call polar_cavger_gen2Dclassdoc(build_glob%spproj)
             call polar_cavger_kill
         else
@@ -1667,7 +1667,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(string)                  :: fname
-        type(polarft_corrcalc)        :: pftcc
+        type(polarft_corrcalc)        :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab2D)          :: eulprob
@@ -1705,13 +1705,13 @@ contains
             call cavger_new(pinds, alloccavgs=.false.)
         endif
         ! init scorer & prep references
-        call preppftcc4align2D(pftcc, nptcls, params%which_iter, l_stream)
+        call preppftc4align2D(pftc, nptcls, params%which_iter, l_stream)
         ! minor cleanup
         call cavger_kill(dealloccavgs=l_distr_exec_glob)
         ! prep particles
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
         call prep_batch_particles2D(nptcls)
-        call build_batch_particles2D(pftcc, nptcls, pinds, l_ctf)
+        call build_batch_particles2D(pftc, nptcls, pinds, l_ctf)
         ! init prob table
         call eulprob%new(pinds)
         fname = DIST_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
@@ -1738,7 +1738,7 @@ contains
                 end select
             endif
         endif
-        call pftcc%kill
+        call pftc%kill
         if(associated(eucl_sigma2_glob)) call eucl_sigma2_glob%kill
         call clean_batch_particles2D
         ! write

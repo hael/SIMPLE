@@ -1,20 +1,20 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
-module simple_pftcc_shsrch_grad
+module simple_pftc_shsrch_grad
 include 'simple_lib.f08'
 use simple_opt_spec,         only: opt_spec
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 use simple_optimizer,        only: optimizer
 use simple_parameters,       only: params_glob
 implicit none
 
-public :: pftcc_shsrch_grad
+public :: pftc_shsrch_grad
 private
 #include "simple_local_flags.inc"
 
 real(dp), parameter :: init_range       = 2.0_dp  ! range for random initialization (negative to positive)
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
 
-type :: pftcc_shsrch_grad
+type :: pftc_shsrch_grad
     private
     type(opt_spec)            :: ospec                  !< optimizer specification object
     class(optimizer), pointer :: opt_obj      =>null()  !< optimizer object
@@ -39,13 +39,13 @@ contains
     procedure          :: set_limits
     procedure          :: coarse_search
     procedure          :: coarse_search_opt_angle
-end type pftcc_shsrch_grad
+end type pftc_shsrch_grad
 
 contains
 
     subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init )
         use simple_opt_factory, only: opt_factory
-        class(pftcc_shsrch_grad),   intent(inout) :: self           !< instance
+        class(pftc_shsrch_grad),   intent(inout) :: self           !< instance
         real,                       intent(in)    :: lims(:,:)      !< limits for barrier constraint
         real,             optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
         character(len=*), optional, intent(in)    :: shbarrier      !< shift barrier constraint or not
@@ -71,7 +71,7 @@ contains
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%opt_obj)
         ! get # rotations
-        self%nrots = pftcc_glob%get_nrots()
+        self%nrots = pftc_glob%get_nrots()
         ! set costfun pointers
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
@@ -80,12 +80,12 @@ contains
     end subroutine grad_shsrch_new
 
     pure logical function does_opt_angle( self )
-        class(pftcc_shsrch_grad), intent(in) :: self
+        class(pftc_shsrch_grad), intent(in) :: self
         does_opt_angle = self%opt_angle
     end function does_opt_angle
 
     subroutine set_limits( self, lims )
-        class(pftcc_shsrch_grad), intent(inout) :: self              !< instance
+        class(pftc_shsrch_grad), intent(inout) :: self              !< instance
         real,                     intent(in)    :: lims(self%ospec%ndim,2) !< new limits
         call self%ospec%set_limits(lims)
     end subroutine set_limits
@@ -96,8 +96,8 @@ contains
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: cost
         select type(self)
-            class is (pftcc_shsrch_grad)
-                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+            class is (pftc_shsrch_grad)
+                cost = - pftc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -111,8 +111,8 @@ contains
         real(dp)                :: corrs_grad(2)
         grad = 0.
         select type(self)
-            class is (pftcc_shsrch_grad)
-                call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+            class is (pftc_shsrch_grad)
+                call pftc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
@@ -129,8 +129,8 @@ contains
         f    = 0.
         grad = 0.
         select type(self)
-            class is (pftcc_shsrch_grad)
-                call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+            class is (pftc_shsrch_grad)
+                call pftc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                 f    = - corrs
                 grad = - corrs_grad
             class default
@@ -139,25 +139,25 @@ contains
     end subroutine grad_shsrch_fdfcostfun
 
     subroutine grad_shsrch_optimize_angle( self )
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         real                                    :: corrs(self%nrots)
-        call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+        call pftc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
         self%cur_inpl_idx = maxloc(corrs, dim=1)
     end subroutine grad_shsrch_optimize_angle
 
     subroutine grad_shsrch_optimize_angle_wrapper( self )
         class(*), intent(inout) :: self
         select type(self)
-            class is (pftcc_shsrch_grad)
+            class is (pftc_shsrch_grad)
                 call grad_shsrch_optimize_angle(self)
             class DEFAULT
-                THROW_HARD('error in grad_shsrch_optimize_angle_wrapper: unknown type; simple_pftcc_shsrch_grad')
+                THROW_HARD('error in grad_shsrch_optimize_angle_wrapper: unknown type; simple_pftc_shsrch_grad')
         end select
     end subroutine grad_shsrch_optimize_angle_wrapper
 
     !> set indicies for shift search
     subroutine grad_shsrch_set_indices( self, ref, ptcl )
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         integer,                  intent(in)    :: ref, ptcl
         self%reference = ref
         self%particle  = ptcl
@@ -165,7 +165,7 @@ contains
 
     !> minimisation routine
     function grad_shsrch_minimize( self, irot, sh_rot, xy_in ) result( cxy )
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
         logical, optional,        intent(in)    :: sh_rot
         real,    optional,        intent(in)    :: xy_in(2)
@@ -185,7 +185,7 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         if( self%opt_angle )then
-            call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+            call pftc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
@@ -200,7 +200,7 @@ contains
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-                call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+                call pftc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
                 loc = maxloc(corrs,dim=1)
                 if( loc == self%cur_inpl_idx ) exit
                 self%cur_inpl_idx = loc
@@ -219,7 +219,7 @@ contains
                 cxy(2:) =   real(lowest_shift)         ! shift
                 if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+                    call rotmat2d(pftc_glob%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
                 endif
             else
@@ -227,7 +227,7 @@ contains
             endif
         else
             self%cur_inpl_idx   = irot
-            lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
+            lowest_cost_overall = -pftc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
                 call self%coarse_search(coarse_cost, init_xy)
@@ -249,7 +249,7 @@ contains
                 cxy(2:) =   lowest_shift               ! shift
                 if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+                    call rotmat2d(pftc_glob%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
                 endif
             else
@@ -260,7 +260,7 @@ contains
     end function grad_shsrch_minimize
 
     subroutine coarse_search(self, lowest_cost, init_xy)
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
         real(dp) :: x, y, cost, stepx, stepy
         integer  :: ix, iy
@@ -273,7 +273,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y    = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
+                cost = -pftc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]
@@ -283,7 +283,7 @@ contains
     end subroutine coarse_search
 
     subroutine coarse_search_opt_angle(self, init_xy, irot)
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         real(dp),                 intent(out)   :: init_xy(2)
         integer,                  intent(out)   :: irot
         real(dp) :: x, y, stepx,stepy
@@ -299,7 +299,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                call pftcc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
+                call pftc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
                 if (cost < lowest_cost) then
@@ -313,7 +313,7 @@ contains
     end subroutine coarse_search_opt_angle
 
     subroutine grad_shsrch_kill( self )
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         if( associated(self%opt_obj) )then
             call self%ospec%kill
             call self%opt_obj%kill
@@ -322,16 +322,16 @@ contains
     end subroutine grad_shsrch_kill
 
     function grad_shsrch_get_nevals( self ) result( nevals )
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         integer :: nevals
         nevals = self%ospec%nevals
     end function grad_shsrch_get_nevals
 
     subroutine grad_shsrch_get_peaks( self, peaks )
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        class(pftc_shsrch_grad), intent(inout) :: self
         real, allocatable,        intent(out)   :: peaks(:,:) !< output peak matrix
         allocate(peaks(1,2))
         peaks(1,:) = self%ospec%x
     end subroutine grad_shsrch_get_peaks
 
-end module simple_pftcc_shsrch_grad
+end module simple_pftc_shsrch_grad

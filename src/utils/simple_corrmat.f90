@@ -134,17 +134,17 @@ contains
     end subroutine calc_cartesian_corrmat_2
 
     subroutine calc_inpl_invariant_fm_1( imgs, hp, lp, trs, corrmat, l_srch_mirr )
-        use simple_pftcc_shsrch_fm
+        use simple_pftc_shsrch_fm
         use simple_polarizer,        only: polarizer
         use simple_polarft_calc, only: polarft_corrcalc
         class(image),          intent(inout) :: imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
         type(image),           allocatable   :: ccimgs(:,:)
-        type(pftcc_shsrch_fm), allocatable   :: fm_correlators(:)
+        type(pftc_shsrch_fm), allocatable   :: fm_correlators(:)
         logical, optional,     intent(in)    :: l_srch_mirr
         type(polarizer)        :: polartransform
-        type(polarft_corrcalc) :: pftcc
+        type(polarft_corrcalc) :: pftc
         real, parameter :: TRS_STEPSZ = 1.0
         integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
         real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
@@ -157,22 +157,22 @@ contains
         smpd       = imgs(1)%get_smpd()
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
-        ! initialize pftcc, polarizer
-        call pftcc%new(n, [1,n], kfromto)
+        ! initialize pftc, polarizer
+        call pftc%new(n, [1,n], kfromto)
         call polartransform%new([box,box,1], smpd)
-        call polartransform%init_polarizer(pftcc, KBALPHA)
+        call polartransform%init_polarizer(pftc, KBALPHA)
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(n,n), source=-1.)
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, n
             call imgs(i)%fft()
-            call polartransform%polarize(pftcc, imgs(i), i, isptcl=.false., iseven=.true.)
-            call pftcc%cp_even_ref2ptcl(i, i)
-            call pftcc%mirror_ref_pft(i) ! controlled by even/odd flag (see below)
+            call polartransform%polarize(pftc, imgs(i), i, isptcl=.false., iseven=.true.)
+            call pftc%cp_even_ref2ptcl(i, i)
+            call pftc%mirror_ref_pft(i) ! controlled by even/odd flag (see below)
         end do
         !$omp end parallel do
-        call pftcc%memoize_refs
-        call pftcc%memoize_ptcls
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
         ! correlation matrix calculation
         allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
         do i = 1,nthr_glob
@@ -188,11 +188,11 @@ contains
                 corrmat(i,i) = 1.
                 do j = i + 1, n
                     ! reference to particle
-                    call pftcc%set_eo(i,.true.)
+                    call pftc%set_eo(i,.true.)
                     call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
                         &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
                     ! mirrored reference to particle
-                    call pftcc%set_eo(i,.false.) ! switch mirror
+                    call pftc%set_eo(i,.false.) ! switch mirror
                     call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
                     &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true., rotang=angm, shift=offsetm)
                     ! higher correlation wins
@@ -214,7 +214,7 @@ contains
                 corrmat(i,i) = 1.
                 do j = i + 1, n
                     ! reference to particle
-                    call pftcc%set_eo(i,.true.)
+                    call pftc%set_eo(i,.true.)
                     call fm_correlators(ithr)%calc_phasecorr(j, i, imgs(j), imgs(i),&
                         &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
                     corrmat(i,j) = cc
@@ -231,7 +231,7 @@ contains
         end do
         !$omp end parallel do
         ! tidy
-        call pftcc%kill
+        call pftc%kill
         call polartransform%kill_polarizer
         call polartransform%kill
         do i = 1,nthr_glob
@@ -242,16 +242,16 @@ contains
     end subroutine calc_inpl_invariant_fm_1
 
     subroutine calc_inpl_invariant_fm_2( refimgs, imgs, hp, lp, trs, corrmat )
-        use simple_pftcc_shsrch_fm
+        use simple_pftc_shsrch_fm
         use simple_polarizer,        only: polarizer
         use simple_polarft_calc, only: polarft_corrcalc
         class(image),          intent(inout) :: refimgs(:), imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
         type(image),           allocatable   :: ccimgs(:,:)
-        type(pftcc_shsrch_fm), allocatable   :: fm_correlators(:)
+        type(pftc_shsrch_fm), allocatable   :: fm_correlators(:)
         type(polarizer)        :: polartransform
-        type(polarft_corrcalc) :: pftcc
+        type(polarft_corrcalc) :: pftc
         real, parameter :: TRS_STEPSZ = 1.0
         integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2), iref, nrefs
         real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
@@ -262,28 +262,28 @@ contains
         smpd       = imgs(1)%get_smpd()
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
-        ! initialize pftcc, polarizer
-        call pftcc%new(nrefs, [1,n], kfromto)
+        ! initialize pftc, polarizer
+        call pftc%new(nrefs, [1,n], kfromto)
         call polartransform%new([box,box,1], smpd)
-        call polartransform%init_polarizer(pftcc, KBALPHA)
+        call polartransform%init_polarizer(pftc, KBALPHA)
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(nrefs,n), source=-1.)
         !$omp parallel default(shared) private(i,iref) proc_bind(close)
         !$omp do schedule(static) 
         do iref = 1, nrefs
             call refimgs(iref)%fft()
-            call polartransform%polarize(pftcc, refimgs(iref), iref, isptcl=.false., iseven=.true.)
+            call polartransform%polarize(pftc, refimgs(iref), iref, isptcl=.false., iseven=.true.)
         end do
         !$omp end do
         !$omp do schedule(static) 
         do i = 1, n
             call imgs(i)%fft()
-            call polartransform%polarize(pftcc, imgs(i), i, isptcl=.true., iseven=.true.)
+            call polartransform%polarize(pftc, imgs(i), i, isptcl=.true., iseven=.true.)
         end do
         !$omp end do
         !$omp end parallel
-        call pftcc%memoize_refs
-        call pftcc%memoize_ptcls
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
         ! correlation matrix calculation
         allocate(fm_correlators(nthr_glob),ccimgs(nthr_glob,2))
         do i = 1,nthr_glob
@@ -297,11 +297,11 @@ contains
             do i = 1, n
                 ithr = omp_get_thread_num() + 1
                 ! reference to particle
-                call pftcc%set_eo(i,.true.)
+                call pftc%set_eo(i,.true.)
                 call fm_correlators(ithr)%calc_phasecorr(iref, i, refimgs(iref), imgs(i),&
                     &ccimgs(ithr,1), ccimgs(ithr,2), cc, rotang=ang, shift=offset)
                 ! mirrored reference to particle
-                call pftcc%mirror_ref_pft(iref) ! switch mirror
+                call pftc%mirror_ref_pft(iref) ! switch mirror
                 call fm_correlators(ithr)%calc_phasecorr(iref, i, refimgs(iref), imgs(i),&
                 &ccimgs(ithr,1), ccimgs(ithr,2), ccm, mirror=.true., rotang=angm, shift=offsetm)
                 ! higher correlation wins
@@ -311,7 +311,7 @@ contains
                     offset = offsetm
                 endif
                 corrmat(iref,i) = cc
-                call pftcc%mirror_ref_pft(iref) ! switch mirror
+                call pftc%mirror_ref_pft(iref) ! switch mirror
             enddo
             !$omp end parallel do
         enddo
@@ -329,7 +329,7 @@ contains
         !$omp end do
         !$omp end parallel
         ! tidy
-        call pftcc%kill
+        call pftc%kill
         call polartransform%kill_polarizer
         call polartransform%kill
         do i = 1,nthr_glob

@@ -21,12 +21,12 @@ end type opt4openMP
 
 type(opt4openMP), allocatable :: opt_symaxes(:)     !< parallel optimisation, symmetry axes
 real,             allocatable :: sym_rmats(:,:,:)   !< symmetry operations rotation matrices
-type(volpft_corrcalc)         :: vpftcc             !< corr calculator
+type(volpft_corrcalc)         :: vpftc             !< corr calculator
 type(ori)                     :: saxis_glob         !< best symaxis solution found so far
 integer                       :: nrestarts     = 3  !< simplex restarts (randomized bounds)
 integer                       :: nsym          = 0  !< # symmetry ops
-integer                       :: nspace        = 0  !< # complex vectors in vpftcc
-integer                       :: nspace_nonred = 0  !< # nonredundant complex vectors in vpftcc
+integer                       :: nspace        = 0  !< # complex vectors in vpftc
+integer                       :: nspace_nonred = 0  !< # nonredundant complex vectors in vpftc
 integer                       :: kfromto(2)         !< Fourier index range
 
 contains
@@ -45,10 +45,10 @@ contains
         real    :: lims(3,2)
         call volpft_symsrch_kill
         ! create the correlator
-        call vpftcc%new(vol, hp, lp, KBALPHA)
-        nspace        = vpftcc%get_nspace()
-        nspace_nonred = vpftcc%get_nspace_nonred()
-        kfromto       = vpftcc%get_kfromto()
+        call vpftc%new(vol, hp, lp, KBALPHA)
+        nspace        = vpftc%get_nspace()
+        nspace_nonred = vpftc%get_nspace_nonred()
+        kfromto       = vpftc%get_kfromto()
         ! create the symmetry object
         call symobj%new(pgrp, icorelion=.true.)
         nsym = symobj%get_nsym()
@@ -188,7 +188,7 @@ contains
             ! ROTATION MATRICES DO NOT COMMUTE
             ! this is the correct order
             rmat   = matmul(sym_rmats(isym,:,:), rmat_symaxis)
-            call vpftcc%extract_target(rmat, tmpmat, sqsum_targets(isym))
+            call vpftc%extract_target(rmat, tmpmat, sqsum_targets(isym))
             sym_targets(isym,:,:) = tmpmat
             sum_of_sym_targets = sum_of_sym_targets + sym_targets(isym,:,:)
         end do
@@ -215,7 +215,7 @@ contains
             end do
             deallocate(opt_symaxes)
         endif
-        call vpftcc%kill
+        call vpftc%kill
         call saxis_glob%kill
     end subroutine volpft_symsrch_kill
 

@@ -4,7 +4,7 @@ use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 implicit none
 
 public :: strategy2D_tseries
@@ -61,7 +61,7 @@ contains
                 call self%s%inpl_srch
             else
                 ! coarse solution
-                call rotmat2d(pftcc_glob%get_rot(self%s%best_rot), rotmat)
+                call rotmat2d(pftc_glob%get_rot(self%s%best_rot), rotmat)
                 self%s%best_shvec = matmul(self%s%best_shvec, rotmat)
             endif
             call self%s%store_solution
@@ -74,7 +74,7 @@ contains
                 if( s2D%cls_pops(iref) == 0 )return
                 do i = -itrs,itrs,TRSSTEP
                     do j = -itrs,itrs,TRSSTEP
-                        call pftcc_glob%gencorrs(iref, self%s%iptcl, real([i,j]), corrs)
+                        call pftc_glob%gencorrs(iref, self%s%iptcl, real([i,j]), corrs)
                         inpl_ind  = maxloc(corrs, dim=1)
                         inpl_corr = corrs(inpl_ind)
                         if( inpl_corr >= corr )then
