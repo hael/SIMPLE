@@ -7,7 +7,7 @@ use simple_parameters,       only: params_glob
 use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 implicit none
 
 public :: strategy3D_shc
@@ -52,9 +52,9 @@ contains
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     if( params_glob%l_sh_first )then
-                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        call pftc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
-                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                        call pftc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     endif
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))

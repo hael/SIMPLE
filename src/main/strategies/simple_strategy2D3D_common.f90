@@ -1156,11 +1156,11 @@ contains
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
 
-    subroutine prepare_refs_sigmas_ptcls( pftcc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter, do_polar )
+    subroutine prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter, do_polar )
         use simple_polarops
         use simple_polarft_calc,        only:  polarft_corrcalc
         use simple_euclid_sigma2,           only:  euclid_sigma2
-        class(polarft_corrcalc),  intent(inout) :: pftcc
+        class(polarft_corrcalc),  intent(inout) :: pftc
         class(cmdline),           intent(in)    :: cline !< command line
         class(euclid_sigma2),     intent(inout) :: eucl_sigma
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
@@ -1172,30 +1172,30 @@ contains
         logical      :: l_polar
         l_polar = .false.
         if( present(do_polar) ) l_polar = do_polar
-        ! PREPARATION OF PFTCC AND REFERENCES
+        ! PREPARATION OF pftc AND REFERENCES
         if( l_polar )then
-            ! PREPARATION OF PFTCC AND REFERENCES
+            ! PREPARATION OF pftc AND REFERENCES
             nrefs = params_glob%nspace * params_glob%nstates
-            call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
-            call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+            call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
+            call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
             ! Read polar references
-            call polar_cavger_new(pftcc, .true.)
+            call polar_cavger_new(pftc, .true.)
             call polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
             call build_glob%clsfrcs%read(string(FRCS_FILE))
-            ! PREPARATION OF REFERENCES IN PFTCC
+            ! PREPARATION OF REFERENCES IN pftc
             !$omp parallel do default(shared) private(iproj)&
             !$omp schedule(static) proc_bind(close)
             do iproj = 1,params_glob%nspace
                 call polar_prep3Dref(iproj)
-                ! transfer to pftcc
+                ! transfer to pftc
                 if( params_glob%l_lpset )then
                     ! put the merged class average in both even and odd positions
-                    call polar_cavger_set_ref_pftcc(iproj, 'merged', pftcc)
-                    call pftcc%cp_even2odd_ref(iproj)
+                    call polar_cavger_set_ref_pftc(iproj, 'merged', pftc)
+                    call pftc%cp_even2odd_ref(iproj)
                 else
-                    ! transfer e/o refs to pftcc
-                    call polar_cavger_set_ref_pftcc(iproj, 'even', pftcc)
-                    call polar_cavger_set_ref_pftcc(iproj, 'odd',  pftcc)
+                    ! transfer e/o refs to pftc
+                    call polar_cavger_set_ref_pftc(iproj, 'even', pftc)
+                    call polar_cavger_set_ref_pftc(iproj, 'odd',  pftc)
                 endif
             end do
             !$omp end parallel do
@@ -1203,13 +1203,13 @@ contains
             if( (trim(params_glob%center)=='yes') .and. (trim(params_glob%center_type)=='params') .and.&
                 &(params_glob%pgrp(:1)=='c1') .and. (.not.params_glob%l_update_frac) .and.&
                 &(params_glob%nstates==1) .and. params_glob%l_doshift )then
-                call center_3Dpolar_refs(pftcc, build_glob%spproj_field, build_glob%eulspace)
+                call center_3Dpolar_refs(pftc, build_glob%spproj_field, build_glob%eulspace)
             endif
             ! Memoize
-            call pftcc%memoize_refs
+            call pftc%memoize_refs
         else
             ! (if needed) estimating lp (over all states) and reseting params_glob%lp and params_glob%kfromto
-            call prepare_polar_references(pftcc, cline, batchsz)
+            call prepare_polar_references(pftc, cline, batchsz)
         endif
         ! PREPARATION OF SIGMAS
         if( params_glob%l_needs_sigma )then
@@ -1231,9 +1231,9 @@ contains
         call build_glob%vol2%kill
     end subroutine prepare_refs_sigmas_ptcls
 
-    subroutine prepare_polar_references( pftcc, cline, batchsz )
+    subroutine prepare_polar_references( pftc, cline, batchsz )
         use simple_polarft_calc, only:  polarft_corrcalc
-        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(polarft_corrcalc), intent(inout) :: pftc
         class(cmdline),          intent(in)    :: cline !< command line
         integer,                 intent(in)    :: batchsz
         type(ori) :: o_tmp
@@ -1245,10 +1245,10 @@ contains
         else
             call estimate_lp_refvols
         endif
-        ! pftcc
+        ! pftc
         nrefs = params_glob%nspace * params_glob%nstates
-        call pftcc%new(nrefs, [1,batchsz], params_glob%kfromto)
-        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+        call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
+        call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             if( str_has_substr(params_glob%refine, 'prob') )then
@@ -1266,24 +1266,24 @@ contains
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                call build_glob%vol_odd%fproject_polar(iref, o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
-                call build_glob%vol%fproject_polar(    iref, o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
+                call build_glob%vol_odd%fproject_polar(iref, o_tmp, pftc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol%fproject_polar(    iref, o_tmp, pftc, iseven=.true.,  mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
         end do
-        call pftcc%memoize_refs
+        call pftc%memoize_refs
     end subroutine prepare_polar_references
 
-    subroutine build_batch_particles( pftcc, nptcls_here, pinds_here, tmp_imgs )
+    subroutine build_batch_particles( pftc, nptcls_here, pinds_here, tmp_imgs )
         use simple_polarft_calc,       only:  polarft_corrcalc
-        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(polarft_corrcalc), intent(inout) :: pftc
         integer,                 intent(in)    :: nptcls_here
         integer,                 intent(in)    :: pinds_here(nptcls_here)
         type(image),             intent(inout) :: tmp_imgs(params_glob%nthr)
         integer :: iptcl_batch, iptcl, ithr
         ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
+        call pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
@@ -1292,14 +1292,14 @@ contains
             ! prep
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_crop_polarizer%polarize(pftc, tmp_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flags
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+            call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
-        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+        call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
+        call pftc%memoize_ptcls
     end subroutine build_batch_particles
 
 end module simple_strategy2D3D_common

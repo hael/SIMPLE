@@ -125,7 +125,7 @@ contains
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:), cavgs(:)
-        type(polarft_corrcalc)        :: pftcc
+        type(polarft_corrcalc)        :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         integer :: nptcls, ithr
@@ -134,8 +134,8 @@ contains
         call set_bp_range( cline )
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
         ! PREPARATION OF PARTICLES
-        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        call pftc%new(params%nspace, [1,nptcls], params%kfromto)
+        call build%img_crop_polarizer%init_polarizer(pftc, params%alpha)
         call prepimgbatch(nptcls)
         allocate(tmp_imgs(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
@@ -143,26 +143,26 @@ contains
             call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
         enddo
         ! Build polar particle images
-        call pftcc%allocate_refs_memoization
-        call build_batch_particles(pftcc, nptcls, pinds, tmp_imgs)
+        call pftc%allocate_refs_memoization
+        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs)
         ! Dealing with polar cavgs
-        call polar_cavger_new(pftcc,.true.)
-        call polar_cavger_update_sums(nptcls, pinds, build%spproj, pftcc, is3D=.true.)
+        call polar_cavger_new(pftc,.true.)
+        call polar_cavger_update_sums(nptcls, pinds, build%spproj, pftc, is3D=.true.)
         call polar_cavger_merge_eos_and_norm(reforis=build%eulspace)
         ! write
         allocate(cavgs(params%nspace))
         call polar_cavger_write(string('cavgs_even.bin'), 'even')
         call polar_cavger_write(string('cavgs_odd.bin'),  'odd')
         call polar_cavger_write(string('cavgs.bin'),     'merged')
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'even')
         call write_imgarr(cavgs, string('cavgs_even.mrc'))
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'odd')
         call write_imgarr(cavgs, string('cavgs_odd.mrc'))
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'merged')
         call write_imgarr(cavgs, string('cavgs_merged.mrc'))
         call polar_cavger_kill
         call killimgbatch
-        call pftcc%kill
+        call pftc%kill
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_CLIN_FSC NORMAL STOP ****')
@@ -399,16 +399,16 @@ contains
     subroutine exec_score_ptcls( self, cline )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align, killimgbatch
         use simple_polarft_calc,    only: polarft_corrcalc
-        use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
+        use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
         use simple_class_frcs,          only: class_frcs
         use simple_euclid_sigma2
         use simple_commanders_euclid
         class(commander_score_ptcls), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(pftcc_shsrch_grad), allocatable :: grad_shsrch_objs(:)
+        type(pftc_shsrch_grad), allocatable :: grad_shsrch_objs(:)
         type(image),             allocatable :: eimgs(:), oimgs(:), cls_even(:), cls_odd(:)
         type(commander_calc_pspec_distr) :: xcalc_pspec_distr
-        type(polarft_corrcalc) :: pftcc
+        type(polarft_corrcalc) :: pftc
         type(builder)          :: build
         type(parameters)       :: params
         type(cmdline)          :: cline_calc_pspec_distr
@@ -510,9 +510,9 @@ contains
         params%kfromto(1) = max(2,calc_fourier_index(params%hp, params%box, params%smpd))
         params%kfromto(2) = min(fdim(params%box)-1, calc_fourier_index(params%lp, params%box, params%smpd))
         write(logfhandle,'(A,F6.1)')'>>> RESOLUTION LIMIT(ANGS): ', params%lp
-        ! PFTCC
-        call pftcc%new(params%ncls, [1,batchsz_max], params%kfromto)
-        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        ! pftc
+        call pftc%new(params%ncls, [1,batchsz_max], params%kfromto)
+        call build%img_crop_polarizer%init_polarizer(pftc, params%alpha)
         call eucl_sigma%new(string(SIGMA2_FBODY)//int2str_pad(params%part,params%numlen)//'.dat', params%box)
         call eucl_sigma%read_part(  build%spproj_field)
         call eucl_sigma%read_groups(build%spproj_field)
@@ -524,8 +524,8 @@ contains
                 call build%img_crop_polarizer%div_by_instrfun(cls_odd(icls))
                 call cls_even(icls)%fft
                 call cls_odd(icls)%fft
-                call build%img_crop_polarizer%polarize(pftcc, cls_even(icls), icls, .false., .true.,  build%l_resmsk)
-                call build%img_crop_polarizer%polarize(pftcc, cls_odd(icls),  icls, .false., .false., build%l_resmsk)
+                call build%img_crop_polarizer%polarize(pftc, cls_even(icls), icls, .false., .true.,  build%l_resmsk)
+                call build%img_crop_polarizer%polarize(pftc, cls_odd(icls),  icls, .false., .false., build%l_resmsk)
             endif
             call cls_even(icls)%kill
             call cls_odd(icls)%kill
@@ -535,7 +535,7 @@ contains
             call oimgs(ithr)%kill
         enddo
         deallocate(cls_even,cls_odd,oimgs)
-        call pftcc%memoize_refs
+        call pftc%memoize_refs
         ! CTF
         do i = 1,size(pinds)
             if( pinds(i)>0 )then
@@ -545,7 +545,7 @@ contains
         enddo
         l_ctf = build%spproj%get_ctfflag(params%oritype,iptcl=iptcl).ne.'no'
         ! Optimization allocations
-        allocate(scores(params%ncls,nptcls),corrs(pftcc%get_nrots()),source=-1.)
+        allocate(scores(params%ncls,nptcls),corrs(pftc%get_nrots()),source=-1.)
         lims(:,1) = -params%trs
         lims(:,2) =  params%trs
         lims_init = lims / 2.
@@ -560,9 +560,9 @@ contains
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            ! Refills pftcc
+            ! Refills pftc
             call discrete_read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz])
-            call pftcc%reallocate_ptcls(batchsz, pinds(batch_start:batch_end))
+            call pftc%reallocate_ptcls(batchsz, pinds(batch_start:batch_end))
             !$omp parallel do private(j,i,iptcl,ithr) default(shared) proc_bind(close)
             do j = batch_start,batch_end
                 ithr  = omp_get_thread_num()+1
@@ -570,12 +570,12 @@ contains
                 iptcl = pinds(j)
                 call eimgs(ithr)%zero_and_flag_ft
                 call prepimg4align(iptcl, build%imgbatch(i), eimgs(ithr))
-                call build%img_crop_polarizer%polarize(pftcc, eimgs(ithr), iptcl, .true., .true.)
-                call pftcc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
+                call build%img_crop_polarizer%polarize(pftc, eimgs(ithr), iptcl, .true., .true.)
+                call pftc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
             enddo
             !$omp end parallel do
-            if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
-            call pftcc%memoize_ptcls
+            if( l_ctf ) call pftc%create_polar_absctfmats(build%spproj, params%oritype)
+            call pftc%memoize_ptcls
             ! Scoring
             !$omp parallel do private(j,i,iptcl,icls,ithr,cxy,irot,inpl_ind,corrs,best_class,best_corr,best_xy,best_rot)&
             !$omp schedule(dynamic) proc_bind(close) default(shared)
@@ -589,14 +589,14 @@ contains
                 best_rot   = 0
                 do icls = 1,params%ncls
                     if( .not. cls_mask(icls) ) cycle
-                    call pftcc%gencorrs(icls, iptcl, corrs)
+                    call pftc%gencorrs(icls, iptcl, corrs)
                     irot     = maxloc(corrs, dim=1)
                     inpl_ind = irot
                     call grad_shsrch_objs(ithr)%set_indices(icls, iptcl)
                     cxy = grad_shsrch_objs(ithr)%minimize(irot=inpl_ind)
                     if( inpl_ind == 0 )then
                         inpl_ind = irot
-                        cxy      = [real(pftcc%gencorr_for_rot_8(icls, iptcl, irot)), 0.,0.]
+                        cxy      = [real(pftc%gencorr_for_rot_8(icls, iptcl, irot)), 0.,0.]
                     endif
                     scores(icls,j) = cxy(1)
                     if( cxy(1) > best_corr )then
@@ -606,7 +606,7 @@ contains
                         best_rot   = inpl_ind
                     endif
                 enddo
-                call build%spproj_field%e3set(iptcl, 360.-pftcc%get_rot(best_rot))
+                call build%spproj_field%e3set(iptcl, 360.-pftc%get_rot(best_rot))
                 call build%spproj_field%set_shift(iptcl,    best_xy)
                 call build%spproj_field%set(iptcl, 'inpl',  best_rot)
                 call build%spproj_field%set(iptcl, 'class', best_class)
@@ -615,7 +615,7 @@ contains
             !$omp end parallel do
         enddo
         call killimgbatch
-        call pftcc%kill
+        call pftc%kill
         call build%spproj%write(params%projfile)
         ! Write array
         call fopen(funit, string('scores.mat'), form='UNFORMATTED', iostat=stat)

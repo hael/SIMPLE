@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 use simple_parameters, only: params_glob
 implicit none
 
-public :: polarft_corrcalc, pftcc_glob
+public :: polarft_corrcalc, pftc_glob
 private
 #include "simple_local_flags.inc"
 
@@ -184,7 +184,7 @@ end type polarft_corrcalc
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter           :: zero            = cmplx(0.,0.) !< just a complex zero
 integer,     parameter           :: FFTW_USE_WISDOM = 16
-class(polarft_corrcalc), pointer :: pftcc_glob => null()
+class(polarft_corrcalc), pointer :: pftc_glob => null()
 
 contains
 
@@ -314,7 +314,7 @@ contains
         ! flag existence
         self%existence = .true.
         ! set pointer to global instance
-        pftcc_glob => self
+        pftc_glob => self
     end subroutine new
 
     ! SETTERS
@@ -2635,7 +2635,7 @@ contains
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
-            nullify(self%sigma2_noise, pftcc_glob)
+            nullify(self%sigma2_noise, pftc_glob)
             self%existence = .false.
         endif
     end subroutine kill

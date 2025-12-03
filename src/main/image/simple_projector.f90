@@ -324,57 +324,57 @@ contains
     ! end function fproject_correlate
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
+    subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
         use simple_polarft_calc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self    !< projector object
         integer,                 intent(in)    :: iref    !< which reference
         class(ori),              intent(in)    :: e       !< orientation
-        class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
+        class(polarft_corrcalc), intent(inout) :: pftc   !< object that holds the polar image
         logical,                 intent(in)    :: iseven  !< eo flag
         logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         integer :: pdim(3), irot, k
         real    :: loc(3), e_rotmat(3,3), hk(2)
-        pdim     = pftcc%get_pdim()
+        pdim     = pftc%get_pdim()
         e_rotmat = e%get_mat()
         do irot = 1,pdim(1)
             do k = pdim(2),pdim(3)
                 if( mask(k) )then
-                    hk  = pftcc%get_coord(irot,k)
+                    hk  = pftc%get_coord(irot,k)
                     loc = matmul([hk(1), hk(2), 0.0], e_rotmat)
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
+                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
                 else
-                    call pftcc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
+                    call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
                 endif
             end do
         end do
     end subroutine fproject_polar
 
     ! !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    ! subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
+    ! subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
     !     use simple_polarft_calc, only: polarft_corrcalc
     !     class(projector),        intent(inout) :: self    !< projector object
     !     integer,                 intent(in)    :: iref    !< which reference
     !     class(ori),              intent(in)    :: e       !< orientation
-    !     class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
+    !     class(polarft_corrcalc), intent(inout) :: pftc   !< object that holds the polar image
     !     logical,                 intent(in)    :: iseven  !< eo flag
     !     logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
     !     integer :: irot, k, pdim(3), lims(3,2), sqlp, sqarg, hk(2)
     !     real    :: loc(3), e_rotmat(3,3)
     !     lims     = self%loop_lims(2)
     !     sqlp     = (maxval(lims(:,2)))**2
-    !     pdim     = pftcc%get_pdim()
+    !     pdim     = pftc%get_pdim()
     !     e_rotmat = e%get_mat()
     !     do irot = 1,pdim(1)
     !         do k = pdim(2),pdim(3)
-    !             if( .not. mask(k) ) call pftcc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
-    !             hk    = pftcc%get_coord(irot,k)
+    !             if( .not. mask(k) ) call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
+    !             hk    = pftc%get_coord(irot,k)
     !             sqarg = dot_product([hk(1),hk(2)],[hk(1),hk(2)])
     !             if( sqarg > sqlp .or. hk(1) < lims(1,1) .or. hk(1) > lims(1,2) .or. &
     !                                  &hk(2) < lims(2,1) .or. hk(2) > lims(2,2) )then
-    !                 call pftcc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
+    !                 call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
     !             endif
     !             loc = matmul(real([hk(1), hk(2), 0]),e_rotmat)
-    !             call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
+    !             call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
     !         end do
     !     end do
     ! end subroutine fproject_polar

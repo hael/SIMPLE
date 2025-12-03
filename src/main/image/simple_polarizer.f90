@@ -38,19 +38,19 @@ contains
     ! IMAGE TO POLAR FT TRANSFORMER
 
     !> \brief  initialises the image polarizer
-    subroutine init_polarizer( self, pftcc, alpha )
+    subroutine init_polarizer( self, pftc, alpha )
         use simple_gridding, only: gen_instrfun_img
         class(polarizer),        intent(inout) :: self   !< projector instance
-        class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
+        class(polarft_corrcalc), intent(inout) :: pftc  !< polarft_corrcalc object to be filled
         real,                    intent(in)    :: alpha  !< oversampling factor
         type(kbinterpol)  :: kbwin                 !< window function object
         real, allocatable :: w(:,:)
         real              :: loc(2), d1, d2
         integer           :: win(2,2), lims(2,3), i, k, l, cnt, f1, f2
         logical           :: normalize_weights
-        if( .not. pftcc%exists() ) THROW_HARD('polarft_corrcalc object needs to be created; init_polarizer')
+        if( .not. pftc%exists() ) THROW_HARD('polarft_corrcalc object needs to be created; init_polarizer')
         call self%kill_polarizer
-        self%pdim = pftcc%get_pdim()
+        self%pdim = pftc%get_pdim()
         lims      = transpose(self%loop_lims(3)) ! fortran layered memory
         select case(trim(params_glob%interpfun))
         case('kb')
@@ -80,7 +80,7 @@ contains
             do i=1,self%pdim(1)
                 do k=self%pdim(2),self%pdim(3)
                     ! polar coordinates
-                    loc = pftcc%get_coord(i,k)
+                    loc = pftc%get_coord(i,k)
                     call sqwin_2d(loc(1), loc(2), kbwin%get_winsz(), win)
                     w   = 1.
                     cnt = 0
@@ -103,7 +103,7 @@ contains
             !$omp parallel do collapse(2) schedule(static) private(i,k,w,loc,f1,f2,d1,d2) default(shared) proc_bind(close)
             do i=1,self%pdim(1)
                 do k=self%pdim(2),self%pdim(3)
-                    loc = pftcc%get_coord(i,k)
+                    loc = pftc%get_coord(i,k)
                     f1  = int(floor(loc(1)))
                     d1  = loc(1) - real(f1)
                     f2  = int(floor(loc(2)))
@@ -153,21 +153,21 @@ contains
 
     !> \brief  creates the polar Fourier transform from self
     !!         KEEP THIS ROUTINE SERIAL
-    subroutine polarize_1( self, pftcc, img_ind, isptcl, iseven, mask )
+    subroutine polarize_1( self, pftc, img_ind, isptcl, iseven, mask )
         class(polarizer),        intent(in)    :: self    !< projector instance
-        class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
+        class(polarft_corrcalc), intent(inout) :: pftc   !< polarft_corrcalc object to be filled
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
         logical,                 intent(in)    :: iseven  !< is even (or odd)
         logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
-        call self%polarize_2(pftcc, self, img_ind, isptcl, iseven, mask )
+        call self%polarize_2(pftc, self, img_ind, isptcl, iseven, mask )
     end subroutine polarize_1
 
     !> \brief  creates the polar Fourier transform from a given image
     !!         KEEP THIS ROUTINE SERIAL
-    subroutine polarize_2( self, pftcc, img, img_ind, isptcl, iseven, mask )
+    subroutine polarize_2( self, pftc, img, img_ind, isptcl, iseven, mask )
         class(polarizer),        intent(in)    :: self    !< projector instance
-        class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
+        class(polarft_corrcalc), intent(inout) :: pftc   !< polarft_corrcalc object to be filled
         class(image),            intent(in)    :: img
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
@@ -177,7 +177,7 @@ contains
         complex :: fcomps(self%wlen)
         integer :: i, k, l, m, addr_m, ind
         ! get temporary pft matrix
-        call pftcc%get_work_pft_ptr(pft)
+        call pftc%get_work_pft_ptr(pft)
         ! interpolate
         do k=self%pdim(2),self%pdim(3)
             do i=1,self%pdim(1)
@@ -199,9 +199,9 @@ contains
             enddo
         endif
         if( isptcl )then
-            call pftcc%set_ptcl_pft(img_ind, pft)
+            call pftc%set_ptcl_pft(img_ind, pft)
         else
-            call pftcc%set_ref_pft(img_ind, pft, iseven)
+            call pftc%set_ref_pft(img_ind, pft, iseven)
         endif
         nullify(pft)
     end subroutine polarize_2

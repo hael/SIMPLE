@@ -4,7 +4,7 @@ use simple_strategy3D_alloc  ! singleton class s3D
 use simple_strategy3D_srch,  only: strategy3D_srch
 use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
-use simple_polarft_calc, only: pftcc_glob
+use simple_polarft_calc, only: pftc_glob
 implicit none
 
 public :: extract_peak_ori, extract_peak_oris, assign_ori
@@ -23,7 +23,7 @@ contains
         integer   :: state, neff_states, nrefs_eval, nrefs_tot
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
         logical   :: l_multistates
-        s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
+        s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftc_glob%get_rot(inpl)
         ! stash previous ori
         call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)

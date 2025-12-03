@@ -29,16 +29,16 @@ use simple_strategy2D_alloc
 implicit none
 
 public :: cluster2D_exec
-public :: sample_ptcls4update2D, preppftcc4align2D, prep_batch_particles2D
+public :: sample_ptcls4update2D, preppftc4align2D, prep_batch_particles2D
 public :: build_batch_particles2D, clean_batch_particles2D
 private
 #include "simple_local_flags.inc"
 
-type(polarft_corrcalc)   :: pftcc
+type(polarft_corrcalc)   :: pftc
 type(euclid_sigma2)      :: eucl_sigma
 type(image), allocatable :: ptcl_match_imgs(:)
-real(timer_int_kind)     :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
-integer(timer_int_kind)  ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
+real(timer_int_kind)     :: rt_init, rt_prep_pftc, rt_align, rt_cavg, rt_projio, rt_tot
+integer(timer_int_kind)  ::  t_init,  t_prep_pftc,  t_align,  t_cavg,  t_projio,  t_tot
 type(string)             :: benchfname
 
 contains
@@ -147,7 +147,7 @@ contains
             call build_glob%spproj%write_segment_inside(params_glob%oritype)
         endif
         if( l_polar .and. which_iter>1 )then
-            ! references are read in prep_polar_pftcc4align2D below
+            ! references are read in prep_polar_pftc4align2D below
             ! On first iteration the references are taken from the input images
         else
             l_alloc_read_cavgs = .true.
@@ -176,22 +176,22 @@ contains
         ! GENERATE POLAR REFERENCES
         if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
-            t_prep_pftcc = tic()
+            t_prep_pftc = tic()
         endif
         if( l_polar .and. which_iter>1)then
             ! Polar references, on first iteration the references are taken from the input images
-            call prep_polar_pftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+            call prep_polar_pftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         else
             ! Cartesian references
-            call preppftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+            call preppftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         endif
         if( l_polar )then
             ! for restoration
-            if( which_iter == 1 ) call polar_cavger_new(pftcc, l_clin)
+            if( which_iter == 1 ) call polar_cavger_new(pftc, l_clin)
             call polar_cavger_zero_pft_refs
         endif
 
-        ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
+        ! ARRAY ALLOCATION FOR STRATEGY2D after pftc initialization
         call prep_strategy2D_glob( neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
@@ -201,7 +201,7 @@ contains
         ! GENERATE PARTICLES IMAGE OBJECTS
         allocate(strategy2Dsrch(batchsz_max))
         call prep_batch_particles2D(batchsz_max)
-        if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
+        if( L_BENCH_GLOB ) rt_prep_pftc = toc(t_prep_pftc)
 
         ! READ THE ASSIGNMENT FOR PROB MODE
         if( l_prob )then
@@ -221,13 +221,13 @@ contains
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            ! Prep particles in pftcc
-            if( L_BENCH_GLOB ) t_prep_pftcc = tic()
-            call build_batch_particles2D(pftcc, batchsz, pinds(batch_start:batch_end), l_ctf)
-            if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
+            ! Prep particles in pftc
+            if( L_BENCH_GLOB ) t_prep_pftc = tic()
+            call build_batch_particles2D(pftc, batchsz, pinds(batch_start:batch_end), l_ctf)
+            if( L_BENCH_GLOB ) rt_prep_pftc = rt_prep_pftc + toc(t_prep_pftc)
             ! batch strategy2D objects
             if( L_BENCH_GLOB ) t_init = tic()
-            call prep_strategy2D_batch( pftcc, which_iter, batchsz, pinds(batch_start:batch_end))
+            call prep_strategy2D_batch( pftc, which_iter, batchsz, pinds(batch_start:batch_end))
             if( L_BENCH_GLOB ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -306,7 +306,7 @@ contains
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch)) ! incremental shift
-                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'class')
+                    call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'class')
                 end if
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
@@ -316,7 +316,7 @@ contains
             ! restore polar cavgs
             if( l_polar )then
                 call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build_glob%spproj, pftcc, incr_shifts(:,1:batchsz))
+                    &build_glob%spproj, pftc, incr_shifts(:,1:batchsz))
             endif
         enddo ! Batch loop
 
@@ -397,7 +397,7 @@ contains
                     endif
                     call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
                     call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                    call polar_cavger_write_cartrefs(pftcc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
+                    call polar_cavger_write_cartrefs(pftc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
                     call polar_cavger_gen2Dclassdoc(build_glob%spproj)
                     call polar_cavger_kill
                 else
@@ -430,7 +430,7 @@ contains
         endif
         call eucl_sigma%kill
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
-        call pftcc%kill
+        call pftc%kill
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished(string('simple_strategy2D_matcher :: cluster2D_exec'))
         if( L_BENCH_GLOB )then
@@ -440,7 +440,7 @@ contains
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', rt_prep_pftcc
+                write(fnr,'(a,1x,f9.2)') 'pftc preparation    : ', rt_prep_pftc
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', rt_cavg
                 write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', rt_projio
@@ -448,12 +448,12 @@ contains
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)       * 100.
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'pftc preparation    : ', (rt_prep_pftc/rt_tot) * 100.
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)      * 100.
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot)       * 100.
                 write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', (rt_projio/rt_tot)     * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
-                    &((rt_init+rt_prep_pftcc+rt_align+rt_cavg+rt_projio)/rt_tot) * 100.
+                    &((rt_init+rt_prep_pftc+rt_align+rt_cavg+rt_projio)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif
@@ -498,18 +498,18 @@ contains
     end subroutine clean_batch_particles2D
 
     !>  \brief  fills batch particle images for polar alignment
-    subroutine build_batch_particles2D( pftcc, nptcls_here, pinds, l_ctf_here )
+    subroutine build_batch_particles2D( pftc, nptcls_here, pinds, l_ctf_here )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align
-        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(polarft_corrcalc), intent(inout) :: pftc
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
         logical, intent(in) :: l_ctf_here
         integer :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds)
+        call pftc%reallocate_ptcls(nptcls_here, pinds)
         if( .not.build_glob%img_crop_polarizer%polarizer_initialized() )then
-            call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+            call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
         endif
         ! call build_glob%spproj_field%write('ptcl2Dfield_going_in.txt')
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
@@ -519,20 +519,20 @@ contains
             iptcl = pinds(iptcl_batch)
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+            call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
         ! Memoize particles FFT parameters
-        if( l_ctf_here ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
-        call pftcc%memoize_ptcls
+        if( l_ctf_here ) call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        call pftc%memoize_ptcls
     end subroutine build_batch_particles2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
-    subroutine preppftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+    subroutine preppftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         use simple_strategy2D3D_common, only: prep2dref
-        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(polarft_corrcalc), intent(inout) :: pftc
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
         type(image),      allocatable :: match_imgs(:), tmp_imgs(:)
@@ -542,7 +542,7 @@ contains
         logical      :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        call pftc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
         ! objective functions & sigma
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
@@ -556,10 +556,10 @@ contains
             endif
         endif
         ! prepare the polarizer images
-        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+        call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls),tmp_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
-        ! PREPARATION OF REFERENCES IN PFTCC
+        ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
         !$omp schedule(static) proc_bind(close)
@@ -586,37 +586,37 @@ contains
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call tmp_imgs(icls)%copy_fast(cavgs_even(icls))
                         call prep2Dref(tmp_imgs(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                        call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call build_glob%img_crop_polarizer%polarize(pftc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call tmp_imgs(icls)%copy_fast(cavgs_odd(icls))
                         call prep2Dref(tmp_imgs(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                        call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call build_glob%img_crop_polarizer%polarize(pftc, match_imgs(icls), icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)  ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
-                        call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
-                        call pftcc%cp_even2odd_ref(icls)
+                        call build_glob%img_crop_polarizer%polarize(pftc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call pftc%cp_even2odd_ref(icls)
                     endif
                 else
                     call tmp_imgs(icls)%copy_fast(cavgs_merged(icls))
                     call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                    call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
-                    call pftcc%cp_even2odd_ref(icls)
+                    call build_glob%img_crop_polarizer%polarize(pftc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                    call pftc%cp_even2odd_ref(icls)
                 endif
                 call match_imgs(icls)%kill
                 call tmp_imgs(icls)%kill
             endif
         end do
         !$omp end parallel do
-        call pftcc%memoize_refs
+        call pftc%memoize_refs
         ! CLEANUP
         deallocate(match_imgs,tmp_imgs)
         call cavgs_merged(1)%kill_thread_safe_tmp_imgs
-    end subroutine preppftcc4align2D
+    end subroutine preppftc4align2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports polar references
-    subroutine prep_polar_pftcc4align2D( pftcc, batchsz_max, which_iter, l_stream )
+    subroutine prep_polar_pftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         use simple_strategy2D3D_common, only: prep2dref
-        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(polarft_corrcalc), intent(inout) :: pftc
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
         type(image),      allocatable :: tmp_imgs(:)
@@ -624,8 +624,8 @@ contains
         real         :: xyz(3)
         integer      :: icls, pop, pop_even, pop_odd
         logical      :: has_been_searched, do_center, l_center
-        ! PFTCC instantiation
-        call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        ! pftc instantiation
+        call pftc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
         ! Sigma2
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
@@ -641,7 +641,7 @@ contains
             endif
         endif
         ! Read polar references
-        call polar_cavger_new(pftcc, trim(params_glob%ref_type)=='comlin_hybrid')
+        call polar_cavger_new(pftc, trim(params_glob%ref_type)=='comlin_hybrid')
         call polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! Centering-related objects
@@ -649,10 +649,10 @@ contains
              &.and. (which_iter > 2) .and. (.not.params_glob%l_update_frac)
         if( do_center )then
             allocate(tmp_imgs(params_glob%ncls))
-            call polar_cavger_refs2cartesian(pftcc, tmp_imgs, 'merged')
+            call polar_cavger_refs2cartesian(pftc, tmp_imgs, 'merged')
             call tmp_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         endif
-        ! PREPARATION OF REFERENCES IN PFTCC
+        ! PREPARATION OF REFERENCES IN pftc
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,xyz,l_center)&
         !$omp schedule(static) proc_bind(close)
         do icls=1,params_glob%ncls
@@ -674,37 +674,37 @@ contains
                     call polar_prep2Dref( icls )
                     xyz = 0.0
                 endif
-                ! transfer to pftcc
+                ! transfer to pftc
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
-                        ! transfer e/o refs to pftcc
-                        call polar_cavger_set_ref_pftcc(icls, 'even', pftcc)
-                        call polar_cavger_set_ref_pftcc(icls, 'odd',  pftcc)
+                        ! transfer e/o refs to pftc
+                        call polar_cavger_set_ref_pftc(icls, 'even', pftc)
+                        call polar_cavger_set_ref_pftc(icls, 'odd',  pftc)
                     else
                         ! put the merged class average in both even and odd positions
-                        call polar_cavger_set_ref_pftcc(icls, 'merged', pftcc)
-                        call pftcc%cp_even2odd_ref(icls)
+                        call polar_cavger_set_ref_pftc(icls, 'merged', pftc)
+                        call pftc%cp_even2odd_ref(icls)
                     endif
                 else
                     ! put the merged class average in both even and odd positions
-                    call polar_cavger_set_ref_pftcc(icls, 'merged', pftcc)
-                    call pftcc%cp_even2odd_ref(icls)
+                    call polar_cavger_set_ref_pftc(icls, 'merged', pftc)
+                    call pftc%cp_even2odd_ref(icls)
                 endif
-                ! centering within the pftcc
+                ! centering within the pftc
                 if( l_center .and. (arg(xyz) > CENTHRESH) )then
                     call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2))
-                    call pftcc%shift_ref(icls, xyz(1:2))
+                    call pftc%shift_ref(icls, xyz(1:2))
                 endif
             endif
             if( do_center ) call tmp_imgs(icls)%kill
         end do
         !$omp end parallel do
-        call pftcc%memoize_refs
+        call pftc%memoize_refs
         ! cleanup
         if( do_center )then
             call tmp_imgs(1)%kill_thread_safe_tmp_imgs
             deallocate(tmp_imgs)
         endif
-    end subroutine prep_polar_pftcc4align2D
+    end subroutine prep_polar_pftc4align2D
 
 end module simple_strategy2D_matcher

@@ -1,8 +1,8 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 include 'simple_lib.f08'
-use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_polarft_calc,   only: pftcc_glob, polarft_corrcalc
+use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_polarft_calc,   only: pftc_glob, polarft_corrcalc
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
 use simple_eul_prob_tab,       only: eul_prob_tab
@@ -20,9 +20,9 @@ end type strategy3D_spec
 
 type strategy3D_srch
     character(len=:), allocatable :: refine                !< 3D refinement flag
-    type(pftcc_shsrch_grad) :: grad_shsrch_obj             !< origin shift search object, L-BFGS with gradient
-    type(pftcc_shsrch_grad) :: grad_shsrch_obj2            !<
-    type(pftcc_shsrch_grad) :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    type(pftc_shsrch_grad) :: grad_shsrch_obj             !< origin shift search object, L-BFGS with gradient
+    type(pftc_shsrch_grad) :: grad_shsrch_obj2            !<
+    type(pftc_shsrch_grad) :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
     type(ori)               :: o_prev                      !< previous orientation
     type(oris)              :: opeaks                      !< peak orientations to consider for refinement
     integer                 :: iptcl           = 0         !< global particle index
@@ -96,7 +96,7 @@ contains
         call self%o_prev%new(is_ptcl=.true.)
         call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
-        self%nrots = pftcc_glob%get_nrots()
+        self%nrots = pftc_glob%get_nrots()
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
         &maxits=params_glob%maxits_sh, opt_angle=.true.)
         call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh,&
@@ -113,7 +113,7 @@ contains
         ! previous parameters
         call build_glob%spproj_field%get_ori(self%iptcl, self%o_prev)        ! previous ori
         self%prev_state = self%o_prev%get_state()                            ! state index
-        self%prev_roind = pftcc_glob%get_roind(360.-self%o_prev%e3get())     ! in-plane angle index
+        self%prev_roind = pftc_glob%get_roind(360.-self%o_prev%e3get())     ! in-plane angle index
         self%prev_shvec = self%o_prev%get_2Dshift()                          ! shift vector
         self%prev_proj  = build_glob%eulspace%find_closest_proj(self%o_prev) ! previous projection direction
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj   ! previous reference
@@ -151,7 +151,7 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
         ! prep corr
-        call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
+        call pftc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
         corr = max(0.,maxval(corrs))
         self%prev_corr = corr
     end subroutine prep4srch
@@ -171,7 +171,7 @@ contains
         self%xy_first_rot = 0.
         if( irot > 0 )then
             ! rotate the shift vector to the frame of reference
-            call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+            call rotmat2d(pftc_glob%get_rot(irot), rotmat)
             self%xy_first_rot = matmul(cxy(2:3), rotmat)
         endif
     end subroutine inpl_srch_first
@@ -232,7 +232,7 @@ contains
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
         if( present(w)  ) s3D%proj_space_w(      ref,self%ithr) = w
         s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind
-        s3D%proj_space_euls(  3,ref,self%ithr) = 360. - pftcc_glob%get_rot(inpl_ind)
+        s3D%proj_space_euls(  3,ref,self%ithr) = 360. - pftc_glob%get_rot(inpl_ind)
         s3D%proj_space_corrs(   ref,self%ithr) = corr
     end subroutine store_solution
 

@@ -1,7 +1,7 @@
 module simple_euclid_sigma2
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
-use simple_polarft_calc, only: polarft_corrcalc, pftcc_glob
+use simple_polarft_calc, only: polarft_corrcalc, pftc_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
@@ -59,9 +59,9 @@ contains
         self%kfromto = [1, fdim(box)-1]
         allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),params_glob%fromp:params_glob%top),&
                   self%pinds(params_glob%fromp:params_glob%top) )
-        if( associated(pftcc_glob) )then
-            call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
-            call pftcc_glob%get_pinds(self%pinds)
+        if( associated(pftc_glob) )then
+            call pftc_glob%assign_sigma2_noise(self%sigma2_noise)
+            call pftc_glob%get_pinds(self%pinds)
         endif
         self%binfname     =  binfname
         self%fromp        =  params_glob%fromp
@@ -164,7 +164,7 @@ contains
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
         integer                             :: iptcl, igroup, ngroups, eo
-        if( associated(pftcc_glob) ) call pftcc_glob%get_pinds(self%pinds)
+        if( associated(pftc_glob) ) call pftc_glob%get_pinds(self%pinds)
         call self%read_sigma2_groups( params_glob%which_iter, self%sigma2_groups, ngroups )
         if( params_glob%l_sigma_glob )then
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
@@ -198,9 +198,9 @@ contains
     end subroutine allocate_ptcls
 
     !>  Calculates and updates sigma2 within search resolution range
-    subroutine calc_sigma2( self, pftcc, iptcl, o, refkind )
+    subroutine calc_sigma2( self, pftc, iptcl, o, refkind )
         class(euclid_sigma2),    intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(polarft_corrcalc), intent(inout) :: pftc
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(in)    :: o
         character(len=*),        intent(in)    :: refkind ! 'proj' or 'class'
@@ -210,8 +210,8 @@ contains
         if ( o%isstatezero() ) return
         shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
-        irot  = pftcc_glob%get_roind(360. - o%e3get())
-        call pftcc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+        irot  = pftc_glob%get_roind(360. - o%e3get())
+        call pftc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
     end subroutine calc_sigma2
 

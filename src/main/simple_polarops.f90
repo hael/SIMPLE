@@ -5,7 +5,7 @@ include 'simple_lib.f08'
 use simple_builder,          only: builder, build_glob
 use simple_image,            only: image
 use simple_parameters,       only: params_glob
-use simple_polarft_calc, only: polarft_corrcalc, pftcc_glob
+use simple_polarft_calc, only: polarft_corrcalc, pftc_glob
 use simple_sp_project,       only: sp_project
 use simple_strategy2D_utils
 implicit none
@@ -14,10 +14,10 @@ implicit none
 public :: polar_cavger_new, polar_cavger_dims_from_header, polar_cavger_update_sums
 public :: polar_cavger_calc_and_write_frcs_and_eoavg
 public :: polar_cavger_merge_eos_and_norm2D, polar_cavger_merge_eos_and_norm
-public :: polar_cavger_assemble_sums_from_parts, polar_cavger_set_ref_pftcc
+public :: polar_cavger_assemble_sums_from_parts, polar_cavger_set_ref_pftc
 public :: polar_cavger_zero_pft_refs, polar_cavger_kill
 ! I/O
-public :: polar_cavger_refs2cartesian, polar_cavger_write_cartrefs, polar_cavger_writeall_pftccrefs
+public :: polar_cavger_refs2cartesian, polar_cavger_write_cartrefs, polar_cavger_writeall_pftcrefs
 public :: polar_cavger_write, polar_cavger_writeall, polar_cavger_writeall_cartrefs
 public :: polar_cavger_readwrite_partial_sums, polar_cavger_read_all
 ! Book-keeping
@@ -35,27 +35,27 @@ integer,     allocatable :: prev_eo_pops(:,:), eo_pops(:,:)                     
 real                     :: smpd       = 0.                                     ! Pixel size
 integer                  :: ncls       = 0                                      ! # classes
 integer                  :: kfromto(2) = 0                                      ! Resolution range
-integer                  :: pftsz      = 0                                      ! Size of PFT in pftcc along rotation dimension
+integer                  :: pftsz      = 0                                      ! Size of PFT in pftc along rotation dimension
 integer                  :: nrots      = 0                                      ! # of in-plane rotations; =2*pftsz
 logical                  :: l_comlin   = .false.                                ! Whether we operate in 2D/3D(=added common lines)
 
 contains
 
     !> Module initialization
-    subroutine polar_cavger_new( pftcc, comlin, nrefs )
-        class(polarft_corrcalc), intent(in) :: pftcc
+    subroutine polar_cavger_new( pftc, comlin, nrefs )
+        class(polarft_corrcalc), intent(in) :: pftc
         logical,                 intent(in) :: comlin
         integer,       optional, intent(in) :: nrefs
         call polar_cavger_kill
-        nrots    = pftcc%get_nrots()
-        pftsz    = pftcc%get_pftsz()
-        kfromto  = pftcc%get_kfromto()
+        nrots    = pftc%get_nrots()
+        pftsz    = pftc%get_pftsz()
+        kfromto  = pftc%get_kfromto()
         l_comlin = comlin
         smpd     = params_glob%smpd
         if( present(nrefs) )then
             ncls = nrefs
         else
-            ncls = pftcc%get_nrefs()
+            ncls = pftc%get_nrefs()
         endif
         allocate(prev_eo_pops(2,ncls), eo_pops(2,ncls), source=0)
         allocate(pfts_even(pftsz,kfromto(1):kfromto(2),ncls),pfts_odd(pftsz,kfromto(1):kfromto(2),ncls),&
@@ -72,19 +72,19 @@ contains
         ctf2_odd  = 0.d0
     end subroutine polar_cavger_zero_pft_refs
 
-    subroutine polar_cavger_set_ref_pftcc( icls, which, pftcc )
+    subroutine polar_cavger_set_ref_pftc( icls, which, pftc )
         integer,                 intent(in)    :: icls
         character(len=*),        intent(in)    :: which
-        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(polarft_corrcalc), intent(inout) :: pftc
         select case(trim(which))
         case('merged')
-            call pftcc%set_ref_pft(icls, cmplx(pfts_merg(:,:,icls),kind=sp), .true.)
+            call pftc%set_ref_pft(icls, cmplx(pfts_merg(:,:,icls),kind=sp), .true.)
         case('even')
-            call pftcc%set_ref_pft(icls, cmplx(pfts_even(:,:,icls),kind=sp), .true.)
+            call pftc%set_ref_pft(icls, cmplx(pfts_even(:,:,icls),kind=sp), .true.)
         case('odd')
-            call pftcc%set_ref_pft(icls, cmplx(pfts_odd(:,:,icls),kind=sp), .false.)
+            call pftc%set_ref_pft(icls, cmplx(pfts_odd(:,:,icls),kind=sp), .false.)
         end select
-    end subroutine polar_cavger_set_ref_pftcc
+    end subroutine polar_cavger_set_ref_pftc
 
     subroutine polar_cavger_calc_pops( spproj )
         class(sp_project), target, intent(in) :: spproj
@@ -136,12 +136,12 @@ contains
     end subroutine polar_cavger_calc_pops
 
     !>  \brief  Updates Fourier components and normalization matrices with new particles
-    subroutine polar_cavger_update_sums( nptcls, pinds, spproj, pftcc, incr_shifts, is3D )
+    subroutine polar_cavger_update_sums( nptcls, pinds, spproj, pftc, incr_shifts, is3D )
         use simple_euclid_sigma2, only: eucl_sigma2_glob
         integer,                         intent(in)    :: nptcls
         integer,                         intent(in)    :: pinds(nptcls)
         class(sp_project),               intent(inout) :: spproj
-        class(polarft_corrcalc), target, intent(inout) :: pftcc
+        class(polarft_corrcalc), target, intent(inout) :: pftc
         real,                  optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,               optional, intent(in)    :: is3d
         class(oris), pointer :: spproj_field
@@ -158,9 +158,9 @@ contains
         if( present(incr_shifts) ) l_shift = .true.
         ! retrieve particle info & pointers
         call spproj%ptr2oritype(params_glob%oritype, spproj_field)
-        call pftcc%get_ptcls_ptr(pptcls)
-        l_ctf = pftcc%is_with_ctf()
-        if( l_ctf ) call pftcc%get_ctfmats_ptr(pctfmats)
+        call pftc%get_ptcls_ptr(pptcls)
+        l_ctf = pftc%is_with_ctf()
+        if( l_ctf ) call pftc%get_ctfmats_ptr(pctfmats)
         ! update classes
         eopops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static) reduction(+:eopops)&
@@ -177,15 +177,15 @@ contains
             else
                 icls = spproj_field%get_class(iptcl)
             endif
-            irot = pftcc%get_roind_fast(spproj_field%e3get(iptcl))
+            irot = pftc%get_roind_fast(spproj_field%e3get(iptcl))
             if( l_shift )then
                 incr_shift = incr_shifts(:,i)
                 ! weighted restoration
-                if( any(abs(incr_shift) > 1.e-6) ) call pftcc%shift_ptcl(iptcl, -incr_shift)
+                if( any(abs(incr_shift) > 1.e-6) ) call pftc%shift_ptcl(iptcl, -incr_shift)
             endif
-            call pftcc%get_work_pft_ptr(rptcl)
+            call pftc%get_work_pft_ptr(rptcl)
             ! Particle rotation
-            call pftcc%rotate_pft(pptcls(:,:,i), irot, rptcl)
+            call pftc%rotate_pft(pptcls(:,:,i), irot, rptcl)
             ! Particle weight
             rptcl = real(w) * rptcl
             ! Particle ML regularization
@@ -197,10 +197,10 @@ contains
             endif
             ! Array updates
             if( l_ctf )then
-                call pftcc%get_work_rpft_ptr(rctf)
-                call pftcc%get_work_rpft8_ptr(rctf2)
+                call pftc%get_work_rpft_ptr(rctf)
+                call pftc%get_work_rpft8_ptr(rctf2)
                 ! weighted CTF2
-                call pftcc%rotate_pft(pctfmats(:,:,i), irot, rctf)
+                call pftc%rotate_pft(pctfmats(:,:,i), irot, rctf)
                 rctf2 = w * real(rctf,kind=dp)**2
                 rptcl = rptcl * rctf    ! PhFlip(X).|CTF|
                 ! CTF2 ML regularization
@@ -223,7 +223,7 @@ contains
             else
                 if( params_glob%l_ml_reg )then
                     ! CTF2=1 & ML regularization
-                    call pftcc%get_work_rpft8_ptr(rctf2)
+                    call pftc%get_work_rpft8_ptr(rctf2)
                     do k = kfromto(1),kfromto(2)
                         rctf2(:,k) = w / real(sigma2(k),dp)
                     enddo
@@ -709,7 +709,7 @@ contains
         if( .not.ref_space%isthere('mirr') )then
             THROW_HARD('Mirror index missing in reference search space')
         endif
-        drot = pftcc_glob%get_dang()
+        drot = pftc_glob%get_dang()
         if( L_KB ) kbwin = kbinterpol(1.5, KBALPHA)
         pfts_cl_even = DCMPLX_ZERO; pfts_cl_odd = DCMPLX_ZERO
         ctf2_cl_even = 0.d0; ctf2_cl_odd  = 0.d0
@@ -756,14 +756,14 @@ contains
                         ! KB
                         ! in plane rotation index of jref slice intersecting iref
                         psi       = 360.0 - eulers(3)
-                        targ_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(targ_irot)
+                        targ_irot = pftc_glob%get_roind_fast(psi)
+                        d         = psi - pftc_glob%get_rot(targ_irot)
                         if( d > drot ) d = d - 360.0
                         targ_w    = d / drot
                         ! in plane rotation index of iref slice
                         psi       = eulers(1)
-                        self_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(self_irot)
+                        self_irot = pftc_glob%get_roind_fast(psi)
+                        d         = psi - pftc_glob%get_rot(self_irot)
                         if( d > drot ) d = d - 360.0
                         self_w    = d / drot
                         ! intepolate common line in jref-th slice
@@ -799,8 +799,8 @@ contains
                         ! Linear interpolation
                         ! in plane rotation index of jref slice intersecting iref
                         psi       = 360.0 - eulers(3)
-                        targ_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(targ_irot)
+                        targ_irot = pftc_glob%get_roind_fast(psi)
+                        d         = psi - pftc_glob%get_rot(targ_irot)
                         if( d > drot ) d = d - 360.0
                         if( d < 0. )then
                             targ_irot = targ_irot - 1
@@ -810,8 +810,8 @@ contains
                         targ_w = d / drot
                         ! in plane rotation index of iref slice
                         psi       = eulers(1)
-                        self_irot = pftcc_glob%get_roind_fast(psi)
-                        d         = psi - pftcc_glob%get_rot(self_irot)
+                        self_irot = pftc_glob%get_roind_fast(psi)
+                        d         = psi - pftc_glob%get_rot(self_irot)
                         if( d > drot ) d = d - 360.0
                         if( d < 0. )then
                             self_irot = self_irot - 1
@@ -957,9 +957,9 @@ contains
     end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
 
     !>  \brief  Converts the polar references to a cartesian grid
-    subroutine polar_cavger_refs2cartesian( pftcc, cavgs, which, pfts_in )
+    subroutine polar_cavger_refs2cartesian( pftc, cavgs, which, pfts_in )
         use simple_image
-        class(polarft_corrcalc), intent(in)    :: pftcc
+        class(polarft_corrcalc), intent(in)    :: pftc
         type(image),             intent(inout) :: cavgs(ncls)
         character(len=*),        intent(in)    :: which
         complex(dp),   optional, intent(in)    :: pfts_in(1:pftsz,kfromto(1):kfromto(2),1:ncls)
@@ -991,7 +991,7 @@ contains
             norm = 0.0
             do irot = 1,pftsz
                 do k = kfromto(1),kfromto(2)
-                    phys  = pftcc%get_coord(irot,k) + [1.,real(c)]
+                    phys  = pftc%get_coord(irot,k) + [1.,real(c)]
                     fc    = pft(irot,k)
                     physh = floor(phys(1))
                     physk = floor(phys(2))
@@ -1099,48 +1099,48 @@ contains
         call polar_cavger_write(tmpl_fname//BIN_EXT,         'merged')
     end subroutine polar_cavger_writeall
 
-    ! Write references contained in PFTCC
-    subroutine polar_cavger_writeall_pftccrefs( tmpl_fname )
+    ! Write references contained in pftc
+    subroutine polar_cavger_writeall_pftcrefs( tmpl_fname )
         class(string),  intent(in) :: tmpl_fname
         complex(sp),  pointer :: ptre(:,:,:), ptro(:,:,:)
-        call pftcc_glob%get_refs_ptr( ptre, ptro )
+        call pftc_glob%get_refs_ptr( ptre, ptro )
         pfts_even = cmplx(ptre,kind=dp)
         pfts_odd  = cmplx(ptro,kind=dp)
         call polar_cavger_write(tmpl_fname//'_even'//BIN_EXT,'even')
         call polar_cavger_write(tmpl_fname//'_odd'//BIN_EXT, 'odd')
         call polar_cavger_zero_pft_refs !! removed after writing
         nullify(ptre, ptro)
-    end subroutine polar_cavger_writeall_pftccrefs
+    end subroutine polar_cavger_writeall_pftcrefs
 
     ! Converts cavgs PFTS to cartesian grids and writes them
-    subroutine polar_cavger_write_cartrefs( pftcc, tmpl_fname, which )
-        class(polarft_corrcalc), intent(in) :: pftcc
+    subroutine polar_cavger_write_cartrefs( pftc, tmpl_fname, which )
+        class(polarft_corrcalc), intent(in) :: pftc
         class(string),           intent(in) :: tmpl_fname
         character(len=*),        intent(in) :: which
         type(image), allocatable :: imgs(:)
         call alloc_imgarr(ncls, [params_glob%box_crop, params_glob%box_crop,1], smpd, imgs)
         select case(trim(which))
             case('even','odd')
-                call polar_cavger_refs2cartesian( pftcc, imgs, trim(which) )
+                call polar_cavger_refs2cartesian( pftc, imgs, trim(which) )
                 call write_imgarr(imgs, tmpl_fname//'_'//trim(which)//params_glob%ext%to_char())
             case('merged')
-                call polar_cavger_refs2cartesian( pftcc, imgs, 'merged' )
+                call polar_cavger_refs2cartesian( pftc, imgs, 'merged' )
                 call write_imgarr(imgs, tmpl_fname//params_glob%ext)
         end select
         call dealloc_imgarr(imgs)
     end subroutine polar_cavger_write_cartrefs
 
     ! Converts all cavgs PFTS to cartesian grids and writes them
-    subroutine polar_cavger_writeall_cartrefs( pftcc, tmpl_fname )
-        class(polarft_corrcalc), intent(in) :: pftcc
+    subroutine polar_cavger_writeall_cartrefs( pftc, tmpl_fname )
+        class(polarft_corrcalc), intent(in) :: pftc
         class(string),           intent(in) :: tmpl_fname
         type(image), allocatable :: imgs(:)
         call alloc_imgarr(ncls, [params_glob%box_crop, params_glob%box_crop,1], smpd, imgs)
-        call polar_cavger_refs2cartesian( pftcc, imgs, 'even' )
+        call polar_cavger_refs2cartesian( pftc, imgs, 'even' )
         call write_imgarr(imgs, tmpl_fname//'_even'//params_glob%ext%to_char())
-        call polar_cavger_refs2cartesian( pftcc, imgs, 'odd' )
+        call polar_cavger_refs2cartesian( pftc, imgs, 'odd' )
         call write_imgarr(imgs, tmpl_fname//'_odd'//params_glob%ext%to_char())
-        call polar_cavger_refs2cartesian( pftcc, imgs, 'merged' )
+        call polar_cavger_refs2cartesian( pftc, imgs, 'merged' )
         call write_imgarr(imgs, tmpl_fname//params_glob%ext)
         call dealloc_imgarr(imgs)
     end subroutine polar_cavger_writeall_cartrefs
@@ -1398,9 +1398,9 @@ contains
 
     ! Estimates the center of the volume based on the distribution of
     ! the individual particles in-plane offsets and map the shifts to both
-    ! the particles and the references stored in the pftcc
-    subroutine center_3Dpolar_refs( pftcc, algndoc, algnrefs )
-        class(polarft_corrcalc), intent(inout) :: pftcc
+    ! the particles and the references stored in the pftc
+    subroutine center_3Dpolar_refs( pftc, algndoc, algnrefs )
+        class(polarft_corrcalc), intent(inout) :: pftc
         class(oris),             intent(inout) :: algndoc
         class(oris),             intent(in)    :: algnrefs
         real    :: R(3,3),offset3D(3), offset2D(3)
@@ -1417,7 +1417,7 @@ contains
             ! 3D Shift rotated with respect to projection direction
             offset2D = matmul(R, offset3D)
             ! Apply offset to e/o references
-            call pftcc%shift_ref(iref, offset2D(1:2))
+            call pftc%shift_ref(iref, offset2D(1:2))
         enddo
         !$omp end parallel do
     end subroutine center_3Dpolar_refs
@@ -1678,7 +1678,7 @@ contains
         integer,     parameter :: NCLS=5
         type(image)            :: tmpl_img, img, cavgs(NCLS)
         type(cmdline)          :: cline
-        type(polarft_corrcalc) :: pftcc
+        type(polarft_corrcalc) :: pftc
         type(parameters)       :: p
         type(builder)          :: b
         real    :: ang, shift(2), shifts(2,NIMGS)
@@ -1714,9 +1714,9 @@ contains
         call cline%set('mskdiam', real(N)/2-10.)
         ! Calculators
         call b%init_params_and_build_strategy2D_tbox(cline, p)
-        call pftcc%new(NCLS, [1,NIMGS], p%kfromto)
+        call pftc%new(NCLS, [1,NIMGS], p%kfromto)
         pinds = (/(i,i=1,NIMGS)/)
-        call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+        call b%img_crop_polarizer%init_polarizer(pftc, p%alpha)
         do i = 1,NIMGS
             shift = 10.*[ran3(), ran3()] - 5.
             ! ang   = 360. * ran3()
@@ -1739,33 +1739,33 @@ contains
             call b%spproj_field%set(i,'class', icls)
             call b%spproj_field%set(i,'eo',eo)
             shifts(:,i) = -shift
-            call b%img_crop_polarizer%polarize(pftcc, img, i, isptcl=.true., iseven=eo==0, mask=b%l_resmsk)
+            call b%img_crop_polarizer%polarize(pftc, img, i, isptcl=.true., iseven=eo==0, mask=b%l_resmsk)
         enddo
-        call polar_cavger_new(pftcc,.false.)
-        call polar_cavger_update_sums(NIMGS, pinds, b%spproj, pftcc, shifts)
+        call polar_cavger_new(pftc,.false.)
+        call polar_cavger_update_sums(NIMGS, pinds, b%spproj, pftc, shifts)
         call polar_cavger_merge_eos_and_norm2D
         call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
         ! write
         call polar_cavger_write(string('cavgs_even.bin'), 'even')
         call polar_cavger_write(string('cavgs_odd.bin'),  'odd')
         call polar_cavger_write(string('cavgs.bin'),      'merged')
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'even')
         call write_imgarr(cavgs, string('cavgs_even.mrc'))
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'odd')
         call write_imgarr(cavgs, string('cavgs_odd.mrc'))
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'merged')
         call write_imgarr(cavgs, string('cavgs_merged.mrc'))
         call polar_cavger_kill
         ! read & write again
-        call polar_cavger_new(pftcc,.false.)
+        call polar_cavger_new(pftc,.false.)
         call polar_cavger_read(string('cavgs_even.bin'), 'even')
         call polar_cavger_read(string('cavgs_odd.bin'),  'odd')
         call polar_cavger_read(string('cavgs.bin'),      'merged')
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'even')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'even')
         call write_imgarr(cavgs, string('cavgs2_even.mrc'))
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'odd')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'odd')
         call write_imgarr(cavgs, string('cavgs2_odd.mrc'))
-        call polar_cavger_refs2cartesian(pftcc, cavgs, 'merged')
+        call polar_cavger_refs2cartesian(pftc, cavgs, 'merged')
         call write_imgarr(cavgs, string('cavgs2_merged.mrc'))
         call polar_cavger_kill
     end subroutine test_polarops

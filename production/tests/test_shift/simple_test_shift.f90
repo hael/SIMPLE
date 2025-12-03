@@ -8,7 +8,7 @@ program simple_test_shift
 ! use simple_image,             only: image
 ! use simple_parameters,        only: parameters
 ! use simple_polarizer,         only: polarizer
-! use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+! use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
 ! use simple_strategy2D3D_common
 ! use simple_simulator
 ! use simple_ctf
@@ -19,8 +19,8 @@ program simple_test_shift
 ! type(cmdline)                 :: cline
 ! type(builder)                 :: b
 ! type(parameters)              :: p
-! type(polarft_corrcalc)        :: pftcc
-! type(pftcc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+! type(polarft_corrcalc)        :: pftc
+! type(pftc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 ! type(ctf)                     :: tfun
 ! type(ori)                     :: o
 ! type(oris)                    :: os
@@ -118,12 +118,12 @@ program simple_test_shift
 ! call b%spproj_field%partition_eo
 ! call b%spproj_field%sample4update_all([p%fromp,p%top],nptcls2update, pinds, .true.)
 
-! ! pftcc
-! call pftcc%new(p%nptcls, [1,p%nptcls], p%kfromto)
+! ! pftc
+! call pftc%new(p%nptcls, [1,p%nptcls], p%kfromto)
 ! call eucl%new('dummy.dat', p%box)
 ! call eucl%allocate_ptcls
 ! allocate(match_imgs(p%ncls),ptcl_match_imgs(nthr_glob))
-! call pftcc%reallocate_ptcls(p%nptcls, pinds)
+! call pftc%reallocate_ptcls(p%nptcls, pinds)
 ! do ithr = 1,nthr_glob
 !     call ptcl_match_imgs(ithr)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
 ! enddo
@@ -138,11 +138,11 @@ program simple_test_shift
 !     ithr  = omp_get_thread_num() + 1
 !     call prepimg4align(iptcl, b%imgbatch(iptcl), ptcl_match_imgs(ithr))
 !     call b%imgbatch(iptcl)%ifft
-!     call b%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
-!     call pftcc%set_eo(iptcl, nint(b%spproj_field%get(iptcl,'eo'))<=0 )
+!     call b%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true.)
+!     call pftc%set_eo(iptcl, nint(b%spproj_field%get(iptcl,'eo'))<=0 )
 ! end do
 ! !$omp end parallel do
-! call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
+! call pftc%create_polar_absctfmats(b%spproj, 'ptcl2D')
 
 ! ! prep for shift search
 ! lims(:,1)       = -p%trs
@@ -160,7 +160,7 @@ program simple_test_shift
 !     no = 0
 !     do iptcl = p%fromp,p%top
 !         call b%spproj_field%get_ori(iptcl, o)
-!         call eucl%calc_sigma2(pftcc, iptcl, o, 'class')
+!         call eucl%calc_sigma2(pftc, iptcl, o, 'class')
 !         if( o%get_eo() == 0 )then
 !             ne = ne+1
 !             sigma2_group(1,1,:) = sigma2_group(1,1,:) + eucl%sigma2_part(:,iptcl)
@@ -174,9 +174,9 @@ program simple_test_shift
 !     call write_groups_starfile(sigma2_star_from_iter(iter-1), sigma2_group, 1)
 !     call eucl%read_groups(b%spproj_field)
 !     do iptcl = p%fromp,p%top
-!         call pftcc%memoize_sqsum_ptcl(iptcl)
+!         call pftc%memoize_sqsum_ptcl(iptcl)
 !     enddo
-!     call pftcc%memoize_ptcls
+!     call pftc%memoize_ptcls
 
 !     ! shift search
 !     do iptcl = p%fromp,p%top
@@ -252,13 +252,13 @@ program simple_test_shift
 !         call b%clsfrcs%read(FRCS_FILE)
 !         call cavger_read(trim(p%refs_even), 'even' )
 !         call cavger_read(trim(p%refs_odd),  'odd' )
-!         call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+!         call b%img_crop_polarizer%init_polarizer(pftc, p%alpha)
 !         call match_imgs(1)%new([p%box_crop, p%box_crop, 1], p%smpd_crop, wthreads=.false.)
 !         call prep2Dref(cavgs_even(1), match_imgs(1), 1, center=.false.)
-!         call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.true.)
+!         call b%img_crop_polarizer%polarize(pftc, match_imgs(1), 1, isptcl=.false., iseven=.true.)
 !         call prep2Dref(cavgs_odd(1), match_imgs(1), 1, center=.false.)
-!         call b%img_crop_polarizer%polarize(pftcc, match_imgs(1), 1, isptcl=.false., iseven=.false.)
-!         call pftcc%memoize_refs
+!         call b%img_crop_polarizer%polarize(pftc, match_imgs(1), 1, isptcl=.false., iseven=.false.)
+!         call pftc%memoize_refs
 !     end subroutine restore_read_polarize_cavgs
 
 end program simple_test_shift
