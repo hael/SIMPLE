@@ -3,7 +3,7 @@ module simple_strategy2D_alloc
 include 'simple_lib.f08'
 use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
-use simple_polarft_corrcalc, only: pftcc_glob
+use simple_polarft_calc, only: pftcc_glob
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D, neighfrac2nsmpl
 implicit none
 
@@ -99,7 +99,7 @@ contains
 
     !>  prep batch related parameters (particles level)
     subroutine prep_strategy2D_batch( pftcc, which_iter, nptcls, pinds )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_corrcalc
         type(polarft_corrcalc), intent(in) :: pftcc
         integer,                intent(in) :: which_iter
         integer,                intent(in) :: nptcls        ! # of particles in batch

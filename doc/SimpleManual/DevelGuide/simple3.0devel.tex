@@ -125,7 +125,7 @@ Layering the design was not something that we really thought long and hard about
 \begin{verbatim}
 simple_cartft_corrcalc.f90   ! calculates correlations between 2D Cartesian FTs
 simple_comlin_corr.f90       ! calculates common line correlations
-simple_polarft_corrcalc.f90  ! calculates correlations between 2D polar FTs 
+simple_polarft_calc.f90  ! calculates correlations between 2D polar FTs 
 simple_volpft_corrcalc.f90   ! calculates correlation between volume FTs
 \end{verbatim}
 These classes have very few dependencies, the most notable one being the builder. These are the number crunchers of the SIMPLE library. About 60\% of the computations in the the PRIME2D/3D searches consists of calculating correlations. It is in this area we will focus our efforts in performance enhancement by designing data structures that make efficient use of cache and data structures that scale up the matrix sizes so that the calculations can be efficiently done on GPUs. In the next level up are the low-level searchers.

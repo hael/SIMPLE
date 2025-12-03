@@ -183,7 +183,7 @@ contains
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self, pftcc )
-        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_polarft_calc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -347,7 +347,7 @@ contains
     end subroutine fill_tab
 
     subroutine fill_tab_state_only( self, pftcc )
-        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_polarft_calc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc

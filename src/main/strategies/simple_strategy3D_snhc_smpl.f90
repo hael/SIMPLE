@@ -8,7 +8,7 @@ use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
 use simple_eul_prob_tab2D,   only: neighfrac2nsmpl, power_sampling
-use simple_polarft_corrcalc, only: pftcc_glob
+use simple_polarft_calc, only: pftcc_glob
 use simple_decay_funs,       only: extremal_decay
 implicit none
 

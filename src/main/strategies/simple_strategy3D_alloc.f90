@@ -3,7 +3,7 @@ module simple_strategy3D_alloc
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
 use simple_builder,          only: build_glob
-use simple_polarft_corrcalc, only: pftcc_glob
+use simple_polarft_calc, only: pftcc_glob
 implicit none
 
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread

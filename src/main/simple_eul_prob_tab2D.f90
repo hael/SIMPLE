@@ -5,7 +5,7 @@ module simple_eul_prob_tab2D
 include 'simple_lib.f08'
 use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob
-use simple_polarft_corrcalc,  only: pftcc_glob
+use simple_polarft_calc,  only: pftcc_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad
 use simple_eul_prob_tab,      only: eulprob_dist_switch, eulprob_corr_switch
 use simple_decay_funs,        only: extremal_decay2D

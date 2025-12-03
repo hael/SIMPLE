@@ -4,7 +4,7 @@ use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
-use simple_polarft_corrcalc, only: pftcc_glob
+use simple_polarft_calc, only: pftcc_glob
 use simple_parameters,       only: params_glob
 use simple_eul_prob_tab2D,   only: squared_sampling
 

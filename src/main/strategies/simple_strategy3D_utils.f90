@@ -4,7 +4,7 @@ use simple_strategy3D_alloc  ! singleton class s3D
 use simple_strategy3D_srch,  only: strategy3D_srch
 use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
-use simple_polarft_corrcalc, only: pftcc_glob
+use simple_polarft_calc, only: pftcc_glob
 implicit none
 
 public :: extract_peak_ori, extract_peak_oris, assign_ori

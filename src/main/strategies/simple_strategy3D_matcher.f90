@@ -11,7 +11,7 @@ use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
 use simple_eul_prob_tab,            only: eul_prob_tab
-use simple_polarft_corrcalc,        only: polarft_corrcalc
+use simple_polarft_calc,        only: polarft_corrcalc
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl

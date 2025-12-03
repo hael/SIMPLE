@@ -9,7 +9,7 @@ program simple_test_opt_reg
 ! use simple_optimizer,         only: optimizer
 ! use simple_opt_factory,       only: opt_factory
 ! use simple_opt_spec,          only: opt_spec
-! use simple_polarft_corrcalc,  only: polarft_corrcalc
+! use simple_polarft_calc,  only: polarft_corrcalc
 ! use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 ! use simple_strategy2D3D_common
 ! use simple_simulator

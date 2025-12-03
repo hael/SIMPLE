@@ -325,7 +325,7 @@ contains
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self    !< projector object
         integer,                 intent(in)    :: iref    !< which reference
         class(ori),              intent(in)    :: e       !< orientation
@@ -351,7 +351,7 @@ contains
 
     ! !> \brief  extracts a polar FT from a volume's expanded FT (self)
     ! subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
-    !     use simple_polarft_corrcalc, only: polarft_corrcalc
+    !     use simple_polarft_calc, only: polarft_corrcalc
     !     class(projector),        intent(inout) :: self    !< projector object
     !     integer,                 intent(in)    :: iref    !< which reference
     !     class(ori),              intent(in)    :: e       !< orientation
