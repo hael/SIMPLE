@@ -325,11 +325,11 @@ contains
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
-        use simple_polarft_calc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_calc
         class(projector),        intent(inout) :: self    !< projector object
         integer,                 intent(in)    :: iref    !< which reference
         class(ori),              intent(in)    :: e       !< orientation
-        class(polarft_corrcalc), intent(inout) :: pftc   !< object that holds the polar image
+        class(polarft_calc), intent(inout) :: pftc   !< object that holds the polar image
         logical,                 intent(in)    :: iseven  !< eo flag
         logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         integer :: pdim(3), irot, k
@@ -351,11 +351,11 @@ contains
 
     ! !> \brief  extracts a polar FT from a volume's expanded FT (self)
     ! subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
-    !     use simple_polarft_calc, only: polarft_corrcalc
+    !     use simple_polarft_calc, only: polarft_calc
     !     class(projector),        intent(inout) :: self    !< projector object
     !     integer,                 intent(in)    :: iref    !< which reference
     !     class(ori),              intent(in)    :: e       !< orientation
-    !     class(polarft_corrcalc), intent(inout) :: pftc   !< object that holds the polar image
+    !     class(polarft_calc), intent(inout) :: pftc   !< object that holds the polar image
     !     logical,                 intent(in)    :: iseven  !< eo flag
     !     logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
     !     integer :: irot, k, pdim(3), lims(3,2), sqlp, sqarg, hk(2)

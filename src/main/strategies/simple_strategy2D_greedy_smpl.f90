@@ -52,9 +52,9 @@ contains
                 else
                     ! in-plane sampling
                     if( self%s%l_sh_first )then
-                        call pftc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        call pftc_glob%gen_corrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
-                        call pftc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                        call pftc_glob%gen_corrs(iref, self%s%iptcl, inpl_corrs)
                     endif
                     call squared_sampling(self%s%nrots, inpl_corrs, inds,&
                                         &s2D%smpl_ninpl, inpl_ind, order_ind, inpl_corr)
@@ -93,14 +93,14 @@ contains
                             cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
                             if( inpl_ind == 0 )then
                                 inpl_ind = refs_inplinds(iref)
-                                cxy(1)   = real(pftc_glob%gencorr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
+                                cxy(1)   = real(pftc_glob%gen_corr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
                                 cxy(2:3) = self%s%xy_first_rot
                             endif
                         else
                             cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
                             if( inpl_ind == 0 )then
                                 inpl_ind = refs_inplinds(iref)
-                                cxy      = [real(pftc_glob%gencorr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
+                                cxy      = [real(pftc_glob%gen_corr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
                             endif
                         endif
                     endif

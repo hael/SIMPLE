@@ -1158,9 +1158,9 @@ contains
 
     subroutine prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter, do_polar )
         use simple_polarops
-        use simple_polarft_calc,        only:  polarft_corrcalc
+        use simple_polarft_calc,        only:  polarft_calc
         use simple_euclid_sigma2,           only:  euclid_sigma2
-        class(polarft_corrcalc),  intent(inout) :: pftc
+        class(polarft_calc),  intent(inout) :: pftc
         class(cmdline),           intent(in)    :: cline !< command line
         class(euclid_sigma2),     intent(inout) :: eucl_sigma
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
@@ -1232,8 +1232,8 @@ contains
     end subroutine prepare_refs_sigmas_ptcls
 
     subroutine prepare_polar_references( pftc, cline, batchsz )
-        use simple_polarft_calc, only:  polarft_corrcalc
-        class(polarft_corrcalc), intent(inout) :: pftc
+        use simple_polarft_calc, only:  polarft_calc
+        class(polarft_calc), intent(inout) :: pftc
         class(cmdline),          intent(in)    :: cline !< command line
         integer,                 intent(in)    :: batchsz
         type(ori) :: o_tmp
@@ -1276,8 +1276,8 @@ contains
     end subroutine prepare_polar_references
 
     subroutine build_batch_particles( pftc, nptcls_here, pinds_here, tmp_imgs )
-        use simple_polarft_calc,       only:  polarft_corrcalc
-        class(polarft_corrcalc), intent(inout) :: pftc
+        use simple_polarft_calc,       only:  polarft_calc
+        class(polarft_calc), intent(inout) :: pftc
         integer,                 intent(in)    :: nptcls_here
         integer,                 intent(in)    :: pinds_here(nptcls_here)
         type(image),             intent(inout) :: tmp_imgs(params_glob%nthr)

@@ -128,7 +128,7 @@ contains
         l_mirr = .false.
         if( present(mirror) ) l_mirr = mirror
         ! evaluate best orientation from rotational correlation of image magnitudes
-        call pftc_glob%gencorrs_mag_cc(ind1, ind2, corrs, kweight=.true.)
+        call pftc_glob%gen_corrs_mag_cc(ind1, ind2, corrs, kweight=.true.)
         irot      = maxloc(corrs, dim=1) ! one solution in [0;pi]
         pftc_ang = pftc_glob%get_rot(irot)
         ! phase correlations of image rotated by irot & irot+pi
@@ -249,9 +249,9 @@ contains
                     offset(2) = -offset(2)
                 endif
                 ! on-grid
-                cc  = real(pftc_glob%gencorr_for_rot_8(ind1,ind2,real(tmp,dp),   rotind))
+                cc  = real(pftc_glob%gen_corr_for_rot_8(ind1,ind2,real(tmp,dp),   rotind))
                 ! off-grid
-                cci = real(pftc_glob%gencorr_for_rot_8(ind1,ind2,real(offset,dp),rotind))
+                cci = real(pftc_glob%gen_corr_for_rot_8(ind1,ind2,real(offset,dp),rotind))
                 if( cci > cc )then
                     cc = cci
                 else
@@ -283,7 +283,7 @@ contains
             do i = -self%hn,self%hn
                 do j = -self%hn,self%hn
                     shift = [self%coords(i), self%coords(j)]
-                    call pftc_glob%gencorrs(self%ref, self%ptcl, shift, self%scores, kweight=params_glob%l_kweight_rot)
+                    call pftc_glob%gen_corrs(self%ref, self%ptcl, shift, self%scores, kweight=params_glob%l_kweight_rot)
                     loc = maxloc(self%scores, dim=1)
                     if( self%scores(loc) > score )then
                         score  = self%scores(loc)
@@ -296,7 +296,7 @@ contains
             do i = max(-self%hn,ii-1), min(self%hn,ii+1)
                 do j = max(-self%hn,jj-1), min(self%hn,jj+1)
                     shift = [self%coords(i), self%coords(j)]
-                    self%grid1(i,j) = real(pftc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
+                    self%grid1(i,j) = real(pftc_glob%gen_corr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
                 enddo
             enddo
         else
@@ -307,7 +307,7 @@ contains
             do i = -self%hn,self%hn
                 do j = -self%hn,self%hn
                     shift = [self%coords(i), self%coords(j)]
-                    self%grid1(i,j) = real(pftc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
+                    self%grid1(i,j) = real(pftc_glob%gen_corr_for_rot_8(self%ref, self%ptcl, real(shift,dp), irot))
                 enddo
             enddo
         endif
@@ -347,7 +347,7 @@ contains
                 if( abs(denom) > TINY ) offset(2) = offset(2) + self%trsincr * 0.5 * (alpha-gamma) / denom
             endif
         endif
-        score = real(pftc_glob%gencorr_for_rot_8(self%ref, self%ptcl, real(offset,dp), irot))
+        score = real(pftc_glob%gen_corr_for_rot_8(self%ref, self%ptcl, real(offset,dp), irot))
         if( score < beta )then
             ! fallback
             offset = [self%coords(i), self%coords(j)]

@@ -68,7 +68,7 @@ contains
                 ! empty space
                 if( .not.s3D%state_exists(s3D%proj_space_state(iref)) )cycle
                 ! In-plane sampling
-                call pftc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                call pftc_glob%gen_corrs(iref, self%s%iptcl, inpl_corrs)
                 call power_sampling( power, self%s%nrots, inpl_corrs, vec_nrots,&
                                     &smpl_ninpl, inpl_ind, order_ind, inpl_corr )
                 call self%s%store_solution(iref, inpl_ind, inpl_corr)
@@ -88,7 +88,7 @@ contains
                     cxy      = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
                     if( inpl_ind == 0 )then
                         inpl_ind = s3D%proj_space_inplinds(iref,self%s%ithr)
-                        cxy      = [real(pftc_glob%gencorr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
+                        cxy      = [real(pftc_glob%gen_corr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
                     endif
                     call self%s%store_solution(iref, inpl_ind, cxy(1), sh=cxy(2:3))
                 enddo

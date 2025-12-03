@@ -53,9 +53,9 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! shc update
                 if( self%s%l_sh_first )then
-                    call pftc_glob%gencorrs(iref, self%s%iptcl, self%s%xy_first, corrs)
+                    call pftc_glob%gen_corrs(iref, self%s%iptcl, self%s%xy_first, corrs)
                 else
-                    call pftc_glob%gencorrs(iref, self%s%iptcl, corrs)
+                    call pftc_glob%gen_corrs(iref, self%s%iptcl, corrs)
                 endif
                 inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
                 if( inpl_ind == 0 )then
@@ -91,13 +91,13 @@ contains
                 ! back-calculating in-plane angle with k-weighing
                 if( found_better )then
                     if( self%s%l_sh_first )then
-                        call pftc_glob%gencorrs(self%s%prev_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                        call pftc_glob%gen_corrs(self%s%prev_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
                         self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
-                        call pftc_glob%gencorrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
                     else
-                        call pftc_glob%gencorrs(self%s%prev_class, self%s%iptcl, corrs, kweight=.true.)
+                        call pftc_glob%gen_corrs(self%s%prev_class, self%s%iptcl, corrs, kweight=.true.)
                         self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
-                        call pftc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
                     endif
                     inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
                     if( inpl_ind == 0 )then
@@ -111,9 +111,9 @@ contains
                     endif
                 else
                     if( self%s%l_sh_first )then
-                        call pftc_glob%gencorrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
+                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
                     else
-                        call pftc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
                     endif
                     self%s%best_rot  = maxloc(corrs, dim=1)
                     self%s%best_corr = corrs(self%s%best_rot)

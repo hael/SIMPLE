@@ -9,7 +9,7 @@ program simple_test_opt_reg
 ! use simple_optimizer,         only: optimizer
 ! use simple_opt_factory,       only: opt_factory
 ! use simple_opt_spec,          only: opt_spec
-! use simple_polarft_calc,  only: polarft_corrcalc
+! use simple_polarft_calc,  only: polarft_calc
 ! use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
 ! use simple_strategy2D3D_common
 ! use simple_simulator
@@ -21,7 +21,7 @@ program simple_test_opt_reg
 ! type(cmdline)            :: cline
 ! type(builder)            :: b
 ! type(parameters)         :: p
-! type(polarft_corrcalc)   :: pftc
+! type(polarft_calc)   :: pftc
 ! type(pftc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 ! type(ctf)                :: tfun
 ! type(ori)                :: o

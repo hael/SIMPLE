@@ -214,7 +214,7 @@ contains
         use simple_commanders_rec,    only: commander_reconstruct3D_distr, commander_volassemble
         use simple_fsc,              only: plot_fsc
         use simple_commanders_euclid, only: commander_calc_group_sigmas
-        use simple_polarft_calc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_calc
         use simple_euclid_sigma2,    only: sigma2_star_from_iter
         use simple_polarops
         class(commander_refine3D_distr), intent(inout) :: self
@@ -229,7 +229,7 @@ contains
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
         type(commander_prob_align)            :: xprob_align_distr
         type(commander_volassemble)           :: xvolassemble
-        type(polarft_corrcalc)                :: pftc
+        type(polarft_calc)                :: pftc
         ! command lines
         type(cmdline) :: cline_reconstruct3D_distr
         type(cmdline) :: cline_calc_pspec_distr
@@ -1009,7 +1009,7 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common
-        use simple_polarft_calc,    only: polarft_corrcalc
+        use simple_polarft_calc,    only: polarft_calc
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_euclid_sigma2,       only: euclid_sigma2
         class(commander_prob_tab), intent(inout) :: self
@@ -1017,7 +1017,7 @@ contains
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:)
         type(string)                  :: fname
-        type(polarft_corrcalc)        :: pftc
+        type(polarft_calc)        :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab)            :: eulprob_obj_part

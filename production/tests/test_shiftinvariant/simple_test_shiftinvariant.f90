@@ -2,7 +2,7 @@ program simple_test_shiftinvariant
 ! !$ use omp_lib
 ! !$ use omp_lib_kinds
 ! include 'simple_lib.f08'
-! use simple_polarft_calc,  only: polarft_corrcalc
+! use simple_polarft_calc,  only: polarft_calc
 ! use simple_cmdline,           only: cmdline
 ! use simple_builder,           only: builder
 ! use simple_image,             only: image
@@ -20,7 +20,7 @@ program simple_test_shiftinvariant
 ! type(cmdline)            :: cline
 ! type(builder)            :: b
 ! type(parameters)         :: p
-! type(polarft_corrcalc)   :: pftc
+! type(polarft_calc)   :: pftc
 ! type(polarizer)          :: img_copy
 ! type(pftc_shsrch_grad)  :: grad_shsrch_obj
 ! type(pftc_shsrch_fm)    :: grad_shsrch_fm_obj
@@ -196,11 +196,11 @@ program simple_test_shiftinvariant
 ! !     do iref = p%fromp,p%top
 ! !         if( trim(p%sh_inv).eq.'yes')then
 ! !             scores = -1.0
-! !             call pftc%gencorrs_mag_cc(iref,iptcl,scores3(1:pftc%get_pftsz()),.true.)
+! !             call pftc%gen_corrs_mag_cc(iref,iptcl,scores3(1:pftc%get_pftsz()),.true.)
 ! !         else
-! !             call pftc%gencorrs(iref,iptcl,scores3)
+! !             call pftc%gen_corrs(iref,iptcl,scores3)
 ! !         endif
-! !         ! call pftc%gencorrs_mag(iptcl,p%iptcl,scores(1:pftc%pftsz),kweight=.true.)
+! !         ! call pftc%gen_corrs_mag(iptcl,p%iptcl,scores(1:pftc%pftsz),kweight=.true.)
 ! !         vals(iref) = maxval(scores3)
 ! !         ! print *,iptcl,maxval(scores3), maxval(scores), orishifts(p%iptcl,:)
 ! !     enddo
@@ -211,9 +211,9 @@ program simple_test_shiftinvariant
 ! ! stop
 
 ! ! iptcl = 1
-! ! call pftc%gencorrs(p%iptcl,iptcl,scores3)
-! ! call pftc%gencorrs_abs(p%iptcl,iptcl,scores(1:pftc%pftsz),kweight=.false.)
-! ! call pftc%gencorrs_mag(p%iptcl,iptcl,scores2,kweight=.false.)
+! ! call pftc%gen_corrs(p%iptcl,iptcl,scores3)
+! ! call pftc%gen_corrs_abs(p%iptcl,iptcl,scores(1:pftc%pftsz),kweight=.false.)
+! ! call pftc%gen_corrs_mag(p%iptcl,iptcl,scores2,kweight=.false.)
 ! ! do irot =1,pftc%get_pftsz()
 ! !     print *,irot,scores3(irot), pftc%calc_corr_rot_shift(p%iptcl,iptcl,[0.0,0.0],irot,.false.),scores(irot), pftc%calc_abscorr_rot(p%iptcl,iptcl,irot,.false.), scores2(irot), pftc%calc_magcorr_rot(p%iptcl,iptcl,irot,.false.)
 ! ! enddo
@@ -232,7 +232,7 @@ program simple_test_shiftinvariant
 ! do iptcl = p%fromp,p%top
 !     if( trim(p%sh_inv).eq.'yes')then
 !             call grad_shsrch_fm_obj%new(p%trs, 1.)
-!             call pftc%gencorrs_mag_cc(p%iptcl,iptcl,scores2,kweight=.false.)
+!             call pftc%gen_corrs_mag_cc(p%iptcl,iptcl,scores2,kweight=.false.)
 !             irot = maxloc(scores2,dim=1)
 !             call grad_shsrch_fm_obj%minimize(p%iptcl, iptcl, irot, cxy(1), cxy(2:3))
 !             e3 = 360. - pftc%get_rot(irot)
@@ -246,7 +246,7 @@ program simple_test_shiftinvariant
 !     else
 !         call grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=p%maxits_sh, opt_angle=.true., coarse_init=.false.)
 !         call grad_shsrch_obj%set_indices(p%iptcl, iptcl)
-!         call pftc%gencorrs(p%iptcl,iptcl,scores)
+!         call pftc%gen_corrs(p%iptcl,iptcl,scores)
 !         irot0 = maxloc(scores,dim=1)
 !         cxy = grad_shsrch_obj%minimize(irot)
 !         if( irot > 0 )then

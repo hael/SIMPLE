@@ -8,7 +8,7 @@ use simple_cmdline,                only: cmdline
 use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_image,                  only: image
 use simple_parameters,             only: params_glob
-use simple_polarft_calc,       only: polarft_corrcalc
+use simple_polarft_calc,       only: polarft_calc
 use simple_qsys_funs,              only: qsys_job_finished
 use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
@@ -34,7 +34,7 @@ public :: build_batch_particles2D, clean_batch_particles2D
 private
 #include "simple_local_flags.inc"
 
-type(polarft_corrcalc)   :: pftc
+type(polarft_calc)   :: pftc
 type(euclid_sigma2)      :: eucl_sigma
 type(image), allocatable :: ptcl_match_imgs(:)
 real(timer_int_kind)     :: rt_init, rt_prep_pftc, rt_align, rt_cavg, rt_projio, rt_tot
@@ -500,7 +500,7 @@ contains
     !>  \brief  fills batch particle images for polar alignment
     subroutine build_batch_particles2D( pftc, nptcls_here, pinds, l_ctf_here )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
         logical, intent(in) :: l_ctf_here
@@ -532,7 +532,7 @@ contains
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine preppftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         use simple_strategy2D3D_common, only: prep2dref
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
         type(image),      allocatable :: match_imgs(:), tmp_imgs(:)
@@ -541,7 +541,7 @@ contains
         integer      :: icls, pop, pop_even, pop_odd
         logical      :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
-        ! create the polarft_corrcalc object
+        ! create the polarft_calc object
         call pftc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
         ! objective functions & sigma
         if( params_glob%l_needs_sigma )then
@@ -616,7 +616,7 @@ contains
     !>  \brief  prepares the polarft corrcalc object for search and imports polar references
     subroutine prep_polar_pftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         use simple_strategy2D3D_common, only: prep2dref
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         integer,                 intent(in)    :: batchsz_max, which_iter
         logical,                 intent(in)    :: l_stream
         type(image),      allocatable :: tmp_imgs(:)
