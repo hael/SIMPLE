@@ -370,7 +370,6 @@ contains
     procedure          :: quantize_bwd
 end type image
 
-
 interface
 
     ! ===== Constructors/lifecycle =====
