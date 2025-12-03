@@ -1,5 +1,5 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
-module simple_polarft_corrcalc
+module simple_polarft_calc
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
@@ -2640,4 +2640,4 @@ contains
         endif
     end subroutine kill
 
-end module simple_polarft_corrcalc
+end module simple_polarft_calc

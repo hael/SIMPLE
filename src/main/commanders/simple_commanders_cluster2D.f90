@@ -1441,7 +1441,7 @@ contains
     end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_corrcalc
         use simple_polarops
         class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -1661,7 +1661,7 @@ contains
     subroutine exec_prob_tab2D( self, cline )
         use simple_strategy2D_matcher
         use simple_strategy2D3D_common, only: set_bp_range2D
-        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_polarft_calc,    only: polarft_corrcalc
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline

@@ -5,7 +5,7 @@ use simple_cmdline,          only: cmdline
 use simple_polarizer,        only: polarizer
 use simple_image,            only: image
 use simple_atoms,            only: atoms
-use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_polarft_calc, only: polarft_corrcalc
 implicit none
 
 public :: init_graphene_subtr, calc_peaks, remove_lattices, kill_graphene_subtr

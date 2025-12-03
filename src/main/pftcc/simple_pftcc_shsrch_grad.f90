@@ -2,7 +2,7 @@
 module simple_pftcc_shsrch_grad
 include 'simple_lib.f08'
 use simple_opt_spec,         only: opt_spec
-use simple_polarft_corrcalc, only: pftcc_glob
+use simple_polarft_calc, only: pftcc_glob
 use simple_optimizer,        only: optimizer
 use simple_parameters,       only: params_glob
 implicit none

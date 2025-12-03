@@ -2,7 +2,7 @@
 module simple_strategy3D_srch
 include 'simple_lib.f08'
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
+use simple_polarft_calc,   only: pftcc_glob, polarft_corrcalc
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
 use simple_eul_prob_tab,       only: eul_prob_tab

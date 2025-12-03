@@ -136,7 +136,7 @@ contains
     subroutine calc_inpl_invariant_fm_1( imgs, hp, lp, trs, corrmat, l_srch_mirr )
         use simple_pftcc_shsrch_fm
         use simple_polarizer,        only: polarizer
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_corrcalc
         class(image),          intent(inout) :: imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
@@ -244,7 +244,7 @@ contains
     subroutine calc_inpl_invariant_fm_2( refimgs, imgs, hp, lp, trs, corrmat )
         use simple_pftcc_shsrch_fm
         use simple_polarizer,        only: polarizer
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_corrcalc
         class(image),          intent(inout) :: refimgs(:), imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)

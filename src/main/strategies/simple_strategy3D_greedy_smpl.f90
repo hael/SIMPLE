@@ -7,7 +7,7 @@ use simple_parameters,       only: params_glob
 use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
-use simple_polarft_corrcalc, only: pftcc_glob
+use simple_polarft_calc, only: pftcc_glob
 implicit none
 
 public :: strategy3D_greedy_smpl

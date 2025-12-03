@@ -3,7 +3,7 @@ module simple_strategy2D_srch
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_polarft_corrcalc,  only: pftcc_glob
+use simple_polarft_calc,  only: pftcc_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob

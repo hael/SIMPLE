@@ -5,7 +5,7 @@ use simple_aff_prop,            only: aff_prop
 use simple_class_frcs,          only: class_frcs
 use simple_cmdline,             only: cmdline
 use simple_pftcc_shsrch_fm,     only: pftcc_shsrch_fm
-use simple_polarft_corrcalc,    only: polarft_corrcalc
+use simple_polarft_calc,    only: polarft_corrcalc
 use simple_polarizer,           only: polarizer
 use simple_corrmat
 use simple_fileio

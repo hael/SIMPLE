@@ -10,7 +10,7 @@ use simple_image_bin,         only: image_bin
 use simple_image_msk,         only: density_inoutside_mask
 use simple_parameters,        only: parameters, params_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_polarft_calc,  only: polarft_corrcalc
 use simple_polarizer,         only: polarizer
 use simple_pspecs,            only: pspecs
 use simple_segmentation,      only: otsu_img

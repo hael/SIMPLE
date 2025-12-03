@@ -119,7 +119,7 @@ contains
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common
         use simple_polarops
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_corrcalc
         use simple_strategy2D_utils, only: write_imgarr
         class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -398,7 +398,7 @@ contains
 
     subroutine exec_score_ptcls( self, cline )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align, killimgbatch
-        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_polarft_calc,    only: polarft_corrcalc
         use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
         use simple_class_frcs,          only: class_frcs
         use simple_euclid_sigma2

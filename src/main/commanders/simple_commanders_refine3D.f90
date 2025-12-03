@@ -214,7 +214,7 @@ contains
         use simple_commanders_rec,    only: commander_reconstruct3D_distr, commander_volassemble
         use simple_fsc,              only: plot_fsc
         use simple_commanders_euclid, only: commander_calc_group_sigmas
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_corrcalc
         use simple_euclid_sigma2,    only: sigma2_star_from_iter
         use simple_polarops
         class(commander_refine3D_distr), intent(inout) :: self
@@ -1009,7 +1009,7 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common
-        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_polarft_calc,    only: polarft_corrcalc
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_euclid_sigma2,       only: euclid_sigma2
         class(commander_prob_tab), intent(inout) :: self

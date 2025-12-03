@@ -5,7 +5,7 @@ include 'simple_lib.f08'
 use simple_builder,          only: builder, build_glob
 use simple_image,            only: image
 use simple_parameters,       only: params_glob
-use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
+use simple_polarft_calc, only: polarft_corrcalc, pftcc_glob
 use simple_sp_project,       only: sp_project
 use simple_strategy2D_utils
 implicit none

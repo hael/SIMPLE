@@ -8,7 +8,7 @@ use simple_cmdline,                only: cmdline
 use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_image,                  only: image
 use simple_parameters,             only: params_glob
-use simple_polarft_corrcalc,       only: polarft_corrcalc
+use simple_polarft_calc,       only: polarft_corrcalc
 use simple_qsys_funs,              only: qsys_job_finished
 use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch

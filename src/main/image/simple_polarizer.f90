@@ -5,7 +5,7 @@ module simple_polarizer
 include 'simple_lib.f08'
 use simple_image,            only: image
 use simple_parameters,       only: params_glob
-use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_polarft_calc, only: polarft_corrcalc
 implicit none
 
 public :: polarizer

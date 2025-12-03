@@ -1,6 +1,6 @@
 program simple_test_gencorrs_fft
 include 'simple_lib.f08'
- use simple_polarft_corrcalc, only: polarft_corrcalc
+ use simple_polarft_calc, only: polarft_corrcalc
 use simple_cmdline,           only: cmdline
 use simple_builder,           only: builder
 use simple_parameters,        only: parameters
