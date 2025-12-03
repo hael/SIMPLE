@@ -1,6 +1,6 @@
 program simple_test_shiftsrch
 ! include 'simple_lib.f08'
-! use simple_polarft_calc,  only: polarft_corrcalc
+! use simple_polarft_calc,  only: polarft_calc
 ! use simple_cmdline,           only: cmdline
 ! use simple_builder,           only: builder
 ! use simple_image,             only: image
@@ -12,7 +12,7 @@ program simple_test_shiftsrch
 ! type(cmdline)                 :: cline, cline_projection
 ! type(builder)                 :: b
 ! type(parameters)              :: p
-! type(polarft_corrcalc)        :: pftc
+! type(polarft_calc)        :: pftc
 ! type(polarizer)               :: img_copy
 ! type(pftc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 ! type(commander_reproject)     :: xreproject
@@ -94,7 +94,7 @@ program simple_test_shiftsrch
 ! call pftc%shift_ptcl(4, [0.,-SHMAG,0.]) ! up
 ! call img_copy%polarize(pftc, b%img, 5, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 ! call img_copy%polarize(pftc, b%img, 5, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
-! call pftc%gencorr_sigma_contrib(5,5,[SHMAG,SHMAG],1,sigma2_noise(:,5))
+! call pftc%gen_sigma_contrib(5,5,[SHMAG,SHMAG],1,sigma2_noise(:,5))
 ! call pftc%assign_sigma2_noise(sigma2_noise)
 ! call pftc%shift_ptcl(5, [SHMAG,SHMAG,0.]) ! left + down
 ! call img_copy%polarize(pftc, b%img, 6, isptcl=.false., iseven=.true., mask=b%l_resmsk)
@@ -133,12 +133,12 @@ program simple_test_shiftsrch
 ! print *, cxy(1), cxy(2:3), irot
 ! params_glob%nstates = 2
 ! do i=5,5
-!     call pftc%gencorrs(i, i, corrs)
+!     call pftc%gen_corrs(i, i, corrs)
 !     print *, 'corr: ', maxval(corrs)
 !     corrmax = 0.
 !     do xsh=-2,2
 !         do ysh=-2,2
-!             call pftc%gencorrs(i, i, real([xsh,ysh]), corrs)
+!             call pftc%gen_corrs(i, i, real([xsh,ysh]), corrs)
 !             corr  = maxval(corrs)
 
 !             print *, 'corr: ', corr, xsh, ysh
@@ -158,7 +158,7 @@ program simple_test_shiftsrch
 ! contains
 
 !     subroutine calc_shift( self, iref, iptcl, sh, rot_in )
-!         class(polarft_corrcalc), intent(inout) :: self
+!         class(polarft_calc), intent(inout) :: self
 !         integer,                 intent(in)    :: iref
 !         integer,                 intent(in)    :: iptcl
 !         real,                    intent(inout) :: sh(2)

@@ -97,7 +97,7 @@ contains
         real(dp)                :: cost
         select type(self)
             class is (pftc_shsrch_grad)
-                cost = - pftc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+                cost = - pftc_glob%gen_corr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -112,7 +112,7 @@ contains
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
-                call pftc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+                call pftc_glob%gen_corr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
@@ -130,7 +130,7 @@ contains
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
-                call pftc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+                call pftc_glob%gen_corr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                 f    = - corrs
                 grad = - corrs_grad
             class default
@@ -141,7 +141,7 @@ contains
     subroutine grad_shsrch_optimize_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
         real                                    :: corrs(self%nrots)
-        call pftc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+        call pftc_glob%gen_corrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
         self%cur_inpl_idx = maxloc(corrs, dim=1)
     end subroutine grad_shsrch_optimize_angle
 
@@ -185,7 +185,7 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         if( self%opt_angle )then
-            call pftc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+            call pftc_glob%gen_corrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
@@ -200,7 +200,7 @@ contains
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-                call pftc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
+                call pftc_glob%gen_corrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
                 loc = maxloc(corrs,dim=1)
                 if( loc == self%cur_inpl_idx ) exit
                 self%cur_inpl_idx = loc
@@ -227,7 +227,7 @@ contains
             endif
         else
             self%cur_inpl_idx   = irot
-            lowest_cost_overall = -pftc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
+            lowest_cost_overall = -pftc_glob%gen_corr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
                 call self%coarse_search(coarse_cost, init_xy)
@@ -273,7 +273,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y    = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                cost = -pftc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
+                cost = -pftc_glob%gen_corr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]
@@ -299,7 +299,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                call pftc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
+                call pftc_glob%gen_corrs(self%reference, self%particle, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
                 if (cost < lowest_cost) then

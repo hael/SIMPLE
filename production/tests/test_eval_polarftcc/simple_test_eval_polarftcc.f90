@@ -1,6 +1,6 @@
 program simple_test_eval_polarftcc
 include 'simple_lib.f08'
-use simple_polarft_calc,    only: polarft_corrcalc
+use simple_polarft_calc,    only: polarft_calc
 use simple_cmdline,             only: cmdline
 use simple_builder,             only: builder
 use simple_parameters,          only: parameters
@@ -8,7 +8,7 @@ use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_strategy2D3D_common, only: set_bp_range
 implicit none
 type(parameters)         :: p
-type(polarft_corrcalc)   :: pftc
+type(polarft_calc)   :: pftc
 type(cmdline)            :: cline
 type(builder)            :: b
 type(ori)                :: o
@@ -70,8 +70,8 @@ call pftc%memoize_ptcls
 !### TIMING
 allocate(cc_fft(pftc%get_nrots()))
 tfft = tic()
-call pftc%gencorrs(1, 1, cc_fft)
-print *, 'time of gencorrs (no cache): ', toc(tfft)
+call pftc%gen_corrs(1, 1, cc_fft)
+print *, 'time of gen_corrs (no cache): ', toc(tfft)
 loc = maxloc(cc_fft, dim=1)
 print *, pftc%get_rot(loc)
 

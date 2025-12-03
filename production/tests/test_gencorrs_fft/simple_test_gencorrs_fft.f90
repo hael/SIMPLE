@@ -1,13 +1,13 @@
-program simple_test_gencorrs_fft
+program simple_test_gen_corrs_fft
 include 'simple_lib.f08'
- use simple_polarft_calc, only: polarft_corrcalc
+ use simple_polarft_calc, only: polarft_calc
 use simple_cmdline,           only: cmdline
 use simple_builder,           only: builder
 use simple_parameters,        only: parameters
 use simple_timer
 implicit none
 type(parameters)        :: p
-type(polarft_corrcalc)  :: pftc
+type(polarft_calc)  :: pftc
 type(cmdline)           :: cline
 type(builder)           :: b
 real, allocatable       :: cc(:), cc_fft(:)
@@ -43,8 +43,8 @@ allocate(cc(pftc%get_nrots()), cc_fft(pftc%get_nrots()))
 tfft = tic()
 do iptcl=1,p%nptcls - 1
     do jptcl=iptcl + 1, p%nptcls
-        call pftc%gencorrs(iptcl, jptcl, cc_fft)
+        call pftc%gen_corrs(iptcl, jptcl, cc_fft)
     end do
 end do
 print *, 'time of fft_mod: ', toc(tfft)
-end program simple_test_gencorrs_fft
+end program simple_test_gen_corrs_fft

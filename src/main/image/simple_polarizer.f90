@@ -5,7 +5,7 @@ module simple_polarizer
 include 'simple_lib.f08'
 use simple_image,            only: image
 use simple_parameters,       only: params_glob
-use simple_polarft_calc, only: polarft_corrcalc
+use simple_polarft_calc, only: polarft_calc
 implicit none
 
 public :: polarizer
@@ -41,14 +41,14 @@ contains
     subroutine init_polarizer( self, pftc, alpha )
         use simple_gridding, only: gen_instrfun_img
         class(polarizer),        intent(inout) :: self   !< projector instance
-        class(polarft_corrcalc), intent(inout) :: pftc  !< polarft_corrcalc object to be filled
+        class(polarft_calc), intent(inout) :: pftc  !< polarft_calc object to be filled
         real,                    intent(in)    :: alpha  !< oversampling factor
         type(kbinterpol)  :: kbwin                 !< window function object
         real, allocatable :: w(:,:)
         real              :: loc(2), d1, d2
         integer           :: win(2,2), lims(2,3), i, k, l, cnt, f1, f2
         logical           :: normalize_weights
-        if( .not. pftc%exists() ) THROW_HARD('polarft_corrcalc object needs to be created; init_polarizer')
+        if( .not. pftc%exists() ) THROW_HARD('polarft_calc object needs to be created; init_polarizer')
         call self%kill_polarizer
         self%pdim = pftc%get_pdim()
         lims      = transpose(self%loop_lims(3)) ! fortran layered memory
@@ -155,7 +155,7 @@ contains
     !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize_1( self, pftc, img_ind, isptcl, iseven, mask )
         class(polarizer),        intent(in)    :: self    !< projector instance
-        class(polarft_corrcalc), intent(inout) :: pftc   !< polarft_corrcalc object to be filled
+        class(polarft_calc), intent(inout) :: pftc   !< polarft_calc object to be filled
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
         logical,                 intent(in)    :: iseven  !< is even (or odd)
@@ -167,7 +167,7 @@ contains
     !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize_2( self, pftc, img, img_ind, isptcl, iseven, mask )
         class(polarizer),        intent(in)    :: self    !< projector instance
-        class(polarft_corrcalc), intent(inout) :: pftc   !< polarft_corrcalc object to be filled
+        class(polarft_calc), intent(inout) :: pftc   !< polarft_calc object to be filled
         class(image),            intent(in)    :: img
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)

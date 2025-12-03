@@ -1,7 +1,7 @@
 module simple_euclid_sigma2
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
-use simple_polarft_calc, only: polarft_corrcalc, pftc_glob
+use simple_polarft_calc, only: polarft_calc, pftc_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
@@ -200,7 +200,7 @@ contains
     !>  Calculates and updates sigma2 within search resolution range
     subroutine calc_sigma2( self, pftc, iptcl, o, refkind )
         class(euclid_sigma2),    intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(in)    :: o
         character(len=*),        intent(in)    :: refkind ! 'proj' or 'class'
@@ -211,7 +211,7 @@ contains
         shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
         irot  = pftc_glob%get_roind(360. - o%e3get())
-        call pftc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+        call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
     end subroutine calc_sigma2
 

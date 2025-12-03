@@ -37,7 +37,7 @@ contains
             ! Prep
             call self%s%prep4srch
             ! inpl search
-            call pftc_glob%gencorrs(self%s%prev_class, self%s%iptcl, corrs)
+            call pftc_glob%gen_corrs(self%s%prev_class, self%s%iptcl, corrs)
             inpl_ind          = maxloc(corrs, dim=1)
             inpl_corr         = corrs(inpl_ind)
             self%s%best_class = self%s%prev_class
@@ -45,7 +45,7 @@ contains
             self%s%best_rot   = inpl_ind
             if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
                 ! back-calculating in-plane angle with k-weighing
-                call pftc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
                 self%s%best_rot  = maxloc(corrs, dim=1)
                 self%s%best_corr = corrs(inpl_ind)
             endif

@@ -136,7 +136,7 @@ contains
     subroutine calc_inpl_invariant_fm_1( imgs, hp, lp, trs, corrmat, l_srch_mirr )
         use simple_pftc_shsrch_fm
         use simple_polarizer,        only: polarizer
-        use simple_polarft_calc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_calc
         class(image),          intent(inout) :: imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
@@ -144,7 +144,7 @@ contains
         type(pftc_shsrch_fm), allocatable   :: fm_correlators(:)
         logical, optional,     intent(in)    :: l_srch_mirr
         type(polarizer)        :: polartransform
-        type(polarft_corrcalc) :: pftc
+        type(polarft_calc) :: pftc
         real, parameter :: TRS_STEPSZ = 1.0
         integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
         real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
@@ -244,14 +244,14 @@ contains
     subroutine calc_inpl_invariant_fm_2( refimgs, imgs, hp, lp, trs, corrmat )
         use simple_pftc_shsrch_fm
         use simple_polarizer,        only: polarizer
-        use simple_polarft_calc, only: polarft_corrcalc
+        use simple_polarft_calc, only: polarft_calc
         class(image),          intent(inout) :: refimgs(:), imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
         type(image),           allocatable   :: ccimgs(:,:)
         type(pftc_shsrch_fm), allocatable   :: fm_correlators(:)
         type(polarizer)        :: polartransform
-        type(polarft_corrcalc) :: pftc
+        type(polarft_calc) :: pftc
         real, parameter :: TRS_STEPSZ = 1.0
         integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2), iref, nrefs
         real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm

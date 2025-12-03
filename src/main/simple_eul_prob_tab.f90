@@ -183,10 +183,10 @@ contains
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self, pftc )
-        use simple_polarft_calc,  only: polarft_corrcalc
+        use simple_polarft_calc,  only: polarft_calc
         use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         integer,                 allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
@@ -239,7 +239,7 @@ contains
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
                     iproj  = self%jinds(ri)
-                    call pftc%gencorrs((istate-1)*params_glob%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                    call pftc%gen_corrs((istate-1)*params_glob%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                     irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                     ! rotate the shift vector to the frame of reference
@@ -295,7 +295,7 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gencorrs((istate-1)*params_glob%nspace + iproj, iptcl, dists_inpl(:,ithr))
+                        call pftc%gen_corrs((istate-1)*params_glob%nspace + iproj, iptcl, dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                         irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
@@ -330,7 +330,7 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gencorrs((istate-1)*params_glob%nspace + iproj, iptcl, dists_inpl(:,ithr))
+                        call pftc%gen_corrs((istate-1)*params_glob%nspace + iproj, iptcl, dists_inpl(:,ithr))
                         dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr))
                         irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
@@ -347,10 +347,10 @@ contains
     end subroutine fill_tab
 
     subroutine fill_tab_state_only( self, pftc )
-        use simple_polarft_calc,  only: polarft_corrcalc
+        use simple_polarft_calc,  only: polarft_calc
         use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
         integer :: i, iproj, iptcl, ithr, irot, istate, iref_start, is
@@ -384,7 +384,7 @@ contains
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                     if( irot == 0 )then
                         irot     = pftc%get_roind(360.-o_prev%e3get())
-                        cxy(1)   = real(pftc%gencorr_for_rot_8(iref_start+iproj, iptcl, irot))
+                        cxy(1)   = real(pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot))
                         cxy(2:3) = 0.
                     endif
                     self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1))
@@ -409,7 +409,7 @@ contains
                 do is = 1, self%nstates
                     istate      = self%ssinds(is)
                     iref_start  = (istate-1)*params_glob%nspace
-                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftc%gencorr_for_rot_8(iref_start+iproj, iptcl, irot)))
+                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)))
                     self%state_tab(istate,i)%iproj  = iproj
                     self%state_tab(istate,i)%inpl   = irot
                     self%state_tab(istate,i)%x      = 0.

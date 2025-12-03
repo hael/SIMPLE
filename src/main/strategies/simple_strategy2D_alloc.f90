@@ -99,8 +99,8 @@ contains
 
     !>  prep batch related parameters (particles level)
     subroutine prep_strategy2D_batch( pftc, which_iter, nptcls, pinds )
-        use simple_polarft_calc, only: polarft_corrcalc
-        type(polarft_corrcalc), intent(in) :: pftc
+        use simple_polarft_calc, only: polarft_calc
+        type(polarft_calc), intent(in) :: pftc
         integer,                intent(in) :: which_iter
         integer,                intent(in) :: nptcls        ! # of particles in batch
         integer,                intent(in) :: pinds(nptcls)

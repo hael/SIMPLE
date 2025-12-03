@@ -5,7 +5,7 @@ include 'simple_lib.f08'
 use simple_builder,          only: builder, build_glob
 use simple_image,            only: image
 use simple_parameters,       only: params_glob
-use simple_polarft_calc, only: polarft_corrcalc, pftc_glob
+use simple_polarft_calc, only: polarft_calc, pftc_glob
 use simple_sp_project,       only: sp_project
 use simple_strategy2D_utils
 implicit none
@@ -43,7 +43,7 @@ contains
 
     !> Module initialization
     subroutine polar_cavger_new( pftc, comlin, nrefs )
-        class(polarft_corrcalc), intent(in) :: pftc
+        class(polarft_calc), intent(in) :: pftc
         logical,                 intent(in) :: comlin
         integer,       optional, intent(in) :: nrefs
         call polar_cavger_kill
@@ -75,7 +75,7 @@ contains
     subroutine polar_cavger_set_ref_pftc( icls, which, pftc )
         integer,                 intent(in)    :: icls
         character(len=*),        intent(in)    :: which
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         select case(trim(which))
         case('merged')
             call pftc%set_ref_pft(icls, cmplx(pfts_merg(:,:,icls),kind=sp), .true.)
@@ -141,7 +141,7 @@ contains
         integer,                         intent(in)    :: nptcls
         integer,                         intent(in)    :: pinds(nptcls)
         class(sp_project),               intent(inout) :: spproj
-        class(polarft_corrcalc), target, intent(inout) :: pftc
+        class(polarft_calc), target, intent(inout) :: pftc
         real,                  optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,               optional, intent(in)    :: is3d
         class(oris), pointer :: spproj_field
@@ -959,7 +959,7 @@ contains
     !>  \brief  Converts the polar references to a cartesian grid
     subroutine polar_cavger_refs2cartesian( pftc, cavgs, which, pfts_in )
         use simple_image
-        class(polarft_corrcalc), intent(in)    :: pftc
+        class(polarft_calc), intent(in)    :: pftc
         type(image),             intent(inout) :: cavgs(ncls)
         character(len=*),        intent(in)    :: which
         complex(dp),   optional, intent(in)    :: pfts_in(1:pftsz,kfromto(1):kfromto(2),1:ncls)
@@ -1114,7 +1114,7 @@ contains
 
     ! Converts cavgs PFTS to cartesian grids and writes them
     subroutine polar_cavger_write_cartrefs( pftc, tmpl_fname, which )
-        class(polarft_corrcalc), intent(in) :: pftc
+        class(polarft_calc), intent(in) :: pftc
         class(string),           intent(in) :: tmpl_fname
         character(len=*),        intent(in) :: which
         type(image), allocatable :: imgs(:)
@@ -1132,7 +1132,7 @@ contains
 
     ! Converts all cavgs PFTS to cartesian grids and writes them
     subroutine polar_cavger_writeall_cartrefs( pftc, tmpl_fname )
-        class(polarft_corrcalc), intent(in) :: pftc
+        class(polarft_calc), intent(in) :: pftc
         class(string),           intent(in) :: tmpl_fname
         type(image), allocatable :: imgs(:)
         call alloc_imgarr(ncls, [params_glob%box_crop, params_glob%box_crop,1], smpd, imgs)
@@ -1400,7 +1400,7 @@ contains
     ! the individual particles in-plane offsets and map the shifts to both
     ! the particles and the references stored in the pftc
     subroutine center_3Dpolar_refs( pftc, algndoc, algnrefs )
-        class(polarft_corrcalc), intent(inout) :: pftc
+        class(polarft_calc), intent(inout) :: pftc
         class(oris),             intent(inout) :: algndoc
         class(oris),             intent(in)    :: algnrefs
         real    :: R(3,3),offset3D(3), offset2D(3)
@@ -1678,7 +1678,7 @@ contains
         integer,     parameter :: NCLS=5
         type(image)            :: tmpl_img, img, cavgs(NCLS)
         type(cmdline)          :: cline
-        type(polarft_corrcalc) :: pftc
+        type(polarft_calc) :: pftc
         type(parameters)       :: p
         type(builder)          :: b
         real    :: ang, shift(2), shifts(2,NIMGS)

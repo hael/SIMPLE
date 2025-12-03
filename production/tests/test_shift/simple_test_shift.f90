@@ -2,7 +2,7 @@ program simple_test_shift
 ! !$ use omp_lib
 ! !$ use omp_lib_kinds
 ! include 'simple_lib.f08'
-! use simple_polarft_calc,  only: polarft_corrcalc
+! use simple_polarft_calc,  only: polarft_calc
 ! use simple_cmdline,           only: cmdline
 ! use simple_builder,           only: builder
 ! use simple_image,             only: image
@@ -19,7 +19,7 @@ program simple_test_shift
 ! type(cmdline)                 :: cline
 ! type(builder)                 :: b
 ! type(parameters)              :: p
-! type(polarft_corrcalc)        :: pftc
+! type(polarft_calc)        :: pftc
 ! type(pftc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 ! type(ctf)                     :: tfun
 ! type(ori)                     :: o

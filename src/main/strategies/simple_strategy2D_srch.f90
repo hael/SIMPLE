@@ -121,7 +121,7 @@ contains
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
-        call pftc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
+        call pftc_glob%gen_corrs(self%prev_class, self%iptcl, corrs)
         if( params_glob%cc_objfun == OBJFUN_CC )then
             self%prev_corr  = max(0., corrs(self%prev_rot))
         else

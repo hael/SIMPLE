@@ -10,7 +10,7 @@ use simple_image_bin,         only: image_bin
 use simple_image_msk,         only: density_inoutside_mask
 use simple_parameters,        only: parameters, params_glob
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_polarft_calc,  only: polarft_corrcalc
+use simple_polarft_calc,  only: polarft_calc
 use simple_polarizer,         only: polarizer
 use simple_pspecs,            only: pspecs
 use simple_segmentation,      only: otsu_img
@@ -586,7 +586,7 @@ contains
         type(image), allocatable        :: imgs_mirr(:)
         type(pftc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
         type(polarizer)                 :: polartransform
-        type(polarft_corrcalc)          :: pftc
+        type(polarft_calc)          :: pftc
         type(inpl_struct), allocatable  :: algninfo(:), algninfo_mirr(:)
         integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, n
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
@@ -654,7 +654,7 @@ contains
         !$omp parallel do default(shared) private(i,ithr,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
         do i = 1, 2 * n
             ithr = omp_get_thread_num() + 1
-            call pftc%gencorrs(1, i, inpl_corrs)
+            call pftc%gen_corrs(1, i, inpl_corrs)
             loc  = maxloc(inpl_corrs)
             irot = loc(1)
             call grad_shsrch_obj(ithr)%set_indices(1, i)
@@ -700,7 +700,7 @@ contains
         type(image),  allocatable       :: imgs_targ_mirr(:)
         type(pftc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
         type(polarizer)                 :: polartransform
-        type(polarft_corrcalc)          :: pftc
+        type(polarft_calc)          :: pftc
         type(inpl_struct), allocatable  :: algninfo(:,:), algninfo_mirr(:,:)
         integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, nrefs, ntargets
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3), rotmat(2,2)
@@ -763,7 +763,7 @@ contains
         do i = 1, 2 * ntargets ! ptcls
             do j = 1, nrefs    ! refs
                 ithr = omp_get_thread_num() + 1
-                call pftc%gencorrs(j, i, inpl_corrs)
+                call pftc%gen_corrs(j, i, inpl_corrs)
                 loc  = maxloc(inpl_corrs,dim=1)
                 irot = loc
                 call grad_shsrch_obj(ithr)%set_indices(j, i)
