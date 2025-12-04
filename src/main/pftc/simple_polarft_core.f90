@@ -192,7 +192,6 @@ contains
             iptcl = pinds(i)
             self%pinds( iptcl ) = i
         enddo
-        if( .not. self%with_ctf )return
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
     end subroutine reallocate_ptcls

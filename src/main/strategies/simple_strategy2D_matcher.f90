@@ -525,7 +525,8 @@ contains
         end do
         !$omp end parallel do
         ! Memoize particles FFT parameters
-        if( l_ctf_here ) call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        ! always create this one, CTF logic internal
+        call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
         call pftc%memoize_ptcls
     end subroutine build_batch_particles2D
 

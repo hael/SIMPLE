@@ -574,7 +574,8 @@ contains
                 call pftc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
             enddo
             !$omp end parallel do
-            if( l_ctf ) call pftc%create_polar_absctfmats(build%spproj, params%oritype)
+            ! always create this one, CTF logic internal
+            call pftc%create_polar_absctfmats(build%spproj, params%oritype)
             call pftc%memoize_ptcls
             ! Scoring
             !$omp parallel do private(j,i,iptcl,icls,ithr,cxy,irot,inpl_ind,corrs,best_class,best_corr,best_xy,best_rot)&
