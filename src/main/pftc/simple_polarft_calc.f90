@@ -159,18 +159,18 @@ type :: polarft_calc
     procedure          :: get_pinds
     procedure          :: get_npix
     procedure          :: is_with_ctf
-    procedure          :: get_work_pft_ptr
-    procedure          :: get_work_rpft_ptr
-    procedure          :: get_work_rpft8_ptr
-    procedure          :: get_ptcls_ptr
-    procedure          :: get_ctfmats_ptr
+    procedure          :: get_work_pft_ptr   ! violation of encapsulation for performance in polarops
+    procedure          :: get_work_rpft_ptr  ! violation of encapsulation for performance in polarops
+    procedure          :: get_work_rpft8_ptr ! violation of encapsulation for performance in polarops
+    procedure          :: get_ptcls_ptr      ! violation of encapsulation for performance in polarops
+    procedure          :: get_ctfmats_ptr    ! violation of encapsulation for performance in polarops
     procedure          :: get_refs_ptr
     ! ===== VIS (print, vis_ptcl, vis_ref, read/write): simple_polarft_vis.f90
     procedure          :: vis_ptcl
     procedure          :: vis_ref
     procedure          :: print
     ! ===== CTF: simple_polarft_ctf.f90
-    procedure          :: create_polar_absctfmats, calc_polar_ctf
+    procedure          :: create_polar_absctfmats
     ! ===== GEOM: simple_polarft_geom.f90
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
@@ -436,28 +436,11 @@ interface
         logical,             intent(in) :: iseven
     end subroutine vis_ref
 
-    ! module subroutine read_ptcls_ctfs(self, ibatch, success)
-    !     class(polarft_calc), intent(inout) :: self
-    !     integer,             intent(in)    :: ibatch
-    !     logical,             intent(inout) :: success
-    ! end subroutine read_ptcls_ctfs
-
-    ! module subroutine write_ptcls_ctfs(self, ibatch)
-    !     class(polarft_calc), intent(in) :: self
-    !     integer,             intent(in) :: ibatch
-    ! end subroutine write_ptcls_ctfs
-
     module subroutine print(self)
         class(polarft_calc), intent(in) :: self
     end subroutine print
 
     ! ===== CTF =====
-
-    module subroutine calc_polar_ctf(self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        real,                intent(in)    :: smpd, kv, cs, fraca, dfx, dfy, angast
-    end subroutine calc_polar_ctf
 
     module subroutine create_polar_absctfmats(self, spproj, oritype, pfromto)
         class(polarft_calc),       intent(inout) :: self
