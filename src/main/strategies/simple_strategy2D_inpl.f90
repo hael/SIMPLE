@@ -43,12 +43,6 @@ contains
             self%s%best_class = self%s%prev_class
             self%s%best_corr  = inpl_corr
             self%s%best_rot   = inpl_ind
-            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight )then
-                ! back-calculating in-plane angle with k-weighing
-                call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
-                self%s%best_rot  = maxloc(corrs, dim=1)
-                self%s%best_corr = corrs(inpl_ind)
-            endif
             self%s%nrefs_eval = self%s%nrefs
             call self%s%inpl_srch
             call self%s%store_solution

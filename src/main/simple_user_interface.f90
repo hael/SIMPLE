@@ -274,7 +274,6 @@ type(simple_input_param) :: icefracthreshold
 type(simple_input_param) :: icm
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
-type(simple_input_param) :: kweight
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lp_pick
@@ -1144,7 +1143,6 @@ contains
         call set_param(icm,            'icm',             'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per computing node', 'Memory in MB per part/computing node in distributed execution{16000}', 'MB per part{16000}', .false., 16000.)
         call set_param(kv,             'kv',              'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
-        call set_param(kweight,        'kweight',         'binary',  'K-weights for correlation', 'K-weights for correlation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(lp,             'lp',              'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(lp_backgr,      'lp_backgr',       'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(lp_pick,        'lp_pick',         'num',    'Low-pass limit for picking', 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
@@ -1867,7 +1865,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 12, 9, 1, 2, .true.,&                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 8, 1, 2, .true.,&                                         ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "search,mask,filter,compute") ! GUI                   
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1911,9 +1909,8 @@ contains
         cluster2D%filt_ctrls(6)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
         cluster2D%filt_ctrls(6)%descr_placeholder = '(yes|no){no}'
         cluster2D%filt_ctrls(6)%cval_default      = 'no'
-        call cluster2D%set_input('filt_ctrls', 7, kweight, gui_submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 8, hp, gui_submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 9, icm, gui_submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 7, hp, gui_submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 8, icm, gui_submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls

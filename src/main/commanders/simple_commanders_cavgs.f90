@@ -154,7 +154,6 @@ contains
         call cline%set('sh_inv',    'yes') ! shift invariant search
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
-        if( .not. cline%defined('kweight') ) call cline%set('kweight', 'yes')
         if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
         if( .not. cline%defined('prune')   ) call cline%set('prune',    'no')
         ! master parameters
@@ -399,7 +398,6 @@ contains
         call cline%set('sh_inv',    'yes') ! shift invariant search
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
-        if( .not. cline%defined('kweight') ) call cline%set('kweight', 'yes')
         if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
         if( .not. cline%defined('prune')   ) call cline%set('prune',    'no')
         ! master parameters
