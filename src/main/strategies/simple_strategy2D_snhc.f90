@@ -87,38 +87,6 @@ contains
                 self%s%best_corr  = cc_glob
                 self%s%best_rot   = inpl_glob
             endif
-            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight )then
-                ! back-calculating in-plane angle with k-weighing
-                if( found_better )then
-                    if( self%s%l_sh_first )then
-                        call pftc_glob%gen_corrs(self%s%prev_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
-                        self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
-                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
-                    else
-                        call pftc_glob%gen_corrs(self%s%prev_class, self%s%iptcl, corrs, kweight=.true.)
-                        self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
-                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
-                    endif
-                    inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
-                    if( inpl_ind == 0 )then
-                        ! accept greedy best
-                        self%s%best_rot  = maxloc(corrs, dim=1)
-                        self%s%best_corr = corrs(self%s%best_rot)
-                    else
-                        ! accept SHC parameters
-                        self%s%best_corr = corrs(inpl_ind)
-                        self%s%best_rot  = inpl_ind
-                    endif
-                else
-                    if( self%s%l_sh_first )then
-                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)
-                    else
-                        call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
-                    endif
-                    self%s%best_rot  = maxloc(corrs, dim=1)
-                    self%s%best_corr = corrs(self%s%best_rot)
-                endif
-            endif
             call self%s%inpl_srch
             call self%s%store_solution(nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
         else

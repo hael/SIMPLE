@@ -236,7 +236,6 @@ type :: parameters
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
-    character(len=STDLEN)     :: kweight='no'         !< k-weighting for cc rot cost function(yes|no){no}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
@@ -533,7 +532,6 @@ type :: parameters
     logical :: l_frac_worst   = .false.
     logical :: l_update_frac  = .false.
     logical :: l_graphene     = .false.
-    logical :: l_kweight      = .false.
     logical :: l_icm          = .false.
     logical :: l_incrreslim   = .false.
     logical :: l_lam_anneal   = .false.
@@ -745,7 +743,6 @@ contains
         call check_carg('iterstats',      self%iterstats)
         call check_carg('json',           self%json)
         call check_carg('keepvol',        self%keepvol)
-        call check_carg('kweight',        self%kweight)
         call check_carg('lam_anneal',     self%lam_anneal)
         call check_carg('linethres',      self%linethres)
         call check_carg('loc_sdev',       self%loc_sdev)
@@ -1783,8 +1780,6 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
-        ! k-weighted cc option
-        self%l_kweight = trim(self%kweight).eq.'yes'
         ! automatically estimated lp
         self%l_lpauto = trim(self%lp_auto).ne.'no'
         select case(trim(self%lp_auto))

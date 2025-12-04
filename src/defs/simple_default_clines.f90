@@ -34,7 +34,6 @@ contains
         if( .not. cline%defined('extr_lim')     ) call cline%set('extr_lim', MAX_EXTRLIM2D)
         if( .not. cline%defined('restore_cavgs')) call cline%set('restore_cavgs','yes')
         ! 2D objective function section
-        if( .not. cline%defined('kweight')      ) call cline%set('kweight',  'default')
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',        'no')
         call set_automask2D_defaults( cline )

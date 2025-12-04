@@ -20,8 +20,6 @@
 ! You have dozens of near-identical kernels:
 ! gen_corrs_cc
 ! gen_corrs_shifted_cc
-! gen_corrs_weighted_cc
-! gen_corrs_shifted_weighted_cc
 ! gen_corr_for_rot_8_*
 ! calc_corr_rot_shift
 ! many more
@@ -188,9 +186,7 @@ type :: polarft_calc
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! ===== CORR: simple_polarft_corr.f90
-    procedure          :: calc_corr_rot_shift, calc_magcorr_rot
-    procedure          :: gen_corrs_mag, gen_corrs_mag_cc
-    procedure          :: gen_corrs_weighted_cc, gen_corrs_shifted_weighted_cc
+    procedure          :: calc_corr_rot_shift
     procedure          :: gen_corrs_cc,          gen_corrs_shifted_cc
     procedure, private :: gen_corrs_1, gen_corrs_2
     generic            :: gen_corrs => gen_corrs_1, gen_corrs_2
@@ -207,6 +203,9 @@ type :: polarft_calc
     procedure          :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
     procedure          :: calc_frc
+    ! ===== CORR_MAG: simple_polarft_corr_mag.f90
+    procedure          :: calc_magcorr_rot
+    procedure          :: gen_corrs_mag, gen_corrs_mag_cc
     procedure          :: bidirectional_shift_search  
 end type polarft_calc
 
@@ -563,32 +562,11 @@ interface
 
     module function calc_corr_rot_shift(self, iref, iptcl, shvec, irot, kweight) result(val)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
-        real(sp),            intent(in) :: shvec(2)
-        logical, optional,   intent(in) :: kweight
+        integer,             intent(in)    :: iref, iptcl, irot
+        real(sp),            intent(in)    :: shvec(2)
+        logical, optional,   intent(in)    :: kweight
         real :: val
     end function calc_corr_rot_shift
-
-    module function calc_magcorr_rot(self, iref, iptcl, irot, kweight) result(val)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
-        logical, optional,   intent(in) :: kweight
-        real :: val
-    end function calc_magcorr_rot
-
-    module subroutine gen_corrs_mag_cc( self, iref, iptcl, ccs, kweight )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real,                intent(inout) :: ccs(self%pftsz)
-        logical,   optional, intent(in)    :: kweight
-    end subroutine gen_corrs_mag_cc
-
-    module subroutine gen_corrs_mag(self, iref, iptcl, ccs, kweight)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real,                intent(inout) :: ccs(self%pftsz)
-        logical, optional,   intent(in) :: kweight
-    end subroutine gen_corrs_mag
 
     module subroutine calc_frc(self, iref, iptcl, irot, shvec, frc)
         class(polarft_calc), intent(inout) :: self
@@ -597,19 +575,17 @@ interface
         real(sp),            intent(out) :: frc(self%kfromto(1):self%kfromto(2))
     end subroutine calc_frc
 
-    module subroutine gen_corrs_1(self, iref, iptcl, cc, kweight)
+    module subroutine gen_corrs_1(self, iref, iptcl, cc)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
         real(sp),            intent(out)   :: cc(self%nrots)
-        logical, optional,   intent(in)   :: kweight
     end subroutine gen_corrs_1
 
-    module subroutine gen_corrs_2(self, iref, iptcl, shift, cc, kweight)
+    module subroutine gen_corrs_2(self, iref, iptcl, shift, cc)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: cc(self%nrots)
-        logical, optional,   intent(in)    :: kweight
     end subroutine gen_corrs_2
 
     module subroutine gen_corrs_cc(self, iptcl, iref, corrs)
@@ -625,19 +601,6 @@ interface
         real(sp),            intent(out)   :: corrs(self%nrots)
     end subroutine gen_corrs_shifted_cc
 
-    module subroutine gen_corrs_weighted_cc(self, iptcl, iref, corrs)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl, iref
-        real(sp),            intent(out)   :: corrs(self%nrots)
-    end subroutine gen_corrs_weighted_cc
-
-    module subroutine gen_corrs_shifted_weighted_cc(self, pft_ref, iptcl, iref, corrs)
-        class(polarft_calc), intent(inout) :: self
-        complex(sp),         intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in)    :: iptcl, iref
-        real(sp),            intent(out)   :: corrs(self%nrots)
-    end subroutine gen_corrs_shifted_weighted_cc
-
     module subroutine gen_euclids(self, iptcl, iref, euclids)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl, iref
@@ -650,13 +613,6 @@ interface
         integer,              intent(in)    :: iptcl, iref
         real(sp),             intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids_shifted
-
-    module subroutine bidirectional_shift_search(self, iref, iptcl, irot, hn, shifts, grid1, grid2)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot, hn
-        real,                intent(in)    :: shifts(-hn:hn)
-        real,                intent(out)   :: grid1(-hn:hn,-hn:hn), grid2(-hn:hn,-hn:hn)
-    end subroutine bidirectional_shift_search
 
     module function gen_corr_for_rot_8_1(self, iref, iptcl, irot) result(val)
         class(polarft_calc), intent(inout) :: self
@@ -726,6 +682,37 @@ interface
         real(sp),            intent(in) :: shvec(2)
         real(sp), optional,  intent(out) :: sigma_contrib(self%kfromto(1):self%kfromto(2))
     end subroutine gen_sigma_contrib
+
+    ! ===== CORR_MAG  =====
+
+    module function calc_magcorr_rot(self, iref, iptcl, irot, kweight) result(val)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl, irot
+        logical, optional,   intent(in)    :: kweight
+        real :: val
+    end function calc_magcorr_rot
+
+    module subroutine gen_corrs_mag_cc( self, iref, iptcl, ccs, kweight)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        real,                intent(inout) :: ccs(self%pftsz)
+        logical, optional,   intent(in)    :: kweight
+
+    end subroutine gen_corrs_mag_cc
+
+    module subroutine gen_corrs_mag(self, iref, iptcl, ccs, kweight)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        real,                intent(inout) :: ccs(self%pftsz)
+        logical, optional,   intent(in)    :: kweight
+    end subroutine gen_corrs_mag
+
+    module subroutine bidirectional_shift_search(self, iref, iptcl, irot, hn, shifts, grid1, grid2)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl, irot, hn
+        real,                intent(in)    :: shifts(-hn:hn)
+        real,                intent(out)   :: grid1(-hn:hn,-hn:hn), grid2(-hn:hn,-hn:hn)
+    end subroutine bidirectional_shift_search
 
 end interface
 
