@@ -87,7 +87,6 @@ contains
         call cline%set('autoscale',    'yes')
         call cline%set('reject_mics',  'no')
         call cline%set('reject_cls',   'no') ! refers to previous implementation
-        call cline%set('kweight_chunk','default')
         call cline%set('prune',        'no')
         call cline%set('wiener',       'full')
         call cline%set('refine',       'snhc_smpl')
@@ -993,7 +992,6 @@ contains
         call cline%set('autoscale',    'yes')
         call cline%set('reject_mics',  'no')
         call cline%set('reject_cls',   'no') ! refers to previous implementation
-        call cline%set('kweight_pool', 'default')
         call cline%set('wiener',       'full')
         call cline%set('refine',       'snhc_smpl')
         call cline%set('ml_reg',       'no')

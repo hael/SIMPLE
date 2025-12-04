@@ -275,8 +275,6 @@ type(simple_input_param) :: icm
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: kweight
-type(simple_input_param) :: kweight_chunk
-type(simple_input_param) :: kweight_pool
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lp_pick
@@ -1146,9 +1144,7 @@ contains
         call set_param(icm,            'icm',             'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per computing node', 'Memory in MB per part/computing node in distributed execution{16000}', 'MB per part{16000}', .false., 16000.)
         call set_param(kv,             'kv',              'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
-        call set_param(kweight,        'kweight',         'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
-        call set_param(kweight_chunk,  'kweight_chunk',   'multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
-        call set_param(kweight_pool,   'kweight_pool',    'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(kweight,        'kweight',         'binary',  'K-weights for correlation', 'K-weights for correlation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(lp,             'lp',              'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(lp_backgr,      'lp_backgr',       'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(lp_pick,        'lp_pick',         'num',    'Low-pass limit for picking', 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)

@@ -206,7 +206,6 @@ contains
         call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
         call cline_cluster2D_chunk%set('sigma_est', params_glob%sigma_est)
-        call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
         call cline_cluster2D_chunk%set('rank_cavgs','no')
         call cline_cluster2D_chunk%set('chunk',     'yes')
         if( l_wfilt )then
@@ -326,7 +325,6 @@ contains
         call cline_cluster2D_pool%set('projfile',  PROJFILE_POOL)
         call cline_cluster2D_pool%set('projname',  get_fbody(PROJFILE_POOL,'simple'))
         call cline_cluster2D_pool%set('sigma_est', params_glob%sigma_est)
-        call cline_cluster2D_pool%set('kweight',   params_glob%kweight_pool)
         if( cline%defined('cls_init') )then
             call cline_cluster2D_pool%set('cls_init', params_glob%cls_init)
         else
@@ -2604,7 +2602,6 @@ contains
         logical          :: all_chunks_submitted
         call cline%set('oritype',      'ptcl2D')
         call cline%set('wiener',       'full')
-        call cline%set('kweight_chunk','default')
         call cline%set('autoscale',    'yes')
         call cline%set('remove_chunks','no')
         call cline%set('reject_cls',   'no')
