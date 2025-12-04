@@ -654,7 +654,7 @@ contains
         !$omp parallel do default(shared) private(i,ithr,inpl_corrs,loc,irot,cxy) schedule(static) proc_bind(close)
         do i = 1, 2 * n
             ithr = omp_get_thread_num() + 1
-            call pftc%gen_corrs(1, i, inpl_corrs)
+            call pftc%gen_objfun_vals(1, i, [0.,0.], inpl_corrs)
             loc  = maxloc(inpl_corrs)
             irot = loc(1)
             call grad_shsrch_obj(ithr)%set_indices(1, i)
@@ -763,7 +763,7 @@ contains
         do i = 1, 2 * ntargets ! ptcls
             do j = 1, nrefs    ! refs
                 ithr = omp_get_thread_num() + 1
-                call pftc%gen_corrs(j, i, inpl_corrs)
+                call pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs)
                 loc  = maxloc(inpl_corrs,dim=1)
                 irot = loc
                 call grad_shsrch_obj(ithr)%set_indices(j, i)

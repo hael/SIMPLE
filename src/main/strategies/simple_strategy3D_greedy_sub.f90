@@ -52,9 +52,9 @@ contains
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
                     if( params_glob%l_sh_first )then
-                        call pftc_glob%gen_corrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
-                        call pftc_glob%gen_corrs(iref, self%s%iptcl, inpl_corrs)
+                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
@@ -79,9 +79,9 @@ contains
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
                     if( params_glob%l_sh_first )then
-                        call pftc_glob%gen_corrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
-                        call pftc_glob%gen_corrs(iref, self%s%iptcl, inpl_corrs)
+                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
                     if( params_glob%l_prob_inpl )then
                         loc = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))

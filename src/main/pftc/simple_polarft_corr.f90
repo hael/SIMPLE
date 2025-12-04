@@ -5,6 +5,8 @@ include 'simple_lib.f08'
 #include "simple_local_flags.inc"
 implicit none
 
+real, parameter :: SHERR = 0.001
+
 contains
 
     ! Benchmark for correlation calculation
@@ -104,96 +106,40 @@ contains
         end do
     end subroutine calc_frc
 
-    module subroutine gen_corrs_1( self, iref, iptcl, cc )
+    module subroutine gen_objfun_vals( self, iref, iptcl, shift, vals )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
-        real(sp),            intent(out)   :: cc(self%nrots)
-        select case(params_glob%cc_objfun)
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(out)   :: vals(self%nrots)
+         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gen_corrs_cc(iptcl, iref, cc)
+                call self%gen_corrs(iref, iptcl, shift, vals)
             case(OBJFUN_EUCLID)
-                call self%gen_euclids(iptcl, iref, cc)
+                call self%gen_euclids(iref, iptcl, shift, vals)
         end select
-    end subroutine gen_corrs_1
+    end subroutine gen_objfun_vals
 
-    module subroutine gen_corrs_2( self, iref, iptcl, shift, cc )
+    module subroutine gen_corrs( self, iref, iptcl, shift, cc )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        integer :: i, ithr
+        integer :: i, ithr, k
         ithr    = omp_get_thread_num() + 1
         i       = self%pinds(iptcl)
         shmat   => self%heap_vars(ithr)%shmat
         pft_ref => self%heap_vars(ithr)%pft_ref
-        call self%gen_shmat(ithr, shift, shmat)
-        if( self%iseven(i) )then
-            pft_ref = shmat * self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
+        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        if( arg(shift) > SHERR )then
+            call self%gen_shmat(ithr, shift, shmat)
+            pft_ref = shmat * pft_ref
         endif
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gen_corrs_shifted_cc(pft_ref, iptcl, iref, cc)
-            case(OBJFUN_EUCLID)
-                call self%gen_euclids_shifted(pft_ref, iptcl, iref, cc)
-        end select
-    end subroutine gen_corrs_2
-
-    module subroutine gen_corrs_cc( self, iptcl, iref, corrs)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl, iref
-        real(sp),            intent(out)   :: corrs(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:)
-        real(dp) :: sqsumref
-        integer  :: k, i, ithr
-        logical  :: even
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        even = self%iseven(i)
-        self%heap_vars(ithr)%kcorrs = 0.d0
-        self%drvec(ithr)%r = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            ! FT(CTF2) x FT(REF2)*)
-            if( even )then
-                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
-            else
-                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
-            endif
-            ! IFFT(FT(CTF2) x FT(REF2)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r(1:self%nrots) = self%drvec(ithr)%r(1:self%nrots) + real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! FT(X.CTF) x FT(REF)*
-            if( even )then
-                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ptcl_ctf(:,k,i) * self%ft_ref_even(:,k,iref)
-            else
-                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ptcl_ctf(:,k,i) * self%ft_ref_odd(:,k,iref)
-            endif
-            ! IFFT( FT(X.CTF) x FT(REF)* )
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%heap_vars(ithr)%kcorrs(1:self%nrots) = self%heap_vars(ithr)%kcorrs(1:self%nrots) + real(self%rvec1(ithr)%r(1:self%nrots),dp)
-        end do
-        self%drvec(ithr)%r(1:self%nrots) = self%drvec(ithr)%r(1:self%nrots) * (self%sqsums_ptcls(i) * real(2*self%nrots,dp))
-        corrs = real(self%heap_vars(ithr)%kcorrs(1:self%nrots) / dsqrt(self%drvec(ithr)%r(1:self%nrots)))
-    end subroutine gen_corrs_cc
-
-    module subroutine gen_corrs_shifted_cc( self, pft_ref, iptcl, iref, corrs)
-        class(polarft_calc), intent(inout) :: self
-        complex(sp),         intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in)    :: iptcl, iref
-        real(sp),            intent(out)   :: corrs(self%nrots)
-        real(dp) :: sqsumref
-        integer  :: k, i, ithr
-        logical  :: even
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        even = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         self%drvec(ithr)%r          = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
             ! FT(CTF2) x FT(REF2)), REF2 is shift invariant
-            if( even )then
+            if( self%iseven(i) )then
                 self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
             else
                 self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
@@ -212,58 +158,33 @@ contains
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(self%rvec1(ithr)%r(1:self%nrots),dp)
         end do
         self%drvec(ithr)%r = self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots),dp)
-        corrs = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
-    end subroutine gen_corrs_shifted_cc
+        cc = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
+    end subroutine gen_corrs
 
-    module subroutine gen_euclids( self, iptcl, iref, euclids )
+    module subroutine gen_euclids( self, iref, iptcl, shift, euclids )
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl, iref
+        integer,             intent(in)    :: iref, iptcl
+        real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: euclids(self%nrots)
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(dp) :: w, sumsqptcl
         integer  :: k, i, ithr
         logical  :: even
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        even = self%iseven(i)
-        self%heap_vars(ithr)%kcorrs = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
-            sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
-            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
-            if( even )then
-                self%cvec1(ithr)%c = self%ft_ctf2(:,k,i)     * self%ft_ref2_even(:,k,iref) - &
-                                &2.0*self%ft_ptcl_ctf(:,k,i) * self%ft_ref_even(:,k,iref)
-            else
-                self%cvec1(ithr)%c = self%ft_ctf2(:,k,i)     * self%ft_ref2_odd(:,k,iref) - &
-                                &2.0*self%ft_ptcl_ctf(:,k,i) * self%ft_ref_odd(:,k,iref)
-            endif
-            ! X.CTF.REF = IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
-        end do
-        euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gen_euclids
-
-    module subroutine gen_euclids_shifted( self, pft_ref, iptcl, iref, euclids )
-        class(polarft_calc),  intent(inout) :: self
-        complex(sp), pointer, intent(in)    :: pft_ref(:,:)
-        integer,              intent(in)    :: iptcl, iref
-        real(sp),             intent(out)   :: euclids(self%nrots)
-        real(dp) :: w, sumsqptcl
-        integer  :: k, i, ithr
-        logical  :: even
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        even = self%iseven(i)
+        ithr    = omp_get_thread_num() + 1
+        i       = self%pinds(iptcl)
+        shmat   => self%heap_vars(ithr)%shmat
+        pft_ref => self%heap_vars(ithr)%pft_ref
+        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        if( arg(shift) > SHERR )then
+            call self%gen_shmat(ithr, shift, shmat)
+            pft_ref = shmat * pft_ref
+        endif
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
             ! FT(CTF2) x FT(REF2)*
-            if( even )then
+            if( self%iseven(i) )then
                 self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
             else
                 self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
@@ -282,7 +203,7 @@ contains
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
-    end subroutine gen_euclids_shifted
+    end subroutine gen_euclids
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_calc), intent(inout) :: self

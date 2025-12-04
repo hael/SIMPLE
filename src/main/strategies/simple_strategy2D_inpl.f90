@@ -37,7 +37,7 @@ contains
             ! Prep
             call self%s%prep4srch
             ! inpl search
-            call pftc_glob%gen_corrs(self%s%prev_class, self%s%iptcl, corrs)
+            call pftc_glob%gen_objfun_vals(self%s%prev_class, self%s%iptcl, [0.,0.], corrs)
             inpl_ind          = maxloc(corrs, dim=1)
             inpl_corr         = corrs(inpl_ind)
             self%s%best_class = self%s%prev_class

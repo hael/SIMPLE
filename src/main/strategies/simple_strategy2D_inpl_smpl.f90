@@ -41,9 +41,9 @@ contains
             call self%s%inpl_srch_first
             ! In-plane sampling
             if( self%s%l_sh_first )then
-                call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                call pftc_glob%gen_objfun_vals(self%s%best_class, self%s%iptcl, self%s%xy_first, inpl_corrs)
             else
-                call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, inpl_corrs)
+                call pftc_glob%gen_objfun_vals(self%s%best_class, self%s%iptcl, [0.,0.],         inpl_corrs)
             endif
             ! Shift search
             if( s2D%do_inplsrch(self%s%iptcl_batch) )then

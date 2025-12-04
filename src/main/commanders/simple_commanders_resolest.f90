@@ -590,7 +590,7 @@ contains
                 best_rot   = 0
                 do icls = 1,params%ncls
                     if( .not. cls_mask(icls) ) cycle
-                    call pftc%gen_corrs(icls, iptcl, corrs)
+                    call pftc%gen_objfun_vals(icls, iptcl, [0.,0.], corrs)
                     irot     = maxloc(corrs, dim=1)
                     inpl_ind = irot
                     call grad_shsrch_objs(ithr)%set_indices(icls, iptcl)

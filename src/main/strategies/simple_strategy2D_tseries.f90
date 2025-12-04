@@ -74,7 +74,7 @@ contains
                 if( s2D%cls_pops(iref) == 0 )return
                 do i = -itrs,itrs,TRSSTEP
                     do j = -itrs,itrs,TRSSTEP
-                        call pftc_glob%gen_corrs(iref, self%s%iptcl, real([i,j]), corrs)
+                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, real([i,j]), corrs)
                         inpl_ind  = maxloc(corrs, dim=1)
                         inpl_corr = corrs(inpl_ind)
                         if( inpl_corr >= corr )then

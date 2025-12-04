@@ -70,7 +70,7 @@ call pftc%memoize_ptcls
 !### TIMING
 allocate(cc_fft(pftc%get_nrots()))
 tfft = tic()
-call pftc%gen_corrs(1, 1, cc_fft)
+call pftc%gen_objfun_vals(1, 1, [0.,0.], cc_fft)
 print *, 'time of gen_corrs (no cache): ', toc(tfft)
 loc = maxloc(cc_fft, dim=1)
 print *, pftc%get_rot(loc)
