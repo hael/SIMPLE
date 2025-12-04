@@ -1502,14 +1502,13 @@ contains
         call self%os_mic%get_static(imic, 'intg', micname)
     end function get_micname
 
-    ! static for OpenMP safety
     function get_mic_kind( self, imic ) result( mickind )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: imic
         type(string) :: mickind
         mickind = NIL
         if( self%os_mic%isthere(imic, 'imgkind') )then
-            mickind = self%os_mic%get(imic, 'imgkind')
+            mickind = self%os_mic%get_str(imic, 'imgkind')
             return
         else
             if( self%os_mic%isthere(imic, 'movie') )then
