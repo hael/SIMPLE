@@ -151,7 +151,7 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
         ! prep corr
-        call pftc_glob%gen_corrs(self%prev_ref, self%iptcl, corrs)
+        call pftc_glob%gen_objfun_vals(self%prev_ref, self%iptcl, [0.,0.], corrs)
         corr = max(0.,maxval(corrs))
         self%prev_corr = corr
     end subroutine prep4srch

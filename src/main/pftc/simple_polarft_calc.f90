@@ -1,38 +1,3 @@
-! for calculation of band-pass limited cross-correlation of polar Fourier transforms
-
-! For consideration:
-
-! 1. Memoization + thread pools should be isolated and reusable
-! Right now heap_vars has many duplicated arrays. Many can be:
-! allocated once, reused across calls
-! replaced with a scratch allocator
-! stored in a thread-local pool to avoid repeated malloc/free overhead
-! Refactoring isolates memo routines → easy to replace with better memory management.
-
-! 2. FFT plan creation can move into allocate_refs_memoization / constructor
-! Instead of creating FFTW plans multiple times or destroying them manually, encapsulate plan lifetimes cleanly:
-! create plan on first call
-! reuse across all operations (FFT reuse = major speedup)
-! destroy only in kill
-! A dedicated FFT submodule makes this easy.
-
-! 4. Correlation routines are highly redundant
-! You have dozens of near-identical kernels:
-! gen_corrs_cc
-! gen_corrs_shifted_cc
-! gen_corr_for_rot_8_*
-! calc_corr_rot_shift
-! many more
-! These can be unified into:
-! shared template functions
-! macro-generated variants (if you want)
-! or a strategy pattern (function pointers)
-! After refactor, these functions live together → easier to unify performance-critical kernels.
-
-! 5. Opportunity for GPU offload
-! If/when you consider GPU acceleration, the new submodules naturally isolate the FFT and kernel operations.
-! The correlation kernels in particular are highly parallelizable.
-
 module simple_polarft_calc
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -187,9 +152,9 @@ type :: polarft_calc
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
     ! ===== CORR: simple_polarft_corr.f90
     procedure          :: calc_corr_rot_shift
-    procedure          :: gen_corrs_cc,          gen_corrs_shifted_cc
-    procedure, private :: gen_corrs_1, gen_corrs_2
-    generic            :: gen_corrs => gen_corrs_1, gen_corrs_2
+    procedure          :: gen_objfun_vals
+    procedure          :: gen_corrs
+    procedure          :: gen_euclids
     procedure, private :: gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     generic            :: gen_corr_for_rot_8 => gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     procedure          :: gen_corr_grad_for_rot_8
@@ -197,8 +162,6 @@ type :: polarft_calc
     procedure          :: gen_corr_cc_for_rot_8
     procedure          :: gen_corr_cc_grad_for_rot_8
     procedure          :: gen_corr_cc_grad_only_for_rot_8
-    procedure          :: gen_euclids
-    procedure          :: gen_euclids_shifted
     procedure          :: gen_euclid_for_rot_8
     procedure          :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
@@ -575,44 +538,26 @@ interface
         real(sp),            intent(out) :: frc(self%kfromto(1):self%kfromto(2))
     end subroutine calc_frc
 
-    module subroutine gen_corrs_1(self, iref, iptcl, cc)
+     module subroutine gen_objfun_vals(self, iref, iptcl, shift, vals)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
-        real(sp),            intent(out)   :: cc(self%nrots)
-    end subroutine gen_corrs_1
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(out)   :: vals(self%nrots)
+    end subroutine gen_objfun_vals
 
-    module subroutine gen_corrs_2(self, iref, iptcl, shift, cc)
+    module subroutine gen_corrs(self, iref, iptcl, shift, cc)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: cc(self%nrots)
-    end subroutine gen_corrs_2
+    end subroutine gen_corrs
 
-    module subroutine gen_corrs_cc(self, iptcl, iref, corrs)
+    module subroutine gen_euclids(self, iref, iptcl, shift, euclids)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl, iref
-        real(sp),            intent(out)   :: corrs(self%nrots)
-    end subroutine gen_corrs_cc
-
-    module subroutine gen_corrs_shifted_cc(self, pft_ref, iptcl, iref, corrs)
-        class(polarft_calc), intent(inout) :: self
-        complex(sp),         intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in)    :: iptcl, iref
-        real(sp),            intent(out)   :: corrs(self%nrots)
-    end subroutine gen_corrs_shifted_cc
-
-    module subroutine gen_euclids(self, iptcl, iref, euclids)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl, iref
+        integer,             intent(in)    :: iref, iptcl
+        real,                intent(in)    :: shift(2)
         real(sp),            intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids
-
-    module subroutine gen_euclids_shifted(self, pft_ref, iptcl, iref, euclids)
-        class(polarft_calc),  intent(inout) :: self
-        complex(sp), pointer, intent(in)    :: pft_ref(:,:)
-        integer,              intent(in)    :: iptcl, iref
-        real(sp),             intent(out)   :: euclids(self%nrots)
-    end subroutine gen_euclids_shifted
 
     module function gen_corr_for_rot_8_1(self, iref, iptcl, irot) result(val)
         class(polarft_calc), intent(inout) :: self

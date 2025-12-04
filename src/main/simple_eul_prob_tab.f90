@@ -239,7 +239,7 @@ contains
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
                     iproj  = self%jinds(ri)
-                    call pftc%gen_corrs((istate-1)*params_glob%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                    call pftc%gen_objfun_vals((istate-1)*params_glob%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                     irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                     ! rotate the shift vector to the frame of reference
@@ -295,7 +295,7 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gen_corrs((istate-1)*params_glob%nspace + iproj, iptcl, dists_inpl(:,ithr))
+                        call pftc%gen_objfun_vals((istate-1)*params_glob%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                         irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
@@ -330,7 +330,7 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gen_corrs((istate-1)*params_glob%nspace + iproj, iptcl, dists_inpl(:,ithr))
+                        call pftc%gen_objfun_vals((istate-1)*params_glob%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
                         dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr))
                         irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)

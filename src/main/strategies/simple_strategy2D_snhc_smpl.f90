@@ -53,9 +53,9 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! In-plane sampling
                 if( self%s%l_sh_first )then
-                    call pftc_glob%gen_corrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                 else
-                    call pftc_glob%gen_corrs(iref, self%s%iptcl, inpl_corrs)
+                    call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                 endif
                 call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
                                     &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )

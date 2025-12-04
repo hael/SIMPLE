@@ -158,7 +158,7 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 do icls = 1, self%ncls
                     if( .not.self%populated(icls) ) cycle
-                    call pftc_glob%gen_corrs(icls, iptcl, scores)
+                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     irot     = maxloc(scores, dim=1)
                     best_rot = irot
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
@@ -185,7 +185,7 @@ contains
                 do j = 1, self%neffcls
                     iptcl = self%pinds(i)
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_corrs(icls, iptcl, scores)
+                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     irot = maxloc(scores, dim=1)
                     self%loc_tab(icls,i)%dist = eulprob_dist_switch(scores(irot))
                     self%loc_tab(icls,i)%inpl = irot
@@ -233,7 +233,7 @@ contains
                 ! exhaustive evaluation without shifts
                 do j = 1,self%neffcls
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_corrs(icls, iptcl, scores)
+                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
                     self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score)
                     self%loc_tab(icls,i)%inpl   = irot
@@ -271,7 +271,7 @@ contains
                 do j = 1, self%neffcls
                     iptcl = self%pinds(i)
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_corrs(icls, iptcl, scores)
+                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
                     self%loc_tab(icls,i)%dist = eulprob_dist_switch(score)
                     self%loc_tab(icls,i)%inpl = irot
@@ -321,7 +321,7 @@ contains
                 ! exhaustive evaluation without shifts
                 do j = 1,self%neffcls
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_corrs(icls, iptcl, scores)
+                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     if( greedy )then
                         ! greedy in-plane
                         irot  = maxloc(scores,dim=1)
@@ -367,7 +367,7 @@ contains
                 greedy = (os%get_updatecnt(iptcl)==1).or.(.not.os%has_been_searched(iptcl))
                 do j = 1, self%neffcls
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_corrs(icls, iptcl, scores)
+                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     if( greedy )then
                         ! new particle
                         irot  = maxloc(scores,dim=1)

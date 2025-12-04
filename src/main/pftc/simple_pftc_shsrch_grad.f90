@@ -141,7 +141,7 @@ contains
     subroutine grad_shsrch_optimize_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
         real                                    :: corrs(self%nrots)
-        call pftc_glob%gen_corrs(self%reference, self%particle, self%ospec%x, corrs)
+        call pftc_glob%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
         self%cur_inpl_idx = maxloc(corrs, dim=1)
     end subroutine grad_shsrch_optimize_angle
 
@@ -185,7 +185,7 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         if( self%opt_angle )then
-            call pftc_glob%gen_corrs(self%reference, self%particle, self%ospec%x, corrs)
+            call pftc_glob%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
@@ -200,7 +200,7 @@ contains
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-                call pftc_glob%gen_corrs(self%reference, self%particle, self%ospec%x, corrs)
+                call pftc_glob%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
                 loc = maxloc(corrs,dim=1)
                 if( loc == self%cur_inpl_idx ) exit
                 self%cur_inpl_idx = loc
@@ -299,7 +299,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                call pftc_glob%gen_corrs(self%reference, self%particle, real([x,y]), corrs)
+                call pftc_glob%gen_objfun_vals(self%reference, self%particle, real([x,y]), corrs)
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
                 if (cost < lowest_cost) then

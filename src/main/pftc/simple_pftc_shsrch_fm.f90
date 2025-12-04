@@ -283,7 +283,7 @@ contains
             do i = -self%hn,self%hn
                 do j = -self%hn,self%hn
                     shift = [self%coords(i), self%coords(j)]
-                    call pftc_glob%gen_corrs(self%ref, self%ptcl, shift, self%scores)
+                    call pftc_glob%gen_objfun_vals(self%ref, self%ptcl, shift, self%scores)
                     loc = maxloc(self%scores, dim=1)
                     if( self%scores(loc) > score )then
                         score  = self%scores(loc)

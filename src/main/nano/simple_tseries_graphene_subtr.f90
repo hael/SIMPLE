@@ -152,7 +152,7 @@ contains
         call pspec_img%polarize(pftc,1,.true.,.true.)
         ! rotational correlations
         call pftc%memoize_ptcls
-        call pftc%gen_corrs(1,1,corrs)
+        call pftc%gen_objfun_vals(1,1,[0.,0.],corrs)
         ! mask out non peak-shape values
         do i = 1,nrots
             il = i-1

@@ -52,9 +52,9 @@ contains
                 else
                     ! in-plane sampling
                     if( self%s%l_sh_first )then
-                        call pftc_glob%gen_corrs(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
-                        call pftc_glob%gen_corrs(iref, self%s%iptcl, inpl_corrs)
+                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
                     call squared_sampling(self%s%nrots, inpl_corrs, inds,&
                                         &s2D%smpl_ninpl, inpl_ind, order_ind, inpl_corr)

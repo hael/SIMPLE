@@ -53,9 +53,9 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! shc update
                 if( self%s%l_sh_first )then
-                    call pftc_glob%gen_corrs(iref, self%s%iptcl, self%s%xy_first, corrs)
+                    call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, corrs)
                 else
-                    call pftc_glob%gen_corrs(iref, self%s%iptcl, corrs)
+                    call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         corrs)
                 endif
                 inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
                 if( inpl_ind == 0 )then
