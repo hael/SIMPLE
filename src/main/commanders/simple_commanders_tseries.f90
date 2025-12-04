@@ -762,7 +762,6 @@ contains
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc') ! best objfun
-        if( .not. cline%defined('kweight')        ) call cline%set('kweight',  'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',        'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
         ! set mkdir to no (to avoid nested directory structure)
@@ -925,7 +924,6 @@ contains
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun for this kind of data
-        if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
         if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 

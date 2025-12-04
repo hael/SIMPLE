@@ -602,7 +602,7 @@ interface
 
     module subroutine gen_corrs_mag(self, iref, iptcl, ccs, kweight)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl
+        integer,             intent(in)    :: iref, iptcl
         real,                intent(inout) :: ccs(self%pftsz)
         logical, optional,   intent(in) :: kweight
     end subroutine gen_corrs_mag
@@ -616,104 +616,104 @@ interface
 
     module subroutine gen_corrs_1(self, iref, iptcl, cc, kweight)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl
-        real(sp),            intent(out) :: cc(self%nrots)
-        logical, optional,   intent(in) :: kweight
+        integer,             intent(in)    :: iref, iptcl
+        real(sp),            intent(out)   :: cc(self%nrots)
+        logical, optional,   intent(in)   :: kweight
     end subroutine gen_corrs_1
 
     module subroutine gen_corrs_2(self, iref, iptcl, shift, cc, kweight)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl
-        real(sp),            intent(in) :: shift(2)
-        real(sp),            intent(out) :: cc(self%nrots)
-        logical, optional,   intent(in) :: kweight
+        integer,             intent(in)    :: iref, iptcl
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(out)   :: cc(self%nrots)
+        logical, optional,   intent(in)    :: kweight
     end subroutine gen_corrs_2
 
     module subroutine gen_corrs_cc(self, iptcl, iref, corrs)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iptcl, iref
-        real(sp),            intent(out) :: corrs(self%nrots)
+        integer,             intent(in)    :: iptcl, iref
+        real(sp),            intent(out)   :: corrs(self%nrots)
     end subroutine gen_corrs_cc
 
     module subroutine gen_corrs_shifted_cc(self, pft_ref, iptcl, iref, corrs)
         class(polarft_calc), intent(inout) :: self
-        complex(sp),         intent(in) :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in) :: iptcl, iref
-        real(sp),            intent(out) :: corrs(self%nrots)
+        complex(sp),         intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)    :: iptcl, iref
+        real(sp),            intent(out)   :: corrs(self%nrots)
     end subroutine gen_corrs_shifted_cc
 
     module subroutine gen_corrs_weighted_cc(self, iptcl, iref, corrs)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iptcl, iref
-        real(sp),            intent(out) :: corrs(self%nrots)
+        integer,             intent(in)    :: iptcl, iref
+        real(sp),            intent(out)   :: corrs(self%nrots)
     end subroutine gen_corrs_weighted_cc
 
     module subroutine gen_corrs_shifted_weighted_cc(self, pft_ref, iptcl, iref, corrs)
         class(polarft_calc), intent(inout) :: self
-        complex(sp),         intent(in) :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in) :: iptcl, iref
-        real(sp),            intent(out) :: corrs(self%nrots)
+        complex(sp),         intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)    :: iptcl, iref
+        real(sp),            intent(out)   :: corrs(self%nrots)
     end subroutine gen_corrs_shifted_weighted_cc
 
     module subroutine gen_euclids(self, iptcl, iref, euclids)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iptcl, iref
-        real(sp),            intent(out) :: euclids(self%nrots)
+        integer,             intent(in)    :: iptcl, iref
+        real(sp),            intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids
 
     module subroutine gen_euclids_shifted(self, pft_ref, iptcl, iref, euclids)
         class(polarft_calc),  intent(inout) :: self
-        complex(sp), pointer, intent(in) :: pft_ref(:,:)
-        integer,              intent(in) :: iptcl, iref
-        real(sp),             intent(out) :: euclids(self%nrots)
+        complex(sp), pointer, intent(in)    :: pft_ref(:,:)
+        integer,              intent(in)    :: iptcl, iref
+        real(sp),             intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids_shifted
 
     module subroutine bidirectional_shift_search(self, iref, iptcl, irot, hn, shifts, grid1, grid2)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot, hn
-        real,                intent(in) :: shifts(-hn:hn)
-        real,                intent(out) :: grid1(-hn:hn,-hn:hn), grid2(-hn:hn,-hn:hn)
+        integer,             intent(in)    :: iref, iptcl, irot, hn
+        real,                intent(in)    :: shifts(-hn:hn)
+        real,                intent(out)   :: grid1(-hn:hn,-hn:hn), grid2(-hn:hn,-hn:hn)
     end subroutine bidirectional_shift_search
 
     module function gen_corr_for_rot_8_1(self, iref, iptcl, irot) result(val)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
+        integer,             intent(in)    :: iref, iptcl, irot
         real(dp) :: val
     end function gen_corr_for_rot_8_1
 
     module function gen_corr_for_rot_8_2(self, iref, iptcl, shvec, irot) result(val)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
-        real(dp),            intent(in) :: shvec(2)
+        integer,             intent(in)    :: iref, iptcl, irot
+        real(dp),            intent(in)    :: shvec(2)
         real(dp) :: val
     end function gen_corr_for_rot_8_2
 
     module function gen_corr_cc_for_rot_8(self, pft_ref, i) result(val)
         class(polarft_calc),  intent(inout) :: self
         complex(dp), pointer, intent(inout) :: pft_ref(:,:)
-        integer,              intent(in) :: i
+        integer,              intent(in)    :: i
         real(dp) :: val
     end function gen_corr_cc_for_rot_8
 
     module function gen_euclid_for_rot_8(self, pft_ref, iptcl) result(val)
         class(polarft_calc),  intent(inout) :: self
         complex(dp), pointer, intent(inout) :: pft_ref(:,:)
-        integer,              intent(in) :: iptcl
+        integer,              intent(in)    :: iptcl
         real(dp) :: val
     end function gen_euclid_for_rot_8
 
     module subroutine gen_corr_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
-        real(dp),            intent(in) :: shvec(2)
-        real(dp),            intent(out) :: f, grad(2)
+        integer,             intent(in)    :: iref, iptcl, irot
+        real(dp),            intent(in)    :: shvec(2)
+        real(dp),            intent(out)   :: f, grad(2)
     end subroutine gen_corr_grad_for_rot_8
 
     module subroutine gen_corr_cc_grad_for_rot_8(self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad)
         class(polarft_calc),  intent(inout) :: self
         complex(dp), pointer, intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,              intent(in) :: iptcl, irot
-        real(dp),             intent(out) :: f, grad(2)
+        integer,              intent(in)    :: iptcl, irot
+        real(dp),             intent(out)   :: f, grad(2)
     end subroutine gen_corr_cc_grad_for_rot_8
 
     module subroutine gen_euclid_grad_for_rot_8(self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad)

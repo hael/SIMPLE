@@ -58,7 +58,7 @@ contains
                     self%s%best_rot   = inpl_ind
                 endif
             end do
-            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
+            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight )then
                 ! back-calculating in-plane angle with k-weighing
                 if( self%s%l_sh_first )then
                     call pftc_glob%gen_corrs(self%s%best_class, self%s%iptcl, self%s%xy_first, corrs, kweight=.true.)

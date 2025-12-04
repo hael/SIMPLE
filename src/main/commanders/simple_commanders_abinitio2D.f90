@@ -391,7 +391,6 @@ contains
             call cline_cluster2D%set('wiener',    'full')
             call cline_cluster2D%set('ptclw',     'no')
             call cline_cluster2D%set('ml_reg',    'no')
-            call cline_cluster2D%set('kweight',   'default')
             call cline_cluster2D%set('cenlp',     params%cenlp)
             call cline_cluster2D%set('chunk',     'no')
             call set_automask2D_defaults( cline_cluster2D )

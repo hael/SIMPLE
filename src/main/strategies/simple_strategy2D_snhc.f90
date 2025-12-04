@@ -87,7 +87,7 @@ contains
                 self%s%best_corr  = cc_glob
                 self%s%best_rot   = inpl_glob
             endif
-            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
+            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight )then
                 ! back-calculating in-plane angle with k-weighing
                 if( found_better )then
                     if( self%s%l_sh_first )then
