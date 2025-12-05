@@ -10,7 +10,7 @@ use simple_gui_utils
 use simple_guistats,           only: guistats
 use simple_image_bin,          only: image_bin
 use simple_micproc
-use simple_moviewatcher
+use simple_stream_watcher
 use simple_nice
 use simple_parameters,         only: parameters
 use simple_particle_extractor, only: ptcl_extractor
@@ -40,16 +40,6 @@ type, extends(commander_base) :: commander_stream_abinitio2D
     procedure :: execute => exec_stream_abinitio2D
 end type commander_stream_abinitio2D
 
-! module constants
-character(len=*), parameter :: DIR_STREAM_COMPLETED = './spprojs_completed/' ! location for processed projects
-character(len=*), parameter :: MICSPPROJ_FNAME      = './streamdata.simple'
-character(len=*), parameter :: REJECTED_CLS_STACK   = './rejected_cls.mrc'
-integer,          parameter :: LONGTIME             = 60    ! time lag after which a movie/project is processed
-integer,          parameter :: WAITTIME             = 10    ! movie folder watched every WAITTIME seconds
-integer(kind=dp), parameter :: FLUSH_TIMELIMIT      = 900   ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
-integer,          parameter :: PAUSE_NITERS         = 5     ! # of iterations after which 2D analysis is paused
-integer,          parameter :: PAUSE_TIMELIMIT      = 600   ! time (secs) after which 2D analysis is paused
-
 contains
 
     ! Manages individual chunks/sets classification, matching & rejection
@@ -66,7 +56,7 @@ contains
         type(stream_http_communicator) :: http_communicator
         type(projs_list)               :: chunkslist, setslist
         type(oris)                     :: moldiamori, chunksizeori, nmicsori
-        type(moviewatcher)             :: project_buff
+        type(stream_watcher)             :: project_buff
         type(sp_project)               :: spproj_glob
         type(json_value), pointer      :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
         character(len=STDLEN)          :: chunk_part_env
@@ -178,7 +168,7 @@ contains
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! project watcher
-        project_buff = moviewatcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
+        project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         call simple_mkdir(PATH_HERE//DIR_STREAM_COMPLETED)
         ! Infinite loop
         nptcls_glob      = 0       ! global number of particles
@@ -972,7 +962,7 @@ contains
         type(stream_http_communicator) :: http_communicator
         type(json_value), pointer      :: latest_cls2D
         type(projs_list)               :: setslist
-        type(moviewatcher)             :: project_buff
+        type(stream_watcher)             :: project_buff
         type(sp_project)               :: spproj_glob
         type(oris)                     :: moldiamori             
         character(kind=CK,len=:), allocatable :: snapshot_filename
@@ -1055,7 +1045,7 @@ contains
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! project watcher
-        project_buff = moviewatcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
+        project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! Infinite loop
         iter              = 0
         nprojects         = 0        ! # of projects per iteration

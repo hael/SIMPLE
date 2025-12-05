@@ -1,10 +1,10 @@
 ! movie watcher for stream processing
-module simple_moviewatcher
+module simple_stream_watcher
 include 'simple_lib.f08'
 use simple_progress
 implicit none
 
-public :: moviewatcher
+public :: stream_watcher
 public :: workout_directory_structure, sniff_folders_SJ
 private
 #include "simple_local_flags.inc"
@@ -13,7 +13,7 @@ character(len=*), parameter :: WATCHER_HISTORY = 'watcher_history.txt'
 character(len=*), parameter :: WATCHER_DIRS    = 'watcher_dirs.txt'
 integer,          parameter :: RATE_INTERVAL   = 3600 ! 1 hour
 
-type moviewatcher
+type stream_watcher
     private
     type(string),    allocatable :: history(:)             !< history of movies detected
     type(string),    allocatable :: watch_dirs(:)          !< directories to watch
@@ -49,9 +49,9 @@ contains
     procedure          :: kill
 end type
 
-interface moviewatcher
+interface stream_watcher
     module procedure constructor
-end interface moviewatcher
+end interface stream_watcher
 
 contains
 
@@ -62,7 +62,7 @@ contains
         logical,       optional, intent(in) :: spproj
         integer,       optional, intent(in) :: nretries
         class(string), optional, intent(in) :: suffix_filter
-        type(moviewatcher) :: self
+        type(stream_watcher) :: self
         integer :: i
         logical :: l_movies
         call self%kill
@@ -117,14 +117,14 @@ contains
     end function constructor
 
     logical function does_exist( self )
-        class(moviewatcher), intent(in) :: self
+        class(stream_watcher), intent(in) :: self
         does_exist = self%exists
     end function does_exist
 
     ! I/O
 
     subroutine write_checkpoint( self )
-        class(moviewatcher), intent(in) :: self
+        class(stream_watcher), intent(in) :: self
         type(string) :: str_watcher_dirs
         if( self%exists )then
             str_watcher_dirs = WATCHER_DIRS
@@ -143,7 +143,7 @@ contains
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies, max_nmovies, chrono )
-        class(moviewatcher),       intent(inout) :: self
+        class(stream_watcher),       intent(inout) :: self
         integer,                   intent(out)   :: n_movies
         type(string), allocatable, intent(out)   :: movies(:)
         integer, optional,         intent(in)    :: max_nmovies
@@ -225,7 +225,7 @@ contains
 
     !>  \brief  append to history of previously processed movies/micrographs
     subroutine add2history_1(self, list)
-        class(moviewatcher),       intent(inout) :: self
+        class(stream_watcher),       intent(inout) :: self
         type(string), allocatable, intent(in)    :: list(:)
         integer :: i
         if( allocated(list) )then
@@ -238,7 +238,7 @@ contains
     !>  \brief  is for adding to the history of already reported files
     !>          absolute path is implied
     subroutine add2history_2( self, fname )
-        class(moviewatcher), intent(inout) :: self
+        class(stream_watcher), intent(inout) :: self
         class(string),       intent(in)    :: fname
         type(string), allocatable :: tmp_farr(:)
         integer :: n
@@ -259,7 +259,7 @@ contains
 
     !>  \brief  is for clearing the history of imported files
     subroutine clear_history( self )
-        class(moviewatcher), intent(inout) :: self
+        class(stream_watcher), intent(inout) :: self
         if( allocated(self%history) ) deallocate(self%history)
         self%n_history = 0
     end subroutine clear_history
@@ -267,7 +267,7 @@ contains
     !>  \brief  is for checking a file has already been reported
     !>          absolute path is implied
     logical function is_past( self, fname )
-        class(moviewatcher), intent(in) :: self
+        class(stream_watcher), intent(in) :: self
         class(string),       intent(in) :: fname
         type(string) :: fname1
         integer :: i
@@ -291,7 +291,7 @@ contains
     end function is_past
 
     subroutine detect_and_add_dirs( self, rootdir, SJdirstruct )
-        class(moviewatcher), intent(inout) :: self
+        class(stream_watcher), intent(inout) :: self
         type(string),        intent(in)    :: rootdir
         logical,             intent(in)    :: SJdirstruct
         type(string), allocatable :: dir_movies(:)
@@ -313,7 +313,7 @@ contains
 
     !>  \brief  is for adding a directory to watch
     subroutine add2watchdirs( self, fname )
-        class(moviewatcher), intent(inout) :: self
+        class(stream_watcher), intent(inout) :: self
         type(string),        intent(in)    :: fname
         type(string), allocatable :: tmp_farr(:)
         type(string)              :: abs_fname
@@ -351,7 +351,7 @@ contains
 
     !>  \brief  is for watching directories
     subroutine watchdirs( self, farray, chrono )
-        class(moviewatcher),       intent(in)    :: self
+        class(stream_watcher),       intent(in)    :: self
         type(string), allocatable, intent(inout) :: farray(:)
         logical,       optional,   intent(in)    :: chrono
         type(string), allocatable :: tmp_farr(:), tmp_farr2(:)
@@ -398,7 +398,7 @@ contains
 
     !>  \brief  is a destructor
     subroutine kill( self )
-        class(moviewatcher), intent(inout) :: self
+        class(stream_watcher), intent(inout) :: self
         self%watch_dir = ''
         self%regexp    = ''
         if( allocated(self%history)    ) deallocate(self%history)
@@ -498,4 +498,4 @@ contains
         endif
     end subroutine workout_directory_structure
 
-end module simple_moviewatcher
+end module simple_stream_watcher
