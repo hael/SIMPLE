@@ -431,14 +431,14 @@ contains
             if( l_has_mics )then
                 ! updating os_mic
                 do imic = nmics1+1,nmics1+nmics2
-                    ogid = self1%os_mic%get_int(i,'ogid') + og_offset
-                    call self1%os_mic%set(i,'ogid', ogid)
+                    ogid = self1%os_mic%get_int(imic,'ogid') + og_offset
+                    call self1%os_mic%set(imic,'ogid', ogid)
                 enddo
             endif
             if( l_has_ptcls )then
                 ! updating particles
                 do iptcl = nptcls1+1,nptcls1+nptcls2
-                    ogid = self1%os_ptcl2D%get_int(i,'ogid') + og_offset
+                    ogid = self1%os_ptcl2D%get_int(iptcl,'ogid') + og_offset
                     call self1%os_ptcl2D%set(iptcl, 'ogid', ogid)
                     call self1%os_ptcl3D%set(iptcl, 'ogid', ogid)
                 enddo
@@ -1493,6 +1493,7 @@ contains
             write(logfhandle,*) 'nptcl2D: ', self%os_ptcl2D%get_noris()
             THROW_HARD('iptcl index out of range; get_micname')
         end if
+        ! Assumes 1:1 mapping between micrographs and stacks
         imic = self%os_ptcl2D%get_int(iptcl, 'stkind')
         if(imic < 1 .or. imic > self%os_mic%get_noris()) then
             write(logfhandle,*) 'imic : ', imic
@@ -2416,19 +2417,15 @@ contains
         end select
     end function get_ctfflag_type
 
-    logical function has_phaseplate( self, oritype, iptcl )
+    logical function has_phaseplate( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        integer,         optional, intent(in)    :: iptcl
         type(string) :: phaseplate
-        integer      :: ind
         has_phaseplate = .false.
         if( trim(oritype) .eq. 'cls3D' ) return
-        ind = 1
-        if( present(iptcl) ) ind = iptcl
         ! get info
-        if( self%os_stk%isthere(ind, 'phaseplate') )then
-            phaseplate = self%os_stk%get_str(ind, 'phaseplate')
+        if( self%os_stk%isthere(1, 'phaseplate') )then
+            phaseplate = self%os_stk%get_str(1, 'phaseplate')
         else
             phaseplate = 'no'
         endif
