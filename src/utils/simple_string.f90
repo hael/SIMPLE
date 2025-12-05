@@ -3,9 +3,9 @@ use simple_error, only: simple_exception
 use simple_defs_string
 use simple_defs
 implicit none
-private
 
 public :: string
+private
 
 interface string
     module procedure char2str

@@ -2,19 +2,15 @@ module simple_stream_p04_refpick_extract
 include 'simple_lib.f08'
 use simple_cmdline,               only: cmdline
 use simple_commander_base,        only: commander_base
-use simple_guistats,              only: guistats
 use simple_stream_watcher,        only: stream_watcher
 use simple_parameters,            only: parameters
 use simple_qsys_env,              only: qsys_env
 use simple_sp_project,            only: sp_project
 use simple_starproject_stream,    only: starproject_stream
 use simple_commanders_preprocess, only: commander_make_pickrefs
-use simple_binoris_io
 use simple_gui_utils
-use simple_nice
 use simple_progress
 use simple_qsys_funs
-use simple_starfile
 use simple_stream_communicator
 use simple_stream_utils
 use simple_timer
@@ -36,7 +32,6 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(commander_make_pickrefs)          :: xmake_pickrefs
         type(parameters)                       :: params
-        integer,                   parameter   :: INACTIVE_TIME = 900  ! inactive time triggers writing of project file
         logical,                   parameter   :: DEBUG_HERE    = .false.
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(projrecord),          allocatable :: projrecords(:), projrecords_main(:)
@@ -239,16 +234,16 @@ contains
             call cline_pick_extract%set('extract','no')
         endif
         ! Infinite loop
-        last_injection        = simple_gettime()
-        prev_stacksz          = 0
-        iter                  = 0
-        n_imported            = 0   ! global number of imported processed micrographs
-        n_failed_jobs         = 0
-        n_added               = 0   ! global number of micrographs added to processing stack
-        l_projects_left       = .false.
-        l_haschanged          = .false.
-        l_once                = .true.
-        pause_import          = .false.
+        last_injection  = simple_gettime()
+        prev_stacksz    = 0
+        iter            = 0
+        n_imported      = 0   ! global number of imported processed micrographs
+        n_failed_jobs   = 0
+        n_added         = 0   ! global number of micrographs added to processing stack
+        l_projects_left = .false.
+        l_haschanged    = .false.
+        l_once          = .true.
+        pause_import    = .false.
         do
             if( file_exists(TERM_STREAM) .or. http_communicator%exit) then
                 ! termination

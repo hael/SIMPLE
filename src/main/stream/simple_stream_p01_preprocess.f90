@@ -8,15 +8,11 @@ use simple_parameters,           only: parameters
 use simple_qsys_env,             only: qsys_env
 use simple_sp_project,           only: sp_project
 use simple_starproject_stream,   only: starproject_stream
-use simple_stream_watcher,       only: sniff_folders_SJ, workout_directory_structure
-use simple_stream_watcher,       only: stream_watcher
-use simple_binoris_io
+use simple_stream_watcher
 use simple_commanders_preprocess
 use simple_gui_utils
 use simple_nice
 use simple_progress
-use simple_qsys_funs
-use simple_starfile
 use simple_stream_communicator
 use simple_stream_utils
 use simple_timer
@@ -36,20 +32,19 @@ contains
     subroutine exec_stream_p01_preprocess( self, cline )
         class(stream_p01_preprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(parameters)                            :: params
-        type(stream_http_communicator)              :: http_communicator
-        type(json_value),             pointer       :: latest_micrographs, histograms, timeplots
-        integer,                      parameter     :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
-        logical,                      parameter     :: DEBUG_HERE      = .false.
-        class(cmdline),               allocatable   :: completed_jobs_clines(:), failed_jobs_clines(:)
-        type(cmdline)                               :: cline_exec
-        type(qsys_env)                              :: qenv
-        type(stream_watcher)                        :: movie_buff
-        type(sp_project)                            :: spproj_glob    ! global project
-        type(starproject_stream)                    :: starproj_stream
-        type(string),                 allocatable   :: movies(:), dir_movies(:)
-        type(string)                                :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, directory, str_dir, str_thumb
-        character(len=STDLEN)                       :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
+        type(parameters)               :: params
+        type(stream_http_communicator) :: http_communicator
+        type(json_value), pointer      :: latest_micrographs, histograms, timeplots
+        logical,          parameter    :: DEBUG_HERE      = .false.
+        class(cmdline),  allocatable   :: completed_jobs_clines(:), failed_jobs_clines(:)
+        type(cmdline)                  :: cline_exec
+        type(qsys_env)                 :: qenv
+        type(stream_watcher)           :: movie_buff
+        type(sp_project)               :: spproj_glob    ! global project
+        type(starproject_stream)       :: starproj_stream
+        type(string), allocatable      :: movies(:), dir_movies(:)
+        type(string)                   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, directory, str_dir, str_thumb
+        character(len=STDLEN)          :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         real        :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
         integer     :: movies_set_counter, import_counter, nwaits, nmovs2importperiter
