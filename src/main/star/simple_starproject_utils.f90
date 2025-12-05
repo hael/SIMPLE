@@ -150,6 +150,7 @@ contains
     subroutine split_dataline(line, splitline)
         class(string), intent(in)    :: line
         class(string), intent(inout) :: splitline(:)
+        character(len=XLONGSTRLEN)   :: buffer
         integer :: iend, istart, flagid, end
         flagid = 1
         iend   = 1
@@ -160,7 +161,8 @@ contains
             end do
             end  = line%strlen_trim()
             iend = index(line%to_char([istart + 1,end]), ' ') + istart
-            splitline(flagid) =  line%to_char([istart,iend])
+            call line%to_static([istart,iend], buffer)
+            splitline(flagid) = trim(buffer)
             istart = iend + 1
             flagid = flagid + 1
         end do
