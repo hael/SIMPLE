@@ -10,6 +10,7 @@ use simple_hash_tester
 use simple_cmdline_tester
 use simple_ori_tester
 use simple_oris_tester
+use simple_projrec_list_tester
 ! hand-written unit tests
 use simple_aff_prop,       only: test_aff_prop
 use simple_ftexp_shsrch,   only: test_ftexp_shsrch
@@ -35,7 +36,10 @@ call run_all_hash_tests
 call run_all_cmdline_tests
 call run_all_ori_tests
 call run_all_oris_tests
+call run_all_projrec_list_tests
 call report_summary()
+
+stop
 ! hand-written unit tests
 write(*,*)'VALIDATING UI JSON FILE:'
 call validate_ui_json

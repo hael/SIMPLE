@@ -9,7 +9,7 @@ public :: run_all_string_tests
 contains
 
     subroutine run_all_string_tests
-        write(*,'(A)') '**** runing all string tests ****'
+        write(*,'(A)') '**** running all string tests ****'
         call test_default_and_kill()
         call test_assign_and_ctor()
         call test_append_operator()
