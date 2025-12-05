@@ -5,7 +5,7 @@ use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
-use simple_moviewatcher,   only: moviewatcher
+use simple_stream_watcher,   only: stream_watcher
 use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
@@ -364,7 +364,7 @@ contains
         type(sp_project)               :: spproj
         type(oris)                     :: deftab
         type(ctfparams)                :: ctfvars, prev_ctfvars
-        type(moviewatcher)             :: movie_buff
+        type(stream_watcher)             :: movie_buff
         type(string)                   :: phaseplate, boxfname
         type(string), allocatable      :: boxfnames(:), movfnames(:) 
         logical :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
@@ -445,7 +445,7 @@ contains
             call read_filetable(params%filetab, movfnames)
         else if( inputted_dir_movies) then
             ! movie watcher init for files older that 1 second (assumed already in place at exec)
-            movie_buff = moviewatcher(1,params%dir_movies)
+            movie_buff = stream_watcher(1,params%dir_movies)
             call movie_buff%watch( nmovf, movfnames )
             call movie_buff%kill
         endif

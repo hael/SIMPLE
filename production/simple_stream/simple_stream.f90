@@ -4,27 +4,29 @@ include 'simple_lib.f08'
 use simple_user_interface, only: make_user_interface, list_stream_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers
-use simple_commanders_stream
+use simple_stream_p01_preprocess
+use simple_stream_p02_assign_optics
+use simple_stream_p03_opening2D
+use simple_stream_p04_refpick_extract
 use simple_commanders_stream2D
-
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROGRAMS
-type(commander_stream_gen_pickrefs)     :: xgen_pickrefs
-type(commander_stream_preprocess)       :: xpreprocess
-type(commander_stream_pick_extract)     :: xpick_extract
-type(commander_stream_assign_optics)    :: xassign_optics
-type(commander_stream_sieve_cavgs)      :: xsieve_cavgs
-type(commander_stream_abinitio2D)       :: xabinitio2D_stream
+type(stream_p01_preprocess)         :: xpreprocess
+type(stream_p02_assign_optics)      :: xassign_optics
+type(stream_p03_opening2D)          :: xgen_opening2D
+type(stream_p04_refpick_extract)    :: xpick_extract
+type(commander_stream_sieve_cavgs)  :: xsieve_cavgs
+type(commander_stream_abinitio2D)   :: xabinitio2D_stream
 
 ! OTHER DECLARATIONS
-character(len=STDLEN)                   :: xarg, prg
-character(len=XLONGSTRLEN)              :: entire_line
-type(cmdline)                           :: cline
-integer                                 :: cmdstat, cmdlen, pos
-integer(timer_int_kind)                 :: t0
-real(timer_int_kind)                    :: rt_exec
+character(len=STDLEN)               :: xarg, prg
+character(len=XLONGSTRLEN)          :: entire_line
+type(cmdline)                       :: cline
+integer                             :: cmdstat, cmdlen, pos
+integer(timer_int_kind)             :: t0
+real(timer_int_kind)                :: rt_exec
 
 ! start timer
 t0 = tic()
@@ -46,7 +48,7 @@ call cline%parse
 call script_exec(cline, string(trim(prg)), string('simple_stream'))
 select case(trim(prg))
     case( 'gen_pickrefs' )
-        call xgen_pickrefs%execute(cline)
+        call xgen_opening2D%execute(cline)
     case( 'preproc' )
         call xpreprocess%execute(cline)
     case( 'pick_extract' )
@@ -65,7 +67,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b41809da')
+call simple_print_git_version('8318bb4c')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

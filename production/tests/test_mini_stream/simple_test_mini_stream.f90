@@ -5,7 +5,7 @@ use simple_parameters,          only: parameters
 use simple_commanders_project,  only: commander_new_project, commander_import_movies
 use simple_commanders_validate, only: commander_mini_stream
 use simple_commanders_project,  only: commander_selection
-use simple_moviewatcher,        only: moviewatcher
+use simple_stream_watcher,        only: stream_watcher
 use simple_commanders_preprocess 
 use simple_sp_project
 implicit none
@@ -23,7 +23,7 @@ type(commander_import_movies)    :: ximport_movies
 type(commander_mini_stream)      :: xmini_stream
 type(commander_selection)        :: xsel
 type(sp_project)                 :: spproj
-type(moviewatcher)               :: movie_buff
+type(stream_watcher)               :: movie_buff
 integer                          :: i, ndata_sets, status, n_nonzero, nmovf
 type(string)                     :: abspath, projfile
 character(len=*), parameter      :: filetab_file='filetab.txt'
@@ -65,7 +65,7 @@ do i = 1, ndata_sets
     call cline_new_project%kill()
     projfile = params%projname//'.simple'
     ! create filetab with a subset of overshoot randomly selected movies
-    movie_buff = moviewatcher(1,params%dir_movies)
+    movie_buff = stream_watcher(1,params%dir_movies)
     call movie_buff%watch(nmovf, movfnames)
     call movie_buff%kill
     filetab = sample_filetab(movfnames, ceiling(real(params%nran)*OVERSHOOT))
