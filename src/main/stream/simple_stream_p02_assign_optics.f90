@@ -4,17 +4,13 @@ use simple_cmdline,            only: cmdline
 use simple_commander_base,     only: commander_base
 use simple_stream_watcher,     only: stream_watcher
 use simple_parameters,         only: parameters
-use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project
 use simple_starproject_stream, only: starproject_stream
 use simple_gui_utils
-use simple_nice
 use simple_progress
 use simple_qsys_funs
-use simple_starfile
 use simple_stream_communicator
 use simple_stream_utils
-use simple_timer
 implicit none
 
 public :: stream_p02_assign_optics
@@ -31,17 +27,17 @@ contains
     subroutine exec_stream_p02_assign_optics( self, cline )
         class(stream_p02_assign_optics), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)                       :: params
-        type(stream_http_communicator)         :: http_communicator
-        type(stream_watcher)                   :: project_buff
-        type(sp_project)                       :: spproj, spproj_part
-        type(starproject_stream)               :: starproj_stream
-        type(json_value),          pointer     :: optics_assignments, optics_group     
-        type(json_value),          pointer     :: optics_group_coordinates,  optics_group_coordinate        
-        type(string),              allocatable :: projects(:)
-        type(string)                           :: str_dir
-        integer                                :: nprojects, iproj, iori, new_oris, nimported, i, j, map_count, imap
-        logical                                :: found
+        type(parameters)               :: params
+        type(stream_http_communicator) :: http_communicator
+        type(stream_watcher)           :: project_buff
+        type(sp_project)               :: spproj, spproj_part
+        type(starproject_stream)       :: starproj_stream
+        type(json_value),  pointer     :: optics_assignments, optics_group     
+        type(json_value),  pointer     :: optics_group_coordinates,  optics_group_coordinate        
+        type(string),      allocatable :: projects(:)
+        type(string)                   :: str_dir
+        integer                        :: nprojects, iproj, iori, new_oris, nimported, i, j, map_count, imap
+        logical                        :: found
         map_count = 0
         call cline%set('mkdir', 'yes')
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')

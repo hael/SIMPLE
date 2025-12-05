@@ -16,6 +16,7 @@ integer,          parameter :: CLASS2D_NCLS               = 200
 integer,          parameter :: CLASS2D_NPARTS             = 10
 integer,          parameter :: CLASS2D_NTHR               = 8
 integer,          parameter :: DEFAULT_NTHR_MASTER        = 4                          ! number of threads requested from queue system for master processes
+integer,          parameter :: INACTIVE_TIME              = 900                        ! inactive time trigger for writing project file
 integer,          parameter :: LONGTIME                   = 60                         ! time lag after which a movie/project is processed
 integer,          parameter :: NMICS_DELTA                = 100                        ! number of micrographs to increment nmics by when user requests more particles to be used in reference generation
 integer,          parameter :: OPENING2D_NTHR             = 32                         ! number of threads requested from queue system for master process. overrides default

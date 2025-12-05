@@ -1,24 +1,18 @@
 module simple_stream_p03_opening2D
 include 'simple_lib.f08'
-use simple_cmdline,            only: cmdline
-use simple_commander_base,     only: commander_base
-use simple_guistats,           only: guistats
-use simple_stream_watcher,     only: stream_watcher
-use simple_parameters,         only: parameters
-use simple_qsys_env,           only: qsys_env
-use simple_sp_project,         only: sp_project
-use simple_starproject_stream, only: starproject_stream
-use simple_binoris_io
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_stream_watcher, only: stream_watcher
+use simple_parameters,     only: parameters
+use simple_sp_project,     only: sp_project
+use simple_mini_stream_utils
+use simple_commanders_abinitio2D
 use simple_commanders_cluster2D_stream
 use simple_commanders_preprocess
 use simple_gui_utils
-use simple_nice
 use simple_progress
-use simple_qsys_funs
-use simple_starfile
 use simple_stream_communicator
 use simple_stream_utils
-use simple_timer
 implicit none
 
 public :: stream_p03_opening2D
@@ -33,35 +27,33 @@ end type stream_p03_opening2D
 contains
 
     subroutine exec_stream_p03_opening2D( self, cline )
-        use simple_mini_stream_utils
-        use simple_commanders_abinitio2D
         implicit none
         class(stream_p03_opening2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters)                       :: params
-        type(stream_http_communicator)         :: http_communicator, http_gen_pickrefs_communicator
-        type(stream_watcher)                   :: project_buff
-        type(sp_project)                       :: spproj, spproj_part
-        type(cmdline)                          :: cline_extract, cline_abinitio2D, cline_shape_rank
-        type(commander_extract_distr)          :: xextract
-        type(commander_abinitio2D)             :: xabinitio2D
-        type(commander_shape_rank_cavgs)       :: xshape_rank
-        type(oris)                             :: nmics_ori
-        type(json_value),          pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
-        type(string),              allocatable :: projects(:)
-        character(len=:),          allocatable :: buffer
-        type(string)                           :: final_selection_source, cavgsstk, mapfileprefix, str_dir, str_thumb, str_box
-        integer,                   allocatable :: cavg_inds(:)
-        character(len=*),          parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
-        integer,                   parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
-        real,                      parameter   :: LPSTOP = 8.
-        integer,                   allocatable :: final_selection(:), final_boxsize(:)
-        integer                                :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
-        integer                                :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt, optics_map_id
-        integer                                :: n_non_zero, nmics
-        logical                                :: found, increase_nmics = .false.
-        logical                                :: restart_requested
-        real                                   :: mskdiam_estimate, smpd_stk
+        type(parameters)                 :: params
+        type(stream_http_communicator)   :: http_communicator, http_gen_pickrefs_communicator
+        type(stream_watcher)             :: project_buff
+        type(sp_project)                 :: spproj, spproj_part
+        type(cmdline)                    :: cline_extract, cline_abinitio2D, cline_shape_rank
+        type(commander_extract_distr)    :: xextract
+        type(commander_abinitio2D)       :: xabinitio2D
+        type(commander_shape_rank_cavgs) :: xshape_rank
+        type(oris)                       :: nmics_ori
+        type(json_value),    pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
+        type(string),        allocatable :: projects(:)
+        character(len=:),    allocatable :: buffer
+        type(string)                     :: final_selection_source, cavgsstk, mapfileprefix, str_dir, str_thumb, str_box
+        integer,             allocatable :: cavg_inds(:)
+        character(len=*),    parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
+        integer,             parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
+        real,                parameter   :: LPSTOP = 8.
+        integer,             allocatable :: final_selection(:), final_boxsize(:)
+        integer                          :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
+        integer                          :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt, optics_map_id
+        integer                          :: n_non_zero, nmics
+        logical                          :: found, increase_nmics = .false.
+        logical                          :: restart_requested
+        real                             :: mskdiam_estimate, smpd_stk
         if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',     200)

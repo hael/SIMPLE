@@ -8,25 +8,27 @@ use simple_stream_p01_preprocess
 use simple_stream_p02_assign_optics
 use simple_stream_p03_opening2D
 use simple_stream_p04_refpick_extract
+use simple_stream_p05_sieve_cavgs
+use simple_stream_p06_pool2D
 use simple_commanders_stream2D
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROGRAMS
-type(stream_p01_preprocess)         :: xpreprocess
-type(stream_p02_assign_optics)      :: xassign_optics
-type(stream_p03_opening2D)          :: xgen_opening2D
-type(stream_p04_refpick_extract)    :: xpick_extract
-type(commander_stream_sieve_cavgs)  :: xsieve_cavgs
-type(commander_stream_abinitio2D)   :: xabinitio2D_stream
+type(stream_p01_preprocess)       :: xpreprocess
+type(stream_p02_assign_optics)    :: xassign_optics
+type(stream_p03_opening2D)        :: xopening2D
+type(stream_p04_refpick_extract)  :: xpick_extract
+type(stream_p05_sieve_cavgs)      :: xsieve_cavgs 
+type(stream_p06_pool2D)           :: xpool2D
 
 ! OTHER DECLARATIONS
-character(len=STDLEN)               :: xarg, prg
-character(len=XLONGSTRLEN)          :: entire_line
-type(cmdline)                       :: cline
-integer                             :: cmdstat, cmdlen, pos
-integer(timer_int_kind)             :: t0
-real(timer_int_kind)                :: rt_exec
+character(len=STDLEN)             :: xarg, prg
+character(len=XLONGSTRLEN)        :: entire_line
+type(cmdline)                     :: cline
+integer                           :: cmdstat, cmdlen, pos
+integer(timer_int_kind)           :: t0
+real(timer_int_kind)              :: rt_exec
 
 ! start timer
 t0 = tic()
@@ -47,18 +49,18 @@ call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_stream'))
 select case(trim(prg))
-    case( 'gen_pickrefs' )
-        call xgen_opening2D%execute(cline)
     case( 'preproc' )
         call xpreprocess%execute(cline)
-    case( 'pick_extract' )
-        call xpick_extract%execute(cline)
     case( 'assign_optics' )
         call xassign_optics%execute(cline)
+    case( 'gen_pickrefs','opening2D' ) ! to maintain GUI support
+        call xopening2D%execute(cline)
+    case( 'pick_extract' )
+        call xpick_extract%execute(cline)
     case( 'sieve_cavgs' )
         call xsieve_cavgs%execute(cline)
-    case( 'abinitio2D_stream' )
-        call xabinitio2D_stream%execute(cline)
+    case( 'abinitio2D_stream','pool2D' )
+        call xpool2D%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
@@ -67,7 +69,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('8318bb4c')
+call simple_print_git_version('cb6f5769')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
