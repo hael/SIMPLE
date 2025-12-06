@@ -3,7 +3,7 @@ use simple_string, only: string
 use simple_defs
 implicit none
 private
-public  :: assert_true, assert_int, assert_real, assert_char, assert_string_eq, assert_double
+public  :: assert_true, assert_int, assert_real, assert_char, assert_string_eq, assert_double, assert_false
 public  :: tests_run, tests_failed, report_summary
 integer :: tests_run    = 0
 integer :: tests_failed = 0
@@ -70,22 +70,30 @@ contains
         character(len=*), intent(in)   :: msg
         real(dp), intent(in), optional :: ulp_tol
         real(dp) :: tol
-
         ! interpret ulp_tol as a multiplier of machine epsilon
         if (present(ulp_tol)) then
             tol = ulp_tol * epsilon(1.0_dp)
         else
             tol = 10.0_dp * epsilon(1.0_dp)
         end if
-
         if (abs(expected - actual) > tol) then
+            tests_failed = tests_failed + 1
             write(*,'(A,ES24.16,A,ES24.16)') 'ASSERT_DOUBLE FAILED: ', expected, ' /= ', actual
             write(*,'(A,ES14.6)') '  |Δ| = ', abs(expected - actual)
             write(*,'(A,ES14.6)') '  tol = ', tol
             write(*,'(A)') '  '//trim(msg)
-            stop 1
         end if
     end subroutine assert_double
+
+    subroutine assert_false(condition, message)
+        logical, intent(in) :: condition
+        character(*), intent(in), optional :: message
+        if (condition) then
+            tests_failed = tests_failed + 1
+            print *, 'Assertion (assert_false) failed!'
+            if (present(message)) print *, '  Message: ', message
+        end if
+    end subroutine assert_false
 
     subroutine report_summary()
         if (tests_failed == 0) then

@@ -179,13 +179,14 @@ contains
         allocate(arr(n))
         i = 0
         diams_iter = self%diameters%begin()
-        do while (diams_iter%has_next())
+        do while (diams_iter%has_value())
             i = i + 1
-            call diams_iter%next(any)
+            call diams_iter%get(any)
             select type(any)
                 type is (real(kind(areal)))
                     arr(i) = any
             end select
+            call diams_iter%next()
         end do
     end subroutine get_diameters
     
@@ -203,19 +204,20 @@ contains
         allocate(arr(n))
         i = 0
         diams_iter = self%diameters%begin()
-        do while (diams_iter%has_next())
+        do while (diams_iter%has_value())
             i = i + 1
-            call diams_iter%next(any)
+            call diams_iter%get(any)
             select type(any)
                 type is (real(kind(areal)))
                     arr(i) = any
             end select
+            call diams_iter%next()
         end do
         call diamsfile%new(fname, 2, i)
         call diamsfile%write(arr)
         call diamsfile%kill()
-        if(allocated(any)) deallocate(any)
         if(allocated(arr)) deallocate(arr)
+        if(allocated(any)) deallocate(any)
     end subroutine write_diameters
 
     ! for writing coordinates & diameters
@@ -242,14 +244,14 @@ contains
         xpos_iter = self%xpos%begin()
         ypos_iter = self%ypos%begin()
         i = 0
-        do while (xpos_iter%has_next())
+        do while (xpos_iter%has_value())
             i = i + 1
-            call xpos_iter%next(any)
+            call xpos_iter%get(any)
             select type(any)
                 type is (integer(kind(i)))
                     x = any
             end select
-            call ypos_iter%next(any)
+            call ypos_iter%get(any)
             select type(any)
                 type is (integer(kind(i)))
                     y = any
@@ -257,9 +259,12 @@ contains
             x = x - box_here/2
             y = y - box_here/2
             write(funit,'(4I7,2F8.1)') x, y, box_here, box_here, diams(i)
+            call xpos_iter%next()
+            call ypos_iter%next()
         end do
         call fclose(funit)
-        deallocate(diams,any)
+        if(allocated(diams)) deallocate(diams)
+        if(allocated(any)  ) deallocate(any)
     end subroutine write_pos_and_diams
 
     subroutine kill( self )
