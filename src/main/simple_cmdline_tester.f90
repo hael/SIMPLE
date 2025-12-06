@@ -12,6 +12,7 @@ public :: run_all_cmdline_tests
 contains
 
     subroutine run_all_cmdline_tests()
+        write(*,'(A)') '**** running all cmdline tests ****'
         call test_set_and_get_numeric()
         call test_set_and_get_char_and_string()
         call test_delete_behavior()
@@ -20,7 +21,7 @@ contains
         call test_copy_and_assignment()
         call test_read_parsing()
         call test_gen_job_descr()
-        write(*,'(A)') 'simple_cmdline: ALL TESTS PASSED'
+        ! call report_summary()
     end subroutine run_all_cmdline_tests
 
     !-----------------------------------------

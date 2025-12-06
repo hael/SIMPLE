@@ -11,6 +11,7 @@ public :: run_all_hash_tests
 contains
 
     subroutine run_all_hash_tests
+        write(*,'(A)') '**** running all hash tests ****'
         call test_constructor_and_kill()
         call test_push_and_set()
         call test_delete()
@@ -19,7 +20,7 @@ contains
         call test_get_keys_and_get_str()
         call test_hash2str_and_strlen()
         call test_copy_and_realloc()
-        write(*,'(A)') 'simple_hash: ALL TESTS PASSED'
+        ! call report_summary()
     end subroutine run_all_hash_tests
 
     !---------------------------

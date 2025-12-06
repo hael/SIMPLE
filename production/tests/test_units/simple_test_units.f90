@@ -29,9 +29,9 @@ folder = './SIMPLE_TEST_UNITS_'//datestr
 call simple_mkdir(folder)
 call simple_chdir(folder)
 ! core library tests generated with help from chatgpt
-call run_all_string_tests
-call run_all_syslib_tests
-call run_all_fileio_tests
+call run_all_string_tests !#
+call run_all_syslib_tests !#
+call run_all_fileio_tests !#
 call run_all_chash_tests
 call run_all_hash_tests
 call run_all_list_tests
@@ -42,6 +42,7 @@ call run_all_projrec_list_tests
 call report_summary()
 
 stop
+
 ! hand-written unit tests
 write(*,*)'VALIDATING UI JSON FILE:'
 call validate_ui_json

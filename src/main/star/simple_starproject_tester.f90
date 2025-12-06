@@ -64,6 +64,7 @@ contains
         call test_relion_writer_micrographs()
         call test_roundtrip_micrographs()
         write(*,'(A)') "**** Completed big integration tests (Part 4/4) ****"
+        ! call report_summary()
     end subroutine run_all_starproject_tests
 
     !=======================================================================
