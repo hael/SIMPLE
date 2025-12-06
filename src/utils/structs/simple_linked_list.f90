@@ -3,6 +3,7 @@ implicit none
 
 public :: linked_list, list_iterator
 private
+#include "simple_local_flags.inc"
 
 type :: node
     class(*), allocatable :: value
@@ -17,60 +18,45 @@ type :: linked_list
     type(node), pointer :: tail => null()
     integer             :: n    = 0
 contains
+    ! construction/lifecycle
+    !--push/pop
     procedure :: push_front
     procedure :: push_back
     procedure :: pop_front
+    !--destructor
+    procedure :: kill
+    ! accessors
     procedure :: front
     procedure :: back
     procedure :: at
-    procedure :: kill
+    ! checkers
     procedure :: size
     procedure :: is_empty
-    procedure :: begin ! iterator to first
+    ! list operations
+    procedure :: assign
+    procedure :: append
+    procedure :: slice
+    ! iteraton
+    procedure :: begin
+    procedure :: end_iter
 end type linked_list
 
 type :: list_iterator
     private
     type(node), pointer :: current => null()
 contains
-    procedure :: has_next
-    procedure :: next  => iter_next
+    procedure :: has_value     ! replacement for has_next
+    procedure :: next
+    procedure :: get
+    procedure :: equals
+    procedure :: advance
+    procedure :: index
 end type list_iterator
 
 contains
 
-    pure subroutine kill_node(self)
-        type(node), intent(inout) :: self
-        if (allocated(self%value)) deallocate(self%value)
-        nullify(self%next)
-    end subroutine kill_node
-
-    pure elemental integer function size(self) result(k)
-        class(linked_list), intent(in) :: self
-        k = self%n
-    end function size
-
-    pure logical function is_empty(self) result(tf)
-        class(linked_list), intent(in) :: self
-        tf = (self%n == 0)
-    end function is_empty
-
-    elemental subroutine kill(self)
-        class(linked_list), intent(inout) :: self
-        type(node), pointer :: p, q
-        p => self%head
-        do while (associated(p))
-            q => p%next
-            call kill_node(p)  ! dealloc value & nullify next
-            deallocate(p)
-            p => q
-        end do
-        nullify(self%head, self%tail)
-        self%n = 0
-    end subroutine kill
-
     !======================
-    ! Push operations
+    ! construction/lifecycle
     !======================
 
     subroutine push_front(self, x)
@@ -87,7 +73,7 @@ contains
 
     subroutine push_back(self, x)
         class(linked_list), intent(inout) :: self
-        class(*), intent(in)             :: x
+        class(*),           intent(in)    :: x
         type(node), pointer :: p
         allocate(p)
         allocate(p%value, source=x)
@@ -101,13 +87,9 @@ contains
         self%n = self%n + 1
     end subroutine push_back
 
-    !======================
-    ! Pop / access
-    !======================
-
     subroutine pop_front(self, x, had_value)
         class(linked_list),    intent(inout) :: self
-        class(*), allocatable, intent(out)   :: x
+        class(*), allocatable, intent(inout) :: x
         logical, optional,     intent(out)   :: had_value
         type(node), pointer :: p
         if (.not. associated(self%head)) then
@@ -118,6 +100,7 @@ contains
         self%head => p%next
         if (.not. associated(self%head)) nullify(self%tail)
         if (allocated(p%value)) then
+            if( allocated(x) ) deallocate(x)
             allocate(x, source=p%value)
             if (present(had_value)) had_value = .true.
         else
@@ -128,24 +111,51 @@ contains
         self%n = self%n - 1
     end subroutine pop_front
 
+    ! helper
+    pure subroutine kill_node(self)
+        type(node), intent(inout) :: self
+        if (allocated(self%value)) deallocate(self%value)
+        nullify(self%next)
+    end subroutine kill_node
+
+    elemental subroutine kill(self)
+        class(linked_list), intent(inout) :: self
+        type(node), pointer :: p, q
+        p => self%head
+        do while (associated(p))
+            q => p%next
+            call kill_node(p)  ! dealloc value & nullify next
+            deallocate(p)
+            p => q
+        end do
+        nullify(self%head, self%tail)
+        self%n = 0
+    end subroutine kill
+
+    !======================
+    ! Accessors
+    !======================
+
     subroutine front(self, x)
-        class(linked_list),    intent(in)  :: self
-        class(*), allocatable, intent(out) :: x
+        class(linked_list),    intent(in)    :: self
+        class(*), allocatable, intent(inout) :: x
         if (.not. associated(self%head)) stop "front(): list is empty"
+        if( allocated(x) ) deallocate(x)
         allocate(x, source=self%head%value)
     end subroutine front
 
     subroutine back(self, x)
-        class(linked_list),    intent(in)  :: self
-        class(*), allocatable, intent(out) :: x
+        class(linked_list),     intent(in)    :: self
+        class(*), allocatable,  intent(inout) :: x
         if (.not. associated(self%tail)) stop "back(): list is empty"
+        if( allocated(x) ) deallocate(x)
         allocate(x, source=self%tail%value)
     end subroutine back
 
     subroutine at(self, idx, x)
-        class(linked_list),    intent(in)  :: self
-        integer,               intent(in)  :: idx   ! 1-based index
-        class(*), allocatable, intent(out) :: x
+        class(linked_list),    intent(in)    :: self
+        integer,               intent(in)    :: idx   ! 1-based index
+        class(*), allocatable, intent(inout) :: x
         type(node), pointer :: p
         integer :: i
         if (idx < 1 .or. idx > self%n) stop "at(): index out of range"
@@ -153,8 +163,82 @@ contains
         do i = 2, idx
             p => p%next
         end do
+        if( allocated(x) ) deallocate(x)
         allocate(x, source=p%value)
     end subroutine at
+
+    !======================
+    ! Checkers
+    !======================
+
+    pure elemental integer function size(self) result(k)
+        class(linked_list), intent(in) :: self
+        k = self%n
+    end function size
+
+    pure logical function is_empty(self) result(tf)
+        class(linked_list), intent(in) :: self
+        tf = (self%n == 0)
+    end function is_empty
+
+    !======================
+    ! List operations
+    !======================
+
+    ! deep polymorphic copy
+    subroutine assign(self, other)
+        class(linked_list), intent(inout) :: self
+        class(linked_list), intent(in)    :: other
+        type(node), pointer :: p
+        if (associated(self%head)) call self%kill()
+        p => other%head
+        do while (associated(p))
+            call self%push_back(p%value)
+            p => p%next
+        end do
+    end subroutine assign
+
+    function append(self, other) result(res)
+        class(linked_list), intent(in) :: self, other
+        type(linked_list)              :: res
+        class(*),   allocatable        :: val
+        type(node), pointer            :: p
+        ! Copy first list
+        p => self%head
+        do while (associated(p))
+            call res%push_back(p%value)
+            p => p%next
+        end do
+        ! Append second
+        p => other%head
+        do while (associated(p))
+            call res%push_back(p%value)
+            p => p%next
+        end do
+    end function append
+
+    
+    !======================
+    ! Slice/append
+    !======================
+
+    subroutine slice(self, i1, i2, this)
+        class(linked_list), intent(in)    :: self
+        integer,             intent(in)   :: i1, i2
+        type(linked_list),   intent(out)  :: this
+        type(node), pointer :: p
+        integer :: i
+        if (i1 < 1 .or. i2 > self%n .or. i1 > i2) stop "slice(): invalid range"
+        call this%kill()
+        p => self%head
+        do i = 1, i1 - 1
+            p => p%next
+        end do
+        do i = i1, i2
+            call this%push_back(p%value)
+            p => p%next
+        end do
+    end subroutine slice
 
     !======================
     ! Iteration
@@ -166,18 +250,58 @@ contains
         it%current => self%head
     end function begin
 
-    pure logical function has_next(self) result(tf)
+    function end_iter(self) result(it)
+        class(linked_list), intent(in) :: self
+        type(list_iterator) :: it
+        nullify(it%current)  ! matches C++ end(): a special sentinel
+    end function end_iter
+
+    pure logical function has_value(self) result(tf)
         class(list_iterator), intent(in) :: self
         tf = associated(self%current)
-    end function has_next
+    end function has_value
 
-    subroutine iter_next(self, x)
-        class(list_iterator),  intent(inout) :: self
-        class(*), allocatable, intent(out)   :: x
-        if (.not. associated(self%current)) stop "iterator: no more elements"
-        allocate(x, source=self%current%value)
+    subroutine next(self)
+        class(list_iterator), intent(inout) :: self
+        if (.not. associated(self%current)) return
         self%current => self%current%next
-    end subroutine iter_next
+    end subroutine next
+
+    subroutine get(self, x)
+        class(list_iterator),  intent(in)    :: self
+        class(*), allocatable, intent(inout) :: x
+        if (.not. associated(self%current)) stop "iterator: dereferencing end()"
+        if( allocated(x) ) deallocate(x)
+        allocate(x, source=self%current%value)
+    end subroutine get
+
+    pure logical function equals(self, other) result(same)
+        class(list_iterator), intent(in) :: self, other
+        same = associated(self%current, other%current)
+    end function equals
+
+    subroutine advance(self, n)
+        class(list_iterator), intent(inout) :: self
+        integer, intent(in) :: n
+        integer :: i
+        do i = 1, n
+            if (.not. associated(self%current)) exit
+            self%current => self%current%next
+        end do
+    end subroutine advance
+
+    integer function index(self, lst) result(i)
+        class(list_iterator), intent(in) :: self
+        class(linked_list),   intent(in) :: lst
+        type(node), pointer :: p
+        i = 1
+        p => lst%head
+        do while (associated(p))
+            if (associated(p, self%current)) return
+            i = i + 1
+            p => p%next
+        end do
+        i = -1  ! not found
+    end function index
 
 end module simple_linked_list
-        
