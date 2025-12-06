@@ -20,6 +20,7 @@ contains
         call test_get_by_key_and_index()
         call test_chash2str_and_strlen()
         call test_sort()
+        ! call report_summary()
     end subroutine run_all_chash_tests
 
     !---------------- construction / destruction ----------------

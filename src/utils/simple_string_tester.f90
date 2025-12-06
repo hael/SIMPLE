@@ -29,6 +29,7 @@ contains
         call test_readline_long_line()
         call test_readline_eof_behavior()
         call test_writeline_unallocated()
+        ! call report_summary()
     end subroutine run_all_string_tests
 
     !---------------- basic lifecycle ----------------

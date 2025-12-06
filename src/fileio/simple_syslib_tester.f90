@@ -33,6 +33,7 @@ contains
         call test_find_next_int_dir_prefix()
         call test_print_slurm_env_smoke()
         call teardown_test_env()
+        ! call report_summary()
     end subroutine run_all_syslib_tests
 
     !---------------- test environment helpers ----------------

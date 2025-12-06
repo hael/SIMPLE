@@ -33,6 +33,7 @@ contains
         call test_simple_mkdir_dir_exists_chdir_getcwd_rmdir()
         call test_simple_touch_rename_abspath()
         call test_simple_list_files_and_regexp()
+        ! call report_summary()
     end subroutine run_all_fileio_tests
 
     !------------------------------------------------------------

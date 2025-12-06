@@ -22,7 +22,7 @@ contains
         call test_append()
         call test_is_project()
         call test_totals()
-        call report_summary()
+        ! call report_summary()
     end subroutine run_all_projrec_list_tests
 
     ! Helper: int -> char for project names

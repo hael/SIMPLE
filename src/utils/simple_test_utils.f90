@@ -70,6 +70,7 @@ contains
         character(len=*), intent(in)   :: msg
         real(dp), intent(in), optional :: ulp_tol
         real(dp) :: tol
+        tests_run = tests_run + 1
         ! interpret ulp_tol as a multiplier of machine epsilon
         if (present(ulp_tol)) then
             tol = ulp_tol * epsilon(1.0_dp)
@@ -88,6 +89,7 @@ contains
     subroutine assert_false(condition, message)
         logical, intent(in) :: condition
         character(*), intent(in), optional :: message
+        tests_run = tests_run + 1
         if (condition) then
             tests_failed = tests_failed + 1
             print *, 'Assertion (assert_false) failed!'

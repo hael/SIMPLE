@@ -36,6 +36,7 @@ contains
         call test_geodesic_metrics()
         call test_euler_compose_vs_compeuler()
         call test_ori2str_and_str2ori_roundtrip()
+        ! call report_summary()
     end subroutine run_all_ori_tests
 
     !---------------- basic lifecycle / flags ----------------

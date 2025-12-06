@@ -20,34 +20,48 @@ type :: linked_list
 contains
     ! construction/lifecycle
     !--push/pop
-    procedure :: push_front
-    procedure :: push_back
-    procedure :: pop_front
+    procedure          :: push_front
+    procedure          :: push_back
+    procedure          :: pop_front
     !--destructor
-    procedure :: kill
+    procedure          :: kill
     ! accessors
-    procedure :: front
-    procedure :: back
-    procedure :: at
+    procedure          :: front
+    procedure          :: back
+    procedure          :: at
     ! checkers
-    procedure :: size
-    procedure :: is_empty
+    procedure          :: size
+    procedure          :: is_empty
     ! list operations
-    procedure :: assign
-    procedure :: append
-    procedure :: slice
+    procedure, private :: assign
+    generic            :: assignment(=) => assign
+    procedure, private :: append
+    generic            :: operator(//)  => append
+    procedure          :: slice
+    procedure          :: replace_with
     ! iteraton
-    procedure :: begin
-    procedure :: end_iter
+    procedure          :: begin
+    procedure          :: end_iter
+    ! type-safe API (wrappers)
+    procedure          :: push_back_int
+    procedure          :: push_back_real
+    procedure          :: push_back_complex
+    procedure          :: push_back_logical
+    procedure          :: push_back_char
+    procedure          :: front_int
+    procedure          :: at_int
+    procedure          :: front_char
+    procedure          :: at_char
 end type linked_list
 
 type :: list_iterator
     private
     type(node), pointer :: current => null()
 contains
-    procedure :: has_value     ! replacement for has_next
+    procedure :: has_value
     procedure :: next
     procedure :: get
+    procedure :: set
     procedure :: equals
     procedure :: advance
     procedure :: index
@@ -241,6 +255,31 @@ contains
     end subroutine slice
 
     !======================
+    ! Move semantics (steal nodes from other)
+    !======================
+
+    subroutine replace_with(self, other)
+        class(linked_list), intent(inout) :: self
+        class(linked_list), intent(inout) :: other
+        ! Move nodes from other into self, leaving other empty.
+        ! This is O(1) (pointer steal).
+        if (associated(self%head)) call self%kill()
+        if (.not. associated(other%head)) then
+            ! other empty -> leave self empty
+            nullify(self%head, self%tail)
+            self%n = 0
+            return
+        end if
+        ! steal descriptor
+        self%head => other%head
+        self%tail => other%tail
+        self%n = other%n
+        ! empty other
+        nullify(other%head, other%tail)
+        other%n = 0
+    end subroutine replace_with
+
+    !======================
     ! Iteration
     !======================
 
@@ -275,6 +314,14 @@ contains
         allocate(x, source=self%current%value)
     end subroutine get
 
+     subroutine set(self, x)
+        class(list_iterator), intent(inout) :: self
+        class(*),             intent(in)    :: x
+        if (.not. associated(self%current)) stop "iterator: dereferencing end()"
+        if( allocated(self%current%value) ) deallocate(self%current%value)
+        allocate(self%current%value, source=x)
+    end subroutine set
+
     pure logical function equals(self, other) result(same)
         class(list_iterator), intent(in) :: self, other
         same = associated(self%current, other%current)
@@ -303,5 +350,101 @@ contains
         end do
         i = -1  ! not found
     end function index
+
+    !======================
+    ! Type-safe wrapper APIs
+    ! (thin wrappers calling polymorphic methods)
+    !======================
+
+    subroutine push_back_int(self, v)
+        class(linked_list), intent(inout) :: self
+        integer,            intent(in)    :: v
+        call self%push_back(v)
+    end subroutine push_back_int
+
+    subroutine push_back_real(self, v)
+        class(linked_list), intent(inout) :: self
+        real,               intent(in)    :: v
+        call self%push_back(v)
+    end subroutine push_back_real
+
+    subroutine push_back_complex(self, v)
+        class(linked_list), intent(inout) :: self
+        complex,            intent(in)    :: v
+        call self%push_back(v)
+    end subroutine push_back_complex
+
+    subroutine push_back_logical(self, v)
+        class(linked_list), intent(inout) :: self
+        logical,            intent(in)    :: v
+        call self%push_back(v)
+    end subroutine push_back_logical
+
+    subroutine push_back_char(self, v)
+        class(linked_list), intent(inout) :: self
+        character(len=*),   intent(in)    :: v
+        character(:), allocatable :: tmp
+        tmp = v
+        call self%push_back(tmp)
+    end subroutine push_back_char
+
+    subroutine front_int(self, val)
+        class(linked_list), intent(in)  :: self
+        integer,            intent(out) :: val
+        class(*), allocatable :: tmp
+        if (.not. associated(self%head)) stop "front_int: empty"
+        call self%front(tmp)
+        select type(t => tmp)
+        type is (integer)
+            val = t
+        class default
+            stop "front_int: stored element not integer"
+        end select
+        if (allocated(tmp)) deallocate(tmp)
+    end subroutine front_int
+
+    subroutine at_int(self, idx, val)
+        class(linked_list), intent(in)  :: self
+        integer,            intent(in)  :: idx
+        integer,            intent(out) :: val
+        class(*), allocatable :: tmp
+        call self%at(idx, tmp)
+        select type(t => tmp)
+        type is (integer)
+            val = t
+        class default
+            stop "at_int: stored element not integer"
+        end select
+        if (allocated(tmp)) deallocate(tmp)
+    end subroutine at_int
+
+    subroutine front_char(self, val)
+        class(linked_list),        intent(in)  :: self
+        character(:), allocatable, intent(out) :: val
+        class(*), allocatable :: tmp
+        call self%front(tmp)
+        select type(t => tmp)
+        type is (character(*))
+            val = t
+        class default
+            stop "front_char: stored element not character"
+        end select
+        if (allocated(tmp)) deallocate(tmp)
+    end subroutine front_char
+
+    subroutine at_char(self, idx, val)
+        class(linked_list),        intent(in)  :: self
+        integer,                   intent(in)  :: idx
+        character(:), allocatable, intent(out) :: val
+        class(*), allocatable :: tmp
+        call self%at(idx, tmp)
+        select type(t => tmp)
+        type is (character(*))
+            val = t
+        class default
+            stop "at_char: stored element not character"
+        end select
+        if (allocated(tmp)) deallocate(tmp)
+    end subroutine at_char
 
 end module simple_linked_list

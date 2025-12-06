@@ -24,6 +24,7 @@ contains
         call test_rotations_and_errors()
         call test_misc_flags()
         call test_euler_angles
+        ! call report_summary()
     end subroutine run_all_oris_tests
 
     !---------------------------------------------------------------
