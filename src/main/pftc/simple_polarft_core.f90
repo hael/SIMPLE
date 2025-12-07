@@ -100,6 +100,7 @@ contains
                 &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
+                &self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
                 &self%heap_vars(params_glob%nthr))
         do ithr=1,params_glob%nthr
@@ -122,7 +123,8 @@ contains
         self%sqsums_ptcls   = 0.d0
         self%ksqsums_ptcls  = 0.d0
         self%wsqsums_ptcls  = 0.d0
-        ! set CTF flag
+        ! CTF
+        self%ctfmats = 1.0
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
         ! setup npix_per_shell
@@ -177,12 +179,16 @@ contains
             if( allocated(self%wsqsums_ptcls)) deallocate(self%wsqsums_ptcls)
             if( allocated(self%iseven) )       deallocate(self%iseven)
             if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
+            if( allocated(self%ctfmats) )      deallocate(self%ctfmats)
             allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                     &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
+                     &self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
+                     &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),&
+                     &self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
             call self%kill_memoized_ptcls
             call self%allocate_ptcls_memoization
         endif
         self%pfts_ptcls    = zero
+        self%ctfmats       = 1.0
         self%sqsums_ptcls  = 0.d0
         self%ksqsums_ptcls = 0.d0
         self%wsqsums_ptcls = 0.d0
@@ -192,8 +198,6 @@ contains
             iptcl = pinds(i)
             self%pinds( iptcl ) = i
         enddo
-        if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
-        allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
     end subroutine reallocate_ptcls
 
     module subroutine set_ref_pft(self, iref, pft, iseven)

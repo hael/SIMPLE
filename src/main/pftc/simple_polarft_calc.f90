@@ -153,17 +153,17 @@ type :: polarft_calc
     ! ===== CORR: simple_polarft_corr.f90
     procedure          :: calc_corr_rot_shift
     procedure          :: gen_objfun_vals
-    procedure          :: gen_corrs
-    procedure          :: gen_euclids
+    procedure, private :: gen_corrs
+    procedure, private :: gen_euclids
     procedure, private :: gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     generic            :: gen_corr_for_rot_8 => gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     procedure          :: gen_corr_grad_for_rot_8
     procedure          :: gen_corr_grad_only_for_rot_8
-    procedure          :: gen_corr_cc_for_rot_8
-    procedure          :: gen_corr_cc_grad_for_rot_8
-    procedure          :: gen_corr_cc_grad_only_for_rot_8
-    procedure          :: gen_euclid_for_rot_8
-    procedure          :: gen_euclid_grad_for_rot_8
+    procedure, private :: gen_corr_cc_for_rot_8
+    procedure, private :: gen_corr_cc_grad_for_rot_8
+    procedure, private :: gen_corr_cc_grad_only_for_rot_8
+    procedure, private :: gen_euclid_for_rot_8
+    procedure, private :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
     procedure          :: calc_frc
     ! ===== CORR_MAG: simple_polarft_corr_mag.f90
@@ -422,8 +422,8 @@ interface
 
     module subroutine gen_shmat_8(self, ithr, shift_8, shmat_8)
         class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in) :: ithr
-        real(dp),             intent(in) :: shift_8(2)
+        integer,              intent(in)    :: ithr
+        real(dp),             intent(in)    :: shift_8(2)
         complex(dp), pointer, intent(inout) :: shmat_8(:,:)
     end subroutine gen_shmat_8
 
