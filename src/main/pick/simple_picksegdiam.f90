@@ -181,7 +181,7 @@ contains
         diams_iter = self%diameters%begin()
         do while (diams_iter%has_value())
             i = i + 1
-            call diams_iter%get(any)
+            call diams_iter%getter(any)
             select type(any)
                 type is (real(kind(areal)))
                     arr(i) = any
@@ -206,7 +206,7 @@ contains
         diams_iter = self%diameters%begin()
         do while (diams_iter%has_value())
             i = i + 1
-            call diams_iter%get(any)
+            call diams_iter%getter(any)
             select type(any)
                 type is (real(kind(areal)))
                     arr(i) = any
@@ -246,12 +246,12 @@ contains
         i = 0
         do while (xpos_iter%has_value())
             i = i + 1
-            call xpos_iter%get(any)
+            call xpos_iter%getter(any)
             select type(any)
                 type is (integer(kind(i)))
                     x = any
             end select
-            call ypos_iter%get(any)
+            call ypos_iter%getter(any)
             select type(any)
                 type is (integer(kind(i)))
                     y = any

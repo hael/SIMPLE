@@ -45,9 +45,12 @@ type poly_rec_list
     type(linked_list) :: rec_list
 contains
     ! constructors/lifecycle
-    procedure          :: push
+    procedure, private :: push_project_rec
+    procedure, private :: push_process_rec
+    procedure, private :: push_chunk_rec
+    generic            :: push => push_project_rec, push_process_rec, push_chunk_rec
     procedure          :: copy_from
-    procedure          :: replace
+    procedure          :: replace_with
     procedure          :: kill
     ! overloaded assignment and append
     procedure, private :: assign
@@ -57,21 +60,40 @@ contains
     ! checkers
     procedure          :: size
     procedure          :: is_empty
-    procedure, private :: is_project
-    ! ! setter
-    ! procedure          :: push
-    ! procedure          :: set
-    ! ! getters
-    ! procedure          :: get
+    procedure          :: is_project
+    ! setter
+    procedure, private :: set_project_rec
+    procedure, private :: set_process_rec
+    procedure, private :: set_chunk_rec
+    generic            :: set => set_project_rec, set_process_rec, set_chunk_rec
+    ! getters
+    procedure, private :: get_project_rec
+    procedure, private :: get_process_rec
+    procedure, private :: get_chunk_rec
+    generic            :: get => get_project_rec, get_process_rec, get_chunk_rec
+    procedure          :: get_nptcls_tot
+    procedure          :: get_nptcls_sel_tot
 end type poly_rec_list
 
 contains
 
-    subroutine push( self, rec )
+    subroutine push_project_rec(self, v)
         class(poly_rec_list), intent(inout) :: self
-        class(*),             intent(in)    :: rec
-        call self%rec_list%push_back(rec)
-    end subroutine push
+        type(project_rec),    intent(in)    :: v
+        call self%rec_list%push_back(v)
+    end subroutine push_project_rec
+
+    subroutine push_process_rec(self, v)
+        class(poly_rec_list), intent(inout) :: self
+        type(process_rec),    intent(in)    :: v
+        call self%rec_list%push_back(v)
+    end subroutine push_process_rec
+
+    subroutine push_chunk_rec(self, v)
+        class(poly_rec_list), intent(inout) :: self
+        type(chunk_rec),      intent(in)    :: v
+        call self%rec_list%push_back(v)
+    end subroutine push_chunk_rec
 
     subroutine copy_from( self, self_old )
         class(poly_rec_list), intent(inout) :: self
@@ -88,29 +110,29 @@ contains
             self_iter = self%rec_list%begin()
             self_old_iter = self_old%rec_list%begin()
             do while (self_old_iter%has_value())
-                call self_old_iter%get(rec)
-                call self_iter%set(rec)
+                call self_old_iter%getter(rec)
+                call self%rec_list%replace_iterator(self_iter, rec)
                 call self_iter%next()
                 call self_old_iter%next()
             end do
         else
             call self_old_iter%advance(n)
             do while (self_old_iter%has_value())
-                call self_old_iter%get(rec)
+                call self_old_iter%getter(rec)
                 call self%rec_list%push_back(rec)
                 call self_old_iter%next()
             end do
         endif
     end subroutine copy_from
 
-    subroutine replace( self, self_old )
+    subroutine replace_with( self, self_old )
         class(poly_rec_list), intent(inout) :: self
         class(poly_rec_list), intent(inout) :: self_old
         if( self_old%rec_list%size() == 0 )then
             THROW_HARD('Nothing to relace with, self_old%rec_list is empty')
         endif
         call self%rec_list%replace_with(self_old%rec_list)
-    end subroutine replace
+    end subroutine replace_with
 
     subroutine kill( self )
         class(poly_rec_list), intent(inout) :: self
@@ -154,177 +176,164 @@ contains
     end function is_empty
 
     logical function is_project(self, ind, projname)
-        class(poly_rec_list), intent(in) :: self
-        integer,             intent(in) :: ind
-        class(string),       intent(in) :: projname
-        class(*), allocatable :: any
-        integer :: n
-        n = self%rec_list%size()
-        if( n == 0 )then
-            is_project = .false.
-        else if( ind < 1 .or. ind > n )then
-            is_project = .false.
-        else
-            call self%rec_list%at(ind, any)
-            select type (any)
-                type is (project_rec)
-                    is_project = any%projname .eq. projname
-                type is (process_rec)
-                    is_project = .false.
-                type is (chunk_rec)
-                    is_project = .false.
-                class default
-                    THROW_HARD('unsupported type')
-            end select
-        end if
-    end function is_project
-
-    ! setters
-
-    subroutine set( self, ind, rec )
         class(poly_rec_list), intent(inout) :: self
         integer,              intent(in)    :: ind
-        class(*),             intent(in)    :: rec
-        type(list_iterator) :: self_iter
+        class(string),        intent(in)    :: projname
+        type(project_rec) :: val
+        call self%get_project_rec(ind, val)
+        is_project = val%projname .eq. projname
+    end function is_project
+
+    ! setter
+
+    subroutine set_project_rec( self, ind, rec )
+        class(poly_rec_list), intent(inout) :: self
+        integer,              intent(in)    :: ind
+        type(project_rec),    intent(in)    :: rec
         integer :: i, n
         n = self%rec_list%size() 
         if( n == 0 .and. ind == 1 )then
-            call self%push(rec)
+            call self%push_project_rec(rec)
         else if( ind == n + 1 )then
-            call self%push(rec)            
-        else if( ind > 0 .and. ind <= n )then          
-            i = 0
-            self_iter = self%rec_list%begin()
-            do while( self_iter%has_value() )
-                i = i + 1
-                if( i == ind )then
-                    call self_iter%set(rec)
-                    exit
-                endif
-                call self_iter%next()
-            enddo
+            call self%push_project_rec(rec)        
+        else if( ind > 0 .and. ind <= n )then
+            call self%rec_list%replace_at(ind, rec)       
         else
             THROW_HARD('index ind out of bounds')
         end if
-    end subroutine set
+    end subroutine set_project_rec
 
-    ! ! getters
+    subroutine set_process_rec( self, ind, rec )
+        class(poly_rec_list), intent(inout) :: self
+        integer,              intent(in)    :: ind
+        type(process_rec),    intent(in)    :: rec
+        integer :: i, n
+        n = self%rec_list%size() 
+        if( n == 0 .and. ind == 1 )then
+            call self%push_process_rec(rec)
+        else if( ind == n + 1 )then
+            call self%push_process_rec(rec)        
+        else if( ind > 0 .and. ind <= n )then
+            call self%rec_list%replace_at(ind, rec)       
+        else
+            THROW_HARD('index ind out of bounds')
+        end if
+    end subroutine set_process_rec
 
-    ! type(string) function get_projname( self, ind )
-    !     class(poly_rec_list), intent(in) :: self
-    !     integer,             intent(in) :: ind
-    !     if (.not. allocated(self%list)) then
-    !         get_projname = ''
-    !     else if (ind < 1 .or. ind > size(self%list)) then
-    !         get_projname = ''
-    !     else
-    !         get_projname = self%list(ind)%projname
-    !     end if
-    ! end function get_projname
+    subroutine set_chunk_rec( self, ind, rec )
+        class(poly_rec_list), intent(inout) :: self
+        integer,              intent(in)    :: ind
+        type(chunk_rec),    intent(in)    :: rec
+        integer :: i, n
+        n = self%rec_list%size() 
+        if( n == 0 .and. ind == 1 )then
+            call self%push_chunk_rec(rec)
+        else if( ind == n + 1 )then
+            call self%push_chunk_rec(rec)        
+        else if( ind > 0 .and. ind <= n )then
+            call self%rec_list%replace_at(ind, rec)       
+        else
+            THROW_HARD('index ind out of bounds')
+        end if
+    end subroutine set_chunk_rec
 
-    ! pure integer function get_micind( self, ind )
-    !     class(poly_rec_list), intent(in) :: self
-    !     integer,             intent(in) :: ind
-    !     if (.not. allocated(self%list)) then
-    !         get_micind = 0
-    !     else if (ind < 1 .or. ind > size(self%list)) then
-    !         get_micind = 0
-    !     else
-    !         get_micind = self%list(ind)%micind
-    !     end if
-    ! end function get_micind
+    ! getters
 
-    ! pure integer function get_nptcls( self, ind )
-    !     class(poly_rec_list), intent(in) :: self
-    !     integer,             intent(in) :: ind
-    !     if (.not. allocated(self%list)) then
-    !         get_nptcls = 0
-    !     else if (ind < 1 .or. ind > size(self%list)) then
-    !         get_nptcls = 0
-    !     else
-    !         get_nptcls = self%list(ind)%nptcls
-    !     end if
-    ! end function get_nptcls
+    subroutine get_project_rec( self, ind, val )
+        class(poly_rec_list),  intent(inout) :: self
+        integer,               intent(in)    :: ind
+        type(project_rec),     intent(out)   :: val
+        class(*), allocatable :: tmp
+        integer :: i, n
+        call self%rec_list%at(ind, tmp)
+        select type(t => tmp)
+        type is (project_rec)
+            val = t
+        class default
+            THROW_HARD('not project_rec type')
+        end select
+        if (allocated(tmp)) deallocate(tmp)
+    end subroutine get_project_rec
 
-    ! pure integer function get_nptcls_sel( self, ind )
-    !     class(poly_rec_list), intent(in) :: self
-    !     integer,             intent(in) :: ind
-    !     if (.not. allocated(self%list)) then
-    !         get_nptcls_sel = 0
-    !     else if (ind < 1 .or. ind > size(self%list)) then
-    !         get_nptcls_sel = 0
-    !     else
-    !         get_nptcls_sel = self%list(ind)%nptcls_sel
-    !     end if
-    ! end function get_nptcls_sel
+    subroutine get_process_rec( self, ind, val )
+        class(poly_rec_list),  intent(inout) :: self
+        integer,               intent(in)    :: ind
+        type(process_rec),     intent(out)   :: val
+        class(*), allocatable :: tmp
+        integer :: i, n
+        call self%rec_list%at(ind, tmp)
+        select type(t => tmp)
+        type is (process_rec)
+            val = t
+        class default
+            THROW_HARD('not process_rec type')
+        end select
+        if (allocated(tmp)) deallocate(tmp)
+    end subroutine get_process_rec
 
-    ! pure function get_projname_arr( self ) result( pnames )
-    !     class(poly_rec_list), intent(in) :: self
-    !     type(string), allocatable :: pnames(:)
-    !     integer :: n
-    !     n = 0
-    !     if( allocated(self%list) ) n = size(self%list)
-    !     if( n > 0 )then
-    !         pnames = self%list(:)%projname
-    !     else    
-    !         allocate(pnames(0))
-    !     endif
-    ! end function get_projname_arr
+    subroutine get_chunk_rec( self, ind, val )
+        class(poly_rec_list),  intent(inout) :: self
+        integer,               intent(in)    :: ind
+        type(chunk_rec),     intent(out)   :: val
+        class(*), allocatable :: tmp
+        integer :: i, n
+        call self%rec_list%at(ind, tmp)
+        select type(t => tmp)
+        type is (chunk_rec)
+            val = t
+        class default
+            THROW_HARD('not chunk_rec type')
+        end select
+        if (allocated(tmp)) deallocate(tmp)
+    end subroutine get_chunk_rec
 
-    ! pure function get_micind_arr( self ) result( micinds )
-    !     class(poly_rec_list), intent(in) :: self
-    !     integer, allocatable :: micinds(:)
-    !     integer :: n
-    !     n = 0
-    !     if( allocated(self%list) ) n = size(self%list)
-    !     if( n > 0 )then
-    !         micinds = self%list(:)%micind
-    !     else    
-    !         allocate(micinds(0))
-    !     endif
-    ! end function get_micind_arr
+    integer function get_nptcls_tot( self )
+        class(poly_rec_list), intent(in) :: self
+        type(list_iterator)   :: self_iter
+        class(*), allocatable :: rec
+        type(project_rec)     :: rec_project
+        integer :: n
+        get_nptcls_tot = 0
+        n = self%rec_list%size()
+        if( n == 0 ) return
+        self_iter = self%rec_list%begin()
+        do while( self_iter%has_value() )
+            call self_iter%getter(rec)
+            select type(t => rec)
+            type is (project_rec)
+                rec_project = t
+            class default
+                THROW_HARD('not project_rec type')
+            end select
+            get_nptcls_tot = get_nptcls_tot + rec_project%nptcls
+            call self_iter%next()
+        enddo
+    end function get_nptcls_tot
 
-    ! pure function get_nptcls_arr( self ) result( nptcls )
-    !     class(poly_rec_list), intent(in) :: self
-    !     integer, allocatable :: nptcls(:)
-    !     integer :: n
-    !     n = 0
-    !     if( allocated(self%list) ) n = size(self%list)
-    !     if( n > 0 )then
-    !         nptcls = self%list(:)%nptcls
-    !     else    
-    !         allocate(nptcls(0))
-    !     endif
-    ! end function get_nptcls_arr
+    integer function get_nptcls_sel_tot( self )
+        class(poly_rec_list), intent(in) :: self
+        type(list_iterator)   :: self_iter
+        class(*), allocatable :: rec
+        type(project_rec)     :: rec_project
+        integer :: n
+        get_nptcls_sel_tot = 0
+        n = self%rec_list%size()
+        if( n == 0 ) return
+        self_iter = self%rec_list%begin()
+        do while( self_iter%has_value() )
+            call self_iter%getter(rec)
+            select type(t => rec)
+            type is (project_rec)
+                rec_project = t
+            class default
+                THROW_HARD('not project_rec type')
+            end select
+            get_nptcls_sel_tot = get_nptcls_sel_tot + rec_project%nptcls_sel
+            call self_iter%next()
+        enddo
+    end function get_nptcls_sel_tot
 
-    ! pure function get_nptcls_sel_arr( self ) result( nptcls_sel )
-    !     class(poly_rec_list), intent(in) :: self
-    !     integer, allocatable :: nptcls_sel(:)
-    !     integer :: n
-    !     n = 0
-    !     if( allocated(self%list) ) n = size(self%list)
-    !     if( n > 0 )then
-    !         nptcls_sel = self%list(:)%nptcls_sel
-    !     else    
-    !         allocate(nptcls_sel(0))
-    !     endif
-    ! end function get_nptcls_sel_arr
-
-    ! integer function get_nptcls_tot(self)
-    !     class(poly_rec_list), intent(in) :: self
-    !     get_nptcls_tot = 0
-    !     if( allocated(self%list) )then
-    !         if( size(self%list) > 0 ) get_nptcls_tot = sum(self%list(:)%nptcls)
-    !     end if
-    ! end function get_nptcls_tot
-
-    ! integer function get_nptcls_sel_tot(self)
-    !     class(poly_rec_list), intent(in) :: self
-    !     get_nptcls_sel_tot = 0
-    !      if( allocated(self%list) )then
-    !         if( size(self%list) > 0 ) get_nptcls_sel_tot = sum(self%list(:)%nptcls_sel)            
-    !     end if
-    ! end function get_nptcls_sel_tot
+end module simple_poly_rec_list
 
     ! THIS ONE BELONGS IN THE SP_PROJECT AREA
     ! SHOULD BE A METHOD THAT IS CONSTRUCTING A SP_PROJECT INSTANCE FROM THE RECORDS PROVIDED BY THIS CLASS
@@ -393,5 +402,3 @@ contains
     !     call tmpproj%kill
     !     if( has_ptcl ) spproj%os_ptcl3D = spproj%os_ptcl2D
     ! end subroutine projrecords2proj
-
-end module simple_poly_rec_list
