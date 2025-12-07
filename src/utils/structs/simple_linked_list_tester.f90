@@ -41,6 +41,7 @@ contains
         call test_nested_allocations()
         call test_move_semantics()
         call test_type_safe_wrappers()
+        call test_replace_iterator_stability()
         ! call report_summary()
     end subroutine run_all_list_tests
 
@@ -164,11 +165,16 @@ contains
         it = lst%begin()
         i = 1
         do while (it%has_value())
-            call it%get(x)
+            call it%getter(x)
             call assert_int(expected(i), transfer(x,0), 'iterator value match')
+            ! Replace the middle element during iteration
+            if (i == 2) call lst%replace_iterator(it, 777)
             call it%next()
             i=i+1
         end do
+        call lst%at(2,x)
+        call assert_int(777, transfer(x,0), 'replace_iterator modified correct node')
+        deallocate(x)
         call lst%kill()
     end subroutine test_iteration
 
@@ -186,7 +192,7 @@ contains
         call assert_int(1, it%index(lst), 'index(start)=1')
         call it%advance(2)
         call assert_int(3, it%index(lst), 'index(after advance 2)=3')
-        call it%get(x)
+        call it%getter(x)
         call assert_int(300, transfer(x,0), 'correct value after advance')
         call lst%kill()
     end subroutine test_iterator_index_and_advance
@@ -427,6 +433,7 @@ contains
         call a%push_back(2)
         ! move into b
         call b%replace_with(a)
+        call assert_true(a%is_empty(), 'source cleared after move')
         call assert_int(0, a%size(), 'source empty after move')
         call assert_int(2, b%size(), 'dest has elements after move')
         call b%front(x)
@@ -449,12 +456,32 @@ contains
         write(*,'(A)') 'test_type_safe_wrappers'
         call lst%push_back_int(101)
         call lst%push_back_char('hello')
-        call lst%front_int(iv)
-        call assert_int(101, iv, 'front_int works')
         call lst%at_char(2, s)
         call assert_char(s, 'hello', 'at_char works')
         deallocate(s)
         call lst%kill()
     end subroutine test_type_safe_wrappers
+
+    subroutine test_replace_iterator_stability()
+        type(linked_list) :: lst
+        type(list_iterator) :: it
+        class(*), allocatable :: x
+        write(*,'(A)') 'test_replace_iterator_stability'
+        call lst%push_back(10)
+        call lst%push_back(20)
+        call lst%push_back(30)
+        it = lst%begin()
+        call it%next()  ! now points to second element (20)
+        call lst%replace_iterator(it, 999)
+        ! Iterator should still reference same logical position
+        call it%getter(x)
+        call assert_int(999, transfer(x,0), 'iterator kept position after replace')
+        ! List structure intact
+        call lst%at(1,x); call assert_int(10,  transfer(x,0), 'first ok')
+        call lst%at(2,x); call assert_int(999, transfer(x,0), 'replacement ok')
+        call lst%at(3,x); call assert_int(30,  transfer(x,0), 'third ok')
+        deallocate(x)
+        call lst%kill()
+    end subroutine test_replace_iterator_stability
 
 end module simple_linked_list_tester
