@@ -14,11 +14,12 @@ use simple_sp_project,         only: sp_project
 use simple_stack_io,           only: stack_io
 use simple_starproject,        only: starproject
 use simple_starproject_stream, only: starproject_stream
-use simple_rec_list
+use simple_stream_chunk,       only: stream_chunk
 use simple_commanders_cluster2D
 use simple_gui_utils
 use simple_nice
 use simple_qsys_funs
+use simple_rec_list
 use simple_stream_utils
 implicit none
 
@@ -2238,7 +2239,7 @@ contains
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
         integer :: first2import, last2import, n2import
         if( .not. stream2D_active ) return
-        n_avail_chunks = count(chunks(:)%available)
+        n_avail_chunks = count(chunks(:)%is_available())
         ! cannot import yet
         if( n_avail_chunks == 0 ) return
         n_spprojs_in = project_list%size()
@@ -2275,7 +2276,7 @@ contains
         enddo
         if( n2fill == 0 ) return ! not enough particles
         do ichunk = 1,params_glob%nchunks
-            if(.not.chunks(ichunk)%available) cycle
+            if(.not.chunks(ichunk)%is_available()) cycle
             if( n2fill == 0 ) exit
             n2fill   = n2fill - 1
             nptcls   = 0
@@ -2315,9 +2316,9 @@ contains
         logical :: chunk_complete
         if( .not. stream2D_active ) return
         do ichunk = 1,params_glob%nchunks
-            if( chunks(ichunk)%available ) cycle
+            if( chunks(ichunk)%is_available() ) cycle
             chunk_complete = .false.
-            if( chunks(ichunk)%toanalyze2D )then
+            if( chunks(ichunk)%to_analyze2D() )then
                 ! chunk meant to be classified
                 if( chunks(ichunk)%has_converged() )then
                     chunk_complete = .true.
@@ -2480,7 +2481,7 @@ contains
         if( params_glob%nchunks == 0 )then
             all_chunks_available = .true.
         else
-            all_chunks_available = all(chunks(:)%available)
+            all_chunks_available = all(chunks(:)%is_available())
         endif
     end function all_chunks_available
 
@@ -2695,7 +2696,7 @@ contains
         do
             ! sequential chunk prep & submission
             if( .not.all_chunks_submitted )then
-                if( chunks(1)%available )then
+                if( chunks(1)%is_available() )then
                     ichunk = ichunk + 1
                     nptcls_per_chunk = nptcls_per_chunk_vec(ichunk) ! is a variable
                     call analyze2D_new_chunks(project_list, .false.)
@@ -2747,9 +2748,9 @@ contains
             logical :: chunk_complete
             if( .not. stream2D_active ) return
             do ichunk = 1,params_glob%nchunks
-                if( chunks(ichunk)%available ) cycle
+                if( chunks(ichunk)%is_available() ) cycle
                 chunk_complete = .false.
-                if( chunks(ichunk)%toanalyze2D )then
+                if( chunks(ichunk)%to_analyze2D() )then
                     chunk_complete = chunks(ichunk)%has_converged()
                 else
                     THROW_HARD('Fatal Error 1')
