@@ -10,6 +10,7 @@ use simple_projfile_utils, only: merge_chunk_projfiles
 use simple_qsys_env,       only: qsys_env
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
+use simple_rec_list
 use simple_commanders_cluster2D
 use simple_gui_utils
 use simple_image_msk
@@ -18,9 +19,8 @@ use simple_qsys_funs
 implicit none
 
 public :: stream_chunk, update_user_params
-public :: projs_list
-public :: projrecord, projrecords2proj, kill_projrecords, class_rejection
-public :: procrecord, append_procrecord, kill_procrecords, stream_datestr
+public :: class_rejection
+public :: stream_datestr
 public :: process_selected_references, get_latest_optics_map_id
 public :: wait_for_folder
 private
@@ -30,40 +30,6 @@ character(len=*), parameter :: PROJNAME_CHUNK     = 'chunk'
 character(len=*), parameter :: CLS_CHUNK_REJECTED = 'cls_rejected_chunks.mrc'
 logical,          parameter :: DEBUG_HERE         = .false.
 integer                     :: ncls_rejected_glob = 0 ! counter of rejected classes
-
-! Convenience type to hold information about individual project files
-type projrecord
-    type(string) :: projname               ! project file name
-    integer      :: micind     = 0         ! index of micrograph in project
-    integer      :: nptcls     = 0         ! # of particles
-    integer      :: nptcls_sel = 0         ! # of particles (state=1)
-    logical      :: included   = .false.   ! whether record has been imported
-end type projrecord
-
-! Convenience type to hold information about processes
-type procrecord
-    type(string) :: id                     ! unique ID
-    type(string) :: folder                 ! location
-    type(string) :: projfile               ! filename
-    type(string) :: volume                 ! volume filename
-    type(string) :: alnvolume              ! aligned volume filename
-    logical      :: submitted = .false.    ! process has been submitted (running)
-    logical      :: complete  = .false.    ! is complete
-    logical      :: included  = .false.    ! has been post-processed/analyzed
-end type procrecord
-
-! Convenience type to keep track of converged chunks
-type projs_list
-    integer                   :: n = 0         ! # of elements in list
-    type(string), allocatable :: projfiles(:)  ! project file filenames
-    integer,      allocatable :: ids(:)        ! unique ID
-    logical,      allocatable :: busy(:)       ! true after submission and until completion is detected
-    logical,      allocatable :: processed(:)  ! chunk: has converged; set: has been clustered/selected/matched
-    logical,      allocatable :: imported(:)   ! whether the set has been imported into the pool
-  contains
-    procedure :: append
-    procedure :: kill_list
-end type projs_list
 
 ! Type to handle a single chunk
 type stream_chunk
@@ -77,8 +43,8 @@ type stream_chunk
     integer                   :: nmics                 ! # of micrographs
     integer                   :: nptcls                ! # number of particles
     logical                   :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
-    logical                   :: converged  = .false.  ! whether 2D analysis is over
-    logical                   :: available  = .true.   ! has been initialized but no 2D analysis peformed
+    logical                   :: converged   = .false. ! whether 2D analysis is over
+    logical                   :: available   = .true.  ! has been initialized but no 2D analysis peformed
   contains
     procedure          :: init_chunk
     procedure, private :: copy
@@ -194,14 +160,15 @@ contains
         call selfout%copy(selfin)
     end subroutine assign
 
-    subroutine generate( self, micproj_records )
+    subroutine generate( self, project_list )
         class(stream_chunk), intent(inout) :: self
-        type(projrecord),    intent(in)    :: micproj_records(:)
-        integer :: istk
+        class(rec_list),     intent(inout) :: project_list
+        integer :: istk, sz
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
-        if( size(micproj_records(:)) == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
-        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(size(micproj_records(:))))
-        call projrecords2proj(micproj_records(:), self%spproj)
+        sz = project_list%size()
+        if( sz == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
+        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(sz))
+        call self%spproj%projrecords2proj(project_list)
         self%nmics  = self%spproj%os_mic%get_noris()
         self%nptcls = self%spproj%os_ptcl2D%get_noris()
         allocate(self%orig_stks(self%nmics))
@@ -652,181 +619,6 @@ contains
         self%converged  = .false.
         self%available  = .false.
     end subroutine kill
-
-    ! Chunks list type
-
-    subroutine append( self, fname, id, processed )
-        class(projs_list), intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        integer,           intent(in)    :: id
-        logical,           intent(in)    :: processed
-        type(string), allocatable :: tmpstr(:)
-        integer,      allocatable :: tmpint(:)
-        logical,      allocatable :: tmplog(:)
-        integer :: ind
-        if( self%n == 0 )then
-            allocate(self%projfiles(1),self%ids(1),self%busy(1),&
-                &self%processed(1),self%imported(1))
-            self%projfiles(1) = fname
-            self%ids(1)       = id
-            self%busy(1)      = .false.
-            self%processed(1) = processed
-            self%imported(1)  = .false.
-            self%n = 1
-        else
-            ind = self%n + 1
-            call move_alloc(self%projfiles, tmpstr)
-            call move_alloc(self%ids,       tmpint)
-            call move_alloc(self%processed, tmplog)
-            allocate(self%projfiles(ind), self%ids(ind),self%processed(ind))
-            self%projfiles(1:self%n) = tmpstr(:)
-            self%projfiles(ind)      = fname
-            self%ids(1:self%n)       = tmpint(:)
-            self%ids(ind)            = id
-            self%processed(1:self%n) = tmplog(:)
-            self%processed(ind)      = processed
-            deallocate(tmpstr,tmpint,tmplog)
-            call move_alloc(self%busy, tmplog)
-            allocate(self%busy(ind))
-            self%busy(1:self%n) = tmplog(:)
-            self%busy(ind)      = .false.
-            deallocate(tmplog)
-            call move_alloc(self%imported, tmplog)
-            allocate(self%imported(ind))
-            self%imported(1:self%n) = tmplog(:)
-            self%imported(ind)      = .false.
-            deallocate(tmplog)
-            self%n = ind
-        endif
-    end subroutine append
-
-    subroutine kill_list( self )
-        class(projs_list), intent(inout) :: self
-        if( self%n > 0 )then
-            deallocate(self%projfiles,self%ids,self%busy,self%processed,self%imported)
-            self%n = 0
-        endif
-    end subroutine kill_list
-
-    ! Public Utility to handle the type projrecord
-
-    elemental subroutine kill_projrecord( rec )
-        type(projrecord), intent(inout) :: rec
-        call rec%projname%kill
-    end subroutine kill_projrecord
-
-    subroutine kill_projrecords( recs )
-        type(projrecord), allocatable, intent(inout) :: recs(:)
-        if( allocated(recs) )then
-            call kill_projrecord(recs(:))
-            deallocate(recs)
-        endif
-    end subroutine kill_projrecords
-
-    !> convert a list of projects into one project
-    !  previous mic/stk/ptcl2D,ptcl3D are wipped, other fields untouched
-    subroutine projrecords2proj( records, spproj )
-        class(projrecord), intent(in)    :: records(:)
-        class(sp_project), intent(inout) :: spproj
-        type(sp_project)              :: tmpproj
-        type(string) :: stack_name, projname, prev_projname
-        integer :: iptcl, fromp, ifromp, itop, jptcl, nptcls_tot
-        integer :: nrecs, nmics, nptcls, imic, micind
-        logical :: has_ptcl
-        call spproj%os_mic%kill
-        call spproj%os_stk%kill
-        call spproj%os_ptcl2D%kill
-        call spproj%os_ptcl3D%kill
-        nrecs      = size(records)
-        if( nrecs == 0 ) return 
-        nmics      = nrecs
-        nptcls_tot = sum(records(:)%nptcls)
-        has_ptcl   = nptcls_tot > 0
-        call spproj%os_mic%new(nmics,is_ptcl=.false.)
-        call spproj%os_stk%new(nmics,is_ptcl=.false.)
-        if( has_ptcl ) call spproj%os_ptcl2D%new(nptcls_tot,is_ptcl=.true.)
-        prev_projname = ''
-        jptcl = 0
-        fromp = 1
-        do imic = 1,nmics
-            ! read individual project (up to STREAM_NMOVS_SET entries)
-            projname = records(imic)%projname
-            if( projname /= prev_projname )then
-                call tmpproj%kill
-                call tmpproj%read_mic_stk_ptcl2D_segments(projname)
-                prev_projname = projname
-            endif
-            ! mic
-            micind = records(imic)%micind
-            call spproj%os_mic%transfer_ori(imic, tmpproj%os_mic, micind)
-            ! stack
-            nptcls = records(imic)%nptcls
-            if( nptcls == 0 )cycle
-            call spproj%os_stk%transfer_ori(imic, tmpproj%os_stk, micind)
-            ! update stack path to absolute
-            stack_name = spproj%get_stkname(imic)
-            if( stack_name%to_char([1,1]) == '/' )then
-                ! already absolute path, should always be the case
-            else if( stack_name%to_char([1,3]) == '../' )then
-                stack_name = simple_abspath(stack_name)
-                call spproj%os_stk%set(imic, 'stk', stack_name)
-            else
-                THROW_HARD('Unexpected file path format for: '//stack_name%to_char())
-            endif
-            ! particles
-            ifromp = spproj%os_stk%get_fromp(imic)
-            itop   = spproj%os_stk%get_top(imic)
-            do iptcl = ifromp,itop
-                jptcl = jptcl+1 ! global index
-                call spproj%os_ptcl2D%transfer_ori(jptcl, tmpproj%os_ptcl2D, iptcl)
-                call spproj%os_ptcl2D%set_stkind(jptcl, imic)
-            enddo
-            call spproj%os_stk%set(imic, 'fromp', fromp)
-            call spproj%os_stk%set(imic, 'top',   fromp+nptcls-1)
-            fromp = fromp + nptcls
-        enddo
-        call tmpproj%kill
-        if( has_ptcl ) spproj%os_ptcl3D = spproj%os_ptcl2D
-    end subroutine projrecords2proj
-
-    ! Public utility to handle the type procrecord
-
-    subroutine append_procrecord( records, id, folder, projfile )
-        type(procrecord), allocatable, intent(inout) :: records(:)
-        class(string),                 intent(in)    :: id, folder, projfile
-        type(procrecord) :: record
-        record%id        = id
-        record%folder    = folder
-        record%projfile  = projfile
-        record%volume    = ''
-        record%alnvolume = ''
-        record%submitted = .false.
-        record%complete  = .false.
-        record%included  = .false.
-        if( allocated(records) )then
-            records = [records(:), record]
-        else
-            allocate(records(1), source=[record])
-        endif
-        call kill_procrecord(record)
-    end subroutine append_procrecord
-
-    elemental subroutine kill_procrecord( rec )
-        type(procrecord), intent(inout) :: rec
-        call rec%id%kill
-        call rec%folder%kill
-        call rec%projfile%kill
-        call rec%volume%kill
-        call rec%alnvolume%kill
-    end subroutine kill_procrecord
-
-    subroutine kill_procrecords( recs )
-        type(procrecord), allocatable, intent(inout) :: recs(:)
-        if( allocated(recs) )then
-            call kill_procrecord(recs(:))
-            deallocate(recs)
-        endif
-    end subroutine kill_procrecords
 
     ! Public utility
 

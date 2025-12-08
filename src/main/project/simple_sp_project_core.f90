@@ -581,6 +581,79 @@ contains
         call self%bos%close
     end subroutine merge_algndocs
 
+    !> convert a polymorphic list of project records into a sp_project instance
+    !  previous mic/stk/ptcl2D,ptcl3D are wipped, other fields untouched
+    module subroutine projrecords2proj( spproj, project_list )
+        class(sp_project), intent(inout) :: spproj
+        class(rec_list ),  intent(inout) :: project_list
+        type(project_rec)  :: prec
+        type(rec_iterator) :: it
+        type(sp_project)   :: tmpproj
+        type(string)       :: stack_name, projname, prev_projname
+        integer :: iptcl, fromp, ifromp, itop, jptcl, nptcls_tot
+        integer :: nrecs, nmics, nptcls, imic, micind
+        logical :: has_ptcl
+        call spproj%os_mic%kill
+        call spproj%os_stk%kill
+        call spproj%os_ptcl2D%kill
+        call spproj%os_ptcl3D%kill
+        nrecs      = project_list%size()
+        if( nrecs == 0 ) return 
+        nmics      = nrecs
+        nptcls_tot = project_list%get_nptcls_tot()
+        has_ptcl   = nptcls_tot > 0
+        call spproj%os_mic%new(nmics,is_ptcl=.false.)
+        call spproj%os_stk%new(nmics,is_ptcl=.false.)
+        if( has_ptcl ) call spproj%os_ptcl2D%new(nptcls_tot,is_ptcl=.true.)
+        prev_projname = ''
+        jptcl = 0
+        fromp = 1
+        it    = project_list%begin()
+        do imic = 1,nmics
+            ! read individual project (up to STREAM_NMOVS_SET entries)
+            ! retrieve one record from the list with the iterator
+            call it%get(prec)
+            projname = prec%projname
+            if( projname /= prev_projname )then
+                call tmpproj%kill
+                call tmpproj%read_mic_stk_ptcl2D_segments(projname)
+                prev_projname = projname
+            endif
+            ! mic
+            micind = prec%micind
+            call spproj%os_mic%transfer_ori(imic, tmpproj%os_mic, micind)
+            ! stack
+            nptcls = prec%nptcls
+            if( nptcls == 0 )cycle
+            call spproj%os_stk%transfer_ori(imic, tmpproj%os_stk, micind)
+            ! update stack path to absolute
+            stack_name = spproj%get_stkname(imic)
+            if( stack_name%to_char([1,1]) == '/' )then
+                ! already absolute path, should always be the case
+            else if( stack_name%to_char([1,3]) == '../' )then
+                stack_name = simple_abspath(stack_name)
+                call spproj%os_stk%set(imic, 'stk', stack_name)
+            else
+                THROW_HARD('Unexpected file path format for: '//stack_name%to_char())
+            endif
+            ! particles
+            ifromp = spproj%os_stk%get_fromp(imic)
+            itop   = spproj%os_stk%get_top(imic)
+            do iptcl = ifromp,itop
+                jptcl = jptcl+1 ! global index
+                call spproj%os_ptcl2D%transfer_ori(jptcl, tmpproj%os_ptcl2D, iptcl)
+                call spproj%os_ptcl2D%set_stkind(jptcl, imic)
+            enddo
+            call spproj%os_stk%set(imic, 'fromp', fromp)
+            call spproj%os_stk%set(imic, 'top',   fromp+nptcls-1)
+            fromp = fromp + nptcls
+            ! move the iterator
+            call it%next()
+        enddo
+        call tmpproj%kill
+        if( has_ptcl ) spproj%os_ptcl3D = spproj%os_ptcl2D
+    end subroutine projrecords2proj
+
     ! Getters/Setters
 
     module subroutine ptr2oritype( self, oritype, os_ptr )

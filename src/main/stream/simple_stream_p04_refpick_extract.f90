@@ -9,6 +9,7 @@ use simple_sp_project,            only: sp_project
 use simple_starproject_stream,    only: starproject_stream
 use simple_commanders_preprocess, only: commander_make_pickrefs
 use simple_gui_utils
+use simple_rec_list
 use simple_progress
 use simple_qsys_funs
 use simple_stream_communicator
@@ -34,7 +35,7 @@ contains
         type(parameters)                       :: params
         logical,                   parameter   :: DEBUG_HERE    = .false.
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
-        type(projrecord),          allocatable :: projrecords(:), projrecords_main(:)
+        type(rec_list)                         :: project_list, project_list_main
         type(qsys_env),            pointer     :: qenv
         type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates!, picking_diameters
         type(qsys_env),            target      :: qenv_main, qenv_interactive
@@ -192,9 +193,9 @@ contains
                 ! http stats
                 call http_communicator%json%update(http_communicator%job_json, "stage", "importing previously processed data", found)
                 call http_communicator%send_jobstats()
-                call import_previous_mics( projrecords )
-                if( allocated(projrecords) )then
-                    nptcls_glob = sum(projrecords(:)%nptcls)
+                call import_previous_mics( project_list )
+                if( project_list%size() > 0 )then
+                    nptcls_glob = project_list%get_nptcls_tot()
                     nmic_star   = spproj_glob%os_mic%get_noris()
                     ! http stats
                     call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",  spproj_glob%os_mic%get_noris(), found)
@@ -327,7 +328,7 @@ contains
             ! fetch completed jobs list & updates
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                call update_projects_list( projrecords, n_imported )
+                call update_projects_list( project_list, n_imported )
                 call completed_jobs_clines(:)%kill
                 deallocate(completed_jobs_clines)
             else
@@ -421,8 +422,8 @@ contains
         ! cleanup
         call spproj_glob%kill
         call qsys_cleanup
-        call kill_projrecords(projrecords)
-        call kill_projrecords(projrecords_main)
+        call project_list%kill
+        call project_list_main%kill
         ! end gracefully
         call http_communicator%term()
         call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
@@ -450,6 +451,8 @@ contains
                 integer, allocatable :: fromps(:)
                 integer              :: nptcls,fromp,top,i,iptcl,nmics,imic,micind,optics_map_id
                 type(string)         :: prev_projname, mapfileprefix
+                type(project_rec)    :: prec
+                type(rec_iterator)   :: it
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
                 if( DEBUG_HERE ) t0 = tic()
                 ! micrographs
@@ -463,34 +466,42 @@ contains
                     fromp         = 0
                     top           = 0
                     prev_projname = ''
+                    it            = project_list%begin()
                     do imic = 1,nmics
-                        if( projrecords(imic)%projname /= prev_projname )then
+                        ! retrieve one record from the list with the iterator
+                        call it%get(prec)
+                        if( prec%projname /= prev_projname )then
                             call stream_spproj%kill
-                            call stream_spproj%read_segment('stk', projrecords(imic)%projname)
-                            prev_projname = projrecords(imic)%projname
+                            call stream_spproj%read_segment('stk', prec%projname)
+                            prev_projname = prec%projname
                         endif
-                        micind       = projrecords(imic)%micind
+                        micind       = prec%micind
                         fromps(imic) = stream_spproj%os_stk%get_fromp(micind) ! fromp from individual project
                         fromp        = nptcls + 1
-                        nptcls       = nptcls + projrecords(imic)%nptcls
+                        nptcls       = nptcls + prec%nptcls
                         top          = nptcls
                         call spproj_glob%os_stk%transfer_ori(imic, stream_spproj%os_stk, micind)
                         call spproj_glob%os_stk%set(imic, 'fromp',fromp)
                         call spproj_glob%os_stk%set(imic, 'top',  top)
+                        ! move the iterator
+                        call it%next()
                     enddo
                     call spproj_glob%write_segment_inside('stk', params%projfile)
                     ! particles
                     call spproj_glob%os_ptcl2D%new(nptcls, is_ptcl=.true.)
                     iptcl         = 0
                     prev_projname = ''
+                    it            = project_list%begin()
                     do imic = 1,nmics
-                        if( projrecords(imic)%projname /= prev_projname )then
+                        ! retrieve one record from the list with the iterator
+                        call it%get(prec)
+                        if( prec%projname /= prev_projname )then
                             call stream_spproj%kill
-                            call stream_spproj%read_segment('ptcl2D', projrecords(imic)%projname)
-                            prev_projname = projrecords(imic)%projname
+                            call stream_spproj%read_segment('ptcl2D', prec%projname)
+                            prev_projname = prec%projname
                         endif
                         fromp = fromps(imic)
-                        top   = fromp + projrecords(imic)%nptcls - 1
+                        top   = fromp + prec%nptcls - 1
                         do i = fromp,top
                             iptcl = iptcl + 1
                             call spproj_glob%os_ptcl2D%transfer_ori(iptcl, stream_spproj%os_ptcl2D, i)
@@ -504,6 +515,8 @@ contains
                     call spproj_glob%os_ptcl3D%delete_2Dclustering
                     call spproj_glob%write_segment_inside('ptcl3D', params%projfile)
                     call spproj_glob%os_ptcl3D%kill
+                    ! move the iterator
+                    call it%next()
                 endif
                 ! add optics
                 if(cline%defined('optics_dir')) then
@@ -524,19 +537,18 @@ contains
             end subroutine write_project
 
             ! updates global project, returns records of processed micrographs
-            subroutine update_projects_list( records, nimported )
-                type(projrecord), allocatable, intent(inout) :: records(:)
-                integer,                       intent(inout) :: nimported
+            subroutine update_projects_list( project_list, nimported )
+                class(rec_list), intent(inout) :: project_list
+                integer,         intent(inout) :: nimported
                 type(sp_project), allocatable :: spprojs(:)
-                type(projrecord), allocatable :: old_records(:)
-                type(string)     :: fname, abs_fname, new_fname
-                type(sp_project) :: tmpproj
+                type(string)       :: fname, abs_fname, new_fname
+                type(sp_project)  :: tmpproj
+                type(project_rec) :: prec
                 integer :: n_spprojs, n_old, j, nprev_imports, n_completed, nptcls, nmics, imic, iproj
                 n_completed = 0
                 nimported   = 0
                 ! previously imported
-                n_old = 0 ! on first import
-                if( allocated(records) ) n_old = size(records)
+                n_old = project_list%size()
                 ! projects to import
                 n_spprojs = size(completed_jobs_clines)
                 if( n_spprojs == 0 )return
@@ -560,13 +572,8 @@ contains
                     ! reallocate global project
                     if( nprev_imports == 0 )then
                         call spproj_glob%os_mic%new(nmics, is_ptcl=.false.) ! first import
-                        allocate(projrecords(nmics))
                     else
                         call spproj_glob%os_mic%reallocate(n_completed)
-                        call move_alloc(projrecords, old_records)
-                        allocate(projrecords(n_completed))
-                        if( n_old > 0 ) projrecords(1:n_old) = old_records(:)
-                        call kill_projrecords(old_records)
                     endif
                     ! update records and global project
                     j = n_old
@@ -580,12 +587,13 @@ contains
                         ! records & project
                         do imic = 1,spprojs(iproj)%os_mic%get_noris()
                             j = j + 1
-                            projrecords(j)%projname = abs_fname
-                            projrecords(j)%micind   = imic
-                            nptcls                  = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
-                            nptcls_glob             = nptcls_glob + nptcls ! global update
-                            projrecords(j)%nptcls   = nptcls
+                            prec%projname = abs_fname
+                            prec%micind   = imic
+                            nptcls        = spprojs(iproj)%os_mic%get_int(imic,'nptcls')
+                            nptcls_glob   = nptcls_glob + nptcls ! global update
+                            prec%nptcls   = nptcls
                             call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
+                            call project_list%push_back(prec)
                         enddo
                     enddo
                 endif
@@ -685,13 +693,14 @@ contains
             end subroutine create_individual_project
 
             !>  import previous run to the current project and reselect micrographs
-            subroutine import_previous_mics( records )
-                type(projrecord), allocatable, intent(inout) :: records(:)
+            subroutine import_previous_mics( project_list )
+                type(rec_list), intent(inout) :: project_list
                 type(sp_project), allocatable :: spprojs(:)
                 type(string),     allocatable :: completed_fnames(:)
                 logical, allocatable :: mics_mask(:)
-                type(string) :: fname
-                integer      :: n_spprojs, iproj, nmics, imic, jmic, iostat,id, nsel_mics, irec
+                type(project_rec) :: prec
+                type(string)      :: fname
+                integer           :: n_spprojs, iproj, nmics, imic, jmic, iostat,id, nsel_mics, irec
                 pick_extract_set_counter = 0
                 ! previously completed projects
                 call simple_list_files_regexp(odir_completed, '\.simple$', completed_fnames)
@@ -740,7 +749,6 @@ contains
                     return
                 endif
                 ! updates global records & project
-                allocate(records(nsel_mics))
                 call spproj_glob%os_mic%new(nsel_mics, is_ptcl=.false.)
                 irec = 0
                 jmic = 0
@@ -749,10 +757,11 @@ contains
                         jmic = jmic+1
                         if( mics_mask(jmic) )then
                             irec = irec + 1
-                            records(irec)%projname = completed_fnames(iproj)
-                            records(irec)%micind   = imic
-                            records(irec)%nptcls   = spprojs(iproj)%os_mic%get_int(imic, 'nptcls')
+                            prec%projname = completed_fnames(iproj)
+                            prec%micind   = imic
+                            prec%nptcls   = spprojs(iproj)%os_mic%get_int(imic, 'nptcls')
                             call spproj_glob%os_mic%transfer_ori(irec, spprojs(iproj)%os_mic, imic)
+                            call project_list%push_back(prec)
                         endif
                     enddo
                     call spprojs(iproj)%kill

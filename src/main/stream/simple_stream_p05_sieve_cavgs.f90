@@ -2,13 +2,15 @@ module simple_stream_p05_sieve_cavgs
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_sp_project,     only: sp_project
+use simple_euclid_sigma2,  only: average_sigma2_groups
 use simple_guistats,       only: guistats
+use simple_linked_list,    only: list_iterator
 use simple_parameters,     only: parameters
 use simple_projfile_utils, only: merge_chunk_projfiles
-use simple_euclid_sigma2,  only: average_sigma2_groups
+use simple_sp_project,     only: sp_project
 use simple_commanders_cluster2D_stream
 use simple_gui_utils
+use simple_rec_list
 use simple_progress
 use simple_qsys_env
 use simple_qsys_funs
@@ -35,16 +37,18 @@ contains
     subroutine exec_stream_p05_sieve_cavgs( self, cline )
         class(stream_p05_sieve_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(projrecord),  allocatable :: projrecords(:)
+        type(rec_list)                 :: project_list, chunk_list, set_list
         type(string),      allocatable :: projects(:), completed_projfiles(:)
         integer,           allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
         real,              allocatable :: cls_res(:), cls_pop(:)
+        logical,           allocatable :: l_processed(:)
         type(parameters)               :: params
         type(qsys_env)                 :: qenv
         type(stream_http_communicator) :: http_communicator
-        type(projs_list)               :: chunkslist, setslist
         type(oris)                     :: moldiamori, chunksizeori, nmicsori
         type(stream_watcher)           :: project_buff
+        type(chunk_rec)                :: crec
+        type(rec_iterator)             :: it
         type(sp_project)               :: spproj_glob
         type(json_value), pointer      :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
         character(len=STDLEN)          :: chunk_part_env
@@ -197,7 +201,7 @@ contains
             endif
             ! project update
             if( nprojects > 0 )then
-                n_imported = size(projrecords)
+                n_imported = project_list%size()
                 write(logfhandle,'(A,I6,I8)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ', n_imported, nptcls_glob
                 ! http stats
                 call http_communicator%json%update(http_communicator%job_json, "particles_imported",       nptcls_glob,      found)
@@ -214,22 +218,32 @@ contains
             !call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             call update_user_params2D(cline, l_params_updated)
             call update_chunks
-            call memoize_chunks(chunkslist, nchunks_imported)
+            call memoize_chunks(chunk_list, nchunks_imported)
             !call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             call update_user_params2D(cline, l_params_updated)
             if( nchunks_imported > 0 )then
                 nchunks_glob = nchunks_glob + nchunks_imported
                 ! build sets
-                call generate_sets(chunkslist, setslist)
+                call generate_sets(chunk_list, set_list)
             endif
             ! Sets analysis section
-            if( setslist%n > 0 )then
-                if( setslist%processed(1) .and. setslist%imported(1) .and. (setslist%n > 1) .and. (.not.l_wait_for_user)) then
+            if( set_list%size() > 0 )then
+                call set_list%at(1, crec)
+                if( crec%processed .and. crec%included .and. (set_list%size() > 1) .and. (.not.l_wait_for_user)) then
+                    l_processed = set_list%get_processed_flags()
                     ! all sets but the first employ match_cavgs
                     latest_processed_set = 0
-                    do i = 2,setslist%n
-                        call is_set_processed(i)
-                        if( setslist%processed(i) ) latest_processed_set = i
+                    it = set_list%begin()
+                    do i = 1,set_list%size()
+                        if( i == 1 )then
+                            ! move iterator
+                            call it%next()
+                            cycle
+                        endif
+                        call is_set_processed(it)
+                        if( l_processed(i) ) latest_processed_set = i
+                        ! move iterator
+                        call it%next()
                     enddo
                     call submit_match_cavgs
                     ! http stats
@@ -279,10 +293,12 @@ contains
                     endif
                 else
                     ! first set uses cluster_cavgs
-                    call is_set_processed(1)
+                    it = set_list%begin()
+                    call is_set_processed(it)
                     call submit_cluster_cavgs
                     ! interactive selection
-                    if( l_wait_for_user .and. setslist%processed(1) ) then
+                    call set_list%at(1, crec)
+                    if( l_wait_for_user .and. crec%processed ) then
                         call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
                         call http_communicator%json%update(http_communicator%job_json, "stage", "waiting for user selection", found)
                         if(.not. selection_jpeg_created) then
@@ -329,8 +345,9 @@ contains
             endif
             if( l_wait_for_user )then
                 ! nothing for abinitio2D_stream until the first set has been selected
-                if(allocated(setslist%processed)) then
-                    if(size(setslist%processed) .gt. 0 .and. setslist%processed(1)) then
+                if( set_list%size() > 0 ) then
+                    call set_list%at(1, crec)
+                    if( crec%processed ) then
                         call http_communicator%json%get(http_communicator%update_arguments, 'accepted_cls2D', accepted_cls_ids, found) ! accepted_cls2D now contains user selection
                         if(found) then
                             call http_communicator%json%get(http_communicator%update_arguments, 'rejected_cls2D', rejected_cls_ids, found) ! rejected_cls2D now contains user selection
@@ -395,7 +412,7 @@ contains
                 call flag_complete_sets
             endif
             ! 2D analyses
-            call analyze2D_new_chunks(projrecords)
+            call analyze2D_new_chunks(project_list)
             call sleep(WAITTIME)
             ! http stats send
             call http_communicator%send_jobstats()
@@ -404,15 +421,19 @@ contains
         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
         call terminate_chunks
         ! merge sets and write project
-        do i=1, setslist%n
-            if(.not. setslist%busy(i) .and. setslist%processed(i) .and. setslist%imported(i)) then
+        it = set_list%begin()
+        do i=1, set_list%size()
+            call it%get(crec)
+            if(.not. crec%busy .and. crec%processed .and. crec%included) then
                 if(.not. allocated(completed_projfiles))then
                     allocate(completed_projfiles(1))
-                    completed_projfiles(1) = setslist%projfiles(i)
+                    completed_projfiles(1) = crec%projfile
                 else
-                    completed_projfiles = [completed_projfiles, setslist%projfiles(i)]
+                    completed_projfiles = [completed_projfiles, crec%projfile]
                 endif
             endif
+            ! move iterator
+            call it%next()
         enddo
         if(allocated(completed_projfiles)) then
             call merge_chunk_projfiles(completed_projfiles, string('./'), spproj_glob, projname_out=string("tmp"), write_proj=.false.)
@@ -432,6 +453,7 @@ contains
         call spproj_glob%write_mics_star(string("micrographs.star"))
         call spproj_glob%write_ptcl2D_star(string("particles.star"))
         ! cleanup
+        if( allocated(l_processed) ) deallocate(l_processed)
         call spproj_glob%kill
         call qsys_cleanup
         ! end gracefully
@@ -445,9 +467,9 @@ contains
                 type(string), allocatable, intent(in)  :: projectnames(:)
                 integer,                   intent(out) :: n_imported
                 type(sp_project), allocatable :: spprojs(:)
-                type(projrecord), allocatable :: old_records(:)
-                type(string) :: fname, abs_fname
-                real    :: avgmicptcls, nptcls_per_cls
+                type(project_rec) :: prec
+                type(string)      :: fname, abs_fname
+                real              :: avgmicptcls, nptcls_per_cls
                 integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls, first
                 n_imported = 0
                 n_ptcls    = 0
@@ -455,7 +477,6 @@ contains
                 n_spprojs = size(projectnames)
                 if( n_spprojs == 0 )return
                 n_old = 0 ! on first import
-                if( allocated(projrecords) ) n_old = size(projrecords)
                 allocate(spprojs(n_spprojs))
                 ! because pick_extract purges state=0 and nptcls=0 mics,
                 ! all mics can be assumed associated with particles
@@ -470,15 +491,6 @@ contains
                 ! import micrographs
                 n_completed = n_old + nmics
                 n_imported  = nmics
-                ! reallocate records
-                if( n_old == 0 )then
-                    allocate(projrecords(nmics))
-                else
-                    call move_alloc(projrecords, old_records)
-                    allocate(projrecords(n_completed))
-                    projrecords(1:n_old) = old_records(:)
-                    deallocate(old_records)
-                endif
                 ! update global records and some global variables
                 irec = n_old
                 do iproj = 1,n_spprojs
@@ -488,18 +500,19 @@ contains
                         n_ptcls   = n_ptcls + nptcls ! global update
                         fname     = projectnames(iproj)
                         abs_fname = simple_abspath(fname)
-                        projrecords(irec)%projname   = abs_fname
-                        projrecords(irec)%micind     = imic
-                        projrecords(irec)%nptcls     = nptcls
-                        projrecords(irec)%nptcls_sel = nptcls
-                        projrecords(irec)%included   = .false.
+                        prec%projname   = abs_fname
+                        prec%micind     = imic
+                        prec%nptcls     = nptcls
+                        prec%nptcls_sel = nptcls
+                        prec%included   = .false.
+                        call project_list%push_back(prec)
                     enddo
                 enddo
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
                 ! Updates global parameters once and init 2D
                 if(params%nptcls_per_cls == 0) then
-                    if(size(projrecords) .gt. params%nmics) then
-                        avgmicptcls    = nptcls_glob / size(projrecords)
+                    if( project_list%size() .gt. params%nmics) then
+                        avgmicptcls    = nptcls_glob / project_list%size()
                         avgmicptcls    = ceiling(avgmicptcls / 10) * 10.0
                         nptcls_per_cls = ceiling(params%nmics * avgmicptcls / params%ncls)
                         write(logfhandle,'(A,I6)')   '>>> AVERAGE # PARTICLES PER MICROGRAPH : ', int(avgmicptcls)
@@ -542,55 +555,62 @@ contains
             end subroutine update_records_with_project
 
             subroutine generate_sets( chunks, sets )
-                class(projs_list), intent(in)    :: chunks
-                class(projs_list), intent(inout) :: sets
-                type(string), allocatable :: starfiles(:)
+                class(rec_list), intent(in)    :: chunks
+                class(rec_list), intent(inout) :: sets
+                type(string),      allocatable :: starfiles(:), projfiles(:)
+                integer,           allocatable :: ids(:)
                 type(sp_project) :: spproj
                 type(string)     :: tmpl
                 integer          :: navail_chunks, n, iset, i, ic, ic_start, ic_end
-                navail_chunks = chunks%n - sets%n * params%nchunksperset
+                navail_chunks = chunks%size() - sets%size() * params%nchunksperset
                 n = floor(real(navail_chunks) / real(params%nchunksperset))
                 if( n < 1 )return
                 do iset = 1,n
                     ! merge chunks project into designated folder
-                    ic_start = sets%n*params%nchunksperset + 1
+                    ic_start = sets%size() * params%nchunksperset + 1
                     ic_end   = ic_start + params%nchunksperset - 1
-                    tmpl     = DIR_SET//int2str(sets%n+1)
+                    tmpl     = DIR_SET//int2str(sets%size() + 1)
                     call simple_mkdir(tmpl)
-                    call merge_chunk_projfiles(chunks%projfiles(ic_start:ic_end), tmpl, spproj, projname_out=tmpl)
+                    projfiles = chunks%get_projfiles([ic_start,ic_end])
+                    call merge_chunk_projfiles(projfiles, tmpl, spproj, projname_out=tmpl)
                     ! average and stash sigma2
                     allocate(starfiles(params%nchunksperset))
+                    ids = chunks%get_ids()
                     do i = 1,params%nchunksperset
                         ic = ic_start + i - 1
-                        starfiles(i) = SIGMAS_DIR//'/chunk_'//int2str(chunks%ids(ic))//STAR_EXT
+                        starfiles(i) = SIGMAS_DIR//'/chunk_'//int2str(ids(ic))//STAR_EXT
                     enddo
                     call average_sigma2_groups(tmpl//'/'//tmpl//STAR_EXT, starfiles)
-                    deallocate(starfiles)
-                    ! update global list and increment sets%n
-                    call sets%append(tmpl//'/'//tmpl//METADATA_EXT, sets%n+1, .false.)
+                    ! update global list
+                    call sets%push2chunk_list(tmpl//'/'//tmpl//METADATA_EXT, sets%size() + 1, .false.)
                     ! remove imported chunk
                     if( trim(params%remove_chunks).eq.'yes' )then
                         do ic = ic_start,ic_end
-                            call simple_rmdir(stemname(chunks%projfiles(ic)))
+                            call simple_rmdir(stemname(projfiles(ic)))
                         enddo
                     endif
+                    call projfiles%kill
+                    call starfiles%kill
+                    if( allocated(ids) ) deallocate(ids)
                 enddo
                 call spproj%kill
             end subroutine generate_sets
 
             subroutine submit_cluster_cavgs
-                type(cmdline) :: cline_cluster_cavgs
-                type(string)  :: cwd
-                if( setslist%n < 1 )        return  ! no sets generated yet
-                if( setslist%busy(1) )      return  ! ongoing
-                if( setslist%processed(1) ) return  ! already done
+                type(cmdline)   :: cline_cluster_cavgs
+                type(string)    :: cwd
+                type(chunk_rec) :: crec
+                if( set_list%size() < 1 ) return  ! no sets generated yet
+                call set_list%at(1, crec)
+                if( crec%busy )           return  ! ongoing
+                if( crec%processed )      return  ! already done
                 call cline_cluster_cavgs%set('prg',          'cluster_cavgs')
-                call cline_cluster_cavgs%set('projfile',     basename(setslist%projfiles(1)))
+                call cline_cluster_cavgs%set('projfile',     basename(crec%projfile))
                 call cline_cluster_cavgs%set('mkdir',        'no')
                 call cline_cluster_cavgs%set('nthr',         params%nthr)
                 call cline_cluster_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_cluster_cavgs%set('verbose_exit', 'yes')
-                call simple_chdir(stemname(setslist%projfiles(1)))
+                call simple_chdir(stemname(crec%projfile))
                 call simple_getcwd(cwd)
                 CWD_GLOB = cwd%to_char()
                 call qenv%exec_simple_prg_in_queue_async(cline_cluster_cavgs,&
@@ -598,30 +618,41 @@ contains
                 call simple_chdir('..')
                 call simple_getcwd(cwd)
                 CWD_GLOB = cwd%to_char()
-                setslist%busy(1)      = .true.
-                setslist%processed(1) = .false.
+                crec%busy      = .true.
+                crec%processed = .false.
+                call set_list%replace_at(1, crec)
                 call cline_cluster_cavgs%kill
             end subroutine submit_cluster_cavgs
 
             subroutine submit_match_cavgs
-                type(cmdline) :: cline_match_cavgs
-                type(string)  :: path, cwd
-                integer :: iset
-                if( setslist%n < 2 ) return    ! not enough sets generated
+                type(cmdline)        :: cline_match_cavgs
+                type(string)         :: path, cwd
+                type(chunk_rec)      :: crec
+                integer              :: iset
+                type(rec_iterator)   :: it
+                logical, allocatable :: l_processed(:), l_busy(:)
+                if( set_list%size() < 2 ) return ! not enough sets generated
+                l_processed = set_list%get_processed_flags()
+                l_busy      = set_list%get_busy_flags()
+                call set_list%at(1, crec)
                 ! any unprocessed and not being processed?
-                if( .not.any((.not.setslist%processed(2:)) .and. (.not.setslist%busy(2:))) ) return
+                if ( all(l_processed(2:) .or. l_busy(2:)) ) return
                 call cline_match_cavgs%set('prg',          'match_cavgs')
-                call cline_match_cavgs%set('projfile',     simple_abspath(setslist%projfiles(1)))
+                call cline_match_cavgs%set('projfile',     simple_abspath(crec%projfile))
                 call cline_match_cavgs%set('mkdir',        'no')
                 call cline_match_cavgs%set('nthr',         params%nthr)
                 call cline_match_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_match_cavgs%set('verbose_exit', 'yes')
                 call cline_match_cavgs%delete('nparts')
-                do iset = 2,setslist%n
-                    if( setslist%processed(iset) ) cycle ! already done
-                    if( setslist%busy(iset) )      cycle ! ongoing
-                    call cline_match_cavgs%set('projfile_target', basename(setslist%projfiles(iset)))
-                    path = stemname(setslist%projfiles(iset))
+                it = set_list%begin()
+                do iset = 1,set_list%size()
+                    call it%get(crec)
+                    if( iset == 1 .or. (crec%processed .or. crec%busy) )then
+                        call it%next()
+                        cycle
+                    endif
+                    call cline_match_cavgs%set('projfile_target', basename(crec%projfile))
+                    path = stemname(crec%projfile)
                     call simple_chdir(path)
                     call simple_getcwd(cwd)
                     CWD_GLOB = cwd%to_char()
@@ -630,25 +661,33 @@ contains
                     call simple_chdir('..')
                     call simple_getcwd(cwd)
                     CWD_GLOB = cwd%to_char()
-                    setslist%busy(iset)      = .true.   ! ongoing
-                    setslist%processed(iset) = .false.  ! not complete
+                    crec%busy      = .true.   ! ongoing
+                    crec%processed = .false.  ! not complete
+                    call set_list%replace_iterator(it, crec)
+                    ! move iterator
+                    call it%next()
                 enddo
+                if( allocated(l_processed) ) deallocate(l_processed)
+                if( allocated(l_busy)      ) deallocate(l_busy)
                 call cline_match_cavgs%kill
             end subroutine submit_match_cavgs
 
             ! Check for status of individual sets
-            subroutine is_set_processed( i )
-                integer, intent(in) :: i
-                type(string) :: fname
-                if( setslist%n < 1        ) return  ! no sets generated yet
-                if( setslist%processed(i) ) return  ! already done
-                fname = stemname(setslist%projfiles(i))//'/'//TASK_FINISHED
+            subroutine is_set_processed( it )
+                class(rec_iterator), intent(inout) :: it
+                type(string)    :: fname
+                type(chunk_rec) :: crec
+                if( set_list%size() < 1 ) return  ! no sets generated yet
+                call it%get(crec)
+                if( crec%processed )      return  ! already done
+                fname = stemname(crec%projfile)//'/'//TASK_FINISHED
                 if( file_exists(fname) )then
-                    setslist%busy(i)      = .false.
-                    setslist%processed(i) = .true.  ! now ready for pool import
+                    crec%busy      = .false.
+                    crec%processed = .true.       ! now ready for pool import
                 else
-                    setslist%processed(i) = .false.
+                    crec%processed = .false.
                 endif
+                call set_list%replace_iterator(it, crec)
             end subroutine is_set_processed
 
             ! apply user-inputted selection on the first set
@@ -656,7 +695,8 @@ contains
                 integer, allocatable, intent(in) :: cls2reject(:)
                 integer, allocatable             :: states(:)
                 type(sp_project)                 :: spproj
-                integer,             allocatable :: clusters_accepted(:)
+                integer, allocatable :: clusters_accepted(:)
+                type(chunk_rec) :: crec
                 integer :: i, n, n_clusters, cluster
                 logical :: l_class_selection
                 if( .not.allocated(cls2reject) )then
@@ -664,7 +704,8 @@ contains
                     return  ! gui must return an non empty vector
                 endif
                 ! read all fields
-                call spproj%read(setslist%projfiles(1))
+                call set_list%at(1, crec)
+                call spproj%read(crec%projfile)
                 n = spproj%os_cls2D%get_noris()
                 ! undo the default particles cluster_cavgs selection
                 call spproj%os_ptcl2D%set_all2single('state', 1)
@@ -708,7 +749,7 @@ contains
                 enddo
                 ! report selection to particles
                 call spproj%map_cavgs_selection(states)
-                call spproj%write(setslist%projfiles(1))
+                call spproj%write(crec%projfile)
                 ! cleanup
                 call spproj%kill
                 if( allocated(clusters_accepted) ) deallocate(clusters_accepted)
@@ -718,19 +759,27 @@ contains
             ! make completed project files visible to the watcher of the next application
             subroutine flag_complete_sets
                 use simple_image, only:image
-                type(sp_project) :: spproj
-                type(image)      :: img
-                type(string)     :: destination, stk
+                type(sp_project)   :: spproj
+                type(image)        :: img
+                type(string)       :: destination, stk
+                type(rec_iterator) :: it
+                type(chunk_rec)    :: crec
                 real    :: smpd
                 integer :: ldim(3), icls, iset, n_state_nonzero, nimgs, ncls
-                do iset = 1,setslist%n
-                    if( setslist%imported(iset) ) cycle
-                    if( setslist%processed(iset) )then
+                it = set_list%begin()
+                do iset = 1,set_list%size()
+                    call it%get(crec)
+                    if( crec%included )then
+                        ! move iterator
+                        call it%next() 
+                        cycle
+                    endif
+                    if( crec%processed )then
                         destination = DIR_STREAM_COMPLETED//DIR_SET//int2str(iset)//METADATA_EXT
-                        call simple_rename(setslist%projfiles(iset), destination)
-                        setslist%projfiles(iset) = destination ! relocation
-                        setslist%imported(iset)  = .true.
-                        write(logfhandle,'(A,I3)')'>>> COMPLETED SET ',setslist%ids(iset)
+                        call simple_rename(crec%projfile, destination)
+                        crec%projfile = destination ! relocation
+                        crec%included = .true.
+                        write(logfhandle,'(A,I3)')'>>> COMPLETED SET ', crec%id
                         ! update particle counts
                         call spproj%read_segment('ptcl2D', destination)
                         n_state_nonzero = spproj%os_ptcl2D%count_state_gt_zero()
@@ -759,6 +808,8 @@ contains
                         enddo
                         call spproj%kill
                     endif
+                    ! move iterator
+                    call it%next() 
                 enddo
                 call img%kill
             end subroutine flag_complete_sets
@@ -820,12 +871,14 @@ contains
             end subroutine cleanup4restart
 
             subroutine generate_selection_jpeg()
-                type(sp_project)           :: set1_proj
-                integer                    :: ncls, icls
-                real                       :: smpd, stkbox
-                call set1_proj%read_segment('cls2D', setslist%projfiles(1))
-                call set1_proj%read_segment('out',   setslist%projfiles(1))
-                call set1_proj%read_segment('stk',   setslist%projfiles(1))
+                type(sp_project) :: set1_proj
+                integer          :: ncls, icls
+                real             :: smpd, stkbox
+                type(chunk_rec)  :: crec
+                call set_list%at(1, crec)
+                call set1_proj%read_segment('cls2D', crec%projfile)
+                call set1_proj%read_segment('out',   crec%projfile)
+                call set1_proj%read_segment('stk',   crec%projfile)
                 call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd, box=stkbox)
                 call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char()), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set1_proj%get_box())))
                 if(allocated(cls_res))     deallocate(cls_res)
@@ -855,9 +908,11 @@ contains
                 type(sp_project) :: set_proj
                 integer          :: ncls, icls
                 real             :: smpd, stkbox
-                call set_proj%read_segment('cls2D', setslist%projfiles(latest_processed_set))
-                call set_proj%read_segment('out',   setslist%projfiles(latest_processed_set))
-                call set_proj%read_segment('stk',   setslist%projfiles(latest_processed_set))
+                type(chunk_rec)  :: crec
+                call set_list%at(latest_processed_set, crec)
+                call set_proj%read_segment('cls2D', crec%projfile)
+                call set_proj%read_segment('out',   crec%projfile)
+                call set_proj%read_segment('stk',   crec%projfile)
                 call set_proj%get_cavgs_stk(selection_jpeg, ncls, smpd, box=stkbox)
                 call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char()), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set_proj%get_box())))
                 if(allocated(accepted_cls_ids)) deallocate(accepted_cls_ids)

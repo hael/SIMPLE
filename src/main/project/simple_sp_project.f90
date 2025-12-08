@@ -1,13 +1,14 @@
 module simple_sp_project
 include 'simple_lib.f08'
-use simple_map_reduce,        only: split_nobjs_even
-use simple_discrete_stack_io, only: dstack_io
 use simple_cmdline,           only: cmdline
+use simple_discrete_stack_io, only: dstack_io
+use simple_map_reduce,        only: split_nobjs_even
 use json_kinds
 use json_module
 use simple_gui_utils
 use simple_histogram
 use simple_image
+use simple_rec_list
 use simple_stack_io
 use simple_starfile
 implicit none
@@ -54,6 +55,7 @@ contains
     procedure          :: append_job_descr2jobproc
     procedure          :: replace_project
     procedure          :: merge_algndocs
+    procedure          :: projrecords2proj
     ! CORE - getters/setters
     procedure          :: ptr2oritype
     procedure          :: get_smpd
@@ -245,6 +247,11 @@ interface
         character(len=*),  intent(in)    :: oritype, fbody
         integer, optional, intent(in)    :: numlen_in
     end subroutine merge_algndocs
+
+    module subroutine projrecords2proj( spproj, project_list )
+        class(sp_project), intent(inout) :: spproj
+        class(rec_list ),  intent(inout) :: project_list
+    end subroutine projrecords2proj
 
     ! CORE - getters/setters
 

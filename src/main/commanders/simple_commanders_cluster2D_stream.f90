@@ -14,6 +14,7 @@ use simple_sp_project,         only: sp_project
 use simple_stack_io,           only: stack_io
 use simple_starproject,        only: starproject
 use simple_starproject_stream, only: starproject_stream
+use simple_rec_list
 use simple_commanders_cluster2D
 use simple_gui_utils
 use simple_nice
@@ -51,22 +52,6 @@ type scaled_dims
     integer :: box=0, boxpd=0
 end type scaled_dims
 
-real,             parameter :: SMPD_HARD_LIMIT         = 1.5              ! Pixel size hard limit -> max resolution=3Angs
-integer,          parameter :: MINBOXSZ                = 128              ! minimum boxsize for scaling
-integer,          parameter :: CHUNK_MINITS            = 13               ! minimum number of iterations for chunks
-integer,          parameter :: CHUNK_MAXITS            = CHUNK_MINITS + 2 ! maximum number of iterations for chunks
-integer,          parameter :: CHUNK_CC_ITERS          = 8                ! maximum number of correlatiion-based iterations for chunks
-integer,          parameter :: CHUNK_EXTR_ITER         = 3                ! starting extremal iteration for chunks
-integer,          parameter :: FREQ_POOL_REJECTION     = 5                ! pool class rejection performed every FREQ_POOL_REJECTION iteration
-integer,          parameter :: MIN_NPTCLS_REJECTION    = 200000           ! Minimum number of particles required to activate rejection
-integer,          parameter :: NPREV_RES               = 5                ! # of previous resolution resolutions to store for resolution update (>=2)
-character(len=*), parameter :: PROJFILE_POOL           = 'cluster2D.simple'
-character(len=*), parameter :: POOL_DIR                = ''               ! should be './pool/' for tidyness but difficult with gui
-character(len=*), parameter :: DISTR_EXEC_FNAME        = './distr_cluster2D_pool'
-character(len=*), parameter :: LOGFILE                 = 'simple_log_cluster2D_pool'
-! character(len=*), parameter :: CHECKPOINT_DIR          = 'checkpoint/'
-! character(len=*), parameter :: CLS_POOL_REJECTED       = 'cls_rejected_pool.mrc'
-! character(len=*), parameter :: CLS_POOL_REJECTED_THUMB = 'cls_rejected_pool.jpeg'
 logical,          parameter :: DEBUG_HERE              = .false.
 integer(timer_int_kind) :: t
 
@@ -91,7 +76,7 @@ class(cmdline),          pointer :: master_cline
 type(string)                     :: orig_projfile
 type(string)                     :: refs_glob                         ! global 2D references filename
 real                             :: conv_score=0., conv_mi_class=0., conv_frac=0.
-real                             :: resolutions(NPREV_RES)=999., current_resolution=999.  ! Resolution book-keeping
+real                             :: resolutions(POOL_NPREV_RES)=999., current_resolution=999.  ! Resolution book-keeping
 integer                          :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
 integer                          :: ncls_glob                         ! global number of classes
 integer                          :: nabinitioprojs_glob = 0           ! global number snapshots generated for abinitio3D
@@ -310,7 +295,7 @@ contains
         ! update to computational parameters to pool, will be transferred to chunks upon init
         if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
         ! commit to disk
-        call pool_proj%write(string(POOL_DIR)//PROJFILE_POOL)
+        call pool_proj%write(string(POOL_DIR)//POOL_PROJFILE)
         ! reference generation
         if( l_no_chunks )then
             iterswitch2euclid = 0
@@ -322,8 +307,8 @@ contains
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
         call cline_cluster2D_pool%set('oritype',   'ptcl2D')
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
-        call cline_cluster2D_pool%set('projfile',  PROJFILE_POOL)
-        call cline_cluster2D_pool%set('projname',  get_fbody(PROJFILE_POOL,'simple'))
+        call cline_cluster2D_pool%set('projfile',  POOL_PROJFILE)
+        call cline_cluster2D_pool%set('projname',  get_fbody(POOL_PROJFILE,'simple'))
         call cline_cluster2D_pool%set('sigma_est', params_glob%sigma_est)
         if( cline%defined('cls_init') )then
             call cline_cluster2D_pool%set('cls_init', params_glob%cls_init)
@@ -421,8 +406,8 @@ contains
         scale_factor          = 1.0
         params_glob%smpd_crop = params_glob%smpd
         params_glob%box_crop  = params_glob%box
-        if( l_scaling .and. params_glob%box >= MINBOXSZ )then
-            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+        if( l_scaling .and. params_glob%box >= CHUNK_MINBOXSZ )then
+            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=CHUNK_MINBOXSZ)
             l_scaling = box < params_glob%box
             if( l_scaling )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',box
@@ -554,8 +539,8 @@ contains
         real              :: scale_factor
         integer           :: ldim(3), p
         ! resolution book-keeping
-        resolutions(1:NPREV_RES-1) = resolutions(2:NPREV_RES)
-        resolutions(NPREV_RES)     = current_resolution
+        resolutions(1:POOL_NPREV_RES-1) = resolutions(2:POOL_NPREV_RES)
+        resolutions(POOL_NPREV_RES)     = current_resolution
         if( l_no_chunks ) return
         ! optional
         if( trim(params_glob%dynreslim).ne.'yes' ) return
@@ -563,13 +548,13 @@ contains
         ! Auto-scaling?
         if( trim(params_glob%autoscale) .ne. 'yes' ) return
         ! Hard limit reached?
-        if( pool_dims%smpd < SMPD_HARD_LIMIT ) return
+        if( pool_dims%smpd < POOL_SMPD_HARD_LIMIT ) return
         ! Too early?
         if( pool_iter < 10 ) return
         if( ncls_glob < max_ncls ) return
         ! Current resolution at Nyquist?
         if( abs(current_resolution-2.*pool_dims%smpd) > 0.01 ) return
-        ! When NPREV_RES iterations are at Nyquist the pool resolution may be updated
+        ! When POOL_NPREV_RES iterations are at Nyquist the pool resolution may be updated
         if( any(abs(resolutions-current_resolution) > 0.01 ) ) return
         ! determines new dimensions
         new_dims%box   = find_larger_magic_box(pool_dims%box+1)
@@ -819,9 +804,9 @@ contains
     end subroutine update_user_params2D
 
     ! ends processing, generates project & cleanup
-    subroutine terminate_stream2D( records, optics_dir)
-        type(projrecord), optional, allocatable, intent(in) :: records(:)
-        class(string),    optional,              intent(in) :: optics_dir
+    subroutine terminate_stream2D( project_list, optics_dir)
+        class(rec_list), optional, intent(inout) :: project_list
+        class(string),   optional, intent(in)    :: optics_dir
         type(string) :: mapfileprefix
         integer      :: ipart, lastmap
         call terminate_chunks
@@ -851,7 +836,7 @@ contains
         endif
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
-        call del_file(POOL_DIR//PROJFILE_POOL)
+        call del_file(POOL_DIR//POOL_PROJFILE)
         call del_file(projfile4gui)
         if( .not.debug_here )then
             call qsys_cleanup
@@ -861,8 +846,8 @@ contains
 
             ! no pool clustering performed, all available info is written down
             subroutine write_raw_project
-                if( present(records) )then
-                    if( allocated(records) )then
+                if( present(project_list) )then
+                    if( project_list%size() > 0 )then
                         lastmap = 0
                         if(present(optics_dir)) then
                             call get_latest_optics_map()
@@ -871,7 +856,7 @@ contains
                                 call pool_proj%import_optics_map(mapfileprefix)
                             endif
                         endif
-                        call projrecords2proj(records, pool_proj)
+                        call pool_proj%projrecords2proj(project_list)
                         call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
                         call starproj_stream%stream_export_micrographs(pool_proj, params_glob%outdir, optics_set=.true.)
                         call starproj_stream%stream_export_particles_2D(pool_proj, params_glob%outdir, optics_set=.true.)
@@ -1112,28 +1097,32 @@ contains
     ! POOL
 
     ! Appends new data for processing
-    subroutine import_records_into_pool( records )
-        type(projrecord), allocatable, intent(inout) :: records(:)
-        type(sp_project) :: spproj
-        type(string)     :: projname
-        integer          :: nptcls2import, nmics2import, imic, nrecords
-        integer          :: fromp, i, nmics_imported, nptcls_imported, iptcl, irec
-        if( .not. allocated(records) ) return
-        if( .not. stream2D_active )    return
-        if( .not.pool_available )      return
-        if( all(records(:)%included) ) return
-        nrecords        = size(records)
+    subroutine import_records_into_pool( project_list )
+        class(rec_list), intent(inout) :: project_list
+        type(sp_project)     :: spproj
+        type(string)         :: projname
+        type(project_rec)    :: prec
+        type(rec_iterator)   :: it
+        logical, allocatable :: incl_mask(:)
+        integer :: nptcls2import, nmics2import, imic, nrecords
+        integer :: fromp, i, nmics_imported, nptcls_imported, iptcl, irec
+        if( .not. stream2D_active ) return
+        if( .not. pool_available  ) return
+        nrecords = project_list%size()
+        if( nrecords == 0         ) return
+        incl_mask = project_list%get_included_flags()
+        if( all(incl_mask)        ) return
         nmics_imported  = pool_proj%os_mic%get_noris()
         nptcls_imported = pool_proj%os_ptcl2D%get_noris()
-        nmics2import    = count(.not.records(:)%included)
-        nptcls2import   = sum(records(:)%nptcls, mask=.not.records(:)%included)
+        nmics2import    = count(.not.incl_mask)
+        nptcls2import   = project_list%get_nptcls_tot(l_not_included=.true.)
         ! reallocations
         nmics_imported  = pool_proj%os_mic%get_noris()
         nptcls_imported = pool_proj%os_ptcl2D%get_noris()
         if( nmics_imported == 0 )then
-            call pool_proj%os_mic%new(nmics2import, is_ptcl=.false.)
-            call pool_proj%os_stk%new(nmics2import, is_ptcl=.false.)
-            call pool_proj%os_ptcl2D%new(nptcls2import, is_ptcl=.true.)
+            call pool_proj%os_mic%new(nmics2import,     is_ptcl=.false.)
+            call pool_proj%os_stk%new(nmics2import,     is_ptcl=.false.)
+            call pool_proj%os_ptcl2D%new(nptcls2import, is_ptcl=.true. )
             fromp = 1
         else
             call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
@@ -1143,21 +1132,28 @@ contains
         endif
         imic     = nmics_imported
         projname = ''
+        it = project_list%begin()
         do irec = 1,nrecords
-            if( records(irec)%included ) cycle
-            if( projname /= records(irec)%projname )then
-                call spproj%read_mic_stk_ptcl2D_segments(records(irec)%projname)
-                projname = records(irec)%projname
+            ! retrieve one record from the list with the iterator
+            call it%get(prec)
+            if( prec%included )then
+                ! move the iterator
+                call it%next()
+                cycle
+            endif
+            if( projname /= prec%projname )then
+                call spproj%read_mic_stk_ptcl2D_segments(prec%projname)
+                projname = prec%projname
             endif
             ! mic & stack
             imic = imic + 1
-            call pool_proj%os_mic%transfer_ori(imic, spproj%os_mic, records(irec)%micind)
-            call pool_proj%os_stk%transfer_ori(imic, spproj%os_stk, records(irec)%micind)
+            call pool_proj%os_mic%transfer_ori(imic, spproj%os_mic, prec%micind)
+            call pool_proj%os_stk%transfer_ori(imic, spproj%os_stk, prec%micind)
             call pool_proj%os_stk%set(imic, 'fromp', fromp)
-            call pool_proj%os_stk%set(imic, 'top',   fromp+records(irec)%nptcls-1)
+            call pool_proj%os_stk%set(imic, 'top',   fromp+prec%nptcls-1)
             ! particles
             !$omp parallel do private(i,iptcl) proc_bind(close) default(shared)
-            do i = 1,records(irec)%nptcls
+            do i = 1,prec%nptcls
                 iptcl = fromp + i - 1
                 call pool_proj%os_ptcl2D%transfer_ori(iptcl, spproj%os_ptcl2D, i)
                 call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
@@ -1168,8 +1164,13 @@ contains
                 call pool_proj%os_ptcl2D%set_class(iptcl, irnd_uni(params_glob%ncls))
             enddo
             !$omp end parallel do
-            fromp = fromp + records(irec)%nptcls
-            records(irec)%included = .true. ! record update
+            fromp = fromp + prec%nptcls
+            ! flag inclusion
+            prec%included = .true.
+            ! replace the node
+            call project_list%replace_iterator(it, prec)
+            ! move the iterator
+            call it%next()
         enddo
         call spproj%kill
     end subroutine import_records_into_pool
@@ -1327,7 +1328,7 @@ contains
                     ! sigmas2 are calculated first thing
                     call clines(1)%set('prg',        'calc_pspec_distr')
                     call clines(1)%set('oritype',    'ptcl2D')
-                    call clines(1)%set('projfile',   PROJFILE_POOL)
+                    call clines(1)%set('projfile',   POOL_PROJFILE)
                     call clines(1)%set('nthr',       cline_cluster2D_pool%get_iarg('nthr'))
                     call clines(1)%set('which_iter', pool_iter)
                     call clines(1)%set('mkdir',      'yes')
@@ -1513,18 +1514,18 @@ contains
             enddo
         endif
         ! write project
-        call spproj%write(string(POOL_DIR)//PROJFILE_POOL)
+        call spproj%write(string(POOL_DIR)//POOL_PROJFILE)
         call spproj%kill
         ! pool stats
         call generate_pool_stats
         ! execution
         if( l_no_chunks .and. pool_iter == iterswitch2euclid )then
             write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
-            call qenv_pool%exec_simple_prgs_in_queue_async(clines, string(DISTR_EXEC_FNAME), string(LOGFILE))
+            call qenv_pool%exec_simple_prgs_in_queue_async(clines, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
             call clines(:)%kill
             deallocate(clines)
         else
-            call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(DISTR_EXEC_FNAME), string(LOGFILE))
+            call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
         endif
         pool_available = .false.
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
@@ -1726,12 +1727,12 @@ contains
             enddo
         endif
         ! write project
-        call spproj%write(string(POOL_DIR)//PROJFILE_POOL)
+        call spproj%write(string(POOL_DIR)//POOL_PROJFILE)
         call spproj%kill
         ! pool stats
         call generate_pool_stats
         ! execution
-        call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(DISTR_EXEC_FNAME), string(LOGFILE))
+        call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
         pool_available = .false.
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
@@ -1895,7 +1896,7 @@ contains
             call os%kill
         endif
         ! transfer to pool
-        call spproj%read_segment('cls2D', string(POOL_DIR)//PROJFILE_POOL)
+        call spproj%read_segment('cls2D', string(POOL_DIR)//POOL_PROJFILE)
         if( spproj%os_cls2D%get_noris() == 0 )then
             ! not executed yet, do nothing
         else
@@ -1903,8 +1904,8 @@ contains
                 THROW_HARD('Critical ERROR 0') ! first time
             endif
             ! transfer particles parameters
-            call spproj%read_segment('stk',   string(POOL_DIR)//PROJFILE_POOL)
-            call spproj%read_segment('ptcl2D',string(POOL_DIR)//PROJFILE_POOL)
+            call spproj%read_segment('stk',   string(POOL_DIR)//POOL_PROJFILE)
+            call spproj%read_segment('ptcl2D',string(POOL_DIR)//POOL_PROJFILE)
             i = 0
             do istk = 1,size(pool_stacks_mask)
                 if( pool_stacks_mask(istk) )then
@@ -2228,34 +2229,49 @@ contains
     ! CHUNKS RELATED
 
     ! Initiates analysis of all available chunks
-    subroutine analyze2D_new_chunks( micproj_records, makecavgs )
-        type(projrecord),  intent(inout) :: micproj_records(:)
-        logical, optional, intent(in)    :: makecavgs
+    subroutine analyze2D_new_chunks( project_list, makecavgs )
+        class(rec_list), intent(inout) :: project_list
+        logical, optional,    intent(in)    :: makecavgs
+        type(project_rec)  :: prec
+        type(rec_iterator) :: it
+        type(rec_list)     :: project_list_slice
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
         integer :: first2import, last2import, n2import
         if( .not. stream2D_active ) return
         n_avail_chunks = count(chunks(:)%available)
         ! cannot import yet
         if( n_avail_chunks == 0 ) return
-        n_spprojs_in = size(micproj_records)
+        n_spprojs_in = project_list%size()
         if( n_spprojs_in == 0 ) return
         ! how many n2fill chunks to load
         n2fill       = 0
         nptcls       = 0
         first2import = 0
+        it = project_list%begin()
         do iproj = 1,n_spprojs_in
-            if( micproj_records(iproj)%included )cycle
-            if( micproj_records(iproj)%nptcls_sel > 0 )then
+            ! retrieve one record from the list with the iterator
+            call it%get(prec)
+            if( prec%included )then
+                ! move the iterator
+                call it%next()
+                cycle
+            endif
+            if( prec%nptcls_sel > 0 )then
                 if( first2import == 0 ) first2import = iproj
-                nptcls = nptcls + micproj_records(iproj)%nptcls_sel
+                nptcls = nptcls + prec%nptcls_sel
                 if( nptcls >= nptcls_per_chunk )then
-                    n2fill = n2fill+1
+                    n2fill = n2fill + 1
                     if( n2fill >= n_avail_chunks )exit
                     nptcls = 0
                 endif
             else
-                micproj_records(iproj)%included = .true. ! mask out empty stacks
+                ! mask out empty stacks
+                prec%included = .true. 
+                ! replace the node
+                call project_list%replace_iterator(it, prec)
             endif
+            ! move the iterator
+            call it%next()
         enddo
         if( n2fill == 0 ) return ! not enough particles
         do ichunk = 1,params_glob%nchunks
@@ -2264,20 +2280,30 @@ contains
             n2fill   = n2fill - 1
             nptcls   = 0
             n2import = 0
+            it       = project_list%begin()
             do iproj = first2import,n_spprojs_in
-                nptcls   = nptcls   + micproj_records(iproj)%nptcls_sel
+                ! retrieve one record from the list with the iterator
+                call it%get(prec)
+                nptcls   = nptcls   + prec%nptcls_sel
                 n2import = n2import + 1
                 if( nptcls >= nptcls_per_chunk )then
                     last2import = iproj
                     exit
                 endif
+                ! move the iterator
+                call it%next()
             enddo
             if( nptcls >= nptcls_per_chunk )then
-                call chunks(ichunk)%generate(micproj_records(first2import:last2import))
-                micproj_records(first2import:last2import)%included = .true.
+                ! need a slice of project_list here
+                call project_list%slice(first2import, last2import, project_list_slice)
+                ! generate chunk from slice
+                call chunks(ichunk)%generate(project_list_slice)
+                ! flag inclusion in original list
+                call project_list%set_included_flags([first2import,last2import])
                 ! execution
                 call chunks(ichunk)%analyze2D(l_update_sigmas, makecavgs)
                 first2import = last2import + 1 ! to avoid cycling through all projects
+                call project_list_slice%kill
             endif
         enddo
     end subroutine analyze2D_new_chunks
@@ -2341,8 +2367,8 @@ contains
 
     ! Chunks Book-keeping
     subroutine memoize_chunks( list, nchunks_imported )
-        class(projs_list), intent(inout) :: list
-        integer,           intent(out)   :: nchunks_imported
+        class(rec_list), intent(inout) :: list
+        integer,         intent(out)   :: nchunks_imported
         type(string) :: fname
         integer      :: i, id, nchunks2import
         nchunks_imported = 0
@@ -2352,7 +2378,7 @@ contains
             fname = converged_chunks(i)%get_projfile_fname()
             id    = converged_chunks(i)%get_id()
             ! append to list
-            call list%append(fname, id, .false.)
+            call list%push2chunk_list(fname, id, .false.)
             ! sigma2 book-keeping
             call converged_chunks(i)%split_sigmas_into(string(SIGMAS_DIR))
             ! destroy chunk
@@ -2473,8 +2499,8 @@ contains
         call simple_rmdir(SIGMAS_DIR)
  !       call simple_rmdir(DIR_SNAPSHOT) ! need snapshots keeping 
         call del_file(USER_PARAMS2D)
-        call del_file(PROJFILE_POOL)
-        call del_file(DISTR_EXEC_FNAME)
+        call del_file(POOL_PROJFILE)
+        call del_file(POOL_DISTR_EXEC_FNAME)
         call del_file(TERM_STREAM)
         call simple_list_files_regexp(string('.'), '\.mrc$|\.mrcs$|\.txt$|\.star$|\.eps$|\.jpeg$|\.jpg$|\.dat$|\.bin$', files)
         if( allocated(files) )then
@@ -2490,7 +2516,7 @@ contains
         endif
         if( present(all) )then
             if( all )then
-                call del_file(LOGFILE)
+                call del_file(POOL_LOGFILE)
                 call del_file(CLUSTER2D_FINISHED)
                 call del_file('simple_script_single')
             endif
@@ -2592,14 +2618,14 @@ contains
         class(cmdline),                     intent(inout) :: cline
         character(len=*), parameter :: DIR_PROJS   = trim(PATH_HERE)//'spprojs/'
         integer,          parameter :: WAITTIME    = 5
-        type(projrecord), allocatable :: micproj_records(:)
-        integer,          allocatable :: nptcls_per_chunk_vec(:)
-        type(string)     :: fname
-        type(parameters) :: params
-        type(sp_project) :: spproj_glob
-        type(projs_list) :: chunkslist
-        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic, id, nc
-        logical          :: all_chunks_submitted
+        integer,        allocatable :: nptcls_per_chunk_vec(:)
+        type(rec_list)      :: project_list
+        type(string)        :: fname
+        type(parameters)    :: params
+        type(sp_project)    :: spproj_glob
+        type(rec_list)      :: chunkslist
+        integer             :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ic, id, nc
+        logical             :: all_chunks_submitted
         call cline%set('oritype',      'ptcl2D')
         call cline%set('wiener',       'full')
         call cline%set('autoscale',    'yes')
@@ -2672,7 +2698,7 @@ contains
                 if( chunks(1)%available )then
                     ichunk = ichunk + 1
                     nptcls_per_chunk = nptcls_per_chunk_vec(ichunk) ! is a variable
-                    call analyze2D_new_chunks(micproj_records, .false.)
+                    call analyze2D_new_chunks(project_list, .false.)
                     all_chunks_submitted = ichunk == ntot_chunks
                 endif
             endif
@@ -2685,7 +2711,7 @@ contains
                 do ic = 1,nc
                     fname = converged_chunks(ic)%get_projfile_fname()
                     id    = converged_chunks(ic)%get_id()
-                    call chunkslist%append(fname, id, .false.)
+                    call chunkslist%push2chunk_list(fname, id, .false.)
                     ! cleanup
                     call converged_chunks(ic)%kill
                     ! run cluster_cavgs on first item of chunkslist
@@ -2696,20 +2722,19 @@ contains
                 deallocate(converged_chunks)
             endif
             ! Completion
-            if( chunkslist%n == ntot_chunks )then
-                if( all(chunkslist%processed) ) exit
+            if( chunkslist%size() == ntot_chunks )then
+                if( all(chunkslist%get_processed_flags()) ) exit
             endif
             call sleep(WAITTIME)
         end do
         ! no final project
         ! cleanup
-        call kill_projrecords(micproj_records)
         call spproj_glob%kill
-        call chunkslist%kill_list
+        call chunkslist%kill
         call simple_rmdir(STDERROUT_DIR)
         call simple_rmdir(DIR_PROJS)
         call simple_rmdir(DIR_SNAPSHOT)
-        call del_file(POOL_DIR//PROJFILE_POOL)
+        call del_file(POOL_DIR//POOL_PROJFILE)
         call simple_rmdir(SIGMAS_DIR)
         call qsys_cleanup
         ! graceful end
@@ -2762,7 +2787,9 @@ contains
 
         subroutine generate_chunk_projects
             type(sp_project)     :: spproj
+            type(project_rec)    :: prec
             integer, allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
+            type(rec_list)       :: project_list_slice
             type(string)         :: fname,absfname,path,projname,projfile
             integer :: cnt, ichunk, istk, iptcl,jptcl,kptcl,fromp,top,cfromp,ctop,n,cnt_stk
             call simple_mkdir(DIR_PROJS)
@@ -2818,7 +2845,6 @@ contains
             path = CWD_GLOB//'/'//DIR_PROJS
             call spproj%projinfo%set(1,'cwd', path)
             ! stacks/ptcls transfer
-            allocate(micproj_records(nstks))
             do ichunk = 1,ntot_chunks
                 projname = int2str_pad(ichunk,6)
                 projfile = path//projname//METADATA_EXT
@@ -2862,18 +2888,22 @@ contains
                     ctop   = cfromp + n - 1
                     call spproj%os_stk%set(cnt,'fromp',cfromp)
                     call spproj%os_stk%set(cnt,'top',  ctop)
-                    micproj_records(istk)%projname   = projfile
-                    micproj_records(istk)%micind     = cnt
-                    micproj_records(istk)%nptcls     = n
-                    micproj_records(istk)%nptcls_sel = stk_nptcls(istk)
-                    micproj_records(istk)%included   = .false.
+                    prec%projname   = projfile
+                    prec%micind     = cnt
+                    prec%nptcls     = n
+                    prec%nptcls_sel = stk_nptcls(istk)
+                    prec%included   = .false.
+                    call project_list%push_back(prec)
                 enddo
                 ! remove previous parameters
                 call spproj%os_ptcl2D%delete_2Dclustering(keepshifts=.false., keepcls=.false.)
                 call spproj%write(projfile)
-                nptcls = sum(micproj_records(chunks_map(ichunk,1):chunks_map(ichunk,2))%nptcls_sel)
-                write(logfhandle,'(A,I8,A,I8,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk,&
-                    &' ; ',nptcls,' / ',sum(stk_nptcls)
+                ! generate a slice of project_list corresponding to the chunk
+                call project_list%slice(chunks_map(ichunk,1),chunks_map(ichunk,2),project_list_slice)
+                ! get total # particles in chunk
+                nptcls = project_list_slice%get_nptcls_sel_tot()
+                write(logfhandle,'(A,I8,A,I8,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_nptcls)
+                call project_list_slice%kill
             enddo
             call spproj%kill
         end subroutine generate_chunk_projects
@@ -2884,22 +2914,25 @@ contains
             type(cmdline)                 :: cline_cluster_cavgs
             type(sp_project)              :: spproj
             type(string)                  :: path, tmpl, cwd
-            if( chunkslist%n /= 1 )      return
-            if( chunkslist%processed(1) )return
+            logical, allocatable          :: l_processed(:)
+            type(chunk_rec)               :: crec
+            if( chunkslist%size() /= 1 ) return
+            l_processed = chunkslist%get_processed_flags()
+            if( l_processed(1)         )return
             ! updates directory structure
             tmpl = trim(DIR_SET)//int2str(1)
             call simple_mkdir(tmpl)
-            call merge_chunk_projfiles(chunkslist%projfiles(1:1), tmpl, spproj,&
-            &projname_out=tmpl, write_proj=.true.)
+            call chunkslist%at(1, crec)
+            call merge_chunk_projfiles([crec%projfile], tmpl, spproj, projname_out=tmpl, write_proj=.true.)
             ! update path
-            chunkslist%projfiles(1:1) = simple_abspath(tmpl//'/'//tmpl//METADATA_EXT)
+            crec%projfile = simple_abspath(tmpl//'/'//tmpl//METADATA_EXT)
             ! execute
             cline_cluster_cavgs = cline
             call cline_cluster_cavgs%set('mkdir',   'no')
             call cline_cluster_cavgs%set('prg',     'cluster_cavgs')
-            call cline_cluster_cavgs%set('projfile', basename(chunkslist%projfiles(1)))
+            call cline_cluster_cavgs%set('projfile', basename(crec%projfile))
             call cline_cluster_cavgs%delete('nparts')
-            path = stemname(chunkslist%projfiles(1))
+            path = stemname(crec%projfile)
             call simple_chdir(path)
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
@@ -2907,31 +2940,38 @@ contains
             call simple_chdir('..')
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
-            chunkslist%processed(1) = .true. !!
+            crec%processed = .true.
+            call chunkslist%replace_at(1, crec)
             ! cleanup
             call spproj%kill
             call cline_cluster_cavgs%kill
+            if( allocated(l_processed) ) deallocate(l_processed)
         end subroutine cluster_chunk_cavgs
 
         ! subjects last chunk(s) chunk of to match_cavgs
         subroutine match_sets
             type(commander_match_cavgs) :: xmatch_cavgs
-            type(cmdline) :: cline_match_cavgs
+            type(cmdline)               :: cline_match_cavgs
+            logical, allocatable        :: l_processed(:)
+            type(chunk_rec) :: crec_id, crec_id_min_1
             type(string)  :: tmpl, cwd
             integer       :: id
-            if( chunkslist%n < 2 )return
-            id = chunkslist%n
-            if(      chunkslist%processed(id)   ) return
-            if( .not.chunkslist%processed(id-1) ) return
+            if( chunkslist%size() < 2 )return
+            id = chunkslist%size()
+            l_processed = chunkslist%get_processed_flags()
+            if(      l_processed(id)    ) return
+            if( .not. l_processed(id-1) ) return
             ! updates directory structure
             tmpl = trim(DIR_SET)//int2str(id)
             call simple_mkdir(tmpl)
             ! execute
+            call chunkslist%at(id,   crec_id)
+            call chunkslist%at(id-1, crec_id_min_1)
             cline_match_cavgs = cline
             call cline_match_cavgs%set('mkdir',           'no')
             call cline_match_cavgs%set('prg',             'match_cavgs')
-            call cline_match_cavgs%set('projfile',        simple_abspath(chunkslist%projfiles(id-1)))
-            call cline_match_cavgs%set('projfile_target', simple_abspath(chunkslist%projfiles(id)))
+            call cline_match_cavgs%set('projfile',        simple_abspath(crec_id_min_1%projfile))
+            call cline_match_cavgs%set('projfile_target', simple_abspath(crec_id%projfile))
             call cline_match_cavgs%set('projfile_merged', 'set_'//int2str(id)//METADATA_EXT)
             call cline_match_cavgs%delete('nparts')
             call simple_chdir(tmpl)
@@ -2941,8 +2981,9 @@ contains
             call simple_chdir('..')
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
-            chunkslist%processed(id) = .true. !!
-            chunkslist%projfiles(id) = simple_abspath(tmpl//'/'//'set_'//int2str(id)//METADATA_EXT)
+            crec_id%processed = .true.
+            crec_id%projfile  = simple_abspath(tmpl//'/'//'set_'//int2str(id)//METADATA_EXT)
+            call chunkslist%replace_at(id, crec_id)
             ! cleanup
             call cline_match_cavgs%kill
         end subroutine match_sets

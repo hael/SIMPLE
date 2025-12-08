@@ -5,14 +5,15 @@ use simple_commander_base, only: commander_base
 use simple_euclid_sigma2,  only: average_sigma2_groups, sigma2_star_from_iter
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
-use simple_stream_watcher
-use simple_stream_utils
-use simple_stream_communicator
-use simple_qsys_funs
-use simple_progress
-use simple_nice
-use simple_gui_utils
 use simple_commanders_cluster2D_stream
+use simple_gui_utils
+use simple_nice
+use simple_progress
+use simple_qsys_funs
+use simple_rec_list
+use simple_stream_communicator
+use simple_stream_utils
+use simple_stream_watcher
 implicit none
 
 public :: stream_p06_pool2D
@@ -30,17 +31,18 @@ contains
     ! TODO: handling of un-classified particles
     subroutine exec_stream_p06_pool2D( self, cline )
         class(stream_p06_pool2D), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
+        class(cmdline),           intent(inout) :: cline
         type(parameters)                      :: params
         type(simple_nice_communicator)        :: nice_communicator
         type(stream_http_communicator)        :: http_communicator
         type(json_value), pointer             :: latest_cls2D
-        type(projs_list)                      :: setslist
+        type(rec_list)                        :: setslist
         type(stream_watcher)                  :: project_buff
         type(sp_project)                      :: spproj_glob
         type(oris)                            :: moldiamori             
         character(kind=CK,len=:), allocatable :: snapshot_filename
         type(string),             allocatable :: projects(:)
+        logical,                  allocatable :: l_imported(:)
         type(string)                          :: str_avgs_jpeg, str_avgs_mrc
         integer(kind=dp) :: time_last_import, time_last_iter
         integer :: i, iter, nprojects, nimported, nptcls_glob, nsets_imported, pool_iter, iter_last_import
@@ -141,7 +143,7 @@ contains
                 ! memoize detected projects
                 call project_buff%add2history(projects)
                 do i = 1,nprojects
-                    call setslist%append(projects(i), setslist%n+1, .true.)
+                    call setslist%push2chunk_list(projects(i), setslist%size() + 1, .true.)
                 enddo
             endif
             ! check on progress, updates particles & alignment parameters
@@ -164,7 +166,8 @@ contains
                 iter_last_import = get_pool_iter()
                 call unpause_pool
             endif
-            nsets_imported = count(setslist%imported)
+            l_imported = setslist%get_included_flags()
+            nsets_imported = count(l_imported)
             call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) call unpause_pool
             ! pause?
@@ -265,6 +268,7 @@ contains
             call sleep(WAITTIME)
         enddo
         ! Cleanup and final project
+        if( allocated(l_imported) ) deallocate(l_imported)
         call terminate_stream2D(optics_dir=params%optics_dir)
         ! cleanup
         call spproj_glob%kill
@@ -287,32 +291,42 @@ contains
                 type(sp_project),  allocatable :: spprojs(:)
                 type(string),      allocatable :: sigmas(:)
                 class(sp_project), pointer     :: pool
+                type(rec_iterator)             :: it
+                type(chunk_rec)                :: crec
+                logical, allocatable :: l_processed(:), l_imported(:)
                 integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
                 integer :: i, fromp, fromp_prev, imic, ind, iptcl, jptcl, jmic, nptcls_sel
                 nimported = 0
-                if( setslist%n == 0 ) return
+                if( setslist%size()== 0 ) return
                 if( nptcls_glob == 0 )then
                     ! first import
                 else
                     ! at other times only import when the pool is free
                     if( .not.is_pool_available() ) return
                 endif
-                nsets2import = count(setslist%processed(:).and.(.not.setslist%imported(:)))
+                l_processed = setslist%get_processed_flags()
+                l_imported  = setslist%get_included_flags()
+                nsets2import = count(l_processed(:).and.(.not.l_imported(:)))
                 if( nsets2import == 0 ) return
                 ! read sets in
-                allocate(spprojs(setslist%n))
+                allocate(spprojs(setslist%size()))
                 nptcls2import = 0
                 nmics2import  = 0
-                do iset = 1,setslist%n
-                    if( setslist%imported(iset) )       cycle   ! already imported
-                    if( .not.setslist%processed(iset) ) cycle   ! not processed yet
-                    if( setslist%busy(iset) )           cycle   ! being processed
-                    call spprojs(iset)%read_non_data_segments(setslist%projfiles(iset))
-                    call spprojs(iset)%read_segment('mic',    setslist%projfiles(iset))
-                    call spprojs(iset)%read_segment('stk',    setslist%projfiles(iset))
-                    call spprojs(iset)%read_segment('ptcl2D', setslist%projfiles(iset))
+                it = setslist%begin()
+                do iset = 1,setslist%size()
+                    call it%get(crec)
+                    if( crec%included .or. (.not.crec%processed .or. crec%busy) )then
+                        ! move iterator
+                        call it%next()
+                        cycle
+                    endif
+                    call spprojs(iset)%read_non_data_segments(crec%projfile)
+                    call spprojs(iset)%read_segment('mic',    crec%projfile)
+                    call spprojs(iset)%read_segment('stk',    crec%projfile)
+                    call spprojs(iset)%read_segment('ptcl2D', crec%projfile)
                     nmics2import  = nmics2import  + spprojs(iset)%os_mic%get_noris()
                     nptcls2import = nptcls2import + spprojs(iset)%os_ptcl2D%get_noris()
+                    call it%next()
                 enddo
                 ! reallocations
                 call get_pool_ptr(pool)
@@ -331,14 +345,18 @@ contains
                 endif
                 ! parameters transfer
                 imic = nmics
-                do iset = 1,setslist%n
-                    if( setslist%imported(iset) )       cycle   ! already imported
-                    if( .not.setslist%processed(iset) ) cycle   ! not processed yet
-                    if( setslist%busy(iset) )           cycle   ! being processed
+                it   = setslist%begin()
+                do iset = 1,setslist%size()
+                    call it%get(crec)
+                    if( crec%included .or. (.not.crec%processed .or. crec%busy) )then
+                        ! move iterator
+                        call it%next()
+                        cycle
+                    endif
                     fromp_prev = fromp
                     ind = 1
                     do jmic = 1,spprojs(iset)%os_mic%get_noris()
-                        imic  = imic+1
+                        imic = imic + 1
                         ! micrograph
                         call pool%os_mic%transfer_ori(imic, spprojs(iset)%os_mic, jmic)
                         ! stack
@@ -364,20 +382,32 @@ contains
                     enddo
                     nptcls_sel = spprojs(iset)%os_ptcl2D%get_noris(consider_state=.true.)
                     ! display
-                    write(logfhandle,'(A,I6,A,I6)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM SET ',setslist%ids(iset)
+                    write(logfhandle,'(A,I6,A,I6)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM SET ',crec%id
                     call flush(logfhandle)
                     ! global list update
-                    setslist%imported(iset) = .true.
+                    crec%included = .true.
+                    call setslist%replace_iterator(it, crec)
+                    ! move iterator
+                    call it%next()
                 enddo
                 nimported = nsets2import
                 ! average all previously imported sigmas
-                allocate(sigmas(count(setslist%imported(:))))
-                i = 0
-                do iset = 1,setslist%n
-                    if( .not.setslist%imported(iset) ) cycle
+                l_imported  = setslist%get_included_flags()
+                allocate(sigmas(count(l_imported)))
+                i  = 0
+                it = setslist%begin()
+                do iset = 1,setslist%size()
+                    call it%get(crec)
+                    if( .not.l_imported(iset) )then
+                        ! move iterator
+                        call it%next()
+                        cycle
+                    endif
                     i         = i+1
-                    ind       = setslist%ids(iset)
+                    ind       = crec%id
                     sigmas(i) = params%dir_target//'/set_'//int2str(ind)//'/set_'//int2str(ind)//STAR_EXT
+                    ! move iterator
+                    call it%next()
                 enddo
                 call average_sigma2_groups(sigma2_star_from_iter(get_pool_iter()+1), sigmas)
                 deallocate(sigmas)
@@ -395,9 +425,11 @@ contains
                 ! global count
                 nptcls_glob = nptcls_glob + nptcls_sel
                 ! cleanup
-                do iset = 1,setslist%n
+                do iset = 1,setslist%size()
                     call spprojs(iset)%kill
                 enddo
+                if( allocated(l_imported)  ) deallocate(l_imported)
+                if( allocated(l_processed) ) deallocate(l_processed)
                 deallocate(spprojs)
                 nullify(pool)
             end subroutine import_sets_into_pool
