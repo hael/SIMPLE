@@ -591,7 +591,7 @@ contains
                         xmlfile = basename(movie_names(imov))
                         if(xmlfile%substr_ind('_fractions') > 0) xmlfile = xmlfile%to_char([1,xmlfile%substr_ind('_fractions') - 1])
                         if(xmlfile%substr_ind('_EER')       > 0) xmlfile = xmlfile%to_char([1,xmlfile%substr_ind('_EER')       - 1])
-                        xmlfile = xmldir//'/'//xmlfile//'.xml'
+                        xmlfile = trim(xmldir%to_char())//'/'//trim(xmlfile%to_char())//'.xml'
                         call spproj_here%os_mic%set(imov, "meta", xmlfile)
                     end if
                 enddo
