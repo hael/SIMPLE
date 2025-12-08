@@ -312,7 +312,7 @@ contains
                 allocate(spprojs(setslist%size()))
                 nptcls2import = 0
                 nmics2import  = 0
-                it = setslist%begin()
+                it            = setslist%begin()
                 do iset = 1,setslist%size()
                     call it%get(crec)
                     if( crec%included .or. (.not.crec%processed .or. crec%busy) )then

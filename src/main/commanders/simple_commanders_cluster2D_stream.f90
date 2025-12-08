@@ -1132,7 +1132,7 @@ contains
         endif
         imic     = nmics_imported
         projname = ''
-        it = project_list%begin()
+        it       = project_list%begin()
         do irec = 1,nrecords
             ! retrieve one record from the list with the iterator
             call it%get(prec)
@@ -2247,7 +2247,7 @@ contains
         n2fill       = 0
         nptcls       = 0
         first2import = 0
-        it = project_list%begin()
+        it           = project_list%begin()
         do iproj = 1,n_spprojs_in
             ! retrieve one record from the list with the iterator
             call it%get(prec)

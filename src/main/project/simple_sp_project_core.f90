@@ -624,7 +624,11 @@ contains
             call spproj%os_mic%transfer_ori(imic, tmpproj%os_mic, micind)
             ! stack
             nptcls = prec%nptcls
-            if( nptcls == 0 )cycle
+            if( nptcls == 0 )then
+                ! move the iterator
+                call it%next()
+                cycle
+            endif
             call spproj%os_stk%transfer_ori(imic, tmpproj%os_stk, micind)
             ! update stack path to absolute
             stack_name = spproj%get_stkname(imic)
