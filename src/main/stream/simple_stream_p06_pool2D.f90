@@ -5,13 +5,15 @@ use simple_commander_base, only: commander_base
 use simple_euclid_sigma2,  only: average_sigma2_groups, sigma2_star_from_iter
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
-use simple_commanders_cluster2D_stream
 use simple_gui_utils
 use simple_nice
 use simple_progress
 use simple_qsys_funs
 use simple_rec_list
+use simple_stream2D_state
+use simple_stream_cluster2D_utils
 use simple_stream_communicator
+use simple_stream_pool2D_utils
 use simple_stream_utils
 use simple_stream_watcher
 implicit none
@@ -243,7 +245,7 @@ contains
                                 &snapshot_starfile_base=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"),&
                                 &optics_dir=params%optics_dir)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_filename",  snapshot_filename)
-                            call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    last_snapshot_nptcls)
+                            call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    snapshot_last_nptcls)
                             call http_communicator%json%add(http_communicator%job_json, "snapshot_time",      stream_datestr())
                         endif
                     endif

@@ -936,7 +936,7 @@ end type simple_nice_communicator
                 type(json_value), pointer :: particles_extracted, particles_imported, last_particles_imported, number_particles_assigned, number_particles_rejected
                 type(json_value), pointer :: iteration, number_classes, number_classes_rejected, assignment_doughnut, last_iteration_time, interactive_plot
                 type(json_value), pointer :: latest_classes_image, maximum_resolution, chunk_rejected_classes_image, chunk_rejected_grid_section, snapshot_json
-                type(json_value), pointer :: pool_rejected_grid_section, pool_rejected_classes_image, last_snapshot, last_snapshot_id, rejection, lpthres, ndev, mskdiam, boxsizea
+                type(json_value), pointer :: pool_rejected_grid_section, pool_rejected_classes_image, snapshot_last, snapshot_last_id, rejection, lpthres, ndev, mskdiam, boxsizea
                 type(nice_plot_doughnut)  :: status_plot
                 integer                   :: i
                 call this%stat_json%create_object(cls2D, 'cls2D')
@@ -1017,10 +1017,10 @@ end type simple_nice_communicator
                 ! snapshots
                 if(this%view_cls2D%snapshot_id .gt. 0) then
                     call this%stat_json%create_object(snapshot_section, 'snapshot')
-                    call this%text_data_object(last_snapshot_id, "last_snapshot_id",   this%view_cls2D%snapshot_id)
-                    call this%stat_json%add(snapshot_section, last_snapshot_id)
-                    call this%text_data_object(last_snapshot,    "last_snapshot_time", this%view_cls2D%snapshot_time)
-                    call this%stat_json%add(snapshot_section, last_snapshot)
+                    call this%text_data_object(snapshot_last_id, "snapshot_last_id",   this%view_cls2D%snapshot_id)
+                    call this%stat_json%add(snapshot_section, snapshot_last_id)
+                    call this%text_data_object(snapshot_last,    "snapshot_last_time", this%view_cls2D%snapshot_time)
+                    call this%stat_json%add(snapshot_section, snapshot_last)
                     ! snapshot json
                     if(associated(this%view_cls2D%snapshot_json)) then
                         call this%stat_json%clone(this%view_cls2D%snapshot_json, snapshot_json)

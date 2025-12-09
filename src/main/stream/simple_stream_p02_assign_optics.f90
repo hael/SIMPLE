@@ -2,10 +2,10 @@ module simple_stream_p02_assign_optics
 include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_commander_base,     only: commander_base
-use simple_stream_watcher,     only: stream_watcher
 use simple_parameters,         only: parameters
 use simple_sp_project,         only: sp_project
 use simple_starproject_stream, only: starproject_stream
+use simple_stream_watcher,     only: stream_watcher
 use simple_gui_utils
 use simple_progress
 use simple_qsys_funs

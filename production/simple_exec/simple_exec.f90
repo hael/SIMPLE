@@ -9,7 +9,6 @@ use simple_commanders_atoms
 use simple_commanders_cavgs
 use simple_commanders_checks
 use simple_commanders_cluster2D
-use simple_commanders_cluster2D_stream
 use simple_commanders_distr
 use simple_commanders_euclid
 use simple_commanders_imgproc
@@ -26,6 +25,7 @@ use simple_commanders_sim
 use simple_commanders_starproject
 use simple_commanders_validate
 use simple_commanders_volops
+use simple_stream_cluster2D_subsets
 use simple_exec_helpers
 implicit none
 #include "simple_local_flags.inc"
@@ -62,7 +62,7 @@ type(commander_pick_distr)                  :: xpick_distr
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_abinitio2D)                  :: xabinitio2D
 type(commander_cluster2D_autoscale)         :: xcluster2D_hlev
-type(commander_cluster2D_subsets)           :: xcluster2D_subsets
+type(stream_cluster2D_subsets)              :: xcluster2D_subsets
 type(commander_cleanup2D_hlev)              :: xcleanup2D_distr
 type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
 type(commander_map_cavgs_states)            :: xmap_cavgs_states
@@ -495,7 +495,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('3265a852')
+    call simple_print_git_version('b655e4f3')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
