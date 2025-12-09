@@ -43,7 +43,7 @@ contains
         type(sp_project)               :: spproj_glob    ! global project
         type(starproject_stream)       :: starproj_stream
         type(string), allocatable      :: movies(:), dir_movies(:)
-        type(string)                   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, directory, str_dir, str_thumb
+        type(string)                   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, str_dir, str_thumb
         character(len=STDLEN)          :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         real        :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
         real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
@@ -586,12 +586,12 @@ contains
                             xmldir = stemname(movie_names(imov))
                         else
                             ! single folder
-                            xmldir = cline%get_carg('dir_meta')
+                            xmldir = params_glob%dir_meta
                         endif
                         xmlfile = basename(movie_names(imov))
                         if(xmlfile%substr_ind('_fractions') > 0) xmlfile = xmlfile%to_char([1,xmlfile%substr_ind('_fractions') - 1])
                         if(xmlfile%substr_ind('_EER')       > 0) xmlfile = xmlfile%to_char([1,xmlfile%substr_ind('_EER')       - 1])
-                        xmlfile = trim(xmldir%to_char())//'/'//trim(xmlfile%to_char())//'.xml'
+                        xmlfile = xmldir//'/'//xmlfile//'.xml'
                         call spproj_here%os_mic%set(imov, "meta", xmlfile)
                     end if
                 enddo

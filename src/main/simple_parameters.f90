@@ -149,7 +149,6 @@ type :: parameters
     type(string)              :: dir_meta             !< grab xml files from here
     type(string)              :: dir_movies           !< grab mrc mrcs files from here
     type(string)              :: dir_prev             !< grab previous projects for streaming
-    type(string)              :: dir_ptcls
     type(string)              :: dir_refine           !< refinement directory
     type(string)              :: dir_reject           !< move rejected files to here{rejected}
     type(string)              :: dir_select           !< move selected files to here{selected}
@@ -575,7 +574,6 @@ contains
         self%dir_meta=''          !< grab xml files from here
         self%dir_movies=''        !< grab mrc mrcs files from here
         self%dir_prev=''          !< grab previous projects for streaming
-        self%dir_ptcls=''
         self%dir_refine=''        !< refinement directory
         self%dir_reject='rejected'!< move rejected files to here{rejected}
         self%dir_select='selected'!< move selected files to here{selected}
@@ -900,9 +898,9 @@ contains
         ! Dir args
         call check_dir('dir',             self%dir)
         call check_dir('dir_box',         self%dir_box)
+        call check_dir('dir_meta',        self%dir_meta)
         call check_dir('dir_movies',      self%dir_movies)
         call check_dir('dir_prev',        self%dir_prev)
-        call check_dir('dir_ptcls',       self%dir_ptcls)
         call check_dir('dir_refine',      self%dir_refine)
         call check_dir('dir_reject',      self%dir_reject)
         call check_dir('dir_select',      self%dir_select)
@@ -1289,6 +1287,7 @@ contains
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
+            if( self%dir_meta%to_char([1,1])  .ne.PATH_SEPARATOR )self%dir_movies = PATH_PARENT//self%dir_meta%to_char()
             if( self%dir_movies%to_char([1,1]).ne.PATH_SEPARATOR )self%dir_movies = PATH_PARENT//self%dir_movies%to_char()
             if( self%dir_target%to_char([1,1]).ne.PATH_SEPARATOR )self%dir_target = PATH_PARENT//self%dir_target%to_char()
         endif

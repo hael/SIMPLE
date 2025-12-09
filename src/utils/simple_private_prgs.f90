@@ -274,7 +274,6 @@ contains
         call cmd_dict%push('dir',           'directory')
         call cmd_dict%push('dir_movies',    'grab .mrc/.mrcs files from here')
         call cmd_dict%push('dir_prev',      'grab previous project info & files')
-        call cmd_dict%push('dir_ptcls',     'grab pre-micrograph stacks and docs from here')
         call cmd_dict%push('dir_refine',    'directory with opeaks_part*.bin; e.g. 1_refine3D')
         call cmd_dict%push('dir_reject',    'move rejected files to here{rejected}')
         call cmd_dict%push('dir_select',    'move selected files to here{selected}')
