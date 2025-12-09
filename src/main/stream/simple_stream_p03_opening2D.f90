@@ -2,14 +2,13 @@ module simple_stream_p03_opening2D
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_stream_watcher, only: stream_watcher
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
-use simple_mini_stream_utils
+use simple_stream_watcher, only: stream_watcher
 use simple_commanders_abinitio2D
-use simple_commanders_cluster2D_stream
 use simple_commanders_preprocess
 use simple_gui_utils
+use simple_mini_stream_utils
 use simple_progress
 use simple_stream_communicator
 use simple_stream_utils

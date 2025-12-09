@@ -54,4 +54,9 @@ real, parameter, dimension(21)  :: ASTIG_BINS    = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0
 real, parameter, dimension(19)  :: CTFRES_BINS   = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
 real, parameter, dimension(21)  :: ICESCORE_BINS = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
 
+type scaled_dims
+    real    :: smpd=0., msk=0.
+    integer :: box=0, boxpd=0
+end type scaled_dims
+
 end module simple_defs_stream

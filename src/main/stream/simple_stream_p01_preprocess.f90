@@ -8,13 +8,13 @@ use simple_parameters,           only: parameters
 use simple_qsys_env,             only: qsys_env
 use simple_sp_project,           only: sp_project
 use simple_starproject_stream,   only: starproject_stream
-use simple_stream_watcher
 use simple_commanders_preprocess
 use simple_gui_utils
 use simple_nice
 use simple_progress
 use simple_stream_communicator
 use simple_stream_utils
+use simple_stream_watcher
 use simple_timer
 implicit none
 

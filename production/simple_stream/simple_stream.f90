@@ -10,7 +10,6 @@ use simple_stream_p03_opening2D
 use simple_stream_p04_refpick_extract
 use simple_stream_p05_sieve_cavgs
 use simple_stream_p06_pool2D
-use simple_commanders_stream2D
 implicit none
 #include "simple_local_flags.inc"
 
@@ -69,7 +68,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('3265a852')
+call simple_print_git_version('b655e4f3')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
