@@ -349,7 +349,8 @@ contains
         write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
     end function stream_datestr
 
-    subroutine process_selected_references(imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles)
+    subroutine process_selected_references( imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
+        use simple_image_msk, only: automask2d
         class(string),   intent(in)    :: imgfile
         real,            intent(in)    :: smpd
         integer,         intent(in)    :: selection(:)
