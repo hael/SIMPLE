@@ -1086,10 +1086,31 @@ contains
                 call write_pft_array(pfts_odd,  fname)
             case('merged')
                 call write_pft_array(pfts_merg, fname)
+                ! call pft2img
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
     end subroutine polar_cavger_write
+
+    ! writes out |PFTs_MERG| as mrcs
+    subroutine pft2img()
+        type(image) :: img
+        integer :: nk,i,k,icls
+        nk = kfromto(2)
+        if( .not.is_even(nk) ) nk = nk+1
+        call img%new([pftsz,nk,1],1.0)
+        do icls = 1,ncls
+            img = 0.0
+            do i = 1,pftsz
+                do k = kfromto(1),kfromto(2)
+                    call img%set([i,k,1], real(abs(pfts_merg(i,k,icls))))
+                enddo
+            enddo
+            call img%write(string('pfts_it'//int2str(params_glob%which_iter)//'.mrc'),icls)
+        enddo
+        call img%kill
+    end subroutine pft2img
+
 
     ! Writes all cavgs PFT arrays
     subroutine polar_cavger_writeall( tmpl_fname )
