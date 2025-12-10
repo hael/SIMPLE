@@ -912,6 +912,7 @@ contains
     subroutine exec_stackops( self, cline )
         use simple_stackops
         use simple_procimgstk
+        use simple_polarft_calc, only: polarft_calc
         class(commander_stackops), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters)          :: params
@@ -920,10 +921,36 @@ contains
         type(oris)                :: o_here, os_ran
         type(ori)                 :: o, o2
         integer,      allocatable :: pinds(:)
+        complex(sp),  pointer     :: ptre(:,:,:), ptro(:,:,:)
         type(string)              :: fname
-        integer :: i, s, cnt, nincl
+        type(polarft_calc)        :: pftc
+        type(image)               :: img
+        integer :: i, s, cnt, nincl, j, k
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! polar representation
+        if( cline%defined('polar') )then
+            call pftc%new(params%nptcls, [1,params%nptcls], params%kfromto)
+            call build%img_crop_polarizer%init_polarizer(pftc, params%alpha)
+            do i = 1, params%nptcls
+                call build%img%read(params%stk, i)
+                call build%img%fft
+                call build%img_crop_polarizer%polarize(pftc, build%img, i, isptcl=.false., iseven=.true., mask=build%l_resmsk)
+            enddo
+            call pftc%get_refs_ptr( ptre, ptro )
+            call img%new([pftc%get_pftsz(),params%kfromto(2),1],1.0)
+            do i = 1, params%nptcls
+                img = 0.
+                do j = 1, pftc%get_pftsz()
+                    do k = params%kfromto(1),params%kfromto(2)
+                        call img%set([j,k,1], real(abs(ptre(j,k,i))))
+                    enddo
+                enddo
+                call img%write(params%outstk,i)
+            enddo
+            call img%kill
+            goto 999
+        endif
         ! random selection
         if( cline%defined('nran') )then
             if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'

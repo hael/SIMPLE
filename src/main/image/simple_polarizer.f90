@@ -155,7 +155,7 @@ contains
     !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize_1( self, pftc, img_ind, isptcl, iseven, mask )
         class(polarizer),        intent(in)    :: self    !< projector instance
-        class(polarft_calc), intent(inout) :: pftc   !< polarft_calc object to be filled
+        class(polarft_calc),     intent(inout) :: pftc   !< polarft_calc object to be filled
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
         logical,                 intent(in)    :: iseven  !< is even (or odd)
@@ -167,7 +167,7 @@ contains
     !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize_2( self, pftc, img, img_ind, isptcl, iseven, mask )
         class(polarizer),        intent(in)    :: self    !< projector instance
-        class(polarft_calc), intent(inout) :: pftc   !< polarft_calc object to be filled
+        class(polarft_calc),     intent(inout) :: pftc   !< polarft_calc object to be filled
         class(image),            intent(in)    :: img
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
