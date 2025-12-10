@@ -5,11 +5,9 @@ use simple_commanders_project, only: commander_new_project
 use simple_sp_project
 implicit none
 type(commander_new_project) :: xnew_project
-type(ori)                   :: o 
 type(oris)                  :: a1, os_peak1, os_peak2
 type(cmdline)               :: cline
 type(binoris)               :: bos
-type(sp_project)            :: spproj 
 logical                     :: mask(5), test_passed
 type(string)                :: fname, projname
 #include "simple_local_flags.inc"

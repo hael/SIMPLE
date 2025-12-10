@@ -3,8 +3,7 @@ include 'simple_lib.f08'
 use simple_decay_funs
 implicit none
 integer, parameter :: MAXITS = 100 ! upper iteration bound
-real               :: update_frac
-integer            :: nsampl, i, nsampl_fromto(2), nptcls
+integer            :: i, nptcls
 ! nptcls = 5000
 ! print *, calc_nsampl_fromto( nptcls )
 ! nptcls = 10000

@@ -192,10 +192,10 @@ contains
         type(ctfparams)               :: ctfvars
         type(Node), pointer           :: xmldoc, beamshiftnode, beamshiftnodex, beamshiftnodey
         type(string)  :: imgkind, moviename, fbody
-        type(string)  :: moviename_forctf, moviename_intg, output_dir_motion_correct
-        type(string)  :: output_dir_ctf_estimate, output_dir_extract, output_dir_inipick_preproc, micname_intg
-        type(string)  :: boxfile, eputiltgroup, str_meta
-        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
+        type(string)  :: moviename_forctf, output_dir_motion_correct
+        type(string)  :: output_dir_ctf_estimate, output_dir_inipick_preproc, micname_intg
+        type(string)  :: eputiltgroup, str_meta
+        integer :: nmovies, fromto(2), imovie, ntot, frame_counter
         logical :: l_del_forctf
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -2177,7 +2177,7 @@ contains
         logical,     allocatable :: l_non_junk(:)
         real,        allocatable :: diams(:), shifts(:,:), ints(:)
         integer,     allocatable :: pops(:), order(:), clsinds(:), cavg_inds(:)
-        integer :: nptcls, ncls, ncls_sel, icls, ldim(3), loc(1), i, irank, xtiles, ytiles
+        integer :: ncls_sel, icls, ldim(3), i, irank, xtiles, ytiles
         real    :: mskrad
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         ! set defaults
@@ -2265,9 +2265,9 @@ contains
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
-        real    :: ang, rot, lp, diam_max, sc, maxdiam, moldiam, mskdiam
+        real    :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam
         integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
-        integer :: cnt, norefs, b, box_for_pick, box_for_extract
+        integer :: cnt, norefs, box_for_pick, box_for_extract
         ! error check
         if( cline%defined('vol1')          ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')

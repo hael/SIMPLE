@@ -1214,7 +1214,7 @@ contains
         integer,       optional, intent(in)    :: vol_dim(3)
         type(string) :: pdbfile_centered
         type(image)  :: vol
-        real         :: mol_dim(3), center(3), qrt_box(3), max_dist, dist
+        real         :: mol_dim(3), center(3), max_dist, dist
         integer      :: ldim(3), i_atom, j_atom
         logical      :: use_center = .false.
         if( present(pdb_out) )then
@@ -1346,9 +1346,9 @@ contains
         real,          intent(in)    :: smpd, smpd_target
         class(string), intent(in)    :: pdb_file, exp_vol_file, even_vol_file, odd_vol_file
         type(image)       :: exp_vol, even_vol, odd_vol
-        real              :: smpd_new, upscaling_factor, beta
+        real              :: smpd_new, upscaling_factor
         real, allocatable :: beta_map_model(:), beta_even_odd(:)
-        integer           :: ifoo, ldim(3), ldim_new(3), box, box_new, i, natoms
+        integer           :: ifoo, ldim(3), ldim_new(3), box, box_new, natoms
         natoms = self%n; allocate(beta_map_model(natoms),beta_even_odd(natoms))
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'

@@ -272,9 +272,7 @@ contains
         type(image)          :: even, odd, even_icm, odd_icm, avg, avg_icm
         type(image_msk)         :: envmsk
         logical, allocatable :: l_msk(:,:,:)
-        real,    allocatable :: fsc(:), res(:), pspec(:), pspec_icm(:)
         type(string) :: file_tag
-        real         :: mskrad
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -672,7 +670,7 @@ contains
             function calc_lplim_final_stage( nbest ) result( lplim )
                 integer, intent(in)  :: nbest
                 real,    allocatable :: res(:), tmp_rarr(:)
-                integer, allocatable :: states(:), tmp_iarr(:)
+                integer, allocatable :: tmp_iarr(:)
                 real :: lplim
                 tmp_rarr  = build%spproj%os_cls2D%get_all('res')
                 tmp_iarr  = nint(build%spproj%os_cls2D%get_all('state'))

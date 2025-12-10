@@ -2,7 +2,7 @@ program simple_test_maxnloc
 include 'simple_lib.f08'
 implicit none
 integer, parameter :: NNRS = 1000, NSEL = 10, NTST=100000
-real               :: arr(NNRS), arr_copy(NNRS), arr_tmp(NNRS)
+real               :: arr(NNRS), arr_copy(NNRS)
 integer            :: indxarr(NNRS), i, loc(NSEL)
 type(ran_tabu)     :: rt
 rt = ran_tabu(NNRS)

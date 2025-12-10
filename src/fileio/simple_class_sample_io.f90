@@ -116,7 +116,7 @@ contains
         type(class_sample), allocatable, intent(inout) :: csarr(:)
         class(string),                   intent(in)    :: fname
         real, allocatable :: rmat(:,:)
-        integer :: i, j, nx, ny, sz_rarr, sz, cnt
+        integer :: i, j, nx, ny, cnt
         ! read matrix
         call file2rmat(fname, rmat)
         ny = size(rmat, dim=1)

@@ -451,7 +451,6 @@ contains
 
     subroutine test_type_safe_wrappers()
         type(linked_list) :: lst
-        integer :: iv
         character(:), allocatable :: s
         write(*,'(A)') 'test_type_safe_wrappers'
         call lst%push_back_int(101)

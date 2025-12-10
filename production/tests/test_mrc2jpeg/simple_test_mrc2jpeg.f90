@@ -7,9 +7,8 @@ use simple_parameters, only: parameters
 implicit none
 type(string), allocatable :: micname(:)
 type(image)               :: microg 
-type(string)              :: outputfile, fbody, filetable
+type(string)              :: outputfile, fbody
 integer                   :: i, j, nfiles, ldim(3), ifoo, ldim_refs(3)
-real                      :: smpd 
 type(cmdline)             :: cline
 type(parameters)          :: p
 if( command_argument_count() < 2 )then

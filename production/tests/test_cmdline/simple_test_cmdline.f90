@@ -4,12 +4,12 @@ use simple_chash
 include 'simple_lib.f08'
 implicit none
 #include "simple_local_flags.inc"
-type(cmdline)         :: cline, cline1
+type(cmdline)         :: cline
 type(chash)           :: job_descr
 character(len=STDLEN) :: xarg, line
 type(string)          :: fname, str_prg
 logical               :: test_passed
-integer               :: cmdstat, cmdlen, pos, funit, funit1
+integer               :: cmdstat, cmdlen, pos
 test_passed  = .true.
 fname        = 'file_command.txt'
 xarg         = "prg=symmetrize_map"

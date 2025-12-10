@@ -139,7 +139,6 @@ contains
         character(8)  :: date
         character(10) :: time
         character(5)  :: zone
-        character(16) :: datestr
         integer,dimension(8) :: values
         ! using keyword arguments
         call date_and_time(date,time,zone,values)

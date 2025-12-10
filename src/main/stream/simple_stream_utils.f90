@@ -365,7 +365,7 @@ contains
         real,              allocatable :: diams(:), shifts(:,:)
         logical,           parameter   :: DEBUG = .false.
         real    :: maxdiam, mskrad_in_pix, moldiam
-        integer :: ldim(3), icavg, icls, stat, ncls, nsel
+        integer :: ldim(3), icls, ncls, nsel
         nsel = size(selection)
         if( nsel == 0 ) return
         params_ptr => params_glob ! for safe call to automask2D

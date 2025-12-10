@@ -69,7 +69,7 @@ contains
         type(oris)           :: ostats
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
-        integer :: nsamples, n, nptcls
+        integer :: n, nptcls
         real    :: overlap_lim, fracsrch_lim
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv
@@ -207,7 +207,7 @@ contains
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged
-        integer :: iptcl, istate, n, nptcls, nsamples, ucnt
+        integer :: iptcl, istate, n, nptcls, ucnt
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         607 format(A,1X,F4.2)
@@ -445,11 +445,11 @@ contains
         type(CDataSet_type)           :: center, axis
         type(CDataPoint_type)         :: p
         type(oris)                    :: os
-        type(string)                  :: titlestr, fname_eps, fname_pdf, ps2pdf_cmd
+        type(string)                  :: fname_eps, fname_pdf, ps2pdf_cmd
         real,             allocatable :: phi(:), psi(:), logpops(:)
         integer,          allocatable :: pops(:), projs(:), inds(:)
         real(dp) :: color, x,y, sz
-        integer  :: iptcl, nptcls, maxpop, nprojs, proj, l, iostat, ind
+        integer  :: iptcl, nptcls, nprojs, proj, l, iostat, ind
         if( trim(params_glob%iterstats).ne.'yes' ) return
         nptcls = size(ptcl_mask)
         projs  = nint(build_glob%spproj_field%get_all('proj'))

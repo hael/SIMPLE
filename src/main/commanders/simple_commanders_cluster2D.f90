@@ -758,8 +758,8 @@ contains
         type(qsys_env)            :: qenv
         type(chash)               :: job_descr
         type(string)              :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
-        real                      :: frac_srch_space, smpd_refs
-        integer                   :: ldim_refs(3), nthr_here, iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid, ncls
+        real                      :: frac_srch_space
+        integer                   :: nthr_here, iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
@@ -1123,7 +1123,7 @@ contains
         type(parameters)          :: params
         type(builder),     target :: build
         type(starproject)         :: starproj
-        type(string)              :: finalcavgs, orig_objfun, refs, refs_sc, fname, fname_sigma
+        type(string)              :: finalcavgs, orig_objfun, refs_sc, fname, fname_sigma
         real,         allocatable :: corrs(:), corrs_all(:)
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
         real    :: smpd_refs

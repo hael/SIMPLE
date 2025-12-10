@@ -120,7 +120,7 @@ contains
     subroutine master_T( self, pcavecs )
         class(pca_svd), intent(inout) :: self
         real,           intent(in)    :: pcavecs(self%D,self%N)
-        real    :: eig_vecs(  self%D,self%N), eig_vals(  self%N), tmp(  self%N,self%N), pcavecs_T(self%N,self%D),&
+        real    :: eig_vecs(  self%D, self%N), eig_vals(  self%N), pcavecs_T(self%N, self%D), &
                    eig_vecs_T(self%N,self%D), eig_vals_T(self%D), tmp_T(self%D, self%D)
         integer :: i, inds(self%D), min_ND
         pcavecs_T  = transpose(pcavecs)

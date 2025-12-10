@@ -6,7 +6,6 @@ implicit none
 #include "simple_local_flags.inc"
 type(string),     allocatable :: thumb_files(:)
 character(len=*), parameter   :: DIR_THUMBS = 'thumbnails/'
-integer :: i
 
 call simple_list_files('*jpg', thumb_files)
 call simple_mkdir(string(DIR_THUMBS))

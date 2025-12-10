@@ -398,11 +398,11 @@ end type simple_nice_communicator
     end subroutine terminate_comm_thread
 
     subroutine remote_heartbeat() bind(c)
-        integer                                :: i, rc, procid, heartbeat_count
+        integer                                :: rc, procid, heartbeat_count
         logical                                :: terminate, send
         type(simple_socket)                    :: socket
         type(json_core)                        :: json
-        type(json_value), pointer              :: ans_json, update_json, update_ptr, update_arguments_1, update_arguments_2, update_arguments_3
+        type(json_value), pointer              :: ans_json, update_json, update_arguments_1, update_arguments_2, update_arguments_3
         logical                                :: found_update, found_arguments_1, found_arguments_2, found_arguments_3
         character(kind=CK,len=:),  allocatable :: msg_str_loc
         character(kind=CK, len=:), allocatable :: ans_str_loc
@@ -506,13 +506,11 @@ end type simple_nice_communicator
         contains
 
             subroutine add_headline_micrographs()
-                type(json_value), pointer :: micrographs, thumbnail, thumbnail_carousel, plots
-                type(json_value), pointer :: movies_section, movies_headline_section, micrographs_section, micrographs_headline_section, compute_section
+                type(json_value), pointer :: movies_headline_section, micrographs_headline_section
                 type(json_value), pointer :: movies_imported, last_movie_imported, n_micrographs
-                type(json_value), pointer :: micrographs_rejected, avg_ctf_resolution
-                type(json_value), pointer :: avg_ice_score, avg_astigmatism, compute_in_use
-                type(json_value), pointer :: latest_mic_img, carousel_img
-                integer                   :: i
+                type(json_value), pointer :: avg_ctf_resolution
+                type(json_value), pointer :: avg_ice_score
+                type(json_value), pointer :: latest_mic_img
                 ! movies
                 if(this%view_micrographs%movies_imported >= 0) then
                     call this%stat_json%create_object(movies_headline_section, 'movies')
@@ -550,12 +548,12 @@ end type simple_nice_communicator
             end subroutine add_headline_micrographs
 
             subroutine add_view_micrographs()
-                type(json_value), pointer :: micrographs, thumbnail, thumbnail_carousel, plots
-                type(json_value), pointer :: movies_section, movies_doughnut, movies_headline_section, micrographs_section, micrographs_headline_section, compute_section
+                type(json_value), pointer :: micrographs, thumbnail_carousel
+                type(json_value), pointer :: movies_section, movies_doughnut, micrographs_section
                 type(json_value), pointer :: movies_imported, last_movie_imported, n_micrographs
                 type(json_value), pointer :: micrographs_rejected, avg_ctf_resolution, interactive_plot
-                type(json_value), pointer :: avg_ice_score, avg_astigmatism, compute_in_use
-                type(json_value), pointer :: latest_mic_img, carousel_img
+                type(json_value), pointer :: avg_ice_score, avg_astigmatism
+                type(json_value), pointer :: carousel_img
                 type(nice_plot_doughnut)  :: status_plot
                 integer                   :: i
                 call this%stat_json%create_object(micrographs, 'micrographs')
@@ -710,7 +708,6 @@ end type simple_nice_communicator
             subroutine add_histograms_cls2D()
                 type(json_value),     pointer :: res_hist
                 type(nice_plot_bar)           :: res_plot
-                character(len=:), allocatable :: val_tmp
                 integer                       :: i, n
                 !! res
                 n = size(res_2d_bins)
@@ -738,7 +735,6 @@ end type simple_nice_communicator
                 type(json_value), pointer :: optics
                 type(json_value), pointer :: micrographs_section, optics_groups_section
                 type(json_value), pointer :: micrographs_imported, last_micrograph_imported, optics_groups
-                integer                   :: i
                 call this%stat_json%create_object(optics, 'optics')
                 ! micrographs
                 call this%stat_json%create_object(micrographs_section, 'micrographs')
@@ -762,7 +758,6 @@ end type simple_nice_communicator
                 type(ori),                 intent(in)    :: seg_ori
                 type(json_value), pointer, intent(inout) :: interactive_plot
                 type(json_value), pointer :: keys
-                integer                   :: i, j
                 call this%stat_json%create_object(interactive_plot, 'interactive_plot')
                 call this%stat_json%add(interactive_plot, 'type', 'plot_interactive')
                 call this%get_real_keys_json(keys, seg_ori)
@@ -896,7 +891,7 @@ end type simple_nice_communicator
             end subroutine add_view_pick
 
             subroutine add_headline_cls2D()
-                type(json_value), pointer :: particles_section, cls2D_section, grid_section
+                type(json_value), pointer :: particles_section, cls2D_section
                 type(json_value), pointer :: particles_imported, particles_assigned, last_iteration_time
                 type(json_value), pointer :: latest_classes_image, number_classes
                 ! particles
@@ -933,12 +928,11 @@ end type simple_nice_communicator
             subroutine add_view_cls2D()
                 type(json_value), pointer :: cls2D
                 type(json_value), pointer :: particles_section, cls2D_section, grid_section, snapshot_section
-                type(json_value), pointer :: particles_extracted, particles_imported, last_particles_imported, number_particles_assigned, number_particles_rejected
+                type(json_value), pointer :: particles_extracted, particles_imported, last_particles_imported
                 type(json_value), pointer :: iteration, number_classes, number_classes_rejected, assignment_doughnut, last_iteration_time, interactive_plot
                 type(json_value), pointer :: latest_classes_image, maximum_resolution, chunk_rejected_classes_image, chunk_rejected_grid_section, snapshot_json
                 type(json_value), pointer :: pool_rejected_grid_section, pool_rejected_classes_image, snapshot_last, snapshot_last_id, rejection, lpthres, ndev, mskdiam, boxsizea
                 type(nice_plot_doughnut)  :: status_plot
-                integer                   :: i
                 call this%stat_json%create_object(cls2D, 'cls2D')
                 ! particles
                 if(this%view_cls2D%particles_imported > -1 .or. this%view_cls2D%number_particles_assigned > -1) then
@@ -1066,7 +1060,7 @@ end type simple_nice_communicator
 
             subroutine add_view_ini3D()
                 type(json_value), pointer :: ini3D
-                type(json_value), pointer :: vols_section, stage, interactive_plot, number_states, last_stage_completed, lp, vols, vol_json, fsc_json
+                type(json_value), pointer :: vols_section, stage, number_states, last_stage_completed, lp, vols, vol_json, fsc_json
                 real                      :: fsc05, fsc0143
                 integer                   :: noris, iori
                 nullify(fsc_json)
@@ -1366,7 +1360,7 @@ end type simple_nice_communicator
         type(json_value), pointer, optional, intent(in) :: snapshot_json
         logical, allocatable                           :: msk(:)
         integer, allocatable                           :: id(:)
-        type(nice_stat_thumb_image_meta)               :: meta_res, meta_pop
+        type(nice_stat_thumb_image_meta)               :: meta_res
         integer :: uid, i
         real    :: rnd
         this%view_cls2D%active = .true.
@@ -1497,9 +1491,6 @@ end type simple_nice_communicator
         integer,                         optional, intent(in)    :: stage, number_states
         logical,                         optional, intent(in)    :: last_stage_completed
         real,                            optional, intent(in)    :: lp
-        integer :: uid, i, noris
-        real    :: rnd
-        logical :: new
         this%view_ini3D%active = .true.
         if(present(stage))         this%view_ini3D%stage         = stage
         if(present(number_states)) this%view_ini3D%number_states = number_states
@@ -1520,9 +1511,6 @@ end type simple_nice_communicator
     subroutine update_vols(this, number_vols)
         class(simple_nice_communicator),           intent(inout) :: this
         integer,                         optional, intent(in)    :: number_vols
-        integer :: uid, i
-        real    :: rnd
-        logical :: new
         this%view_vols%active = .true.
         if(present(number_vols)) this%view_vols%number_vols = number_vols
     end subroutine update_vols
@@ -1726,7 +1714,6 @@ end type simple_nice_communicator
         type(json_value), pointer,       intent(inout) :: ptr
         type(ori),                       intent(in)    :: seg_ori
         type(string), allocatable :: keys(:)
-        logical :: is_ptcl = .false.
         integer :: j
         call this%stat_json%create_array(ptr, 'keys')
         keys = seg_ori%get_keys()

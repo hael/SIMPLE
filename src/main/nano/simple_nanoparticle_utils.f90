@@ -466,7 +466,7 @@ contains
 
             ! Computes nearest neighbor bond length along the <111> <110> <100> lattice directions of the crystal
             subroutine nnbdl_lat()
-                real    :: bondl, cendist, dvect(3), angle, dist, d111(3), d100(3), d110(3), d(3), dl(3), a, latensor(3,3)
+                real    :: bondl, cendist, dvect(3), angle, dist, d111(3), d100(3), d110(3), d(3), a, latensor(3, 3)
                 integer :: natoms, iatom, jatom, ios, funit
                 real, parameter    :: threshold=10.
                 logical            :: ifound

@@ -124,7 +124,7 @@ contains
         real, optional,    intent(in)    :: pix_thres
         real,    allocatable :: ccsizes(:)
         type(image_bin)       :: ccimage
-        integer              :: loc(1), imax, sz, nccs
+        integer              :: loc(1), sz
         ! binarize volume
         if( present(pix_thres) )then
             call self%binarize(pix_thres)
@@ -277,8 +277,8 @@ contains
         real,         intent(out)   :: cccen(2)
         type(image_bin)    :: img_bin, cc_img
         real, allocatable :: ccsizes(:)
-        integer :: loc, ldim(3), npix
-        real    :: smpd, xyz(3)
+        integer :: loc, ldim(3)
+        real    :: smpd
         ldim = img%get_ldim()
         smpd = img%get_smpd()
         call img_bin%new_bimg(ldim, smpd, wthreads=.false.)

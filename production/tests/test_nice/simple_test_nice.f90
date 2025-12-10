@@ -3,7 +3,6 @@ include 'simple_lib.f08'
 use simple_nice
 implicit none
 type(simple_nice_communicator) :: nice_communicator
-integer :: i
 call nice_communicator%init(1, "testserver")
 call nice_communicator%cycle()
 call sleep(5)

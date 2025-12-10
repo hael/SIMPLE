@@ -133,7 +133,7 @@ contains
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         logical, optional, intent(in)    :: roi
         integer, optional, intent(in)    :: nboxes_max
-        real    :: scale, lp, ang, r
+        real    :: scale, lp
         integer :: iref, box
         if( self%exists ) call self%kill
         self%l_roi = .false.
@@ -766,7 +766,7 @@ contains
         integer,        intent(in)    :: np
         class(pickref), intent(inout) :: pickers(np)
         integer,        intent(inout) :: pickind
-        integer              :: nx,ny,ioff,joff,ipick,c,cmax, ind
+        integer              :: nx, ny, ioff, joff, ipick, c, cmax
         real,    allocatable :: scores(:,:)
         integer, allocatable :: map(:,:)
         nx = pickers(1)%nx_offset

@@ -358,7 +358,6 @@ contains
     subroutine build_strategy2D_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
-        integer :: i
         call self%kill_strategy2D_tbox
         call self%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
@@ -368,7 +367,6 @@ contains
 
     subroutine kill_strategy2D_tbox( self )
         class(builder), intent(inout) :: self
-        integer :: i
         if( self%strategy2D_tbox_exists )then
             call self%clsfrcs%kill
             self%strategy2D_tbox_exists = .false.

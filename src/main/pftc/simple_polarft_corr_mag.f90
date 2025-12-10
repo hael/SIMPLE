@@ -61,7 +61,7 @@ contains
         logical,   optional, intent(in)    :: kweight
         complex(dp), pointer :: pft_ref(:,:)
         real(dp),    pointer :: pft_mag_ptcl(:,:)
-        real(dp)    :: sumsqptcl, sumsqref
+        real(dp)    :: sumsqptcl
         integer     :: i, k, ithr
         logical     :: kw
         kw = .true.

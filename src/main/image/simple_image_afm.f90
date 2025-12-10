@@ -45,8 +45,8 @@ contains
         real(kind=4), allocatable :: Rank3_Data_4byte(:, :, :, :)
         character(len=:), allocatable :: channel_info
         character(len=10) :: iteration(2), properties(4)
-        integer :: in, check, real_type
-        integer :: real_type1, data, total_bytes, bytes_read, iter_ind, prop_ind, img_ind, i
+        integer :: in, check
+        integer :: data, bytes_read, iter_ind, prop_ind, img_ind
         type :: bin_header5
             integer(kind=2) :: version 
             integer(kind=2) :: checksum 
@@ -143,7 +143,6 @@ contains
         type(pickseg),    intent(inout) :: avg_p   
         integer, allocatable :: pickpos(:, :), val_center_r(:, :), val_center_t(:, :)
         real,    allocatable :: corr_final_t(:), corr_final_r(:)
-        character(len = 255) :: temp_dir   
         type(image)   :: HeightTrace, HeightRetrace, AvgHeight
         type(pickseg) :: trace_p, retrace_p
         type(image)   :: avg_slim, trace_slim, retrace_slim 
@@ -152,7 +151,7 @@ contains
         integer       :: coord_test(2), center_x(20), center_y(20)
         logical       :: outs
         integer       :: neighbor(3, 8), nsiz, center(3)
-        real          :: corr_r, corr_t, val_score_t, val_score_r 
+        real          :: corr_r, corr_t
         call get_AFM(AFM_in, 'AvgHeight',     AvgHeight)
         call get_AFM(AFM_in, 'HeightTrace',   HeightTrace)
         call get_AFM(AFM_in, 'HeightRetrace', HeightRetrace)
@@ -267,7 +266,7 @@ contains
         class(image_afm), intent(in)  :: AFM_in 
         class(image_afm), intent(out) :: Align_AFM
         real, allocatable :: shifts(:, :)
-        integer           :: num_avg, avg_ind, prop_ind, new_size, count, num_mic, tr_ind, retr_ind, i 
+        integer           :: num_avg, avg_ind, new_size, count, num_mic, tr_ind, retr_ind, i 
         type(string)      :: new_name 
         num_mic  = size(AFM_in%img_array)
         new_size = int(num_mic*1.5)
@@ -324,9 +323,9 @@ contains
         real,    parameter   :: min_theta = -PI/2., theta_step = PI/180., rad_step = 1
         real,    allocatable :: angles(:), rad(:), curr_rads(:), sins(:), coss(:), emat(:,:,:), rmat(:,:,:), imat(:,:,:)
         integer, allocatable :: accumulator(:,:), line_pos(:,:)
-        real    :: threshold, curr_rad, theta_range_def(2), smpd, fil_val
-        integer :: dims(3), diagonal, a_grid, r_grid, i, count, x, y, t, r, curr_rad_r, end_px, pix_cnt
-        integer :: draw, line_num, traversed, min_line = 5, center(3), nsz, neigh_filter(3, 8) = 0, m, n 
+        real    :: curr_rad, theta_range_def(2), smpd
+        integer :: dims(3), diagonal, a_grid, r_grid, i, x, y, t, r, curr_rad_r, end_px, pix_cnt
+        integer :: draw, line_num, traversed, min_line = 5
         logical :: debug_m = .false.
         if( present(theta_range) )then 
             theta_range_def = theta_range
@@ -452,8 +451,8 @@ contains
         real,    allocatable :: im_in_rmat(:,:,:), im_win_rmat(:,:,:), bin_win_rmat(:,:,:), area(:,:)
         type(image)    :: img_win, bin_win, lin_win, lines
         type(image_bin) :: bin_erode 
-        real           :: smpd,new_cen(3), msk_rad = 50.
-        integer        :: ldim(3), ldim_pick(3), i, windim(3), j, num_parts, counts, pad = 150
+        real           :: smpd, new_cen(3)
+        integer        :: ldim(3), ldim_pick(3), i, windim(3), j, counts, pad = 150
         logical        :: outside
         ldim   = img_in%get_ldim()
         smpd   = img_in%get_smpd()
@@ -543,7 +542,7 @@ contains
     function per_pix_var( img1, img2 ) result( var )
         type(image), intent(in) :: img1, img2
         real, allocatable :: rmat1(:,:,:), rmat2(:,:, :)
-        integer :: ldim(3), i, j
+        integer :: ldim(3)
         real    :: var 
         ldim = img1%get_ldim()
         allocate(rmat1(ldim(1), ldim(2), ldim(3)), rmat2(ldim(1), ldim(2), ldim(3)), source = 0.)
@@ -559,7 +558,7 @@ contains
         type(pickseg), intent(in)    :: trace_picks  
         integer,       intent(out)   :: retrace_centers(:,:)
         integer, allocatable :: coords(:,:)
-        type(image) :: trace_slim, retrace_slim, trace_shrink, retrace_shrink
+        type(image) :: trace_slim, retrace_slim
         integer     :: search_iter, neighbor_iter, box_iter, center(3), nsiz, neighbor(3,8), dim(3), dim_shrink(3)
         logical     :: outside
         real        :: neighbor_corr(8), coord_corr(3,8), max_corr(20), smpd, smpd_shrink, shrink = 1.
@@ -610,7 +609,7 @@ contains
         type(image),   intent(inout) :: trace, retrace
         type(image),   intent(inout) :: trace_vec(:), retrace_vec(:) 
         integer, allocatable :: coords(:,:)
-        integer        :: ldim(3), windim(3), box_iter
+        integer        :: ldim(3), windim(3)
         real           :: smpd
         type(image_bin) :: retrace_image_bin
         call trace_pick%get_positions(coords)
@@ -649,11 +648,11 @@ contains
         integer,      intent(in) :: ncls ! number of gaussians
         type(image), allocatable :: clus_stk(:), gau2D_stk(:)
         real,        allocatable :: rmat(:,:,:), euc_dist(:,:), rmat_labl(:,:,:)
-        integer,     allocatable :: labels(:), centers(:), nonzero_px(:), x(:), y(:), npnts(:), temp_vec(:)
+        integer,     allocatable :: labels(:), centers(:), x(:), y(:), npnts(:), temp_vec(:)
         logical,     allocatable :: mask(:)
         type(image) :: gau2D_sum
         real        :: smpd, rand, cen_gauss(2), cov_gauss(2,2), corr
-        integer     :: ldim(3), i, j, ndat, maxits = 100, iter, k, l, counts, sum 
+        integer     :: ldim(3), i, j, ndat, maxits = 100, iter, l, counts, sum 
         call im_in%vis()
         ldim = im_in%get_ldim()
         ldim = [ldim(1),ldim(2),1]

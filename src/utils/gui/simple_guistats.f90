@@ -306,7 +306,6 @@ contains
         class(guistats),  intent(inout) :: self  
         character(len=*), intent(in)    :: section
         character(len=*), intent(in)    :: key
-        integer       :: line
         character(8)  :: date
         character(10) :: time
         character(5)  :: zone
@@ -597,7 +596,7 @@ contains
         real,             intent(in)    :: smpd
         type(image)                     :: clsstk, img
         type(string) :: cavgs, cwd
-        integer      :: ncls, i, n, ldim_stk(3), ldim_img(3), nptcls
+        integer      :: ncls, i, ldim_stk(3), ldim_img(3), nptcls
         call simple_getcwd(cwd)
         cavgs = cwd%to_char() // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.mrc'
         if(.not. file_exists(cavgs)) return

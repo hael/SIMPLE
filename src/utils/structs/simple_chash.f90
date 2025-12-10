@@ -494,7 +494,7 @@ contains
         character(len=STDLEN), allocatable   :: keys_sorted(:)
         type(string) :: val
         type(chash)  :: tmp
-        integer      :: ikey, sz
+        integer      :: ikey
         if( self%chash_index > 1 )then
             ! fill in keys
             allocate(keys_sorted(self%chash_index))
@@ -643,7 +643,6 @@ contains
 
     subroutine dealloc_chash( self )
         class(chash), intent(inout) :: self
-        integer :: i
         if( allocated(self%keys) )then
             call self%keys%kill
             deallocate(self%keys)

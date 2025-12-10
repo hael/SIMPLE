@@ -298,7 +298,6 @@ contains
         type(inpl_struct), allocatable   :: algninfo(:,:)
         real,              allocatable   :: ccmat(:,:)
         integer :: ncavgs, i, j
-        real    :: diag_elem
         ncavgs   = size(cavg_imgs)
         algninfo = match_imgs(hp, lp, trs, cavg_imgs, cavg_imgs)
         if( allocated(dmat_res) ) deallocate(dmat_res)
@@ -327,7 +326,6 @@ contains
         type(inpl_struct), allocatable   :: algninfo(:,:)
         real,              allocatable   :: ccmat(:,:)
         integer :: ncls_ref, ncls_match, i, j
-        real    :: diag_elem
         ncls_ref   = size(cavg_imgs_ref)
         ncls_match = size(cavg_imgs_match)
         algninfo   = match_imgs(hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
@@ -403,7 +401,7 @@ contains
         type(clust_info),     allocatable   :: clust_info_arr(:)
         logical,              allocatable   :: l_msk(:,:,:)
         type(image)  :: img_msk 
-        integer      :: ncls_sel, i, j, nclust, iclust
+        integer      :: ncls_sel, nclust, iclust
         ncls_sel = size(cavg_imgs)
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
@@ -505,7 +503,7 @@ contains
         real,             allocatable   :: resvals(:), resarr(:)
         real,             parameter     :: FRAC_BEST_CAVGS=0.3
         integer :: cnt, i, filtsz, ldim(3), iclust, nclust
-        real    :: smpd, rfoo, best_res, worst_res, score_ice
+        real    :: smpd, rfoo, best_res, worst_res
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
         filtsz = cavg_imgs(1)%get_filtsz()
         smpd   = cavg_imgs(1)%get_smpd()

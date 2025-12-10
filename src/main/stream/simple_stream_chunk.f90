@@ -347,7 +347,7 @@ contains
             subroutine average_into(tmpl)
                 class(string), intent(in) :: tmpl
                 type(string) :: fname
-                integer      :: icls, ipart, numlen_chunk, iostat
+                integer      :: icls, ipart, numlen_chunk
                 if( params_glob%nparts_chunk > 1  )then
                     numlen_chunk = len(int2str(params_glob%nparts_chunk)) ! as per parameters
                     call img%zero_and_flag_ft

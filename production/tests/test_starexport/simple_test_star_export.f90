@@ -9,10 +9,7 @@ implicit none
 #include "simple_local_flags.inc"
 character(len=*), parameter :: projfile   = 'test.simple'
 character(len=*), parameter :: opticsfile = 'optics.simple'
-type(parameters)            :: params
-type(cmdline)               :: cline
 type(sp_project)            :: spproj
-type(starfile)              :: spproj_starfile
 integer(timer_int_kind)     :: ms0
 real(timer_int_kind)        :: ms_complete
 

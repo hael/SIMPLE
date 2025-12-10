@@ -215,7 +215,6 @@ contains
     subroutine send_1(this, msg)
         class(simple_socket),      intent(inout) :: this
         character (len=*), target, intent(in)    :: msg
-        character (len=BUFFER_LENGTH), target    :: buf, ip  
         integer(kind=c_size_t),        target    :: msglen
         integer :: rc
         msglen = len(trim(msg))

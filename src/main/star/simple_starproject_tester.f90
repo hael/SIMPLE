@@ -136,8 +136,7 @@ contains
         type(string), intent(in) :: fname
         integer,      intent(in) :: nexpected
         type(starfile_table_type) :: tbl
-        integer :: obj, count, ok
-        character(len=:), allocatable :: s
+        integer :: obj, count
         write(*,'(A)') "test_parallel_export_readback"
         count = 0
         call starfile_table__new(tbl)
@@ -403,7 +402,6 @@ contains
         type(starfile_table_type) :: checktbl
         type(string)              :: fname
         integer :: i, ok
-        logical :: exists
         write(*,'(A)') "test_relion_write_corrected_micrographs_star"
         call proj%os_mic%new(2, .false.)
         do i=1,2
@@ -478,7 +476,7 @@ contains
         type(cmdline)             :: cl
         type(starfile_table_type) :: checktbl
         type(string)              :: fname
-        integer :: i,j, ok
+        integer :: i, ok
         write(*,'(A)') "test_relion_write_particles2D_star"
         call proj%os_ptcl2D%new(3,.true.)
         call proj%os_stk%new(2,.false.)
@@ -601,7 +599,7 @@ contains
         type(sp_project)  :: proj
         type(cmdline)     :: cl
         type(string)      :: fname, tmpdir
-        integer :: i, unit
+        integer :: unit
         write(*,'(A)') "test_star_import_mics"
         ! Create temporary directory
         tmpdir = tmpfile("import_mic_test")
@@ -644,10 +642,8 @@ contains
     subroutine test_star_export_micrographs()
         type(starproject) :: sp
         type(sp_project)  :: proj
-        type(cmdline)     :: cl
         type(string)      :: out
         logical :: exists
-        integer :: i
         write(*,'(A)') "test_star_export_micrographs"
         out = tmpfile("export_mic_test")
         call exec_cmdline("mkdir -p " // out%to_char())
@@ -727,7 +723,6 @@ contains
         type(tilt_info)   :: t
         type(string)      :: fn
         integer :: unit, i
-        logical :: exists
         write(*,'(A)') "test_xml_tiltinfo"
         xmldir = tmpfile("xml_test")
         call exec_cmdline("mkdir -p " // xmldir%to_char())
@@ -778,7 +773,6 @@ contains
         type(sp_project)     :: proj
         type(cmdline)        :: cl
         logical :: exists
-        type(string) :: outf
         integer :: i
         write(*,'(A)') "test_relion_writer_micrographs"
         ! Create micrographs in project

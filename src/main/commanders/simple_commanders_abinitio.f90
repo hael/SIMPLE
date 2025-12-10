@@ -101,7 +101,7 @@ contains
         type(commander_reconstruct3D) :: xreconstruct3D
         type(commander_reproject)     :: xreproject
         ! other
-        type(string)                  :: stk, stkpath, orig_stk, shifted_stk, stk_even, stk_odd, ext
+        type(string)                  :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
         integer,          allocatable :: states(:)
         type(ori)                     :: o, o_even, o_odd
         type(parameters)              :: params
@@ -526,7 +526,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(simple_nice_communicator)  :: nice_communicator
-        integer :: istage, s, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
+        integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         logical :: l_stream
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously

@@ -24,7 +24,7 @@ type(commander_mini_stream)      :: xmini_stream
 type(commander_selection)        :: xsel
 type(sp_project)                 :: spproj
 type(stream_watcher)               :: movie_buff
-integer                          :: i, ndata_sets, status, n_nonzero, nmovf
+integer                          :: i, ndata_sets, n_nonzero, nmovf
 type(string)                     :: abspath, projfile
 character(len=*), parameter      :: filetab_file='filetab.txt'
 ! Parsing

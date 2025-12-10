@@ -500,7 +500,6 @@ contains
         real                 :: beamtiltx, beamtilty, threshold
         real,    allocatable :: tilts(:,:), centroids(:,:)
         integer, allocatable :: populations(:) 
-        logical              :: exists
         integer              :: pos
         call seed_rnd
         write(logfhandle, *) "Parsing movie XML files ... "

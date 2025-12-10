@@ -294,7 +294,7 @@ contains
         character(len=*), intent(in) :: listofints
         integer, allocatable :: iarr(:)
         character(len=:), allocatable :: str, before
-        integer :: index, cnt, iostat
+        integer :: index, cnt
         str   = adjustl(trim(listofints))
         index = scan(str, ',')
         if( index == 0 )then

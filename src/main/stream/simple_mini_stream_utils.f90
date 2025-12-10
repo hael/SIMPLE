@@ -22,10 +22,9 @@ contains
         real,              parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
         integer,           parameter     :: BOXFAC = 3, NQ_DIAMS = 10
         type(picksegdiam)                :: picker
-        type(image)                      :: mic_raw, mic_shrink, mic_den
-        type(image_bin)                  :: mic_bin
+        type(image)                      :: mic_raw, mic_shrink
         type(string)  :: mic_name, mic_den_name, mic_topo_name, mic_bin_name, mic_diam_name
-        integer :: ldim_raw(3), ldim(3), imic, nboxes
+        integer :: ldim_raw(3), ldim(3), imic
         real    :: scale, smpd
         logical :: l_empty
         ! parse project
@@ -77,17 +76,15 @@ contains
         real,              parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
         integer,           parameter     :: BOXFAC = 3, NQ_DIAMS = 10
         type(string),      allocatable   :: micnames(:), mic_den_names(:), mic_topo_names(:), mic_bin_names(:)
-        integer,           allocatable   :: labels(:), diam_labels(:), orimap(:)
+        integer,           allocatable   :: diam_labels(:), orimap(:)
         real,              allocatable   :: diams_arr(:), diams_arr_ts(:), tmp(:)
         real,              allocatable   :: diam_means(:), abs_z_scores(:)
         type(string)       :: boxfile, fbody_here, ext, fname_thumb_den, str_intg
         type(picksegdiam)  :: picker
         type(image)        :: mic_raw, mic_shrink, mic_den
-        type(image_bin)    :: mic_bin
         type(stats_struct) :: diam_stats
-        type(stats_struct) :: stats_nboxes
         type(nrtxtfile)    :: diams_file
-        integer :: nmics, ldim_raw(3), ldim(3), imic, loc(1), pop, nptcls, i, nboxes
+        integer :: nmics, ldim_raw(3), ldim(3), imic, pop, nptcls, i
         real    :: scale, mad, smpd
         logical :: l_empty
         ! parse project

@@ -262,7 +262,7 @@ contains
         class(oris),           intent(inout) :: sporis
         class(oris), optional, intent(inout) :: spoptics
         type(string), allocatable :: splitline(:)
-        type(string) :: cwd, line, entrystr, splitimage, fname, abspath
+        type(string) :: cwd, line, entrystr, splitimage, fname
         type(ori)    :: opticsori, spori
         logical      :: isptcl
         real         :: rval
@@ -1371,7 +1371,7 @@ contains
     subroutine propagate_optics_box(self, spproj)
         class(starproject),    intent(inout)   :: self
         class(sp_project),     intent(inout)   :: spproj
-        integer :: stkbox, stkind, stkogid, i, j
+        integer :: stkbox, stkogid, i, j
         if(spproj%os_stk%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring optics groups in project file have correct box ... "
@@ -1395,7 +1395,7 @@ contains
     subroutine propagate_optics2D(self, spproj)
         class(starproject),    intent(inout)   :: self
         class(sp_project),     intent(inout)   :: spproj
-        integer :: ogid, stkind, stkogid, i
+        integer :: ogid, stkind, i
         if(spproj%os_ptcl2D%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring particles 2d in project file have updated optics groups ... "
@@ -1412,7 +1412,7 @@ contains
     subroutine propagate_optics3D(self, spproj)
         class(starproject),    intent(inout)   :: self
         class(sp_project),     intent(inout)   :: spproj
-        integer :: ogid, stkind, stkogid, i
+        integer :: ogid, stkind, i
         if(spproj%os_ptcl3D%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring particles 3d in project file have updated optics groups ... "
