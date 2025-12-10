@@ -17,10 +17,8 @@ type(cmdline)               :: cline
 type(sp_project)            :: spproj
 type(sym)                   :: pgrpsyms
 type(chash)                 :: qdescr
-real                        :: vec(3), angle, rotmat(3,3), euls(3), shvec(2), rval, eullims(3,2)
-real(dp)                    :: rval_dp
-type(string)                :: key, cval, projname, projfile, str_projname, str_projrec, str_ori
-integer                     :: ival, state
+real                        :: vec(3), angle, rotmat(3, 3), euls(3), shvec(2)
+type(string)                :: key, projname, projfile, str_projname, str_projrec, str_ori
 logical                     :: test_passed
 type(string), allocatable   :: keys(:)
 test_passed = .true.

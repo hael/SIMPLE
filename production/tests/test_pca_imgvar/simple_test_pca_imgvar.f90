@@ -8,8 +8,6 @@ use simple_parameters, only: parameters
 implicit none
 integer, parameter :: NX = 5, NY = 5, NP = NX*NY, NC = 2, MAXPCAITS = 15
 type(ppca_inmem)   :: prob_pca
-type(pca_svd)      :: pca_obj
-type(kpca_svd)     :: kpca_obj
 integer :: i, j, cnt
 real    :: imgs(NX, NY, NC), flat_img(NP), dist_x(NP), dist_y(NP)
 real    :: data_ori(NP, NP), avg(NP), E_zn(NC, NP), data_cen(NP, NP), tmpvec(NP)

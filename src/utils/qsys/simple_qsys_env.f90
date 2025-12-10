@@ -56,7 +56,7 @@ contains
         type(string)          :: qsnam, tpi, hrs_str, mins_str, secs_str
         character(len=STDLEN) :: default_time_env
         integer               :: partsz, hrs, mins, secs, nptcls_here, envlen
-        real                  :: rtpi, tot_time_sec, default_time
+        real                  :: rtpi, tot_time_sec
         logical               :: sstream
         integer, parameter    :: MAXENVKEYS = 30
         call self%kill

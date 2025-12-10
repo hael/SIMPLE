@@ -150,7 +150,7 @@ contains
     subroutine background_heartbeat(self)
         class(stream_http_communicator), intent(inout) :: self
         character,                       target        :: rcv, snd
-        integer                                        :: pid, rc, i
+        integer                                        :: rc, i
         if(.not. self%active) return ! this process isn't communicating with nice
         ! create pipe
         rc = c_pipe(self%bg_pipe)
@@ -270,7 +270,7 @@ contains
         character(len=512)            :: buf
         character(len=:), allocatable :: cmd
         integer                       :: file_unit, stat
-        logical                       :: evaluate_checksum, found, terminate
+        logical                       :: evaluate_checksum
         cmd = 'md5sum ' // self%tmp_send%to_char() // ' >> ' // self%tmp_recv%to_char()
         call execute_command_line(cmd, exitstat=stat)
         if (stat /= 0) then

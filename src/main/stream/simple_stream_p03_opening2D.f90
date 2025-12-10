@@ -49,7 +49,7 @@ contains
         integer,             parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                parameter   :: LPSTOP = 8.
         integer,             allocatable :: final_selection(:)
-        integer                          :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
+        integer                          :: nprojects, i, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
         integer                          :: ithumb, xtiles, ytiles, xtile, ytile, ncls_stk, cnt, optics_map_id
         integer                          :: n_non_zero, nmics
         logical                          :: found, increase_nmics = .false.
@@ -460,7 +460,7 @@ contains
                 type(nrtxtfile)               :: boxfile
                 type(json_value), pointer     :: micrograph, boxes, box
                 real,             allocatable :: boxdata(:,:)
-                integer                       :: i, x, y, diameter, type
+                integer                       :: i, x, y
                 call json%create_object(micrograph, "")
                 call json%add(micrograph, "path",    path)
                 call json%add(micrograph, "xdim"   , xdim)

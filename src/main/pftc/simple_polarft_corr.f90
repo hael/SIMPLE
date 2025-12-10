@@ -169,7 +169,6 @@ contains
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(dp) :: w, sumsqptcl
         integer  :: k, i, ithr
-        logical  :: even
         ithr    = omp_get_thread_num() + 1
         i       = self%pinds(iptcl)
         shmat   => self%heap_vars(ithr)%shmat

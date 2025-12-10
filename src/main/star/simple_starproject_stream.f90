@@ -430,7 +430,7 @@ contains
         type(starpart), allocatable :: starparts(:)
         type(starpart)          :: newpart
         logical                 :: l_optics_set, l_verbose
-        integer                 :: ioptics, i, nptcls, nbatches, fhandle, ok
+        integer                 :: i, nptcls, nbatches, fhandle, ok
         integer,      parameter :: BATCHSIZE=10000
         integer,      parameter :: NTHR=4
         integer(timer_int_kind) :: ms0

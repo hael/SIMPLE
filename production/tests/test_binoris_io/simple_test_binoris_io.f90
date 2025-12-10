@@ -7,7 +7,6 @@ use simple_binoris_io
 implicit none
 type(commander_new_project) :: xnew_project
 type(cmdline)               :: cline
-type(binoris)               :: bos
 type(oris)                  :: o
 type(sp_project)            :: spproj 
 logical                     :: test_passed

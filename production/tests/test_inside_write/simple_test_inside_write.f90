@@ -3,7 +3,6 @@ include 'simple_lib.f08'
 use simple_sp_project, only: sp_project
 implicit none
 type(sp_project) :: spproj
-type(string)     :: str
 integer          :: i
 call spproj%os_mic%new(10, is_ptcl=.false.)
 do i=1,10

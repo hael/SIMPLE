@@ -325,7 +325,7 @@ contains
         integer, allocatable, intent(inout) :: medoids(:)   ! cluster medoids
         integer, allocatable, intent(inout) :: pops(:)      ! cluster populations
         logical, allocatable :: available(:), outliers(:)
-        integer :: N, i, j, icls, jcls, cnt, ncls, sz_dim1, sz_dim2, loc(1)
+        integer :: N, i, icls, jcls, cnt, ncls, sz_dim1, sz_dim2, loc(1)
         real    :: d
         sz_dim1 = size(distmat, dim=1)
         sz_dim2 = size(distmat, dim=2)

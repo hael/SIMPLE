@@ -126,7 +126,7 @@ contains
         type(pickref),    allocatable :: comprefp_refine(:)
         real,             allocatable :: moldiams(:)
         character(len=4), allocatable :: moldiams_str(:)
-        type(pickref) :: refp, refp_refine, refp_merg
+        type(pickref) :: refp, refp_refine
         type(string)  :: kind, boxfile
         real          :: maxdiam, sig, r, ang
         integer       :: box, i, istr, num_entries, nmoldiams, sel

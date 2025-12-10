@@ -334,7 +334,6 @@ contains
         integer,     intent(in) :: inds(:)
         type(oris) :: self_sub
         integer    :: n, i
-        logical    :: is_ptcl
         n  = size(inds)
         call self_sub%new(n, self%is_particle())
         do i = 1,n
@@ -1820,7 +1819,7 @@ contains
         integer,            intent(inout) :: states(self%n)
         integer, optional,  intent(in)    :: nptcls_per_part
         integer, allocatable :: parts(:,:)
-        integer :: nptcls, i, j, k, nptcls_eff, ipart
+        integer :: nptcls, i, j, nptcls_eff, ipart
         ! calculate total # particles to sample
         nptcls_eff = self%count_state_gt_zero() 
         if( present(nptcls_per_part) )then

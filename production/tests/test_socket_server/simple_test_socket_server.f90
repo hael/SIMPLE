@@ -9,8 +9,7 @@ use unix, only : c_pthread_mutex_init, c_pthread_mutex_destroy
 use unix, only : c_pthread_mutex_lock, c_pthread_mutex_unlock
 implicit none
 type(simple_socket)                    :: socket
-integer                                :: fd, i
-character(kind=CK, len=:), allocatable :: ans_str
+integer                                :: fd
 write(*,*) "Socket server test. Waiting for client message"
 call socket%open
 call socket%set_options

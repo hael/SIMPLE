@@ -960,10 +960,8 @@ contains
         type(commander_make_cavgs)    :: xmake_cavgs
         type(cmdline)                 :: cline_refine3D_nano, cline_detect_atms, cline_reproject
         type(cmdline)                 :: cline_vizoris, cline_make_cavgs
-        type(ori)                     :: o1, o2
         type(image), allocatable      :: imgs(:)
         type(sp_project)              :: spproj
-        type(stats_struct)            :: euldist_stats
         character(len=*), parameter   :: RECVOL     = 'recvol_state01.mrc'
         character(len=*), parameter   :: EVEN       = 'recvol_state01_even.mrc'
         character(len=*), parameter   :: ODD        = 'recvol_state01_odd.mrc'
@@ -976,11 +974,10 @@ contains
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         integer,          parameter   :: NSPACE_CLS3D = 500
         type(string)                  :: iter_dir, cavgs_stk, fname
-        integer,          allocatable :: pinds(:)
-        real,             allocatable :: rstates(:), corrs(:), euldists(:)
-        logical,          allocatable :: state_mask(:), pind_mask(:)
+        real,             allocatable :: rstates(:), corrs(:)
+        logical,          allocatable :: state_mask(:)
         type(string) :: fbody, fbody_split, fname_reprojs, fname_reprojs_sim, fname_cvags_vs_reprojs
-        integer      :: i, iter, cnt, cnt2, funit, io_stat, endit, noris, pind_plus_one
+        integer      :: i, iter, cnt, cnt2, funit, io_stat, endit
         real         :: smpd
         logical      :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
@@ -1163,16 +1160,15 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
         class(commander_ptclsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        real,          allocatable :: rad_cc(:,:), rad_dists(:,:)
         integer,       allocatable :: pinds(:)
         type(parameters)     :: params
         type(builder)        :: build
         type(image)          :: cavg_img
         type(sp_project)     :: spproj
         type(string)         :: command_plot
-        type(string)         :: cavgs_stk, ptcls_stk
-        integer              :: cnt, iptcl, icavgs, ncavgs, sz_cls2D, j, nptcls
-        real                 :: smpd, corr, tmpstap
+        type(string)         :: cavgs_stk
+        integer              :: cnt, iptcl, icavgs, ncavgs, nptcls
+        real                 :: smpd, corr
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_ptclsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -1224,11 +1220,11 @@ contains
         type(image)          :: cavg_even, cavg_odd, img_w
         type(sp_project)     :: spproj
         type(string)         :: cavgs_stk, cavgs_stk_even, cavgs_stk_odd
-        type(string)         :: command_plot, ext
+        type(string)         :: command_plot
         real,    allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical, allocatable :: state_mask(:)
         integer, allocatable :: pinds(:)
-        integer :: ncavgs, ncavgs_even, ncavgs_odd, i, j, cnt, cnt2, ncls, icls, tmax, tmin, tstamp
+        integer :: ncavgs, i, j, cnt, tmax, tmin, tstamp
         real    :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgseoproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -1297,7 +1293,7 @@ contains
         real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
         integer,          allocatable :: pinds(:)
-        integer :: ncavgs, i, j, cnt, cnt2, ncls, icls, tmax, tmin, tstamp
+        integer :: ncavgs, i, j, cnt, cnt2, tmax, tmin, tstamp
         real    :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -1548,18 +1544,15 @@ contains
         type(string),          allocatable :: vol_fnames(:)
         real,                  allocatable :: ccs(:,:,:), fsc(:), rstates(:), rad_cc(:), rad_dists(:)
         integer,               allocatable :: parts(:,:)
-        type(string)                  :: recname, fname, volassemble_output, str_state, recname_even, res_fname
+        type(string)                  :: recname, fname, str_state, recname_even, res_fname
         type(string)                  :: recname_odd, vol_fname_even, vol_fname_odd
         type(commander_reconstruct3D) :: xrec3D_shmem
-        type(commander_volassemble)   :: xvolassemble
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(cmdline)                 :: cline_rec
-        type(chash)                   :: job_descr
         type(image)                   :: vol1, vol2
-        integer :: state, ipart, istate, iptcl, nptcls, frame_start, frame_end
+        integer :: state, ipart, istate, nptcls, frame_start, frame_end
         integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime
-        logical :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)

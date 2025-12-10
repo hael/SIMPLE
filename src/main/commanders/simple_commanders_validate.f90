@@ -38,9 +38,8 @@ contains
         type(parameters)                   :: params
         type(sp_project)                   :: spproj
         type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
-        type(cmdline)                      :: cline_make_pickrefs, cline_extract, cline_abinitio2D, cline_shape_rank
+        type(cmdline)                      :: cline_extract, cline_abinitio2D, cline_shape_rank
         type(commander_new_project)        :: xnew_project
-        type(commander_make_pickrefs)      :: xmake_pickrefs
         type(commander_import_movies)      :: ximport_movies
         type(commander_ctf_estimate_distr) :: xctf_estimate
         type(commander_extract_distr)      :: xextract

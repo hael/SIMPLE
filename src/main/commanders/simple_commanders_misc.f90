@@ -74,21 +74,14 @@ contains
         class(commander_afm), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(parameters), target     :: params
-        type(image),     allocatable :: img_arr(:), pick_vec(:), pick_vec_ds(:), height_trace(:), height_retrace(:), ordered_pick_vec(:)
-        type(image_afm), allocatable :: stack_afm(:)   
-        type(pickseg),   allocatable :: trace_picks(:)
-        type(image),     allocatable :: trace_pick_vec(:), retrace_pick_vec(:)
-        type(string),    allocatable :: file_list(:)
-        type(pickseg)   :: pick_test 
+        type(image),     allocatable :: pick_vec(:), ordered_pick_vec(:)
         type(string)    :: directory, test_file, sim_dir
-        type(image) :: im_stack, sim_test(2), exp_img, test_vec_corr(4), subtract, trace_test, retrace_test
-        integer                 :: i, nptcls, temp_ldim(3), pick_dim(3),j, cropped_dim(3), test_count, clip_len, orig_dim(3), n_picks
-        integer, allocatable    :: ldim_arr(:,:), medoids(:), labels(:), clus_count(:), retrace_centers(:,:), labels_ind(:)
-        real,    allocatable    :: smpd_arr(:), stack_rmat(:,:,:,:), R(:,:), X(:,:), Y(:,:), corrmat(:,:), var_mat(:,:), labels_real(:)
-        logical, allocatable    :: M(:,:), corrmat_mask(:,:)
+        integer                 :: i, nptcls, temp_ldim(3), pick_dim(3), cropped_dim(3), test_count
+        integer, allocatable    :: medoids(:), labels(:), labels_ind(:)
+        real,    allocatable    :: corrmat(:, :), var_mat(:, :), labels_real(:)
+        logical, allocatable    :: corrmat_mask(:, :)
         type(aff_prop)          :: clus
-        real        :: hp = 100., lp = 10., new_smpd, sim_sum, var_test, ang, x_sh, y_sh
-        logical     :: mirr
+        real        :: sim_sum
         directory = '/Users/atifao/Downloads/IBW_orig/'
         test_file = '/Users/atifao/Downloads/MRC_T/17.mrc'
         sim_dir   = '/Users/atifao/Downloads/mrc_for_clus.mrc'
@@ -487,7 +480,7 @@ contains
         type(ori)                     :: o
         type(image)                   :: micrograph_dw, micrograph_nodw, mic, background
         real,             allocatable :: frc(:), res(:)
-        type(string)                  :: abs_fname, orig_mic
+        type(string)                  :: orig_mic
         integer :: nmovies, imov, cnt, n
         logical :: l_bilinear_interp
         call cline%set('mkdir',   'no')

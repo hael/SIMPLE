@@ -6,7 +6,6 @@ implicit none
 type(oris) :: o, o1, o2, o_subset, o1_subset
 logical    :: test_passed
 integer    :: inds(10)=[1,2,3,4,5,6,7,8,9,10]
-character(STDLEN) :: valstr
 #include "simple_local_flags.inc"
 test_passed=.true.
 print *,'>>> CREATE ORIS '

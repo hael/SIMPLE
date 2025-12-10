@@ -564,7 +564,7 @@ contains
         type(oris)                     :: os
         type(nrtxtfile)                :: paramfile
         type(ctfparams)                :: ctfvars
-        integer                        :: ldim1(3), ldim2(3), nptcls1, nptcls2, i, ndatlines, nrecs, n_ori_inputs, nstks
+        integer                        :: ldim1(3), i, ndatlines, nrecs, n_ori_inputs, nstks
         logical                        :: inputted_oritab, inputted_plaintexttab, inputted_deftab, inputted_stk_den
         logical                        :: l_stktab_per_stk_parms, is_ptcl
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -885,9 +885,8 @@ contains
         logical,            allocatable :: clustmask(:)
         type(class_sample), allocatable :: clssmp(:)
         type(string)                    :: projfname, fbody
-        integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: noris,i,noris_in_state,ncls,icls,iclust,nclust
-        integer                         :: state,nstates,nptcls,ipart
+        integer                         :: noris, ncls, icls, iclust, nclust
+        integer                         :: nptcls, ipart
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
@@ -990,10 +989,9 @@ contains
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
         integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
-        type(string)                    :: projfname
         integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state,ncls,icls
-        integer                         :: state,nstates,nptcls,ipart,n_thumbnails
+        integer                         :: n_lines, fnr, noris, i, nstks, noris_in_state
+        integer                         :: state
         logical                         :: l_ctfres, l_icefrac, l_append, l_keep, l_writecls2d, l_writestar
         class(oris), pointer :: pos => NULL()
         l_append     = .false.
@@ -1700,7 +1698,7 @@ contains
         real,               allocatable :: smpds(:)
         real    :: smpd
         integer :: nprojs, iproj, box
-        logical :: l_reextract, l_has_ptcls, l_has_mics
+        logical :: l_reextract, l_has_ptcls
         if( .not.cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
         if( .not.cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
         if( .not.cline%defined('outside')      ) call cline%set('outside',      'no')
@@ -1781,7 +1779,6 @@ contains
         class(commander_concatenate_projects), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(string), allocatable :: fnames(:)
-        type(string)     :: fname
         type(sp_project) :: spproj_read, spproj
         type(parameters) :: params   
         integer :: n_spprojs, iproj
@@ -1847,7 +1844,7 @@ contains
         type(ctfparams)                  :: ctfvars
         type(cmdline)                    :: cline_new_proj, cline_import_particles
         type(oris)                       :: os_ptcl2D_prev, os_ptcl3D_prev
-        integer :: cnt, i, n, np2D, np3D
+        integer :: i, n, np2D, np3D
         call cline%set('mkdir', 'no')
         ! init params
         call params%new(cline)

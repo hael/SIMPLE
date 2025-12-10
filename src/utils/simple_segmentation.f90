@@ -130,7 +130,7 @@ contains
         real,    allocatable :: arr(:), means(:), peak_ts(:), frac_peaks(:), arr1(:), arr2(:)
         integer, allocatable :: labels(:)
         integer :: iq, n_fg, nvals, cnt, iq_min, ind
-        real    :: diff, diff_min, med1, med2
+        real    :: diff, diff_min
         ! quantize with sortmeans
         allocate( means(NQUANTA), labels(NQUANTA), frac_peaks(NQUANTA), peak_ts(NQUANTA) )
         means  = 0.
@@ -248,7 +248,7 @@ contains
             function dist_avg( arr1, arr2 ) result( adist )
                 real, intent(in) :: arr1(:), arr2(:)
                 integer :: i, j, ni, nj
-                real    :: dist, adist
+                real    :: adist
                 ni    = size(arr1)
                 nj    = size(arr2)
                 adist = 0.
@@ -631,7 +631,7 @@ contains
         type(image) :: tmpimg
         integer     :: ldim(3)
         logical     :: ppositive, ttight, ttighter
-        real        :: selected_t, outlier_t, t1, t2
+        real        :: selected_t, t1, t2
         ldim = img%get_ldim()
         if( present(mskrad) )then
             call tmpimg%disc(ldim, img%get_smpd(), mskrad, lmsk)

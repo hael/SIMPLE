@@ -132,21 +132,20 @@ contains
         logical,          parameter   :: DEBUG = .true.
         real,             parameter   :: SCORE_THRES_INCL = 75.
         integer,          parameter   :: NCLUST_MAX = 65
-        type(image),      allocatable :: cavg_imgs(:), cluster_imgs(:)
+        type(image),      allocatable :: cavg_imgs(:)
         type(image)                   :: img_msk
         real,             allocatable :: mm(:,:), dmat(:,:), resvals_tmp(:), resvals(:)
         logical,          allocatable :: l_non_junk(:), l_msk(:,:,:)
-        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), cluster_inds(:)
-        integer,          allocatable :: clspops(:), clspops_sel(:), states(:), labels4write(:), inds_glob(:)
+        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:)
+        integer,          allocatable :: clspops(:), states(:), labels4write(:), inds_glob(:)
         type(clust_info), allocatable :: clust_info_arr(:)
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        type(stats_struct)            :: res_stats
-        integer                       :: ncls, ncls_sel, icls, cnt, rank, nptcls, loc(1)
-        integer                       :: i, j, ii, jj, nclust, iclust, nclust_sel, nptcls_good
-        integer                       :: ngood, minv_labels, ind, ldim(3), cnt_clust, pop, box
-        real                          :: fsc_res, rfoo, frac_good, best_res, worst_res, res_max, mskrad
-        real                          :: oa_min, oa_max, smpd, simsum
+        integer                       :: ncls, ncls_sel, icls, cnt, nptcls
+        integer                       :: i, nclust, iclust, nptcls_good
+        integer                       :: ldim(3), pop, box
+        real                          :: frac_good, mskrad
+        real                          :: oa_min, oa_max, smpd
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -386,10 +385,10 @@ contains
         type(string)                   :: chunk_fnames(2), folder
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
-        integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
-        logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
-        real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:), dmat(:,:)
-        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch
+        integer,           allocatable :: states(:), labels_match(:), states_map(:)
+        logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:)
+        real,              allocatable :: mm_ref(:, :), mm_match(:, :), dmat_clust(:, :), dmat(:, :)
+        integer :: nmatch, nrefs, ldim(3), i, ncls_match, nclust, icls, iclust, imatch
         real    :: smpd, oa_minmax(2)
         ! defaults
         call cline%set('oritype', 'cls2D')

@@ -398,7 +398,6 @@ contains
         type(winfuns)         :: fwin
         character(len=STDLEN) :: wstr
         type(image)           :: img_filt
-        real                  :: k2(3,3), k3(3,3,3) !laplacian kernels (2D-3D)
         ! check the number of pixels in window
         if( self%is_3d() )then
             npix = (2*winsz+1)**3

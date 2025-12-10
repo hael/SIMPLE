@@ -1172,9 +1172,9 @@ contains
         class(commander_cluster_stack), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
-        type(image),      allocatable :: stk_imgs(:), cluster_imgs(:)
+        type(image),      allocatable :: stk_imgs(:)
         integer,          allocatable :: labels(:), i_medoids(:)
-        real,             allocatable :: mm(:,:), dmat(:,:), dmat_res(:,:)
+        real,             allocatable :: mm(:, :), dmat(:, :)
         real    :: smpd, mskrad, oa_min, oa_max
         integer :: i, ldim(3), box, nimgs, nclust
         ! defaults
@@ -1236,9 +1236,9 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
         type(image),       allocatable :: stk_imgs_ref(:), stk_imgs_match(:)
-        integer,           allocatable :: i_medoids_ref(:), labels_match(:)
-        real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat(:,:)
-        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch, box
+        integer,           allocatable :: labels_match(:)
+        real,              allocatable :: mm_ref(:, :), dmat(:, :)
+        integer :: nmatch, nrefs, ldim(3), i, nclust, imatch, box
         real    :: smpd, oa_minmax(2), mskrad
         ! defaults
         call cline%set('oritype', 'cls2D')

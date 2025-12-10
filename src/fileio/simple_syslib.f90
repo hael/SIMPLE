@@ -373,7 +373,6 @@ contains
     logical function dir_exists( dname )
         class(*), intent(in) :: dname
         integer :: status
-        integer, allocatable :: buffer(:)
         character(kind=c_char, len=:), allocatable :: d1
         dir_exists=.false.
         select type(dname)
@@ -563,7 +562,7 @@ contains
         type(string),     allocatable :: dirs(:)
         logical,          allocatable :: nrmap(:)
         integer,          allocatable :: dirinds(:)
-        integer :: i, j, last_nr_ind, io_stat
+        integer :: i, j, last_nr_ind
         integer :: next_int_dir_prefix, ndirs, loc(1)
         dirs = simple_list_dirs(dir2list)
         last_nr_ind = 1

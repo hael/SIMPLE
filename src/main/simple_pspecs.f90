@@ -45,7 +45,6 @@ contains
         type(image), allocatable :: cavg_threads(:) 
         real,        allocatable :: pspec(:)
         integer :: ldim(3), ispec, ithr
-        real    :: dynrange
         call self%kill
         self%nspecs     = size(imgs)
         ldim            = imgs(1)%get_ldim()

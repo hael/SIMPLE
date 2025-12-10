@@ -41,7 +41,6 @@ contains
         logical,       optional, intent(out)   :: empty
         integer, allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
         logical, allocatable :: picking_mask(:,:)
-        type(string)    :: fname, output_dir
         type(image)     :: mic_raw, mic_den
         type(image_bin) :: mic_shrink, mic_bin, img_cc
         real            :: rpos(2), diam, scale
@@ -115,11 +114,9 @@ contains
         class(string),      intent(in)    :: binmicname !< binarized micrograph file name, smpd is SMPD_SHRINK1
         real,               intent(in)    :: diam_fromto(2)
         integer,  allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
-        real,     allocatable :: masscens(:,:)
         type(image_bin) :: mic_bin, img_cc
         real           :: rpos(2), diam, diam_adj, scale
-        integer        :: pos(2), icc, nccs, nboxes, ldim(3), nframes
-        logical        :: l_empty
+        integer        :: pos(2), icc, nccs, ldim(3), nframes
         call self%kill
         scale = smpd_raw / SMPD_SHRINK1
         ! read binary
@@ -229,7 +226,6 @@ contains
         type(list_iterator)   :: xpos_iter, ypos_iter
         real,     allocatable :: diams(:)
         class(*), allocatable :: any
-        real    :: areal, diam
         integer :: i, funit, iostat, x,y, box_here
         nptcls = self%diameters%size()
         if( nptcls == 0 ) return

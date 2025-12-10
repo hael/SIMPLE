@@ -554,7 +554,7 @@ contains
         integer,            allocatable :: inds(:), pairs(:,:), inds_neigh(:)
         type(stats_struct), allocatable :: dist_stats(:)
         type(parameters) :: params
-        integer          :: npdbs, i, ii, j, ind, ipdb, npairs, cnt
+        integer          :: npdbs, i, j, ipdb, npairs, cnt
         character(len=2) :: el
         call cline%set('mkdir', 'no')
         call params%new(cline)
@@ -609,10 +609,9 @@ contains
         real,               allocatable :: betas(:), pdbmat(:,:)
         logical,            allocatable :: mask_core(:)
         type(parameters)   :: params
-        integer            :: npdbs, i, j, k, cnt, ipdb, natoms
+        integer            :: npdbs, i, ipdb, natoms
         character(len=2)   :: el
         type(stats_struct) :: dist_stats
-        type(string)       :: fname1, fname2
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
         npdbs = size(pdbfnames)

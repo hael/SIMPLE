@@ -49,7 +49,6 @@ contains
                 real                 :: dist
             end function
         end interface
-        integer :: nchanges
         call self%kill
         self%distfun => distfun
         self%n       =  n
