@@ -11,6 +11,7 @@ use simple_progress
 use simple_qsys_funs
 use simple_stream_communicator
 use simple_stream_utils
+use json_kinds
 implicit none
 
 public :: stream_p02_assign_optics
@@ -33,7 +34,8 @@ contains
         type(sp_project)               :: spproj, spproj_part
         type(starproject_stream)       :: starproj_stream
         type(json_value),  pointer     :: optics_assignments, optics_group     
-        type(json_value),  pointer     :: optics_group_coordinates,  optics_group_coordinate        
+        type(json_value),  pointer     :: optics_group_coordinates,  optics_group_coordinate
+        type(json_core)                :: json   
         type(string),      allocatable :: projects(:)
         type(string)                   :: str_dir
         integer                        :: nprojects, iproj, iori, new_oris, nimported, i, j, map_count, imap
@@ -84,12 +86,12 @@ contains
         ! Infinite loop
         nimported = 0
         do
-            if( file_exists(TERM_STREAM) .or. http_communicator%exit) then
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit_status()) then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
-            if( http_communicator%stop )then
+            if( http_communicator%stop_status() )then
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj%kill
@@ -98,7 +100,7 @@ contains
                 call EXIT(0)
             endif
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage", "finding and processing new micrographs", found) 
+            call http_communicator%update_json("stage", "finding and processing new micrographs", found) 
             ! detection of new projects
             call project_buff%watch( nprojects, projects, max_nmovies=50 )
             ! append projects to processing stack
@@ -124,26 +126,26 @@ contains
                 call starproj_stream%stream_export_optics(spproj, params%outdir)
                 call starproj_stream%stream_export_micrographs(spproj, params%outdir, optics_set=.true.)
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "micrographs_assigned",     spproj%os_mic%get_noris(),    found)
-                call http_communicator%json%update(http_communicator%job_json, "optics_groups_assigned",   spproj%os_optics%get_noris(), found)
-                call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),             found)
-                call http_communicator%json%remove(optics_assignments, destroy=.true.)
-                call http_communicator%json%create_array(optics_assignments, "optics_assignments")
-                call http_communicator%json%add(http_communicator%job_json, optics_assignments)
+                call http_communicator%update_json("micrographs_assigned",     spproj%os_mic%get_noris(),    found)
+                call http_communicator%update_json("optics_groups_assigned",   spproj%os_optics%get_noris(), found)
+                call http_communicator%update_json("last_micrograph_imported", stream_datestr(),             found)
+                call json%remove(optics_assignments, destroy=.true.)
+                call json%create_array(optics_assignments, "optics_assignments")
+                call http_communicator%add_to_json(optics_assignments)
                 do i = 1, spproj%os_optics%get_noris()
-                    call http_communicator%json%create_array(optics_group_coordinates, "coordinates")
+                    call json%create_array(optics_group_coordinates, "coordinates")
                     do j = 1, spproj%os_mic%get_noris()
                         if (spproj%os_mic%get(j, 'ogid') .eq. real(i)) then
-                            call http_communicator%json%create_object(optics_group_coordinate, "")
-                            call http_communicator%json%add(optics_group_coordinate, "x", dble(spproj%os_mic%get(i, 'shiftx')))
-                            call http_communicator%json%add(optics_group_coordinate, "y", dble(spproj%os_mic%get(i, 'shifty')))
-                            call http_communicator%json%add(optics_group_coordinates, optics_group_coordinate)
+                            call json%create_object(optics_group_coordinate, "")
+                            call json%add(optics_group_coordinate, "x", dble(spproj%os_mic%get(i, 'shiftx')))
+                            call json%add(optics_group_coordinate, "y", dble(spproj%os_mic%get(i, 'shifty')))
+                            call json%add(optics_group_coordinates, optics_group_coordinate)
                         endif
                     enddo
-                    call http_communicator%json%create_object(optics_group, "")
-                    call http_communicator%json%add(optics_group, optics_group_coordinates)
-                    call http_communicator%json%add(optics_group, "id", i)
-                    call http_communicator%json%add(optics_assignments, optics_group)
+                    call json%create_object(optics_group, "")
+                    call json%add(optics_group, optics_group_coordinates)
+                    call json%add(optics_group, "id", i)
+                    call json%add(optics_assignments, optics_group)
                 enddo
                 map_count = map_count + 1
                 call spproj%write_optics_map(OPTICS_MAP_PREFIX // int2str(map_count))
@@ -166,7 +168,7 @@ contains
             call http_communicator%send_jobstats()
         end do
         ! termination
-        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found) 
+        call http_communicator%update_json("stage", "terminating", found) 
         call http_communicator%send_jobstats()
         if(allocated(projects)) deallocate(projects)
         ! cleanup
@@ -179,12 +181,12 @@ contains
         contains
         
             subroutine communicator_init()
-                call http_communicator%json%add(http_communicator%job_json, "stage",                    "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_assigned ",    0)
-                call http_communicator%json%add(http_communicator%job_json, "optics_groups_assigned",   0)
-                call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
-                call http_communicator%json%create_array(optics_assignments, "optics_assignments")
-                call http_communicator%json%add(http_communicator%job_json, optics_assignments)
+                call http_communicator%add_to_json("stage",                    "initialising")
+                call http_communicator%add_to_json("micrographs_assigned ",    0)
+                call http_communicator%add_to_json("optics_groups_assigned",   0)
+                call http_communicator%add_to_json("last_micrograph_imported", "")
+                call json%create_array(optics_assignments, "optics_assignments")
+                call http_communicator%add_to_json(optics_assignments)
             end subroutine communicator_init
 
     end subroutine exec_stream_p02_assign_optics

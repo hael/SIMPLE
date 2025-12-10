@@ -15,6 +15,7 @@ use simple_rec_list
 use simple_stream_communicator
 use simple_stream_utils
 use simple_timer
+use json_kinds
 implicit none
 
 public :: stream_p04_refpick_extract
@@ -38,6 +39,7 @@ contains
         type(rec_list)                         :: project_list, project_list_main
         type(qsys_env),            pointer     :: qenv
         type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates!, picking_diameters
+        type(json_core)                        :: json
         type(qsys_env),            target      :: qenv_main, qenv_interactive
         type(cmdline)                          :: cline_make_pickrefs, cline_pick_extract
         type(stream_watcher)                   :: project_buff
@@ -134,7 +136,7 @@ contains
                     if(file_exists(params%pickrefs)) exit
                     call sleep(10)
                     call http_communicator%send_jobstats()
-                    if( http_communicator%exit )then
+                    if( http_communicator%exit_status() )then
                         ! termination
                         write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                         call http_communicator%term()
@@ -191,17 +193,16 @@ contains
             else
                 ! import previous run and updates stats for gui
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "stage", "importing previously processed data", found)
+                call http_communicator%update_json("stage", "importing previously processed data", found)
                 call http_communicator%send_jobstats()
                 call import_previous_mics( project_list )
                 if( project_list%size() > 0 )then
                     nptcls_glob = project_list%get_nptcls_tot()
                     nmic_star   = spproj_glob%os_mic%get_noris()
                     ! http stats
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",  spproj_glob%os_mic%get_noris(), found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", spproj_glob%os_mic%get_noris(), found)
-                    call http_communicator%json%update(http_communicator%job_json, "movies_rejected",       0,                              found)
-
+                    call http_communicator%update_json("micrographs_imported",  spproj_glob%os_mic%get_noris(), found)
+                    call http_communicator%update_json("micrographs_processed", spproj_glob%os_mic%get_noris(), found)
+                    call http_communicator%update_json("movies_rejected",       0,                              found)
                 endif
             endif
         endif
@@ -246,12 +247,12 @@ contains
         l_once          = .true.
         pause_import    = .false.
         do
-            if( file_exists(TERM_STREAM) .or. http_communicator%exit) then
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit_status()) then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
-            if( http_communicator%stop )then
+            if( http_communicator%stop_status() )then
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
@@ -283,7 +284,7 @@ contains
                             xtile = 0
                             ytile = 0
                             do i=0, n_pickrefs - 1
-                                call communicator_add_picking_template(cwd_job%to_char()//'/'//PICKREFS_FBODY//".jpeg",&
+                                call json_add_picking_template(cwd_job%to_char()//'/'//PICKREFS_FBODY//".jpeg",&
                                 &xtile * 100, ytile * 100, 100 * ytiles, 100 * xtiles)
                                 xtile = xtile + 1
                                 if(xtile .eq. xtiles) then
@@ -312,8 +313,8 @@ contains
                 endif
                 l_projects_left = cnt .ne. nprojects
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     project_buff%n_history * STREAM_NMOVS_SET, found)
-                call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(), found)
+                call http_communicator%update_json("micrographs_imported",     project_buff%n_history * STREAM_NMOVS_SET, found)
+                call http_communicator%update_json("last_micrograph_imported", stream_datestr(), found)
             else
                 l_projects_left = .false.
             endif
@@ -352,24 +353,24 @@ contains
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 if(.not. l_interactive) then
                     ! http stats   
-                    call http_communicator%json%update(http_communicator%job_json, "stage",               "finding, picking and extracting micrographs",  found)  
-                    call http_communicator%json%update(http_communicator%job_json, "box_size",              params%box,                                   found)
-                    call http_communicator%json%update(http_communicator%job_json, "particles_extracted",   nptcls_glob,                                  found)
-                    call http_communicator%json%update(http_communicator%job_json, "particles_per_mic",     nint(float(nptcls_glob) / float(n_imported)), found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_processed", n_imported,                                   found)
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,          found)
+                    call http_communicator%update_json("stage",               "finding, picking and extracting micrographs",  found)  
+                    call http_communicator%update_json("box_size",              params%box,                                   found)
+                    call http_communicator%update_json("particles_extracted",   nptcls_glob,                                  found)
+                    call http_communicator%update_json("particles_per_mic",     nint(float(nptcls_glob) / float(n_imported)), found)
+                    call http_communicator%update_json("micrographs_processed", n_imported,                                   found)
+                    call http_communicator%update_json("micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,          found)
                     if(spproj_glob%os_mic%isthere('thumb_den') .and. spproj_glob%os_mic%isthere('xdim') .and. spproj_glob%os_mic%isthere('ydim') \
                     .and. spproj_glob%os_mic%isthere('smpd') .and. spproj_glob%os_mic%isthere('boxfile')) then
                         i_max = 10
                         if(spproj_glob%os_mic%get_noris() < i_max) i_max = spproj_glob%os_mic%get_noris()
                         ! create an empty latest_picked_micrographs json array
-                        call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
-                        call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                        call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
+                        call json%remove(latest_picked_micrographs, destroy=.true.)
+                        call json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+                        call http_communicator%add_to_json(latest_picked_micrographs)
                         do i_thumb=0, i_max - 1
                             str_mic = spproj_glob%os_mic%get_str(spproj_glob%os_mic%get_noris() - i_thumb, "thumb_den")
                             str_box = spproj_glob%os_mic%get_str(spproj_glob%os_mic%get_noris() - i_thumb, "boxfile")
-                            call communicator_add_micrograph(str_mic, 100, 0, 100, 200,\
+                            call json_add_micrograph(str_mic, 100, 0, 100, 200,\
                             nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "xdim")),\
                             nint(spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "ydim")), str_box)
                             call str_mic%kill
@@ -410,10 +411,10 @@ contains
             end if
             ! http stats send
             call http_communicator%send_jobstats()
-            call update_user_params(cline, http_communicator%update_arguments)
+            call update_user_params(cline, http_communicator)
         end do
         ! termination
-        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
+        call http_communicator%update_json("stage", "terminating", found)
         call http_communicator%send_jobstats()
         call write_project
         ! write star files (just in case you want ot import these particles/micrographs elsewhere)
@@ -782,78 +783,78 @@ contains
             end subroutine import_previous_mics
 
             subroutine communicator_init()
-                call http_communicator%json%add(http_communicator%job_json, "stage",               "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_imported",     0)
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_processed",    0)
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_rejected",     0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_per_mic",        0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_extracted",      dble(0.0))
-                call http_communicator%json%add(http_communicator%job_json, "box_size",                 dble(0.0))
-                ! call http_communicator%json%add(http_communicator%job_json, "best_diam",                dble(0.0))
-                call http_communicator%json%add(http_communicator%job_json, "user_input",               .false.)
-                call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
-                call http_communicator%json%create_array(latest_extracted_particles, "latest_extracted_particles")
-                call http_communicator%json%add(http_communicator%job_json, latest_extracted_particles)
-                call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
-                call http_communicator%json%create_array(picking_templates, "picking_templates")
-                call http_communicator%json%add(http_communicator%job_json, picking_templates)
-                ! call http_communicator%json%create_array(picking_diameters, "picking_diameters")
-                ! call http_communicator%json%add(http_communicator%job_json, picking_diameters)
-                ! call http_communicator%json%create_array(refinement_diameters, "refinement_diameters")
-                ! call http_communicator%json%add(http_communicator%job_json, refinement_diameters)
+                call http_communicator%add_to_json("stage",               "initialising")
+                call http_communicator%add_to_json("micrographs_imported",     0)
+                call http_communicator%add_to_json("micrographs_processed",    0)
+                call http_communicator%add_to_json("micrographs_rejected",     0)
+                call http_communicator%add_to_json("particles_per_mic",        0)
+                call http_communicator%add_to_json("particles_extracted",      dble(0.0))
+                call http_communicator%add_to_json("box_size",                 dble(0.0))
+                ! call http_communicator%add_to_json("best_diam",                dble(0.0))
+                call http_communicator%add_to_json("user_input",               .false.)
+                call http_communicator%add_to_json("last_micrograph_imported", "")
+                call json%create_array(latest_extracted_particles, "latest_extracted_particles")
+                call http_communicator%add_to_json(latest_extracted_particles)
+                call json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+                call http_communicator%add_to_json(latest_picked_micrographs)
+                call json%create_array(picking_templates, "picking_templates")
+                call http_communicator%add_to_json(picking_templates)
+                ! call json%create_array(picking_diameters, "picking_diameters")
+                ! call http_communicator%add_to_json(picking_diameters)
+                ! call json%create_array(refinement_diameters, "refinement_diameters")
+                ! call http_communicator%add_to_json(refinement_diameters)
             end subroutine communicator_init
 
-            subroutine communicator_add_micrograph( path, spritex, spritey, spriteh, spritew, xdim, ydim, boxfile_path )
+            subroutine json_add_micrograph( path, spritex, spritey, spriteh, spritew, xdim, ydim, boxfile_path )
                 class(string),     intent(in)  :: path, boxfile_path
                 integer,          intent(in)  :: spritex, spritey, spriteh, spritew, xdim, ydim
                 type(nrtxtfile)               :: boxfile
                 type(json_value), pointer     :: micrograph, boxes, box
                 real,             allocatable :: boxdata(:,:)
                 integer                       :: i, x, y
-                call http_communicator%json%create_object(micrograph, "")
-                call http_communicator%json%add(micrograph, "path",    path%to_char())
-                call http_communicator%json%add(micrograph, "spritex", spritex)
-                call http_communicator%json%add(micrograph, "spritey", spritey)
-                call http_communicator%json%add(micrograph, "spriteh", spriteh)
-                call http_communicator%json%add(micrograph, "spritew", spritew)
-                call http_communicator%json%add(micrograph, "xdim"   , xdim)
-                call http_communicator%json%add(micrograph, "ydim",    ydim)
-                call http_communicator%json%create_array(boxes, "boxes")
+                call json%create_object(micrograph, "")
+                call json%add(micrograph, "path",    path%to_char())
+                call json%add(micrograph, "spritex", spritex)
+                call json%add(micrograph, "spritey", spritey)
+                call json%add(micrograph, "spriteh", spriteh)
+                call json%add(micrograph, "spritew", spritew)
+                call json%add(micrograph, "xdim"   , xdim)
+                call json%add(micrograph, "ydim",    ydim)
+                call json%create_array(boxes, "boxes")
                 call boxfile%new(boxfile_path, 1)
                 allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
                 if(boxfile%get_nrecs_per_line() == 5) then
                     ! standard boxfile
                     do i=1, boxfile%get_ndatalines()
                         call boxfile%readNextDataLine(boxdata(:,i))
-                        call http_communicator%json%create_object(box, "")
+                        call json%create_object(box, "")
                         x = nint(boxdata(1,i) + boxdata(3,i)/2)
                         y = nint(boxdata(2,i) + boxdata(4,i)/2)
-                        call http_communicator%json%add(box, "x",    x)
-                        call http_communicator%json%add(box, "y",    y)
-                        call http_communicator%json%add(boxes, box)
+                        call json%add(box, "x",    x)
+                        call json%add(box, "y",    y)
+                        call json%add(boxes, box)
                     enddo
                 else if(boxfile%get_nrecs_per_line() == 6) then
                     THROW_HARD('Invalid boxfile format!')
                 endif
                 call boxfile%kill()
                 deallocate(boxdata)
-                call http_communicator%json%add(micrograph, boxes)
-                call http_communicator%json%add(latest_picked_micrographs, micrograph)
-            end subroutine communicator_add_micrograph
+                call json%add(micrograph, boxes)
+                call json%add(latest_picked_micrographs, micrograph)
+            end subroutine json_add_micrograph
 
-            subroutine communicator_add_picking_template( path, spritex, spritey, spriteh, spritew )
+            subroutine json_add_picking_template( path, spritex, spritey, spriteh, spritew )
                 character(*),     intent(in)  :: path
                 integer,          intent(in)  :: spritex, spritey, spriteh, spritew
                 type(json_value), pointer     :: template
-                call http_communicator%json%create_object(template, "")
-                call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "spritex", spritex)
-                call http_communicator%json%add(template, "spritey", spritey)
-                call http_communicator%json%add(template, "spriteh", spriteh)
-                call http_communicator%json%add(template, "spritew", spritew)
-                call http_communicator%json%add(picking_templates, template)
-            end subroutine communicator_add_picking_template
+                call json%create_object(template, "")
+                call json%add(template, "path",    path)
+                call json%add(template, "spritex", spritex)
+                call json%add(template, "spritey", spritey)
+                call json%add(template, "spriteh", spriteh)
+                call json%add(template, "spritew", spritew)
+                call json%add(picking_templates, template)
+            end subroutine json_add_picking_template
 
     end subroutine exec_stream_pick_extract
 

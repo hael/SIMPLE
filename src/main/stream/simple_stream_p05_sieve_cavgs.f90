@@ -21,6 +21,7 @@ use simple_stream_communicator
 use simple_stream_pool2D_utils
 use simple_stream_utils
 use simple_stream_watcher
+use json_kinds
 implicit none
 
 public :: stream_p05_sieve_cavgs
@@ -53,6 +54,7 @@ contains
         type(rec_iterator)             :: it
         type(sp_project)               :: spproj_glob
         type(json_value), pointer      :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
+        type(json_core)                :: json
         character(len=STDLEN)          :: chunk_part_env
         type(string)     :: selection_jpeg, mapfileprefix
         real             :: mskdiam
@@ -114,7 +116,7 @@ contains
                 if(file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) exit
                 call sleep(10)
                 call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
+                if( http_communicator%exit_status() )then
                     ! termination
                     write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                     call http_communicator%term()
@@ -178,8 +180,8 @@ contains
         time_last_import = huge(time_last_import)   ! used for flushing unprocessed particles
         do
             ! termination
-            if( file_exists(TERM_STREAM) .or. http_communicator%exit ) exit
-            if( http_communicator%stop .or. test_repick() ) then
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit_status() ) exit
+            if( http_communicator%stop_status() .or. test_repick() ) then
                 if(test_repick()) call write_repick_refs(string("../repick_refs.mrc"))
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
@@ -191,9 +193,9 @@ contains
             endif
             iter = iter + 1
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and sieving particles", found)    
-            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  n_accepted,                      found)
-            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  n_rejected,                      found)
+            call http_communicator%update_json("stage",               "finding and sieving particles", found)    
+            call http_communicator%update_json("particles_accepted",  n_accepted,                      found)
+            call http_communicator%update_json("particles_rejected",  n_rejected,                      found)
             ! detection of new projects
             call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
             ! update global records
@@ -206,8 +208,8 @@ contains
                 n_imported = project_list%size()
                 write(logfhandle,'(A,I6,I8)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ', n_imported, nptcls_glob
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "particles_imported",       nptcls_glob,      found)
-                call http_communicator%json%update(http_communicator%job_json, "last_particles_imported",  stream_datestr(), found)
+                call http_communicator%update_json("particles_imported",       nptcls_glob,      found)
+                call http_communicator%update_json("last_particles_imported",  stream_datestr(), found)
                 time_last_import = time8()
                 if( n_imported < 1000 )then
                     call update_user_params(cline)
@@ -249,23 +251,23 @@ contains
                     enddo
                     call submit_match_cavgs
                     ! http stats
-                    call http_communicator%json%remove(accepted_cls2D, destroy=.true.)
-                    call http_communicator%json%remove(rejected_cls2D, destroy=.true.)
+                    call json%remove(accepted_cls2D, destroy=.true.)
+                    call json%remove(rejected_cls2D, destroy=.true.)
                     if(latest_processed_set > 0 .and. latest_displayed_set .ne. latest_processed_set) then
                         latest_displayed_set = latest_processed_set
                         call generate_set_jpeg()
                         xtile = 0
                         ytile = 0
-                        call http_communicator%json%remove(latest_accepted_cls2D, destroy=.true.)
-                        call http_communicator%json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
-                        call http_communicator%json%add(http_communicator%job_json, latest_accepted_cls2D)
-                        call http_communicator%json%remove(latest_rejected_cls2D, destroy=.true.)
-                        call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
-                        call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
+                        call json%remove(latest_accepted_cls2D, destroy=.true.)
+                        call json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
+                        call http_communicator%add_to_json(latest_accepted_cls2D)
+                        call json%remove(latest_rejected_cls2D, destroy=.true.)
+                        call json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
+                        call http_communicator%add_to_json(latest_rejected_cls2D)
                         if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                             do i=0, size(jpg_cls_map) - 1
                                 if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
-                                    call communicator_add_cls2D_accepted(selection_jpeg%to_char(),&
+                                    call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
                                         &i + 1,&
                                         &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                         &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -275,7 +277,7 @@ contains
                                         &res=cls_res(jpg_cls_map(i+1)),&
                                         &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                 else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
-                                    call communicator_add_cls2D_rejected(selection_jpeg%to_char(),&
+                                    call add_cls2D_rejected_to_json(selection_jpeg%to_char(),&
                                         &i + 1,&
                                         &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                         &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -301,22 +303,22 @@ contains
                     ! interactive selection
                     call set_list%at(1, crec)
                     if( l_wait_for_user .and. crec%processed ) then
-                        call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
-                        call http_communicator%json%update(http_communicator%job_json, "stage", "waiting for user selection", found)
+                        call http_communicator%update_json("user_input", .true., found)
+                        call http_communicator%update_json("stage", "waiting for user selection", found)
                         if(.not. selection_jpeg_created) then
                             call generate_selection_jpeg()
                             xtile = 0
                             ytile = 0
-                            call http_communicator%json%remove(accepted_cls2D, destroy=.true.)
-                            call http_communicator%json%create_array(accepted_cls2D, "accepted_cls2D")
-                            call http_communicator%json%add(http_communicator%job_json, accepted_cls2D)
-                            call http_communicator%json%remove(rejected_cls2D, destroy=.true.)
-                            call http_communicator%json%create_array(rejected_cls2D, "rejected_cls2D")
-                            call http_communicator%json%add(http_communicator%job_json, rejected_cls2D)
+                            call json%remove(accepted_cls2D, destroy=.true.)
+                            call json%create_array(accepted_cls2D, "accepted_cls2D")
+                            call http_communicator%add_to_json( accepted_cls2D)
+                            call json%remove(rejected_cls2D, destroy=.true.)
+                            call json%create_array(rejected_cls2D, "rejected_cls2D")
+                            call http_communicator%add_to_json( rejected_cls2D)
                             if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                                 do i=0, size(jpg_cls_map) - 1
                                     if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
-                                        call communicator_add_cls2D_accepted(selection_jpeg%to_char(),&
+                                        call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
                                             &jpg_cls_map(i + 1),&
                                             &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                             &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -325,7 +327,7 @@ contains
                                             &res=cls_res(jpg_cls_map(i+1)),&
                                             &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                     else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
-                                        call communicator_add_cls2D_rejected(selection_jpeg%to_char(),&
+                                        call add_cls2D_rejected_to_json(selection_jpeg%to_char(),&
                                             &jpg_cls_map(i + 1),&
                                             &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                             &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -350,29 +352,29 @@ contains
                 if( set_list%size() > 0 ) then
                     call set_list%at(1, crec)
                     if( crec%processed ) then
-                        call http_communicator%json%get(http_communicator%update_arguments, 'accepted_cls2D', accepted_cls_ids, found) ! accepted_cls2D now contains user selection
+                        call http_communicator%get_json_arg('accepted_cls2D', accepted_cls_ids, found) ! accepted_cls2D now contains user selection
                         if(found) then
-                            call http_communicator%json%get(http_communicator%update_arguments, 'rejected_cls2D', rejected_cls_ids, found) ! rejected_cls2D now contains user selection
+                            call http_communicator%get_json_arg('rejected_cls2D', rejected_cls_ids, found) ! rejected_cls2D now contains user selection
                             if(found) then
-                                call http_communicator%json%update(http_communicator%job_json, "user_input", .false., found)
+                                call http_communicator%update_json("user_input", .false., found)
                                 ! apply interactive selection
                                 call report_interactive_selection( rejected_cls_ids )
                                 write(logfhandle,'(A)') '>>> RECEIVED USER SELECTIONS'
                                 ! http stats
-                                call http_communicator%json%remove(accepted_cls2D, destroy=.true.)
-                                call http_communicator%json%remove(rejected_cls2D, destroy=.true.)
+                                call json%remove(accepted_cls2D, destroy=.true.)
+                                call json%remove(rejected_cls2D, destroy=.true.)
                                 xtile = 0
                                 ytile = 0
-                                call http_communicator%json%remove(latest_accepted_cls2D, destroy=.true.)
-                                call http_communicator%json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
-                                call http_communicator%json%add(http_communicator%job_json, latest_accepted_cls2D)
-                                call http_communicator%json%remove(latest_rejected_cls2D, destroy=.true.)
-                                call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
-                                call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
+                                call json%remove(latest_accepted_cls2D, destroy=.true.)
+                                call json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
+                                call http_communicator%add_to_json( latest_accepted_cls2D)
+                                call json%remove(latest_rejected_cls2D, destroy=.true.)
+                                call json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
+                                call http_communicator%add_to_json( latest_rejected_cls2D)
                                 if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
                                     do i=0, size(jpg_cls_map) - 1
                                         if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
-                                            call communicator_add_cls2D_accepted(selection_jpeg%to_char(),&
+                                            call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
                                                 &jpg_cls_map(i + 1),&
                                                 &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                                 &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -382,7 +384,7 @@ contains
                                                 &res=cls_res(i+1),&
                                                 &pop=nint(cls_pop(i+1)))
                                         else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
-                                            call communicator_add_cls2D_rejected(selection_jpeg%to_char(),&
+                                            call add_cls2D_rejected_to_json(selection_jpeg%to_char(),&
                                                 &jpg_cls_map(i + 1),&
                                                 &xtile * (100.0 / (jpg_nxtiles - 1)),&
                                                 &ytile * (100.0 / (jpg_nytiles - 1)),&
@@ -817,20 +819,20 @@ contains
             end subroutine flag_complete_sets
 
             subroutine communicator_init()
-                call http_communicator%json%add(http_communicator%job_json, "stage",                   "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "particles_imported ",     0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_accepted",      0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_rejected",      0)
-                call http_communicator%json%add(http_communicator%job_json, "user_input",              .false.)
-                call http_communicator%json%add(http_communicator%job_json, "last_particles_imported", "")
-                call http_communicator%json%create_array(accepted_cls2D, "accepted_cls2D")
-                call http_communicator%json%add(http_communicator%job_json, accepted_cls2D)
-                call http_communicator%json%create_array(rejected_cls2D, "rejected_cls2D")
-                call http_communicator%json%add(http_communicator%job_json, rejected_cls2D)
-                call http_communicator%json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
-                call http_communicator%json%add(http_communicator%job_json, latest_accepted_cls2D)
-                call http_communicator%json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
-                call http_communicator%json%add(http_communicator%job_json, latest_rejected_cls2D)
+                call http_communicator%add_to_json( "stage",                   "initialising")
+                call http_communicator%add_to_json( "particles_imported ",     0)
+                call http_communicator%add_to_json( "particles_accepted",      0)
+                call http_communicator%add_to_json( "particles_rejected",      0)
+                call http_communicator%add_to_json( "user_input",              .false.)
+                call http_communicator%add_to_json( "last_particles_imported", "")
+                call json%create_array(accepted_cls2D, "accepted_cls2D")
+                call http_communicator%add_to_json( accepted_cls2D)
+                call json%create_array(rejected_cls2D, "rejected_cls2D")
+                call http_communicator%add_to_json( rejected_cls2D)
+                call json%create_array(latest_accepted_cls2D, "latest_accepted_cls2D")
+                call http_communicator%add_to_json( latest_accepted_cls2D)
+                call json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
+                call http_communicator%add_to_json( latest_rejected_cls2D)
             end subroutine communicator_init
 
             ! Remove previous files from folder to restart
@@ -941,7 +943,7 @@ contains
                 selection_jpeg = swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char())
             end subroutine generate_set_jpeg
 
-            subroutine communicator_add_cls2D_accepted(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
+            subroutine add_cls2D_accepted_to_json(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
                 character(*),      intent(in) :: path
                 real,              intent(in) :: spritex, spritey
                 integer,           intent(in) :: spriteh, spritew, idx
@@ -951,23 +953,23 @@ contains
                 type(json_value),  pointer    :: template
                 logical                       :: l_latest = .false.
                 if(present(latest)) l_latest = latest
-                call http_communicator%json%create_object(template, "")
-                call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "spritex", dble(spritex))
-                call http_communicator%json%add(template, "spritey", dble(spritey))
-                call http_communicator%json%add(template, "spriteh", spriteh)
-                call http_communicator%json%add(template, "spritew", spritew)
-                call http_communicator%json%add(template, "idx",     idx)
-                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
-                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
+                call json%create_object(template, "")
+                call json%add(template, "path",    path)
+                call json%add(template, "spritex", dble(spritex))
+                call json%add(template, "spritey", dble(spritey))
+                call json%add(template, "spriteh", spriteh)
+                call json%add(template, "spritew", spritew)
+                call json%add(template, "idx",     idx)
+                if(present(res)) call json%add(template, "res",     dble(res))
+                if(present(pop)) call json%add(template, "pop",     pop)
                 if(l_latest) then
-                    call http_communicator%json%add(latest_accepted_cls2D, template)
+                    call json%add(latest_accepted_cls2D, template)
                 else
-                    call http_communicator%json%add(accepted_cls2D, template)
+                    call json%add(accepted_cls2D, template)
                 endif
-            end subroutine communicator_add_cls2D_accepted
+            end subroutine add_cls2D_accepted_to_json
 
-            subroutine communicator_add_cls2D_rejected(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
+            subroutine add_cls2D_rejected_to_json(path, idx, spritex, spritey, spriteh, spritew, latest, res, pop)
                 character(*),      intent(in) :: path
                 real,              intent(in) :: spritex, spritey
                 integer,           intent(in) :: spriteh, spritew, idx
@@ -977,21 +979,21 @@ contains
                 type(json_value),  pointer    :: template
                 logical                       :: l_latest = .false.
                 if(present(latest)) l_latest = latest
-                call http_communicator%json%create_object(template, "")
-                call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "spritex", dble(spritex))
-                call http_communicator%json%add(template, "spritey", dble(spritey))
-                call http_communicator%json%add(template, "spriteh", spriteh)
-                call http_communicator%json%add(template, "spritew", spritew)
-                call http_communicator%json%add(template, "idx",     idx)
-                if(present(res)) call http_communicator%json%add(template, "res",     dble(res))
-                if(present(pop)) call http_communicator%json%add(template, "pop",     pop)
+                call json%create_object(template, "")
+                call json%add(template, "path",    path)
+                call json%add(template, "spritex", dble(spritex))
+                call json%add(template, "spritey", dble(spritey))
+                call json%add(template, "spriteh", spriteh)
+                call json%add(template, "spritew", spritew)
+                call json%add(template, "idx",     idx)
+                if(present(res)) call json%add(template, "res",     dble(res))
+                if(present(pop)) call json%add(template, "pop",     pop)
                 if(l_latest) then
-                    call http_communicator%json%add(latest_rejected_cls2D, template)
+                    call json%add(latest_rejected_cls2D, template)
                 else
-                    call http_communicator%json%add(rejected_cls2D, template)
+                    call json%add(rejected_cls2D, template)
                 endif
-            end subroutine communicator_add_cls2D_rejected
+            end subroutine add_cls2D_rejected_to_json
 
     end subroutine exec_stream_p05_sieve_cavgs
 

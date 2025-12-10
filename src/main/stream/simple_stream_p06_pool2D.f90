@@ -16,6 +16,7 @@ use simple_stream_communicator
 use simple_stream_pool2D_utils
 use simple_stream_utils
 use simple_stream_watcher
+use json_kinds
 implicit none
 
 public :: stream_p06_pool2D
@@ -38,6 +39,7 @@ contains
         type(simple_nice_communicator)        :: nice_communicator
         type(stream_http_communicator)        :: http_communicator
         type(json_value), pointer             :: latest_cls2D
+        type(json_core)                       :: json
         type(rec_list)                        :: setslist
         type(stream_watcher)                  :: project_buff
         type(sp_project)                      :: spproj_glob
@@ -99,7 +101,7 @@ contains
                 if(file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) exit
                 call sleep(10)
                 call http_communicator%send_jobstats()
-                if( http_communicator%exit )then
+                if( http_communicator%exit_status() )then
                     ! termination
                     write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                     call http_communicator%term()
@@ -137,7 +139,7 @@ contains
         extra_pause_iters = 0        ! extra iters before pause
         do
             ! termination
-            if( file_exists(TERM_STREAM) .or. http_communicator%exit ) exit
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit_status() ) exit
             iter = iter + 1
             ! detection of new projects
             call project_buff%watch(nprojects, projects)
@@ -163,7 +165,7 @@ contains
             call import_sets_into_pool( nimported )
             if( nimported > 0 )then
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "last_particles_imported",  stream_datestr(), found)
+                call http_communicator%update_json("last_particles_imported",  stream_datestr(), found)
                 time_last_import = time8()
                 iter_last_import = get_pool_iter()
                 call unpause_pool
@@ -196,23 +198,23 @@ contains
                 endif
             endif
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and classifying particles", found)
-            call http_communicator%json%update(http_communicator%job_json, "particles_imported",  nptcls_glob,                         found)
-            call http_communicator%json%update(http_communicator%job_json, "particles_accepted",  get_pool_assigned(),                 found)
-            call http_communicator%json%update(http_communicator%job_json, "particles_rejected",  get_pool_rejected(),                 found)
-            call http_communicator%json%update(http_communicator%job_json, "iteration",           last_complete_iter,                  found) ! -1 as get_pool_iter returns currently running iteration
+            call http_communicator%update_json("stage",               "finding and classifying particles", found)
+            call http_communicator%update_json("particles_imported",  nptcls_glob,                         found)
+            call http_communicator%update_json("particles_accepted",  get_pool_assigned(),                 found)
+            call http_communicator%update_json("particles_rejected",  get_pool_rejected(),                 found)
+            call http_communicator%update_json("iteration",           last_complete_iter,                  found) ! -1 as get_pool_iter returns currently running iteration
             if(get_pool_iter() > 1) then
-                call http_communicator%json%update(http_communicator%job_json, "user_input", .true., found)
+                call http_communicator%update_json("user_input", .true., found)
                 xtile = 0
                 ytile = 0
-                call http_communicator%json%remove(latest_cls2D, destroy=.true.)
-                call http_communicator%json%create_array(latest_cls2D, "latest_cls2D")
-                call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
+                call json%remove(latest_cls2D, destroy=.true.)
+                call json%create_array(latest_cls2D, "latest_cls2D")
+                call http_communicator%add_to_json(latest_cls2D)
                 if(allocated(pool_jpeg_map)) then
                     do i=0, size(pool_jpeg_map) - 1
                         str_avgs_jpeg = get_pool_cavgs_jpeg()
                         str_avgs_mrc  = string(CWD_GLOB) // '/' // get_pool_cavgs_mrc()
-                        call communicator_add_cls2D(&
+                        call add_cls2D_to_json(&
                             &str_avgs_jpeg%to_char(),&
                             &str_avgs_mrc%to_char(),&
                             &pool_jpeg_map(i + 1),&
@@ -232,40 +234,39 @@ contains
                     end do
                 endif
             endif
-            if(associated(http_communicator%update_arguments) .and. last_complete_iter .gt. 0) then
+            if( http_communicator%arg_associated() .and. last_complete_iter .gt. 0) then
                 ! project snapshot if requested
-                call http_communicator%json%get(http_communicator%update_arguments, "snapshot_iteration", snapshot_iteration, found) 
+                call http_communicator%get_json_arg("snapshot_iteration", snapshot_iteration, found) 
                 if(found) then
-                    call http_communicator%json%get(http_communicator%update_arguments, "snapshot_selection", snapshot_selection, found)
+                    call http_communicator%get_json_arg("snapshot_selection", snapshot_selection, found)
                     if(found) then
-                        call http_communicator%json%get(http_communicator%update_arguments, "snapshot_filename", snapshot_filename, found)
+                        call http_communicator%get_json_arg("snapshot_filename", snapshot_filename, found)
                         if(found) then
                             call write_project_stream2D(&
                                 &snapshot_projfile=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' //snapshot_filename,&
                                 &snapshot_starfile_base=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"),&
                                 &optics_dir=params%optics_dir)
-                            call http_communicator%json%add(http_communicator%job_json, "snapshot_filename",  snapshot_filename)
-                            call http_communicator%json%add(http_communicator%job_json, "snapshot_nptcls",    snapshot_last_nptcls)
-                            call http_communicator%json%add(http_communicator%job_json, "snapshot_time",      stream_datestr())
+                            call http_communicator%add_to_json("snapshot_filename", snapshot_filename)
+                            call http_communicator%add_to_json("snapshot_nptcls",   snapshot_last_nptcls)
+                            call http_communicator%add_to_json("snapshot_time",     stream_datestr())
                         endif
                     endif
                 endif
                 ! update mskdiam if requested
-                call http_communicator%json%get(http_communicator%update_arguments, "mskdiam", mskdiam_update, found) 
+                call http_communicator%get_json_arg("mskdiam", mskdiam_update, found) 
                 if(found) then
                     call update_mskdiam(mskdiam_update)
                     if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
                     time_last_import = time8()
                     call unpause_pool()
                 endif
-                call http_communicator%json%destroy(http_communicator%update_arguments)
-                nullify(http_communicator%update_arguments)
+                call http_communicator%destroy_arg()
             endif
             call http_communicator%send_jobstats()
             ! ensure snapshot info is only returned once
-            call http_communicator%json%remove_if_present(http_communicator%job_json, "snapshot_filename")
-            call http_communicator%json%remove_if_present(http_communicator%job_json, "snapshot_nptcls")
-            call http_communicator%json%remove_if_present(http_communicator%job_json, "snapshot_time")
+            call http_communicator%remove_from_json_if_present("snapshot_filename")
+            call http_communicator%remove_from_json_if_present("snapshot_nptcls")
+            call http_communicator%remove_from_json_if_present("snapshot_time")
             ! Wait
             call sleep(WAITTIME)
         enddo
@@ -464,38 +465,38 @@ contains
             end subroutine cleanup4restart
 
             subroutine communicator_init()
-                call http_communicator%json%add(http_communicator%job_json, "stage",                   "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "particles_imported ",     0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_accepted",      0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_rejected",      0)
-                call http_communicator%json%add(http_communicator%job_json, "iteration",               0)
-                call http_communicator%json%add(http_communicator%job_json, "user_input",              .false.)
-                call http_communicator%json%add(http_communicator%job_json, "last_particles_imported", "")
-                call http_communicator%json%create_array(latest_cls2D, "latest_cls2D")
-                call http_communicator%json%add(http_communicator%job_json, latest_cls2D)
+                call http_communicator%add_to_json("stage",                   "initialising")
+                call http_communicator%add_to_json("particles_imported ",     0)
+                call http_communicator%add_to_json("particles_accepted",      0)
+                call http_communicator%add_to_json("particles_rejected",      0)
+                call http_communicator%add_to_json("iteration",               0)
+                call http_communicator%add_to_json("user_input",              .false.)
+                call http_communicator%add_to_json("last_particles_imported", "")
+                call json%create_array(latest_cls2D, "latest_cls2D")
+                call http_communicator%add_to_json(latest_cls2D)
             end subroutine communicator_init
 
-            subroutine communicator_add_cls2D(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, pop, res)
+            subroutine add_cls2D_to_json(path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, pop, res)
                 character(*),      intent(in) :: path, mrcpath
                 real,              intent(in) :: spritex, spritey
                 integer,           intent(in) :: spriteh, spritew, mrc_idx
                 integer, optional, intent(in) :: pop
                 real,    optional, intent(in) :: res
                 type(json_value),  pointer    :: template
-                call http_communicator%json%create_object(template, "")
-                call http_communicator%json%add(template, "path",    path)
-                call http_communicator%json%add(template, "mrcpath", mrcpath)
-                call http_communicator%json%add(template, "mrcidx",  mrc_idx)
-                call http_communicator%json%add(template, "spritex", dble(spritex))
-                call http_communicator%json%add(template, "spritey", dble(spritey))
-                call http_communicator%json%add(template, "spriteh", spriteh)
-                call http_communicator%json%add(template, "spritew", spritew)
-                call http_communicator%json%add(template, "mskdiam",    nint(params%mskdiam))
-                call http_communicator%json%add(template, "mskscale",   dble(params%box * params%smpd))
-                if(present(pop)) call http_communicator%json%add(template, "pop", pop)
-                if(present(res)) call http_communicator%json%add(template, "res", dble(res))
-                call http_communicator%json%add(latest_cls2D,        template)
-            end subroutine communicator_add_cls2D
+                call json%create_object(template, "")
+                call json%add(template, "path",     path)
+                call json%add(template, "mrcpath",  mrcpath)
+                call json%add(template, "mrcidx",   mrc_idx)
+                call json%add(template, "spritex",  dble(spritex))
+                call json%add(template, "spritey",  dble(spritey))
+                call json%add(template, "spriteh",  spriteh)
+                call json%add(template, "spritew",  spritew)
+                call json%add(template, "mskdiam",  nint(params%mskdiam))
+                call json%add(template, "mskscale", dble(params%box * params%smpd))
+                if(present(pop)) call json%add(template, "pop", pop)
+                if(present(res)) call json%add(template, "res", dble(res))
+                call json%add(latest_cls2D, template)
+            end subroutine add_cls2D_to_json
 
     end subroutine exec_stream_p06_pool2D
 
