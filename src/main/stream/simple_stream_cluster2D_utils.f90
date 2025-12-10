@@ -41,9 +41,7 @@ logical, parameter       :: DEBUG_HERE = .false.
 integer, allocatable     :: repick_selection(:)  ! selection for selecting classes for re-picking
 integer(timer_int_kind)  :: t
 integer                  :: snapshot_jobid   = 0 ! nice job id for snapshot
-!!!!!!!!!!!!!!!!! C#/Joe !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 integer                  :: repick_iteration = 0 ! iteration to select classes from for re-picking
-!!!!!!!!!!!!!!!!! C#/Joe !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 character(16)            :: snapshot_last = ""   ! timestamp string for last snapshot
 
 contains
@@ -883,7 +881,7 @@ contains
         integer      :: icls, i
         if( .not. l_stream2D_active ) return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
-        ! if(repick_iteration .lt. 1) return  !!!!!!!!!!! this would always be true in the current implementation
+        if(repick_iteration .lt. 1) return
         refsin = CAVGS_ITER_FBODY//int2str_pad(repick_iteration,3)//params_glob%ext%to_char()
         if(.not. file_exists(string(POOL_DIR)//refsin)) return
         if(file_exists(refsout) ) call del_file(refsout)

@@ -1,10 +1,11 @@
 module simple_stream_utils
 include 'simple_lib.f08'
-use simple_cmdline,        only: cmdline
-use simple_default_clines, only: set_automask2D_defaults
-use simple_image,          only: image
-use simple_parameters,     only: parameters, params_glob
-use simple_stack_io,       only: stack_io
+use simple_cmdline,             only: cmdline
+use simple_default_clines,      only: set_automask2D_defaults
+use simple_image,               only: image
+use simple_parameters,          only: parameters, params_glob
+use simple_stack_io,            only: stack_io
+use simple_stream_communicator, only: stream_http_communicator 
 use simple_gui_utils
 use simple_nice
 use simple_qsys_funs
@@ -14,11 +15,10 @@ implicit none
 contains
 
     !> To deal with dynamic user input diring streaming
-    subroutine update_user_params( cline_here, update_arguments )
-        type(cmdline),                       intent(inout) :: cline_here
-        type(json_value), pointer, optional, intent(inout) :: update_arguments
+    subroutine update_user_params( cline_here, httpcom )
+        type(cmdline),                            intent(inout) :: cline_here
+        type(stream_http_communicator), optional, intent(inout) :: httpcom
         type(oris) :: os
-        type(json_core) :: json
         character(kind=CK,len=:), allocatable :: interactive, ring
         real       :: tilt_thres, beamtilt, astigthreshold, ctfresthreshold, icefracthreshold
         real(kind=dp) :: icefracthreshold_dp
@@ -122,10 +122,10 @@ contains
         endif
         call os%kill
         ! nice
-        if(present(update_arguments)) then
-            if(associated(update_arguments)) then
+        if(present(httpcom)) then
+            if( httpcom%arg_associated() )then
                 ! moldiam_refine
-                call json%get(update_arguments, 'moldiam_refine', moldiam_refine_int, found)
+                call httpcom%get_json_arg('moldiam_refine', moldiam_refine_int, found)
                 if(found) then
                     if( abs(real(moldiam_refine_int)-params_glob%moldiam_refine) > 0.001) then
                         if(moldiam_refine_int < 10 .and. moldiam_refine_int > 0)then
@@ -140,7 +140,7 @@ contains
                     end if
                 end if
                 ! moldiam
-                call json%get(update_arguments, 'moldiam', moldiam_int, found)
+                call httpcom%get_json_arg('moldiam', moldiam_int, found)
                 if(found) then
                     if( abs(real(moldiam_int)-params_glob%moldiam) > 0.001) then
                         if(moldiam_int < 20 .and. moldiam_int > 0)then
@@ -155,7 +155,7 @@ contains
                     end if
                 end if
                 ! moldiam_ring
-                call json%get(update_arguments, 'moldiam_ring', moldiam_ring_int, found)
+                call httpcom%get_json_arg('moldiam_ring', moldiam_ring_int, found)
                 if(found) then
                     if( abs(real(moldiam_ring_int)-params_glob%moldiam_ring) > 0.001) then
                         if(moldiam_ring_int < 20 .and. moldiam_ring_int > 0)then
@@ -170,21 +170,21 @@ contains
                     end if
                 end if
                 ! interactive
-                call json%get(update_arguments, 'interactive', interactive, found)
+                call httpcom%get_json_arg('interactive', interactive, found)
                 if(found) then
                     params_glob%interactive = interactive
                     params_glob%updated        = 'yes'
                     write(logfhandle,'(A,A)')'>>> INTERACTIVE UPDATED TO: ', interactive
                 end if
                 ! ring
-                call json%get(update_arguments, 'ring', ring, found)
+                call httpcom%get_json_arg('ring', ring, found)
                 if(found) then
                     params_glob%ring = ring
                     params_glob%updated        = 'yes'
                     write(logfhandle,'(A,A)')'>>> RING UPDATED TO: ', ring
                 end if
                 ! astigthreshold
-                call json%get(update_arguments, 'astigthreshold', astigthreshold_int, found)
+                call httpcom%get_json_arg('astigthreshold', astigthreshold_int, found)
                 if(found) then
                     if( abs(real(astigthreshold_int)-params_glob%astigthreshold) > 0.001) then
                         params_glob%astigthreshold = real(astigthreshold_int)
@@ -193,7 +193,7 @@ contains
                     end if
                 end if
                 ! ctfresthreshold
-                call json%get(update_arguments, 'ctfresthreshold', ctfresthreshold_int, found)
+                call httpcom%get_json_arg('ctfresthreshold', ctfresthreshold_int, found)
                 if(found) then
                     if( abs(real(ctfresthreshold_int)-params_glob%ctfresthreshold) > 0.001) then
                         params_glob%ctfresthreshold = real(ctfresthreshold_int)
@@ -202,7 +202,7 @@ contains
                     end if
                 end if
                 ! icefracthreshold
-                call json%get(update_arguments, 'icefracthreshold', icefracthreshold_dp, found)
+                call httpcom%get_json_arg('icefracthreshold', icefracthreshold_dp, found)
                 if(found) then
                     if( abs(icefracthreshold_dp-params_glob%icefracthreshold) > 0.001) then
                         params_glob%icefracthreshold = real(icefracthreshold_dp)
@@ -211,7 +211,7 @@ contains
                     end if
                 end if
             end if
-            call json%destroy(update_arguments)
+            call httpcom%destroy_arg
         end if
     end subroutine update_user_params
 
@@ -231,7 +231,7 @@ contains
                 endif
                 call sleep(10)
                 call httpcom%send_jobstats()
-                if( httpcom%exit )then
+                if( httpcom%exit_status() )then
                     ! termination
                     write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                     call httpcom%term()
@@ -349,7 +349,7 @@ contains
         write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
     end function stream_datestr
 
-    subroutine process_selected_references( imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
+    subroutine process_selected_refs( imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
         use simple_image_msk, only: automask2d
         class(string),   intent(in)    :: imgfile
         real,            intent(in)    :: smpd
@@ -431,7 +431,7 @@ contains
         ! put back pointer to params_glob
         params_glob => params_ptr
         nullify(params_ptr)
-    end subroutine process_selected_references
+    end subroutine process_selected_refs
     
     function get_latest_optics_map_id(optics_dir) result (lastmap)
         class(string), optional, intent(in)   :: optics_dir

@@ -8,32 +8,52 @@ use unix
 implicit none
 
 public :: stream_http_communicator
+private
 
 type :: stream_http_communicator
-    type(string),              private :: url
-    type(string),              private :: checksum
-    type(string),              private :: tmp_recv
-    type(string),              private :: tmp_send
-    integer,                   private :: id        = 0
-    integer,                   private :: bg_pid    = 0
-    integer,                   private :: bg_pipe(2)
-    logical,                   private :: active    = .false.
-    logical,                   public  :: exit      = .false.
-    logical,                   public  :: stop      = .false.
-    type(json_core),           public  :: json
-    type(json_value), pointer, public  :: job_json, heartbeat_json, update_arguments
-    contains
-    procedure, public   :: create
-    procedure, public   :: term
-    procedure, public   :: send_heartbeat
-    procedure, public   :: send_jobstats
-    procedure, public   :: background_heartbeat
-    procedure, public   :: join_background_heartbeat
+    private
+    type(string)              :: url
+    type(string)              :: checksum
+    type(string)              :: tmp_recv
+    type(string)              :: tmp_send
+    integer                   :: id        = 0
+    integer                   :: bg_pid    = 0
+    integer                   :: bg_pipe(2)
+    logical                   :: active    = .false.
+    logical                   :: exit      = .false.
+    logical                   :: stop      = .false.
+    type(json_core)           :: json
+    type(json_value), pointer :: job_json, heartbeat_json, update_arguments
+ contains
+    ! LIFECYCLE
+    procedure           :: create
+    procedure           :: term
+    procedure           :: send_heartbeat
+    procedure           :: send_jobstats
+    procedure           :: background_heartbeat
+    procedure           :: join_background_heartbeat
     procedure, private  :: evaluate_checksum
     procedure, private  :: curl_request
+    ! STATUS CHECKS AND JSON ARGUMENT MANAGEMENT
+    procedure           :: active_status
+    procedure           :: exit_status
+    procedure           :: stop_status
+    procedure           :: arg_associated
+    procedure           :: destroy_arg
+    ! JSON MODIFIERS
+    procedure, private  :: update_json_1, update_json_2, update_json_3, update_json_4
+    generic             :: update_json => update_json_1, update_json_2, update_json_3, update_json_4
+    procedure, private  :: add_to_json_1, add_to_json_2, add_to_json_3, add_to_json_4, add_to_json_5
+    generic             :: add_to_json => add_to_json_1, add_to_json_2, add_to_json_3, add_to_json_4, add_to_json_5
+    procedure           :: remove_from_json_if_present
+    ! JSON GETTERS
+    procedure, private  :: get_json_arg_1, get_json_arg_2, get_json_arg_3, get_json_arg_4, get_json_arg_5
+    generic             :: get_json_arg => get_json_arg_1, get_json_arg_2, get_json_arg_3, get_json_arg_4, get_json_arg_5
 end type stream_http_communicator
 
 contains
+
+    ! LIFECYCLE
 
     subroutine create(self, jobid, url, name)
         class(stream_http_communicator), intent(inout) :: self
@@ -127,6 +147,78 @@ contains
         endif
     end subroutine send_jobstats
 
+    subroutine background_heartbeat(self)
+        class(stream_http_communicator), intent(inout) :: self
+        character,                       target        :: rcv, snd
+        integer                                        :: pid, rc, i
+        if(.not. self%active) return ! this process isn't communicating with nice
+        ! create pipe
+        rc = c_pipe(self%bg_pipe)
+        if (rc < 0) call simple_exception("Creating background heartbeat pipe failed", __FILENAME__ , __LINE__)
+        ! set pipe reads to non-blocking
+        rc = c_fcntl(self%bg_pipe(1), F_SETFL, O_NONBLOCK); 
+        if (rc < 0) call simple_exception("Updating background heartbeat pipe failed", __FILENAME__ , __LINE__)
+        ! fork process
+        self%bg_pid = c_fork()
+        if (self%bg_pid < 0) then
+            ! Fork failed.
+            call simple_exception("Background heartbeat fork failed", __FILENAME__ , __LINE__)
+        else if (self%bg_pid == 0) then
+            ! Child process infinite do loop until term signal recieved
+            i = 0
+            do
+                ! Send heartbeat every 10 seconds
+                if(i == 10) then
+                    call self%send_heartbeat()
+                    i = 0
+                endif
+                ! Read character from pipe. If present and T => terminate
+                if(c_read(self%bg_pipe(1), c_loc(rcv), 1_c_size_t) > 0) then
+                    if(rcv == 'T') exit
+                endif
+                ! Sleep 1 second
+                call sleep(1)
+                i = i + 1
+            end do
+            ! send parent X if self%exit is false, else Y
+            snd = 'Y'
+            if(self%exit) snd = 'X'
+            rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
+            if (rc < 0) call simple_exception("Child write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
+            ! close pipes and exit
+            rc = c_close(self%bg_pipe(1))
+            if (rc < 0) call simple_exception("Child close background heartbeat pipe failed 1", __FILENAME__ , __LINE__)
+            rc = c_close(self%bg_pipe(2))
+            if (rc < 0) call simple_exception("Child close background heartbeat pipe failed 2", __FILENAME__ , __LINE__)
+            call c_exit(0)
+        else
+            ! Parent process. continue as normal
+        end if
+    end subroutine background_heartbeat
+
+    subroutine join_background_heartbeat(self)
+        class(stream_http_communicator), intent(inout) :: self
+        character,                       target        :: rcv, snd
+        integer                                        :: pid, rc
+        if(.not. self%active) return ! this process isn't communicating with nice
+        snd = 'T'
+        ! send child T to terminate
+        rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
+        if (rc < 0) call simple_exception("Parent write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
+        ! wait for child to terminate
+        pid = c_waitpid(self%bg_pid, rc, 0)
+        if (rc < 0) call simple_exception("Parent wait for background heartbeat termination failed", __FILENAME__ , __LINE__)
+        ! Read character from pipe. If present and X => set self%exit to true
+        if(c_read(self%bg_pipe(1), c_loc(rcv), 1_c_size_t) > 0) then
+            if(rcv == 'X') self%exit = .true.
+        endif
+        ! close pipes
+        rc = c_close(self%bg_pipe(1))
+        if (rc < 0) call simple_exception("Parent close background heartbeat pipe failed 1", __FILENAME__ , __LINE__)
+        rc = c_close(self%bg_pipe(2))
+        if (rc < 0) call simple_exception("Parent close background heartbeat pipe failed 2", __FILENAME__ , __LINE__)
+    end subroutine join_background_heartbeat
+
     subroutine curl_request(self, data)
         class(stream_http_communicator), intent(inout) :: self
         character(*), optional,          intent(in)    :: data
@@ -207,76 +299,147 @@ contains
         endif
     end function evaluate_checksum
 
-    subroutine background_heartbeat(self)
-        class(stream_http_communicator), intent(inout) :: self
-        character,                       target        :: rcv, snd
-        integer                                        :: pid, rc, i
-        if(.not. self%active) return ! this process isn't communicating with nice
-        ! create pipe
-        rc = c_pipe(self%bg_pipe)
-        if (rc < 0) call simple_exception("Creating background heartbeat pipe failed", __FILENAME__ , __LINE__)
-        ! set pipe reads to non-blocking
-        rc = c_fcntl(self%bg_pipe(1), F_SETFL, O_NONBLOCK); 
-        if (rc < 0) call simple_exception("Updating background heartbeat pipe failed", __FILENAME__ , __LINE__)
-        ! fork process
-        self%bg_pid = c_fork()
-        if (self%bg_pid < 0) then
-            ! Fork failed.
-            call simple_exception("Background heartbeat fork failed", __FILENAME__ , __LINE__)
-        else if (self%bg_pid == 0) then
-            ! Child process infinite do loop until term signal recieved
-            i = 0
-            do
-                ! Send heartbeat every 10 seconds
-                if(i == 10) then
-                    call self%send_heartbeat()
-                    i = 0
-                endif
-                ! Read character from pipe. If present and T => terminate
-                if(c_read(self%bg_pipe(1), c_loc(rcv), 1_c_size_t) > 0) then
-                    if(rcv == 'T') exit
-                endif
-                ! Sleep 1 second
-                call sleep(1)
-                i = i + 1
-            end do
-            ! send parent X if self%exit is false, else Y
-            snd = 'Y'
-            if(self%exit) snd = 'X'
-            rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
-            if (rc < 0) call simple_exception("Child write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
-            ! close pipes and exit
-            rc = c_close(self%bg_pipe(1))
-            if (rc < 0) call simple_exception("Child close background heartbeat pipe failed 1", __FILENAME__ , __LINE__)
-            rc = c_close(self%bg_pipe(2))
-            if (rc < 0) call simple_exception("Child close background heartbeat pipe failed 2", __FILENAME__ , __LINE__)
-            call c_exit(0)
-        else
-            ! Parent process. continue as normal
-        end if
-    end subroutine background_heartbeat
+    ! STATUS CHECKS AND JSON ARGUMENT MANAGEMENT
 
-    subroutine join_background_heartbeat(self)
+    pure logical function active_status( self )
+        class(stream_http_communicator), intent(in) :: self
+        active_status = self%active
+    end function active_status
+
+    pure logical function exit_status( self )
+        class(stream_http_communicator), intent(in) :: self
+        exit_status = self%exit
+    end function exit_status
+
+    pure logical function stop_status( self )
+        class(stream_http_communicator), intent(in) :: self
+        stop_status = self%stop
+    end function stop_status
+
+    pure logical function arg_associated( self )
+        class(stream_http_communicator), intent(in) :: self
+        arg_associated = associated(self%update_arguments)
+    end function arg_associated
+
+    subroutine destroy_arg( self )
         class(stream_http_communicator), intent(inout) :: self
-        character,                       target        :: rcv, snd
-        integer                                        :: pid, rc
-        if(.not. self%active) return ! this process isn't communicating with nice
-        snd = 'T'
-        ! send child T to terminate
-        rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
-        if (rc < 0) call simple_exception("Parent write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
-        ! wait for child to terminate
-        pid = c_waitpid(self%bg_pid, rc, 0)
-        if (rc < 0) call simple_exception("Parent wait for background heartbeat termination failed", __FILENAME__ , __LINE__)
-        ! Read character from pipe. If present and X => set self%exit to true
-        if(c_read(self%bg_pipe(1), c_loc(rcv), 1_c_size_t) > 0) then
-            if(rcv == 'X') self%exit = .true.
-        endif
-        ! close pipes
-        rc = c_close(self%bg_pipe(1))
-        if (rc < 0) call simple_exception("Parent close background heartbeat pipe failed 1", __FILENAME__ , __LINE__)
-        rc = c_close(self%bg_pipe(2))
-        if (rc < 0) call simple_exception("Parent close background heartbeat pipe failed 2", __FILENAME__ , __LINE__)
-    end subroutine join_background_heartbeat
+        call self%json%destroy(self%update_arguments)
+        nullify(self%update_arguments)
+    end subroutine destroy_arg
+
+    ! JSON MODIFIERS
+
+    subroutine update_json_1(self, key, value, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key, value
+        logical,                         intent(out)   :: found
+        call self%json%update(self%job_json, trim(key), trim(value), found)
+    end subroutine update_json_1
+
+    subroutine update_json_2(self, key, ival, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        integer,                         intent(in)    :: ival
+        logical,                         intent(out)   :: found
+        call self%json%update(self%job_json, trim(key), ival, found)
+    end subroutine update_json_2
+
+    subroutine update_json_3(self, key, rval, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        real(dp),                        intent(in)    :: rval
+        logical,                         intent(out)   :: found
+        call self%json%update(self%job_json, trim(key), rval, found)
+    end subroutine update_json_3
+   
+    subroutine update_json_4(self, key, lval, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        logical,                         intent(in)    :: lval
+        logical,                         intent(out)   :: found
+        call self%json%update(self%job_json, trim(key), lval, found)
+    end subroutine update_json_4
+
+    subroutine add_to_json_1( self, key, ival )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        integer,                         intent(in)    :: ival
+        call self%json%add(self%job_json, trim(key), ival)
+    end subroutine add_to_json_1
+
+    subroutine add_to_json_2( self, key, rval )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        real(dp),                        intent(in)    :: rval
+        call self%json%add(self%job_json, trim(key), rval)
+    end subroutine add_to_json_2
+
+    subroutine add_to_json_3( self, key, value )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key, value
+        call self%json%add(self%job_json, trim(key), trim(value))
+    end subroutine add_to_json_3
+
+    subroutine add_to_json_4( self, jval )
+        class(stream_http_communicator), intent(inout) :: self
+        type(json_value), pointer,       intent(in)    :: jval
+        call self%json%add(self%job_json, jval)
+    end subroutine add_to_json_4
+
+    subroutine add_to_json_5( self, key, lval )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        logical,                         intent(in)    :: lval
+        call self%json%add(self%job_json, trim(key), lval)
+    end subroutine add_to_json_5
+
+    subroutine remove_from_json_if_present( self, str )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: str
+        call self%json%remove_if_present(self%job_json, trim(str))
+    end subroutine remove_from_json_if_present
+
+    ! JSON GETTERS
+
+    subroutine get_json_arg_1( self, key, ival, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        integer,                         intent(inout) :: ival
+        logical,                         intent(out)   :: found
+        call self%json%get(self%update_arguments, trim(key), ival, found)
+    end subroutine get_json_arg_1
+
+    subroutine get_json_arg_2( self, key, rval, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        real(dp),                        intent(inout) :: rval
+        logical,                         intent(out)   :: found
+        call self%json%get(self%update_arguments, trim(key), rval, found)
+    end subroutine get_json_arg_2
+
+    subroutine get_json_arg_3( self, key, str, found )
+        class(stream_http_communicator),       intent(inout) :: self
+        character(len=*),                      intent(in)    :: key
+        character(kind=CK,len=:), allocatable, intent(inout) :: str
+        logical,                               intent(out)   :: found
+        call self%json%get(self%update_arguments, trim(key), str, found)
+    end subroutine get_json_arg_3
+
+    subroutine get_json_arg_4( self, key, lval, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        logical,                         intent(inout) :: lval
+        logical,                         intent(out)   :: found
+        call self%json%get(self%update_arguments, trim(key), lval, found)
+    end subroutine get_json_arg_4
+
+    subroutine get_json_arg_5( self, key, iarr, found )
+        class(stream_http_communicator), intent(inout) :: self
+        character(len=*),                intent(in)    :: key
+        integer, allocatable,            intent(inout) :: iarr(:)
+        logical,                         intent(out)   :: found
+        if( allocated(iarr) ) deallocate(iarr)
+        call self%json%get(self%update_arguments, trim(key), iarr, found)
+    end subroutine get_json_arg_5
 
 end module simple_stream_communicator

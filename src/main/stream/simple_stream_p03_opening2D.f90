@@ -12,6 +12,7 @@ use simple_mini_stream_utils
 use simple_progress
 use simple_stream_communicator
 use simple_stream_utils
+use json_kinds
 implicit none
 
 public :: stream_p03_opening2D
@@ -38,7 +39,8 @@ contains
         type(commander_abinitio2D)       :: xabinitio2D
         type(commander_shape_rank_cavgs) :: xshape_rank
         type(oris)                       :: nmics_ori
-        type(json_value),    pointer     :: latest_picked_micrographs, latest_cls2D, selected_references   
+        type(json_value),    pointer     :: latest_picked_micrographs, latest_cls2D, selected_refs
+        type(json_core)                  :: json 
         type(string),        allocatable :: projects(:)
         character(len=:),    allocatable :: buffer
         type(string)                     :: final_selection_source, cavgsstk, mapfileprefix, str_dir, str_thumb, str_box
@@ -120,13 +122,13 @@ contains
             ! join background http heartbeats
             call join_background_heartbeats()
             ! send initial picking display info to gui
-            call http_communicator%json%update(http_communicator%job_json, "micrographs_accepted", spproj%os_mic%count_state_gt_zero(), found)
+            call http_communicator%update_json("micrographs_accepted", spproj%os_mic%count_state_gt_zero(), found)
             if(spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
             .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile')) then
                 ! create an empty latest_picked_micrographs json array
-                call http_communicator%json%remove(latest_picked_micrographs, destroy=.true.)
-                call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
+                call json%remove(latest_picked_micrographs, destroy=.true.)
+                call json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+                call http_communicator%add_to_json(latest_picked_micrographs)
                 cnt = 0
                 do ithumb = spproj%os_mic%get_noris(),1,-1 ! only params%nmics are picked
                     if( cnt > NTHUMB_MAX ) exit
@@ -134,7 +136,7 @@ contains
                     if( .not.spproj%os_mic%isthere(ithumb, 'boxfile') )   cycle
                     str_thumb = spproj%os_mic%get_str(ithumb, 'thumb_den')
                     str_box   = spproj%os_mic%get_str(ithumb, 'boxfile') 
-                    call communicator_add_micrograph(str_thumb%to_char(),&
+                    call add_micrograph_to_json(str_thumb%to_char(),&
                         spproj%os_mic%get_int(ithumb, 'xdim'), spproj%os_mic%get_int(ithumb, 'ydim'),&
                         str_box%to_char() )
                     call str_thumb%kill
@@ -156,11 +158,11 @@ contains
             ! join background http heartbeats
             call join_background_heartbeats()
             ! send generate pickrefs display info to gui
-            call http_communicator%json%add(http_communicator%job_json, "particles_extracted", spproj%os_ptcl2D%get_noris())
-            call http_communicator%json%add(http_communicator%job_json, "particles_per_mic",   nint(float(spproj%os_ptcl2D%get_noris()) / float(spproj%os_mic%get_noris())))
-            call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_imported",  spproj%os_ptcl2D%get_noris())
-            call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",           nint(mskdiam_estimate))
-            call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",            box_in_pix)
+            call http_communicator%add_to_json("particles_extracted", spproj%os_ptcl2D%get_noris())
+            call http_communicator%add_to_json("particles_per_mic",   nint(float(spproj%os_ptcl2D%get_noris()) / float(spproj%os_mic%get_noris())))
+            call http_gen_pickrefs_communicator%add_to_json("particles_imported",  spproj%os_ptcl2D%get_noris())
+            call http_gen_pickrefs_communicator%add_to_json("mask_diam",           nint(mskdiam_estimate))
+            call http_gen_pickrefs_communicator%add_to_json("box_size",            box_in_pix)
             call send_jobstats()
             ! background http heartbeats
             call background_heartbeats()   
@@ -198,15 +200,15 @@ contains
             xtile = 0
             ytile = 0
             n_non_zero = spproj%os_ptcl2D%count_state_gt_zero()
-            call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_accepted",  n_non_zero)
-            call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_rejected",  spproj%os_ptcl2D%get_noris() - n_non_zero)
-            call http_gen_pickrefs_communicator%json%remove(latest_cls2D, destroy=.true.)
-            call http_gen_pickrefs_communicator%json%create_array(latest_cls2D, "latest_cls2D")
-            call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, latest_cls2D)
-            call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input", .true.)
+            call http_gen_pickrefs_communicator%add_to_json("particles_accepted",  n_non_zero)
+            call http_gen_pickrefs_communicator%add_to_json("particles_rejected",  spproj%os_ptcl2D%get_noris() - n_non_zero)
+            call json%remove(latest_cls2D, destroy=.true.)
+            call json%create_array(latest_cls2D, "latest_cls2D")
+            call http_gen_pickrefs_communicator%add_to_json(latest_cls2D)
+            call http_gen_pickrefs_communicator%add_to_json("user_input", .true.)
             if(allocated(cavg_inds)) then
                 do i=0, size(cavg_inds) - 1
-                    call communicator_add_cls2D(trim(CWD_GLOB) // '/' // "shape_ranked_" // int2str(params%nmics) // JPG_EXT,&
+                    call add_cls2D_to_json(trim(CWD_GLOB) // '/' // "shape_ranked_" // int2str(params%nmics) // JPG_EXT,&
                         cavgsstk%to_char(),&
                         cavg_inds(i + 1),&
                         xtile * (100.0 / (xtiles - 1)),&
@@ -228,32 +230,32 @@ contains
             write(logfhandle, *) ">>> WAITING FOR USER TO SELECT REFERENCES"
             do 
                 call send_jobstats()
-                call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'increase_nmics', increase_nmics, found)
+                call http_gen_pickrefs_communicator%get_json_arg('increase_nmics', increase_nmics, found)
                 if (found) then
                     if(increase_nmics) then
                         increase_nmics = .false.
                         call cline%set('nmics', params%nmics + NMICS_DELTA)
                         params%nmics = params%nmics + NMICS_DELTA
                         call cleanup_previous
-                        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input", .false.)
+                        call http_gen_pickrefs_communicator%add_to_json("user_input", .false.)
                         restart_requested = .true.
                         exit  ! exit inner wait-loop to restart outer loop
                     endif
                 endif
-                call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection', final_selection, found)
+                call http_gen_pickrefs_communicator%get_json_arg('final_selection', final_selection, found)
                 if(found) then
-                    call http_gen_pickrefs_communicator%json%get(http_gen_pickrefs_communicator%update_arguments, 'final_selection_source', buffer, found)
+                    call http_gen_pickrefs_communicator%get_json_arg('final_selection_source', buffer, found)
                     if(found) then
                         final_selection_source = buffer
-                        call process_selected_references(final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
-                        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam", nint(mskdiam_estimate))
-                        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mskscale",  dble(box_for_extract * spproj%get_smpd()))
-                        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",  box_for_extract)
+                        call process_selected_refs(final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
+                        call http_gen_pickrefs_communicator%add_to_json("mask_diam", nint(mskdiam_estimate))
+                        call http_gen_pickrefs_communicator%add_to_json("mskscale",  dble(box_for_extract * spproj%get_smpd()))
+                        call http_gen_pickrefs_communicator%add_to_json("box_size",  box_for_extract)
                         xtile = 0
                         ytile = 0
                         n_non_zero = 0
                         do i=1, size(final_selection)
-                            call communicator_add_selected_reference(trim(CWD_GLOB) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
+                            call add_selected_refs_to_json(trim(CWD_GLOB) // '/' // STREAM_SELECTED_REFS // JPG_EXT,&
                                 &xtile * (100.0 / (xtiles - 1)),&
                                 &ytile * (100.0 / (ytiles - 1)),&
                                 &100 * ytiles,&
@@ -268,8 +270,8 @@ contains
                                 ytile = ytile + 1
                             endif
                         end do
-                        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_accepted",  n_non_zero)
-                        call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_rejected",  spproj%os_ptcl2D%get_noris() - n_non_zero)
+                        call http_gen_pickrefs_communicator%add_to_json("particles_accepted",  n_non_zero)
+                        call http_gen_pickrefs_communicator%add_to_json("particles_rejected",  spproj%os_ptcl2D%get_noris() - n_non_zero)
                         if( allocated(buffer) ) deallocate(buffer)               
                     endif
                     exit
@@ -281,8 +283,8 @@ contains
         end do ! end restart loop
         call send_jobstats()
         ! termination
-        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found)
-        call http_gen_pickrefs_communicator%json%update(http_gen_pickrefs_communicator%job_json, "stage", "terminating", found)
+        call http_communicator%update_json("stage", "terminating", found)
+        call http_gen_pickrefs_communicator%update_json("stage", "terminating", found)
         call send_jobstats()
         if( allocated(projects)  ) deallocate(projects)
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
@@ -320,7 +322,7 @@ contains
             subroutine join_background_heartbeats()
                 call http_communicator%join_background_heartbeat()
                 call http_gen_pickrefs_communicator%join_background_heartbeat()
-                if(http_communicator%exit .or. http_gen_pickrefs_communicator%exit) then
+                if(http_communicator%exit_status() .or. http_gen_pickrefs_communicator%exit_status()) then
                     write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                     call spproj%kill
                     call http_communicator%term()
@@ -352,7 +354,7 @@ contains
                 integer :: n_imported, n_new_oris, iproj, iori, imic
                 n_imported= 0
                 do
-                    if( file_exists(TERM_STREAM) .or. http_communicator%exit) then
+                    if( file_exists(TERM_STREAM) .or. http_communicator%exit_status()) then
                         ! termination
                         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                         call spproj%kill
@@ -363,7 +365,7 @@ contains
                         call EXIT(0)
                     endif
                     ! http stats
-                    call http_communicator%json%update(http_communicator%job_json, "stage", "finding and importing new micrographs to project", found) 
+                    call http_communicator%update_json("stage", "finding and importing new micrographs to project", found) 
                     ! detection of new projects
                     call project_buff%watch( nprojects, projects, max_nmovies=50 )
                     ! append projects to processing stack
@@ -389,8 +391,8 @@ contains
                         enddo
                         write(logfhandle,'(A,I4,A,A)')'>>> ', nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS DETECTED; ', cast_time_char(simple_gettime())
                         ! http stats
-                        call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     spproj%os_mic%get_noris(),                                       found)
-                        call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),                                                found)
+                        call http_communicator%update_json("micrographs_imported",     spproj%os_mic%get_noris(),                                       found)
+                        call http_communicator%update_json("last_micrograph_imported", stream_datestr(),                                                found)
                     else
                         call sleep(WAITTIME) ! may want to increase as 3s default
                     endif
@@ -409,11 +411,11 @@ contains
                         end if
                     enddo
                     ! http stats
-                    call http_communicator%json%update(http_communicator%job_json, "micrographs_rejected", spproj%os_mic%get_noris() - spproj%os_mic%count_state_gt_zero(), found)
+                    call http_communicator%update_json("micrographs_rejected", spproj%os_mic%get_noris() - spproj%os_mic%count_state_gt_zero(), found)
                     ! http stats send
                     call send_jobstats() ! needs to be called so the gui doesn't think the process is dead, "fancy heartbeat"
                     ! update thresholds if sent from gui
-                    call update_user_params(cline, http_communicator%update_arguments)
+                    call update_user_params(cline, http_communicator)
                     if( spproj%os_mic%count_state_gt_zero() >= nmics ) then
                         ! set state=-1 mics back to 1
                         do imic = 1,spproj%os_mic%get_noris()
@@ -425,102 +427,102 @@ contains
             end subroutine micimporter
 
             subroutine communicator_init_initial_picking()
-                call http_communicator%json%add(http_communicator%job_json, "stage",               "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_imported",     0)
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_accepted",     0)
-                call http_communicator%json%add(http_communicator%job_json, "micrographs_rejected",     0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_extracted",      0)
-                call http_communicator%json%add(http_communicator%job_json, "particles_per_mic",        0)
-                call http_communicator%json%add(http_communicator%job_json, "user_input",               .false.)
-                call http_communicator%json%add(http_communicator%job_json, "last_micrograph_imported", "")
-                call http_communicator%json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                call http_communicator%json%add(http_communicator%job_json, latest_picked_micrographs)
+                call http_communicator%add_to_json("stage",       "initialising")
+                call http_communicator%add_to_json("micrographs_imported",     0)
+                call http_communicator%add_to_json("micrographs_accepted",     0)
+                call http_communicator%add_to_json("micrographs_rejected",     0)
+                call http_communicator%add_to_json("particles_extracted",      0)
+                call http_communicator%add_to_json("particles_per_mic",        0)
+                call http_communicator%add_to_json("user_input",         .false.)
+                call http_communicator%add_to_json("last_micrograph_imported", "")
+                call json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
+                call http_communicator%add_to_json(latest_picked_micrographs)
             end subroutine communicator_init_initial_picking
 
             subroutine communicator_gen_pickrefs_init()
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "stage",              "initialising")
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_imported", 0)
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_accepted", 0)
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "particles_rejected", 0)
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mask_diam",          0)
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "box_size",           0)
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "mskscale",           dble(0.0))
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, "user_input",         .false.)
-                call http_gen_pickrefs_communicator%json%create_array(latest_cls2D, "latest_cls2D")
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, latest_cls2D)
-                call http_gen_pickrefs_communicator%json%create_array(selected_references, "selected_references")
-                call http_gen_pickrefs_communicator%json%add(http_gen_pickrefs_communicator%job_json, selected_references)
+                call http_gen_pickrefs_communicator%add_to_json("stage",              "initialising")
+                call http_gen_pickrefs_communicator%add_to_json("particles_imported", 0)
+                call http_gen_pickrefs_communicator%add_to_json("particles_accepted", 0)
+                call http_gen_pickrefs_communicator%add_to_json("particles_rejected", 0)
+                call http_gen_pickrefs_communicator%add_to_json("mask_diam",          0)
+                call http_gen_pickrefs_communicator%add_to_json("box_size",           0)
+                call http_gen_pickrefs_communicator%add_to_json("mskscale",           dble(0.0))
+                call http_gen_pickrefs_communicator%add_to_json("user_input",         .false.)
+                call json%create_array(latest_cls2D, "latest_cls2D")
+                call http_gen_pickrefs_communicator%add_to_json(latest_cls2D)
+                call json%create_array(selected_refs, "selected_refs")
+                call http_gen_pickrefs_communicator%add_to_json(selected_refs)
             end subroutine communicator_gen_pickrefs_init
 
-            subroutine communicator_add_micrograph( path, xdim, ydim, boxfile_path )
+            subroutine add_micrograph_to_json( path, xdim, ydim, boxfile_path )
                 character(*),     intent(in)  :: path, boxfile_path
                 integer,          intent(in)  :: xdim, ydim
                 type(nrtxtfile)               :: boxfile
                 type(json_value), pointer     :: micrograph, boxes, box
                 real,             allocatable :: boxdata(:,:)
                 integer                       :: i, x, y, diameter, type
-                call http_communicator%json%create_object(micrograph, "")
-                call http_communicator%json%add(micrograph, "path",    path)
-                call http_communicator%json%add(micrograph, "xdim"   , xdim)
-                call http_communicator%json%add(micrograph, "ydim",    ydim)
-                call http_communicator%json%create_array(boxes, "boxes")
+                call json%create_object(micrograph, "")
+                call json%add(micrograph, "path",    path)
+                call json%add(micrograph, "xdim"   , xdim)
+                call json%add(micrograph, "ydim",    ydim)
+                call json%create_array(boxes, "boxes")
                 call boxfile%new(string(boxfile_path), 1)
                 allocate(boxdata(boxfile%get_nrecs_per_line(), boxfile%get_ndatalines()))
                 if(boxfile%get_nrecs_per_line() >= 4) then
                     do i=1, boxfile%get_ndatalines()
                         call boxfile%readNextDataLine(boxdata(:,i))
-                        call http_communicator%json%create_object(box, "")
+                        call json%create_object(box, "")
                         x = nint(boxdata(1,i) + boxdata(3,i)/2)
                         y = nint(boxdata(2,i) + boxdata(4,i)/2)
-                        call http_communicator%json%add(box, "x",    x)
-                        call http_communicator%json%add(box, "y",    y)
-                        call http_communicator%json%add(boxes, box)
+                        call json%add(box, "x",    x)
+                        call json%add(box, "y",    y)
+                        call json%add(boxes, box)
                     enddo
                 endif
                 call boxfile%kill()
                 deallocate(boxdata)
-                call http_communicator%json%add(micrograph, boxes)
-                call http_communicator%json%add(latest_picked_micrographs, micrograph)
-            end subroutine communicator_add_micrograph
+                call json%add(micrograph, boxes)
+                call json%add(latest_picked_micrographs, micrograph)
+            end subroutine add_micrograph_to_json
             
-            subroutine communicator_add_cls2D( path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop, scale )
-                 character(*),      intent(in) :: path, mrcpath
-                 real,              intent(in) :: spritex, spritey
-                 integer,           intent(in) :: spriteh, spritew, mrc_idx
-                 integer, optional, intent(in) :: pop
-                 real,    optional, intent(in) :: res, scale
-                 type(json_value),  pointer    :: template
-                 call http_gen_pickrefs_communicator%json%create_object(template, "")
-                 call http_gen_pickrefs_communicator%json%add(template, "path",     path)
-                 call http_gen_pickrefs_communicator%json%add(template, "mrcpath",  mrcpath)
-                 call http_gen_pickrefs_communicator%json%add(template, "mrcidx",   mrc_idx)
-                 call http_gen_pickrefs_communicator%json%add(template, "spritex",  dble(spritex))
-                 call http_gen_pickrefs_communicator%json%add(template, "spritey",  dble(spritey))
-                 call http_gen_pickrefs_communicator%json%add(template, "spriteh",  spriteh)
-                 call http_gen_pickrefs_communicator%json%add(template, "spritew",  spritew)
-                 if(present(scale)) call http_gen_pickrefs_communicator%json%add(template, "mskscale", dble(scale))
-                 if(present(res))   call http_gen_pickrefs_communicator%json%add(template, "res",      dble(res))
-                 if(present(pop))   call http_gen_pickrefs_communicator%json%add(template, "pop",      pop)
-                 call http_gen_pickrefs_communicator%json%add(latest_cls2D, template)
-             end subroutine communicator_add_cls2D
+            subroutine add_cls2D_to_json( path, mrcpath, mrc_idx, spritex, spritey, spriteh, spritew, res, pop, scale )
+                character(*),      intent(in) :: path, mrcpath
+                real,              intent(in) :: spritex, spritey
+                integer,           intent(in) :: spriteh, spritew, mrc_idx
+                integer, optional, intent(in) :: pop
+                real,    optional, intent(in) :: res, scale
+                type(json_value),  pointer    :: template
+                call json%create_object(template, "")
+                call json%add(template, "path",     path)
+                call json%add(template, "mrcpath",  mrcpath)
+                call json%add(template, "mrcidx",   mrc_idx)
+                call json%add(template, "spritex",  dble(spritex))
+                call json%add(template, "spritey",  dble(spritey))
+                call json%add(template, "spriteh",  spriteh)
+                call json%add(template, "spritew",  spritew)
+                if(present(scale)) call json%add(template, "mskscale", dble(scale))
+                if(present(res))   call json%add(template, "res",      dble(res))
+                if(present(pop))   call json%add(template, "pop",      pop)
+                call json%add(latest_cls2D, template)
+             end subroutine add_cls2D_to_json
 
-             subroutine communicator_add_selected_reference( path, spritex, spritey, spriteh, spritew, res, pop )
+             subroutine add_selected_refs_to_json( path, spritex, spritey, spriteh, spritew, res, pop )
                 character(*),      intent(in) :: path
                 real,              intent(in) :: spritex, spritey
                 integer,           intent(in) :: spriteh, spritew
                 integer, optional, intent(in) :: pop
                 real,    optional, intent(in) :: res
                 type(json_value),  pointer    :: template
-                call http_gen_pickrefs_communicator%json%create_object(template, "")
-                call http_gen_pickrefs_communicator%json%add(template, "path",    path)
-                call http_gen_pickrefs_communicator%json%add(template, "spritex", dble(spritex))
-                call http_gen_pickrefs_communicator%json%add(template, "spritey", dble(spritey))
-                call http_gen_pickrefs_communicator%json%add(template, "spriteh", spriteh)
-                call http_gen_pickrefs_communicator%json%add(template, "spritew", spritew)
-                if(present(res)) call http_gen_pickrefs_communicator%json%add(template, "res",     dble(res))
-                if(present(pop)) call http_gen_pickrefs_communicator%json%add(template, "pop",     pop)
-                call http_gen_pickrefs_communicator%json%add(selected_references, template)
-            end subroutine communicator_add_selected_reference
+                call json%create_object(template, "")
+                call json%add(template, "path",    path)
+                call json%add(template, "spritex", dble(spritex))
+                call json%add(template, "spritey", dble(spritey))
+                call json%add(template, "spriteh", spriteh)
+                call json%add(template, "spritew", spritew)
+                if(present(res)) call json%add(template, "res",     dble(res))
+                if(present(pop)) call json%add(template, "pop",     pop)
+                call json%add(selected_refs, template)
+            end subroutine add_selected_refs_to_json
 
     end subroutine exec_stream_p03_opening2D
 

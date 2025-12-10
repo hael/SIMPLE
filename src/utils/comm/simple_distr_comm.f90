@@ -10,8 +10,8 @@ private
 type :: thread_comm
     private
     type(c_pthread_mutex_t) :: lock
-    integer :: port      = 39000
-    logical :: listening = .false.
+    integer                 :: port      = 39000
+    logical                 :: listening = .false.
     ! add a message queue - use it to communicate with shmem and distr processes
 end type thread_comm
 
@@ -19,10 +19,10 @@ type(thread_comm), target :: server_comm
 
 type :: distr_comm
     private
-    integer                :: sock_fd, port
-    type(c_pthread_t)      :: server_thread
+    integer           :: sock_fd, port
+    type(c_pthread_t) :: server_thread
 contains
-    procedure          :: init
+    procedure :: init
 end type distr_comm
 
 contains
@@ -66,7 +66,5 @@ contains
         end do
         call socket%close
     end subroutine server
-
-    
 
 end module simple_distr_comm

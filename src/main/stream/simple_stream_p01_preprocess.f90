@@ -16,6 +16,7 @@ use simple_stream_communicator
 use simple_stream_utils
 use simple_stream_watcher
 use simple_timer
+use json_kinds
 implicit none
 
 public :: stream_p01_preprocess
@@ -35,6 +36,7 @@ contains
         type(parameters)               :: params
         type(stream_http_communicator) :: http_communicator
         type(json_value), pointer      :: latest_micrographs, histograms, timeplots
+        type(json_core)                :: json
         logical,          parameter    :: DEBUG_HERE      = .false.
         class(cmdline),  allocatable   :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(cmdline)                  :: cline_exec
@@ -103,6 +105,8 @@ contains
             call spproj_glob%update_compenv(cline)
             call spproj_glob%write
         endif
+        ! initialize json 
+        call json%initialize(no_whitespace=.true.)
         ! master parameters
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
@@ -156,30 +160,30 @@ contains
             call del_file(TERM_STREAM)
             if( cline%defined('dir_exec') ) call cline%delete('dir_exec')
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage", "importing previously processed data", found)
+            call http_communicator%update_json("stage", "importing previously processed data", found)
             call http_communicator%send_jobstats()
             call import_previous_projects
             nmic_star = spproj_glob%os_mic%get_noris()
             call write_mic_star_and_field(write_field=.true.)
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "movies_imported",  spproj_glob%os_mic%get_noris(), found)
-            call http_communicator%json%update(http_communicator%job_json, "movies_processed", spproj_glob%os_mic%get_noris(), found)
-            call http_communicator%json%update(http_communicator%job_json, "movies_rejected",  0,                              found)
+            call http_communicator%update_json("movies_imported",  spproj_glob%os_mic%get_noris(), found)
+            call http_communicator%update_json("movies_processed", spproj_glob%os_mic%get_noris(), found)
+            call http_communicator%update_json("movies_rejected",  0,                              found)
             call communicator_clear_histograms()
             if(spproj_glob%os_mic%isthere("ctfres")) then
                 avg_tmp = spproj_glob%os_mic%get_avg("ctfres")
-                call http_communicator%json%update(http_communicator%job_json, "average_ctf_res", dble(avg_tmp), found)
-                call communicator_add_histogram("ctfres")
+                call http_communicator%update_json("average_ctf_res", dble(avg_tmp), found)
+                call json_add_histogram("ctfres")
             end if
             if(spproj_glob%os_mic%isthere("icefrac")) then
                 avg_tmp = spproj_glob%os_mic%get_avg("icefrac")
-                call http_communicator%json%update(http_communicator%job_json, "average_ice_score", dble(avg_tmp), found)
-                call communicator_add_histogram("icefrac")
+                call http_communicator%update_json("average_ice_score", dble(avg_tmp), found)
+                call json_add_histogram("icefrac")
             end if
             if(spproj_glob%os_mic%isthere("astig")) then
                 avg_tmp = spproj_glob%os_mic%get_avg("astig")
-                call http_communicator%json%update(http_communicator%job_json, "average_astigmatism", dble(avg_tmp), found)
-                call communicator_add_histogram("astig")
+                call http_communicator%update_json("average_astigmatism", dble(avg_tmp), found)
+                call json_add_histogram("astig")
             end if
             call http_communicator%send_jobstats()
         endif
@@ -221,12 +225,12 @@ contains
         call cline_exec%set('fromp',1)
         call cline_exec%set('top',  STREAM_NMOVS_SET)
         do
-            if( file_exists(TERM_STREAM) .or. http_communicator%exit )then
+            if( file_exists(TERM_STREAM) .or. http_communicator%exit_status() )then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
-            if( http_communicator%stop )then
+            if( http_communicator%stop_status() )then
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
@@ -237,11 +241,11 @@ contains
             endif
             iter = iter + 1
             ! http stats
-            call http_communicator%json%update(http_communicator%job_json, "stage",               "finding and processing new movies", found)    
-            call http_communicator%json%update(http_communicator%job_json, "cutoff_ctf_res",      dble(params%ctfresthreshold),        found)
-            call http_communicator%json%update(http_communicator%job_json, "cutoff_ice_score",    dble(params%icefracthreshold),       found)
-            call http_communicator%json%update(http_communicator%job_json, "cutoff_astigmatism",  dble(params%astigthreshold),         found)
-            call http_communicator%json%update(http_communicator%job_json, "movies_rate",         movie_buff%rate,                     found)
+            call http_communicator%update_json("stage",               "finding and processing new movies", found)    
+            call http_communicator%update_json("cutoff_ctf_res",      dble(params%ctfresthreshold),        found)
+            call http_communicator%update_json("cutoff_ice_score",    dble(params%icefracthreshold),       found)
+            call http_communicator%update_json("cutoff_astigmatism",  dble(params%astigthreshold),         found)
+            call http_communicator%update_json("movies_rate",         movie_buff%rate,                     found)
             ! detection of new folders & movies
             call movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
             call movie_buff%watch( nmovies, movies, max_nmovies=nmovs2importperiter )
@@ -264,8 +268,8 @@ contains
                 write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "movies_imported",      movie_buff%n_history, found)
-                call http_communicator%json%update(http_communicator%job_json, "last_movie_imported",  stream_datestr(),     found)
+                call http_communicator%update_json("movies_imported",      movie_buff%n_history, found)
+                call http_communicator%update_json("last_movie_imported",  stream_datestr(),     found)
             else
                 l_movies_left = .false.
             endif
@@ -301,39 +305,39 @@ contains
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! http stats
-                call http_communicator%json%update(http_communicator%job_json, "movies_processed", n_imported, found)
-                if( n_failed_jobs > 0 )  call http_communicator%json%update(http_communicator%job_json, "movies_rejected",  n_failed_jobs, found)
+                call http_communicator%update_json("movies_processed", n_imported, found)
+                if( n_failed_jobs > 0 )  call http_communicator%update_json("movies_rejected",  n_failed_jobs, found)
                 call communicator_clear_histograms()
                 if(spproj_glob%os_mic%isthere("ctfres")) then
                     avg_tmp = spproj_glob%os_mic%get_avg("ctfres")
-                    call http_communicator%json%update(http_communicator%job_json, "average_ctf_res", dble(avg_tmp), found)
-                    call communicator_add_histogram("ctfres")
+                    call http_communicator%update_json("average_ctf_res", dble(avg_tmp), found)
+                    call json_add_histogram("ctfres")
                 end if
                 if(spproj_glob%os_mic%isthere("icefrac")) then
                     avg_tmp = spproj_glob%os_mic%get_avg("icefrac")
-                    call http_communicator%json%update(http_communicator%job_json, "average_ice_score", dble(avg_tmp), found)
-                    call communicator_add_histogram("icefrac")
+                    call http_communicator%update_json("average_ice_score", dble(avg_tmp), found)
+                    call json_add_histogram("icefrac")
                 end if
                 if(spproj_glob%os_mic%isthere("astig")) then
                     avg_tmp = spproj_glob%os_mic%get_avg("astig")
-                    call http_communicator%json%update(http_communicator%job_json, "average_astigmatism", dble(avg_tmp), found)
-                    call communicator_add_histogram("astig")
+                    call http_communicator%update_json("average_astigmatism", dble(avg_tmp), found)
+                    call json_add_histogram("astig")
                 end if
                 call communicator_clear_timeplots()
-                call communicator_add_timeplot("ctfres")
-                call communicator_add_timeplot("astig")
-                call communicator_add_timeplot("df")
-                call communicator_add_timeplot("rate")
+                call add_timeplot_to_json("ctfres")
+                call add_timeplot_to_json("astig")
+                call add_timeplot_to_json("df")
+                call add_timeplot_to_json("rate")
                 if(spproj_glob%os_mic%isthere('thumb')) then
                     i_max = 10
                     if(spproj_glob%os_mic%get_noris() < 10) i_max = spproj_glob%os_mic%get_noris()
                     ! create an empty latest_micrographs json array
-                    call http_communicator%json%remove(latest_micrographs, destroy=.true.)
-                    call http_communicator%json%create_array(latest_micrographs, "latest_micrographs")
-                    call http_communicator%json%add(http_communicator%job_json, latest_micrographs)
+                    call json%remove(latest_micrographs, destroy=.true.)
+                    call json%create_array(latest_micrographs, "latest_micrographs")
+                    call http_communicator%add_to_json(latest_micrographs)
                     do i_thumb=0, i_max - 1
                         str_thumb = spproj_glob%os_mic%get_str(spproj_glob%os_mic%get_noris() - i_thumb, "thumb")
-                        call communicator_add_micrograph(&
+                        call json_add_micrograph(&
                             &str_thumb%to_char(),&
                             &dfx=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "dfx"),&
                             &dfy=spproj_glob%os_mic%get(spproj_glob%os_mic%get_noris() - i_thumb, "dfy"),&
@@ -377,10 +381,10 @@ contains
             endif
             ! http stats send
             call http_communicator%send_jobstats()
-            call update_user_params(cline, http_communicator%update_arguments)
+            call update_user_params(cline, http_communicator)
         end do
         ! termination
-        call http_communicator%json%update(http_communicator%job_json, "stage", "terminating", found) 
+        call http_communicator%update_json( "stage", "terminating", found) 
         call http_communicator%send_jobstats()
         call update_user_params(cline)
         call write_mic_star_and_field(write_field=.true., copy_optics=.true.)
@@ -670,45 +674,45 @@ contains
             end subroutine import_previous_projects
 
             subroutine communicator_init()
-                call http_communicator%json%add(http_communicator%job_json, "stage",               "initialising")
-                call http_communicator%json%add(http_communicator%job_json, "movies_imported",     0)
-                call http_communicator%json%add(http_communicator%job_json, "movies_processed",    0)
-                call http_communicator%json%add(http_communicator%job_json, "movies_rejected",     0)
-                call http_communicator%json%add(http_communicator%job_json, "movies_rate",         0)
-                call http_communicator%json%add(http_communicator%job_json, "average_ctf_res",     dble(0.0))
-                call http_communicator%json%add(http_communicator%job_json, "average_ice_score",   dble(0.0))
-                call http_communicator%json%add(http_communicator%job_json, "average_astigmatism", dble(0.0))
-                call http_communicator%json%add(http_communicator%job_json, "cutoff_ctf_res",      dble(params%ctfresthreshold))
-                call http_communicator%json%add(http_communicator%job_json, "cutoff_ice_score",    dble(params%icefracthreshold))
-                call http_communicator%json%add(http_communicator%job_json, "cutoff_astigmatism",  dble(params%astigthreshold))
-                call http_communicator%json%add(http_communicator%job_json, "last_movie_imported", "")
-                call http_communicator%json%create_array(latest_micrographs, "latest_micrographs")
-                call http_communicator%json%add(http_communicator%job_json, latest_micrographs)
-                call http_communicator%json%create_object(histograms,        "histograms")
-                call http_communicator%json%add(http_communicator%job_json, histograms)
-                call http_communicator%json%create_object(timeplots,        "timeplots")
-                call http_communicator%json%add(http_communicator%job_json, timeplots)
+                call http_communicator%add_to_json("stage",               "initialising")
+                call http_communicator%add_to_json("movies_imported",     0)
+                call http_communicator%add_to_json("movies_processed",    0)
+                call http_communicator%add_to_json("movies_rejected",     0)
+                call http_communicator%add_to_json("movies_rate",         0)
+                call http_communicator%add_to_json("average_ctf_res",     dble(0.0))
+                call http_communicator%add_to_json("average_ice_score",   dble(0.0))
+                call http_communicator%add_to_json("average_astigmatism", dble(0.0))
+                call http_communicator%add_to_json("cutoff_ctf_res",      dble(params%ctfresthreshold))
+                call http_communicator%add_to_json("cutoff_ice_score",    dble(params%icefracthreshold))
+                call http_communicator%add_to_json("cutoff_astigmatism",  dble(params%astigthreshold))
+                call http_communicator%add_to_json("last_movie_imported", "")
+                call json%create_array(latest_micrographs, "latest_micrographs")
+                call http_communicator%add_to_json(latest_micrographs)
+                call json%create_object(histograms, "histograms")
+                call http_communicator%add_to_json(histograms)
+                call json%create_object(timeplots, "timeplots")
+                call http_communicator%add_to_json(timeplots)
             end subroutine communicator_init
 
-            subroutine communicator_add_micrograph( path, dfx, dfy, ctfres )
+            subroutine json_add_micrograph( path, dfx, dfy, ctfres )
                 character(*),     intent(in) :: path
                 real, optional,   intent(in) :: dfx, dfy, ctfres
                 type(json_value), pointer    :: micrograph
-                call http_communicator%json%create_object(micrograph, "")
-                call http_communicator%json%add(micrograph, "path", path)
-                if(present(dfx))    call http_communicator%json%add(micrograph, "dfx", dble(dfx))
-                if(present(dfy))    call http_communicator%json%add(micrograph, "dfy", dble(dfy))
-                if(present(ctfres)) call http_communicator%json%add(micrograph, "ctfres", dble(ctfres))
-                call http_communicator%json%add(latest_micrographs, micrograph)
-            end subroutine communicator_add_micrograph
+                call json%create_object(micrograph, "")
+                call json%add(micrograph, "path", path)
+                if(present(dfx))    call json%add(micrograph, "dfx", dble(dfx))
+                if(present(dfy))    call json%add(micrograph, "dfy", dble(dfy))
+                if(present(ctfres)) call json%add(micrograph, "ctfres", dble(ctfres))
+                call json%add(latest_micrographs, micrograph)
+            end subroutine json_add_micrograph
 
             subroutine communicator_clear_histograms()
-                call http_communicator%json%remove(histograms, destroy=.true.)
-                call http_communicator%json%create_object(histograms, "histograms")
-                call http_communicator%json%add(http_communicator%job_json, histograms)
+                call json%remove(histograms, destroy=.true.)
+                call json%create_object(histograms, "histograms")
+                call http_communicator%add_to_json(histograms)
             end subroutine communicator_clear_histograms
 
-            subroutine communicator_add_histogram( key )
+            subroutine json_add_histogram( key )
                 character(*),     intent(in) :: key
                 type(json_value), pointer    :: new_histogram, histogram_labels, histogram_data
                 type(histogram)              :: key_histogram
@@ -731,27 +735,27 @@ contains
                 do ikey = 1, spproj_glob%os_mic%get_noris()
                     call key_histogram%update(spproj_glob%os_mic%get(ikey, key))
                 enddo
-                call http_communicator%json%create_object(new_histogram, key)
-                call http_communicator%json%create_array(histogram_labels, "labels")
-                call http_communicator%json%add(new_histogram, histogram_labels)
-                call http_communicator%json%create_array(histogram_data,   "data")
-                call http_communicator%json%add(new_histogram, histogram_data)
+                call json%create_object(new_histogram, key)
+                call json%create_array(histogram_labels, "labels")
+                call json%add(new_histogram, histogram_labels)
+                call json%create_array(histogram_data,   "data")
+                call json%add(new_histogram, histogram_data)
                 do ibin=1, size(histogram_rvec)
-                    call http_communicator%json%add(histogram_labels, "", dble(histogram_rvec(ibin)))
-                    call http_communicator%json%add(histogram_data,   "", int(key_histogram%get(ibin)))
+                    call json%add(histogram_labels, "", dble(histogram_rvec(ibin)))
+                    call json%add(histogram_data,   "", int(key_histogram%get(ibin)))
                 end do
-                call http_communicator%json%add(histograms, new_histogram)
+                call json%add(histograms, new_histogram)
                 call key_histogram%kill()
                 deallocate(histogram_rvec)
-            end subroutine communicator_add_histogram
+            end subroutine json_add_histogram
 
             subroutine communicator_clear_timeplots()
-                call http_communicator%json%remove(timeplots, destroy=.true.)
-                call http_communicator%json%create_object(timeplots, "timeplots")
-                call http_communicator%json%add(http_communicator%job_json, timeplots)
+                call json%remove(timeplots, destroy=.true.)
+                call json%create_object(timeplots, "timeplots")
+                call http_communicator%add_to_json(timeplots)
             end subroutine communicator_clear_timeplots
 
-            subroutine communicator_add_timeplot( key )
+            subroutine add_timeplot_to_json( key )
                 character(*),     intent(in) :: key
                 type(json_value), pointer    :: new_timeplot, timeplot_labels, timeplot_data, timeplot_data2
                 integer                      :: fromto(2)
@@ -770,33 +774,33 @@ contains
                 else
                     return
                 endif
-                call http_communicator%json%create_object(new_timeplot, key)
-                call http_communicator%json%create_array(timeplot_labels, "labels")
-                call http_communicator%json%add(new_timeplot, timeplot_labels)
-                call http_communicator%json%create_array(timeplot_data,   "data")
-                call http_communicator%json%add(new_timeplot, timeplot_data)
+                call json%create_object(new_timeplot, key)
+                call json%create_array(timeplot_labels, "labels")
+                call json%add(new_timeplot, timeplot_labels)
+                call json%create_array(timeplot_data,   "data")
+                call json%add(new_timeplot, timeplot_data)
                 if(key == "rate") then
                     nbins = size(movie_buff%ratehistory)
                     do ibin=1, nbins
-                        call http_communicator%json%add(timeplot_labels, "", ibin)
-                        call http_communicator%json%add(timeplot_data,   "", movie_buff%ratehistory(ibin))
+                        call json%add(timeplot_labels, "", ibin)
+                        call json%add(timeplot_data,   "", movie_buff%ratehistory(ibin))
                     enddo
                 else
-                    call http_communicator%json%create_array(timeplot_data2,   "data2") ! contains sdev for each bin
-                    call http_communicator%json%add(new_timeplot, timeplot_data2)
+                    call json%create_array(timeplot_data2,   "data2") ! contains sdev for each bin
+                    call json%add(new_timeplot, timeplot_data2)
                     nbins = ceiling(spproj_glob%os_mic%get_noris() / real(binsize))
                     do ibin=1, nbins
                         fromto(1) = 1 + ((ibin - 1)  * binsize)
                         fromto(2) = ibin * binsize
                         if(fromto(2) .gt. spproj_glob%os_mic%get_noris()) fromto(2) = spproj_glob%os_mic%get_noris()
                         call spproj_glob%os_mic%stats(key, ave, sdev, var, err, fromto)
-                        call http_communicator%json%add(timeplot_labels, "", ibin)
-                        call http_communicator%json%add(timeplot_data,   "", dble(ave))
-                        call http_communicator%json%add(timeplot_data2,  "", dble(sdev))
+                        call json%add(timeplot_labels, "", ibin)
+                        call json%add(timeplot_data,   "", dble(ave))
+                        call json%add(timeplot_data2,  "", dble(sdev))
                     enddo
                 endif
-                call http_communicator%json%add(timeplots, new_timeplot)
-            end subroutine communicator_add_timeplot
+                call json%add(timeplots, new_timeplot)
+            end subroutine add_timeplot_to_json
 
     end subroutine exec_stream_p01_preprocess
 
