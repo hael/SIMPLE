@@ -46,19 +46,19 @@ contains
         character(len=*),    parameter   :: PROJNAME_GEN_PICKREFS = 'gen_pickrefs', PROJFILE_GEN_PICKREFS = 'gen_pickrefs.simple'
         integer,             parameter   :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
         real,                parameter   :: LPSTOP = 8.
-        integer,             allocatable :: final_selection(:), final_boxsize(:)
+        integer,             allocatable :: final_selection(:)
         integer                          :: nprojects, iori, i, j, nptcls, ncls, nthr2D, box_in_pix, box_for_pick, box_for_extract
-        integer                          :: ithumb, xtiles, ytiles, xtile, ytile, user_selected_boxsize, ncls_stk, cnt, optics_map_id
+        integer                          :: ithumb, xtiles, ytiles, xtile, ytile, ncls_stk, cnt, optics_map_id
         integer                          :: n_non_zero, nmics
         logical                          :: found, increase_nmics = .false.
         logical                          :: restart_requested
         real                             :: mskdiam_estimate, smpd_stk
-        if( .not. cline%defined('dir_target')       ) THROW_HARD('DIR_TARGET must be defined!')
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',            'yes')
-        if( .not. cline%defined('nptcls_per_class') ) call cline%set('nptcls_per_cls',     200)
-        if( .not. cline%defined('pick_roi')         ) call cline%set('pick_roi',         'yes')
-        if( .not. cline%defined('outdir')           ) call cline%set('outdir',              '')
-        if( .not. cline%defined('nmics')            ) call cline%set('nmics',              100)
+        if( .not. cline%defined('dir_target')     ) THROW_HARD('DIR_TARGET must be defined!')
+        if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',            'yes')
+        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',     200)
+        if( .not. cline%defined('pick_roi')       ) call cline%set('pick_roi',         'yes')
+        if( .not. cline%defined('outdir')         ) call cline%set('outdir',              '')
+        if( .not. cline%defined('nmics')          ) call cline%set('nmics',              100)
         ! sanity check for restart
         if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
             write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB"
@@ -387,7 +387,7 @@ contains
                             end do
                             call spproj_part%kill()
                         enddo
-                        write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
+                        write(logfhandle,'(A,I4,A,A)')'>>> ', nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS DETECTED; ', cast_time_char(simple_gettime())
                         ! http stats
                         call http_communicator%json%update(http_communicator%job_json, "micrographs_imported",     spproj%os_mic%get_noris(),                                       found)
                         call http_communicator%json%update(http_communicator%job_json, "last_micrograph_imported", stream_datestr(),                                                found)
