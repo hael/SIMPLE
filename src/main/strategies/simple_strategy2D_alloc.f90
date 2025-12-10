@@ -101,9 +101,9 @@ contains
     subroutine prep_strategy2D_batch( pftc, which_iter, nptcls, pinds )
         use simple_polarft_calc, only: polarft_calc
         type(polarft_calc), intent(in) :: pftc
-        integer,                intent(in) :: which_iter
-        integer,                intent(in) :: nptcls        ! # of particles in batch
-        integer,                intent(in) :: pinds(nptcls)
+        integer,            intent(in) :: which_iter
+        integer,            intent(in) :: nptcls        ! # of particles in batch
+        integer,            intent(in) :: pinds(nptcls)
         type(ran_tabu) :: rt
         integer        :: i,iptcl,prev_class
         logical        :: l_alloc

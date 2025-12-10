@@ -1445,15 +1445,15 @@ contains
         use simple_polarops
         class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(parameters)       :: params
-        type(builder)          :: build
-        type(starproject)      :: starproj
+        type(parameters)   :: params
+        type(builder)      :: build
+        type(starproject)  :: starproj
         type(polarft_calc) :: pftc
-        real, allocatable :: states(:)
-        real              :: clw
-        integer           :: iterstr_start, iterstr_end, iter, io_stat, icls
-        integer           :: pftsz, kfromto(2), ncls
-        logical           :: l_stream
+        real, allocatable  :: states(:)
+        real               :: clw
+        integer            :: iterstr_start, iterstr_end, iter, io_stat, icls
+        integer            :: pftsz, kfromto(2), ncls
+        logical            :: l_stream
         if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         l_stream = .false.
         if( cline%defined('stream') )then
@@ -1661,13 +1661,13 @@ contains
     subroutine exec_prob_tab2D( self, cline )
         use simple_strategy2D_matcher
         use simple_strategy2D3D_common, only: set_bp_range2D
-        use simple_polarft_calc,    only: polarft_calc
+        use simple_polarft_calc,        only: polarft_calc
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(string)                  :: fname
-        type(polarft_calc)        :: pftc
+        type(polarft_calc)            :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab2D)          :: eulprob

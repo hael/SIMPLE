@@ -3,8 +3,8 @@ module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,            only: image
-use simple_parameters,       only: params_glob
+use simple_image,        only: image
+use simple_parameters,   only: params_glob
 use simple_polarft_calc, only: polarft_calc
 implicit none
 
@@ -40,10 +40,10 @@ contains
     !> \brief  initialises the image polarizer
     subroutine init_polarizer( self, pftc, alpha )
         use simple_gridding, only: gen_instrfun_img
-        class(polarizer),        intent(inout) :: self   !< projector instance
-        class(polarft_calc), intent(inout) :: pftc  !< polarft_calc object to be filled
-        real,                    intent(in)    :: alpha  !< oversampling factor
-        type(kbinterpol)  :: kbwin                 !< window function object
+        class(polarizer),    intent(inout) :: self   !< projector instance
+        class(polarft_calc), intent(inout) :: pftc   !< polarft_calc object to be filled
+        real,                intent(in)    :: alpha  !< oversampling factor
+        type(kbinterpol)  :: kbwin                   !< window function object
         real, allocatable :: w(:,:)
         real              :: loc(2), d1, d2
         integer           :: win(2,2), lims(2,3), i, k, l, cnt, f1, f2

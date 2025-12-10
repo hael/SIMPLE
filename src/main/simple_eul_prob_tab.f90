@@ -183,13 +183,13 @@ contains
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self, pftc )
-        use simple_polarft_calc,  only: polarft_calc
+        use simple_polarft_calc,     only: polarft_calc
         use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
-        class(eul_prob_tab),     intent(inout) :: self
+        class(eul_prob_tab), intent(inout) :: self
         class(polarft_calc), intent(inout) :: pftc
-        integer,                 allocatable   :: locn(:,:)
+        integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
-        type(ori)               :: o_prev
+        type(ori)              :: o_prev
         integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(pftc%get_nrots(),nthr_glob),&
                   &istate, iref_start
         logical :: l_doshift
@@ -347,7 +347,7 @@ contains
     end subroutine fill_tab
 
     subroutine fill_tab_state_only( self, pftc )
-        use simple_polarft_calc,  only: polarft_calc
+        use simple_polarft_calc,     only: polarft_calc
         use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_calc), intent(inout) :: pftc

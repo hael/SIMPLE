@@ -119,13 +119,13 @@ contains
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common
         use simple_polarops
-        use simple_polarft_calc, only: polarft_calc
+        use simple_polarft_calc,     only: polarft_calc
         use simple_strategy2D_utils, only: write_imgarr
         class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:), cavgs(:)
-        type(polarft_calc)        :: pftc
+        type(polarft_calc)            :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         integer :: nptcls, ithr
@@ -396,9 +396,9 @@ contains
 
     subroutine exec_score_ptcls( self, cline )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align, killimgbatch
-        use simple_polarft_calc,    only: polarft_calc
-        use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
-        use simple_class_frcs,          only: class_frcs
+        use simple_polarft_calc,     only: polarft_calc
+        use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+        use simple_class_frcs,       only: class_frcs
         use simple_euclid_sigma2
         use simple_commanders_euclid
         class(commander_score_ptcls), intent(inout) :: self
@@ -406,7 +406,7 @@ contains
         type(pftc_shsrch_grad), allocatable :: grad_shsrch_objs(:)
         type(image),             allocatable :: eimgs(:), oimgs(:), cls_even(:), cls_odd(:)
         type(commander_calc_pspec_distr) :: xcalc_pspec_distr
-        type(polarft_calc) :: pftc
+        type(polarft_calc)     :: pftc
         type(builder)          :: build
         type(parameters)       :: params
         type(cmdline)          :: cline_calc_pspec_distr
