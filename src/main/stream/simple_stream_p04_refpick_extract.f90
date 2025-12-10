@@ -507,6 +507,8 @@ contains
                             call spproj_glob%os_ptcl2D%transfer_ori(iptcl, stream_spproj%os_ptcl2D, i)
                             call spproj_glob%os_ptcl2D%set_stkind(iptcl, imic)
                         enddo
+                        ! move the iterator
+                        call it%next()
                     enddo
                     call stream_spproj%kill
                     write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',spproj_glob%os_ptcl2D%get_noris()
@@ -515,8 +517,6 @@ contains
                     call spproj_glob%os_ptcl3D%delete_2Dclustering
                     call spproj_glob%write_segment_inside('ptcl3D', params%projfile)
                     call spproj_glob%os_ptcl3D%kill
-                    ! move the iterator
-                    call it%next()
                 endif
                 ! add optics
                 if(cline%defined('optics_dir')) then
