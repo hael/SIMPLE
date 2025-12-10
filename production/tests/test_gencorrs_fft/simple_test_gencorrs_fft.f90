@@ -1,13 +1,13 @@
 program simple_test_gen_corrs_fft
 include 'simple_lib.f08'
  use simple_polarft_calc, only: polarft_calc
-use simple_cmdline,           only: cmdline
-use simple_builder,           only: builder
-use simple_parameters,        only: parameters
+use simple_cmdline,       only: cmdline
+use simple_builder,       only: builder
+use simple_parameters,    only: parameters
 use simple_timer
 implicit none
 type(parameters)        :: p
-type(polarft_calc)  :: pftc
+type(polarft_calc)      :: pftc
 type(cmdline)           :: cline
 type(builder)           :: b
 real, allocatable       :: cc(:), cc_fft(:)

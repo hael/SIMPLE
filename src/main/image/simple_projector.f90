@@ -326,12 +326,12 @@ contains
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
         use simple_polarft_calc, only: polarft_calc
-        class(projector),        intent(inout) :: self    !< projector object
-        integer,                 intent(in)    :: iref    !< which reference
-        class(ori),              intent(in)    :: e       !< orientation
-        class(polarft_calc), intent(inout) :: pftc   !< object that holds the polar image
-        logical,                 intent(in)    :: iseven  !< eo flag
-        logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
+        class(projector),    intent(inout) :: self    !< projector object
+        integer,             intent(in)    :: iref    !< which reference
+        class(ori),          intent(in)    :: e       !< orientation
+        class(polarft_calc), intent(inout) :: pftc    !< object that holds the polar image
+        logical,             intent(in)    :: iseven  !< eo flag
+        logical,             intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         integer :: pdim(3), irot, k
         real    :: loc(3), e_rotmat(3,3), hk(2)
         pdim     = pftc%get_pdim()

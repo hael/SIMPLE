@@ -18,11 +18,11 @@ real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.) ! obscuring half-width 2
 real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.) ! obscuring half-width 3
 
 type(polarft_calc) :: pftc
-type(polarizer)        :: pspec_img
-type(image)            :: filter_img
-type(parameters)       :: params
-real                   :: angstep
-integer                :: nrots
+type(polarizer)    :: pspec_img
+type(image)        :: filter_img
+type(parameters)   :: params
+real               :: angstep
+integer            :: nrots
 
 contains
 

@@ -135,18 +135,18 @@ contains
 
     subroutine calc_inpl_invariant_fm_1( imgs, hp, lp, trs, corrmat, l_srch_mirr )
         use simple_pftc_shsrch_fm
-        use simple_polarizer,        only: polarizer
+        use simple_polarizer,    only: polarizer
         use simple_polarft_calc, only: polarft_calc
         class(image),          intent(inout) :: imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
-        type(image),           allocatable   :: ccimgs(:,:)
-        type(pftc_shsrch_fm), allocatable   :: fm_correlators(:)
         logical, optional,     intent(in)    :: l_srch_mirr
-        type(polarizer)        :: polartransform
+        type(image),           allocatable   :: ccimgs(:,:)
+        type(pftc_shsrch_fm),  allocatable   :: fm_correlators(:)
+        type(polarizer)    :: polartransform
         type(polarft_calc) :: pftc
-        real, parameter :: TRS_STEPSZ = 1.0
-        integer :: n, i, j, ithr, ldim(3), box, kfromto(2)
+        real, parameter    :: TRS_STEPSZ = 1.0
+        integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
         real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
         logical :: ll_srch_mirr
         ll_srch_mirr = .true.
@@ -243,14 +243,14 @@ contains
 
     subroutine calc_inpl_invariant_fm_2( refimgs, imgs, hp, lp, trs, corrmat )
         use simple_pftc_shsrch_fm
-        use simple_polarizer,        only: polarizer
+        use simple_polarizer,    only: polarizer
         use simple_polarft_calc, only: polarft_calc
         class(image),          intent(inout) :: refimgs(:), imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
         type(image),           allocatable   :: ccimgs(:,:)
         type(pftc_shsrch_fm), allocatable   :: fm_correlators(:)
-        type(polarizer)        :: polartransform
+        type(polarizer)    :: polartransform
         type(polarft_calc) :: pftc
         real, parameter :: TRS_STEPSZ = 1.0
         integer :: n, i, ithr, ldim(3), box, kfromto(2), iref, nrefs

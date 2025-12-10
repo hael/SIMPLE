@@ -51,6 +51,19 @@ contains
         end do
     end function pack_imgarr
 
+    function extract_imgarr( imgs, inds ) result( imgs_extr )
+        class(image), intent(in) :: imgs(:)
+        integer,      intent(in) :: inds(:)
+        type(image), allocatable :: imgs_extr(:)
+        integer :: n, n_extr, i
+        n      = size(imgs)
+        n_extr = size(inds)
+        allocate(imgs_extr(n_extr))
+        do i = 1, n_extr
+            call imgs_extr(i)%copy(imgs(inds(i)))
+        end do
+    end function extract_imgarr
+
     function copy_imgarr( imgarr_in ) result( imgarr_copy )
         class(image), intent(in) :: imgarr_in(:)
         type(image), allocatable :: imgarr_copy(:)

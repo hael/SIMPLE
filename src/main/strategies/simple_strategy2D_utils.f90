@@ -9,8 +9,8 @@ use simple_image,             only: image
 use simple_image_bin,         only: image_bin
 use simple_image_msk,         only: density_inoutside_mask
 use simple_parameters,        only: parameters, params_glob
-use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_polarft_calc,  only: polarft_calc
+use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_polarft_calc,      only: polarft_calc
 use simple_polarizer,         only: polarizer
 use simple_pspecs,            only: pspecs
 use simple_segmentation,      only: otsu_img
@@ -582,9 +582,9 @@ contains
         integer,     parameter          :: MAXITS_SH = 60
         real,        allocatable        :: inpl_corrs(:)
         type(image), allocatable        :: imgs_mirr(:)
-        type(pftc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad)          :: grad_shsrch_obj(nthr_glob)
         type(polarizer)                 :: polartransform
-        type(polarft_calc)          :: pftc
+        type(polarft_calc)              :: pftc
         type(inpl_struct), allocatable  :: algninfo(:), algninfo_mirr(:)
         integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, n
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
@@ -696,9 +696,9 @@ contains
         real,         parameter         :: FRC_CRIT = 0.5
         real,         allocatable       :: inpl_corrs(:), frc(:)
         type(image),  allocatable       :: imgs_targ_mirr(:)
-        type(pftc_shsrch_grad)         :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad)          :: grad_shsrch_obj(nthr_glob)
         type(polarizer)                 :: polartransform
-        type(polarft_calc)          :: pftc
+        type(polarft_calc)              :: pftc
         type(inpl_struct), allocatable  :: algninfo(:,:), algninfo_mirr(:,:)
         integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, nrefs, ntargets
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3), rotmat(2,2)

@@ -8,7 +8,7 @@ use simple_cmdline,                only: cmdline
 use simple_euclid_sigma2,          only: euclid_sigma2
 use simple_image,                  only: image
 use simple_parameters,             only: params_glob
-use simple_polarft_calc,       only: polarft_calc
+use simple_polarft_calc,           only: polarft_calc
 use simple_qsys_funs,              only: qsys_job_finished
 use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
@@ -34,7 +34,7 @@ public :: build_batch_particles2D, clean_batch_particles2D
 private
 #include "simple_local_flags.inc"
 
-type(polarft_calc)   :: pftc
+type(polarft_calc)       :: pftc
 type(euclid_sigma2)      :: eucl_sigma
 type(image), allocatable :: ptcl_match_imgs(:)
 real(timer_int_kind)     :: rt_init, rt_prep_pftc, rt_align, rt_cavg, rt_projio, rt_tot
@@ -534,8 +534,8 @@ contains
     subroutine preppftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         use simple_strategy2D3D_common, only: prep2dref
         class(polarft_calc), intent(inout) :: pftc
-        integer,                 intent(in)    :: batchsz_max, which_iter
-        logical,                 intent(in)    :: l_stream
+        integer,             intent(in)    :: batchsz_max, which_iter
+        logical,             intent(in)    :: l_stream
         type(image),      allocatable :: match_imgs(:), tmp_imgs(:)
         type(string) :: fname
         real         :: xyz(3)
@@ -618,8 +618,8 @@ contains
     subroutine prep_polar_pftc4align2D( pftc, batchsz_max, which_iter, l_stream )
         use simple_strategy2D3D_common, only: prep2dref
         class(polarft_calc), intent(inout) :: pftc
-        integer,                 intent(in)    :: batchsz_max, which_iter
-        logical,                 intent(in)    :: l_stream
+        integer,             intent(in)    :: batchsz_max, which_iter
+        logical,             intent(in)    :: l_stream
         type(image),      allocatable :: tmp_imgs(:)
         type(string) :: fname
         real         :: xyz(3)
