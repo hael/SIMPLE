@@ -1,7 +1,7 @@
 #!/bin/bash
 export TMPDIR=$HOME/tmp
-mkdir ~/tmp
-chmod u+rwx -R ~/tmp
+mkdir $TMPDIR 
+chmod u+rwx -R $TMPDIR 
 rm -rf build
 mkdir build
 cd build
