@@ -1,4 +1,3 @@
-! concrete commander: high-level workflows
 module simple_commanders_abinitio2D
 include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline

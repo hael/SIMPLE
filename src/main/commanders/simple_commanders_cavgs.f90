@@ -380,6 +380,8 @@ contains
         call simple_end('**** SIMPLE_SELECT_CLUSTERS_CAVGS NORMAL STOP ****')
     end subroutine exec_select_clusters
 
+    ! SIEVING_MATCH_CAVGS_MAX
+
     subroutine exec_match_cavgs( self, cline )
         use simple_projfile_utils, only: merge_chunk_projfiles
         class(commander_match_cavgs), intent(inout) :: self
@@ -396,8 +398,9 @@ contains
         integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:)
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:)
-        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch
+        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch, nmerged
         real    :: smpd, oa_minmax(2)
+        logical :: l_refine_before_merge
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -420,6 +423,14 @@ contains
         call prep_cavgs4clustering(spproj_match, cavg_imgs_match, params%mskdiam, clspops_match, clsinds_match, l_non_junk_match, mm_match)
         nrefs        = size(cavg_imgs_ref)
         nmatch       = size(cavg_imgs_match)
+        nmerged      = nrefs + nmatch
+        if( nmerged > SIEVING_MATCH_CAVGS_MAX )then
+            ! only refine the matched solution before merging
+            l_refine_before_merge = .true. 
+        else
+            ! merge first, then refine the merged solution
+            l_refine_before_merge = .false.
+        endif
         smpd         = cavg_imgs_ref(1)%get_smpd()
         ldim         = cavg_imgs_ref(1)%get_ldim()
         ! ensure correct smpd/box in params class
@@ -438,10 +449,10 @@ contains
         ! extract medoid class averages from reference set
         inds         = (/(i,i=1,nrefs)/)
         medoid_inds  = spproj_ref%os_cls2D%get_all_asint('medoid_ind') ! all medoid_inds
-        medoid_inds  = pack(medoid_inds, mask=l_non_junk_ref)  ! all included medoid_inds after junk rejection
-        medoid_map   = pack(inds,        mask=medoid_inds > 0) ! mapping the medoids to physical class indices
-        medoid_inds  = pack(medoid_inds, mask=medoid_inds > 0) ! making medoid_inds congruent with medoid_map
-        call hpsort(medoid_inds, medoid_map)                   ! ranking the mapping
+        medoid_inds  = pack(medoid_inds, mask=l_non_junk_ref)          ! all included medoid_inds after junk rejection
+        medoid_map   = pack(inds,        mask=medoid_inds > 0)         ! mapping the medoids to physical class indices
+        medoid_inds  = pack(medoid_inds, mask=medoid_inds > 0)         ! making medoid_inds congruent with medoid_map
+        call hpsort(medoid_inds, medoid_map)                           ! ranking the mapping
         medoid_imgs_ref = extract_imgarr(cavg_imgs_ref, medoid_map)
         ! generate cluster distance matrix
         dmat_clust = calc_match_cavgs_dmat(params, medoid_imgs_ref, cavg_imgs_match, oa_minmax, params%clust_crit)
@@ -468,7 +479,7 @@ contains
                 endif
             enddo
         enddo
-        if( cline%defined('projfile_merged') )then
+        if( .not. l_refine_before_merge )then
             ! merge spproj_ref & spproj_match projects
             call spproj_match%write(string(TMPPROJFILE))
             chunk_fnames(1) = params%projfile
@@ -490,18 +501,25 @@ contains
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
             call cline_cluster_cavgs%kill
         else
-            ! translate to state array
-            ncls_match = spproj_match%os_cls2D%get_noris()
-            allocate(states_map(ncls_match), source=0)
-            do icls = 1, nmatch
-                states_map(clsinds_match(icls)) = find_label_state(labels_match(icls))
-            end do
-            ! map selection to project
-            call spproj_match%map_cavgs_selection(states_map)
-            ! optional pruning
-            if( trim(params%prune).eq.'yes') call spproj_match%prune_particles
-            ! this needs to be a full write as many segments are updated
-            call spproj_match%write(params%projfile_target)
+            call spproj_match%write(string(TMPPROJFILE))
+            ! refine matched solution
+            call cline_cluster_cavgs%set('mkdir',                      'no')
+            call cline_cluster_cavgs%set('have_clustering',           'yes')
+            call cline_cluster_cavgs%set('prune',              params%prune)
+            call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
+            call cline_cluster_cavgs%set('hp',                    params%hp)
+            call cline_cluster_cavgs%set('lp',                    params%lp)
+            call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
+            call cline_cluster_cavgs%set('nthr',                params%nthr)
+            call cline_cluster_cavgs%set('projfile',            TMPPROJFILE)
+            call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
+            call cline_cluster_cavgs%kill
+            chunk_fnames(1) = params%projfile
+            chunk_fnames(2) = simple_abspath(TMPPROJFILE)
+            folder = PATH_HERE
+            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
+            call del_file(chunk_fnames(2))
+            call spproj_merged%write(params%projfile_merged)
         endif
         ! cleanup
         call spproj_match%kill
