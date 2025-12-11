@@ -1,5 +1,5 @@
 program simple_test_angres
-include 'simple_lib.f08'
+use simple_core_module_api
 implicit none
 type(oris) :: os
 integer    :: i

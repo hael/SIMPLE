@@ -1,11 +1,12 @@
 ! shared-memory parallelised programs executed by distributed commanders
 program simple_private_exec
-include 'simple_lib.f08'
-use simple_cmdline,        only: cmdline, cmdline_err
+use simple_core_module_api
+use simple_private_exec_module_api
 use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_stream_ui_json
 use simple_private_prgs,   only: make_private_user_interface
 use simple_symanalyzer,    only: print_subgroups
-use simple_private_exec_module_api
+use simple_syslib,         only: print_slurm_env
+use simple_jiffys,         only: simple_print_timer
 implicit none
 #include "simple_local_flags.inc"
 

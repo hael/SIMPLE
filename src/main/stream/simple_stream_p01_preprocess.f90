@@ -77,7 +77,7 @@ contains
         if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',            DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',            DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',        'yes')
-        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
+        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  STREAM_CTFRES_THRESHOLD)
         ! ev overrides
         call get_environment_variable(SIMPLE_STREAM_PREPROC_NTHR, preproc_nthr_env, envlen)
         if( envlen > 0)  call cline%set('nthr', str2int(preproc_nthr_env))

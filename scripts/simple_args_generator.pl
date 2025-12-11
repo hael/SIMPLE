@@ -73,7 +73,7 @@ open(MODULE, "> ".$tmp_argsfile) or die "Cannot open simple_args.f90\n";
 print MODULE "! for error checking of the SIMPLE command line arguments
 
 module simple_args
-include 'simple_lib.f08'
+use simple_string, only: string
 implicit none
 
 public :: args

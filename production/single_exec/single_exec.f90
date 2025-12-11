@@ -1,6 +1,6 @@
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 program single_exec
-include 'simple_lib.f08'
+use simple_core_module_api
 use simple_user_interface,        only: make_user_interface, list_single_prgs_in_ui
 use simple_cmdline,               only: cmdline, cmdline_err
 use simple_commanders_sim,        only: commander_simulate_atoms
@@ -224,7 +224,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('271c811d')
+    call simple_print_git_version('f57d5637')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

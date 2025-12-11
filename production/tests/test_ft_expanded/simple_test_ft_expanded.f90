@@ -14,7 +14,7 @@
 ! TODO_dd_mmm_yyyy - TODO_describe_appropriate_changes - TODO_name
 !------------------------------------------------------------------------------
 program simple_test_ft_expanded
-include 'simple_lib.f08'
+use simple_core_module_api
 use simple_ft_expanded_tester
 implicit none
 call seed_rnd

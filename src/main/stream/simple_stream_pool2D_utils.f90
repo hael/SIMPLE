@@ -240,7 +240,7 @@ contains
         ! when the 2D analysis is started from raw particles
         if( l_no_chunks ) l_update_sigmas = .false.
         ! set # of ptcls beyond which fractional updates will be used
-        lim_ufrac_nptcls = MAX_STREAM_NPTCLS
+        lim_ufrac_nptcls = STREAM_NPTCLS_MAX
         if( master_cline%defined('nsample_max') ) lim_ufrac_nptcls = params_glob%nsample_max
         ! EV override
         params_glob%nthr2D = params_glob%nthr ! will be deprecated

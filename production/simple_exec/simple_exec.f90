@@ -1,10 +1,10 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
-include 'simple_lib.f08'
-use simple_cmdline,        only: cmdline, cmdline_err
-use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
-use simple_exec_helpers,   only: script_exec, restarted_exec, update_job_descriptions_in_project
+use simple_core_module_api
 use simple_exec_module_api
+use simple_exec_helpers,   only: script_exec, restarted_exec, update_job_descriptions_in_project
+use simple_jiffys,         only: simple_print_git_version, simple_print_timer
+use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
 implicit none
 #include "simple_local_flags.inc"
 
@@ -399,7 +399,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('271c811d')
+    call simple_print_git_version('f57d5637')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

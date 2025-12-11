@@ -3790,15 +3790,15 @@ contains
         call pick_extract%set_input('filt_ctrls', 2, ctfresthreshold, gui_submenu="data")
         pick_extract%filt_ctrls(2)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
         pick_extract%filt_ctrls(2)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
-        pick_extract%filt_ctrls(2)%rval_default      = CTFRES_THRESHOLD_STREAM
+        pick_extract%filt_ctrls(2)%rval_default      = STREAM_CTFRES_THRESHOLD
         call pick_extract%set_input('filt_ctrls', 3, icefracthreshold, gui_submenu="data")
         pick_extract%filt_ctrls(3)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
         pick_extract%filt_ctrls(3)%descr_placeholder = 'Ice fraction threshold{1.0}'
-        pick_extract%filt_ctrls(3)%rval_default      = ICEFRAC_THRESHOLD_STREAM
+        pick_extract%filt_ctrls(3)%rval_default      = STREAM_ICEFRAC_THRESHOLD
         call pick_extract%set_input('filt_ctrls', 4, astigthreshold, gui_submenu="data")
         pick_extract%filt_ctrls(4)%descr_long        = 'Micrographs with an astigmatism (%) above the threshold will be ignored from further processing{10.0}'
         pick_extract%filt_ctrls(4)%descr_placeholder = 'Astigmatism threshold{10.0}'
-        pick_extract%filt_ctrls(4)%rval_default      = ASTIG_THRESHOLD_STREAM
+        pick_extract%filt_ctrls(4)%rval_default      = STREAM_ASTIG_THRESHOLD
         ! mask controls
         ! <empty>
         ! computer controls

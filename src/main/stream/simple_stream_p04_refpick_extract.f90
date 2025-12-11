@@ -66,9 +66,9 @@ contains
         if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29*60) ! 29 minutes
         ! micrograph selection
         if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'yes')
-        if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
-        if( .not. cline%defined('icefracthreshold')) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
-        if( .not. cline%defined('astigthreshold'  )) call cline%set('astigthreshold',   ASTIG_THRESHOLD_STREAM)
+        if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  STREAM_CTFRES_THRESHOLD)
+        if( .not. cline%defined('icefracthreshold')) call cline%set('icefracthreshold', STREAM_ICEFRAC_THRESHOLD)
+        if( .not. cline%defined('astigthreshold'  )) call cline%set('astigthreshold',   STREAM_ASTIG_THRESHOLD)
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          PICK_LP_DEFAULT)
         if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',         'yes')

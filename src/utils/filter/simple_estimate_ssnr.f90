@@ -3,6 +3,7 @@ module simple_estimate_ssnr
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_defs_stream
 use simple_defs_conv
 use simple_srch_sort_loc
 use simple_syslib
@@ -162,7 +163,7 @@ contains
     subroutine mskdiam2streamresthreshold( mskdiam, res_threshold )
         real, intent(in)  :: mskdiam
         real, intent(out) :: res_threshold
-        res_threshold = max(min(mskdiam/6.,150.),RES_THRESHOLD_STREAM)
+        res_threshold = max(min(mskdiam/6.,150.),STREAM_RES_THRESHOLD)
     end subroutine mskdiam2streamresthreshold
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980

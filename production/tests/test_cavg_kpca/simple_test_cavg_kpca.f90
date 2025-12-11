@@ -1,5 +1,4 @@
 program simple_test_cavg_kpca
-! include 'simple_lib.f08'
 ! use simple_cmdline,            only: cmdline
 ! use simple_builder,            only: builder
 ! use simple_parameters,         only: parameters

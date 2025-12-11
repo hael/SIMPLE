@@ -1,7 +1,5 @@
 program simple_test_cmdline
-use simple_cmdline
-use simple_chash
-include 'simple_lib.f08'
+use simple_core_module_api
 implicit none
 #include "simple_local_flags.inc"
 type(cmdline)         :: cline
