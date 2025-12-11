@@ -856,7 +856,7 @@ contains
                     l_restart = .true.
                 endif
                 if( l_restart ) then
-                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", cwd_restart%to_char()
+                    write(logfhandle,'(A,A)') ">>> RESTARTING EXISTING JOB IN ", cwd_restart%to_char()
                     if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(TERM_STREAM)
                     call del_file(USER_PARAMS2D)
