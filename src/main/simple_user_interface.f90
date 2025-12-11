@@ -96,7 +96,6 @@ type(simple_program), target :: center
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_refpick
 type(simple_program), target :: check_states
-type(simple_program), target :: cleanup2D
 type(simple_program), target :: clin_fsc
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
@@ -430,7 +429,6 @@ contains
         call new_center2D_nano
         call new_check_refpick
         call new_check_states
-        call new_cleanup2D
         call new_clin_fsc
         call new_cluster2D
         call new_cluster2D_nano
@@ -585,7 +583,6 @@ contains
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(check_refpick)
         call push2prg_ptr_array(check_states)
-        call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(clin_fsc)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
@@ -749,7 +746,6 @@ contains
             case('center2D_nano');               ptr2prg => center2D_nano
             case('check_refpick');               ptr2prg => check_refpick
             case('check_states');                ptr2prg => check_states
-            case('cleanup2D');                   ptr2prg => cleanup2D
             case('clin_fsc');                    ptr2prg => clin_fsc
             case('cluster2D');                   ptr2prg => cluster2D
             case('cluster2D_nano');              ptr2prg => cluster2D_nano
@@ -897,7 +893,6 @@ contains
         write(logfhandle,'(A)') center%name%to_char()
         write(logfhandle,'(A)') check_refpick%name%to_char()
         write(logfhandle,'(A)') check_states%name%to_char()
-        write(logfhandle,'(A)') cleanup2D%name%to_char()
         write(logfhandle,'(A)') clin_fsc%name%to_char()
         write(logfhandle,'(A)') cluster2D%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
@@ -1728,54 +1723,6 @@ contains
         ! computer controls
         call center%set_input('comp_ctrls', 1, nthr)
     end subroutine new_center
-
-    subroutine new_cleanup2D
-        ! PROGRAM SPECIFICATION
-        call cleanup2D%new(&
-        &'cleanup2D',&                                                          ! name
-        &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
-        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
-        & suitable for the first pass of cleanup after picking',&               ! descr_long
-        &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 7, 5, 1, 2, .true.,&                                          ! # entries in each group, requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "search,mask,filter,compute") ! GUI                  
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call cleanup2D%set_input('srch_ctrls', 1, ncls, gui_submenu="search", gui_advanced=.false.)
-        call cleanup2D%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
-        call cleanup2D%set_input('srch_ctrls', 3, maxits, gui_submenu="search")
-        call cleanup2D%set_input('srch_ctrls', 4, update_frac, gui_submenu="search")
-        call cleanup2D%set_input('srch_ctrls', 5, objfun, gui_submenu="search")
-        call cleanup2D%set_input('srch_ctrls', 6, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated execution(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
-        call cleanup2D%set_input('srch_ctrls', 7, cls_init, gui_submenu="cluster2D")
-        ! filter controls
-        call cleanup2D%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call cleanup2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms',&
-        &.false., 15., gui_submenu="filter")
-        call cleanup2D%set_input('filt_ctrls', 4, ml_reg, gui_submenu="filter")
-        cleanup2D%filt_ctrls(4)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
-        cleanup2D%filt_ctrls(4)%descr_placeholder = '(yes|no){no}'
-        cleanup2D%filt_ctrls(4)%cval_default      = 'no'
-        call cleanup2D%set_input('filt_ctrls', 5, icm, gui_submenu="filter")
-        ! mask controls
-        call cleanup2D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        cleanup2D%mask_ctrls(1)%required = .false.
-        ! computer controls
-        call cleanup2D%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
-        cleanup2D%comp_ctrls(1)%required = .false.
-        call cleanup2D%set_input('comp_ctrls', 2, nthr, gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_cleanup2D
 
     subroutine new_center2D_nano
         ! PROGRAM SPECIFICATION
