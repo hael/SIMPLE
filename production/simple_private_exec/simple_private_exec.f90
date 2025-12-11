@@ -5,23 +5,7 @@ use simple_cmdline,        only: cmdline, cmdline_err
 use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_stream_ui_json
 use simple_private_prgs,   only: make_private_user_interface
 use simple_symanalyzer,    only: print_subgroups
-use simple_commanders_project
-use simple_commanders_checks
-use simple_commanders_distr
-use simple_commanders_misc
-use simple_commanders_mask
-use simple_commanders_imgproc
-use simple_commanders_oris
-use simple_commanders_preprocess
-use simple_commanders_cluster2D
-use simple_commanders_cavgs
-use simple_commanders_refine3D
-use simple_commanders_euclid
-use simple_commanders_rec
-use simple_commanders_sim
-use simple_commanders_volops
-use simple_commanders_tseries
-use simple_commanders_resolest
+use simple_private_exec_module_api
 implicit none
 #include "simple_local_flags.inc"
 
@@ -36,7 +20,6 @@ type(commander_pick_extract)            :: xpick_extract
 type(commander_pick)                    :: xpick
 type(commander_shape_rank_cavgs)        :: xshape_rank_cavgs
 type(commander_make_pickrefs)           :: xmake_pickrefs
-type(commander_fractionate_movies)      :: xfractionate_movies
 
 ! CLUSTER2D PROGRAMS
 type(commander_make_cavgs)              :: xmake_cavgs
@@ -74,7 +57,6 @@ type(commander_automask)                :: xautomask
 ! GENERAL IMAGE PROCESSING PROGRAMS
 type(commander_scale)                   :: xscale
 type(commander_binarize)                :: xbinarize
-type(commander_edge_detect)             :: xdetector
 
 ! MISCELLANOUS PROGRAMS
 type(commander_kstest)                  :: xkstst
@@ -153,8 +135,6 @@ select case(prg)
         call xshape_rank_cavgs%execute(cline)
     case( 'make_pickrefs' )
         call xmake_pickrefs%execute(cline)
-    case( 'fractionate_movies' )
-        call xfractionate_movies%execute(cline)
 
     ! CLUSTER2D PROGRAMS
     case( 'make_cavgs' )
@@ -217,8 +197,6 @@ select case(prg)
         call xscale%execute(cline)
     case( 'binarize' )
         call xbinarize%execute(cline)
-    case('edge_detect')
-        call xdetector%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
     case( 'kstest' )
