@@ -46,6 +46,7 @@ integer,          parameter :: SIEVING_NCLS               = 100
 integer,          parameter :: SIEVING_NPARTS             = 8
 integer,          parameter :: SIEVING_NPTCLS_PER_CLASS   = 0
 integer,          parameter :: SIEVING_NTHR               = 8
+integer,          parameter :: SIEVING_MATCH_CAVGS_MAX    = 800
 integer,          parameter :: STREAM_DEFAULT_KV          = 300
 integer,          parameter :: WAITTIME                   = 10                        ! movie folder watched every WAITTIME seconds
 real,             parameter :: POOL_SMPD_HARD_LIMIT       = 1.5                       ! Pixel size hard limit -> max resolution=3Angs

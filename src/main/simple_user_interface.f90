@@ -1208,7 +1208,7 @@ contains
         call set_param(pickrefs,       'pickrefs',        'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call set_param(projfile,       'projfile',        'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., '')
         call set_param(projfile_target,'projfile_target', 'file',   'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., '')
-        call set_param(projfile_merged,'projfile_merged', 'file',   'Merged output project file', 'SIMPLE projectfile', 'e.g. merged.simple', .false., '')
+        call set_param(projfile_merged,'projfile_merged', 'file',   'Merged output project file', 'SIMPLE projectfile', 'e.g. merged.simple', .true., '')
         call set_param(projname,       'projname',        'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for', 'e.g. to create ./myproject/myproject.simple', .true., '')
         call set_param(prune,          'prune',           'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
         call set_param(pspecsz,        'pspecsz',         'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)

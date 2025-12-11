@@ -2,31 +2,9 @@
 program simple_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
-use simple_commanders_abinitio
-use simple_commanders_abinitio2D
-use simple_commanders_atoms
-use simple_commanders_cavgs
-use simple_commanders_checks
-use simple_commanders_cluster2D
-use simple_commanders_distr
-use simple_commanders_euclid
-use simple_commanders_imgproc
-use simple_commanders_mask
-use simple_commanders_misc
-use simple_commanders_oris
-use simple_commanders_preprocess
-use simple_commanders_project
-use simple_commanders_rec
-use simple_commanders_refine3D
-use simple_commanders_relion
-use simple_commanders_resolest
-use simple_commanders_sim
-use simple_commanders_starproject
-use simple_commanders_validate
-use simple_commanders_volops
-use simple_stream_cluster2D_subsets
-use simple_exec_helpers
+use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
+use simple_exec_helpers,   only: script_exec, restarted_exec, update_job_descriptions_in_project
+use simple_exec_module_api
 implicit none
 #include "simple_local_flags.inc"
 
@@ -52,7 +30,7 @@ type(commander_extract_subproj)             :: xextract_subproj
 ! PRE-PROCESSING WORKFLOWS
 type(commander_preprocess_distr)            :: xpreprocess
 type(commander_extract_distr)               :: xextract_distr
-type(commander_extract_distr)               :: xreextract_distr
+type(commander_reextract_distr)             :: xreextract_distr
 type(commander_motion_correct_distr)        :: xmotion_correct_distr
 type(commander_gen_pspecs_and_thumbs_distr) :: xgen_pspecs_and_thumbs
 type(commander_ctf_estimate_distr)          :: xctf_estimate_distr
@@ -61,18 +39,15 @@ type(commander_pick_distr)                  :: xpick_distr
 ! CLUSTER2D WORKFLOWS
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_abinitio2D)                  :: xabinitio2D
-type(commander_cluster2D_autoscale)         :: xcluster2D_hlev
+type(commander_cluster2D_autoscale)         :: xcluster2D
 type(stream_cluster2D_subsets)              :: xcluster2D_subsets
-type(commander_cleanup2D_hlev)              :: xcleanup2D_distr
 type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
-type(commander_map_cavgs_states)            :: xmap_cavgs_states
 type(commander_sample_classes)              :: xsample_classes
 type(commander_cluster_cavgs)               :: xcluster_cavgs
 type(commander_cluster_stack)               :: xcluster_stack
 type(commander_select_clusters)             :: xsel_clusts
 type(commander_match_cavgs)                 :: xmatch_cavgs
 type(commander_match_stacks)                :: xmatch_stacks
-type(commander_score_ptcls)                 :: xscore_ptcls
 type(commander_write_classes)               :: xwrite_classes
 type(commander_write_mic_filetab)           :: xwrite_mic_filetab
 
@@ -80,12 +55,10 @@ type(commander_write_mic_filetab)           :: xwrite_mic_filetab
 type(commander_estimate_lpstages)           :: xestimate_lpstages
 type(commander_noisevol)                    :: xnoisevol
 type(commander_abinitio3D_cavgs)            :: xabinitio3D_cavgs
-type(commander_abinitio3D_cavgs_fast)       :: xabinitio3D_cavgs_fast
 type(commander_abinitio3D)                  :: xabinitio3D
 type(commander_multivol_assign)             :: xmultivol_assign
 
 ! REFINE3D WORKFLOWS
-type(commander_calc_pspec_distr)            :: xcalc_pspec_distr
 type(commander_refine3D_distr)              :: xrefine3D_distr
 type(commander_refine3D_auto)               :: xrefine3D_auto
 type(commander_reconstruct3D_distr)         :: xreconstruct3D
@@ -98,8 +71,6 @@ type(commander_dock_volpair)                :: xdock_volpair
 type(commander_postprocess)                 :: xpostprocess
 type(commander_automask)                    :: xautomask
 type(commander_auto_spher_mask)             :: xauto_spher_mask
-type(commander_fractionate_movies_distr)    :: xfractionate_movies
-type(commander_comparemc)                   :: xcomparemc
 
 ! VALIDATION WORKFLOWS
 type(commander_mini_stream)                 :: xmini_stream
@@ -111,7 +82,6 @@ type(commander_mask)                        :: xmask
 type(commander_automask2D)                  :: xautomask2D
 type(commander_fsc)                         :: xfsc
 type(commander_clin_fsc)                    :: xclin_fsc
-type(commander_nununiform_filter3D)         :: xnununiform_filter3D
 type(commander_centervol)                   :: xcenter
 type(commander_reproject)                   :: xreproject
 type(commander_volanalyze)                  :: xvolanalyze
@@ -123,7 +93,6 @@ type(commander_filter)                      :: xfilter
 type(commander_normalize)                   :: xnormalize
 type(commander_ppca_denoise)                :: xppca_denoise
 type(commander_ppca_denoise_classes)        :: xppca_denoise_classes
-type(commander_ppca_volvar)                 :: xppca_volvar
 type(commander_scale)                       :: xscale
 type(commander_stack)                       :: xstack
 type(commander_stackops)                    :: xstackops
@@ -133,11 +102,9 @@ type(commander_icm2D)                       :: xicm2D
 type(commander_icm3D)                       :: xicm3D
 
 ! ORIENTATION PROCESSING PROGRAMS
-type(commander_check_states)                :: xcheck_states
 type(commander_make_oris)                   :: xmake_oris
 type(commander_orisops)                     :: xorisops
 type(commander_oristats)                    :: xoristats
-type(commander_oriconsensus)                :: xoriconsensus
 type(commander_vizoris)                     :: xvizoris
 
 ! PRINT INFO PROGRAMS
@@ -151,22 +118,10 @@ type(commander_print_dose_weights)          :: xprint_dose_weights
 type(commander_simulate_noise)              :: xsimulate_noise
 type(commander_simulate_particles)          :: xsimulate_particles
 type(commander_simulate_movie)              :: xsimulate_movie
-type(commander_simulate_subtomogram)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
-type(commander_afm)                         :: xafm
-type(commander_scale_project_distr)         :: xscale_project
-type(commander_map2model_fsc)               :: xmap2model_fsc
-type(commander_map_validation)              :: xmap_validation
-type(commander_model_validation)            :: xmodel_validation
-type(commander_model_validation_eo)         :: xmodel_validation_eo
-type(commander_projops)                     :: xprojops
 type(commander_prune_project_distr)         :: xprune_project
-type(commander_pdb2mrc)                     :: xpdb2mrc   
-type(commander_sharpvol)                    :: xsharpvol  
-
-! SYSTEM INTERACTION PROGRAMS
-type(commander_mkdir)                       :: xmkdir
+type(commander_pdb2mrc)                     :: xpdb2mrc
 
 ! PARALLEL PROCESSING PROGRAMS
 type(commander_split)                       :: xsplit
@@ -264,16 +219,12 @@ select case(trim(prg))
         else
             call xabinitio2D%execute(cline)
         endif
-    case( 'cleanup2D' )
-        call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
-        call xcluster2D_hlev%execute(cline)
+        call xcluster2D%execute(cline)
     case( 'cluster2D_subsets' )
         call xcluster2D_subsets%execute(cline)
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
-    case( 'map_cavgs_states' )
-        call xmap_cavgs_states%execute(cline)
     case('sample_classes')
         call xsample_classes%execute(cline)
     case( 'cluster_cavgs' )
@@ -286,8 +237,6 @@ select case(trim(prg))
         call xmatch_cavgs%execute(cline)
     case( 'match_stacks' )
         call xmatch_stacks%execute(cline)
-    case( 'score_ptcls' )
-        call xscore_ptcls%execute(cline)
     case( 'write_classes' )
         call xwrite_classes%execute(cline)
     case( 'write_mic_filetab' )
@@ -304,12 +253,6 @@ select case(trim(prg))
         else
             call xabinitio3D_cavgs%execute(cline)
         endif
-    case( 'abinitio3D_cavgs_fast' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('abinitio3D_cavgs_fast'), string('simple_exec'))
-        else
-            call xabinitio3D_cavgs_fast%execute(cline)
-        endif
     case( 'abinitio3D' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, string('abinitio3D'), string('simple_exec'))
@@ -320,8 +263,6 @@ select case(trim(prg))
         call xmultivol_assign%execute(cline)
 
     ! REFINE3D WORKFLOWS
-    case( 'calc_pspec' )
-        call xcalc_pspec_distr%execute(cline)
     case( 'refine3D' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, string('refine3D'), string('simple_exec'))
@@ -352,10 +293,6 @@ select case(trim(prg))
         call xautomask%execute(cline)
     case( 'auto_spher_mask' )
         call xauto_spher_mask%execute(cline)
-    case( 'fractionate_movies' )
-        call xfractionate_movies%execute(cline)
-    case( 'comparemc' )
-        call xcomparemc%execute(cline)
 
     ! VALIDATION WORKFLOWS
     case( 'mini_stream' )
@@ -374,8 +311,6 @@ select case(trim(prg))
         call xfsc%execute(cline)
     case( 'clin_fsc' )
         call xclin_fsc%execute(cline)
-    case( 'nununiform_filter3D' )
-        call xnununiform_filter3D%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
@@ -398,8 +333,6 @@ select case(trim(prg))
         call xppca_denoise%execute(cline)
     case( 'ppca_denoise_classes' )
         call xppca_denoise_classes%execute(cline)
-    case( 'ppca_volvar' )
-        call xppca_volvar%execute(cline)
     case( 'scale' )
         call xscale%execute(cline)
     case( 'stack' )
@@ -416,16 +349,12 @@ select case(trim(prg))
         call xicm3D%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
-    case( 'check_states' )
-        call xcheck_states%execute(cline)
     case( 'make_oris' )
         call xmake_oris%execute(cline)
     case( 'orisops' )
         call xorisops%execute(cline)
     case( 'oristats' )
         call xoristats%execute(cline)
-    case( 'oriconsensus' )
-        call xoriconsensus%execute(cline)
     case( 'vizoris' )
         call xvizoris%execute(cline)
 
@@ -451,37 +380,12 @@ select case(trim(prg))
         call xsimulate_particles%execute(cline)
     case( 'simulate_movie' )
         call xsimulate_movie%execute(cline)
-    case( 'simulate_subtomogram' )
-        call xsimulate_subtomogram%execute(cline)
-
-    ! VALIDATION PROGRAMS
-    case( 'map2model_fsc' )
-        call xmap2model_fsc%execute(cline)
-    case( 'map_validation' )
-        call xmap_validation%execute(cline)
-    case( 'model_validation' )
-        call xmodel_validation%execute(cline)
-    case( 'model_validation_eo' )
-        call xmodel_validation_eo%execute(cline)
 
     ! MISCELLANEOUS WORKFLOWS
-    case( 'afm' )
-        call xafm%execute( cline )
     case( 'pdb2mrc' )
-        call xpdb2mrc%execute( cline )
-    case( 'projops' )
-        call xprojops%execute( cline )   
+        call xpdb2mrc%execute( cline ) 
     case( 'prune_project' )
         call xprune_project%execute( cline )
-    case( 'scale_project' )
-        call xscale_project%execute( cline )
-    case( 'sharpvol' )
-        call xsharpvol%execute( cline )
-
-
-    ! SYSTEM INTERACTION PROGRAMS
-    case( 'mkdir' )
-        call xmkdir%execute(cline)
 
     ! PARALLEL PROCESSING PROGRAMS
     case( 'split' )
@@ -495,7 +399,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('ba154a1d')
+    call simple_print_git_version('a2860635')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
