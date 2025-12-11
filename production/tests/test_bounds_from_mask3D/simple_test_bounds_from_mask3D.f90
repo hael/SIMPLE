@@ -1,6 +1,7 @@
 program simple_test_bounds_from_mask3D
-include 'simple_lib.f08'
-use simple_image
+use simple_core_module_api
+use simple_math,  only: bounds_from_mask3D
+use simple_image, only: image
 implicit none
 type(image)          :: cube
 integer, parameter   :: BOX=256, RAD=50

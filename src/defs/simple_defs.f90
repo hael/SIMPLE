@@ -248,22 +248,22 @@ integer, parameter :: BATCHTHRSZ                = 50             !< # of images 
 integer, parameter :: AMSK_FREQ                 = 3              !< automasking every third iteration
 
 ! stream-related constants & thresholds
-real,    parameter :: CTFRES_THRESHOLD_STREAM   = 10.0           !< preprocessing: Stream ctfres rejection threshold (Angstroms)
-real,    parameter :: ICEFRAC_THRESHOLD_STREAM  = 1.0            !< preprocessing: Stream icefrac rejection threshold
-real,    parameter :: ASTIG_THRESHOLD_STREAM    = 10.0           !< preprocessing: Stream astigmatism rejection threshold
-real,    parameter :: RES_THRESHOLD_STREAM      = 35.0           !< class rejection: Default streaming best resolution rejection threshold
-real,    parameter :: LOWRES_REJECT_THRESHOLD   = 199.           !< class rejection: Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
-real,    parameter :: CLS_REJECT_STD            = 2.5            !< class rejection: # deviations for 2D class selection/rejection
-real,    parameter :: MEAN_THRESHOLD            = -8.0           !< class rejection: image mean     threshold (Mahalabonis distance)
-real,    parameter :: REL_VAR_THRESHOLD         = 6.0            !< class rejection: image variance threshold (Mahalabonis distance)
-real,    parameter :: ABS_VAR_THRESHOLD         = 1.5            !< class rejection: image variance threshold (absolute value)
-real,    parameter :: TVD_THRESHOLD             = 0.55           !< class rejection: Total Variation Distance of image distributions
-real,    parameter :: MINMAX_THRESHOLD          = 2.0            !< class rejection: image min & max threshold (absolute value)
-real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< 2D analysis: When the number of classes to reject is too high rejection is skipped
-integer, parameter :: STREAM_SRCHLIM            = 5              !< 2D analysis: maximum # of systematic iterations for streaming 2D pool
-integer, parameter :: MAX_STREAM_NPTCLS         = 500000         !< 2D analysis: cap for adjusting update_frac in 2D streaming
-integer, parameter :: STREAM_NMOVS_SET          = 5              !< number of movies processed at once (>1)
-integer, parameter :: STREAM_NMOVS_SET_TIFF     = 3              !< number of TIFF movies processed at once (>1)
+! real,    parameter :: STREAM_CTFRES_THRESHOLD   = 10.0           !< preprocessing: Stream ctfres rejection threshold (Angstroms)
+! real,    parameter :: STREAM_ICEFRAC_THRESHOLD  = 1.0            !< preprocessing: Stream icefrac rejection threshold
+! real,    parameter :: STREAM_ASTIG_THRESHOLD    = 10.0           !< preprocessing: Stream astigmatism rejection threshold
+! real,    parameter :: STREAM_RES_THRESHOLD      = 35.0           !< class rejection: Default streaming best resolution rejection threshold
+! real,    parameter :: LOWRES_REJECT_THRESHOLD   = 199.           !< class rejection: Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
+! real,    parameter :: CLS_REJECT_STD            = 2.5            !< class rejection: # deviations for 2D class selection/rejection
+! real,    parameter :: MEAN_THRESHOLD            = -8.0           !< class rejection: image mean     threshold (Mahalabonis distance)
+! real,    parameter :: REL_VAR_THRESHOLD         = 6.0            !< class rejection: image variance threshold (Mahalabonis distance)
+! real,    parameter :: ABS_VAR_THRESHOLD         = 1.5            !< class rejection: image variance threshold (absolute value)
+! real,    parameter :: TVD_THRESHOLD             = 0.55           !< class rejection: Total Variation Distance of image distributions
+! real,    parameter :: MINMAX_THRESHOLD          = 2.0            !< class rejection: image min & max threshold (absolute value)
+! real,    parameter :: FRAC_SKIP_REJECTION       = 0.7            !< 2D analysis: When the number of classes to reject is too high rejection is skipped
+! integer, parameter :: STREAM_SRCHLIM            = 5              !< 2D analysis: maximum # of systematic iterations for streaming 2D pool
+! integer, parameter :: STREAM_NPTCLS_MAX         = 500000         !< 2D analysis: cap for adjusting update_frac in 2D streaming
+! integer, parameter :: STREAM_NMOVS_SET          = 5              !< number of movies processed at once (>1)
+! integer, parameter :: STREAM_NMOVS_SET_TIFF     = 3              !< number of TIFF movies processed at once (>1)
 
 ! nanoparticles
 real,    parameter :: AMSKLP_NANO               = 5.

@@ -1,7 +1,4 @@
 module simple_linalg
-#ifdef IFX
-  use IFPORT
-#endif
 use simple_defs
 use simple_is_check_assert
 implicit none

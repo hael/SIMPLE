@@ -1,5 +1,6 @@
 program simple_test_class_sample
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_class_sample_io
 implicit none
 type(class_sample), allocatable :: cs(:), cs2(:)
 

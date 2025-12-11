@@ -1,5 +1,5 @@
 module simple_ft_expanded_tester
-include 'simple_lib.f08'
+use simple_core_module_api
 use simple_ft_expanded,  only: ft_expanded
 use simple_ftexp_shsrch, only: ftexp_shsrch
 use simple_image,        only: image
