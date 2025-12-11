@@ -80,7 +80,7 @@ use simple_commanders_validate, only: commander_mini_stream, commander_check_ref
 ! oris commanders, construction and operations on oris (per-particle parameters)
 use simple_commanders_oris, only: commander_make_oris, commander_orisops, commander_oristats, commander_vizoris
 
-! check commanders, checck number of and dimensions of images
+! check commanders, check number of and dimensions of images
 use simple_commanders_checks, only: commander_info_image, commander_info_stktab
 
 ! misc commanders, miscallenous commanders (mostly printing)
