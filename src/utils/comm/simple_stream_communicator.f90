@@ -225,7 +225,7 @@ contains
         type(json_value), pointer :: response_json
         type(string) :: cmd, buf
         integer      :: file_unit, stat
-        logical      :: found, terminate
+        logical      :: found, terminate, valid_json
         if(present(data)) then
             cmd = 'curl --header "Content-Type: application/json" --silent --request GET --data ' // "'" // data // "'" // ' -o ' // self%tmp_recv%to_char() // ' ' // self%url%to_char()
         else
@@ -243,26 +243,42 @@ contains
             call simple_exception("Error opening file "//self%tmp_recv%to_char(), __FILENAME__ , __LINE__,  l_stop=.false.)
             return
         end if
-        ! Read and output contents of file.
+        ! Read contents of file.
+        valid_json = .false.
         do
             call buf%readline(file_unit, stat)
-            if (stat /= 0) exit
-        !    print '(a)', trim(buf) ! uncomment to view raw json responses
+            if( stat == 0 )then
+                ! valid line, try parsing
+                call self%json%parse(response_json, buf%to_char())
+                if( self%json%failed() )then
+                    ! not a valid json string, try next line
+                    valid_json = .false.
+                else
+                    ! valid string, continue
+                    valid_json = .true.
+                    exit
+                endif
+            else
+                ! not a valid line, continue
+                valid_json = .false.
+                exit
+            endif
         end do
         ! Close and delete file.
         if( is_open(file_unit) ) close (file_unit, status='delete')
-        ! parse response
-        call self%json%parse(response_json, buf%to_char())
-        ! terminate if requested
-        call self%json%get(response_json, 'terminate', terminate, found)
-        call self%json%clone(response_json, self%update_arguments)
-        if(found) then
-            if(terminate) then
-                self%exit = .true.
+        ! use response string
+        if( valid_json )then
+            ! update communicator
+            call self%json%clone(response_json, self%update_arguments)
+            ! terminate if requested
+            call self%json%get(response_json, 'terminate', terminate, found)
+            if(found) then
+                if(terminate) self%exit = .true.
             endif
         endif
         call cmd%kill
         call buf%kill
+        if( associated(response_json) ) call self%json%destroy(response_json)
     end subroutine curl_request
 
     function evaluate_checksum(self)
