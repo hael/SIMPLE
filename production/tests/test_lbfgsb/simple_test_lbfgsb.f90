@@ -1,5 +1,5 @@
 program simple_test_lbfgsb
-    include 'simple_lib.f08'
+    use simple_core_module_api
     use simple_optimizer,   only: optimizer
     use simple_opt_factory, only: opt_factory
     use simple_opt_spec,    only: opt_spec

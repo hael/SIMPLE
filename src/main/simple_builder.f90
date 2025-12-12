@@ -280,10 +280,7 @@ contains
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
-            call mskimg%kill
-            ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
-            self%l_resmsk = calc_graphene_mask(params%box, params%smpd)
-            if( .not. params%l_graphene ) self%l_resmsk = .true.            
+            call mskimg%kill        
         endif
         if( params%box_crop > 0 )then
             ! build image objects
@@ -331,7 +328,6 @@ contains
             if( allocated(self%fsc)           ) deallocate(self%fsc)
             if( allocated(self%lmsk)          ) deallocate(self%lmsk)
             if( allocated(self%lmsk_crop)     ) deallocate(self%lmsk_crop)
-            if( allocated(self%l_resmsk)      ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
