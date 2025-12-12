@@ -4,6 +4,7 @@ use simple_core_module_api
 use simple_exec_helpers,   only: script_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
 use simple_user_interface, only: make_user_interface, list_stream_prgs_in_ui
+use iso_fortran_env,       only: output_unit
 use simple_stream_p01_preprocess
 use simple_stream_p02_assign_optics
 use simple_stream_p03_opening2D
@@ -68,7 +69,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('37f35a7c')
+call simple_print_git_version('f8291ea6')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

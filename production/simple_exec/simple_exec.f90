@@ -5,6 +5,7 @@ use simple_exec_module_api
 use simple_exec_helpers,   only: script_exec, restarted_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
 use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
+use iso_fortran_env,       only: output_unit
 implicit none
 #include "simple_local_flags.inc"
 
@@ -399,7 +400,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('37f35a7c')
+    call simple_print_git_version('f8291ea6')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
