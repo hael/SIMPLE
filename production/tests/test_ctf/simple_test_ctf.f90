@@ -1,7 +1,7 @@
 program simple_test_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
 use simple_image, only: image
 use simple_ctf,   only: ctf
 implicit none

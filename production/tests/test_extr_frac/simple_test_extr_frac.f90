@@ -1,5 +1,4 @@
 program simple_test_extr_frac
-include 'simple_lib.f08'
 use simple_decay_funs
 implicit none
 integer, parameter :: MAXITS = 100 ! upper iteration bound

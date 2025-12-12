@@ -2,7 +2,6 @@
 ! in a micrograph with a 2D multivariate Gaussian distribution
 program simple_test_gauss2Dfit
 
-! include 'simple_lib.f08'
 ! use simple_picker_utils
 ! use simple_image,        only: image
 ! use simple_gauss2Dfit,   only: batch_gauss2Dfit

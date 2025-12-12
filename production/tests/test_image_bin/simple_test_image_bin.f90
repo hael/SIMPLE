@@ -1,5 +1,4 @@
 program simple_test_image_bin
-include 'simple_lib.f08'
 use simple_image_bin
 type(image_bin)      :: test_image_bin, test_image_bin_3D, ccimage
 integer, allocatable :: imat_ccs(:,:,:)

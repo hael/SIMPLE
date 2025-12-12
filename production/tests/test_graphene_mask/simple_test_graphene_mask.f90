@@ -1,5 +1,5 @@
 program simple_test_graphene_mask
-include 'simple_lib.f08'
+use simple_core_module_api
 implicit none
 integer, parameter   :: box  = 160
 real,    parameter   :: smpd = 0.358

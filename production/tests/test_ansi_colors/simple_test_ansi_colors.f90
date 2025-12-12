@@ -1,5 +1,6 @@
 program simple_test_ansi_format_strs
-include 'simple_lib.f08'
+use simple_ansi_ctrls
+use simple_defs_fname, only: NEWLINE
 implicit none
 print '(a)', &
    format_str('Red',     C_RED)     // NEWLINE // &

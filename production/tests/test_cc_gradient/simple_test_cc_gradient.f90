@@ -1,5 +1,4 @@
 program simple_test_cc_gradient
-! include 'simple_lib.f08'
 ! use simple_cmdline,          only: cmdline
 ! use simple_image,            only: image
 ! use simple_parameters,       only: parameters

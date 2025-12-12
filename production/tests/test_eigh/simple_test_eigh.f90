@@ -1,5 +1,5 @@
 program simple_test_eigh
-include 'simple_lib.f08'
+use simple_linalg
 integer, parameter :: N = 5, N_EIGS = 3, N_L = 15000, N_EIGS_L = 12
 integer            :: i
 real               :: mat(N, N), eigvals(N_EIGS), eigvecs(N,N_EIGS), tmp(N,N), eig_vals(N), mat_ori(N, N)

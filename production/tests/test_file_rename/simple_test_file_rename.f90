@@ -1,5 +1,5 @@
 program simple_test_file_rename
-include 'simple_lib.f08'
+use simple_core_module_api
 implicit none
 character(len=*), parameter :: FNAME = '/Users/elmlundho/src/SIMPLE/build/CTestTestfile.cmake'
 character(len=*), parameter :: HELLO_SUFFIX = '_hello'

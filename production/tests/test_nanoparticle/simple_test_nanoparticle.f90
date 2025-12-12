@@ -1,6 +1,5 @@
 program simple_test_nanoparticle
     
-    ! include 'simple_lib.f08'
     ! use simple_nanoparticle
     ! use simple_parameters
     ! use simple_image

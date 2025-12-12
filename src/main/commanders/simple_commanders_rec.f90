@@ -124,7 +124,7 @@ contains
     end subroutine exec_reconstruct3D_distr
 
     subroutine exec_reconstruct3D( self, cline )
-        use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
+        use simple_euclid_sigma2, only: euclid_sigma2
         class(commander_reconstruct3D), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)            :: params

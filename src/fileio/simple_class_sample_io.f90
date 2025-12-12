@@ -1,5 +1,5 @@
 module simple_class_sample_io
-use simple_defs
+use simple_type_defs
 use simple_string_utils
 use simple_error
 use simple_syslib

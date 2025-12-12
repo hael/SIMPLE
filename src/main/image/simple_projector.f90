@@ -285,44 +285,6 @@ contains
         end do
     end subroutine fproject_serial_2
 
-    ! function fproject_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk, filtw ) result( corrs )
-    !     class(projector),              intent(inout) :: self
-    !     class(ori),                    intent(in)    :: e
-    !     integer,                       intent(in)    :: lims(2,2), nptcls
-    !     complex(kind=c_float_complex), intent(inout) :: cmats(  lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
-    !     real,                          intent(in)    :: ctfmats(lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
-    !     logical,                       intent(in)    :: resmsk( lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-    !     real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-    !     real    :: loc(3), e_rotmat(3,3), ccs(3,nptcls), corrs(nptcls)
-    !     integer :: h, k, iptcl
-    !     complex :: ref_comp
-    !     e_rotmat = e%get_mat()
-    !     ccs(:,:) = 0.
-    !     !$omp parallel do collapse(3) schedule(static) default(shared)&
-    !     !$omp private(h,k,iptcl,loc,ref_comp) proc_bind(close)
-    !     do h = lims(1,1),lims(1,2)
-    !         do k = lims(2,1),lims(2,2)
-    !             do iptcl = 1,nptcls
-    !                 if( resmsk(h,k) )then
-    !                     loc = matmul(real([h,k,0]), e_rotmat)
-    !                     if( h > 0 )then
-    !                         ref_comp =       self%interp_fcomp(loc)  * ctfmats(h,k,iptcl) * filtw(h,k)
-    !                     else
-    !                         ref_comp = conjg(self%interp_fcomp(loc)) * ctfmats(h,k,iptcl) * filtw(h,k)
-    !                     endif
-    !                     ! update cross product
-    !                     ccs(1,iptcl) = ccs(1,iptcl) + real(ref_comp         * conjg(cmats(h,k,iptcl)))
-    !                     ! update normalization terms
-    !                     ccs(2,iptcl) = ccs(2,iptcl) + real(ref_comp         * conjg(ref_comp))
-    !                     ccs(3,iptcl) = ccs(3,iptcl) + real(cmats(h,k,iptcl) * conjg(cmats(h,k,iptcl)))
-    !                 endif
-    !             end do
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    !     corrs = norm_corr(ccs(1,:),ccs(2,:),ccs(3,:))
-    ! end function fproject_correlate
-
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
         use simple_polarft_calc, only: polarft_calc

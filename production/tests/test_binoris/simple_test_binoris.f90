@@ -1,6 +1,5 @@
 program simple_test_binoris
-include 'simple_lib.f08'
-use simple_cmdline,            only: cmdline
+use simple_core_module_api
 use simple_commanders_project, only: commander_new_project
 use simple_sp_project
 implicit none

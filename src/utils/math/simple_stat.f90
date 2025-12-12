@@ -2,9 +2,10 @@
 module simple_stat
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_math
 use simple_error, only: simple_exception
+use simple_defs
+use simple_type_defs
+use simple_math
 use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none

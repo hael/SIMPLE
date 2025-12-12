@@ -1,5 +1,5 @@
 program simple_test_install
-include 'simple_lib.f08'
+use simple_core_module_api
 use simple_testfuns ! use all in there
 use simple_image,  only: image
 implicit none

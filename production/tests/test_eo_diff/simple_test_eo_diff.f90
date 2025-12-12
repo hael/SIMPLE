@@ -1,5 +1,5 @@
 program simple_test_eo_diff
-include 'simple_lib.f08'
+use simple_core_module_api
 use simple_image, only: image
 implicit none
 #include "simple_local_flags.inc"
