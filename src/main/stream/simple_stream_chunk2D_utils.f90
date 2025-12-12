@@ -41,15 +41,7 @@ contains
         class(sp_project),         intent(inout) :: spproj
         character(len=STDLEN) :: chunk_nthr_env
         integer               :: ichunk, envlen
-        ! kill first
-        if( l_stream2D_active )then
-            if( allocated(chunks) )then
-                do ichunk = 1,size(chunks)
-                    call chunks(ichunk)%kill
-                enddo
-                deallocate(chunks)
-            endif
-        endif
+        if( l_stream2D_active ) THROW_HARD('init_chunk_clustering can only be called once!')
         call seed_rnd
         ! general parameters
         master_cline => cline

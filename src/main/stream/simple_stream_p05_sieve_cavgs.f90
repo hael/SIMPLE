@@ -48,7 +48,7 @@ contains
         type(parameters)               :: params
         type(qsys_env)                 :: qenv
         type(stream_http_communicator) :: http_communicator
-        type(oris)                     :: moldiamori, chunksizeori, nmicsori
+        type(oris)                     :: moldiamori, nmicsori
         type(stream_watcher)           :: project_buff
         type(chunk_rec)                :: crec
         type(rec_iterator)             :: it
@@ -474,13 +474,14 @@ contains
                 type(project_rec) :: prec
                 type(string)      :: fname, abs_fname
                 real              :: avgmicptcls, nptcls_per_cls
-                integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls, first
+                integer           :: iproj, n_spprojs, n_recs_prev, irec, n_completed, nptcls
+                integer           :: nmics, imic, n_ptcls, first
                 n_imported = 0
                 n_ptcls    = 0
                 if( .not.allocated(projectnames) ) return
                 n_spprojs = size(projectnames)
                 if( n_spprojs == 0 )return
-                n_old = 0 ! on first import
+                n_recs_prev = project_list%size()
                 allocate(spprojs(n_spprojs))
                 ! because pick_extract purges state=0 and nptcls=0 mics,
                 ! all mics can be assumed associated with particles
@@ -493,10 +494,10 @@ contains
                 enddo
                 if( nmics == 0 ) return
                 ! import micrographs
-                n_completed = n_old + nmics
+                n_completed = n_recs_prev + nmics
                 n_imported  = nmics
                 ! update global records and some global variables
-                irec = n_old
+                irec = n_recs_prev
                 do iproj = 1,n_spprojs
                     do imic = 1,spprojs(iproj)%os_mic%get_noris()
                         irec      = irec + 1
@@ -513,7 +514,8 @@ contains
                     enddo
                 enddo
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
-                ! Updates global parameters once and init 2D
+                ! Updates global parameters once and init chuk 2D clustering
+                ! the set of conditions below ensure the init will only happen once
                 if(params%nptcls_per_cls == 0) then
                     if( project_list%size() .gt. params%nmics) then
                         avgmicptcls    = nptcls_glob / project_list%size()
@@ -533,17 +535,12 @@ contains
                         endif
                         call init_chunk_clustering(cline, spproj_glob)
                         call cline%delete('ncls')
-                        ! write out for stream3d to pick up
-                        call chunksizeori%new(1, .false.)
-                        call chunksizeori%set(1, 'nptcls_per_cls', params%nptcls_per_cls)
-                        call chunksizeori%write(1, string(STREAM_CHUNKSIZE))
-                        call chunksizeori%kill
                     end if
-                else if( n_old == 0 )then
+                else if( n_recs_prev == 0 )then
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                     call spprojs(first)%read_segment('stk', projectnames(first))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
-                    if(params%mskdiam == 0.0) then
+                    if( params%mskdiam < 0.5 ) then
                         params%mskdiam = 0.9 * ceiling(params%box * spprojs(first)%os_stk%get(1,'smpd'))
                         call cline%set('mskdiam', params%mskdiam)
                         write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
