@@ -412,7 +412,8 @@ contains
     end function get_ids 
 
     !=====================================================================
-    ! Return logical mask of "included" flags for all stored records
+    ! Return an allocated logical mask of "included" flags for all
+    ! stored records. When empty, the mask is allocated size zero
     !=====================================================================
     function get_included_flags(self) result(mask)
         class(rec_list), intent(in) :: self
@@ -421,8 +422,8 @@ contains
         class(rec), allocatable     :: r
         integer :: n, i
         n = self%size()
-        if (n == 0) return
         allocate(mask(n))
+        if (n == 0) return
         it = self%begin()
         i = 0
         do while (it%valid())
@@ -449,8 +450,8 @@ contains
         class(rec), allocatable     :: r
         integer :: n, i
         n = self%size()
-        if (n == 0) return
         allocate(mask(n))
+        if (n == 0) return
         it = self%begin()
         i = 0
         do while (it%valid())
@@ -473,8 +474,8 @@ contains
         class(rec), allocatable     :: r
         integer :: n, i
         n = self%size()
-        if (n == 0) return
         allocate(mask(n))
+        if (n == 0) return
         it = self%begin()
         i = 0
         do while (it%valid())

@@ -125,10 +125,18 @@ contains
     end subroutine test_iterator_replace
 
     subroutine test_included_mask()
-        type(rec_list) :: lst
+        type(rec_list) :: lst, lst2
         type(project_rec) :: r(3)
-        logical, allocatable :: m(:)
+        logical, allocatable :: m(:), m2(:)
         write(*,'(A)') 'test_included_mask'
+        m = lst%get_included_flags()
+        call assert_true(size(m)==0,  'included() logical array empty size correct')
+        call assert_true(all(m),      'included() logical array empty all correct')
+        call assert_true(count(m)==0, 'included() logical array empty count 0 correct')
+        m2 = lst2%get_included_flags()
+        call assert_true(count(m.and.m2)==0,'included() logical array empty count 1 correct')
+        call assert_true(count(m.and..not.m2)==0,'included() logical array empty count 2 correct')
+        call assert_true(count(.not.m.and..not.m2)==0,'included() logical array empty count 3 correct')
         r(1)%id=1; r(1)%included=.false.
         r(2)%id=2; r(2)%included=.true.
         r(3)%id=3; r(3)%included=.false.
