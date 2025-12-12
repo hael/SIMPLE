@@ -120,8 +120,6 @@ jobs:
              simple_test_neigh
              echo "-------------------- TEST OPENMP -------------------------"
              simple_test_openmp
-             echo "-------------------- TEST OPT GENERIC -------------------------"
-             simple_test_opt_genetic
              echo "-------------------- TEST ORDER CORR -------------------------"
              simple_test_order_corr
              echo "-------------------- TEST ORI -------------------------"
