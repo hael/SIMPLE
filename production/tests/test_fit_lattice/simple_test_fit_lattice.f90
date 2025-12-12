@@ -6,7 +6,6 @@
 ! lattice parameters. Reports results in a .csv file.
 program simple_test_fit_lattice
 
-!     include 'simple_lib.f08'
 !     use simple_atoms,              only: atoms
 !     use simple_nanoparticle_utils, only: fit_lattice, find_rMax
 !     implicit none

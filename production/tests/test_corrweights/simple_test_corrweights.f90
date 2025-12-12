@@ -1,5 +1,4 @@
 program simple_test_corrweights
-! include 'simple_lib.f08'
 ! use gnufor2
 ! implicit none
 ! integer, parameter :: NCORRS=38, NDISTR=5

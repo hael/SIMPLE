@@ -1,5 +1,4 @@
 program simple_test_clustering
-include 'simple_lib.f08'
 use simple_aff_prop
 use simple_linalg
 implicit none

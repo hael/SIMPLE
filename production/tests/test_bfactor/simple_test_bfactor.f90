@@ -10,7 +10,6 @@
 ! For assembling the tests in github, using NP7 and NP1 from the Homogeneous
 ! NP Paper should provide a good range of possible atomic densities.
 program simple_test_bfactor
-!     include 'simple_lib.f08'
 !     use simple_cmdline,          only: cmdline
 !     use simple_commanders_atoms, only: commander_atoms_stats
 !     use simple_atoms,            only: atoms

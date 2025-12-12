@@ -1,13 +1,11 @@
 program simple_test_insert_plane
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
-use simple_cmdline,           only: cmdline
-use simple_builder,           only: builder
-use simple_image,             only: image
-use simple_parameters,        only: parameters
+use simple_core_module_api
+use simple_builder,    only: builder
+use simple_image,      only: image
+use simple_parameters, only: parameters
 use simple_fplane
-use simple_ori
 implicit none
 type(cmdline)             :: cline
 type(builder)             :: b

@@ -1,5 +1,5 @@
 program simple_test_corrs2weights
-include 'simple_lib.f08'
+use simple_core_module_api
 implicit none
 real    :: corrs(12), weights(12)
 integer :: i

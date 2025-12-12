@@ -1,11 +1,11 @@
 program simple_test_opt_lp
-include 'simple_lib.f08'
-use simple_cmdline,           only: cmdline
+use simple_core_module_api
 use simple_builder,           only: builder
 use simple_parameters,        only: parameters
 use simple_commanders_volops, only: commander_reproject
 use simple_image,             only: image
 use simple_butterworth,       only: butterworth_filter
+use simple_math,              only: create_hist_vector
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_projection

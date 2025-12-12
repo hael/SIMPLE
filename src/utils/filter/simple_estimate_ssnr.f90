@@ -3,6 +3,7 @@ module simple_estimate_ssnr
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_type_defs
 use simple_defs_stream
 use simple_defs_conv
 use simple_srch_sort_loc

@@ -649,7 +649,7 @@ contains
     function cnt_recs_per_line( line, separators ) result( nrecs )
         character(len=*)            :: line        !<  line to be split
         character(len=*), optional  :: separators  !<  characters which separate words, if not present, default is blank characters (space, tabs...)
-        character(len=LINE_MAX_LEN) :: buffer
+        character(len=XLONGSTRLEN) :: buffer
         integer :: nrecs, pos1, pos2
         if (str_is_blank(line) .or. str_is_comment(line)) then
             nrecs = 0
