@@ -1,6 +1,7 @@
 ! helper routines and definitions for certain optimizer routines (those taken from the gsl library)
 module simple_opt_helpers
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 
 !< constants for return values

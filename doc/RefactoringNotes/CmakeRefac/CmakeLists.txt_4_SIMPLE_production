@@ -1,0 +1,89 @@
+# SIMPLE/production/CMakeLists.txt
+
+# ------------------------------------------------------------------------------
+# Main executables
+# ------------------------------------------------------------------------------
+
+add_executable(simple_exec         "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/simple_exec.f90")
+add_executable(single_exec         "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exec.f90")
+add_executable(simple_stream       "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream/simple_stream.f90")
+add_executable(simple_private_exec "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
+
+set(SIMPLE_MAIN_TARGETS
+    simple_exec
+    single_exec
+    simple_stream
+    simple_private_exec
+)
+
+foreach(tgt IN LISTS SIMPLE_MAIN_TARGETS)
+    target_link_libraries(${tgt} PRIVATE SIMPLE)
+    # Fortran module dir (for any modules used by the main programs)
+    set_target_properties(${tgt} PROPERTIES
+        Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+    )
+endforeach()
+
+# Install executables
+install(TARGETS ${SIMPLE_MAIN_TARGETS}
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+
+# ------------------------------------------------------------------------------
+# Tests (optional)
+# ------------------------------------------------------------------------------
+
+if(BUILD_TESTS)
+
+    file(GLOB TESTDIRS
+        LIST_DIRECTORIES TRUE
+        RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+        "tests/test_*"
+    )
+
+    if(NOT USE_MPI)
+        list(REMOVE_ITEM TESTDIRS "tests/test_mpi")
+    endif()
+
+    foreach(TESTDIR ${TESTDIRS})
+        string(REPLACE "tests/" "" TESTNAME "${TESTDIR}")
+        set(TESTEXE "simple_${TESTNAME}")
+
+        file(GLOB_RECURSE TESTSOURCES
+            LIST_DIRECTORIES FALSE
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/${TESTNAME}/*.[fF][90][0538]"
+        )
+
+        if(TESTSOURCES)
+            add_executable(${TESTEXE} ${TESTSOURCES})
+            target_link_libraries(${TESTEXE} PRIVATE SIMPLE)
+
+            # Extra Fortran flags for tests (range check etc.)
+            if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+                target_compile_options(${TESTEXE}
+                    PRIVATE
+                        $<$<COMPILE_LANGUAGE:Fortran>:-fno-range-check>
+                )
+            endif()
+
+            add_test(NAME ${TESTEXE}
+                     COMMAND ${TESTEXE})
+
+            install(TARGETS ${TESTEXE}
+                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+            )
+
+            # Install .txt files associated with tests
+            file(GLOB_RECURSE TESTTXTSOURCES
+                LIST_DIRECTORIES FALSE
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/${TESTNAME}/*.txt"
+            )
+            if(TESTTXTSOURCES)
+                install(FILES ${TESTTXTSOURCES}
+                    DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/${TESTNAME}"
+                )
+            endif()
+        endif()
+    endforeach()
+
+endif()

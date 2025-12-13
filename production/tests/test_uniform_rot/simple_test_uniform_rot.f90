@@ -1,6 +1,7 @@
 ! from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
 program simple_test_uniform_rot
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 integer, parameter  :: N_SAMPLES = 4, N_ARR = 2000
 real,    parameter  :: SIGMA = 1.

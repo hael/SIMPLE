@@ -1,5 +1,6 @@
 program simple_test_angres
 use simple_core_module_api
+use simple_defs
 implicit none
 type(oris) :: os
 integer    :: i

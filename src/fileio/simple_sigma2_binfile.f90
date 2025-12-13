@@ -1,5 +1,7 @@
 module simple_sigma2_binfile
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs_fname
 implicit none
 
 public :: sigma2_binfile

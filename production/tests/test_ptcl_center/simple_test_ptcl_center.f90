@@ -1,11 +1,10 @@
 program simple_test_ptcl_center
-include 'simple_lib.f08'
-use simple_cmdline,    only: cmdline
+use simple_core_module_api
+use simple_defs
 use simple_parameters, only: parameters
 use simple_image,      only: image
 use simple_projector,  only: projector
-use simple_oris
-use simple_ori
+use simple_cmdline,    only: cmdline
 implicit none
 integer,          parameter   :: ORI_IND = 15, NPLANES = 100, MAX_R = 45, CENTER_RAD = 40
 character(len=:), allocatable :: cmd

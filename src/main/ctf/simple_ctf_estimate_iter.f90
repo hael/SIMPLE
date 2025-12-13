@@ -1,6 +1,9 @@
 ! ctf_estimate iterator
 module simple_ctf_estimate_iter
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_type_defs
+use simple_defs_fname
+use simple_defs
 use simple_parameters,       only: params_glob
 use simple_image,            only: image
 use simple_ctf_estimate_fit, only: ctf_estimate_fit

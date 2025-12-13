@@ -1,6 +1,7 @@
 module simple_stream_communicator
 use, intrinsic :: iso_c_binding 
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use json_kinds
 use json_module
 use simple_fileio

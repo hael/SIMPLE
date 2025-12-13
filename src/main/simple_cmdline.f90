@@ -1,6 +1,7 @@
 ! command line parsersimple_cmdline
 module simple_cmdline
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_user_interface
 use simple_private_prgs 
 use simple_args, only: args
@@ -61,7 +62,7 @@ contains
         type(args)                    :: allowed_args
         type(simple_program), pointer :: ptr2prg => null()
         type(string)                  :: prgname, exec_cmd_ui, exec_cmd
-        character(len=LONGSTRLEN)     :: arg, buffer
+        character(len=XLONGSTRLEN)     :: arg, buffer
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt = command_argument_count()
@@ -138,7 +139,7 @@ contains
             if( cmdstat == -1 )then
                 write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
+                write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
@@ -152,7 +153,7 @@ contains
         class(cmdline), intent(inout) :: self
         type(string), allocatable     :: keys_required(:)
         type(args)                    :: allowed_args
-        character(len=LONGSTRLEN)     :: arg
+        character(len=XLONGSTRLEN)     :: arg
         type(simple_program), pointer :: ptr2prg => null()
         integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
         ! parse command line
@@ -220,7 +221,7 @@ contains
             if( cmdstat == -1 )then
                 write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_private'
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
+                write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
@@ -234,7 +235,7 @@ contains
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN)     :: exec_name
-        character(len=LONGSTRLEN) :: arg
+        character(len=XLONGSTRLEN) :: arg
         type(args)                :: allowed_args
         integer                   :: i, cmdstat, cmdlen, ikey
         integer                   :: nreq, cmdargcnt
@@ -272,7 +273,7 @@ contains
             if( cmdstat == -1 )then
                 write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
+                write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
@@ -724,7 +725,7 @@ contains
         if( cmdstat == -1 )then
             write(logfhandle,*) 'ERROR! while parsing the command line'
             write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-            write(logfhandle,*) 'which likely exceeds the lenght limit LONGSTRLEN'
+            write(logfhandle,*) 'which likely exceeds the lenght limit XLONGSTRLEN'
             write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
             stop
         endif

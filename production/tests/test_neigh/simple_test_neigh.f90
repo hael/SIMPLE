@@ -1,5 +1,7 @@
 program simple_test_neigh
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_type_defs
 implicit none
 character(len=*), parameter :: PGRP       = 'c2'
 integer,          parameter :: NSPACE     = 20000

@@ -1,5 +1,6 @@
 module simple_gui_utils
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_image,      only: image
 use simple_stack_io,   only: stack_io
 #include "simple_local_flags.inc"

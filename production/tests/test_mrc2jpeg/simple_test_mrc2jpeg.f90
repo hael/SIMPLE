@@ -1,5 +1,6 @@
 program simple_test_mrc2jpeg
-include 'simple_lib.f08' 
+use simple_core_module_api
+use simple_defs
 use simple_image
 use simple_jpg
 use simple_cmdline,    only: cmdline

@@ -1,5 +1,6 @@
 module simple_imgarr_utils
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_image,      only: image
 use simple_sp_project, only: sp_project
 use simple_stack_io,   only: stack_io

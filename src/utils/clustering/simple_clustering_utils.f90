@@ -2,7 +2,8 @@
 module simple_clustering_utils
 use simple_kmedoids, only: kmedoids
 use simple_aff_prop, only: aff_prop
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 
 public :: cluster_dmat, labels2smat, aggregate, silhouette_score, DBIndex, DunnIndex

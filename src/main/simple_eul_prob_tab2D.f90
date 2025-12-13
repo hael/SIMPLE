@@ -2,13 +2,16 @@
 module simple_eul_prob_tab2D
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
-use simple_parameters,        only: params_glob
-use simple_builder,           only: build_glob
-use simple_polarft_calc,  only: pftc_glob
+use simple_core_module_api
+use simple_type_defs
+use simple_defs_fname
+use simple_defs
+use simple_parameters,       only: params_glob
+use simple_builder,          only: build_glob
+use simple_polarft_calc,     only: pftc_glob
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
-use simple_eul_prob_tab,      only: eulprob_dist_switch, eulprob_corr_switch
-use simple_decay_funs,        only: extremal_decay2D
+use simple_eul_prob_tab,     only: eulprob_dist_switch, eulprob_corr_switch
+use simple_decay_funs,       only: extremal_decay2D
 implicit none
 
 public :: eul_prob_tab2D, squared_sampling, power_sampling, neighfrac2nsmpl

@@ -1,6 +1,9 @@
 ! batch-processing manager - environment module
 module simple_qsys_env
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs
+use simple_defs_environment
 use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base

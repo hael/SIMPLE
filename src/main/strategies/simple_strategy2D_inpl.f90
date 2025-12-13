@@ -1,5 +1,6 @@
 module simple_strategy2D_inpl
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec

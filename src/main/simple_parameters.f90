@@ -2,7 +2,12 @@
 module simple_parameters
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_stream
+use simple_defs_fname
+use simple_defs_conv
+use simple_defs
+use simple_type_defs
 use simple_cmdline,        only: cmdline
 use simple_user_interface, only: simple_program, get_prg_ptr
 use simple_atoms,          only: atoms

@@ -1,5 +1,6 @@
 module simple_commanders_starproject
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project

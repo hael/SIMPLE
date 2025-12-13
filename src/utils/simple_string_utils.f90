@@ -4,8 +4,8 @@
 module simple_string_utils
 use simple_error,  only: simple_exception
 use simple_string, only: string
-use simple_defs
 use simple_defs_string
+use simple_defs
 use, intrinsic :: iso_c_binding
 implicit none
 

@@ -1,11 +1,11 @@
 program simple_test_mini_stream
-include 'simple_lib.f08'
-use simple_cmdline,             only: cmdline
+use simple_core_module_api
+use simple_defs
 use simple_parameters,          only: parameters
 use simple_commanders_project,  only: commander_new_project, commander_import_movies
 use simple_commanders_validate, only: commander_mini_stream
 use simple_commanders_project,  only: commander_selection
-use simple_stream_watcher,        only: stream_watcher
+use simple_stream_watcher,      only: stream_watcher
 use simple_commanders_preprocess 
 use simple_sp_project
 implicit none
@@ -23,7 +23,7 @@ type(commander_import_movies)    :: ximport_movies
 type(commander_mini_stream)      :: xmini_stream
 type(commander_selection)        :: xsel
 type(sp_project)                 :: spproj
-type(stream_watcher)               :: movie_buff
+type(stream_watcher)             :: movie_buff
 integer                          :: i, ndata_sets, n_nonzero, nmovf
 type(string)                     :: abspath, projfile
 character(len=*), parameter      :: filetab_file='filetab.txt'

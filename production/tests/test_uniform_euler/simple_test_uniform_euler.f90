@@ -1,7 +1,6 @@
 program simple_test_uniform_euler
-include 'simple_lib.f08'
-use simple_sym
-use simple_ori
+use simple_core_module_api
+use simple_defs
 implicit none
 integer, parameter :: N_SAMPLES = 2000
 type(sym)   :: pgrpsyms

@@ -531,7 +531,8 @@ contains
 
             subroutine calculate_histogram( seg_oris )
                 use, intrinsic :: iso_c_binding 
-                include 'simple_lib.f08'
+                use simple_core_module_api
+use simple_defs
                 type(oris),        intent(in)  :: seg_oris
                 type(histogram)                :: histgrm
                 type(json_value),  pointer     :: data, labels

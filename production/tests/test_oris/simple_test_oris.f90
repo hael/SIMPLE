@@ -1,7 +1,6 @@
 program simple_test_oris
-include 'simple_lib.f08'
-use simple_oris
-use simple_ori
+use simple_core_module_api
+use simple_defs
 implicit none
 type(oris) :: o, o1, o2, o_subset, o1_subset
 logical    :: test_passed

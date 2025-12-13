@@ -1,6 +1,7 @@
 ! concrete strategy3D: probabilistic refinement
 module simple_strategy3D_prob
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_strategy3D_alloc  ! use all in there
 use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D,       only: strategy3D

@@ -1,16 +1,21 @@
 module simple_sp_project
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs_fname
+use simple_defs_ori
+use simple_type_defs
+use simple_ansi_ctrls
 use simple_cmdline,           only: cmdline
 use simple_discrete_stack_io, only: dstack_io
 use simple_map_reduce,        only: split_nobjs_even
-use json_kinds
-use json_module
-use simple_gui_utils
-use simple_histogram
-use simple_image
-use simple_rec_list
-use simple_stack_io
+use simple_image,             only: image
 use simple_starfile
+use simple_stack_io
+use simple_rec_list
+use simple_histogram
+use simple_gui_utils
+use json_module
+use json_kinds
 implicit none
 
 public :: sp_project, oritype2segment

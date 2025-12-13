@@ -10,7 +10,10 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs_fname
+use simple_tifflib
 use gnufor2
 implicit none
 

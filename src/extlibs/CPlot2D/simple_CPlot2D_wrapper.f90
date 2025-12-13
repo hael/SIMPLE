@@ -1,124 +1,128 @@
 module CPlot2D_wrapper_module
+use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_char, C_double, C_bool, c_null_char
+use simple_core_module_api
+use simple_defs
+implicit none
 #include "simple_local_flags.inc"
-    use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_char, C_double, C_bool
-    implicit none
 
-    type :: CDataPoint_type
-        private
-        type(C_ptr) :: object = C_NULL_ptr
-    end type CDataPoint_type
-    type :: CDataSet_type
-        private
-        type(C_ptr) :: object = C_NULL_ptr
-    end type CDataSet_type
-    type :: CPlot2D_type
-        private
-        type(C_ptr) :: object = C_NULL_ptr
-    end type CPlot2D_type
-    interface
-        function C_CPlot2D__new(title) result(this) bind(C,name="CPlot2D__new")
-            import
-            type(C_ptr) :: this
-            character(kind=c_char), dimension(*) :: title
-        end function C_CPlot2D__new
-        subroutine C_CPlot2D__SetXAxisSize(this, val) bind(C,name="CPlot2D__SetXAxisSize")
-            import
-            type(C_ptr), value :: this
-            real(C_double), value :: val
-        end subroutine C_CPlot2D__SetXAxisSize
-        subroutine C_CPlot2D__SetYAxisSize(this, val) bind(C,name="CPlot2D__SetYAxisSize")
-            import
-            type(C_ptr), value :: this
-            real(C_double), value :: val
-        end subroutine C_CPlot2D__SetYAxisSize
-        subroutine C_CPlot2D__SetDrawLegend(this, flag) bind(C,name="CPlot2D__SetDrawLegend")
-            import
-            type(C_ptr), value :: this
-            logical(c_bool), value :: flag
-        end subroutine C_CPlot2D__SetDrawLegend
-        subroutine C_CPlot2D__SetFlipY(this, flag) bind(C,name="CPlot2D__SetFlipY")
-            import
-            type(C_ptr), value :: this
-            logical(C_bool), value :: flag
-        end subroutine C_CPlot2D__SetFlipY
-        subroutine C_CPlot2D__AddDataSet(this, dataSet) bind(C,name="CPlot2D__AddDataSet")
-            import
-            type(C_ptr), value :: this
-            type(C_ptr), value :: dataSet
-        end subroutine C_CPlot2D__AddDataSet
-        subroutine C_CPlot2D__SetXAxisTitle(this, font) bind(C,name="CPlot2D__SetXAxisTitle")
-            import
-            type(C_ptr), value :: this
-            character(kind=c_char), dimension(*) :: font
-        end subroutine C_CPlot2D__SetXAxisTitle
-        subroutine C_CPlot2D__SetYAxisTitle(this, font) bind(C,name="CPlot2D__SetYAxisTitle")
-            import
-            type(C_ptr), value :: this
-            character(kind=c_char), dimension(*) :: font
-        end subroutine C_CPlot2D__SetYAxisTitle
-        subroutine C_CPlot2D__OutputPostScriptPlot(this, fileName) bind(C,name="CPlot2D__OutputPostScriptPlot")
-            import
-            type(C_ptr), value :: this
-            character(kind=c_char), dimension(*) :: fileName
-        end subroutine C_CPlot2D__OutputPostScriptPlot
-        subroutine C_CPlot2D__delete(this) bind(C,name="CPlot2D__delete")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_CPlot2D__delete
-        function C_CDataSet__new() result(this) bind(C,name="CDataSet__new")
-            import
-            type(C_ptr) :: this
-        end function C_CDataSet__new
-        subroutine C_CPlot2D__SetDrawXAxisGridLines(this, flag) bind(C,name="CPlot2D__SetDrawXAxisGridLines")
-            import
-            type(C_ptr), value :: this
-            logical(C_bool), value :: flag
-        end subroutine C_CPlot2D__SetDrawXAxisGridLines
-        subroutine C_CPlot2D__SetDrawYAxisGridLines(this, flag) bind(C,name="CPlot2D__SetDrawYAxisGridLines")
-            import
-            type(C_ptr), value :: this
-            logical(C_bool), value :: flag
-        end subroutine C_CPlot2D__SetDrawYAxisGridLines
-        subroutine C_CDataSet__SetDrawMarker(this, flag) bind(C,name="CDataSet__SetDrawMarker")
-            import
-            type(C_ptr), value :: this
-            logical(C_bool), value :: flag
-        end subroutine C_CDataSet__SetDrawMarker
-        subroutine C_CDataSet__SetDrawLine(this, flag) bind(C,name="CDataSet__SetDrawLine")
-            import
-            type(C_ptr), value :: this
-            logical(C_bool), value :: flag
-        end subroutine C_CDataSet__SetDrawLine
-        subroutine C_CDataSet__SetMarkerSize(this, size) bind(C,name="CDataSet__SetMarkerSize")
-            import
-            type(C_ptr), value :: this
-            real(C_double), value :: size
-        end subroutine C_CDataSet__SetMarkerSize
-        subroutine C_CDataSet__SetDatasetColor(this, r, g, b) bind(C,name="CDataSet__SetDatasetColor")
-            import
-            type(C_ptr), value :: this
-            real(C_double), value :: r, g, b
-        end subroutine C_CDataSet__SetDatasetColor
-        function C_CDataPoint__new2(x, y) result(this) bind(C,name="CDataPoint__new2")
-            import
-            type(C_ptr) :: this
-            real(C_double), value :: x, y
-        end function C_CDataPoint__new2
-        subroutine C_CDataPoint__delete(this) bind(C,name="CDataPoint__delete")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_CDataPoint__delete
-        subroutine C_CDataSet__AddDataPoint(this, point) bind(C,name="CDataSet__AddDataPoint")
-            import
-            type(C_ptr), value :: this
-            type(C_ptr), value :: point
-        end subroutine C_CDataSet__AddDataPoint
-        subroutine C_CDataSet__delete(this) bind(C,name="CDataSet__delete")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_CDataSet__delete
-    end interface
+type :: CDataPoint_type
+    private
+    type(C_ptr) :: object = C_NULL_ptr
+end type CDataPoint_type
+type :: CDataSet_type
+    private
+    type(C_ptr) :: object = C_NULL_ptr
+end type CDataSet_type
+type :: CPlot2D_type
+    private
+    type(C_ptr) :: object = C_NULL_ptr
+end type CPlot2D_type
+interface
+    function C_CPlot2D__new(title) result(this) bind(C,name="CPlot2D__new")
+        import
+        type(C_ptr) :: this
+        character(kind=c_char), dimension(*) :: title
+    end function C_CPlot2D__new
+    subroutine C_CPlot2D__SetXAxisSize(this, val) bind(C,name="CPlot2D__SetXAxisSize")
+        import
+        type(C_ptr), value :: this
+        real(C_double), value :: val
+    end subroutine C_CPlot2D__SetXAxisSize
+    subroutine C_CPlot2D__SetYAxisSize(this, val) bind(C,name="CPlot2D__SetYAxisSize")
+        import
+        type(C_ptr), value :: this
+        real(C_double), value :: val
+    end subroutine C_CPlot2D__SetYAxisSize
+    subroutine C_CPlot2D__SetDrawLegend(this, flag) bind(C,name="CPlot2D__SetDrawLegend")
+        import
+        type(C_ptr), value :: this
+        logical(c_bool), value :: flag
+    end subroutine C_CPlot2D__SetDrawLegend
+    subroutine C_CPlot2D__SetFlipY(this, flag) bind(C,name="CPlot2D__SetFlipY")
+        import
+        type(C_ptr), value :: this
+        logical(C_bool), value :: flag
+    end subroutine C_CPlot2D__SetFlipY
+    subroutine C_CPlot2D__AddDataSet(this, dataSet) bind(C,name="CPlot2D__AddDataSet")
+        import
+        type(C_ptr), value :: this
+        type(C_ptr), value :: dataSet
+    end subroutine C_CPlot2D__AddDataSet
+    subroutine C_CPlot2D__SetXAxisTitle(this, font) bind(C,name="CPlot2D__SetXAxisTitle")
+        import
+        type(C_ptr), value :: this
+        character(kind=c_char), dimension(*) :: font
+    end subroutine C_CPlot2D__SetXAxisTitle
+    subroutine C_CPlot2D__SetYAxisTitle(this, font) bind(C,name="CPlot2D__SetYAxisTitle")
+        import
+        type(C_ptr), value :: this
+        character(kind=c_char), dimension(*) :: font
+    end subroutine C_CPlot2D__SetYAxisTitle
+    subroutine C_CPlot2D__OutputPostScriptPlot(this, fileName) bind(C,name="CPlot2D__OutputPostScriptPlot")
+        import
+        type(C_ptr), value :: this
+        character(kind=c_char), dimension(*) :: fileName
+    end subroutine C_CPlot2D__OutputPostScriptPlot
+    subroutine C_CPlot2D__delete(this) bind(C,name="CPlot2D__delete")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_CPlot2D__delete
+    function C_CDataSet__new() result(this) bind(C,name="CDataSet__new")
+        import
+        type(C_ptr) :: this
+    end function C_CDataSet__new
+    subroutine C_CPlot2D__SetDrawXAxisGridLines(this, flag) bind(C,name="CPlot2D__SetDrawXAxisGridLines")
+        import
+        type(C_ptr), value :: this
+        logical(C_bool), value :: flag
+    end subroutine C_CPlot2D__SetDrawXAxisGridLines
+    subroutine C_CPlot2D__SetDrawYAxisGridLines(this, flag) bind(C,name="CPlot2D__SetDrawYAxisGridLines")
+        import
+        type(C_ptr), value :: this
+        logical(C_bool), value :: flag
+    end subroutine C_CPlot2D__SetDrawYAxisGridLines
+    subroutine C_CDataSet__SetDrawMarker(this, flag) bind(C,name="CDataSet__SetDrawMarker")
+        import
+        type(C_ptr), value :: this
+        logical(C_bool), value :: flag
+    end subroutine C_CDataSet__SetDrawMarker
+    subroutine C_CDataSet__SetDrawLine(this, flag) bind(C,name="CDataSet__SetDrawLine")
+        import
+        type(C_ptr), value :: this
+        logical(C_bool), value :: flag
+    end subroutine C_CDataSet__SetDrawLine
+    subroutine C_CDataSet__SetMarkerSize(this, size) bind(C,name="CDataSet__SetMarkerSize")
+        import
+        type(C_ptr), value :: this
+        real(C_double), value :: size
+    end subroutine C_CDataSet__SetMarkerSize
+    subroutine C_CDataSet__SetDatasetColor(this, r, g, b) bind(C,name="CDataSet__SetDatasetColor")
+        import
+        type(C_ptr), value :: this
+        real(C_double), value :: r, g, b
+    end subroutine C_CDataSet__SetDatasetColor
+    function C_CDataPoint__new2(x, y) result(this) bind(C,name="CDataPoint__new2")
+        import
+        type(C_ptr) :: this
+        real(C_double), value :: x, y
+    end function C_CDataPoint__new2
+    subroutine C_CDataPoint__delete(this) bind(C,name="CDataPoint__delete")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_CDataPoint__delete
+    subroutine C_CDataSet__AddDataPoint(this, point) bind(C,name="CDataSet__AddDataPoint")
+        import
+        type(C_ptr), value :: this
+        type(C_ptr), value :: point
+    end subroutine C_CDataSet__AddDataPoint
+    subroutine C_CDataSet__delete(this) bind(C,name="CDataSet__delete")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_CDataSet__delete
+end interface
+
 contains
+
     subroutine CPlot2D__new(this, title)
         type(CPlot2D_type), intent(out) :: this
         character(kind=c_char), dimension(*), intent(in) :: title
@@ -234,7 +238,6 @@ contains
     end subroutine CDataSet_addpoint
 
     subroutine plot2D( n, x, y, tmpl_fname, line, suptitle, xtitle, ytitle, z )
-        include 'simple_lib.f08'
         integer,                     intent(in) :: n
         real,                        intent(in) :: x(n), y(n)
         character(len=*),            intent(in) :: tmpl_fname
@@ -244,7 +247,7 @@ contains
         type(string)              :: title
         type(CPlot2D_type)        :: plot
         type(CDataSet_type)       :: dataSet
-        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
+        character(len=XLONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
         integer  :: k,iostat
         if( n == 0 ) THROW_HARD('Empty vectors; plot')
         fname_eps  = trim(tmpl_fname)//'.eps'
@@ -302,12 +305,11 @@ contains
     end subroutine plot2D
 
     subroutine test_CPlot2D
-        include 'simple_lib.f08'
         type(string)               :: title
         type(CPlot2D_type)         :: plot
         type(CDataSet_type)        :: dataSet
         type(string)               :: fname_pdf, fname_jpeg
-        character(len=LONGSTRLEN) :: ps2pdf_cmd, ps2jpeg_cmd, fname_eps
+        character(len=XLONGSTRLEN) :: ps2pdf_cmd, ps2jpeg_cmd, fname_eps
         real    :: vals1(50,2), vals2(50,2), left, right, up, down, xdim,ydim
         integer :: l, i, iostat
         call seed_rnd

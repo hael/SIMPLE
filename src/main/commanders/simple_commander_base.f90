@@ -1,6 +1,7 @@
 ! abstract commander
 module simple_commander_base
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 
 public :: commander_base

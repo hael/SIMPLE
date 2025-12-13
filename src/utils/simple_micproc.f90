@@ -1,6 +1,9 @@
 ! operations on micrographs
 module simple_micproc
-include 'simple_lib.f08'
+!$ use omp_lib
+!$ use omp_lib_kinds
+use simple_core_module_api
+use simple_defs
 use simple_image,     only: image
 use simple_image_bin, only: image_bin
 implicit none

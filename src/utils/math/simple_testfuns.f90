@@ -7,7 +7,8 @@
 !! http://www.sfu.ca/~ssurjano/optimization.html
 !
 module simple_testfuns
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 
 !>  \brief  defines the test function interface

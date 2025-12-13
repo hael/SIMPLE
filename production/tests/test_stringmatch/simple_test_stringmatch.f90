@@ -1,5 +1,6 @@
 program simple_test_stringmatch
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 character(len=*), parameter :: projname = 'state_2'
 character(len=*), parameter :: stkname  = '2_state.mrc'

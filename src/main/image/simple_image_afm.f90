@@ -1,6 +1,7 @@
 module simple_image_afm 
 use iso_c_binding
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_aff_prop,       only: aff_prop
 use simple_class_frcs,     only: class_frcs
 use simple_cmdline,        only: cmdline
@@ -14,7 +15,6 @@ use simple_gauss2Dfit
 use simple_image
 use simple_image_bin
 use simple_neighs
-use simple_parameters
 use simple_parameters
 use simple_pickseg
 use simple_segmentation

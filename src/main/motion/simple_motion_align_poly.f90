@@ -1,7 +1,8 @@
 module simple_motion_align_poly
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_image,           only: image, image_ptr
 use simple_ft_expanded_dp,  only: ft_expanded_dp
 use simple_parameters,      only: params_glob

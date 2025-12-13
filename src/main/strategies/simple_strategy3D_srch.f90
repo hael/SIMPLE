@@ -1,6 +1,7 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_polarft_calc,     only: pftc_glob, polarft_calc
 use simple_parameters,       only: params_glob

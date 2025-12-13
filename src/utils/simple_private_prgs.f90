@@ -1,5 +1,7 @@
 module simple_private_prgs
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs
 implicit none
 
 public :: make_private_user_interface, print_private_cmdline, get_private_keys_required, get_n_private_keys_required, print_cmdline_oldschool

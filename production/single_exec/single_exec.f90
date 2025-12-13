@@ -1,17 +1,19 @@
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 program single_exec
 use simple_core_module_api
-use simple_user_interface,        only: make_user_interface, list_single_prgs_in_ui
+use simple_defs
 use simple_cmdline,               only: cmdline, cmdline_err
-use simple_commanders_sim,        only: commander_simulate_atoms
-use simple_commanders_preprocess, only: commander_map_cavgs_selection
+use simple_cmdline,               only: cmdline, cmdline_err
 use simple_commanders_imgproc,    only: commander_estimate_diam
-use simple_exec_helpers
-use simple_commanders_project
-use simple_commanders_cluster2D
-use simple_commanders_tseries
-use simple_commanders_oris
+use simple_commanders_preprocess, only: commander_map_cavgs_selection
+use simple_commanders_sim,        only: commander_simulate_atoms
+use simple_exec_helpers,          only: script_exec, update_job_descriptions_in_project
+use simple_user_interface,        only: make_user_interface, list_single_prgs_in_ui
 use simple_commanders_atoms
+use simple_commanders_cluster2D
+use simple_commanders_oris
+use simple_commanders_project
+use simple_commanders_tseries
 implicit none
 #include "simple_local_flags.inc"
 
@@ -224,7 +226,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('f8291ea6')
+    call simple_print_git_version('483449dd')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

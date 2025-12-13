@@ -1,8 +1,10 @@
 program simple_test_binoris_io
 use simple_core_module_api
+use simple_defs
+use simple_defs
 use simple_cmdline,            only: cmdline
 use simple_commanders_project, only: commander_new_project
-use simple_sp_project
+use simple_sp_project,         only: sp_project
 use simple_binoris_io
 implicit none
 type(commander_new_project) :: xnew_project

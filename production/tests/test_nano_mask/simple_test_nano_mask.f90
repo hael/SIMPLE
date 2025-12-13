@@ -1,5 +1,6 @@
 program simple_test_nano_mask
 use simple_core_module_api
+use simple_defs
 use simple_image
 use simple_image_msk, only: automask2D
 implicit none

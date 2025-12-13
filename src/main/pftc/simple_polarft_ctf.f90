@@ -1,7 +1,8 @@
 submodule (simple_polarft_calc) simple_polarft_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 #include "simple_local_flags.inc"
 use simple_ctf,        only: ctf
 use simple_sp_project, only: sp_project

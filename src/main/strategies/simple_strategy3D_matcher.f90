@@ -1,9 +1,11 @@
 module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_defs
+use simple_type_defs
 use simple_strategy3D_alloc ! singleton s3D
-use simple_timer
 use simple_binoris_io
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_image,                   only: image

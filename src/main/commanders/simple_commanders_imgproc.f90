@@ -1,6 +1,9 @@
 ! concrete commander: general image processing routines
 module simple_commanders_imgproc
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_type_defs
+use simple_defs
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base

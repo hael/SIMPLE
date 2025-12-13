@@ -1,7 +1,7 @@
 module simple_string_tester
+use simple_test_utils
 use simple_string
 use simple_defs
-use simple_test_utils
 implicit none
 private
 public :: run_all_string_tests

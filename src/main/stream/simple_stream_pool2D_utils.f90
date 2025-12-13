@@ -1,5 +1,11 @@
 module simple_stream_pool2D_utils
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_environment
+use simple_defs_fname
+use simple_defs_stream
+use simple_defs_conv
+use simple_defs
+use simple_type_defs
 use simple_cmdline,       only: cmdline
 use simple_euclid_sigma2, only: sigma2_star_from_iter
 use simple_parameters,    only: params_glob

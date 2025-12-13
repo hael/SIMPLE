@@ -1,6 +1,7 @@
 ! just write out a few fields into a starfile and retrieve one string
 program simple_test_starfile
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_starproject_tester
 use, intrinsic :: ISO_C_Binding, only: C_long
 use simple_starfile_wrappers

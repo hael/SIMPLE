@@ -1,10 +1,11 @@
 module simple_pspecs
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_image,    only: image
-use simple_fsc,      only: plot_fsc
-use simple_oris,     only: oris
+use simple_image, only: image
+use simple_fsc,   only: plot_fsc
+use simple_oris,  only: oris
 implicit none
 
 public :: pspecs

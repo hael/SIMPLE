@@ -1,5 +1,6 @@
 module simple_linked_list
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 
 public :: linked_list, list_iterator

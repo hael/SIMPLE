@@ -1,5 +1,7 @@
 module simple_starfile
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs_fname
 !$ use omp_lib
 use simple_starfile_wrappers
 implicit none

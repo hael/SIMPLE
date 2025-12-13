@@ -1,5 +1,4 @@
 program simple_test_masscen_nano
-! include 'simple_lib.f08'
 ! use simple_atoms
 ! implicit none
 ! character(len=*), parameter :: atmsin = '1.pdb'

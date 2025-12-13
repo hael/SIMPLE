@@ -1,5 +1,9 @@
 module simple_stream_chunk2D_utils
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_environment
+use simple_defs_fname
+use simple_defs_stream
+use simple_defs
 use simple_parameters,   only: params_glob
 use simple_cmdline,      only: cmdline
 use simple_stream_chunk, only: stream_chunk
