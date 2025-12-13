@@ -4,7 +4,8 @@
 ! and an output array of 2D images displaying the Gaussian fits.
 module simple_gauss2Dfit
 
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_image,        only: image
 implicit none
 

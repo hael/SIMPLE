@@ -1,6 +1,10 @@
 ! for checking convergence
 module simple_convergence
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_type_defs
+use simple_defs_conv
+use simple_defs_fname
+use simple_defs
 use simple_parameters, only: params_glob
 use simple_builder,    only: build_glob
 use simple_cmdline,    only: cmdline

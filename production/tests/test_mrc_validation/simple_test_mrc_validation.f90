@@ -1,5 +1,6 @@
 program simple_test_mrc_validation
-include 'simple_lib.f08' 
+use simple_core_module_api
+use simple_defs
 use simple_atoms, only: atoms
 use simple_image
 implicit none

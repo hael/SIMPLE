@@ -2,7 +2,9 @@
 module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_type_defs
 use simple_ft_expanded,          only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_patched,       only: motion_patched
 use simple_motion_align_hybrid,  only: motion_align_hybrid

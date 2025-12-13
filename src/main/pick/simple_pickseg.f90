@@ -1,7 +1,9 @@
 module simple_pickseg
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_type_defs
+use simple_defs
 use simple_parameters,   only: params_glob
 use simple_image,        only: image
 use simple_tvfilter,     only: tvfilter
@@ -15,10 +17,10 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: SHRINK   = 1.
-real,    parameter :: LAMBDA   = 3.
-logical, parameter :: L_WRITE  = .true.
-logical, parameter :: L_DEBUG  = .true.
+real,    parameter :: SHRINK  = 1.
+real,    parameter :: LAMBDA  = 3.
+logical, parameter :: L_WRITE = .true.
+logical, parameter :: L_DEBUG = .true.
 
 ! class variables
 integer      :: ldim_raw(3)

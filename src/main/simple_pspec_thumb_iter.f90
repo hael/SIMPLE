@@ -1,6 +1,8 @@
 ! iterator for pspec_thumb (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_pspec_thumb_iter
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs_fname
 use simple_image,      only: image
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: params_glob

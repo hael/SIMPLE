@@ -1,6 +1,7 @@
 ! particle picker iterator
 module simple_picker_iter
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_parameters
 use simple_picker_utils
 use simple_cmdline, only: cmdline

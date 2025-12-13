@@ -1,5 +1,6 @@
 module simple_syslib
 use simple_defs
+use simple_defs_fname
 use simple_error
 use simple_string
 use simple_string_utils

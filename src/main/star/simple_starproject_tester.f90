@@ -12,6 +12,7 @@ module simple_starproject_tester
 !=======================================================================
 use omp_lib
 use simple_cmdline
+use simple_defs
 use simple_relion
 use simple_sp_project
 use simple_starfile

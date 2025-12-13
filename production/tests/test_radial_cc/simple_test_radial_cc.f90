@@ -1,5 +1,4 @@
 program simple_test_radial_cc
-! include 'simple_lib.f08'
 ! use simple_image, only: image
 ! implicit none
 ! #include "simple_local_flags.inc"

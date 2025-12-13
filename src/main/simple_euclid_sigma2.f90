@@ -1,5 +1,8 @@
 module simple_euclid_sigma2
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_defs
+use simple_defs_fname
 use simple_parameters,       only: params_glob
 use simple_polarft_calc,     only: polarft_calc, pftc_glob
 use simple_sigma2_binfile,   only: sigma2_binfile

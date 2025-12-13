@@ -1,9 +1,6 @@
 module simple_oris_tester
-include 'simple_lib.f08'
-use simple_ori
-use simple_oris          ! provides type(oris), type(ori) and methods
-use simple_sym
-use simple_defs          ! for dp, etc.
+use simple_core_module_api
+use simple_defs
 use simple_test_utils    ! for assert_* utilities and counters
 implicit none
 private

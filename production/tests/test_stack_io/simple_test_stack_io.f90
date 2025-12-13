@@ -1,5 +1,6 @@
 program simple_test_stack_io
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_stack_io, only: stack_io
 use simple_image,    only: image
 implicit none

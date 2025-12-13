@@ -1,5 +1,7 @@
 module simple_polarops
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_defs
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_builder,          only: builder, build_glob

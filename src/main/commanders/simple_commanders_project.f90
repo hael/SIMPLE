@@ -1,11 +1,14 @@
 ! concrete commander: operations on projects (spproject) and associated files
 module simple_commanders_project
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_defs
+use simple_type_defs
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
-use simple_stream_watcher,   only: stream_watcher
+use simple_stream_watcher, only: stream_watcher
 use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io

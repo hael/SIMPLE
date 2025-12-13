@@ -1,6 +1,7 @@
 ! clustering based on a similartity matrix using affinity propagation
 module simple_aff_prop
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 
 public :: aff_prop, test_aff_prop

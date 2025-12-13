@@ -1,6 +1,7 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
 module simple_pftc_shsrch_fm
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_polarft_calc, only: pftc_glob
 use simple_parameters,       only: params_glob
 use simple_image,            only: image, image_ptr

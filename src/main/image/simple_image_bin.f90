@@ -1,7 +1,8 @@
 module simple_image_bin
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_image, only: image
 use simple_neighs
 implicit none

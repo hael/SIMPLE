@@ -3,8 +3,8 @@ module simple_binoris
 !$ use omp_lib
 use, intrinsic :: ISO_C_BINDING
 use simple_defs
-use simple_type_defs
 use simple_defs_ori
+use simple_type_defs
 use simple_fileio
 use simple_map_reduce
 use simple_ori

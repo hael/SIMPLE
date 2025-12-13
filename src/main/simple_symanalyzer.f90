@@ -1,8 +1,9 @@
 module simple_symanalyzer
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_volpft_symsrch
-use simple_image,          only: image
-use simple_projector,      only: projector
+use simple_image,            only: image
+use simple_projector,        only: projector
 use simple_simple_volinterp, only: rotvol_slim, rotvol
 implicit none
 

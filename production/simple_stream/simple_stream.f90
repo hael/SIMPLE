@@ -1,10 +1,12 @@
 ! executes the shared-memory parallelised programs in SIMPLE_STREAM
 program simple_stream
 use simple_core_module_api
+use simple_defs
+use iso_fortran_env,       only: output_unit
+use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers,   only: script_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
 use simple_user_interface, only: make_user_interface, list_stream_prgs_in_ui
-use iso_fortran_env,       only: output_unit
 use simple_stream_p01_preprocess
 use simple_stream_p02_assign_optics
 use simple_stream_p03_opening2D
@@ -69,7 +71,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('f8291ea6')
+call simple_print_git_version('483449dd')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

@@ -1,5 +1,6 @@
 program simple_test_imgfile
 use simple_core_module_api
+use simple_defs
 use simple_image,   only: image
 use simple_imgfile, only: imgfile
 implicit none

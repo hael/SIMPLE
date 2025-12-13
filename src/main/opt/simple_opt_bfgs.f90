@@ -1,7 +1,8 @@
 ! function minimization by L-BFGS (Limited memory Broyden–Fletcher–Goldfarb–Shannon optimisation)
 
 module simple_opt_bfgs
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_optimizer, only: optimizer
 implicit none
 

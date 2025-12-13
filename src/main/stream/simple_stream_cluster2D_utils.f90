@@ -1,5 +1,8 @@
 module simple_stream_cluster2D_utils
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_defs_stream
+use simple_defs
 use simple_class_frcs,         only: class_frcs
 use simple_cmdline,            only: cmdline
 use simple_euclid_sigma2,      only: sigma2_star_from_iter

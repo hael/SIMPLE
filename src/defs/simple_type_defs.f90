@@ -33,12 +33,12 @@ enum, bind(c)
 end enum
 
 ! export (to STAR) type enumeration
-enum, bind(c)
-    enumerator :: ENUM_STARTYPE = 0
-    enumerator :: MOV_STAR = 1, MIC_STAR = 2, STK_STAR = 3, PTCL_STAR = 4, CLSAVG_STAR = 5, OUT_STAR = 6
-    enumerator :: PROJINFO_STAR = 7
-end enum
-integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
+! enum, bind(c)
+!     enumerator :: ENUM_STARTYPE = 0
+!     enumerator :: MOV_STAR = 1, MIC_STAR = 2, STK_STAR = 3, PTCL_STAR = 4, CLSAVG_STAR = 5, OUT_STAR = 6
+!     enumerator :: PROJINFO_STAR = 7
+! end enum
+! integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 
 ! type for CTF parameters
 type ctfparams

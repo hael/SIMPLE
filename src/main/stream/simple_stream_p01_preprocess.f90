@@ -1,5 +1,9 @@
 module simple_stream_p01_preprocess
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_environment
+use simple_defs_fname
+use simple_defs_stream
+use simple_defs
 use simple_cmdline,              only: cmdline
 use simple_commander_base,       only: commander_base
 use simple_guistats,             only: guistats

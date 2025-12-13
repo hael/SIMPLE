@@ -1,5 +1,4 @@
 program simple_test_val_rescale_map
-! include 'simple_lib.f08' 
 ! use simple_atoms, only: atoms
 ! use simple_image
 ! implicit none

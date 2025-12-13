@@ -1,5 +1,4 @@
 program simple_test_stream
-! include 'simple_lib.f08'
 ! use simple_cmdline,              only: cmdline
 ! use simple_parameters,           only: parameters
 ! use simple_commanders_project,   only: commander_new_project

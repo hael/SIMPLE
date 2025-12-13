@@ -1,6 +1,7 @@
 ! PCA using standard SVD
 module simple_pca_svd
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_defs
 use simple_pca, only: pca
 implicit none

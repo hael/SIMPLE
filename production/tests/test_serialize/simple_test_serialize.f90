@@ -1,5 +1,6 @@
 program simple_test_serialize
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_image
 use simple_stackops
 use simple_ppca

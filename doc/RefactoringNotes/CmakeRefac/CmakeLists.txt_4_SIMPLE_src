@@ -1,0 +1,198 @@
+# SIMPLE/src/CMakeLists.txt
+
+# Platform macro for unix library
+if(APPLE)
+    add_compile_definitions(__FreeBSD__)
+else()
+    add_compile_definitions(__linux__)
+endif()
+
+# Where generated sources live
+set(SIMPLE_GEN_DIR "${CMAKE_BINARY_DIR}/lib/simple")
+file(MAKE_DIRECTORY "${SIMPLE_GEN_DIR}")
+
+# ------------------------------------------------------------------------------
+# Custom generated Fortran sources
+# ------------------------------------------------------------------------------
+
+add_custom_command(
+    OUTPUT
+        "${SIMPLE_GEN_DIR}/simple_args.f90"
+        "${SIMPLE_GEN_DIR}/simple_varlist.txt"
+    COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR}
+            "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl"
+    DEPENDS
+        "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl"
+        "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_parameters.f90"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/main"
+    COMMENT "Generating SIMPLE argument handling module"
+    VERBATIM)
+
+add_custom_command(
+    OUTPUT
+        "${SIMPLE_GEN_DIR}/simple_modules.f90"
+    COMMAND
+        echo "Creating simple_modules ..."
+        && ( echo "module simple_modules";
+             for file in ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${JPG_src} ${OPERATORS_src} ${MAIN_src}; do
+                 if [ "\${file##*.}" = "f90" ] && [ ! "\${file}" != "\${file%simple_modules*}" ]; then
+                     echo "  use \$(basename \${file} .f90)";
+                 fi;
+             done;
+             echo "contains";
+             echo "end module";
+           ) > "${SIMPLE_GEN_DIR}/simple_modules_tmp.f90"
+        && if [ ! -f "${SIMPLE_GEN_DIR}/simple_modules.f90" ]; then
+               mv "${SIMPLE_GEN_DIR}/simple_modules_tmp.f90" "${SIMPLE_GEN_DIR}/simple_modules.f90";
+           else
+               cmp --silent "${SIMPLE_GEN_DIR}/simple_modules_tmp.f90" "${SIMPLE_GEN_DIR}/simple_modules.f90" || cp "${SIMPLE_GEN_DIR}/simple_modules_tmp.f90" "${SIMPLE_GEN_DIR}/simple_modules.f90";
+               rm -f "${SIMPLE_GEN_DIR}/simple_modules_tmp.f90";
+           fi
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    COMMENT "Generating simple_modules aggregation module"
+    VERBATIM)
+
+add_custom_command(
+    OUTPUT
+        "${SIMPLE_GEN_DIR}/simple_git_dummy"  # dummy output to make CMake happy
+    COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR}
+            "${CMAKE_SOURCE_DIR}/scripts/insert_git_commit_hash.pl"
+    DEPENDS "${CMAKE_SOURCE_DIR}/scripts/insert_git_commit_hash.pl"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/main"
+    COMMENT "Inserting git commit hash"
+    VERBATIM)
+
+add_custom_target(simple_codegen ALL
+    DEPENDS
+        "${SIMPLE_GEN_DIR}/simple_args.f90"
+        "${SIMPLE_GEN_DIR}/simple_modules.f90"
+        "${SIMPLE_GEN_DIR}/simple_git_dummy")
+
+# ------------------------------------------------------------------------------
+# Source collection
+# ------------------------------------------------------------------------------
+
+file(GLOB DEFS_src      "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.[Ff][90][08]")
+file(GLOB CPLOT2D_src   "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/CPlot2D/*.cpp"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/CPlot2D/*.[Ff][90][08]")
+file(GLOB GNUFOR_src    "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/gnufor/*.[Ff][90][08]")
+file(GLOB JPG_src       "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/jpg/*.[Ff][90][08]")
+list(APPEND JPG_src
+    "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/jpg/stb_image_write.c")
+
+if(USE_LIBTIFF)
+    list(APPEND JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/tiff/libtiff_funs.c")
+endif()
+
+file(GLOB SIMPLE_src    "${CMAKE_CURRENT_SOURCE_DIR}/main/*.[Ff][90][08]"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*.[Ff][90][08]")
+file(GLOB UTILS_src     "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.[Ff][90][08]"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/utils/*/*.[Ff][90][08]")
+file(GLOB JSON_src      "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/json/*.[Ff][90][08]")
+file(GLOB NETLIB_src    "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/netlib/*.[Ff][90][08]")
+file(GLOB UNIX_src      "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/unix/src/*.[Ff][90][08]")
+file(GLOB XML_src       "${CMAKE_CURRENT_SOURCE_DIR}/extlibs/xml/*/*.[Ff][90][08]")
+file(GLOB FILEIO_src    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.[Ff][90][08]")
+list(APPEND FILEIO_src
+    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_posix.c")
+
+list(APPEND OPERATORS_src
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/interp/simple_kbinterpol_memo.c")
+
+file(GLOB STARFILE_src  "${CMAKE_CURRENT_SOURCE_DIR}/fileio/starfile/*.cpp")
+
+# main sources excluding "commander" if that pattern is still needed
+file(GLOB MAIN_src      "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*.[Ff][90][08]"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/main/*.[Ff][90][08]")
+
+set(SIMPLECORE_SOURCES
+    ${DEFS_src}
+    ${GNUFOR_src}
+    ${JSON_src}
+    ${UTILS_src}
+    ${FILEIO_src}
+    ${STARFILE_src}
+    ${CPLOT2D_src}
+    ${NETLIB_src}
+    ${XML_src}
+    ${UNIX_src}
+    ${JPG_src}
+    ${OPERATORS_src}
+    ${SIMPLE_src}
+    "${SIMPLE_GEN_DIR}/simple_args.f90"
+    "${SIMPLE_GEN_DIR}/simple_modules.f90"
+)
+
+# ------------------------------------------------------------------------------
+# Library target
+# ------------------------------------------------------------------------------
+
+add_library(SIMPLE SHARED ${SIMPLECORE_SOURCES})
+
+add_dependencies(SIMPLE simple_codegen)
+
+# Basic properties
+set_target_properties(SIMPLE PROPERTIES
+    OUTPUT_NAME         "${SIMPLELIB_NAME}"
+    VERSION             "${PROJECT_VERSION}"
+    SOVERSION           "${PROJECT_VERSION_MAJOR}"
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+target_include_directories(SIMPLE
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${SIMPLE_GEN_DIR}"
+        "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+# OpenMP / MPI / coarrays / OpenACC flags
+if(USE_OPENMP AND OpenMP_Fortran_FOUND)
+    target_link_libraries(SIMPLE PUBLIC OpenMP::OpenMP_Fortran)
+endif()
+
+if(USE_MPI AND MPI_Fortran_FOUND)
+    target_link_libraries(SIMPLE PUBLIC MPI::MPI_Fortran)
+endif()
+
+# Coarrays (simple GFortran-only hook; adjust as needed)
+if(USE_COARRAYS AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(SIMPLE PUBLIC
+        $<$<COMPILE_LANGUAGE:Fortran>:-fcoarray=single>)
+endif()
+
+# OpenACC hook (compiler-specific; example for GNU)
+if(USE_OPENACC AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(SIMPLE PUBLIC
+        $<$<COMPILE_LANGUAGE:Fortran>:-fopenacc>)
+endif()
+
+# Build-type-specific Fortran flags
+target_compile_options(SIMPLE
+    PRIVATE
+        $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:Fortran>>:-O0 -g -fcheck=all -fbacktrace>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:Fortran>>:-O3>
+        $<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:Fortran>>:-O2 -g>
+)
+
+# ------------------------------------------------------------------------------
+# Install
+# ------------------------------------------------------------------------------
+
+install(TARGETS SIMPLE
+    EXPORT SIMPLETargets
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+)
+
+install(FILES "${SIMPLE_GEN_DIR}/simple_varlist.txt"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple"
+)
+
+# Export config files so other projects can find_package(SIMPLE)
+install(EXPORT SIMPLETargets
+    FILE SIMPLETargets.cmake
+    NAMESPACE SIMPLE::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/SIMPLE"
+)

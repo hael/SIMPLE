@@ -1,5 +1,4 @@
 program simple_test_shiftsrch
-! include 'simple_lib.f08'
 ! use simple_polarft_calc,  only: polarft_calc
 ! use simple_cmdline,           only: cmdline
 ! use simple_builder,           only: builder

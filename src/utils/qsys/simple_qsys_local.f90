@@ -1,6 +1,7 @@
 ! batch-processing manager - Local system
 module simple_qsys_local
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_qsys_base, only: qsys_base
 
 implicit none

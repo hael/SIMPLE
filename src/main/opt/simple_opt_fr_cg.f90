@@ -1,6 +1,7 @@
 ! function minimization by Fletcher-Reeves conjugate gradient algorithm, translated from gsl 2.4
 module simple_opt_fr_cg
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_spec, only: opt_spec
 use simple_opt_helpers

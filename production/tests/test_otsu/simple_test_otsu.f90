@@ -1,5 +1,6 @@
 program simple_test_otsu
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 integer, parameter :: NSAMP = 300, NPEAKS = 50
 real,    parameter :: MEAN = 1, SDEV_P = 10

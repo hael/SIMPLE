@@ -1,6 +1,7 @@
 ! movie watcher for stream processing
 module simple_stream_watcher
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_progress
 implicit none
 

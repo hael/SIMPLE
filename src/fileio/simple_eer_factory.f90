@@ -1,8 +1,11 @@
 module simple_eer_factory
-include 'simple_lib.f08'
 use, intrinsic :: iso_c_binding
 !$ use omp_lib
 !$ use omp_lib_kinds
+use simple_core_module_api
+use simple_defs
+use simple_tifflib
+use simple_defs
 use simple_image, only: image
 implicit none
 

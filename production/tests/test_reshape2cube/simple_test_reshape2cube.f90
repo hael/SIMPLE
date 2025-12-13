@@ -1,5 +1,4 @@
 program simple_test_reshape2cube
-! include 'simple_lib.f08'
 ! use simple_image, only: image
 ! implicit none
 ! character(len=:), allocatable :: smpd_char

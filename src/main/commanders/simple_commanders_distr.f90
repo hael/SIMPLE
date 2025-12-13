@@ -1,6 +1,7 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
 module simple_commanders_distr
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
@@ -8,28 +9,12 @@ use simple_stack_io,       only: stack_io
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_split_pairs
-  contains
-    procedure :: execute      => exec_split_pairs
-end type commander_split_pairs
-
 type, extends(commander_base) :: commander_split
   contains
     procedure :: execute      => exec_split
 end type commander_split
 
 contains
-
-    !> for splitting calculations between pairs of objects into balanced partitions
-    subroutine exec_split_pairs( self, cline )
-        use simple_map_reduce, only: split_pairs_in_parts
-        class(commander_split_pairs), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        call params%new(cline)
-        call split_pairs_in_parts(params%nptcls, params%nparts)
-        call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_split_pairs
 
     !> split is a program for splitting of image stacks into partitions for parallel execution.
     !! This is done to reduce I/O latency

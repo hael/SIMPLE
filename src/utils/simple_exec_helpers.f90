@@ -1,5 +1,8 @@
 module simple_exec_helpers
-include 'simple_lib.f08'
+!$ use omp_lib
+!$ use omp_lib_kinds
+use simple_core_module_api
+use simple_defs
 use simple_qsys_env,   only: qsys_env
 use simple_parameters, only: parameters, params_glob
 use simple_cmdline,    only: cmdline

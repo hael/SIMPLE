@@ -1,5 +1,6 @@
 program simple_test_order_corr
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 implicit none
 type(oris)           :: os
 type(ori)            :: o

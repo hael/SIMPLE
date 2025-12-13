@@ -1,5 +1,4 @@
-program simple_test_pdb2mrc
-! include 'simple_lib.f08' 
+program simple_test_pdb2mrc 
 ! use simple_atoms, only: atoms
 ! use simple_image
 ! implicit none

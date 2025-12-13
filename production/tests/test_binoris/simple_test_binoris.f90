@@ -1,7 +1,7 @@
 program simple_test_binoris
 use simple_core_module_api
 use simple_commanders_project, only: commander_new_project
-use simple_sp_project
+use simple_cmdline,            only: cmdline
 implicit none
 type(commander_new_project) :: xnew_project
 type(oris)                  :: a1, os_peak1, os_peak2

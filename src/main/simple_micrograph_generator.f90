@@ -1,7 +1,8 @@
 module simple_micrograph_generator
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_eer_factory,          only: eer_decoder
 use simple_image,                only: image, image_ptr
 use simple_motion_correct_utils, only: correct_gain, apply_dose_weighing

@@ -7,7 +7,7 @@ use simple_pftc_shsrch_grad,    only: pftc_shsrch_grad
 use simple_strategy2D3D_common, only: set_bp_range
 implicit none
 type(parameters)         :: p
-type(polarft_calc)   :: pftc
+type(polarft_calc)       :: pftc
 type(cmdline)            :: cline
 type(builder)            :: b
 type(ori)                :: o

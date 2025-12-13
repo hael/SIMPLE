@@ -4,8 +4,10 @@
 !! (better than 8-bit PNG)
 
 module simple_jpg
-include 'simple_lib.f08'
-use,intrinsic :: iso_c_binding
+use, intrinsic :: iso_c_binding
+use simple_core_module_api
+use simple_defs
+use simple_defs_fname
 implicit none
 
 public :: jpg_img, test_jpg_export

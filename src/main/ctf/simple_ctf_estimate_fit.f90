@@ -1,5 +1,7 @@
 module simple_ctf_estimate_fit
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_type_defs
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_image,             only: image

@@ -1,12 +1,9 @@
 program simple_test_ori
-include 'simple_lib.f08'
-use simple_ori
-use simple_sym
+use simple_core_module_api
+use simple_defs
 use json_kinds
 use json_module
-use simple_chash
 use simple_sp_project
-use simple_cmdline
 use simple_commanders_project
 implicit none
 #include "simple_local_flags.inc"

@@ -1,5 +1,6 @@
 submodule (simple_polarft_calc) simple_polarft_vis
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 #include "simple_local_flags.inc"
 use gnufor2, only: gnufor_image
 implicit none

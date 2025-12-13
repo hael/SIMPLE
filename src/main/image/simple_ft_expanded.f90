@@ -2,8 +2,9 @@
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
-use simple_image,  only: image
+use simple_core_module_api
+use simple_defs
+use simple_image, only: image
 implicit none
 private
 public :: ft_expanded

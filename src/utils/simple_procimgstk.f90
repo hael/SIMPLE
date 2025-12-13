@@ -1,6 +1,7 @@
 ! stack image processing routines for SPIDER/MRC files
 module simple_procimgstk
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_image,    only: image
 use simple_stack_io, only: stack_io
 use simple_tvfilter

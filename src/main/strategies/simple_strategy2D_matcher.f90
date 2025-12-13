@@ -2,7 +2,10 @@
 module simple_strategy2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_defs
+use simple_type_defs
 use simple_builder,                only: build_glob
 use simple_cmdline,                only: cmdline
 use simple_euclid_sigma2,          only: euclid_sigma2

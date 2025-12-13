@@ -1,5 +1,9 @@
 module simple_stream_p05_sieve_cavgs
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_environment
+use simple_defs_fname
+use simple_defs_stream
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_euclid_sigma2,  only: average_sigma2_groups

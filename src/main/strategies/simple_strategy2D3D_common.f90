@@ -2,7 +2,10 @@
 module simple_strategy2D3D_common
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_type_defs
+use simple_defs_fname
+use simple_defs
 use simple_builder,           only: build_glob
 use simple_cmdline,           only: cmdline
 use simple_discrete_stack_io, only: dstack_io

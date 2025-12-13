@@ -18,6 +18,7 @@ use simple_fileio
 use simple_string
 use simple_string_utils
 use simple_syslib
+use simple_tifflib
 #ifdef USING_TIFF
 use simple_tifflib
 #define     SAMPLEFORMAT_UINT       1   /* !unsigned integer data */

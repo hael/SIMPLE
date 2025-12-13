@@ -1,5 +1,6 @@
 module simple_strategy3D_eval
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_strategy3D_utils
 use simple_strategy3D_alloc  ! singleton
 use simple_strategy3D,       only: strategy3D

@@ -1,6 +1,8 @@
 ! concrete commander: pre-processing routines
 module simple_commanders_preprocess
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs_fname
+use simple_defs
 use simple_builder,              only: builder
 use simple_cmdline,              only: cmdline
 use simple_parameters,           only: parameters, params_glob

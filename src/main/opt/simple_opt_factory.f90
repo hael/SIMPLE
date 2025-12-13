@@ -1,6 +1,7 @@
 ! factory pattern class for the SIMPLE optimisers
 module simple_opt_factory
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
 use simple_optimizer,   only: optimizer
 use simple_opt_spec,    only: opt_spec
 use simple_opt_lbfgsb,  only: opt_lbfgsb

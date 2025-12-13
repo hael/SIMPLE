@@ -1,5 +1,7 @@
 module simple_class_frcs
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_defs_fname
 use simple_fsc
 implicit none
 

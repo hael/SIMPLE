@@ -7,9 +7,7 @@ use simple_srch_sort_loc
 use simple_string
 use simple_string_utils
 implicit none
-private
 #include "simple_local_flags.inc"
-public ::  split_nobjs_even,split_pairs_in_parts
 
 contains
 

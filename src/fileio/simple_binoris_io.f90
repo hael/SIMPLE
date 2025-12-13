@@ -1,5 +1,7 @@
 module simple_binoris_io
-include 'simple_lib.f08'
+use simple_core_module_api
+use simple_defs
+use simple_type_defs
 use simple_sp_project, only: sp_project
 implicit none
 
