@@ -1,5 +1,6 @@
 program simple_test_corrs2weights
 use simple_core_module_api
+use simple_type_defs
 implicit none
 real    :: corrs(12), weights(12)
 integer :: i
