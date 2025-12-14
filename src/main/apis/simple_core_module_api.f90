@@ -3,19 +3,21 @@ module simple_core_module_api
 ! DEFINE API
 use simple_binoris,         only: binoris, binoris_seginfo
 use simple_chash,           only: chash
+use simple_class_sample_io, only: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples
 use simple_error,           only: simple_exception
 use simple_estimate_ssnr,   only: fsc2optlp, fsc2optlp_sub, gaussian_filter, fsc2boostfilter, get_resolution, mskdiam2lplimits,&
-                                 &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar
+                                 &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold
 use simple_fileio,          only: add2fbody, append2basename, arr2file, arr2txtfile, basename, del_file, del_files, fclose, file2drarr, file2rarr,&
                                  &file2rmat, file_exists, fileiochk, filepath, fname2ext, fname2format, fname_new_ext, fopen, get_fbody, get_fpath,&
                                  &move_files2dir, nlines, read_filetable, rmat2file, simple_abspath, simple_chdir, simple_chmod, simple_copy_file,&
                                  &simple_getenv, simple_list_dirs, simple_list_files, simple_list_files_regexp, simple_rename, stemname, swap_suffix,&
-                                 &wait_for_closure, simple_touch, simple_rmdir, simple_getcwd
+                                 &wait_for_closure, simple_touch, simple_rmdir, simple_getcwd, write_filetable, write_singlelineoftext, move_files_in_cwd,&
+                                 &read_exit_code
 use simple_hash,            only: hash
 use simple_is_check_assert, only: is_a_number, is_zero, is_gt_zero, is_equal, is_even, check4nans3D, check4nans2D, check4nans, assert_eq,&
                                  &is_odd, is_even
 use simple_imghead,         only: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead, find_ldim_nptcls, update_stack_nimgs
-use simple_jiffys,          only: progress_gfortran, simple_end, swap
+use simple_jiffys,          only: progress, progress_gfortran, simple_end, swap
 use simple_kbinterpol,      only: kbinterpol
 use simple_linalg,          only: eigsrt, jacobi, matinv, norm_2, svdcmp, svdfit, svd_multifit, euclid, hyp, myacos, deg2rad, rad2deg, pythag,&
                                  &eigh, arg, fit_lsq_plane, fit_straight_line, plane_from_points, projz, trace, ang2vox, vox2ang
@@ -38,11 +40,11 @@ use simple_stat,            only: avg_sdev, moment, skewness, kurtosis, pearsn, 
                                  &avg_frac_smallest, pearsn_serial, std_mean_diff, calc_stats, corrs2weights, kstwo, analyze_smat,&
                                  &dmat2smat, smat2dmat, scores2scores_percen, dists2scores_percen, merge_smats, medoid_from_smat,&
                                  &medoid_from_dmat, median, median_nocopy, conv2rank_weights, rank_sum_weights, rank_centroid_weights,&
-                                 &rank_exponent_weights, rank_inverse_weights, z_scores, mad_gau
+                                 &rank_exponent_weights, rank_inverse_weights, z_scores, mad_gau, robust_scaling
 use simple_string,          only: string
 use simple_string_utils,    only: str2format, str2int, str2real, real2str, findloc_str, spaces, char_is_a_letter, char_is_a_number,&
                                &str_has_substr, list_of_ints2arr, int2str, int2str_pad, map_str_nrs, to_cstring, lex_sort, upperCase,&
-                               &str_pad, lowercase, parsestr, split
+                               &str_pad, lowercase, parsestr, split, split_str
 use simple_sym,             only: sym
 use simple_syslib,          only: is_open, syslib_symlink, exec_cmdline, simple_mkdir, get_process_id, find_next_int_dir_prefix, dir_exists
 use simple_timer,           only: timer_int_kind, tic, toc, simple_gettime, cast_time_char
@@ -52,19 +54,22 @@ use simple_timer,           only: timer_int_kind, tic, toc, simple_gettime, cast
 public :: binoris, binoris_seginfo
 ! chash
 public :: chash
+! class_sample_io
+public :: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples
 ! edges_sqwins
 public :: cosedge, cosedge_inner, hardedge, hardedge_inner, sqwin_1d, sqwin_2d, sqwin_3d
 ! error
 public :: simple_exception
 ! estimate_ssnr
 public :: fsc2optlp, fsc2optlp_sub, gaussian_filter, fsc2boostfilter, get_resolution, mskdiam2lplimits,&
-         &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar
+         &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold
 ! fileio
 public :: add2fbody, append2basename, arr2file, arr2txtfile, basename, del_file, del_files, fclose, file2drarr, file2rarr,&
          &file2rmat, file_exists, fileiochk, filepath, fname2ext, fname2format, fname_new_ext, fopen, get_fbody, get_fpath,&
          &move_files2dir, nlines, read_filetable, rmat2file, simple_abspath, simple_chdir, simple_chmod, simple_copy_file,&
          &simple_getenv, simple_list_dirs, simple_list_files, simple_list_files_regexp, simple_rename, stemname, swap_suffix,&
-         &wait_for_closure, simple_touch, simple_rmdir, simple_getcwd
+         &wait_for_closure, simple_touch, simple_rmdir, simple_getcwd, write_filetable, write_singlelineoftext, move_files_in_cwd,&
+         &read_exit_code
 ! hash
 public :: hash
 ! is_check_assert
@@ -73,7 +78,7 @@ public :: is_a_number, is_zero, is_gt_zero, is_equal, is_even, check4nans3D, che
 ! imghead
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead, find_ldim_nptcls, update_stack_nimgs
 ! jiffys
-public :: progress_gfortran, simple_end, swap
+public :: progress, progress_gfortran, simple_end, swap
 ! kbinterpol
 public :: kbinterpol
 ! linalg
@@ -108,13 +113,13 @@ public :: avg_sdev, moment, skewness, kurtosis, pearsn, normalize, normalize_min
          &avg_frac_smallest, pearsn_serial, std_mean_diff, calc_stats, corrs2weights, kstwo, analyze_smat,&
          &dmat2smat, smat2dmat, scores2scores_percen, dists2scores_percen, merge_smats, medoid_from_smat,&
          &medoid_from_dmat, median, median_nocopy, conv2rank_weights, rank_sum_weights, rank_centroid_weights,&
-         &rank_exponent_weights, rank_inverse_weights, z_scores, mad_gau
+         &rank_exponent_weights, rank_inverse_weights, z_scores, mad_gau, robust_scaling
 ! string
 public :: string
 ! string_utils
 public :: str2format, str2int, str2real, real2str, findloc_str, spaces, char_is_a_letter, char_is_a_number,&
          &str_has_substr, list_of_ints2arr, int2str, int2str_pad, map_str_nrs, to_cstring, lex_sort, upperCase,&
-         &str_pad, lowercase, parsestr, split
+         &str_pad, lowercase, parsestr, split, split_str
 ! sym
 public :: sym
 ! syslib

@@ -3,7 +3,8 @@ use simple_core_module_api
 use simple_defs
 use json_kinds
 use json_module
-use simple_sp_project
+use simple_cmdline,    only: cmdline
+use simple_sp_project, only: sp_project
 use simple_commanders_project
 implicit none
 #include "simple_local_flags.inc"
