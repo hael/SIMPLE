@@ -6,7 +6,8 @@ use simple_chash,           only: chash
 use simple_class_sample_io, only: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples
 use simple_error,           only: simple_exception
 use simple_estimate_ssnr,   only: fsc2optlp, fsc2optlp_sub, gaussian_filter, fsc2boostfilter, get_resolution, mskdiam2lplimits,&
-                                 &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold
+                                 &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold,&
+                                 &calc_dose_weights
 use simple_fileio,          only: add2fbody, append2basename, arr2file, arr2txtfile, basename, del_file, del_files, fclose, file2drarr, file2rarr,&
                                  &file2rmat, file_exists, fileiochk, filepath, fname2ext, fname2format, fname_new_ext, fopen, get_fbody, get_fpath,&
                                  &move_files2dir, nlines, read_filetable, rmat2file, simple_abspath, simple_chdir, simple_chmod, simple_copy_file,&
@@ -25,7 +26,7 @@ use simple_magic_boxes,     only: magic_pftsz, find_larger_magic_box, find_magic
 use simple_map_reduce,      only: split_nobjs_even
 use simple_math,            only: otsu, pixels_dist, equispaced_vals, put_last, bounds_from_mask3D, elim_dup, mode, sortmeans,&
                                  &quantize_vec_serial, quantize_vec, quadri, create_hist_vector, round2even, round2odd, rotmat2d, gauwfun,&
-                                 &gaussian1D, gaussian2D, gaussian3D, shft, cross
+                                 &gaussian1D, gaussian2D, gaussian3D, shft, cross, get_pixel_pos
 use simple_math_ft,         only: csq_fast, csq, calc_fourier_index, calc_graphene_mask, calc_lowpass_lim, cyci_1d, cyci_1d_static,&
                                  &fdim, get_find_at_res, get_find_at_crit, get_resarr, mycabs, phase_angle, resang
 use simple_nrtxtfile,       only: nrtxtfile
@@ -47,7 +48,8 @@ use simple_string_utils,    only: str2format, str2int, str2real, real2str, findl
                                &str_has_substr, list_of_ints2arr, int2str, int2str_pad, map_str_nrs, to_cstring, lex_sort, upperCase,&
                                &str_pad, lowercase, parsestr, split, split_str
 use simple_sym,             only: sym
-use simple_syslib,          only: is_open, syslib_symlink, exec_cmdline, simple_mkdir, get_process_id, find_next_int_dir_prefix, dir_exists
+use simple_syslib,          only: is_open, syslib_symlink, exec_cmdline, simple_mkdir, get_process_id, find_next_int_dir_prefix, dir_exists,&
+                                 &simple_file_stat
 use simple_timer,           only: timer_int_kind, tic, toc, simple_gettime, cast_time_char
 
 ! PUBLICIZE API
@@ -63,7 +65,8 @@ public :: cosedge, cosedge_inner, hardedge, hardedge_inner, sqwin_1d, sqwin_2d, 
 public :: simple_exception
 ! estimate_ssnr
 public :: fsc2optlp, fsc2optlp_sub, gaussian_filter, fsc2boostfilter, get_resolution, mskdiam2lplimits,&
-         &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold
+         &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold,&
+         &calc_dose_weights
 ! fileio
 public :: add2fbody, append2basename, arr2file, arr2txtfile, basename, del_file, del_files, fclose, file2drarr, file2rarr,&
          &file2rmat, file_exists, fileiochk, filepath, fname2ext, fname2format, fname_new_ext, fopen, get_fbody, get_fpath,&
@@ -92,7 +95,7 @@ public :: split_nobjs_even
 ! math
 public :: otsu, pixels_dist, equispaced_vals, put_last, bounds_from_mask3D, elim_dup, mode, sortmeans,&
          &quantize_vec_serial, quantize_vec, quadri, create_hist_vector, round2even, round2odd, rotmat2d, gauwfun,&
-         &gaussian1D, gaussian2D, gaussian3D, shft, cross
+         &gaussian1D, gaussian2D, gaussian3D, shft, cross, get_pixel_pos
 ! nrtxtfile
 public :: nrtxtfile
 ! math_ft
@@ -125,7 +128,8 @@ public :: str2format, str2int, str2real, real2str, findloc_str, spaces, char_is_
 ! sym
 public :: sym
 ! syslib
-public :: is_open, syslib_symlink, exec_cmdline, simple_mkdir, get_process_id, find_next_int_dir_prefix, dir_exists
+public :: is_open, syslib_symlink, exec_cmdline, simple_mkdir, get_process_id, find_next_int_dir_prefix, dir_exists,&
+            &simple_file_stat
 ! timer
 public :: timer_int_kind, tic, toc, simple_gettime, cast_time_char
 
