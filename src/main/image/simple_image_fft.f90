@@ -1,10 +1,7 @@
 submodule (simple_image) simple_image_fft
-!$ use omp_lib
-!$ use omp_lib_kinds
-include  'simple_lib.f08'
-#include "simple_local_flags.inc"
-use, intrinsic :: iso_c_binding
 implicit none
+#include "simple_local_flags.inc"
+
 contains
 
     !===========================

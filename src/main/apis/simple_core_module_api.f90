@@ -35,7 +35,8 @@ use simple_ran_tabu,        only: ran_tabu
 use simple_rnd,             only: ran3arr, gasdev, greedy_sampling, seed_rnd, ran3, irnd_uni, irnd_uni_pair, shcloc, rnd_inds, mnorm_smp,&
                                  &multinomal
 use simple_edges_sqwins,    only: cosedge, cosedge_inner, hardedge, hardedge_inner, sqwin_1d, sqwin_2d, sqwin_3d
-use simple_srch_sort_loc,   only: find, hpsort, locate, reverse, maxnloc, min3, minnloc, scores2order, dists2order, mask2inds, reorder
+use simple_srch_sort_loc,   only: find, hpsort, locate, reverse, maxnloc, min3, minnloc, scores2order, dists2order, mask2inds, reorder, selec,&
+                                 &reverse_f
 use simple_stat,            only: avg_sdev, moment, skewness, kurtosis, pearsn, normalize, normalize_minmax, merge_dmats,&
                                  &avg_frac_smallest, pearsn_serial, std_mean_diff, calc_stats, corrs2weights, kstwo, analyze_smat,&
                                  &dmat2smat, smat2dmat, scores2scores_percen, dists2scores_percen, merge_smats, medoid_from_smat,&
@@ -107,7 +108,8 @@ public :: ran_tabu
 public :: ran3arr, gasdev, greedy_sampling, seed_rnd, ran3, irnd_uni, irnd_uni_pair, shcloc, rnd_inds, mnorm_smp,&
          &multinomal
 ! srch_sort_loc
-public :: find, hpsort, locate, reverse, maxnloc, min3, minnloc, scores2order, dists2order, mask2inds, reorder
+public :: find, hpsort, locate, reverse, maxnloc, min3, minnloc, scores2order, dists2order, mask2inds, reorder, selec,&
+         &reverse_f
 ! stat
 public :: avg_sdev, moment, skewness, kurtosis, pearsn, normalize, normalize_minmax, merge_dmats,&
          &avg_frac_smallest, pearsn_serial, std_mean_diff, calc_stats, corrs2weights, kstwo, analyze_smat,&

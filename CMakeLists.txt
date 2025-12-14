@@ -10,12 +10,16 @@ project(SIMPLE
         LANGUAGES Fortran C CXX)
 
 # OPTIONS
+# Always build shared libs (no static)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared libraries only" FORCE)
+
+
 option(USE_AFM                     "Use AFM support" OFF )
 option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
 option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
 option(USE_LIBTIFF                 "Use libtiff." ON)
 option(BUILD_TESTS                 "Build the test examples." ON)
-option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
+# option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
 option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." OFF)
 option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
 option(GUI                         "Install the GUI." ON)

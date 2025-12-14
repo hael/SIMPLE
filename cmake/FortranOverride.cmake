@@ -231,8 +231,11 @@ endif()
 # Bring in helper functions for dealing with CACHE INTERNAL variables
 include(CacheInternalHelpers)
 
+# Always build shared libs (no static)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared libraries only" FORCE)
+
 # We want to create static libraries
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build the simple library as shared or static (default).")
+# set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build the simple library as shared or static (default).")
 include(GNUInstallDirs)
 if("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})

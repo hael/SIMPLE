@@ -49,17 +49,8 @@ file(GLOB MAIN_src     "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*(^commander)*.[Ff][9
 # add the simple_args module to SIMPLE_src
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
-  "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   )
   list(APPEND SIMPLECORELIB ${DEFS_src} ${GNUFOR_src} ${JSON_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${CPLOT2D_src} ${NETLIB_src} ${XML_src} ${UNIX_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
-
-add_custom_target(simple_modules
-  COMMAND  echo Creating simple_module \; ( echo module simple_modules\; for file in ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${JPG_src} ${OPERATORS_src} ${MAIN_src}\; do if \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;fi\;done\;echo contains\;echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90
-  COMMAND if \\[ ! -f ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90 \\]\;then mv ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90 ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90\;else cmp --silent ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90 ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90 || cp ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90 ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90\; rm -f  ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90\;fi
-  BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  USES_TERMINAL
-  )
 
   if(BUILD_SHARED_LIBS)
     add_library(${SIMPLELIB}  ${SIMPLECORELIB})
@@ -67,7 +58,7 @@ add_custom_target(simple_modules
     add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
   endif()
 
-add_dependencies(${SIMPLELIB} simple_args simple_git simple_modules)
+add_dependencies(${SIMPLELIB} simple_args simple_git)
 set_target_properties(${SIMPLELIB}
   PROPERTIES
   LINKER_LANGUAGE Fortran

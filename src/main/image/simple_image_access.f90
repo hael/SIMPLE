@@ -1,9 +1,7 @@
 submodule (simple_image) simple_image_access
-!$ use omp_lib
-!$ use omp_lib_kinds
-include  'simple_lib.f08'
-#include "simple_local_flags.inc"
 implicit none
+#include "simple_local_flags.inc"
+
 contains
 
     !===========================
