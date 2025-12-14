@@ -33,7 +33,6 @@ option(USE_OPENMP   "Use OpenMP for parallelisation" ON)
 option(USE_MPI      "Use MPI for parallelisation" OFF)          # keep, but off by default
 option(USE_COARRAYS "Enable Fortran coarrays (GFortran only)" OFF)
 option(USE_OPENACC  "Enable OpenACC (where supported)" OFF)
-
 option(BUILD_TESTS  "Build the test examples" ON)
 option(BUILD_DOCS   "Build docs (manuals, Doxygen)" OFF)
 

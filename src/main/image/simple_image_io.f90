@@ -1,11 +1,7 @@
 submodule (simple_image) simple_image_io
-!$ use omp_lib
-!$ use omp_lib_kinds
-include  'simple_lib.f08'
-#include "simple_local_flags.inc"
-use simple_imgfile, only: imgfile
-use gnufor2
 implicit none
+#include "simple_local_flags.inc"
+
 contains
 
     !===========================

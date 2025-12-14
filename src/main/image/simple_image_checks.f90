@@ -1,5 +1,7 @@
 submodule (simple_image) simple_image_checks
-  implicit none
+implicit none
+#include "simple_local_flags.inc"
+
 contains
 
     module pure function exists( self ) result( is )

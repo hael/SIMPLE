@@ -1,9 +1,7 @@
 submodule (simple_image) simple_image_norm
-!$ use omp_lib
-!$ use omp_lib_kinds
-include  'simple_lib.f08'
-#include "simple_local_flags.inc"
 implicit none
+#include "simple_local_flags.inc"
+
 contains
 
     module subroutine scale_pixels(self, new_range, ssc, oold_range)
