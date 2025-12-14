@@ -1,222 +1,137 @@
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-include(FortranOverride)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(SIMPLE
-        VERSION 3.0.0
-        DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://github.com/hael/SIMPLE)"
-        HOMEPAGE_URL "https://github.com/hael/SIMPLE"
-        LANGUAGES Fortran C CXX)
+    VERSION 3.0.0
+    DESCRIPTION "SIMPLE cryo-EM image processing"
+    HOMEPAGE_URL "https://github.com/hael/SIMPLE"
+    LANGUAGES Fortran C CXX)
 
-# OPTIONS
-# Always build shared libs (no static)
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared libraries only" FORCE)
+# CMake modules path
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
+# Build options
+option(USE_OPENMP "Use OpenMP for parallelization" ON)
+option(USE_OPENACC "Use OpenACC for GPU acceleration" OFF)
+option(USE_COARRAYS "Use Fortran coarrays for parallelization" OFF)
+option(USE_MPI "Use MPI for parallelization" OFF)
+option(USE_LIBTIFF "Use libtiff library" ON)
+option(BUILD_TESTS "Build test executables" ON)
+option(BUILD_DOCS "Build documentation" OFF)
+option(INSTALL_GUI "Install GUI components" ON)
 
-option(USE_AFM                     "Use AFM support" OFF )
-option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
-option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
-option(USE_LIBTIFF                 "Use libtiff." ON)
-option(BUILD_TESTS                 "Build the test examples." ON)
-# option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
-option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." OFF)
-option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
-option(GUI                         "Install the GUI." ON)
-option(BUILD_GUI                   "Build single user GUI from source." OFF)
-option(NICE                        "Install NICE." OFF)
-option(NICE_FQDN                   "Set NICE server fqdn else fqdn of compiling node is used." OFF)
-option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
-OPTION(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
-OPTION(USE_PROFILING               "Enable symbol generation without debug support." OFF)
-option(USE_LINK_TIME_OPTIMISATION  "Enable link-time optimization." OFF)
+# Always build shared library (as requested)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared library" FORCE)
 
-set(EXTRA_LIBS "")
-set(NUM_JOBS 1)
-include(ProcessorCount)
-ProcessorCount(NUM_JOBS)
-
-set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend. ")
-set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-
-# Define the main targets
-# Have the .mod files placed in the lib folder
-include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
-set(EXECUTABLE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_BINDIR}")
-set(LIBRARY_OUTPUT_DIRECTORY "${CMAKE_INSTALL_LIBDIR}")
-set(SCRIPTS_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}/scripts")
-
-# Define the executable names
-set(SIMPLE_EXE simple_exec)
-set(SINGLE_EXE single_exec)
-set(STREAM_EXE simple_stream)
-set(SIMPLE_PRIVATE_EXE simple_private_exec)
-# Define the library name lib<name>.so
-set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
-
-# Define some directories
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
-include_directories(${CMAKE_BINARY_DIR}/lib/simple)
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-# INCLUDES
-include(CheckIncludeFiles)
-include(SimpleFortranOptions)
-
-############################################################
-#
-# Add definition macros unique to compilation
-#
-############################################################
-add_definitions("-DBUILD_NAME=\"${BUILD_NAME}\"")
-add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
-# use _DEBUG since DEBUG or debug is used as a variable in some files
-# _DEBUG is defined by Intel Fortran on Windows
-if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
-  add_definitions("-D_DEBUG")
+# Installation directories
+include(GNUInstallDirs)
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Installation prefix" FORCE)
 endif()
 
-#   cmake_add_fortran_subdirectory(
-#    ${SRC}                  # name of subdirectory
-#    PROJECT libSIMPLE       # project name in subdir top CMakeLists.txt
-#    ARCHIVE_DIR ${LIB}      # dir where project places .lib files
-#    RUNTIME_DIR ${LIB}      # dir where project places .dll files
-#    LIBRARIES <lib>         # names of library targets to import
-#    LINK_LIBRARIES          # link interface libraries for LIBRARIES
-#     [LINK_LIBS ${FFTW_LIBRARIES} <dep>...]...
-#    CMAKE_COMMAND_LINE ...  # extra command line flags to pass to cmake
-#    NO_EXTERNAL_INSTALL     # skip installation of external project
-#    )
+# Fortran module directory
+set(CMAKE_Fortran_MODULE_DIRECTORY "${PROJECT_BINARY_DIR}/modules")
+include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
 
-# CREATE libSIMPLE<VERSION>
-add_subdirectory(src lib)
-list(APPEND EXTRA_LIBS
-  ${SIMPLELIB}
-  ${CMAKE_THREAD_LIBS_INIT}
-  ${EXTRA_LIBS})
-link_directories(lib)
-message(STATUS "EXTRA_LIBS ${EXTRA_LIBS}")
+# Git version information
+set(SIMPLE_GIT_VERSION "not known")
+if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} describe --abbrev=8 --always
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            OUTPUT_VARIABLE SIMPLE_GIT_VERSION
+            ERROR_QUIET
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        set(SIMPLE_GIT_VERSION "git${SIMPLE_GIT_VERSION}")
+    endif()
+else()
+    set(SIMPLE_GIT_VERSION "-${PROJECT_VERSION}")
+endif()
 
-# ADD SCRIPTS
-# The script folder contains some handy perl scripts for running SIMPLE
+message(STATUS "Git version: ${SIMPLE_GIT_VERSION}")
+
+# Generate SimpleGitVersion.h
+configure_file(
+    "${CMAKE_SOURCE_DIR}/cmake/Modules/GitVersion.h.in"
+    "${CMAKE_BINARY_DIR}/lib/simple/SimpleGitVersion.h"
+    @ONLY
+)
+
+# Include the generated header location
+include_directories("${CMAKE_BINARY_DIR}/lib/simple")
+
+# Compiler options and flags
+include(CompilerOptions)
+
+# Find dependencies
+include(Dependencies)
+
+# Build targets
+set(SIMPLELIB "SIMPLE${PROJECT_VERSION}")
+
+# Add source directory - builds the library
+add_subdirectory(src)
+
+# Add executables
+add_subdirectory(production)
+
+# Add scripts
 add_subdirectory(scripts)
 
-# INSTALL NICE
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/nice)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nice)
+# Optional subdirectories
+if(EXISTS "${CMAKE_SOURCE_DIR}/nice" AND INSTALL_GUI)
+    add_subdirectory(nice)
 endif()
 
-# INSTALL GUI
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-  add_subdirectory(gui ${CMAKE_INSTALL_BINDIR}/gui)
+if(EXISTS "${CMAKE_SOURCE_DIR}/gui" AND INSTALL_GUI)
+    add_subdirectory(gui)
 endif()
 
-# STATIC LIBRARIES
-# Try to search first static libraries
-if(NOT ${BUILD_SHARED_LIBS})
-  set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_FIND_LIBRARY_SUFFIXES} .a")
+if(BUILD_DOCS AND EXISTS "${CMAKE_SOURCE_DIR}/doc")
+    add_subdirectory(doc)
 endif()
 
-# Add a distclean target to the Makefile
-add_custom_target(distclean
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/distclean.cmake
-  )
-
-# here we save a version file
-set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECT_NAME}ConfigVersion.cmake")
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
-
-# modules / depends
-FILE(GLOB_RECURSE SIMPLE_CMAKE_FILES
-  LIST_DIRECTORIES false
-  RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
-list(REMOVE_DUPLICATES SIMPLE_CMAKE_FILES)
-INSTALL(
-  FILES ${SIMPLE_CMAKE_FILES}
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
-  CONFIGURATIONS DEBUG
-  COMPONENT dev)
-
-message( STATUS "Set runtime variables. ")
-if(NOT BUILD_SHARED_LIBS)
-  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
-  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
-else()
-  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.sharedtemplate"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
-  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.sharedtemplate"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
-endif()
-install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc
-  DESTINATION ${CMAKE_INSTALL_PREFIX}
-  CONFIGURATIONS DEBUG|RELEASE
-  PERMISSIONS   OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
-  )
-
-if(${BUILD_DOCS})
-
-  #
-  # User manual and tutorial
-  #
-  add_subdirectory(doc)
-
-  #
-  # Doxygen
-  #
-  option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation." ON)
-  if (ENABLE_DOXYGEN)
-    add_custom_target(doc
-      ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMENT "Generating API documentation with Doxygen." VERBATIM
-      )
-    include(UseDoxygen OPTIONAL)
-    # add_doxygen(
-    #     docs
-    #     INPUT
-    #         "${CMAKE_SOURCE_DIR}/src"
-    #     STRIP_FROM_PATH
-    #         "${CMAKE_SOURCE_DIR}/src/inc"
-    #     STRIP_FROM_INC_PATH
-    #         "${CMAKE_SOURCE_DIR}/src/inc"
-    #     EXCLUDE_PATTERNS
-    #         */gnufor2/*
-    #     EXCLUDE_SYMBOLS
-    #         *debug*
-    #         *verbose*
-    #     ALL
-    # )
-  endif()
+# Testing
+if(BUILD_TESTS)
+    enable_testing()
+    add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 endif()
 
+# Generate environment setup scripts
+configure_file(
+    "${CMAKE_SOURCE_DIR}/scripts/add2.bashrc.sharedtemplate"
+    "${CMAKE_BINARY_DIR}/add2.bashrc"
+    @ONLY
+)
+configure_file(
+    "${CMAKE_SOURCE_DIR}/scripts/add2.tcshrc.sharedtemplate"
+    "${CMAKE_BINARY_DIR}/add2.tcshrc"
+    @ONLY
+)
 
-if(VERBOSE) #only for the fool-hardy
-  OPTION(USE_FAST_MATH_OPTIMISATION  "Optimize code for fastmath." OFF)
-  OPTION(USE_PROFILE_OPTIMISATION    "Optimize code for PFO. (GNU: -fpfo )." OFF)
-  OPTION(USE_AUTO_PARALLELISE        "Optimize code for parallel systems. [Intel and PGI only]." OFF)
-  OPTION(USE_AGGRESSIVE_OPTIMISATION "Flags for aggressive optimization level. Unroll all loops and inline functions."  OFF)
-  option(CPACK_GENERATOR             "Enable build of distribution packages using CPack." TGZ)
+install(FILES
+    "${CMAKE_BINARY_DIR}/add2.bashrc"
+    "${CMAKE_BINARY_DIR}/add2.tcshrc"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+)
 
-  #
-  # CPack
-  #
-  option(CPACK_GENERATOR "Enable build of distribution packages using CPack." OFF)
-  include(SimplePackage)
-  ## Debugging CMAKE
-  include(CMakeGraphVizOptions)
-endif()
-
-# CTest
-enable_testing()
-# emulate GNU Autotools `make check`
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
-
-# ADD PRODUCTION EXECUTABLES
-# The source for the SIMPLE binary and have it placed in the bin folder
-add_subdirectory(production bin)
-
-#only for debugging
-if(VERBOSE)
-  include(GenericLogging)
-endif()
-
-# Add message at end of installation
-add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
+# Summary
+message(STATUS "========================================")
+message(STATUS "SIMPLE Configuration Summary")
+message(STATUS "========================================")
+message(STATUS "Version:          ${PROJECT_VERSION}")
+message(STATUS "Build type:       ${CMAKE_BUILD_TYPE}")
+message(STATUS "Install prefix:   ${CMAKE_INSTALL_PREFIX}")
+message(STATUS "Fortran compiler: ${CMAKE_Fortran_COMPILER_ID} ${CMAKE_Fortran_COMPILER_VERSION}")
+message(STATUS "C compiler:       ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
+message(STATUS "C++ compiler:     ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+message(STATUS "----------------------------------------")
+message(STATUS "OpenMP:           ${USE_OPENMP}")
+message(STATUS "OpenACC:          ${USE_OPENACC}")
+message(STATUS "Coarrays:         ${USE_COARRAYS}")
+message(STATUS "MPI:              ${USE_MPI}")
+message(STATUS "LIBTIFF:          ${USE_LIBTIFF}")
+message(STATUS "Build tests:      ${BUILD_TESTS}")
+message(STATUS "========================================")

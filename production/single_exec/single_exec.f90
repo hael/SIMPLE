@@ -7,6 +7,7 @@ use simple_cmdline,               only: cmdline, cmdline_err
 use simple_commanders_imgproc,    only: commander_estimate_diam
 use simple_commanders_preprocess, only: commander_map_cavgs_selection
 use simple_commanders_sim,        only: commander_simulate_atoms
+use simple_jiffys,                only: simple_print_git_version, simple_print_timer
 use simple_exec_helpers,          only: script_exec, update_job_descriptions_in_project, restarted_exec
 use simple_user_interface,        only: make_user_interface, list_single_prgs_in_ui
 use simple_commanders_atoms
@@ -226,7 +227,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('71de451b')
+    call simple_print_git_version('d11aa76a')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
