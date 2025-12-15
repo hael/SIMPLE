@@ -1,7 +1,6 @@
 ! command line parsersimple_cmdline
 module simple_cmdline
 use simple_core_module_api
-use simple_defs
 use simple_user_interface
 use simple_private_prgs 
 use simple_args, only: args

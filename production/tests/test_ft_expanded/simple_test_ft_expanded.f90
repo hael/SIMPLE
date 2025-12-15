@@ -15,7 +15,6 @@
 !------------------------------------------------------------------------------
 program simple_test_ft_expanded
 use simple_core_module_api
-use simple_defs
 use simple_ft_expanded_tester
 implicit none
 call seed_rnd

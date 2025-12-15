@@ -1,13 +1,10 @@
 ! iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_motion_correct_iter
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
-use simple_type_defs
-use simple_image,        only: image
-use simple_cmdline,      only: cmdline
-use simple_parameters,   only: params_glob
-use simple_stackops,     only: frameavg_stack
+use simple_image,      only: image
+use simple_cmdline,    only: cmdline
+use simple_parameters, only: params_glob
+use simple_stackops,   only: frameavg_stack
 use simple_motion_correct
 implicit none
 

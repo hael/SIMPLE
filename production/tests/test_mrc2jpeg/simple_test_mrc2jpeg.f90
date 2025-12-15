@@ -1,8 +1,7 @@
 program simple_test_mrc2jpeg
 use simple_core_module_api
-use simple_defs
-use simple_image
 use simple_jpg
+use simple_image,      only: image
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 implicit none

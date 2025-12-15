@@ -3,10 +3,8 @@
 ! The second implementation includes sorting by correlation
 ! and an output array of 2D images displaying the Gaussian fits.
 module simple_gauss2Dfit
-
 use simple_core_module_api
-use simple_defs
-use simple_image,        only: image
+use simple_image, only: image
 implicit none
 
 public  :: batch_gauss2Dfit, gauss2Dfit

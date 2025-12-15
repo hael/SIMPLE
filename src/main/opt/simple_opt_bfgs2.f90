@@ -1,7 +1,6 @@
 ! function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)
 module simple_opt_bfgs2
 use simple_core_module_api
-use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
 implicit none

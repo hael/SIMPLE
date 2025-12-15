@@ -1,6 +1,5 @@
 program simple_test_ptcl_center
 use simple_core_module_api
-use simple_defs
 use simple_parameters, only: parameters
 use simple_image,      only: image
 use simple_projector,  only: projector

@@ -1,8 +1,5 @@
 module simple_mini_stream_utils
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
-use simple_type_defs
 use simple_micproc
 use simple_sp_project,  only: sp_project
 use simple_picksegdiam, only: picksegdiam

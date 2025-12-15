@@ -2,8 +2,6 @@ program simple_test_insert_plane
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
-use simple_type_defs
 use simple_cmdline,    only: cmdline
 use simple_builder,    only: builder
 use simple_image,      only: image

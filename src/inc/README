@@ -1,6 +1,0 @@
-The SIMPLE core modules in the simple_lib.f08 header/include files are necessary for baseline
-
-Important note: files in this folder, defs, utils, or fileio should reference only other files in these
-folders and must not contain the `use simple_core_module_api
-use simple_defs` statement to avoid
-any circular dependencies.

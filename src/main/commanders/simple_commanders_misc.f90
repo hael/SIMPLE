@@ -1,9 +1,6 @@
 ! concrete commander: miscallenaous routines
 module simple_commanders_misc
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
-use simple_type_defs
 include "starfile_enum.inc"
 use simple_binoris_io
 use simple_cmdline,          only: cmdline

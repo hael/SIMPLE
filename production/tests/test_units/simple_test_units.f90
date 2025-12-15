@@ -1,6 +1,5 @@
 program simple_test_units
 use simple_core_module_api
-use simple_defs
 use simple_imghead, only: test_imghead
 use simple_oris,    only: test_oris
 ! core library tester modules generated with help from chatgpt

@@ -1,26 +1,6 @@
 module simple_stream_p06_pool2D
-use simple_core_module_api
-use simple_defs_environment
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_euclid_sigma2,  only: average_sigma2_groups, sigma2_star_from_iter
-use simple_parameters,     only: parameters
-use simple_sp_project,     only: sp_project
-use simple_gui_utils
-use simple_nice
-use simple_progress
-use simple_qsys_funs
-use simple_rec_list
-use simple_stream2D_state
-use simple_stream_cluster2D_utils
-use simple_stream_communicator
+use simple_stream_module_api
 use simple_stream_pool2D_utils
-use simple_stream_utils
-use simple_stream_watcher
-use json_kinds
 implicit none
 
 public :: stream_p06_pool2D

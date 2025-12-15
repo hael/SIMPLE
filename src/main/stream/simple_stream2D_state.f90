@@ -1,7 +1,5 @@
 module simple_stream2D_state
 use simple_core_module_api
-use simple_defs_stream
-use simple_defs
 use simple_cmdline,            only: cmdline
 use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project

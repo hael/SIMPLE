@@ -1,6 +1,5 @@
 program simple_test_bounds_from_mask3D
 use simple_core_module_api
-use simple_defs
 use simple_math,  only: bounds_from_mask3D
 use simple_image, only: image
 implicit none

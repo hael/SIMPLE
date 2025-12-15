@@ -1,8 +1,6 @@
 program simple_test_sym
 use simple_core_module_api
-use simple_defs
 use simple_sym, only: sym_tester
-use simple_timer
 implicit none
 type(sym)                     :: se
 integer                       :: nsubgrps

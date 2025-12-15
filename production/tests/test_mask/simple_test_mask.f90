@@ -1,6 +1,5 @@
 program simple_test_mask
 use simple_core_module_api
-use simple_defs
 use simple_image,     only: image
 use simple_image_bin, only: image_bin
 implicit none

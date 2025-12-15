@@ -6,10 +6,7 @@ module simple_nanoparticle_utils
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs_fname
 use simple_defs_atoms
-use simple_defs
-use simple_type_defs
 use simple_qr_solve
 use simple_atoms, only: atoms
 use simple_image, only: image

@@ -1,7 +1,6 @@
 ! concrete strategy3D: refinement
 module simple_strategy3D_snhc_smpl
 use simple_core_module_api
-use simple_defs
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
 use simple_parameters,       only: params_glob
@@ -9,7 +8,7 @@ use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
 use simple_eul_prob_tab2D,   only: neighfrac2nsmpl, power_sampling
-use simple_polarft_calc, only: pftc_glob
+use simple_polarft_calc,     only: pftc_glob
 use simple_decay_funs,       only: extremal_decay
 implicit none
 

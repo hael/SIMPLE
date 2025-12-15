@@ -1,6 +1,5 @@
 module simple_decay_funs
 use simple_core_module_api
-use simple_defs
 implicit none
 
 public :: calc_update_frac, calc_update_frac_dyn, nsampl_decay, inv_nsampl_decay, calc_nsampl_fromto

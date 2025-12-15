@@ -1,6 +1,5 @@
 module simple_dock_vols
 use simple_core_module_api
-use simple_defs
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_image,            only: image

@@ -1,8 +1,6 @@
 ! concrete commander: masking routines
 module simple_commanders_mask
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline

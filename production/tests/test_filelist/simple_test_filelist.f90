@@ -2,7 +2,6 @@ program simple_test_filelist
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
 implicit none
 #include "simple_local_flags.inc"
 type(string),     allocatable :: thumb_files(:)

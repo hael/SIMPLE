@@ -1,7 +1,5 @@
 program simple_test_sp_project
 use simple_core_module_api
-use simple_defs
-use simple_type_defs
 use simple_sp_project, only: sp_project
 use simple_binoris_io, only: binwrite_oritab
 implicit none

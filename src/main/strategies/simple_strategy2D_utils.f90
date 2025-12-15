@@ -2,9 +2,6 @@ module simple_strategy2D_utils
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs_stream
-use simple_defs
-use simple_type_defs
 use simple_class_frcs,        only: class_frcs
 use simple_clustering_utils,  only: cluster_dmat
 use simple_cmdline,           only: cmdline

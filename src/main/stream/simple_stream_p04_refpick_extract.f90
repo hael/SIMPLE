@@ -1,25 +1,7 @@
 module simple_stream_p04_refpick_extract
-use simple_core_module_api
-use simple_defs_environment
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
-use simple_cmdline,               only: cmdline
-use simple_commander_base,        only: commander_base
+use simple_stream_module_api
 use simple_commanders_preprocess, only: commander_make_pickrefs
-use simple_parameters,            only: parameters
-use simple_qsys_env,              only: qsys_env
-use simple_sp_project,            only: sp_project
-use simple_starproject_stream,    only: starproject_stream
-use simple_stream_watcher,        only: stream_watcher
-use simple_gui_utils
-use simple_progress
-use simple_qsys_funs
-use simple_rec_list
-use simple_stream_communicator
-use simple_stream_utils
 use simple_timer
-use json_kinds
 implicit none
 
 public :: stream_p04_refpick_extract

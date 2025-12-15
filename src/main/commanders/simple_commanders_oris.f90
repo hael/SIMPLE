@@ -1,9 +1,6 @@
 ! concrete commander: operations on orientations
 module simple_commanders_oris
 use simple_core_module_api
-use simple_type_defs
-use simple_defs_fname
-use simple_defs
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project

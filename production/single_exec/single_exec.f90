@@ -1,8 +1,6 @@
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 program single_exec
 use simple_core_module_api
-use simple_defs
-use simple_cmdline,               only: cmdline, cmdline_err
 use simple_cmdline,               only: cmdline, cmdline_err
 use simple_commanders_imgproc,    only: commander_estimate_diam
 use simple_commanders_preprocess, only: commander_map_cavgs_selection
@@ -227,7 +225,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('8e647e55')
+    call simple_print_git_version('383a0ec5')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

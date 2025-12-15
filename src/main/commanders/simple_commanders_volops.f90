@@ -1,8 +1,6 @@
 ! concrete commander: operations on volumes
 module simple_commanders_volops
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
 use simple_binoris_io
 use simple_strategy2D_utils
 use simple_parameters,       only: parameters, params_glob

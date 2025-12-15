@@ -1,6 +1,5 @@
 module simple_linked_list
 use simple_core_module_api
-use simple_defs
 implicit none
 
 public :: linked_list, list_iterator

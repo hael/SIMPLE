@@ -2,7 +2,6 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commanders_validate
 use simple_core_module_api
-use simple_defs
 use simple_sp_project,     only: sp_project
 use simple_parameters,     only: parameters
 use simple_commander_base, only: commander_base

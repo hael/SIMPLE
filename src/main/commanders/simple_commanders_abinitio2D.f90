@@ -1,6 +1,5 @@
 module simple_commanders_abinitio2D
 use simple_core_module_api
-use simple_defs
 use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base
 use simple_exec_helpers,        only: set_shmem_flag

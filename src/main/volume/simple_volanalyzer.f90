@@ -1,6 +1,5 @@
 module simple_volanalyzer
 use simple_core_module_api
-use simple_defs
 use simple_dock_vols,        only: dock_vols
 use simple_parameters,       only: params_glob
 use simple_image,            only: image

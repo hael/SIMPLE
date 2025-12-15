@@ -1,6 +1,5 @@
 program simple_test_order_corr
 use simple_core_module_api
-use simple_defs
 implicit none
 type(oris)           :: os
 type(ori)            :: o

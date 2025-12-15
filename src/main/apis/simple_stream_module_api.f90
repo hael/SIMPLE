@@ -1,9 +1,19 @@
 module simple_stream_module_api
+use simple_core_module_api
+use simple_defs_environment
+use simple_defs_fname
+use simple_defs_conv
+use simple_defs_stream
+use simple_defs
+use simple_type_defs
+use json_kinds
+use json_module
+use simple_stream2D_state
 use simple_class_frcs,             only: class_frcs
 use simple_cmdline,                only: cmdline
 use simple_commander_base,         only: commander_base
 use simple_euclid_sigma2,          only: average_sigma2_groups, sigma2_star_from_iter
-use simple_gui_utils,              only: mic2thumb
+use simple_gui_utils,              only: mic2thumb, mrc2jpeg_tiled
 use simple_guistats,               only: guistats
 use simple_image,                  only: image
 use simple_nice,                   only: simple_nice_communicator

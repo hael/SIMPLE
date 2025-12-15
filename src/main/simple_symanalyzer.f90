@@ -1,6 +1,5 @@
 module simple_symanalyzer
 use simple_core_module_api
-use simple_defs
 use simple_volpft_symsrch
 use simple_image,            only: image
 use simple_projector,        only: projector

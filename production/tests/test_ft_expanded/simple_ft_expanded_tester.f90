@@ -1,6 +1,5 @@
 module simple_ft_expanded_tester
 use simple_core_module_api
-use simple_defs
 use simple_ft_expanded,  only: ft_expanded
 use simple_ftexp_shsrch, only: ftexp_shsrch
 use simple_image,        only: image

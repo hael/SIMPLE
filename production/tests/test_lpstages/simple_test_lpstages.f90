@@ -2,8 +2,6 @@ program simple_test_lpstages
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
-use simple_type_defs
 implicit none
 #include "simple_local_flags.inc"
 integer, parameter :: LDIM(3)=[256,256,1], BOX=LDIM(1), FILTSZ=BOX/2, NSTAGES=10

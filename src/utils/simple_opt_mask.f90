@@ -3,7 +3,6 @@ module simple_opt_mask
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
 use simple_image,      only: image, image_ptr
 use simple_parameters, only: params_glob
 implicit none

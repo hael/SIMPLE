@@ -6,8 +6,6 @@
 module simple_jpg
 use, intrinsic :: iso_c_binding
 use simple_core_module_api
-use simple_defs
-use simple_defs_fname
 implicit none
 
 public :: jpg_img, test_jpg_export

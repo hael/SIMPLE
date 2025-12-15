@@ -1,7 +1,6 @@
 ! concrete strategy3D: refinement
 module simple_strategy3D_shc_smpl
 use simple_core_module_api
-use simple_defs
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
 use simple_parameters,       only: params_glob

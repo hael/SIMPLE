@@ -1,6 +1,5 @@
 program simple_test_pca_all
 use simple_core_module_api
-use simple_defs
 use simple_ppca_inmem, only: ppca_inmem
 use simple_pca_svd,    only: pca_svd
 use simple_kpca_svd,   only: kpca_svd

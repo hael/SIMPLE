@@ -1,6 +1,5 @@
 program simple_test_lbfgsb
     use simple_core_module_api
-use simple_defs
     use simple_optimizer,   only: optimizer
     use simple_opt_factory, only: opt_factory
     use simple_opt_spec,    only: opt_spec

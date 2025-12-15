@@ -1,8 +1,6 @@
 ! batch-processing manager - LSF
 module simple_qsys_lsf
 use simple_core_module_api
-use simple_defs
-use simple_defs_fname
 use simple_qsys_base, only: qsys_base
 implicit none
 

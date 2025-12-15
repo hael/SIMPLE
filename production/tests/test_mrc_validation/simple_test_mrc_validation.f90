@@ -1,8 +1,7 @@
 program simple_test_mrc_validation
 use simple_core_module_api
-use simple_defs
 use simple_atoms, only: atoms
-use simple_image
+use simple_image, only: image
 implicit none
 character(len=STDLEN)         :: vol_file
 character(len=:), allocatable :: smpd_char

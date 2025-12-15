@@ -3,15 +3,14 @@ module simple_motion_patched
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
-use simple_parameters,                    only: params_glob
-use simple_opt_factory,                   only: opt_factory
-use simple_opt_spec,                      only: opt_spec
-use simple_opt_lbfgsb,                    only: PRINT_NEVALS
-use simple_optimizer,                     only: optimizer
-use simple_image,                         only: image, image_stack
-use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
-use simple_motion_align_hybrid,           only: motion_align_hybrid
+use simple_parameters,          only: params_glob
+use simple_opt_factory,         only: opt_factory
+use simple_opt_spec,            only: opt_spec
+use simple_opt_lbfgsb,          only: PRINT_NEVALS
+use simple_optimizer,           only: optimizer
+use simple_image,               only: image, image_stack
+use simple_ft_expanded,         only: ftexp_transfmat_init, ftexp_transfmat_kill
+use simple_motion_align_hybrid, only: motion_align_hybrid
 use simple_motion_correct_utils
 use CPlot2D_wrapper_module
 implicit none

@@ -1,7 +1,5 @@
 module simple_starproject
 use simple_core_module_api
-use simple_defs
-use simple_defs_fname
 !$ use omp_lib
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline

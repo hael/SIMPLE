@@ -1,6 +1,5 @@
 module simple_strategy2D_eval
 use simple_core_module_api
-use simple_defs
 use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec

@@ -1,6 +1,5 @@
 program simple_test_install
 use simple_core_module_api
-use simple_defs
 use simple_testfuns ! use all in there
 use simple_image,  only: image
 implicit none

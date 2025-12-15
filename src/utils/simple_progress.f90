@@ -1,7 +1,6 @@
 ! job progress estimation
 module simple_progress
 use simple_core_module_api
-use simple_defs
 implicit none
 
 contains

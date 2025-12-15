@@ -1,7 +1,6 @@
 ! continuous particle swarm optimisation
 module simple_opt_particle_swarm
 use simple_core_module_api
-use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 implicit none

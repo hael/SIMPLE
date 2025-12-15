@@ -3,7 +3,6 @@ module simple_volpft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
 use simple_projector, only: projector
 implicit none
 

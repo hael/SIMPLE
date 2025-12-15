@@ -1,13 +1,14 @@
 program simple_test_mini_stream
 use simple_core_module_api
-use simple_defs
-use simple_parameters,          only: parameters
-use simple_commanders_project,  only: commander_new_project, commander_import_movies
-use simple_commanders_validate, only: commander_mini_stream
-use simple_commanders_project,  only: commander_selection
-use simple_stream_watcher,      only: stream_watcher
-use simple_commanders_preprocess 
-use simple_sp_project
+use simple_parameters,            only: parameters
+use simple_cmdline,               only: cmdline
+use simple_commanders_project,    only: commander_new_project, commander_import_movies
+use simple_commanders_validate,   only: commander_mini_stream
+use simple_commanders_project,    only: commander_selection
+use simple_stream_watcher,        only: stream_watcher
+use simple_commanders_preprocess, only: commander_preprocess_distr
+use simple_sp_project,            only: sp_project
+use simple_micproc,               only: sample_filetab
 implicit none
 real,         parameter          :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
 type(string), allocatable        :: dataset_cmds(:)

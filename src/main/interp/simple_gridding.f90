@@ -3,9 +3,8 @@ module simple_gridding
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
-use simple_image,      only: image
-use simple_projector,  only: projector
+use simple_image,     only: image
+use simple_projector, only: projector
 implicit none
 
 public :: mul_w_instr, gen_instrfun_img

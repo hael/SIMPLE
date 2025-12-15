@@ -11,8 +11,6 @@
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
 use simple_core_module_api
-use simple_defs
-use simple_defs_fname
 use simple_tifflib
 use gnufor2
 implicit none
