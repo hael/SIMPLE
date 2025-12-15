@@ -352,7 +352,7 @@ contains
     end subroutine exec_tseries_motion_correct
 
     subroutine exec_tseries_make_pickavg( self, cline )
-        use simple_commanders_imgproc,   only: commander_stack
+        use simple_commanders_stkops,   only: commander_stack
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_tvfilter,            only: tvfilter
         class(commander_tseries_make_pickavg), intent(inout) :: self
@@ -1471,7 +1471,7 @@ contains
     end subroutine exec_graphene_subtr
 
     subroutine exec_denoise_trajectory( self, cline )
-        use simple_commanders_imgproc, only: commander_ppca_denoise
+        use simple_commanders_imgops, only: commander_ppca_denoise
         class(commander_denoise_trajectory), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(commander_ppca_denoise) :: xkpca_den

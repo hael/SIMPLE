@@ -10,7 +10,7 @@ use simple_commanders_cavgs,   only: commander_rank_cavgs
 use simple_gui_utils,          only: mrc2jpeg_tiled
 use simple_procimgstk,         only: selection_from_tseries_imgfile, random_selection_from_imgfile, copy_imgfile, noise_imgfile
 use simple_progress,           only: progressfile_init, progressfile_update
-use simple_commanders_imgproc, only: commander_scale
+use simple_commanders_imgops,  only: commander_scale
 use simple_starproject,        only: starproject
 implicit none
 #include "simple_local_flags.inc"

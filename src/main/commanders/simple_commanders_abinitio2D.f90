@@ -223,9 +223,9 @@ contains
 
         ! Deals with initial references dimensions when *not* abinitio
         subroutine inirefs
-            use simple_procimgstk,         only: copy_imgfile
-            use simple_commanders_imgproc, only: commander_scale
-            use simple_commanders_volops,  only: commander_noisevol
+            use simple_procimgstk,        only: copy_imgfile
+            use simple_commanders_imgops, only: commander_scale
+            use simple_commanders_volops, only: commander_noisevol
             type(commander_scale)    :: xscale
             type(commander_noisevol) :: xnoisevol
             type(cmdline)            :: cline_scalerefs, cline_noisevol

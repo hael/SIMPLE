@@ -51,9 +51,15 @@ use simple_stream_cluster2D_subsets, only: stream_cluster2D_subsets
 use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_select_clusters, commander_match_cavgs
 
 ! imgproc commanders, standard image processing routines
-use simple_commanders_imgproc, only: commander_cluster_stack, &
-commander_match_stacks, commander_binarize, commander_convert, commander_ctfops, commander_ctf_phaseflip,&
-commander_filter, commander_normalize, commander_ppca_denoise, commander_scale, commander_stack, commander_stackops
+use simple_commanders_imgproc, only: commander_ctfops, commander_ctf_phaseflip
+
+! stkops commanders, image stack operations
+use simple_commanders_stkops, only: commander_cluster_stack, commander_match_stacks, commander_convert,&
+commander_stack, commander_stackops
+
+! imgops commanders, standard image operation routines
+use simple_commanders_imgops, only: commander_binarize, commander_filter, commander_normalize, commander_ppca_denoise,&
+commander_scale
 
 ! mkcavgs commanders, for making class averages
 use simple_commanders_mkcavgs, only: commander_make_cavgs_distr,  commander_write_classes
