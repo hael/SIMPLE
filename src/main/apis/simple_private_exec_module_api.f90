@@ -20,17 +20,20 @@ use simple_symanalyzer,    only: print_subgroups
 use simple_syslib,         only: print_slurm_env
 use simple_user_interface, only: make_user_interface, print_ui_json, write_ui_json, print_stream_ui_json
 
+! pick commanders, picking routines
+use simple_commanders_pick, only: commander_extract, commander_reextract, commander_pick_extract,&
+commander_pick, commander_make_pickrefs
+
 ! preprocess commanders,  pre-processing routines
-use simple_commanders_preprocess, only: commander_preprocess, commander_extract, commander_reextract,&
-commander_motion_correct, commander_gen_pspecs_and_thumbs, commander_ctf_estimate, commander_pick_extract,&
-commander_pick, commander_shape_rank_cavgs, commander_make_pickrefs
+use simple_commanders_preprocess, only: commander_preprocess, commander_motion_correct,&
+commander_gen_pspecs_and_thumbs, commander_ctf_estimate
 
 ! cluster2D commanders, for simultanous 2D alignment and clustering of single-particle images
 use simple_commanders_cluster2D, only: commander_make_cavgs, commander_cluster2D, commander_cluster2D_distr,&
 commander_cavgassemble, commander_prob_tab2D
 
 ! cavgs commanders, for operations on class averages
-use simple_commanders_cavgs, only: commander_rank_cavgs
+use simple_commanders_cavgs, only: commander_rank_cavgs, commander_shape_rank_cavgs
 
 ! project commanders, operations on projects (sp_project) and associated files
 use simple_commanders_project, only: commander_export_cavgs, commander_print_project_vals, commander_prune_project,&

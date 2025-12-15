@@ -1,6 +1,7 @@
 module simple_stream_p03_opening2D
 use simple_stream_module_api
-use simple_commanders_preprocess, only: commander_extract_distr, commander_shape_rank_cavgs
+use simple_commanders_pick,       only: commander_extract_distr
+use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_mini_stream_utils,     only: segdiampick_mics
 implicit none

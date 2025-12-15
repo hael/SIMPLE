@@ -23,8 +23,8 @@ use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commanders_project, only: commander_new_project, commander_update_project, commander_print_project_info,&
 commander_print_project_field, commander_zero_project_shifts, commander_import_movies, commander_import_boxes,&
 commander_import_particles, commander_import_cavgs, commander_replace_project_field, commander_selection,&
-commander_merge_projects, commander_extract_subproj,&
-commander_sample_classes, commander_write_mic_filetab, commander_prune_project_distr
+commander_merge_projects, commander_extract_subproj, commander_sample_classes, commander_write_mic_filetab,&
+commander_prune_project_distr
 
 ! RELION commanders, export utility for RELION
 use simple_commanders_relion, only: commander_export_relion
@@ -33,10 +33,12 @@ use simple_commanders_relion, only: commander_export_relion
 use simple_commanders_starproject, only: commander_import_starproject, commander_export_starproject,&
 commander_assign_optics_groups
 
+! pick commanders, picking routines
+use simple_commanders_pick, only: commander_pick_distr, commander_extract_distr, commander_reextract_distr
+
 ! preprocess commanders,  pre-processing routines
 use simple_commanders_preprocess, only: commander_preprocess_distr, commander_motion_correct_distr,&
-commander_gen_pspecs_and_thumbs_distr, commander_ctf_estimate_distr, commander_pick_distr,&
-commander_extract_distr, commander_reextract_distr, commander_map_cavgs_selection
+commander_gen_pspecs_and_thumbs_distr, commander_ctf_estimate_distr
 
 ! cluster2D commanders, for simultanous 2D alignment and clustering of single-particle images
 use simple_commanders_cluster2D, only: commander_cluster2D_autoscale, commander_ppca_denoise_classes
@@ -48,7 +50,8 @@ use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_stream_cluster2D_subsets, only: stream_cluster2D_subsets
 
 ! cavgs commanders, for operations on class averages
-use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_select_clusters, commander_match_cavgs
+use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_select_clusters, commander_match_cavgs,&
+commander_map_cavgs_selection
 
 ! imgproc commanders, standard image processing routines
 use simple_commanders_imgproc, only: commander_ctfops, commander_ctf_phaseflip

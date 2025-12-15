@@ -2,12 +2,12 @@
 ! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
 module simple_commanders_validate
 use simple_commander_module_api
-use simple_commanders_abinitio2D
-use simple_commanders_preprocess
-use simple_commanders_project
-use simple_micproc  
-use simple_mini_stream_utils
-use simple_picksegdiam
+use simple_commanders_abinitio2D, only: commander_abinitio2D
+use simple_commanders_preprocess, only: commander_ctf_estimate_distr
+use simple_commanders_project,    only: commander_new_project, commander_import_movies
+use simple_commanders_pick,       only: commander_extract_distr, commander_make_pickrefs, commander_pick_extract
+use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
+use simple_mini_stream_utils,     only: segdiampick_mics
 implicit none
 #include "simple_local_flags.inc"
 
