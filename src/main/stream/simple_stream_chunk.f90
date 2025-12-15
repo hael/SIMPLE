@@ -4,14 +4,14 @@ use simple_defs_environment
 use simple_defs_stream
 use simple_defs_fname
 use simple_defs
-use simple_cmdline,    only: cmdline
-use simple_image,      only: image
-use simple_parameters, only: params_glob
-use simple_qsys_env,   only: qsys_env
-use simple_sp_project, only: sp_project
-use simple_stream_utils
-use simple_rec_list
-use simple_qsys_funs
+use simple_cmdline,      only: cmdline
+use simple_image,        only: image
+use simple_parameters,   only: params_glob
+use simple_qsys_env,     only: qsys_env
+use simple_sp_project,   only: sp_project
+use simple_rec_list,     only: rec_list
+use simple_stream_utils, only: class_rejection
+use simple_qsys_funs,    only: qsys_cleanup
 implicit none
 
 public :: stream_chunk
