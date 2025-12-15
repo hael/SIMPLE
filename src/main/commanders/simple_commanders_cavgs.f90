@@ -26,6 +26,21 @@ type, extends(commander_base) :: commander_match_cavgs
         procedure :: execute      => exec_match_cavgs
 end type commander_match_cavgs
 
+type, extends(commander_base) :: commander_map_cavgs_selection
+  contains
+    procedure :: execute      => exec_map_cavgs_selection
+end type commander_map_cavgs_selection
+
+type, extends(commander_base) :: commander_map_cavgs_states
+  contains
+    procedure :: execute      => exec_map_cavgs_states
+end type commander_map_cavgs_states
+
+type, extends(commander_base) :: commander_shape_rank_cavgs
+  contains
+    procedure :: execute      => exec_shape_rank_cavgs
+end type commander_shape_rank_cavgs
+
 contains
 
     subroutine exec_rank_cavgs( self, cline )
@@ -539,5 +554,209 @@ contains
         end function find_label_state
 
     end subroutine exec_match_cavgs
+
+     subroutine exec_map_cavgs_selection( self, cline )
+        use simple_corrmat,             only: calc_cartesian_corrmat
+        class(commander_map_cavgs_selection), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(image),      allocatable :: imgs_sel(:), imgs_all(:)
+        integer,          allocatable :: states(:)
+        real,             allocatable :: correlations(:,:)
+        type(string) :: cavgstk
+        integer      :: iimg, isel, nall, nsel, loc(1), lfoo(3)
+        real         :: smpd
+        call cline%set('dir_exec', 'selection')
+        call cline%set('mkdir',    'yes')
+        if( .not.cline%defined('prune')   ) call cline%set('prune',   'no')
+        if( .not.cline%defined('imgkind') ) call cline%set('imgkind', 'cavg')
+        call build%init_params_and_build_spproj(cline,params)
+        ! find number of selected cavgs
+        call find_ldim_nptcls(params%stk2, lfoo, nsel)
+        if( cline%defined('ares') ) nsel = int(params%ares)
+        ! find number of original cavgs
+        if( .not. cline%defined('stk' ) )then
+            call build%spproj%get_cavgs_stk(cavgstk, nall, smpd, imgkind=params%imgkind)
+            params%stk = cavgstk
+        else
+            call find_ldim_nptcls(params%stk, lfoo, nall)
+        endif
+        ! read images
+        allocate(imgs_sel(nsel), imgs_all(nall))
+        do isel=1,nsel
+            call imgs_sel(isel)%new([params%box,params%box,1], params%smpd)
+            call imgs_sel(isel)%read(params%stk2, isel)
+        end do
+        do iimg=1,nall
+            call imgs_all(iimg)%new([params%box,params%box,1], params%smpd)
+            call imgs_all(iimg)%read(params%stk, iimg)
+        end do
+        write(logfhandle,'(a)') '>>> CALCULATING CORRELATIONS'
+        call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
+        ! create the states array for mapping the selection
+        allocate(states(nall), source=0)
+        do isel=1,nsel
+            loc = maxloc(correlations(isel,:))
+            states(loc(1)) = 1
+        end do
+        ! communicate selection to project
+        call build%spproj%map_cavgs_selection(states)
+        ! optional pruning
+        if( trim(params%prune).eq.'yes') call build%spproj%prune_particles
+        ! this needs to be a full write as many segments are updated
+        call build%spproj%write
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAP_CAVGS_SELECTION NORMAL STOP ****')
+    end subroutine exec_map_cavgs_selection
+
+    subroutine exec_map_cavgs_states( self, cline )
+        use simple_corrmat, only: calc_cartesian_corrmat
+        class(commander_map_cavgs_states), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline !< command line input
+        type(parameters)          :: params
+        type(builder)             :: build
+        type(image),  allocatable :: imgs_sel(:), imgs_all(:)
+        integer,      allocatable :: states(:)
+        real,         allocatable :: correlations(:,:)
+        type(string), allocatable :: stkfnames(:)
+        type(string)              :: cavgstk, fname
+        integer :: iimg, isel, nall, nsel, loc(1), lfoo(3), s
+        real    :: smpd
+        call cline%set('dir_exec', 'state_mapping')
+        call cline%set('mkdir',    'yes')
+        call build%init_params_and_build_spproj(cline,params)
+        call read_filetable(params%stktab, stkfnames)
+        ! find number of original cavgs
+        if( .not. cline%defined('stk' ) )then
+            call build%spproj%get_cavgs_stk(cavgstk, nall, smpd)
+            params%stk = cavgstk
+        else
+            call find_ldim_nptcls(params%stk, lfoo, nall)
+        endif
+        ! read images
+        allocate(imgs_all(nall))
+        do iimg=1,nall
+            call imgs_all(iimg)%new([params%box,params%box,1], params%smpd)
+            call imgs_all(iimg)%read(params%stk, iimg)
+        end do
+        ! create the states array for mapping the selection
+        allocate(states(nall), source=0)
+        do s = 1,size(stkfnames)
+            ! find number of selected cavgs
+            fname = '../'//stkfnames(s)%to_char()
+            call find_ldim_nptcls(fname, lfoo, nsel)
+            ! read images
+            allocate(imgs_sel(nsel))
+            do isel=1,nsel
+                call imgs_sel(isel)%new([params%box,params%box,1], params%smpd)
+                call imgs_sel(isel)%read(fname, isel)
+            end do
+            call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
+            do isel=1,nsel
+                loc = maxloc(correlations(isel,:))
+                states(loc(1)) = s
+            end do
+            ! destruct
+            do isel=1,nsel
+                call imgs_sel(isel)%kill
+            end do
+            deallocate(imgs_sel)
+        end do
+        ! communicate selection to project
+        call build%spproj%map_cavgs_selection(states)
+        ! this needs to be a full write as many segments are updated
+        call build%spproj%write
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAP_CAVGS_SELECTION NORMAL STOP ****')
+    end subroutine exec_map_cavgs_states
+
+    subroutine exec_shape_rank_cavgs( self, cline )
+        use simple_strategy2D_utils
+        class(commander_shape_rank_cavgs), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        real,        parameter   :: LP_BIN = 20.
+        type(parameters)         :: params
+        type(sp_project)         :: spproj
+        type(image), allocatable :: cavg_imgs(:), mask_imgs(:), masked_imgs(:)
+        logical,     allocatable :: l_non_junk(:)
+        real,        allocatable :: diams(:), shifts(:,:), ints(:)
+        integer,     allocatable :: pops(:), order(:), clsinds(:), cavg_inds(:)
+        integer :: ncls_sel, icls, ldim(3), i, irank, xtiles, ytiles
+        real    :: mskrad
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
+        ! set defaults
+        call set_automask2D_defaults(cline)
+        ! parse parameters
+        call params%new(cline)
+        ! read project
+        call spproj%read(params%projfile)
+        ! extract cavgs from project
+        cavg_imgs = read_cavgs_into_imgarr(spproj)
+        ! flag non-junk cavgs
+        ldim   = cavg_imgs(1)%get_ldim()
+        mskrad = real(ldim(1)/2) - COSMSKHALFWIDTH - 1.
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
+        clsinds = (/(icls,icls=1,size(cavg_imgs))/)
+        clsinds = pack(clsinds, mask=l_non_junk)
+        ! re-read non-junk cavg_imgs
+        call dealloc_imgarr(cavg_imgs)
+        cavg_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        mask_imgs   = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        masked_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+        ncls_sel  = size(cavg_imgs)
+        ! extract class populations
+        pops      = spproj%os_cls2D%get_all_asint('pop')
+        pops      = pack(pops, mask=l_non_junk)
+        ! Automasking
+        call automask2D(mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+        ! calc integrated intesities and shift
+        allocate(ints(ncls_sel), source=0.)
+        do icls = 1, ncls_sel
+            call masked_imgs(icls)%mul(mask_imgs(icls))
+            ints(icls) = masked_imgs(icls)%get_sum_int()
+            call cavg_imgs(icls)%shift([shifts(icls,1),shifts(icls,2),0.])
+        end do
+        ! order
+        order = (/(i,i=1,ncls_sel)/)
+        call hpsort(order, p1_lt_p2 )
+        call reverse(order) ! largest first
+        ! communicate ranks to project file
+        call spproj%os_cls2D%set_all2single('shape_rank', 0)
+        do irank = 1, ncls_sel
+            icls = clsinds(order(irank))
+            call spproj%os_cls2D%set(icls, 'shape_rank', irank)
+        end do
+        ! write ranks to project file
+        call spproj%write_segment_inside('cls2D')
+        ! write class averages
+        call write_imgarr(cavg_imgs, string(SHAPE_RANKED_CAVGS_MRCNAME), order)
+        call spproj%shape_ranked_cavgs2jpg(cavg_inds, string(SHAPE_RANKED_CAVGS_JPGNAME), xtiles, ytiles)
+        ! kill
+        call spproj%kill
+        call dealloc_imgarr(cavg_imgs)
+        call dealloc_imgarr(mask_imgs)
+        if( allocated(cavg_inds)  ) deallocate(cavg_inds)
+        if( allocated(clsinds)    ) deallocate(clsinds)
+        if( allocated(l_non_junk) ) deallocate(l_non_junk)
+        if( allocated(diams)      ) deallocate(diams)
+        if( allocated(shifts)     ) deallocate(shifts)
+        if( allocated(pops)       ) deallocate(pops)
+        call simple_end('**** SIMPLE_SHAPE_RANK_CAVGS NORMAL STOP ****')
+
+        contains
+
+            function p1_lt_p2( p1, p2 ) result( val )
+                integer, intent(in) :: p1, p2
+                logical :: val
+                val = .false.
+                if( ints(p1) < ints(p2) )then
+                    val = .true.
+                else if( diams(p1) < diams(p2) )then
+                    val = .true.
+                endif
+            end function p1_lt_p2
+
+    end subroutine exec_shape_rank_cavgs
 
 end module simple_commanders_cavgs

@@ -1673,7 +1673,7 @@ contains
     end subroutine exec_prune_project
 
     subroutine exec_merge_projects( self, cline )
-        use simple_commanders_preprocess, only: commander_extract_distr
+        use simple_commanders_pick, only: commander_extract_distr
         class(commander_merge_projects), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)                :: params
