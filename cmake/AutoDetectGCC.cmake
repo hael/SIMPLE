@@ -34,11 +34,10 @@ foreach(_cand IN LISTS _gfortran_candidates)
         continue()
     endif()
     message(STATUS "AutoDetectGCC: candidate ${_fc_prog} (version ${_fc_ver})")
-    # Require at least 8.5 here (adjust if you want stricter)
-    if(_fc_ver VERSION_LESS "8.5")
+    # Require at least 14.2 here
+    if(_fc_ver VERSION_LESS "14.2")
         continue()
     endif()
-
     if(NOT _best_gfortran OR _fc_ver VERSION_GREATER _best_version)
         set(_best_gfortran "${_fc_prog}")
         set(_best_version "${_fc_ver}")

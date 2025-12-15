@@ -10,7 +10,7 @@ use simple_guistats,               only: guistats
 use simple_image,                  only: image
 use simple_nice,                   only: simple_nice_communicator
 use simple_parameters,             only: parameters, params_glob
-use simple_progress,               only: progressfile_init, progressfile_update, 
+use simple_progress,               only: progressfile_init, progressfile_update
 use simple_projfile_utils,         only: merge_chunk_projfiles
 use simple_qsys_env,               only: qsys_env
 use simple_qsys_funs,              only: qsys_watcher, qsys_cleanup, qsys_job_finished
@@ -36,10 +36,10 @@ public :: guistats
 public :: image
 public :: simple_nice_communicator
 public :: parameters, params_glob
-public :: progressfile_init, progressfile_update, 
+public :: progressfile_init, progressfile_update
 public :: merge_chunk_projfiles
 public :: qsys_env
-public :: qsys_watcher, qsys_cleanup, qsys_job_finished, 
+public :: qsys_watcher, qsys_cleanup, qsys_job_finished
 public :: rec, project_rec, process_rec, chunk_rec, rec_list, rec_iterator
 public :: sp_project
 public :: stack_io

@@ -30,7 +30,7 @@ This refactoring reduces the CMake codebase from **~2000 lines** to **~500 lines
 - ✅ Script generation
 
 ### What Was Modernized
-- ✨ Modern CMake 3.12+ syntax
+- ✨ Modern CMake 3.25+ syntax
 - ✨ Generator expressions for compile flags
 - ✨ Target-based linking (not directory-based)
 - ✨ Proper dependency propagation
@@ -198,14 +198,6 @@ brew install libtiff jpeg zlib
 ### Build warnings about unused variables
 This is normal - the refactored CMake is cleaner and doesn't set unnecessary variables.
 
-## Restoring Removed Features
-
-### If You Need Intel Compiler Support
-You'll need to restore parts of `FortranOverride.cmake` and `SimpleFortranOptions.cmake`. Let me know and I can create a minimal Intel support module.
-
-### If You Need CPack
-The packaging configuration in `SimplePackage.cmake` can be restored as a separate module.
-
 ### If You Need Coverage/Profiling
 Add this to `cmake/CompilerOptions.cmake`:
 ```cmake
@@ -215,19 +207,3 @@ if(USE_CODE_COVERAGE)
     add_link_options(--coverage)
 endif()
 ```
-
-## Questions?
-
-Common questions:
-
-**Q: Will this break my existing build?**
-A: No - it uses the same options and produces the same outputs.
-
-**Q: Can I revert easily?**
-A: Yes - just restore from `cmake.old/` and `CMakeLists.txt.old`.
-
-**Q: What about Windows?**
-A: Not supported (GCC/GFortran on Windows would work but hasn't been tested).
-
-**Q: Performance impact?**
-A: None - compilation flags are identical for GCC.

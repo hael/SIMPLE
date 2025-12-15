@@ -1,133 +1,158 @@
-project(simple_gui)
-
-cmake_minimum_required(VERSION 3.2)
+project(simple_gui LANGUAGES NONE)
 
 include(ExternalProject)
 
-if(${GUI})
-
-	add_custom_target(
-                        gui_core ALL
-                        COMMENT "Installing GUI core ... "
-                        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/client ${CMAKE_BINARY_DIR}/gui_data/client
-                        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_BINARY_DIR}/gui_data/server
-                        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/client/public ${CMAKE_BINARY_DIR}/gui_data/public
-                        COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_CURRENT_SOURCE_DIR}/tutorials.tar.gz
-                        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/bin/gui/tutorials ${CMAKE_BINARY_DIR}/tutorials
-                        COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/bin/gui/tutorials
-        )
-	
-	install(DIRECTORY ${CMAKE_BINARY_DIR}/gui_data DESTINATION ${CMAKE_INSTALL_PREFIX})
-	install(DIRECTORY ${CMAKE_BINARY_DIR}/tutorials DESTINATION ${CMAKE_INSTALL_PREFIX})
-
-	if(${APPLE})
-
-		ExternalProject_Add(
-                        nodejs_apple
-                        URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-darwin-arm64.tar.gz
-                        URL_MD5 5e85b7df5071ad757f773f94dc886d68 
-                        DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/external/tarballs
-                        SOURCE_DIR ${CMAKE_BINARY_DIR}/bin/nodejs
-                        CONFIGURE_COMMAND ""
-                        BUILD_COMMAND ""
-                        INSTALL_COMMAND ""
-                        TEST_COMMAND ""
-                )
-
-		install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/nodejs DESTINATION ${CMAKE_INSTALL_PREFIX}/bin USE_SOURCE_PERMISSIONS)
-
-		add_custom_target(
-                        gui_multi_apple ALL
-                        COMMENT "Installing GUI multiuser ... "
-                        DEPENDS gui_core nodejs_apple
-                        COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin/nodejs/bin:$ENV{PATH}" npm install -g --unsafe-perm binding
-			COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/server/multi_user/simple_multiuser.sh ${CMAKE_BINARY_DIR}/bin/simple_multiuser
-                        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/gui_data/server/multi_user
-                )
-
-	install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/simple_multiuser DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-
-		if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_gui.mac.tar.gz)
-			message("-- Located pre-built gui binary for mac")
-			add_custom_target(
-				gui_single_apple ALL
-				DEPENDS gui_core
-				COMMENT "Installing precompiled single-user GUI ... "
-				COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_gui.mac.tar.gz
-				COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_mac.sh ${CMAKE_BINARY_DIR}/bin/simple
-			)
-
-		install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/simple DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-		
-		else()
-			message(FATAL_ERROR "Could not locate a prebuilt gui binary for your architecture. Please rerun cmake with -DGUI=OFF")
-		endif()
-	elseif(${UNIX})
-
-		ExternalProject_Add(
-			nodejs_unix
-    			URL https://nodejs.org/dist/v16.13.0/node-v16.13.0-linux-x64.tar.gz
-			URL_MD5 bb20c3f845896272f18bd8c91d1c9b07
-    			#URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-linux-x64.tar.gz
-			#URL_MD5 8ca721fd7d5dd835a9e64b11f35bdad6
-			DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/external/tarballs
-			SOURCE_DIR ${CMAKE_BINARY_DIR}/bin/nodejs
-			CONFIGURE_COMMAND ""
-			BUILD_COMMAND ""
-			INSTALL_COMMAND ""
-    			TEST_COMMAND ""
-			DOWNLOAD_EXTRACT_TIMESTAMP "ON"
-		)
-
-		install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/nodejs DESTINATION ${CMAKE_INSTALL_PREFIX}/bin USE_SOURCE_PERMISSIONS)
-
-		add_custom_target(
-                        gui_multi_unix ALL
-			COMMENT "Installing GUI multiuser ... "
-			DEPENDS gui_core nodejs_unix
-			COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin/nodejs/bin:$ENV{PATH}" npm install -g -unsafe-perm
-			COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/server/multi_user/simple_multiuser.sh ${CMAKE_BINARY_DIR}/bin/simple_multiuser
-			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/gui_data/server/multi_user
-		)
-
-		install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/simple_multiuser DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-		
-		if(${BUILD_GUI})
-			add_custom_target(
-                 	       	gui_single_unix ALL
-                	       	COMMENT "Installing GUI singleuser ... "
-                        	DEPENDS gui_core nodejs_unix
-                        	COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin/nodejs/bin:$ENV{PATH}" npm install
-				COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin/nodejs/bin:$ENV{PATH}" npm run build
-				COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/gui_data/server/single_user/dist/simple_gui.linux ${CMAKE_BINARY_DIR}/bin/simple
-                        	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/gui_data/server/single_user
-                	)
-			
-			install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/simple DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-
-		else()
-			if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_gui.linux)
-                		message("-- Located pre-built single-user gui binary for linux")
-		
-				add_custom_target(
-                			gui_single_unix ALL
-					DEPENDS gui_core
-                			COMMENT "Installing precompiled single-user GUI ... "
-                			COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_gui.linux ${CMAKE_BINARY_DIR}/bin/simple
-					COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_CURRENT_SOURCE_DIR}/precompiled/node_modules.linux.tar.gz
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/bin/gui/node_modules ${CMAKE_BINARY_DIR}/bin/node_modules
-            			)
-				
-				install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/simple DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-				install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/gui/node_modules DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-				
-			else()
-            			message(FATAL_ERROR "Could not locate a prebuilt single-user gui binary for your architecture. Please rerun cmake with -DGUI=OFF")
-        		endif()
-		endif()
-	else()
-		message(FATAL_ERROR "Could not locate a prebuilt single-user gui binary for your architecture. Please rerun cmake with -DGUI=OFF")
-    endif()
-
+# ------------------------------------------------------------------------------
+# Options
+# ------------------------------------------------------------------------------
+option(GUI "Build and install GUI components" OFF)
+option(BUILD_GUI "Build GUI from source (Linux)" OFF)
+if(NOT GUI)
+  return()
 endif()
 
+# ------------------------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------------------------
+set(GUI_DATA_DIR    "${CMAKE_BINARY_DIR}/gui_data")
+set(GUI_BIN_DIR     "${CMAKE_BINARY_DIR}/bin")
+set(NODEJS_DIR      "${GUI_BIN_DIR}/nodejs")
+set(TUTORIALS_DIR   "${CMAKE_BINARY_DIR}/tutorials")
+
+# ------------------------------------------------------------------------------
+# Core GUI data (always installed when GUI=ON)
+# ------------------------------------------------------------------------------
+add_custom_target(gui_core ALL
+  COMMENT "Installing GUI core assets"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_CURRENT_SOURCE_DIR}/client"
+          "${GUI_DATA_DIR}/client"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_CURRENT_SOURCE_DIR}/server"
+          "${GUI_DATA_DIR}/server"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_CURRENT_SOURCE_DIR}/client/public"
+          "${GUI_DATA_DIR}/public"
+  COMMAND ${CMAKE_COMMAND} -E tar xf
+          "${CMAKE_CURRENT_SOURCE_DIR}/tutorials.tar.gz"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${GUI_BIN_DIR}/gui/tutorials"
+          "${TUTORIALS_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E remove_directory
+          "${GUI_BIN_DIR}/gui/tutorials"
+)
+install(DIRECTORY "${GUI_DATA_DIR}" DESTINATION .)
+install(DIRECTORY "${TUTORIALS_DIR}" DESTINATION .)
+
+# ------------------------------------------------------------------------------
+# Node.js (platform-specific)
+# ------------------------------------------------------------------------------
+if(APPLE)
+  set(NODEJS_URL
+    "https://nodejs.org/dist/v21.7.1/node-v21.7.1-darwin-arm64.tar.gz"
+  )
+  set(NODEJS_MD5 "5e85b7df5071ad757f773f94dc886d68")
+elseif(UNIX)
+  set(NODEJS_URL
+    "https://nodejs.org/dist/v16.13.0/node-v16.13.0-linux-x64.tar.gz"
+  )
+  set(NODEJS_MD5 "bb20c3f845896272f18bd8c91d1c9b07")
+else()
+  message(FATAL_ERROR "GUI is not supported on this platform")
+endif()
+ExternalProject_Add(nodejs
+  URL             ${NODEJS_URL}
+  URL_MD5         ${NODEJS_MD5}
+  DOWNLOAD_DIR    "${CMAKE_BINARY_DIR}/external/tarballs"
+  SOURCE_DIR      "${NODEJS_DIR}"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND     ""
+  INSTALL_COMMAND   ""
+  TEST_COMMAND      ""
+)
+install(DIRECTORY "${NODEJS_DIR}"
+        DESTINATION bin
+        USE_SOURCE_PERMISSIONS)
+
+# ------------------------------------------------------------------------------
+# Multi-user GUI
+# ------------------------------------------------------------------------------
+add_custom_target(gui_multi ALL
+  COMMENT "Installing GUI multi-user support"
+  DEPENDS gui_core nodejs
+  COMMAND ${CMAKE_COMMAND} -E env
+          "PATH=${NODEJS_DIR}/bin:$ENV{PATH}"
+          npm install -g --unsafe-perm binding
+  COMMAND ${CMAKE_COMMAND} -E copy
+          "${CMAKE_CURRENT_SOURCE_DIR}/server/multi_user/simple_multiuser.sh"
+          "${GUI_BIN_DIR}/simple_multiuser"
+  WORKING_DIRECTORY
+          "${GUI_DATA_DIR}/server/multi_user"
+)
+install(PROGRAMS
+  "${GUI_BIN_DIR}/simple_multiuser"
+  DESTINATION bin
+)
+
+# ------------------------------------------------------------------------------
+# Single-user GUI
+# ------------------------------------------------------------------------------
+if(APPLE)
+  set(PREBUILT_GUI
+      "${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_gui.mac.tar.gz")
+  if(NOT EXISTS "${PREBUILT_GUI}")
+    message(FATAL_ERROR
+      "Prebuilt macOS GUI not found. Re-run cmake with -DGUI=OFF")
+  endif()
+  add_custom_target(gui_single ALL
+    COMMENT "Installing precompiled macOS GUI"
+    DEPENDS gui_core
+    COMMAND ${CMAKE_COMMAND} -E tar xf "${PREBUILT_GUI}"
+    COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_mac.sh"
+            "${GUI_BIN_DIR}/simple"
+  )
+  install(PROGRAMS "${GUI_BIN_DIR}/simple" DESTINATION bin)
+elseif(UNIX)
+  if(BUILD_GUI)
+    add_custom_target(gui_single ALL
+      COMMENT "Building single-user GUI from source"
+      DEPENDS gui_core nodejs
+      COMMAND ${CMAKE_COMMAND} -E env
+              "PATH=${NODEJS_DIR}/bin:$ENV{PATH}"
+              npm install
+      COMMAND ${CMAKE_COMMAND} -E env
+              "PATH=${NODEJS_DIR}/bin:$ENV{PATH}"
+              npm run build
+      COMMAND ${CMAKE_COMMAND} -E copy
+              "${GUI_DATA_DIR}/server/single_user/dist/simple_gui.linux"
+              "${GUI_BIN_DIR}/simple"
+      WORKING_DIRECTORY
+              "${GUI_DATA_DIR}/server/single_user"
+    )
+  else()
+    set(PREBUILT_GUI
+        "${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_gui.linux")
+    if(NOT EXISTS "${PREBUILT_GUI}")
+      message(FATAL_ERROR
+        "Prebuilt Linux GUI not found. Re-run cmake with -DGUI=OFF")
+    endif()
+    add_custom_target(gui_single ALL
+      COMMENT "Installing precompiled Linux GUI"
+      DEPENDS gui_core
+      COMMAND ${CMAKE_COMMAND} -E copy
+              "${PREBUILT_GUI}"
+              "${GUI_BIN_DIR}/simple"
+      COMMAND ${CMAKE_COMMAND} -E tar xf
+              "${CMAKE_CURRENT_SOURCE_DIR}/precompiled/node_modules.linux.tar.gz"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${GUI_BIN_DIR}/gui/node_modules"
+              "${GUI_BIN_DIR}/node_modules"
+    )
+    install(DIRECTORY
+      "${GUI_BIN_DIR}/node_modules"
+      DESTINATION bin
+    )
+  endif()
+  install(PROGRAMS "${GUI_BIN_DIR}/simple" DESTINATION bin)
+endif()

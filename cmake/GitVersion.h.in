@@ -9,14 +9,9 @@ character(len=*),parameter :: SIMPLE_GIT_VERSION = "@SIMPLE_GIT_VERSION@"   !< g
 character(len=*),parameter :: SIMPLE_SOURCE_PATH = "@CMAKE_SOURCE_DIR@"     !< source dir
 character(len=*),parameter :: SIMPLE_BUILD_PATH  = "@CMAKE_BINARY_DIR@"     !< where SIMPLE was built
 character(len=*),parameter :: SIMPLE_PATH        = "@CMAKE_INSTALL_PREFIX@" !< installation dir
-enum,bind(C)
-    enumerator :: FC_GNU_COMPILER   = 0
-    enumerator :: FC_INTEL_COMPILER = 1
-    enumerator :: FC_PGI_COMPILER   = 2
-end enum
-    integer, parameter :: OS_LINUX   =  1
-    integer, parameter :: OS_MACOSX  =  0
-    integer, parameter :: OS_WINDOWS = -1
+integer,         parameter :: FC_GNU_COMPILER = 1
+integer,         parameter :: OS_LINUX   =  1
+integer,         parameter :: OS_MACOSX  =  0
 #ifdef MACOSX
     integer, parameter :: OS_PLATFORM =  OS_MACOSX
 #else

@@ -12,7 +12,6 @@ find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(PC_FFTW QUIET fftw3)
 endif()
-
 # Find the include directory
 find_path(FFTW_INCLUDE_DIR
     NAMES fftw3.h
@@ -31,7 +30,6 @@ find_path(FFTW_INCLUDE_DIR
         /opt/homebrew
         /opt
 )
-
 # Find the library
 find_library(FFTW_LIBRARY
     NAMES fftw3 libfftw3
@@ -50,18 +48,15 @@ find_library(FFTW_LIBRARY
         /opt/homebrew
         /opt
 )
-
 # Handle REQUIRED and QUIET arguments
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(FFTW
     REQUIRED_VARS FFTW_LIBRARY FFTW_INCLUDE_DIR
     VERSION_VAR FFTW_VERSION
 )
-
 if(FFTW_FOUND)
     set(FFTW_LIBRARIES ${FFTW_LIBRARY})
     set(FFTW_INCLUDE_DIRS ${FFTW_INCLUDE_DIR})
-    
     # Create imported target
     if(NOT TARGET FFTW::FFTW)
         add_library(FFTW::FFTW UNKNOWN IMPORTED)
@@ -70,6 +65,5 @@ if(FFTW_FOUND)
             INTERFACE_INCLUDE_DIRECTORIES "${FFTW_INCLUDE_DIR}"
         )
     endif()
-    
     mark_as_advanced(FFTW_INCLUDE_DIR FFTW_LIBRARY)
 endif()
