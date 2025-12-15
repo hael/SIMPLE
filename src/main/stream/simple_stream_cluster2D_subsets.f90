@@ -3,18 +3,9 @@ use simple_core_module_api
 use simple_defs_fname
 use simple_defs_stream
 use simple_defs
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: params_glob
-use simple_projfile_utils, only: merge_chunk_projfiles
-use simple_sp_project,     only: sp_project
-use simple_stream_chunk,   only: stream_chunk
-use simple_stream_chunk2D_utils
 use simple_stream2D_state
-use simple_commanders_cluster2D
-use simple_qsys_funs
-use simple_rec_list
-use simple_stream_utils
+use simple_stream_module_api
+use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_match_cavgs
 implicit none
 #include "simple_local_flags.inc"
 

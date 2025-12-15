@@ -4,28 +4,20 @@ use simple_defs_environment
 use simple_defs_fname
 use simple_defs_stream
 use simple_defs
-use simple_parameters,   only: params_glob
-use simple_cmdline,      only: cmdline
-use simple_stream_chunk, only: stream_chunk
-use simple_sp_project,   only: sp_project
-use simple_stream_cluster2D_utils
 use simple_stream2D_state
-use simple_gui_utils
-use simple_rec_list
+use simple_parameters,             only: params_glob
+use simple_cmdline,                only: cmdline
+use simple_stream_chunk,           only: stream_chunk
+use simple_sp_project,             only: sp_project
+use simple_stream_cluster2D_utils, only: setup_downscaling
+use simple_gui_utils,              only: mrc2jpeg_tiled
+use simple_rec_list,               only: project_rec, rec_list, rec_iterator
 implicit none
 
 ! LIFECYCLE
 public :: init_chunk_clustering
 public :: analyze2D_new_chunks
 public :: memoize_chunks
-! GETTERS
-public :: all_chunks_available
-public :: get_chunk_rejected_jpeg
-public :: get_chunk_rejected_jpeg_scale
-public :: get_nchunks
-! SETTERS
-public :: set_chunk_dimensions
-! UPDATERS
 public :: update_chunks
 private
 #include "simple_local_flags.inc"
