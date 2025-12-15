@@ -57,8 +57,8 @@ use simple_commanders_volops, only: commander_postprocess
 ! mask commanders, masking and envelope maskign routines
 use simple_commanders_mask, only: commander_automask
 
-! imgproc commanders, standard image processing routines
-use simple_commanders_imgproc, only: commander_scale, commander_binarize
+! imgops commanders, standard image operation routines
+use simple_commanders_imgops, only: commander_scale, commander_binarize
 
 ! misc commanders, miscallenous commanders (mostly printing)
 use simple_commanders_misc, only: commander_kstest, commander_pearsn
