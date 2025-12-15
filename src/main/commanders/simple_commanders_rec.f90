@@ -1,13 +1,6 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commanders_rec
-use simple_core_module_api
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_exec_helpers,   only: set_master_num_threads
-use simple_parameters,     only: parameters
-use simple_qsys_env,       only: qsys_env
-use simple_qsys_funs
+use simple_commander_module_api
 use simple_strategy2D3D_common
 implicit none
 #include "simple_local_flags.inc"
@@ -124,7 +117,6 @@ contains
     end subroutine exec_reconstruct3D_distr
 
     subroutine exec_reconstruct3D( self, cline )
-        use simple_euclid_sigma2, only: euclid_sigma2
         class(commander_reconstruct3D), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)            :: params
@@ -181,7 +173,6 @@ contains
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
-        use simple_image,            only: image
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params

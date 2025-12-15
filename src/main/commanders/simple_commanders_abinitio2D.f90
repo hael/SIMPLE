@@ -1,14 +1,7 @@
 module simple_commanders_abinitio2D
-use simple_core_module_api
-use simple_cmdline,             only: cmdline
-use simple_commander_base,      only: commander_base
-use simple_exec_helpers,        only: set_shmem_flag
-use simple_parameters,          only: parameters
-use simple_sp_project,          only: sp_project
+use simple_commander_module_api
 use simple_commanders_cavgs
 use simple_commanders_cluster2D
-use simple_commanders_euclid
-use simple_qsys_funs
 implicit none
 
 public :: commander_abinitio2D, autosample2D
@@ -379,7 +372,6 @@ contains
         end subroutine set_sampling
 
         subroutine prep_command_lines( cline )
-            use simple_default_clines, only: set_automask2D_defaults
             class(cmdline), intent(in) :: cline
             cline_cluster2D  = cline
             cline_calc_pspec = cline
@@ -714,7 +706,6 @@ contains
     end subroutine exec_abinitio2D
 
     subroutine autosample2D( cline, nptcls, ncls, max_pop, max_nptcls, popfac )
-        use simple_parameters, only: params_glob
         class(cmdline), intent(in)  :: cline
         integer,        intent(in)  :: nptcls, ncls
         integer,        intent(out) :: max_pop, max_nptcls

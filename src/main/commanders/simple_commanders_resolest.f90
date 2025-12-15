@@ -2,14 +2,9 @@
 module simple_commanders_resolest
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_core_module_api
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
-use simple_image_msk,      only: image_msk
-use simple_parameters,     only: parameters
+use simple_commander_module_api
 use simple_fsc
+use simple_commanders_euclid, only: commander_calc_pspec_distr
 implicit none
 #include "simple_local_flags.inc"
 
@@ -399,8 +394,6 @@ contains
         use simple_polarft_calc,     only: polarft_calc
         use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
         use simple_class_frcs,       only: class_frcs
-        use simple_euclid_sigma2
-        use simple_commanders_euclid
         class(commander_score_ptcls), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(pftc_shsrch_grad), allocatable :: grad_shsrch_objs(:)

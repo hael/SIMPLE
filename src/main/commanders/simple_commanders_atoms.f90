@@ -1,13 +1,8 @@
 module simple_commanders_atoms
-use simple_core_module_api
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
-use simple_image,          only: image
-use simple_image_bin,      only: image_bin
-use simple_nanoparticle,   only: nanoparticle
-use simple_atoms,          only: atoms
+use simple_commander_module_api
 use simple_nanoparticle_utils
+use simple_nanoparticle, only: nanoparticle
+use simple_atoms,        only: atoms
 implicit none
 #include "simple_local_flags.inc"
 

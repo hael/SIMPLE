@@ -1,13 +1,7 @@
 module simple_commanders_starproject
-use simple_core_module_api
-use simple_commander_base, only: commander_base
-use simple_cmdline,        only: cmdline
-use simple_sp_project,     only: sp_project
-use simple_starproject,    only: starproject
-use simple_binoris_io,     only: binread_nlines, binread_oritab
-use simple_parameters,     only: parameters, params_glob
-use simple_jiffys,         only: simple_end
-use simple_nice
+use simple_commander_module_api
+use simple_starproject, only: starproject
+use simple_jiffys,      only: simple_end
 implicit none
 #include "simple_local_flags.inc"
 

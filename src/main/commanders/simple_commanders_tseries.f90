@@ -1,24 +1,11 @@
 ! concrete commander: time-series analysis
 module simple_commanders_tseries
-use simple_core_module_api
-use simple_builder,           only: builder
-use simple_cmdline,           only: cmdline
-use simple_commander_base,    only: commander_base
+use simple_commander_module_api
 use simple_commanders_oris,   only: commander_vizoris
 use simple_commanders_rec,    only: commander_reconstruct3D
 use simple_commanders_volops, only: commander_reproject
-use simple_exec_helpers,      only: set_shmem_flag
-use simple_image,             only: image
-use simple_image_bin,         only: image_bin
-use simple_parameters,        only: parameters, params_glob
-use simple_qsys_env,          only: qsys_env
-use simple_sp_project,        only: sp_project
-use simple_stack_io,          only: stack_io
-use simple_binoris_io
 use simple_commanders_cluster2D
 use simple_nanoparticle
-use simple_nice
-use simple_qsys_funs
 implicit none
 #include "simple_local_flags.inc"
 
@@ -145,7 +132,6 @@ end type commander_tseries_make_projavgs
 contains
 
     subroutine exec_tseries_import( self, cline )
-        use simple_sp_project, only: sp_project
         class(commander_tseries_import), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
@@ -179,7 +165,6 @@ contains
     end subroutine exec_tseries_import
 
     subroutine exec_tseries_import_particles( self, cline )
-        use simple_sp_project,       only: sp_project
         use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(commander_tseries_import_particles), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
@@ -523,8 +508,6 @@ contains
 
     subroutine exec_tseries_track_particles( self, cline )
         use simple_tseries_track_particles
-        use simple_qsys_funs,  only: qsys_job_finished
-        use simple_sp_project, only: sp_project
         class(commander_tseries_track_particles), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         type(sp_project)          :: spproj
@@ -932,7 +915,6 @@ contains
     end subroutine exec_refine3D_nano
 
     subroutine exec_extract_substk( self, cline )
-        use simple_image, only: image
         class(commander_extract_substk), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
@@ -1669,7 +1651,6 @@ contains
 
     subroutine exec_tseries_core_finder( self, cline )
         use simple_opt_mask,  only: estimate_spher_mask
-        use simple_image_msk, only: image_msk
         class(commander_tseries_core_finder), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
         real, parameter   :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging

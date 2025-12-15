@@ -1,14 +1,7 @@
 module simple_commanders_cavgs
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_core_module_api
-use simple_builder,        only: builder, build_glob
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters, params_glob
-use simple_sp_project,     only: sp_project
-use simple_image,          only: image
-use simple_stack_io,       only: stack_io
+use simple_commander_module_api
 use simple_strategy2D_utils
 implicit none
 #include "simple_local_flags.inc"

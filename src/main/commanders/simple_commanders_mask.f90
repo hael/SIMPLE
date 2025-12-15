@@ -1,13 +1,6 @@
 ! concrete commander: masking routines
 module simple_commanders_mask
-use simple_core_module_api
-use simple_builder,        only: builder
-use simple_parameters,     only: parameters
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
-use simple_image_msk,      only: image_msk
-use simple_default_clines
+use simple_commander_module_api
 implicit none
 #include "simple_local_flags.inc"
 
@@ -106,7 +99,6 @@ contains
 
     !> for automasking of class averages
     subroutine exec_automask2D( self, cline )
-        use simple_image_msk, only: automask2D
         class(commander_automask2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)         :: params

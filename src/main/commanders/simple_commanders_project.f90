@@ -1,18 +1,8 @@
 ! concrete commander: operations on projects (spproject) and associated files
 module simple_commanders_project
-use simple_core_module_api
-use simple_binoris_io
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
+use simple_commander_module_api
 use simple_stream_watcher, only: stream_watcher
-use simple_parameters,     only: parameters, params_glob
-use simple_sp_project,     only: sp_project
-use simple_stack_io,       only: stack_io
-use simple_qsys_env,       only: qsys_env
 use simple_stream_communicator
-use simple_nice
-use simple_qsys_funs
 implicit none
 #include "simple_local_flags.inc"
 
@@ -205,7 +195,6 @@ contains
     end subroutine exec_print_project_info
 
     subroutine exec_print_project_vals( self, cline )
-        use simple_sp_project, only: oritype2segment
         class(commander_print_project_vals), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(binoris)                 :: bos_doc
@@ -981,7 +970,6 @@ contains
     end subroutine exec_sample_classes
 
     subroutine exec_selection( self, cline )
-        use simple_sp_project, only: oritype2segment
         class(commander_selection), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)                :: params
@@ -1200,7 +1188,6 @@ contains
     end subroutine exec_replace_project_field
 
     subroutine exec_scale_project_distr( self, cline )
-        use simple_builder,    only: builder
         class(commander_scale_project_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(chash),      allocatable :: part_params(:)
@@ -1544,7 +1531,6 @@ contains
     subroutine exec_prune_project( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_qsys_funs, only: qsys_job_finished
         class(commander_prune_project), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)     :: params

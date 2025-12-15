@@ -1,15 +1,8 @@
 ! concrete commander: miscallenaous routines
 module simple_commanders_misc
-use simple_core_module_api
 include "starfile_enum.inc"
-use simple_binoris_io
-use simple_cmdline,          only: cmdline
-use simple_commander_base,   only: commander_base
+use simple_commander_module_api
 use simple_simple_volinterp, only: rotvol
-use simple_sp_project,       only: sp_project
-use simple_image,            only: image
-use simple_builder,          only: builder
-use simple_parameters,       only: parameters
 implicit none
 #include "simple_local_flags.inc"
 
@@ -275,8 +268,6 @@ contains
 
     !>  dsym_cylinder search intended for symmetry of order D
     subroutine exec_dsym_volinit( dsym_os, cylinder)
-        use simple_parameters,   only: params_glob
-        use simple_image,        only: image
         use simple_segmentation, only: otsu_robust_fast
         class(oris),   intent(inout) :: dsym_os
         class(image),  intent(inout) :: cylinder
@@ -415,8 +406,6 @@ contains
 
     subroutine exec_fractionate_movies_distr( self, cline )
         use simple_starproject, only: starproject
-        use simple_qsys_env,    only: qsys_env
-        use simple_qsys_funs
         class(commander_fractionate_movies_distr), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         type(parameters)  :: params
@@ -467,7 +456,6 @@ contains
 
     subroutine exec_fractionate_movies( self, cline )
         use simple_micrograph_generator
-        use simple_qsys_funs
         use simple_fsc, only: plot_fsc
         class(commander_fractionate_movies), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline

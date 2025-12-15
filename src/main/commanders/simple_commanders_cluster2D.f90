@@ -2,29 +2,16 @@
 module simple_commanders_cluster2D
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_core_module_api
-use simple_builder,             only: builder, build_glob
-use simple_cmdline,             only: cmdline
-use simple_commander_base,      only: commander_base
-use simple_commanders_imgproc,  only: commander_scale
-use simple_exec_helpers,        only: set_shmem_flag, set_master_num_threads
-use simple_image,               only: image
-use simple_parameters,          only: parameters, params_glob
-use simple_qsys_env,            only: qsys_env
-use simple_sp_project,          only: sp_project
-use simple_stack_io,            only: stack_io
-use simple_starproject,         only: starproject
+use simple_commander_module_api
+use simple_commanders_euclid
 use simple_classaverager
 use simple_commanders_cavgs
-use simple_commanders_euclid
-use simple_default_clines
-use simple_euclid_sigma2
 use simple_gui_utils
-use simple_nice
 use simple_procimgstk
 use simple_progress
-use simple_qsys_funs
 use simple_strategy2D_utils
+use simple_commanders_imgproc, only: commander_scale
+use simple_starproject,        only: starproject
 implicit none
 #include "simple_local_flags.inc"
 
@@ -1583,7 +1570,6 @@ contains
 
     subroutine exec_ppca_denoise_classes( self, cline )
         use simple_imgproc,       only: make_pcavecs
-        use simple_image,         only: image
         use simple_pca,           only: pca
         use simple_pca_svd,       only: pca_svd
         use simple_kpca_svd,      only: kpca_svd
@@ -1859,7 +1845,6 @@ contains
 
     subroutine check_2Dconv( cline, os )
         use simple_convergence, only: convergence
-        use simple_parameters,  only: params_glob
         class(cmdline), intent(inout) :: cline
         class(oris),    intent(inout) :: os
         type(parameters)  :: params
