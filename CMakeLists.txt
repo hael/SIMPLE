@@ -168,3 +168,7 @@ message(STATUS "MPI:                  ${USE_MPI}")
 message(STATUS "LIBTIFF:              ${USE_LIBTIFF}")
 message(STATUS "Build tests:          ${BUILD_TESTS}")
 message(STATUS "========================================")
+
+# Add message at end of installation
+add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
+
