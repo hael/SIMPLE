@@ -2,15 +2,12 @@
 #
 # Compiler and platform configuration for SIMPLE.
 # Requires: CMake >= 3.25, GCC/GFortran >= 14 (Linux), GFortran + AppleClang (macOS).
-
 # ------------------------------------------------------------------------------
 # Basic compiler sanity checks
 # ------------------------------------------------------------------------------
-
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     message(FATAL_ERROR "Only GFortran is supported for Fortran. Found: ${CMAKE_Fortran_COMPILER_ID}")
 endif()
-
 if(APPLE)
     # On macOS, allow AppleClang for C/C++ if GFortran is used
     if(NOT (CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU"))
@@ -40,7 +37,6 @@ endif()
 # ------------------------------------------------------------------------------
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -80,7 +76,6 @@ add_compile_definitions(
 # Fortran compile flags
 #   Use target_compile_options where possible, but keep defaults for all targets.
 # ------------------------------------------------------------------------------
-
 # Common Fortran flags (apply to all configurations)
 string(APPEND CMAKE_Fortran_FLAGS
        " -cpp -ffree-form -fimplicit-none -ffree-line-length-none"
