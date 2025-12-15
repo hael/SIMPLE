@@ -2,8 +2,6 @@ module simple_polarft_calc
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
-use simple_type_defs
 use simple_fftw3
 use simple_sp_project, only: sp_project
 use simple_parameters, only: params_glob

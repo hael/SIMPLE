@@ -1,7 +1,6 @@
 ! function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4
 module simple_opt_pr_cg
 use simple_core_module_api
-use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
 implicit none

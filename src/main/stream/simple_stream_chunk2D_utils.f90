@@ -1,9 +1,6 @@
 module simple_stream_chunk2D_utils
 use simple_core_module_api
 use simple_defs_environment
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
 use simple_stream2D_state
 use simple_parameters,             only: params_glob
 use simple_cmdline,                only: cmdline

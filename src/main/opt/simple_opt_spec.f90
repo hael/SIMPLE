@@ -1,7 +1,6 @@
 ! optimiser specification
 module simple_opt_spec
 use simple_core_module_api
-use simple_defs
 implicit none
 
 public :: opt_spec, costfun

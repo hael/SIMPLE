@@ -3,8 +3,6 @@ module simple_kpca_svd
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
-use simple_defs
 use simple_pca, only: pca
 implicit none
 
