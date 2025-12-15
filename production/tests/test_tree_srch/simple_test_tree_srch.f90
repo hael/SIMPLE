@@ -1,0 +1,109 @@
+program simple_test_tree_srch
+! use simple_image,            only: image
+! use simple_cmdline,          only: cmdline
+! use simple_parameters,       only: parameters
+! use simple_oris
+! use simple_stat
+! use simple_commanders_volops,  only: commander_reproject
+! use simple_commanders_sim,      only: commander_simulate_particles
+use simple_hierch_tree 
+implicit none 
+
+! type(image)  :: vol
+! type(parameters)    :: p 
+! type(image), allocatable    :: ptcls(:), refs(:)
+! type(cmdline)   :: cline
+! type(oris)   :: space, space_sub, spiral
+! type(commander_reproject)     :: xreproject
+! type(commander_simulate_particles)  :: xsimulate_particles 
+! character(len=:), allocatable :: cmd
+! integer     :: ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, i, NPLANES 
+! real, allocatable   :: smat_ref(:,:)
+! integer, allocatable :: ptcl_rank_neigh(:), ref_rank_neigh(:,:)
+type(dendro)    :: test_tree
+real, allocatable            :: test_dist_mat(:,:)
+! nspace = 1000 
+
+! ! Load Volume 
+! write(*, *) 'Downloading the example dataset...'
+! cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
+! ! call execute_command_line(cmd, exitstat=rc)
+! write(*, *) 'Converting .pdb to .mrc...'
+! cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+! ! call execute_command_line(cmd, exitstat=rc)
+! cmd = 'rm 1JYX.pdb'
+! ! call execute_command_line(cmd, exitstat=rc)
+
+! Reproject Volume 
+! call cline%set('smpd'   , 1.)
+! call cline%set('nthr'   , 16.)
+! call cline%set('vol1'   , '1JYX.mrc')
+! call cline%set('mskdiam', 180.)
+! call cline%set('lp'   ,   3.)
+
+! Spiral Reprojections of Volume 
+! call p%new(cline)
+! call find_ldim_nptcls(p%vols(1), p%ldim, ifoo)
+! call vol%new(p%ldim, p%smpd)
+! call vol%read(p%vols(1))
+! call spiral%new(NPLANES, is_ptcl=.false.)
+! call spiral%spiral
+
+! allocate(smat_ref(nspace, nspace))
+
+
+! do ispace = 1, nspace - 1
+!     do jspace = ispace + 1, nspace 
+!         ! calc pairwise FM
+!         ! diagonal set to 0.
+!     end do 
+! end do 
+
+
+! Calc FM distance matrix no ctf 
+
+! count number of nodes traversed 
+
+! can also try with cheaper similarity metric 
+
+! Hierarchical Clustering from distance mat 
+
+! not sure if dendrogram balanced 
+
+
+allocate(test_dist_mat(10,10))
+
+! test_dist_mat = reshape( [0., 0.1, 0.8, 0.9, 0.1, 0., 0.6, 0.3, 0.8, 0.6, 0., 0.7, 0.9, 0.3, 0.7, 0.], [4,4] )
+
+test_dist_mat = reshape([ &
+! Cluster 1 (1,2)
+    0, 1, 10,10,20,20,30,30,40,40, &
+    1, 0, 10,10,20,20,30,30,40,40, &
+
+! Cluster 2 (3,4)
+    10,10, 0, 1,10,10,20,20,30,30, &
+    10,10, 1, 0,10,10,20,20,30,30, &
+
+! Cluster 3 (5,6)
+    20,20,10,10, 0, 1,10,10,20,20, &
+    20,20,10,10, 1, 0,10,10,20,20, &
+
+! Cluster 4 (7,8)
+    30,30,20,20,10,10, 0, 1,10,10, &
+    30,30,20,20,10,10, 1, 0,10,10, &
+
+! Cluster 5 (9,10)
+    40,40,30,30,20,20,10,10, 0, 1, &
+    40,40,30,30,20,20,10,10, 1, 0  &
+], [10,10])
+
+print *, test_dist_mat
+! test_dist_mat = reshape( [0., 0.8, 0., 0.8], [2,2])
+call test_tree%set_distmat(test_dist_mat)
+call test_tree%set_npnts(10)
+call test_tree%build_dendro
+call print_dendro(test_tree%root)
+print*, test_tree%root%left%right%left%subset
+end program simple_test_tree_srch
+
+    
