@@ -1,7 +1,5 @@
 module simple_ctf_estimate_cost
 use simple_core_module_api
-use simple_defs
-use simple_type_defs
 use simple_image,     only: image
 use simple_ctf,       only: ctf
 use simple_opt_spec,  only: opt_spec

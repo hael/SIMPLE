@@ -5,9 +5,6 @@ module simple_image
 !$ use omp_lib_kinds
 use, intrinsic :: iso_c_binding
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
-use simple_type_defs
 use simple_fftw3
 use simple_ftiter,  only: ftiter
 use simple_imgfile, only: imgfile

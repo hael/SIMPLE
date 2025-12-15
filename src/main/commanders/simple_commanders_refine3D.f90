@@ -1,9 +1,6 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commanders_refine3D
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs_conv
-use simple_defs
 use simple_builder,           only: builder, build_glob
 use simple_cmdline,           only: cmdline
 use simple_commander_base,    only: commander_base

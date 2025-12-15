@@ -1,12 +1,10 @@
 module simple_relion
 use simple_core_module_api
-use simple_defs
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use CPlot2D_wrapper_module
-use FoX_dom
-! use simple_rnd
 use simple_starfile_wrappers
+use FoX_dom
 implicit none
 private
 public :: relion_project

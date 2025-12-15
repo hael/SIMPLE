@@ -1,6 +1,5 @@
 program simple_test_maxnloc
 use simple_core_module_api
-use simple_defs
 implicit none
 integer, parameter :: NNRS = 1000, NSEL = 10, NTST=100000
 real               :: arr(NNRS), arr_copy(NNRS)

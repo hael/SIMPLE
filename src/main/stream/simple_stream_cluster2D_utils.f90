@@ -1,8 +1,5 @@
 module simple_stream_cluster2D_utils
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
 use simple_stream2D_state
 use json_kinds
 use json_module

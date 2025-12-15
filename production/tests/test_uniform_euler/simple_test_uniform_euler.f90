@@ -1,6 +1,5 @@
 program simple_test_uniform_euler
 use simple_core_module_api
-use simple_defs
 implicit none
 integer, parameter :: N_SAMPLES = 2000
 type(sym)   :: pgrpsyms

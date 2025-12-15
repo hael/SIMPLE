@@ -3,9 +3,6 @@ module simple_eul_prob_tab2D
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_type_defs
-use simple_defs_fname
-use simple_defs
 use simple_parameters,       only: params_glob
 use simple_builder,          only: build_glob
 use simple_polarft_calc,     only: pftc_glob

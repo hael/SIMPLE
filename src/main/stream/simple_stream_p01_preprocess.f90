@@ -1,14 +1,5 @@
 module simple_stream_p01_preprocess
-use simple_core_module_api
 use simple_stream_module_api
-use simple_defs_environment
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
-use simple_type_defs
-use simple_timer
-use json_kinds
-use json_module
 use simple_motion_correct_utils, only: flip_gain
 use simple_histogram,            only: histogram
 implicit none

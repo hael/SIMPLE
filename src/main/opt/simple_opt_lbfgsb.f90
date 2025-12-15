@@ -1,7 +1,6 @@
 ! memory limited bound-constained BFGS optimiser
 module simple_opt_lbfgsb
 use simple_core_module_api
-use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
 implicit none

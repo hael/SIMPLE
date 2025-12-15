@@ -1,4 +1,9 @@
 module simple_core_module_api
+use simple_defs_fname
+use simple_defs_conv
+use simple_defs_stream
+use simple_defs
+use simple_type_defs
 use simple_binoris,         only: binoris, binoris_seginfo
 use simple_chash,           only: chash
 use simple_class_sample_io, only: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples

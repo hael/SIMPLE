@@ -1,7 +1,5 @@
 module simple_fsc
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
 use simple_image, only: image
 use CPlot2D_wrapper_module
 implicit none

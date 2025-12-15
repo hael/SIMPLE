@@ -1,7 +1,6 @@
 module simple_nice
 use, intrinsic :: iso_c_binding 
 use simple_core_module_api
-use simple_defs
 use simple_sp_project, only: sp_project
 use simple_socket_comm
 use simple_histogram

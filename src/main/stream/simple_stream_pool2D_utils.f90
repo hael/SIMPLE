@@ -1,30 +1,9 @@
 module simple_stream_pool2D_utils
-use simple_core_module_api
-use simple_defs_environment
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs_conv
-use simple_defs
-use simple_type_defs
-use simple_cmdline,       only: cmdline
-use simple_euclid_sigma2, only: sigma2_star_from_iter
-use simple_parameters,    only: params_glob
-use simple_sp_project,    only: sp_project
-use simple_stream_chunk,  only: stream_chunk
-use simple_image,         only: image
-use simple_stack_io,      only: stack_io
-use simple_guistats,      only: guistats
-use simple_class_frcs,    only: class_frcs
-use simple_stream_cluster2D_utils
-use simple_stream2D_state
-use simple_rec_list
+use simple_stream_module_api
 implicit none
 
-! LIFECYCLE
-public :: import_records_into_pool
 ! CALCULATORS
 public :: init_pool_clustering
-public :: analyze2D_pool
 public :: iterate_pool
 ! GETTERS
 public :: get_pool_assigned
@@ -39,17 +18,13 @@ public :: get_pool_rejected
 public :: is_pool_available
 ! SETTERS
 public :: set_lpthres_type
-public :: set_pool_dimensions
 public :: set_pool_resolution_limits
 ! UPDATERS
 public :: update_mskdiam
 public :: update_pool
 public :: update_pool_aln_params
-public :: update_pool_dims
-public :: update_pool_for_gui
 public :: update_pool_status
 ! JPGS / GUI
-public :: generate_pool_jpeg
 public :: generate_pool_stats
 private
 #include "simple_local_flags.inc"

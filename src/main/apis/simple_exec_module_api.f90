@@ -12,6 +12,13 @@
 !!  3. Declare a type(commander_...) variable in simple_exec and wire it
 !!     into the SELECT CASE(prg) dispatch.
 module simple_exec_module_api
+use simple_core_module_api
+use simple_exec_helpers,   only: script_exec, restarted_exec, update_job_descriptions_in_project
+use simple_jiffys,         only: simple_print_git_version, simple_print_timer
+use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
+use iso_fortran_env,       only: output_unit
+use simple_cmdline,        only: cmdline, cmdline_err
+
 ! project commanders, operations on projects (sp_project) and associated files
 use simple_commanders_project, only: commander_new_project, commander_update_project, commander_print_project_info,&
 commander_print_project_field, commander_zero_project_shifts, commander_import_movies, commander_import_boxes,&

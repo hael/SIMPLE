@@ -1,8 +1,6 @@
 ! batch-processing manager - control module
 module simple_qsys_ctrl
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
 use simple_qsys_base,  only: qsys_base
 use simple_qsys_slurm, only: qsys_slurm
 use simple_qsys_lsf,   only: qsys_lsf

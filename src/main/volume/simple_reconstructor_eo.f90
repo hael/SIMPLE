@@ -1,8 +1,6 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_reconstructor_eo
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
 use simple_reconstructor, only: reconstructor
 use simple_image_msk,     only: image_msk
 use simple_parameters,    only: params_glob

@@ -1,11 +1,8 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commanders_cluster2D
-use simple_core_module_api
-use simple_defs_fname
-use simple_defs_conv
-use simple_defs
 !$ use omp_lib
 !$ use omp_lib_kinds
+use simple_core_module_api
 use simple_builder,             only: builder, build_glob
 use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base

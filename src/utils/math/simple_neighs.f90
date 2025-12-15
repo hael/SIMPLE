@@ -1,6 +1,5 @@
 module simple_neighs
 use simple_core_module_api
-use simple_defs
 implicit none
 #include "simple_local_flags.inc"
 

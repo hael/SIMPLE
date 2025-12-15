@@ -1,11 +1,9 @@
 ! shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
 module simple_ftexp_shsrch
 use simple_core_module_api
-use simple_defs
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
 use simple_ft_expanded, only: ft_expanded, ftexp_transfmat, ftexp_transfmat_init
-
 implicit none
 
 public :: ftexp_shsrch, test_ftexp_shsrch

@@ -2,8 +2,6 @@ module simple_motion_correct_utils
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs
-use simple_type_defs
 use simple_image,       only: image
 use simple_eer_factory, only: eer_decoder
 implicit none

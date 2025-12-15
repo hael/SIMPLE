@@ -1,7 +1,6 @@
 ! Fourier index iterator
 module simple_ftiter
 use simple_core_module_api
-use simple_defs
 implicit none
 
 public :: ftiter, test_ftiter

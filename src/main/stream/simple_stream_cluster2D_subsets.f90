@@ -1,9 +1,4 @@
 module simple_stream_cluster2D_subsets
-use simple_core_module_api
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
-use simple_stream2D_state
 use simple_stream_module_api
 use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_match_cavgs
 implicit none

@@ -3,8 +3,6 @@ module simple_tseries_track_particles
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
 use simple_parameters, only: params_glob
 use simple_image,      only: image
 use simple_tvfilter

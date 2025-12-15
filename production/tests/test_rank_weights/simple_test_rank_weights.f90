@@ -1,7 +1,6 @@
 program simple_test_rank_weights
-use gnufor2, only: plot
 use simple_core_module_api
-use simple_defs
+use gnufor2, only: plot
 implicit none
 real    :: ranks(200), weights(200)
 integer :: i

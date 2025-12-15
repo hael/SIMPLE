@@ -1,9 +1,6 @@
 module simple_user_interface
 use simple_core_module_api
 use simple_ansi_ctrls
-use simple_defs
-use simple_defs_fname
-use simple_defs_stream
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui

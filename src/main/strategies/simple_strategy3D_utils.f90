@@ -1,7 +1,5 @@
 module simple_strategy3D_utils
 use simple_core_module_api
-use simple_type_defs
-use simple_defs
 use simple_strategy3D_alloc  ! singleton class s3D
 use simple_strategy3D_srch,  only: strategy3D_srch
 use simple_builder,          only: build_glob

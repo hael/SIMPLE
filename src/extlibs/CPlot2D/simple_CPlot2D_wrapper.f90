@@ -1,7 +1,6 @@
 module CPlot2D_wrapper_module
 use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_char, C_double, C_bool, c_null_char
 use simple_core_module_api
-use simple_defs
 implicit none
 #include "simple_local_flags.inc"
 

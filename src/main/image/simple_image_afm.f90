@@ -1,7 +1,6 @@
 module simple_image_afm 
 use iso_c_binding
 use simple_core_module_api
-use simple_defs
 use simple_aff_prop,       only: aff_prop
 use simple_class_frcs,     only: class_frcs
 use simple_cmdline,        only: cmdline

@@ -1,8 +1,5 @@
 module simple_classaverager
 use simple_core_module_api
-use simple_defs_fname
-use simple_defs
-use simple_type_defs
 !$ use omp_lib
 use simple_builder,           only: build_glob
 use simple_ctf,               only: ctf

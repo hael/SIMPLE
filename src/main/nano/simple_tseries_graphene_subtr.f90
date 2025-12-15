@@ -1,11 +1,10 @@
 module simple_tseries_graphene_subtr
 use simple_core_module_api
-use simple_defs
-use simple_parameters,       only: parameters, params_glob
-use simple_cmdline,          only: cmdline
-use simple_polarizer,        only: polarizer
-use simple_image,            only: image
-use simple_atoms,            only: atoms
+use simple_parameters,   only: parameters, params_glob
+use simple_cmdline,      only: cmdline
+use simple_polarizer,    only: polarizer
+use simple_image,        only: image
+use simple_atoms,        only: atoms
 use simple_polarft_calc, only: polarft_calc
 implicit none
 

@@ -1,21 +1,8 @@
 module simple_stream_p03_opening2D
-use simple_core_module_api
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
-use simple_sp_project,     only: sp_project
-use simple_stream_watcher, only: stream_watcher
-use simple_commanders_abinitio2D
-use simple_commanders_preprocess
-use simple_gui_utils
-use simple_mini_stream_utils
-use simple_progress
-use simple_stream_communicator
-use simple_stream_utils
-use json_kinds
+use simple_stream_module_api
+use simple_commanders_preprocess, only: commander_extract_distr, commander_shape_rank_cavgs
+use simple_commanders_abinitio2D, only: commander_abinitio2D
+use simple_mini_stream_utils,     only: segdiampick_mics
 implicit none
 
 public :: stream_p03_opening2D

@@ -1,7 +1,6 @@
 ! simulation of single-particle images
 module simple_simulator
 use simple_core_module_api
-use simple_defs
 implicit none
 
 contains

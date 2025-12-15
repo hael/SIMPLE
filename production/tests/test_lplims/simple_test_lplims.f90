@@ -1,6 +1,5 @@
 program simple_test_lplims
 use simple_core_module_api
-use simple_defs
 implicit none
 real :: mskdiam, lpstart,lpstop, lpcen
 mskdiam = 300.

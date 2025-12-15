@@ -1,7 +1,6 @@
 ! batch-processing manager - Factory class
 module simple_qsys_factory
 use simple_core_module_api
-use simple_defs
 use simple_qsys_base,  only: qsys_base
 use simple_qsys_local, only: qsys_local
 use simple_qsys_slurm, only: qsys_slurm

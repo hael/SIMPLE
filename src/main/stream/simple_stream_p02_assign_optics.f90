@@ -1,21 +1,5 @@
 module simple_stream_p02_assign_optics
-use simple_core_module_api
-use simple_defs_environment
-use simple_defs_fname
-use simple_defs_stream
-use simple_defs
-use simple_cmdline,            only: cmdline
-use simple_commander_base,     only: commander_base
-use simple_parameters,         only: parameters
-use simple_sp_project,         only: sp_project
-use simple_starproject_stream, only: starproject_stream
-use simple_stream_watcher,     only: stream_watcher
-use simple_gui_utils
-use simple_progress
-use simple_qsys_funs
-use simple_stream_communicator
-use simple_stream_utils
-use json_kinds
+use simple_stream_module_api
 implicit none
 
 public :: stream_p02_assign_optics

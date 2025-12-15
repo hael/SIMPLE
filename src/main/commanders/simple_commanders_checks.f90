@@ -1,7 +1,6 @@
 ! concrete commander: checking routines
 module simple_commanders_checks
 use simple_core_module_api
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters

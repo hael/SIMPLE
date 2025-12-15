@@ -2,7 +2,6 @@
 
 module simple_opt_bfgs
 use simple_core_module_api
-use simple_defs
 use simple_optimizer, only: optimizer
 implicit none
 

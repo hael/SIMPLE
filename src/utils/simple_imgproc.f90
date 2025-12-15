@@ -1,7 +1,6 @@
 ! stack image processing routines for SPIDER/MRC files and other useful img jiffys
 module simple_imgproc
 use simple_core_module_api
-use simple_defs
 use simple_image, only: image
 implicit none
 #include "simple_local_flags.inc"

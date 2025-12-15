@@ -1,15 +1,12 @@
 module simple_starproject_stream
 use simple_core_module_api
-use simple_defs
 !$ use omp_lib
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: params_glob
 use simple_histogram,  only: histogram
 use simple_starfile_wrappers
-use simple_math
 use CPlot2D_wrapper_module
-use simple_rnd
 use FoX_dom
 implicit none
 

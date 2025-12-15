@@ -1,6 +1,5 @@
 program simple_test_nice
 use simple_core_module_api
-use simple_defs
 use simple_nice
 implicit none
 type(simple_nice_communicator) :: nice_communicator
