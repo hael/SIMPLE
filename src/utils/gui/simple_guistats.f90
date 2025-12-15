@@ -50,10 +50,12 @@ contains
         class(guistats),   intent(inout) :: self
         logical, optional, intent(in)    :: remove_existing
         type(string) :: file
-        if(present(remove_existing) .and. remove_existing) then
-            file = GUISTATS_FILE // '.json'
-            if(file_exists(file)) call del_file(file)
-            call file%kill
+        if( present(remove_existing) )then
+            if( remove_existing) then
+                file = GUISTATS_FILE // '.json'
+                if(file_exists(file)) call del_file(file)
+                call file%kill
+            endif
         endif
         call self%stats%new(1, .false.)
         call self%stats%set(1, "len", 1.0)
@@ -258,17 +260,19 @@ contains
         call self%stats%set(line, 'key', key)
         call self%stats%set(line, 'val', val)
         call self%stats%set(line, 'sect', section)
-        if(present(thumbnail) .and. thumbnail) then
-            call self%stats%set(line, 'type', 'thumbnail')
-            if(present(boxfile)) then
-                call self%stats%set(line, 'boxfile', trim(boxfile))
-            end if
-            if(present(smpd)) then
-                call self%stats%set(line, 'smpd', smpd)
-            end if
-            if(present(box)) then
-                call self%stats%set(line, 'box', box)
-            end if
+        if( present(thumbnail) )then
+            if( thumbnail ) then
+                call self%stats%set(line, 'type', 'thumbnail')
+                if(present(boxfile)) then
+                    call self%stats%set(line, 'boxfile', trim(boxfile))
+                end if
+                if(present(smpd)) then
+                    call self%stats%set(line, 'smpd', smpd)
+                end if
+                if(present(box)) then
+                    call self%stats%set(line, 'box', box)
+                end if
+            endif
         else
             call self%stats%set(line, 'type', 'string')
         end if 

@@ -154,7 +154,7 @@ contains
             nbatch    = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
             cmat_thr_sum = dcmplx(0.d0,0.d0)
-            !$omp parallel do default(shared) private(iptcl,imatch,pspec,cmat)&
+            !$omp parallel do default(shared) private(iptcl,imatch,pspec,cmat,sdev_noise)&
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
             do imatch = 1,nbatch
                 iptcl = pinds(batchlims(1)+imatch-1)

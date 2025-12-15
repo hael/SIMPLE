@@ -793,8 +793,8 @@ contains
     ! This subroutine stores in pos the indexes corresponding to
     ! the pixels with value > 0 in the binary matrix imat.
     subroutine get_pixel_pos(imat, pos)
-        integer,              intent(in)  :: imat(:,:,:)
-        integer, allocatable, intent(out) :: pos(:,:)
+        integer,              intent(in)    :: imat(:,:,:)
+        integer, allocatable, intent(inout) :: pos(:,:)
         integer ::  i, j, k, cnt
         integer :: s(3)
         if(allocated(pos)) deallocate(pos)

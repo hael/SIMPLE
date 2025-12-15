@@ -527,7 +527,6 @@ contains
                                 call spproj_glob%os_mic%transfer_ori(j, streamspprojs(iproj)%os_mic, i)
                             endif
                         enddo
-                        call streamspprojs(iproj)%write_segment_inside('mic', completed_fnames(iproj))
                         call streamspprojs(iproj)%kill
                     enddo
                 endif

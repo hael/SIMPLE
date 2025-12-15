@@ -337,6 +337,7 @@ contains
         class(*),             intent(in)    :: filename
         integer,              intent(inout) :: status
         integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
+        if( allocated(buffer) ) deallocate(buffer)
         allocate(buffer(13), source=0)
         select type(filename)
             type is(string)
