@@ -14,6 +14,15 @@ implicit none
 
 contains
 
+    subroutine terminate_stream( msg )
+        character(len=*), intent(in) :: msg
+        if(trim(params_glob%async).eq.'yes')then
+            if( file_exists(TERM_STREAM) )then
+                call simple_end('**** '//trim(msg)//' ****', print_simple=.false.)
+            endif
+        endif
+    end subroutine terminate_stream
+
     !> To deal with dynamic user input diring streaming
     subroutine update_user_params( cline_here, httpcom )
         type(cmdline),                            intent(inout) :: cline_here

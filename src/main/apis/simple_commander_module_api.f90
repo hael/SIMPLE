@@ -16,4 +16,5 @@ use simple_parameters,     only: parameters, params_glob
 use simple_qsys_env,       only: qsys_env
 use simple_sp_project,     only: sp_project, oritype2segment
 use simple_stack_io,       only: stack_io
+use simple_stream_utils,   only: terminate_stream
 end module simple_commander_module_api

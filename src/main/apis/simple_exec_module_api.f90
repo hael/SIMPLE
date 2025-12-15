@@ -39,8 +39,7 @@ commander_gen_pspecs_and_thumbs_distr, commander_ctf_estimate_distr, commander_p
 commander_extract_distr, commander_reextract_distr, commander_map_cavgs_selection
 
 ! cluster2D commanders, for simultanous 2D alignment and clustering of single-particle images
-use simple_commanders_cluster2D, only: commander_make_cavgs_distr, commander_cluster2D_autoscale, commander_write_classes,&
-commander_ppca_denoise_classes
+use simple_commanders_cluster2D, only: commander_cluster2D_autoscale, commander_ppca_denoise_classes
 
 ! ab initio 2D commanders, for simultanous 2D alignment and clustering of single-particle images
 use simple_commanders_abinitio2D, only: commander_abinitio2D
@@ -55,6 +54,9 @@ use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_select_clu
 use simple_commanders_imgproc, only: commander_cluster_stack, &
 commander_match_stacks, commander_binarize, commander_convert, commander_ctfops, commander_ctf_phaseflip,&
 commander_filter, commander_normalize, commander_ppca_denoise, commander_scale, commander_stack, commander_stackops
+
+! mkcavgs commanders, for making class averages
+use simple_commanders_mkcavgs, only: commander_make_cavgs_distr,  commander_write_classes
 
 ! resoltest commanders, for resolution estimation and regularization testing
 use simple_commanders_resolest, only: commander_estimate_lpstages, commander_fsc, commander_clin_fsc,&
