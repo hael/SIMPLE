@@ -282,7 +282,9 @@ contains
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
-            call mskimg%kill        
+            call mskimg%kill
+            ! resolution band mask
+            allocate(self%l_resmsk(fdim(params%box)-1),source=.true.)
         endif
         if( params%box_crop > 0 )then
             ! build image objects
@@ -330,6 +332,7 @@ contains
             if( allocated(self%fsc)           ) deallocate(self%fsc)
             if( allocated(self%lmsk)          ) deallocate(self%lmsk)
             if( allocated(self%lmsk_crop)     ) deallocate(self%lmsk_crop)
+            if( allocated(self%l_resmsk)      ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
