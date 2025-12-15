@@ -3,36 +3,30 @@ use simple_core_module_api
 use simple_defs_fname
 use simple_defs_stream
 use simple_defs
-use simple_class_frcs,         only: class_frcs
-use simple_cmdline,            only: cmdline
-use simple_euclid_sigma2,      only: sigma2_star_from_iter
-use simple_image,              only: image
-use simple_parameters,         only: params_glob
-use simple_sp_project,         only: sp_project
-use simple_stack_io,           only: stack_io
-use simple_starproject,        only: starproject
-use simple_starproject_stream, only: starproject_stream
-use simple_commanders_cluster2D
-use simple_rec_list
 use simple_stream2D_state
+use json_kinds
+use json_module
+use simple_class_frcs,           only: class_frcs
+use simple_cmdline,              only: cmdline
+use simple_commanders_cluster2D, only: commander_rank_cavgs
+use simple_euclid_sigma2,        only: sigma2_star_from_iter
+use simple_image,                only: image
+use simple_parameters,           only: params_glob
+use simple_qsys_funs,            only: qsys_cleanup
+use simple_rec_list,             only: rec_list
+use simple_sp_project,           only: sp_project
+use simple_stack_io,             only: stack_io
+use simple_starproject,          only: starproject
+use simple_starproject_stream,   only: starproject_stream
 implicit none
 
-public :: apply_snapshot_selection
 public :: cleanup_root_folder
 public :: consolidate_sigmas
-public :: debug_print
-public :: get_box
-public :: get_boxa
-public :: rank_cavgs
-public :: rescale_cavgs
-public :: set_dimensions
-public :: set_resolution_limits
 public :: setup_downscaling
 public :: terminate_chunks
 public :: terminate_stream2D
 public :: test_repick
 public :: tidy_2Dstream_iter
-public :: transfer_cavg
 public :: update_user_params2D
 public :: write_project_stream2D
 public :: write_repick_refs
