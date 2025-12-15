@@ -7,7 +7,6 @@ use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project
 use simple_stream_chunk,       only: stream_chunk
 use simple_starproject,        only: starproject
-use simple_starproject_stream, only: starproject_stream
 use json_module,               only: json_value
 implicit none
 

@@ -1292,7 +1292,7 @@ contains
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
-            if( self%dir_meta%to_char([1,1])  .ne.PATH_SEPARATOR )self%dir_movies = PATH_PARENT//self%dir_meta%to_char()
+            if( self%dir_meta%to_char([1,1])  .ne.PATH_SEPARATOR )self%dir_meta   = PATH_PARENT//self%dir_meta%to_char()
             if( self%dir_movies%to_char([1,1]).ne.PATH_SEPARATOR )self%dir_movies = PATH_PARENT//self%dir_movies%to_char()
             if( self%dir_target%to_char([1,1]).ne.PATH_SEPARATOR )self%dir_target = PATH_PARENT//self%dir_target%to_char()
         endif

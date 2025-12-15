@@ -518,10 +518,10 @@ contains
                     enddo
                 enddo
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
-                ! Updates global parameters once and init chuk 2D clustering
-                ! the set of conditions below ensure the init will only happen once
+                ! Updates global parameters once and init chunk 2D clustering
                 if(params%nptcls_per_cls == 0) then
                     if( project_list%size() .gt. params%nmics) then
+                        ! nptcls_per_cls is calculated after params%nmics processed micrographs
                         avgmicptcls    = nptcls_glob / project_list%size()
                         avgmicptcls    = ceiling(avgmicptcls / 10) * 10.0
                         nptcls_per_cls = ceiling(params%nmics * avgmicptcls / params%ncls)
@@ -541,6 +541,7 @@ contains
                         call cline%delete('ncls')
                     end if
                 else if( n_recs_prev == 0 )then
+                    ! nptcls_per_cls is provided on command line: initialize upon first set import
                     params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                     call spprojs(first)%read_segment('stk', projectnames(first))
                     params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
@@ -590,7 +591,7 @@ contains
                     call sets%push2chunk_list(tmpl//'/'//tmpl//METADATA_EXT, sets%size() + 1, .false.)
                     ! remove imported chunk
                     if( trim(params%remove_chunks).eq.'yes' )then
-                        do ic = ic_start,ic_end
+                        do ic = 1,size(projfiles)
                             call simple_rmdir(stemname(projfiles(ic)))
                         enddo
                     endif
@@ -599,6 +600,7 @@ contains
                     if( allocated(ids) ) deallocate(ids)
                 enddo
                 call spproj%kill
+                call tmpl%kill
             end subroutine generate_sets
 
             subroutine submit_cluster_cavgs
@@ -785,6 +787,7 @@ contains
                         crec%projfile = destination ! relocation
                         crec%included = .true.
                         write(logfhandle,'(A,I3)')'>>> COMPLETED SET ', crec%id
+                        call set_list%replace_iterator(it, crec)
                         ! update particle counts
                         call spproj%read_segment('ptcl2D', destination)
                         n_state_nonzero = spproj%os_ptcl2D%count_state_gt_zero()
