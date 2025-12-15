@@ -1,10 +1,6 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
 module simple_commanders_distr
-use simple_core_module_api
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
-use simple_stack_io,       only: stack_io
+use simple_commander_module_api
 implicit none
 #include "simple_local_flags.inc"
 
@@ -19,7 +15,6 @@ contains
     !! This is done to reduce I/O latency
     subroutine exec_split( self, cline )
         use simple_map_reduce ! use all in there
-        use simple_image, only: image
         class(commander_split), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters)     :: p

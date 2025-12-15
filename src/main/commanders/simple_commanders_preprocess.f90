@@ -1,21 +1,9 @@
 ! concrete commander: pre-processing routines
 module simple_commanders_preprocess
-use simple_core_module_api
-use simple_builder,              only: builder
-use simple_cmdline,              only: cmdline
-use simple_parameters,           only: parameters, params_glob
-use simple_commander_base,       only: commander_base
-use simple_image,                only: image
-use simple_sp_project,           only: sp_project
-use simple_qsys_env,             only: qsys_env
-use simple_stack_io,             only: stack_io
+use simple_commander_module_api
 use simple_motion_correct_utils, only: flip_gain
-use simple_image_msk,            only: automask2D
-use simple_default_clines
 use simple_mini_stream_utils
-use simple_qsys_funs
 use simple_progress
-use simple_binoris_io
 implicit none
 #include "simple_local_flags.inc"
 
@@ -179,7 +167,6 @@ contains
 
     subroutine exec_preprocess( self, cline )
         use FoX_dom
-        use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(commander_preprocess), intent(inout) :: self
@@ -385,7 +372,6 @@ contains
     end subroutine exec_motion_correct_distr
 
     subroutine exec_motion_correct( self, cline )
-        use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
         class(commander_motion_correct), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
@@ -495,7 +481,6 @@ contains
     end subroutine exec_gen_pspecs_and_thumbs_distr
 
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
-        use simple_sp_project,       only: sp_project
         use simple_pspec_thumb_iter, only: pspec_thumb_iter
         class(commander_gen_pspecs_and_thumbs), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
@@ -591,7 +576,6 @@ contains
     end subroutine exec_ctf_estimate_distr
 
     subroutine exec_ctf_estimate( self, cline )
-        use simple_sp_project,          only: sp_project
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(commander_ctf_estimate), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
@@ -2035,7 +2019,6 @@ contains
 
     ! Stream only application
     subroutine exec_pick_extract( self, cline )
-        use simple_sp_project,  only: sp_project
         use simple_picker_iter, only: picker_iter
         class(commander_pick_extract), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -2165,8 +2148,6 @@ contains
     end subroutine exec_pick_extract
 
     subroutine exec_shape_rank_cavgs( self, cline )
-        use simple_image_msk, only: automask2D
-        use simple_default_clines
         use simple_strategy2D_utils
         class(commander_shape_rank_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline

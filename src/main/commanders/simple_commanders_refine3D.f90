@@ -1,21 +1,12 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commanders_refine3D
-use simple_core_module_api
-use simple_builder,           only: builder, build_glob
-use simple_cmdline,           only: cmdline
-use simple_commander_base,    only: commander_base
-use simple_parameters,        only: parameters, params_glob
+use simple_commander_module_api
+use simple_commanders_euclid
 use simple_sigma2_binfile,    only: sigma2_binfile
-use simple_qsys_env,          only: qsys_env
 use simple_cluster_seed,      only: gen_labelling
 use simple_commanders_volops, only: commander_postprocess
 use simple_commanders_mask,   only: commander_automask
 use simple_decay_funs,        only: inv_cos_decay, cos_decay
-use simple_image,             only: image
-use simple_image_msk,         only: image_msk
-use simple_exec_helpers,      only: set_master_num_threads
-use simple_commanders_euclid
-use simple_qsys_funs
 implicit none
 #include "simple_local_flags.inc"
 
@@ -80,7 +71,6 @@ contains
 
     subroutine exec_refine3D_auto( self, cline )
         use simple_commanders_rec, only: commander_reconstruct3D_distr
-        use simple_sp_project,    only: sp_project
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_reconstruct3D_distr
@@ -213,9 +203,7 @@ contains
     subroutine exec_refine3D_distr( self, cline )
         use simple_commanders_rec,    only: commander_reconstruct3D_distr, commander_volassemble
         use simple_fsc,               only: plot_fsc
-        use simple_commanders_euclid, only: commander_calc_group_sigmas
         use simple_polarft_calc,      only: polarft_calc
-        use simple_euclid_sigma2,     only: sigma2_star_from_iter
         use simple_polarops
         class(commander_refine3D_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -978,7 +966,6 @@ contains
 
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
-        use simple_parameters,  only: params_glob
         class(commander_check_3Dconv), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)  :: params
@@ -1011,7 +998,6 @@ contains
         use simple_strategy2D3D_common
         use simple_polarft_calc,  only: polarft_calc
         use simple_eul_prob_tab,  only: eul_prob_tab
-        use simple_euclid_sigma2, only: euclid_sigma2
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)

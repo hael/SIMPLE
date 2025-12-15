@@ -1,14 +1,6 @@
 module simple_commanders_euclid
-use simple_core_module_api
-use simple_builder,        only: builder, build_glob
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_euclid_sigma2,  only: write_groups_starfile
-use simple_image,          only: image
-use simple_parameters,     only: parameters, params_glob
-use simple_qsys_env,       only: qsys_env
+use simple_commander_module_api
 use simple_sigma2_binfile, only: sigma2_binfile
-use simple_qsys_funs
 implicit none
 #include "simple_local_flags.inc"
 
@@ -40,7 +32,6 @@ end type sigma_array
 contains
 
     subroutine exec_calc_pspec_distr( self, cline )
-        use simple_sp_project, only: sp_project
         class(commander_calc_pspec_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! commanders

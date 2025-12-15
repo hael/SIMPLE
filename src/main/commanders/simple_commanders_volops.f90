@@ -1,15 +1,8 @@
 ! concrete commander: operations on volumes
 module simple_commanders_volops
-use simple_core_module_api
-use simple_binoris_io
+use simple_commander_module_api
 use simple_strategy2D_utils
-use simple_parameters,       only: parameters, params_glob
-use simple_builder,          only: builder
-use simple_cmdline,          only: cmdline
-use simple_commander_base,   only: commander_base
-use simple_image,            only: image
 use simple_simple_volinterp, only: reproject, rotvol
-use simple_image_msk,        only: image_msk
 use simple_projector,        only: projector
 use simple_dock_vols,        only: dock_vols
 implicit none
@@ -170,7 +163,6 @@ contains
         !use simple_sp_project, only: sp_project
         use simple_atoms,        only: atoms
         use simple_segmentation, only: otsu_img
-        use simple_image_bin,    only: image_bin
         class(commander_sharpvol), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
@@ -300,7 +292,6 @@ contains
     end subroutine exec_sharpvol
 
     subroutine exec_postprocess( self, cline )
-        use simple_sp_project, only: sp_project
         class(commander_postprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         real, allocatable :: fsc(:), optlp(:), res(:)
@@ -858,7 +849,6 @@ contains
         use simple_ppca_inmem, only: ppca_inmem
         use simple_pca_svd,    only: pca_svd
         use simple_kpca_svd,   only: kpca_svd
-        use simple_image,      only: image
         class(commander_ppca_volvar), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,     parameter   :: MAXPCAITS = 15

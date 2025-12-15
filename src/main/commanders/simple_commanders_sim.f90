@@ -1,14 +1,9 @@
 ! concrete commander: simulation routines
 module simple_commanders_sim
-use simple_core_module_api
+use simple_commander_module_api
 use simple_defs_atoms
-use simple_parameters,     only: parameters
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_image,          only: image
-use simple_ctf,            only: ctf
-use simple_simulator,      only: simimg
-use simple_commander_base, only: commander_base
+use simple_ctf,       only: ctf
+use simple_simulator, only: simimg
 implicit none
 #include "simple_local_flags.inc"
 

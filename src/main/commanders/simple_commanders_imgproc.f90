@@ -1,15 +1,7 @@
 ! concrete commander: general image processing routines
 module simple_commanders_imgproc
-use simple_core_module_api
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
-use simple_image_bin,      only: image_bin
-use simple_parameters,     only: parameters
-use simple_stack_io,       only: stack_io
+use simple_commander_module_api
 use simple_imgarr_utils
-use simple_nice
 use simple_strategy2D_utils
 implicit none
 #include "simple_local_flags.inc"
@@ -658,7 +650,6 @@ contains
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_procimgstk, only: scale_and_clip_imgfile, scale_imgfile, pad_imgfile, clip_imgfile
-        use simple_qsys_funs,  only: qsys_job_finished
         class(commander_scale), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(string), allocatable :: filenames(:)
@@ -1329,7 +1320,6 @@ contains
 
     subroutine exec_estimate_diam( self, cline )
         use simple_segmentation
-        use simple_image_msk, only: automask2D
         class(commander_estimate_diam), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants

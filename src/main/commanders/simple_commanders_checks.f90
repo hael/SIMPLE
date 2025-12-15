@@ -1,9 +1,6 @@
 ! concrete commander: checking routines
 module simple_commanders_checks
-use simple_core_module_api
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
+use simple_commander_module_api
 implicit none
 #include "simple_local_flags.inc"
 
@@ -112,7 +109,6 @@ contains
 
     !> for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_info_image( self, cline)
-        use simple_image,   only: image
         class(commander_info_image), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params

@@ -1,10 +1,6 @@
 module simple_commanders_relion
-use simple_core_module_api
-use simple_commander_base, only: commander_base
-use simple_cmdline,        only: cmdline
-use simple_sp_project,     only: sp_project
-use simple_relion,         only: relion_project
-use simple_parameters,     only: parameters, params_glob
+use simple_commander_module_api
+use simple_relion, only: relion_project
 implicit none
 #include "simple_local_flags.inc"
 

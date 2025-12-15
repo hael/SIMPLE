@@ -1,12 +1,6 @@
 ! concrete commander: operations on orientations
 module simple_commanders_oris
-use simple_core_module_api
-use simple_binoris_io
-use simple_cmdline,        only: cmdline
-use simple_sp_project,     only: sp_project
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
-use simple_builder,        only: builder
+use simple_commander_module_api
 implicit none
 #include "simple_local_flags.inc"
 

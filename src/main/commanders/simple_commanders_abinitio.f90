@@ -1,26 +1,15 @@
 ! concrete commander: high-level workflows
 module simple_commanders_abinitio
-use simple_core_module_api
-use simple_stack_io,            only: stack_io
-use simple_sp_project,          only: sp_project
-use simple_qsys_env,            only: qsys_env
+use simple_commander_module_api
 use simple_procimgstk,          only: shift_imgfile
-use simple_parameters,          only: parameters, params_glob
-use simple_image,               only: image
 use simple_convergence,         only: convergence
 use simple_commanders_volops,   only: commander_reproject, commander_symaxis_search, commander_postprocess, commander_symmetrize_map
 use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_distr
 use simple_commanders_rec,      only: commander_reconstruct3D, commander_reconstruct3D_distr
 use simple_commanders_mask,     only: commander_automask
-use simple_commander_base,      only: commander_base
-use simple_cmdline,             only: cmdline
 use simple_cluster_seed,        only: gen_labelling
 use simple_class_frcs,          only: class_frcs
-use simple_qsys_funs
-use simple_nice
-use simple_euclid_sigma2
 use simple_decay_funs
-use simple_commanders_euclid
 implicit none
 
 public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_fast, commander_abinitio3D, commander_multivol_assign
