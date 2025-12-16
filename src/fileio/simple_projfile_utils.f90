@@ -58,6 +58,7 @@ contains
             call chunks(ic)%get_cavgs_stk(stkname, ncls, smpd, imgkind='cavg')
             call find_ldim_nptcls(stkname, ldim, ncls)
             ldim(3) = 1
+            ncls    = chunks(ic)%os_cls2D%get_noris()
             call img%new(ldim, smpd)
             evenname = add2fbody(stkname, params_glob%ext, '_even')
             oddname  = add2fbody(stkname, params_glob%ext, '_odd')

@@ -398,12 +398,11 @@ contains
         type(sp_project) :: spproj_ref, spproj_match, spproj_merged
         type(cmdline)    :: cline_cluster_cavgs
         type(commander_cluster_cavgs)  :: xcluster_cavgs
-        character(len=*),  parameter   :: TMPPROJFILE = 'tmp_projfile_match_cavgs.simple'
         type(string)                   :: chunk_fnames(2), folder
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), medoid_imgs_ref(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
         integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
-        integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:)
+        integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:), accept_match(:)
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:)
         integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch, nmerged
@@ -487,49 +486,39 @@ contains
                 endif
             enddo
         enddo
+        ! merging & refinement
+        call spproj_match%write(string(MATCH_PROJFILE))
+        call cline_cluster_cavgs%set('mkdir',                      'no')
+        call cline_cluster_cavgs%set('have_clustering',           'yes')
+        call cline_cluster_cavgs%set('prune',              params%prune)
+        call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
+        call cline_cluster_cavgs%set('hp',                    params%hp)
+        call cline_cluster_cavgs%set('lp',                    params%lp)
+        call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
+        call cline_cluster_cavgs%set('nthr',                params%nthr)
+        folder          = PATH_HERE
+        chunk_fnames(1) = params%projfile
+        chunk_fnames(2) = simple_abspath(MATCH_PROJFILE)
         if( .not. l_refine_before_merge )then
             ! merge spproj_ref & spproj_match projects
-            call spproj_match%write(string(TMPPROJFILE))
-            chunk_fnames(1) = params%projfile
-            chunk_fnames(2) = simple_abspath(TMPPROJFILE)
-            folder = PATH_HERE
             call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
-            call del_file(chunk_fnames(2))
             call spproj_merged%write(params%projfile_merged)
             ! refine joint solution
-            call cline_cluster_cavgs%set('mkdir',                      'no')
-            call cline_cluster_cavgs%set('have_clustering',           'yes')
-            call cline_cluster_cavgs%set('prune',              params%prune)
-            call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
-            call cline_cluster_cavgs%set('hp',                    params%hp)
-            call cline_cluster_cavgs%set('lp',                    params%lp)
-            call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
-            call cline_cluster_cavgs%set('nthr',                params%nthr)
             call cline_cluster_cavgs%set('projfile', params%projfile_merged)
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
-            call cline_cluster_cavgs%kill
+            ! reporting clusters selection to the match project
+            accept_match = spproj_match%os_cls2D%get_all_asint('accept')
+            call spproj_match%map_cavgs_selection(accept_match)
+            call spproj_match%write(string(MATCH_PROJFILE))
         else
-            call spproj_match%write(string(TMPPROJFILE))
             ! refine matched solution
-            call cline_cluster_cavgs%set('mkdir',                      'no')
-            call cline_cluster_cavgs%set('have_clustering',           'yes')
-            call cline_cluster_cavgs%set('prune',              params%prune)
-            call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
-            call cline_cluster_cavgs%set('hp',                    params%hp)
-            call cline_cluster_cavgs%set('lp',                    params%lp)
-            call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
-            call cline_cluster_cavgs%set('nthr',                params%nthr)
-            call cline_cluster_cavgs%set('projfile',            TMPPROJFILE)
+            call cline_cluster_cavgs%set('projfile', MATCH_PROJFILE)
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
-            call cline_cluster_cavgs%kill
-            chunk_fnames(1) = params%projfile
-            chunk_fnames(2) = simple_abspath(TMPPROJFILE)
-            folder = PATH_HERE
             call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
-            call del_file(chunk_fnames(2))
             call spproj_merged%write(params%projfile_merged)
         endif
         ! cleanup
+        call cline_cluster_cavgs%kill
         call spproj_match%kill
         call spproj_ref%kill
         call spproj_merged%kill

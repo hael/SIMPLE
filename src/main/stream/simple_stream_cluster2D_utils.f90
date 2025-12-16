@@ -671,24 +671,23 @@ contains
 
     !> produces consolidated project
     subroutine write_project_stream2D( write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir)
-        logical,           optional, intent(in)    :: write_star
-        logical,           optional, intent(in)    :: clspath
-        class(string),     optional, intent(in)    :: snapshot_projfile, snapshot_starfile_base, optics_dir
-        integer                        :: snapshot_complete_jobid = 0 ! nice job id for completed snapshot
-        type(class_frcs)               :: frcs
-        type(oris)                     :: os_backup
-        type(sp_project)               :: snapshot_proj
-      !  type(simple_nice_communicator) :: snapshot_comm
-        type(json_core)                :: json
-        type(string)                   :: projfile, projfname, cavgsfname, frcsfname, src, dest, mapfileprefix
-        type(string)                   :: pool_refs, l_stkname, l_frcsname
-        logical                        :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found = .false.
-        logical,     parameter         :: DEBUG_HERE = .false.
-        real                           :: l_smpd
-        integer                        :: l_ncls, lastmap
-        l_write_star = .false.
-        l_clspath    = .false.
-        l_snapshot   = .false.
+        logical,       optional, intent(in) :: write_star
+        logical,       optional, intent(in) :: clspath
+        class(string), optional, intent(in) :: snapshot_projfile, snapshot_starfile_base, optics_dir
+        logical, parameter :: DEBUG_HERE = .false.
+        integer            :: snapshot_complete_jobid = 0 ! nice job id for completed snapshot
+        type(class_frcs)   :: frcs
+        type(oris)         :: os_backup
+        type(sp_project)   :: snapshot_proj
+        type(json_core)    :: json
+        type(string)       :: projfile, projfname, cavgsfname, frcsfname, mapfileprefix
+        type(string)       :: pool_refs, src, l_frcsname
+        logical            :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found
+        integer            :: lastmap
+        l_write_star        = .false.
+        l_clspath           = .false.
+        l_snapshot          = .false.
+        snapshot_proj_found = .false.
         if(present(write_star)) l_write_star = write_star
         if(present(clspath))    l_clspath    = clspath
         ! file naming
@@ -727,15 +726,14 @@ contains
                     endif
                 endif
                 call apply_snapshot_selection(snapshot_proj)
-                call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd)
+                cavgsfname = stemname(snapshot_projfile) // '/cavgs' // STK_EXT
+                frcsfname  = stemname(snapshot_projfile) // '/' // FRCS_FILE
+                call rescale_refs( cavgsfname )
                 call snapshot_proj%get_frcs(l_frcsname, 'frc2D')
-                call simple_copy_file(l_stkname, stemname(snapshot_projfile) // "/cavgs" // STK_EXT)
-                call simple_copy_file(add2fbody(l_stkname, params_glob%ext,'_even'), stemname(snapshot_projfile) // "/cavgs_even" // STK_EXT)
-                call simple_copy_file(add2fbody(l_stkname, params_glob%ext,'_odd'),  stemname(snapshot_projfile) // "/cavgs_odd"  // STK_EXT)
-                call simple_copy_file(l_frcsname, stemname(snapshot_projfile) // '/' // FRCS_FILE)
+                call simple_copy_file(l_frcsname, frcsfname)
                 call snapshot_proj%os_out%kill
-                call snapshot_proj%add_cavgs2os_out(stemname(snapshot_projfile) // "/cavgs" // STK_EXT, l_smpd, 'cavg')
-                call snapshot_proj%add_frcs2os_out(stemname(snapshot_projfile) // '/' // FRCS_FILE, 'frc2D')
+                call snapshot_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')
+                call snapshot_proj%add_frcs2os_out(frcsfname, 'frc2D')
                 call snapshot_proj%set_cavgs_thumb(snapshot_projfile)
                 snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
                 call snapshot_proj%write(snapshot_projfile)
@@ -766,25 +764,7 @@ contains
             endif
             if( l_scaling )then
                 os_backup = pool_proj%os_cls2D
-                ! rescale classes
-                if( l_wfilt )then
-                    src  = add2fbody(pool_refs, params_glob%ext,WFILT_SUFFIX)
-                    dest = add2fbody(cavgsfname,params_glob%ext,WFILT_SUFFIX)
-                    call rescale_cavgs(src, dest)
-                    src  = add2fbody(pool_refs, params_glob%ext,WFILT_SUFFIX//'_even')
-                    dest = add2fbody(cavgsfname,params_glob%ext,WFILT_SUFFIX//'_even')
-                    call rescale_cavgs(src, dest)
-                    src  = add2fbody(pool_refs, params_glob%ext,WFILT_SUFFIX//'_odd')
-                    dest = add2fbody(cavgsfname,params_glob%ext,WFILT_SUFFIX//'_odd')
-                    call rescale_cavgs(src, dest)
-                endif
-                call rescale_cavgs(pool_refs, cavgsfname)
-                src  = add2fbody(pool_refs, params_glob%ext,'_even')
-                dest = add2fbody(cavgsfname,params_glob%ext,'_even')
-                call rescale_cavgs(src, dest)
-                src  = add2fbody(pool_refs, params_glob%ext,'_odd')
-                dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
-                call rescale_cavgs(src, dest)
+                call rescale_refs( cavgsfname )
                 call pool_proj%os_out%kill
                 call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
                 if( l_wfilt )then
@@ -865,6 +845,30 @@ contains
             endif
         end subroutine get_latest_optics_map
         
+        ! rescale classes to original scale
+        subroutine rescale_refs( cavgs_fname )
+            class(string), intent(in) :: cavgs_fname
+            type(string) :: source, destination
+            if( l_wfilt )then
+                source  = add2fbody(pool_refs, params_glob%ext, WFILT_SUFFIX)
+                destination = add2fbody(cavgs_fname, params_glob%ext, WFILT_SUFFIX)
+                call rescale_cavgs(source, destination)
+                source  = add2fbody(pool_refs, params_glob%ext, WFILT_SUFFIX//'_even')
+                destination = add2fbody(cavgs_fname, params_glob%ext, WFILT_SUFFIX//'_even')
+                call rescale_cavgs(source, destination)
+                source  = add2fbody(pool_refs, params_glob%ext,WFILT_SUFFIX//'_odd')
+                destination = add2fbody(cavgs_fname, params_glob%ext,WFILT_SUFFIX//'_odd')
+                call rescale_cavgs(source, destination)
+            endif
+            call rescale_cavgs(pool_refs, cavgs_fname)
+            source  = add2fbody(pool_refs, params_glob%ext, '_even')
+            destination = add2fbody(cavgs_fname, params_glob%ext, '_even')
+            call rescale_cavgs(source, destination)
+            source  = add2fbody(pool_refs, params_glob%ext,'_odd')
+            destination = add2fbody(cavgs_fname, params_glob%ext,'_odd')
+            call rescale_cavgs(source, destination)
+        end subroutine rescale_refs
+
     end subroutine write_project_stream2D
 
     ! Handles user inputted class rejection

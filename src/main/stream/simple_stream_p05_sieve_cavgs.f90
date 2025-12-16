@@ -19,23 +19,24 @@ contains
     subroutine exec_stream_p05_sieve_cavgs( self, cline )
         class(stream_p05_sieve_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(rec_list)                 :: project_list, chunk_list, set_list
-        type(string),      allocatable :: projects(:), completed_projfiles(:)
-        integer,           allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
-        real,              allocatable :: cls_res(:), cls_pop(:)
-        logical,           allocatable :: l_processed(:)
-        type(parameters)               :: params
-        type(qsys_env)                 :: qenv
-        type(stream_http_communicator) :: http_communicator
-        type(oris)                     :: moldiamori, nmicsori
-        type(stream_watcher)           :: project_buff
-        type(chunk_rec)                :: crec
-        type(rec_iterator)             :: it
-        type(sp_project)               :: spproj_glob
-        type(json_value), pointer      :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
-        type(json_core)                :: json
-        character(len=STDLEN)          :: chunk_part_env
-        type(string)     :: selection_jpeg, mapfileprefix
+        character(len=STDLEN), parameter :: MERGED_PROJFILE = 'merged.simple'
+        type(string),        allocatable :: projects(:), completed_projfiles(:)
+        integer,             allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
+        real,                allocatable :: cls_res(:), cls_pop(:)
+        logical,             allocatable :: l_processed(:)
+        type(json_value),        pointer :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
+        type(rec_list)                   :: project_list, chunk_list, set_list
+        type(parameters)                 :: params
+        type(qsys_env)                   :: qenv
+        type(stream_http_communicator)   :: http_communicator
+        type(oris)                       :: moldiamori, nmicsori
+        type(stream_watcher)             :: project_buff
+        type(chunk_rec)                  :: crec
+        type(rec_iterator)               :: it
+        type(sp_project)                 :: spproj_glob
+        type(json_core)                  :: json
+        type(string)                     :: selection_jpeg, mapfileprefix
+        character(len=STDLEN)            :: chunk_part_env
         real             :: mskdiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
@@ -604,28 +605,28 @@ contains
                 crec%processed = .false.
                 call set_list%replace_at(1, crec)
                 call cline_cluster_cavgs%kill
+                call cwd%kill
             end subroutine submit_cluster_cavgs
 
             subroutine submit_match_cavgs
                 type(cmdline)        :: cline_match_cavgs
                 type(string)         :: path, cwd
-                type(chunk_rec)      :: crec
+                type(chunk_rec)      :: crec, crec1
                 integer              :: iset
                 type(rec_iterator)   :: it
                 logical, allocatable :: l_processed(:), l_busy(:)
                 if( set_list%size() < 2 ) return ! not enough sets generated
                 l_processed = set_list%get_processed_flags()
                 l_busy      = set_list%get_busy_flags()
-                call set_list%at(1, crec)
                 ! any unprocessed and not being processed?
                 if ( all(l_processed(2:) .or. l_busy(2:)) ) return
                 call cline_match_cavgs%set('prg',          'match_cavgs')
-                call cline_match_cavgs%set('projfile',     simple_abspath(crec%projfile))
                 call cline_match_cavgs%set('mkdir',        'no')
                 call cline_match_cavgs%set('nthr',         params%nthr)
                 call cline_match_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_match_cavgs%set('verbose_exit', 'yes')
                 call cline_match_cavgs%delete('nparts')
+                call set_list%at(1, crec1)  ! from the first cluster cavgs
                 it = set_list%begin()
                 do iset = 1,set_list%size()
                     call it%get(crec)
@@ -633,7 +634,13 @@ contains
                         call it%next()
                         cycle
                     endif
+                    ! constant clustering reference, will be updated to dynamic reference
+                    call cline_match_cavgs%set('projfile', simple_abspath(crec1%projfile))
+                    ! target: current set 2 cluster and transfer 2 pool2D
                     call cline_match_cavgs%set('projfile_target', basename(crec%projfile))
+                    ! merged: is the dynamic reference
+                    call cline_match_cavgs%set('projfile_merged', string(MERGED_PROJFILE))
+                    ! submission
                     path = stemname(crec%projfile)
                     call simple_chdir(path)
                     call simple_getcwd(cwd)
@@ -643,6 +650,7 @@ contains
                     call simple_chdir('..')
                     call simple_getcwd(cwd)
                     CWD_GLOB = cwd%to_char()
+                    ! update status in list
                     crec%busy      = .true.   ! ongoing
                     crec%processed = .false.  ! not complete
                     call set_list%replace_iterator(it, crec)
@@ -743,7 +751,7 @@ contains
                 use simple_image, only:image
                 type(sp_project)   :: spproj
                 type(image)        :: img
-                type(string)       :: destination, stk
+                type(string)       :: source, destination, stk
                 type(rec_iterator) :: it
                 type(chunk_rec)    :: crec
                 real    :: smpd
@@ -757,8 +765,13 @@ contains
                         cycle
                     endif
                     if( crec%processed )then
+                        if( iset==1 )then
+                            source = crec%projfile  ! from cluster_cavgs
+                        else
+                            source = stemname(crec%projfile)//'/'//trim(MATCH_PROJFILE)
+                        endif
                         destination = DIR_STREAM_COMPLETED//DIR_SET//int2str(iset)//METADATA_EXT
-                        call simple_rename(crec%projfile, destination)
+                        call simple_rename(source, destination)
                         crec%projfile = destination ! relocation
                         crec%included = .true.
                         write(logfhandle,'(A,I3)')'>>> COMPLETED SET ', crec%id
