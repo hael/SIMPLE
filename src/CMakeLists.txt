@@ -88,7 +88,7 @@ set(SIMPLE_ALL_SOURCES
 # Library target
 # ------------------------------------------------------------------------------
 
-add_library(${SIMPLELIB} SHARED ${SIMPLE_ALL_SOURCES})
+add_library(${SIMPLELIB} STATIC ${SIMPLE_ALL_SOURCES})
 
 add_dependencies(${SIMPLELIB} simple_args simple_git)
 

@@ -35,8 +35,8 @@ option(BUILD_TESTS  "Build test executables" ON)
 option(BUILD_DOCS   "Build documentation" OFF)
 option(INSTALL_GUI  "Install GUI components" ON)
 
-# Always build shared libraries
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared library" FORCE)
+# Always build static library (faster compilation while developing)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build as shared or static" FORCE)
 
 # ------------------------------------------------------------------------------
 # Install layout & default build type
