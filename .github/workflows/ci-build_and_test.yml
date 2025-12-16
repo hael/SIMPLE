@@ -40,22 +40,17 @@ jobs:
              make distclean
              cd ..
              
-      - name: Tests Install SIMPLE debug mode
+      - name: Install SIMPLE debug mode
         run: |
              ./compile_debug.sh
-             export SIMPLE_EMAIL="my.name@uni.edu"
-             export SIMPLE_QSYS="local"
-             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
-             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-             cd ..
+
+      - name: Install SIMPLE GUI 
+        run: |
+             ./compile_gui.sh
 
       - name: Install SIMPLE
         run: |
              ./compile_clean.sh
-             export SIMPLE_EMAIL="my.name@uni.edu"
-             export SIMPLE_QSYS="local"
-             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
-             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
 
       - name: Test SIMPLE
         run: |
@@ -63,7 +58,6 @@ jobs:
              export SIMPLE_QSYS="local"
              export SIMPLE_PATH=$GITHUB_WORKSPACE/build
              export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-             eval "$($GITHUB_WORKSPACE/eman2/bin/conda shell.bash hook)" 
              echo "-------------------- TEST INSTALL -------------------------"
              simple_test_install 
              echo "-------------------- TEST ANGRES -------------------------"
