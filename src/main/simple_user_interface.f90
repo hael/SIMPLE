@@ -78,7 +78,6 @@ type(simple_program), target :: abinitio2D
 type(simple_program), target :: abinitio2D_stream
 type(simple_program), target :: abinitio3D
 type(simple_program), target :: abinitio3D_cavgs
-type(simple_program), target :: abinitio3D_cavgs_fast
 type(simple_program), target :: afm
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics
@@ -90,13 +89,11 @@ type(simple_program), target :: automask
 type(simple_program), target :: automask2D
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
-type(simple_program), target :: calc_pspec
 type(simple_program), target :: cavgseoproc_nano
 type(simple_program), target :: cavgsproc_nano
 type(simple_program), target :: center
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_refpick
-type(simple_program), target :: check_states
 type(simple_program), target :: clin_fsc
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
@@ -104,7 +101,6 @@ type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: cluster_stack
-type(simple_program), target :: comparemc
 type(simple_program), target :: conv_atom_denoise
 type(simple_program), target :: convert
 type(simple_program), target :: crys_score
@@ -122,7 +118,6 @@ type(simple_program), target :: extract
 type(simple_program), target :: extract_subproj
 type(simple_program), target :: extract_substk
 type(simple_program), target :: filter
-type(simple_program), target :: fractionate_movies
 type(simple_program), target :: fsc
 type(simple_program), target :: gen_pickrefs
 type(simple_program), target :: gen_pspecs_and_thumbs
@@ -138,25 +133,19 @@ type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
-type(simple_program), target :: map2model_fsc
 type(simple_program), target :: map_cavgs_selection
-type(simple_program), target :: map_cavgs_states
-type(simple_program), target :: map_validation
 type(simple_program), target :: mask
 type(simple_program), target :: match_cavgs
 type(simple_program), target :: match_stacks
 type(simple_program), target :: merge_projects
 type(simple_program), target :: mini_stream
 type(simple_program), target :: mkdir_
-type(simple_program), target :: model_validation
-type(simple_program), target :: model_validation_eo
 type(simple_program), target :: motion_correct
 type(simple_program), target :: multivol_assign
 type(simple_program), target :: new_project
 type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
 type(simple_program), target :: nununiform_filter3D
-type(simple_program), target :: oriconsensus
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
 type(simple_program), target :: pdb2mrc
@@ -185,18 +174,14 @@ type(simple_program), target :: replace_project_field
 type(simple_program), target :: reproject
 type(simple_program), target :: sample_classes
 type(simple_program), target :: scale
-type(simple_program), target :: scale_project
-type(simple_program), target :: score_ptcls
 type(simple_program), target :: select_
 type(simple_program), target :: select_clusters
 type(simple_program), target :: selection
-type(simple_program), target :: sharpvol
 type(simple_program), target :: sieve_cavgs
 type(simple_program), target :: simulate_atoms
 type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
 type(simple_program), target :: simulate_particles
-type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: split_
 type(simple_program), target :: split_stack
 type(simple_program), target :: stack
@@ -410,8 +395,6 @@ contains
         call new_abinitio2D_stream
         call new_abinitio3D
         call new_abinitio3D_cavgs
-        call new_abinitio3D_cavgs_fast
-        call new_afm
         call new_analysis2D_nano
         call new_assign_optics
         call new_assign_optics_groups
@@ -422,13 +405,11 @@ contains
         call new_automask2D
         call new_autorefine3D_nano
         call new_binarize
-        call new_calc_pspec
         call new_cavgseoproc_nano
         call new_cavgsproc_nano
         call new_center
         call new_center2D_nano
         call new_check_refpick
-        call new_check_states
         call new_clin_fsc
         call new_cluster2D
         call new_cluster2D_nano
@@ -436,7 +417,6 @@ contains
         call new_cluster2D_subsets
         call new_cluster_cavgs
         call new_cluster_stack
-        call new_comparemc
         call new_conv_atom_denoise
         call new_convert
         call new_crys_score
@@ -454,7 +434,6 @@ contains
         call new_extract_subproj
         call new_extract_substk
         call new_filter
-        call new_fractionate_movies
         call new_fsc
         call new_gen_pickrefs
         call new_gen_pspecs_and_thumbs
@@ -470,25 +449,19 @@ contains
         call new_info_stktab
         call new_make_cavgs
         call new_make_oris
-        call new_map2model_fsc
         call new_map_cavgs_selection
-        call new_map_cavgs_states
-        call new_map_validation
         call new_mask
         call new_match_cavgs
         call new_match_stacks
         call new_merge_projects
         call new_mini_stream
         call new_mkdir_
-        call new_model_validation
-        call new_model_validation_eo
         call new_motion_correct
         call new_multivol_assign
         call new_new_project
         call new_noisevol
         call new_normalize
         call new_nununiform_filter3D
-        call new_oriconsensus
         call new_orisops
         call new_oristats
         call new_pdb2mrc
@@ -516,18 +489,14 @@ contains
         call new_reproject
         call new_sample_classes
         call new_scale
-        call new_scale_project
-        call new_score_ptcls
         call new_select_
         call new_select_clusters
         call new_selection
-        call new_sharpvol
         call new_sieve_cavgs
         call new_simulate_atoms
         call new_simulate_movie
         call new_simulate_noise
         call new_simulate_particles
-        call new_simulate_subtomogram
         call new_split_
         call new_split_stack
         call new_stack
@@ -564,7 +533,6 @@ contains
         call push2prg_ptr_array(abinitio2D_stream)
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_cavgs)
-        call push2prg_ptr_array(abinitio3D_cavgs_fast)
         call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
@@ -575,13 +543,11 @@ contains
         call push2prg_ptr_array(automask2D)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
-        call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(cavgseoproc_nano)
         call push2prg_ptr_array(cavgsproc_nano)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(check_refpick)
-        call push2prg_ptr_array(check_states)
         call push2prg_ptr_array(clin_fsc)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
@@ -589,7 +555,6 @@ contains
         call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster_cavgs)
         call push2prg_ptr_array(cluster_stack)
-        call push2prg_ptr_array(comparemc)
         call push2prg_ptr_array(conv_atom_denoise)
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(crys_score)
@@ -605,7 +570,6 @@ contains
         call push2prg_ptr_array(extract_subproj)
         call push2prg_ptr_array(extract_substk)
         call push2prg_ptr_array(filter)
-        call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
         call push2prg_ptr_array(gen_pickrefs)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
@@ -621,25 +585,19 @@ contains
         call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
-        call push2prg_ptr_array(map2model_fsc)
         call push2prg_ptr_array(map_cavgs_selection)
-        call push2prg_ptr_array(map_cavgs_states)
-        call push2prg_ptr_array(map_validation)
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(match_cavgs)
         call push2prg_ptr_array(match_stacks)
         call push2prg_ptr_array(merge_projects)
         call push2prg_ptr_array(mini_stream)
         call push2prg_ptr_array(mkdir_)
-        call push2prg_ptr_array(model_validation)
-        call push2prg_ptr_array(model_validation_eo)
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(multivol_assign)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(noisevol)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(nununiform_filter3D)
-        call push2prg_ptr_array(oriconsensus)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
         call push2prg_ptr_array(pdb2mrc)
@@ -667,18 +625,14 @@ contains
         call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(sample_classes)
         call push2prg_ptr_array(scale)
-        call push2prg_ptr_array(scale_project)
-        call push2prg_ptr_array(score_ptcls)
         call push2prg_ptr_array(select_)
         call push2prg_ptr_array(select_clusters)
         call push2prg_ptr_array(selection)
-        call push2prg_ptr_array(sharpvol)
         call push2prg_ptr_array(sieve_cavgs)
         call push2prg_ptr_array(simulate_atoms)
         call push2prg_ptr_array(simulate_movie)
         call push2prg_ptr_array(simulate_noise)
         call push2prg_ptr_array(simulate_particles)
-        call push2prg_ptr_array(simulate_subtomogram)
         call push2prg_ptr_array(split_)
         call push2prg_ptr_array(split_stack)
         call push2prg_ptr_array(stack)
@@ -725,7 +679,6 @@ contains
             case('abinitio2D_stream');           ptr2prg => abinitio2D_stream
             case('abinitio3D');                  ptr2prg => abinitio3D
             case('abinitio3D_cavgs');            ptr2prg => abinitio3D_cavgs
-            case('abinitio3D_cavgs_fast');       ptr2prg => abinitio3D_cavgs_fast
             case('afm');                         ptr2prg => afm
             case('analysis2D_nano');             ptr2prg => analysis2D_nano
             case('assign_optics');               ptr2prg => assign_optics   
@@ -737,13 +690,11 @@ contains
             case('automask2D');                  ptr2prg => automask2D
             case('autorefine3D_nano');           ptr2prg => autorefine3D_nano
             case('binarize');                    ptr2prg => binarize
-            case('calc_pspec');                  ptr2prg => calc_pspec
             case('cavgseoproc_nano');            ptr2prg => cavgseoproc_nano
             case('cavgsproc_nano');              ptr2prg => cavgsproc_nano
             case('center');                      ptr2prg => center
             case('center2D_nano');               ptr2prg => center2D_nano
             case('check_refpick');               ptr2prg => check_refpick
-            case('check_states');                ptr2prg => check_states
             case('clin_fsc');                    ptr2prg => clin_fsc
             case('cluster2D');                   ptr2prg => cluster2D
             case('cluster2D_nano');              ptr2prg => cluster2D_nano
@@ -751,7 +702,6 @@ contains
             case('cluster2D_subsets');           ptr2prg => cluster2D_subsets
             case('cluster_cavgs');               ptr2prg => cluster_cavgs
             case('cluster_stack');               ptr2prg => cluster_stack
-            case('comparemc');                   ptr2prg => comparemc
             case('conv_atom_denoise');           ptr2prg => conv_atom_denoise
             case('convert');                     ptr2prg => convert
             case('crys_score');                  ptr2prg => crys_score
@@ -769,7 +719,6 @@ contains
             case('extract_subproj');             ptr2prg => extract_subproj
             case('extract_substk');              ptr2prg => extract_substk
             case('filter');                      ptr2prg => filter
-            case('fractionate_movies');          ptr2prg => fractionate_movies
             case('fsc');                         ptr2prg => fsc
             case('gen_pickrefs');                ptr2prg => gen_pickrefs
             case('gen_pspecs_and_thumbs');       ptr2prg => gen_pspecs_and_thumbs
@@ -785,25 +734,19 @@ contains
             case('info_stktab');                 ptr2prg => info_stktab
             case('make_cavgs');                  ptr2prg => make_cavgs
             case('make_oris');                   ptr2prg => make_oris
-            case('map2model_fsc');               ptr2prg => map2model_fsc
             case('map_cavgs_selection');         ptr2prg => map_cavgs_selection
-            case('map_cavgs_states');            ptr2prg => map_cavgs_states
-            case('map_validation');              ptr2prg => map_validation
             case('mask');                        ptr2prg => mask
             case('match_cavgs');                 ptr2prg => match_cavgs
             case('match_stacks');                ptr2prg => match_stacks
             case('merge_projects');              ptr2prg => merge_projects
             case('mini_stream');                 ptr2prg => mini_stream
             case('mkdir');                       ptr2prg => mkdir_
-            case('model_validation');            ptr2prg => model_validation
-            case('model_validation_eo');         ptr2prg => model_validation_eo
             case('motion_correct');              ptr2prg => motion_correct
             case('multivol_assign');             ptr2prg => multivol_assign
             case('new_project');                 ptr2prg => new_project
             case('noisevol');                    ptr2prg => noisevol
             case('normalize');                   ptr2prg => normalize_
             case('nununiform_filter3D');         ptr2prg => nununiform_filter3D
-            case('oriconsensus');                ptr2prg => oriconsensus
             case('orisops');                     ptr2prg => orisops
             case('oristats');                    ptr2prg => oristats
             case('pdb2mrc');                     ptr2prg => pdb2mrc
@@ -819,7 +762,7 @@ contains
             case('print_fsc');                   ptr2prg => print_fsc
             case('print_magic_boxes');           ptr2prg => print_magic_boxes
             case('print_project_field');         ptr2prg => print_project_field
-            case('print_project_info');          ptr2prg => print_project_info  
+            case('print_project_info');          ptr2prg => print_project_info
             case('prune_project');               ptr2prg => prune_project
             case('ptclsproc_nano');              ptr2prg => ptclsproc_nano
             case('reconstruct3D');               ptr2prg => reconstruct3D
@@ -831,18 +774,14 @@ contains
             case('reproject');                   ptr2prg => reproject
             case('sample_classes');              ptr2prg => sample_classes
             case('scale');                       ptr2prg => scale
-            case('scale_project');               ptr2prg => scale_project
-            case('score_ptcls');                 ptr2prg => score_ptcls
             case('select');                      ptr2prg => select_
             case('select_clusters');             ptr2prg => select_clusters
             case('selection');                   ptr2prg => selection
-            case('sharpvol');                    ptr2prg => sharpvol
             case('sieve_cavgs');                 ptr2prg => sieve_cavgs
             case('simulate_atoms');              ptr2prg => simulate_atoms
             case('simulate_movie');              ptr2prg => simulate_movie
             case('simulate_noise');              ptr2prg => simulate_noise
             case('simulate_particles');          ptr2prg => simulate_particles
-            case('simulate_subtomogram');        ptr2prg => simulate_subtomogram
             case('split');                       ptr2prg => split_
             case('split_stack');                 ptr2prg => split_stack
             case('stack');                       ptr2prg => stack
@@ -879,23 +818,19 @@ contains
         write(logfhandle,'(A)') abinitio2D%name%to_char()
         write(logfhandle,'(A)') abinitio3D%name%to_char()
         write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
-        write(logfhandle,'(A)') abinitio3D_cavgs_fast%name%to_char()
         write(logfhandle,'(A)') afm%name%to_char()
         write(logfhandle,'(A)') assign_optics_groups%name%to_char()
         write(logfhandle,'(A)') auto_spher_mask%name%to_char()
         write(logfhandle,'(A)') automask%name%to_char()
         write(logfhandle,'(A)') automask2D%name%to_char()
         write(logfhandle,'(A)') binarize%name%to_char()
-        write(logfhandle,'(A)') calc_pspec%name%to_char()
         write(logfhandle,'(A)') center%name%to_char()
         write(logfhandle,'(A)') check_refpick%name%to_char()
-        write(logfhandle,'(A)') check_states%name%to_char()
         write(logfhandle,'(A)') clin_fsc%name%to_char()
         write(logfhandle,'(A)') cluster2D%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
         write(logfhandle,'(A)') cluster_cavgs%name%to_char()
         write(logfhandle,'(A)') cluster_stack%name%to_char()
-        write(logfhandle,'(A)') comparemc%name%to_char()
         write(logfhandle,'(A)') convert%name%to_char()
         write(logfhandle,'(A)') ctf_estimate%name%to_char()
         write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
@@ -906,7 +841,6 @@ contains
         write(logfhandle,'(A)') export_starproject%name%to_char()
         write(logfhandle,'(A)') extract%name%to_char()
         write(logfhandle,'(A)') filter%name%to_char()
-        write(logfhandle,'(A)') fractionate_movies%name%to_char()
         write(logfhandle,'(A)') fsc%name%to_char()
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
         write(logfhandle,'(A)') icm2D%name%to_char()
@@ -920,25 +854,19 @@ contains
         write(logfhandle,'(A)') info_stktab%name%to_char()
         write(logfhandle,'(A)') make_cavgs%name%to_char()
         write(logfhandle,'(A)') make_oris%name%to_char()
-        write(logfhandle,'(A)') map2model_fsc%name%to_char()
         write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
-        write(logfhandle,'(A)') map_cavgs_states%name%to_char()
-        write(logfhandle,'(A)') map_validation%name%to_char()
         write(logfhandle,'(A)') mask%name%to_char()
         write(logfhandle,'(A)') match_cavgs%name%to_char()
         write(logfhandle,'(A)') match_stacks%name%to_char()
         write(logfhandle,'(A)') merge_projects%name%to_char()
         write(logfhandle,'(A)') mini_stream%name%to_char()
         write(logfhandle,'(A)') mkdir_%name%to_char()
-        write(logfhandle,'(A)') model_validation%name%to_char()
-        write(logfhandle,'(A)') model_validation_eo%name%to_char()
         write(logfhandle,'(A)') motion_correct%name%to_char()
         write(logfhandle,'(A)') multivol_assign%name%to_char()
         write(logfhandle,'(A)') new_project%name%to_char()
         write(logfhandle,'(A)') noisevol%name%to_char()
         write(logfhandle,'(A)') normalize_%name%to_char()
         write(logfhandle,'(A)') nununiform_filter3D%name%to_char()
-        write(logfhandle,'(A)') oriconsensus%name%to_char()
         write(logfhandle,'(A)') orisops%name%to_char()
         write(logfhandle,'(A)') oristats%name%to_char()
         write(logfhandle,'(A)') pdb2mrc%name%to_char()
@@ -962,16 +890,12 @@ contains
         write(logfhandle,'(A)') reproject%name%to_char()
         write(logfhandle,'(A)') sample_classes%name%to_char()
         write(logfhandle,'(A)') scale%name%to_char()
-        write(logfhandle,'(A)') scale_project%name%to_char()
-        write(logfhandle,'(A)') score_ptcls%name%to_char()
         write(logfhandle,'(A)') select_%name%to_char()
         write(logfhandle,'(A)') select_clusters%name%to_char()
         write(logfhandle,'(A)') selection%name%to_char()
-        write(logfhandle,'(A)') sharpvol%name%to_char()
         write(logfhandle,'(A)') simulate_movie%name%to_char()
         write(logfhandle,'(A)') simulate_noise%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
-        write(logfhandle,'(A)') simulate_subtomogram%name%to_char()
         write(logfhandle,'(A)') split_%name%to_char()
         write(logfhandle,'(A)') split_stack%name%to_char()
         write(logfhandle,'(A)') stack%name%to_char()
@@ -1038,7 +962,6 @@ contains
         write(logfhandle,'(A)') vizoris%name%to_char()
         write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
         write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
-        write(logfhandle,'(A)') model_validation%name%to_char()
         write(logfhandle,'(A)') ptclsproc_nano%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
@@ -1260,31 +1183,6 @@ contains
     ! <empty>
     ! computer controls
     ! <empty>
-
-    subroutine new_afm
-        ! PROGRAM SPECIFICATION
-        call afm%new(&
-        &'afm', &                                            ! name
-        &'analysis of afm',&                                 ! descr_short
-        &'picking, clustering, and additional analysis of high SNR/conformationally dynamic images',& ! descr long
-        &'all',&                                             ! executable
-        &0, 0, 0, 0, 0, 0, 0, .false., gui_advanced=.false.) ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_afm
 
     subroutine new_analysis2D_nano
         ! PROGRAM SPECIFICATION
@@ -1586,32 +1484,6 @@ contains
         call binarize%set_input('comp_ctrls', 1, nthr)
     end subroutine new_binarize
 
-    subroutine new_calc_pspec
-        ! PROGRAM SPECIFICATION
-        call calc_pspec%new(&
-        &'calc_pspec',&                                                     ! name
-        &'Calculate individual particles power spectra; internal use oly',& ! descr_long
-        &'Calculate individual particles power spectra; internal use oly',& ! descr_long
-        &'simple_exec',&                                                    ! executable
-        &0, 0, 0, 0, 0, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call calc_pspec%set_input('comp_ctrls', 1, nparts)
-        call calc_pspec%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_calc_pspec
-
     subroutine new_cavgsproc_nano
         ! PROGRAM SPECIFICATION
         call cavgsproc_nano%new(&
@@ -1748,31 +1620,6 @@ contains
         call center2D_nano%set_input('comp_ctrls', 1, nthr)
         call center2D_nano%set_input('comp_ctrls', 2, script)
     end subroutine new_center2D_nano
-
-    subroutine new_check_states
-        ! PROGRAM SPECIFICATION
-        call check_states%new(&
-        &'check_states',&                                       ! name
-        &'Checking current oris against the ground truth',&     ! descr_short
-        &'Checking current oris against the ground truth',&     ! descr_long
-        &'simple_exec',&                                        ! executable
-        &0, 0, 0, 0, 0, 0, 1, .true.)                           ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call check_states%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_check_states
 
     subroutine new_conv_atom_denoise
         ! PROGRAM SPECIFICATION
@@ -2069,31 +1916,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_convert
-
-    subroutine new_comparemc
-        ! PROGRAM SPECIFICATION
-        call comparemc%new(&
-        &'comparemc',&                                                    ! name
-        &'utility',&                     ! descr_short
-        &'is a utility program',& ! descr_long
-        &'simple_exec',&                                                ! executable
-        &0, 1, 0, 0, 0, 0, 0, .false.)                                  ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call comparemc%set_input('parm_ios', 1, 'infile', 'file', 'List of project files', 'List of project files', 'e.g. projects.txt', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_comparemc
 
     subroutine new_ctf_estimate
         ! PROGRAM SPECIFICATION
@@ -2764,42 +2586,6 @@ contains
         call abinitio3D_cavgs%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_abinitio3D_cavgs
 
-    subroutine new_abinitio3D_cavgs_fast
-        ! PROGRAM SPECIFICATION
-        call abinitio3D_cavgs_fast%new(&
-        &'abinitio3D_cavgs_fast',&                                                                    ! name
-        &'Rapid 3D ab initio model(s) generation from class averages',&                               ! descr_short
-        &'is a distributed workflow for generating crude ab initio 3D model(s) from class averages',& ! descr_long
-        &'simple_exec',&                                                                              ! executable
-        &0, 0, 0, 4, 4, 1, 1, .true., gui_advanced=.false.)                                           ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 2, pgrp)
-        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 3, pgrp_start)
-        call abinitio3D_cavgs_fast%set_input('srch_ctrls', 4, nstates, gui_submenu="search", gui_advanced=.false.)
-        ! filter controls
-        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 1, hp, gui_submenu="filter")
-        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 3, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
-            &'low-pass limit for the initial stage in Angstroms', .false., 20., gui_submenu="filter")
-        call abinitio3D_cavgs_fast%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
-        ! mask controls
-        call abinitio3D_cavgs_fast%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        ! computer controls
-        call abinitio3D_cavgs_fast%set_input('comp_ctrls', 1, nthr, gui_submenu="compute", gui_advanced=.false.)
-    end subroutine new_abinitio3D_cavgs_fast
-
     subroutine new_abinitio3D
         ! PROGRAM SPECIFICATION
         call abinitio3D%new(&
@@ -3106,62 +2892,6 @@ contains
         ! <empty>
     end subroutine new_map_cavgs_selection
 
-    subroutine new_map_cavgs_states
-        ! PROGRAM SPECIFICATION
-        call map_cavgs_states%new(&
-        &'map_cavgs_states',&                                            ! name
-        &'Map class average state selection by common lines-based clustering to particles in project file',& ! descr_short
-        &'is a program for mapping state selection by common lines-based clustering of class averages to the individual particles using correlation matching',& ! descr_long
-        &'all',&                                                         ! executable
-        &2, 0, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call map_cavgs_states%set_input('img_ios', 1, 'stk',    'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '')
-        call map_cavgs_states%set_input('img_ios', 2, 'stktab', 'file', 'Stacks of class averages list',&
-        &'List of stacks of class averages to use for mapping states', 'list input e.g. stktab.txt', .true., '')
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_map_cavgs_states
-
-    subroutine new_map2model_fsc
-        ! PROGRAM SPECIFICATION
-        call map2model_fsc%new(&
-        &'map2model_fsc', &                                ! name
-        &'Map to model FSC',&                              ! descr_short
-        &'is a program to compute the FSC between a map and PDB atomic model',& ! descr long
-        &'all',&                                           ! executable
-        &2, 2, 0, 0, 1, 1, 1, .false.)                     ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call map2model_fsc%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
-        call map2model_fsc%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
-        ! parameter input/output
-        call map2model_fsc%set_input('parm_ios', 1, smpd)
-        call map2model_fsc%set_input('parm_ios', 2, vol_dim)
-        map2model_fsc%parm_ios(2)%required = .true.
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call map2model_fsc%set_input('filt_ctrls', 1, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .false., '')
-        map2model_fsc%filt_ctrls(1)%required = .false.
-        ! mask controls
-        call map2model_fsc%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call map2model_fsc%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_map2model_fsc
-
     subroutine new_mask
         ! PROGRAM SPECIFICATION
         call mask%new(&
@@ -3359,82 +3089,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_mkdir_
-
-    subroutine new_map_validation
-        ! PROGRAM SPECIFICATION
-        call map_validation%new(& 
-        &'map_validation', &                               ! name
-        &'Validation of experimental map',&                ! descr_short
-        &'is a program to validate the 3D experimental density map in MRC format with respect to the simulated volume map given by the atomic model',& ! descr long
-        &'all',&                                           ! executable
-        &2, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call map_validation%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
-        call map_validation%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
-        ! parameter input/output
-        call map_validation%set_input('parm_ios', 1, smpd)
-        call map_validation%set_input('parm_ios', 2, smpd_target)
-        ! alternative inputs      
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! mask controls
-        ! computer controls
-    end subroutine new_map_validation
-
-    subroutine new_model_validation
-        ! PROGRAM SPECIFICATION
-        call model_validation%new(&
-        &'model_validation', &                             ! name
-        &'Validation of atomic model',&                    ! descr_short
-        &'is a program to validate the PDB atomic model given a 3D experimental density map in MRC',& ! descr long
-        &'all',&                                           ! executable
-        &2, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call model_validation%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
-        call model_validation%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
-        ! parameter input/output
-        call model_validation%set_input('parm_ios', 1, smpd)
-        call model_validation%set_input('parm_ios', 2, smpd_target)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! mask controls
-        ! computer controls
-    end subroutine new_model_validation
-
-    subroutine new_model_validation_eo
-        ! PROGRAM SPECIFICATION
-        call model_validation_eo%new(&
-        &'model_validation_eo', &                            ! name
-        &'Validation of atomic model using even/odd pair',&  ! descr_short
-        &'is a program to validate the PDB atomic model given a 3D experimental even/odd density map pair in MRC',& ! descr long
-        &'all',&                                             ! executable
-        &4, 2, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call model_validation_eo%set_input('img_ios', 1, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
-        call model_validation_eo%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',  'Experimental even volume',  'vol_even.mrc file', .true., '')
-        model_validation_eo%img_ios(2)%required = .false.
-        call model_validation_eo%set_input('img_ios', 3, 'vol3', 'file', 'Odd volume',  'Experimental odd volume',  'vol_odd.mrc file', .true., '')
-        model_validation_eo%img_ios(3)%required = .false.
-        call model_validation_eo%set_input('img_ios', 4, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
-        ! parameter input/output
-        call model_validation_eo%set_input('parm_ios', 1, smpd)
-        call model_validation_eo%set_input('parm_ios', 2, smpd_target)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! mask controls
-        ! computer controls
-    end subroutine new_model_validation_eo
 
     subroutine new_motion_correct
         ! PROGRAM SPECIFICATION
@@ -4281,31 +3935,6 @@ contains
         call oristats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_oristats
 
-    subroutine new_oriconsensus
-        ! PROGRAM SPECIFICATION
-        call oriconsensus%new(&
-        &'oriconsensus',&                                   ! name
-        &'Statistical consensus analyses of orientations',& ! descr_short
-        &'is a program for analyzing SIMPLE orientation/parameter files',&
-        &'simple_exec',&                                    ! executable
-        &0, 1, 0, 0, 0, 0, 0, .false.)                      ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call oriconsensus%set_input('parm_ios', 1, 'oritab', 'file', 'List of project files', 'List of project files', 'e.g. filetab.txt', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_oriconsensus
-
     subroutine new_prune_project
         ! PROGRAM SPECIFICATION
         call prune_project%new(&
@@ -4330,31 +3959,6 @@ contains
         ! computer controls
         call prune_project%set_input('comp_ctrls', 1, nparts)
     end subroutine new_prune_project
-
-    subroutine new_score_ptcls
-        ! PROGRAM SPECIFICATION
-        call score_ptcls%new(&
-        &'score_ptcls',&                              ! name
-        &'prune poor particles from class averages',& ! descr_short
-        &'is a program for discarding bad particles from class averages',& ! descr_long
-        &'all',&                                      ! executable
-        &0, 1, 0, 0, 1, 1, 1, .true.)                 ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call score_ptcls%set_input('parm_ios', 1, 'infile', 'file', 'Ground truth(0/1)', 'Plain text file (.txt)','xxx.txt', .false., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call score_ptcls%set_input('filt_ctrls', 1, lp)
-        ! mask controls
-        call score_ptcls%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call score_ptcls%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_score_ptcls
 
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
@@ -4530,36 +4134,6 @@ contains
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_nano
 
-    subroutine new_fractionate_movies
-        ! PROGRAM SPECIFICATION
-        call fractionate_movies%new(&
-        &'fractionate_movies', &                                        ! name
-        &'Re-generation of micrographs with subsets of movie frames',&  ! descr_short
-        &'Re-generation of micrographs with subsets of movie frames',&  ! descr_long
-        &'simple_exec',&                                                ! executable
-        &0, 4, 0, 0, 0, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call fractionate_movies%set_input('parm_ios', 1, 'fromf', 'num', 'Starting fraction', 'starting fraction{1}', '{1}', .false., 1.)
-        call fractionate_movies%set_input('parm_ios', 2, 'tof',   'num', 'Final fraction', 'Final fraction(0=all){0}','{0}', .false., 0.)
-        call fractionate_movies%set_input('parm_ios', 3, 'mcconvention', 'multi', 'Application-specific image processing',&
-        &'Application specific image processing: file naming & frame weights(simple|relion|cryosparc){simple}', '(simple|relion|cryosparc){simple}', .false., 'simple')
-        call fractionate_movies%set_input('parm_ios', 4, 'interpfun', 'multi', 'Interpolation for micrograph generation',&
-        &'Interpolation scheme for beam-induced motion correction micrograph generation(linear|nn){linear}', '(linear|nn){linear}', .false., 'simple')        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call fractionate_movies%set_input('comp_ctrls', 1, nparts)
-        call fractionate_movies%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_fractionate_movies
-
     subroutine new_replace_project_field
         ! PROGRAM SPECIFICATION
         call replace_project_field%new(&
@@ -4693,32 +4267,6 @@ contains
         call scale%set_input('comp_ctrls', 1, nthr)
     end subroutine new_scale
 
-    subroutine new_scale_project
-        ! PROGRAM SPECIFICATION
-        call scale_project%new(&
-        &'scale_project', &                                                                ! name
-        &'Re-scaling of MRC and SPIDER stacks',&                                           ! descr_short
-        &'is a distributed workflow for re-scaling MRC and SPIDER stacks part of project specification',& ! descr_long
-        &'simple_exec',&                                                             ! executable
-        &0, 1, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call scale_project%set_input('parm_ios', 1, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call scale_project%set_input('comp_ctrls', 1, nparts)
-        call scale_project%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_scale_project
-
     subroutine new_select_
         ! PROGRAM SPECIFICATION
         call select_%new(&
@@ -4779,36 +4327,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_select_clusters
-
-    subroutine new_sharpvol
-        ! PROGRAM SPECIFICATION
-        call sharpvol%new(&
-        &'sharpvol',&                                         ! name
-        &'Sharpening volume',&                                ! descr_short
-        &'is a program for sharpening raw volumes',&          ! descr_long
-        &'all',&                                              ! executable
-        &2, 1, 0, 0, 2, 0, 1, .false.)                        ! # entries in each group, requires sp_project
-        ! TEMPLATE
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call sharpvol%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
-        sharpvol%img_ios(1)%required = .true.
-        call sharpvol%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
-        sharpvol%img_ios(2)%required = .true.
-        ! parameter input/output
-        call sharpvol%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call sharpvol%set_input('filt_ctrls', 1, 'fsc',     'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .false., '')
-        call sharpvol%set_input('filt_ctrls', 2, bfac)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call sharpvol%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_sharpvol
 
     subroutine new_preproc
         ! PROGRAM SPECIFICATION
@@ -5040,33 +4558,6 @@ contains
         ! computer controls
         call simulate_particles%set_input('comp_ctrls', 1, nthr)
     end subroutine new_simulate_particles
-
-    subroutine new_simulate_subtomogram
-        ! PROGRAM SPECIFICATION
-        call simulate_subtomogram%new(&
-        &'simulate_subtomogram',&                               ! name
-        &'Simulate subtomogram',&                               ! descr_short
-        &'is a program for crude simulation of a subtomogram',& ! descr_long
-        &'simple_exec',&                                        ! executable
-        &1, 3, 0, 0, 0,0, 1, .false.)                           ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call simulate_subtomogram%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to use for simulation', 'input volume e.g. vol.mrc', .false., '')
-        ! parameter input/output
-        call simulate_subtomogram%set_input('parm_ios', 1,  smpd)
-        call simulate_subtomogram%set_input('parm_ios', 2,  nptcls)
-        call simulate_subtomogram%set_input('parm_ios', 3,  'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .false., 0.)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call simulate_subtomogram%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_simulate_subtomogram
 
     subroutine new_split_
         call split_%new(&
