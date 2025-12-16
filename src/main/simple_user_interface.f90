@@ -174,7 +174,6 @@ type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: print_ui_stream
-type(simple_program), target :: projops
 type(simple_program), target :: prune_project
 type(simple_program), target :: ptclsproc_nano
 type(simple_program), target :: reconstruct3D
@@ -506,7 +505,6 @@ contains
         call new_print_magic_boxes
         call new_print_project_field
         call new_print_project_info
-        call new_projops
         call new_prune_project
         call new_ptclsproc_nano
         call new_reconstruct3D
@@ -658,7 +656,6 @@ contains
         call push2prg_ptr_array(print_magic_boxes)
         call push2prg_ptr_array(print_project_field)
         call push2prg_ptr_array(print_project_info)
-        call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(ptclsproc_nano)
         call push2prg_ptr_array(reconstruct3D)
@@ -822,8 +819,7 @@ contains
             case('print_fsc');                   ptr2prg => print_fsc
             case('print_magic_boxes');           ptr2prg => print_magic_boxes
             case('print_project_field');         ptr2prg => print_project_field
-            case('print_project_info');          ptr2prg => print_project_info
-            case('projops');                     ptr2prg => projops  
+            case('print_project_info');          ptr2prg => print_project_info  
             case('prune_project');               ptr2prg => prune_project
             case('ptclsproc_nano');              ptr2prg => ptclsproc_nano
             case('reconstruct3D');               ptr2prg => reconstruct3D
@@ -957,7 +953,6 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name%to_char()
         write(logfhandle,'(A)') print_project_field%name%to_char()
         write(logfhandle,'(A)') print_project_info%name%to_char()
-        write(logfhandle,'(A)') projops%name%to_char()
         write(logfhandle,'(A)') prune_project%name%to_char()
         write(logfhandle,'(A)') reconstruct3D%name%to_char()
         write(logfhandle,'(A)') reextract%name%to_char()
@@ -4310,32 +4305,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_oriconsensus
-
-    subroutine new_projops
-        ! PROGRAM SPECIFICATION
-        call projops%new(&
-        &'projops',&                                ! name
-        &'Project manipulation tools',&             ! descr_short
-        &'Project manipulation tools',&             ! descr_long
-        &'simple_exec',&                            ! executable
-        &0, 4, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! parameter input/output
-        call projops%set_input('parm_ios', 1, projfile)
-        call projops%set_input('parm_ios', 2, smpd)
-        call projops%set_input('parm_ios', 3, 'randomise', 'binary', 'Randomise particles within stack', 'Randomise particles within stack(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call projops%set_input('parm_ios', 4, outstk)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-    end subroutine new_projops
 
     subroutine new_prune_project
         ! PROGRAM SPECIFICATION

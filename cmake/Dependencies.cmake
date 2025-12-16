@@ -3,6 +3,7 @@
 # Finds and configures external dependencies.
 # Populates SIMPLE_LIBRARIES for linking by the SIMPLE library and executables.
 
+
 set(SIMPLE_LIBRARIES "")
 
 # ------------------------------------------------------------------------------
@@ -175,7 +176,6 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ------------------------------------------------------------------------------
-# Export to parent
+# Final status
 # ------------------------------------------------------------------------------
-set(SIMPLE_LIBRARIES "${SIMPLE_LIBRARIES}" PARENT_SCOPE)
 message(STATUS "All dependencies configured")

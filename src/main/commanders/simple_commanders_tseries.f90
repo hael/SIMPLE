@@ -1481,7 +1481,6 @@ contains
     end subroutine exec_denoise_trajectory
 
     subroutine exec_tseries_swap_stack( self, cline )
-        use simple_commanders_project
         class(commander_tseries_swap_stack), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(sp_project) :: spproj, spproj_tmp
