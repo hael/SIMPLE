@@ -521,7 +521,7 @@ contains
         if( .not.cline%defined('pdbout') )then
             params%pdbout = get_fbody(params%pdbfile,'pdb')//'_centered.pdb'
         endif
-        if( .not.cline%defined('outvol') ) params%outvol = get_fbody(params%pdbfile,'pdb')//'_sim.mrc'
+        if( .not.cline%defined('outvol') ) params%outvol = get_fbody(params%pdbfile,'pdb')//'.mrc'
         if( cline%defined('vol_dim') ) vol_dims(:) = params%vol_dim
         if( cline%defined('vol_dim') )then  
             if( params%center_pdb .eq. 'yes' )then
