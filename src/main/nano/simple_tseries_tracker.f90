@@ -1,5 +1,5 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
-module simple_tseries_track_particles
+module simple_track_trajectory
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
@@ -444,4 +444,4 @@ contains
         call pspec_nn%kill
     end subroutine kill_tracker
 
-end module simple_tseries_track_particles
+end module simple_track_trajectory

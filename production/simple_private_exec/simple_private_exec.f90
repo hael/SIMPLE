@@ -66,7 +66,7 @@ type(commander_prune_project)           :: xprune_project
 type(commander_scale_project_distr)     :: xscale_project_distr
 
 ! TIME-SERIES ANALYSIS PROGRAMS
-type(commander_tseries_track_particles) :: xtseries_track_particles
+type(commander_track_trajectory) :: xtrack_trajectory
 type(commander_tseries_motion_correct)  :: xtseries_mcorr
 
 ! PARALLEL PROCESSING PROGRAMS
@@ -216,8 +216,8 @@ select case(prg)
     ! TIME-SERIES ANALYSIS PROGRAMS
     case( 'tseries_motion_correct' )
         call xtseries_mcorr%execute(cline)
-    case( 'tseries_track_particles' )
-        call xtseries_track_particles%execute(cline)
+    case( 'track_trajectory' )
+        call xtrack_trajectory%execute(cline)
 
     ! PARALLEL PROCESSING PROGRAMS
     case( 'split' )

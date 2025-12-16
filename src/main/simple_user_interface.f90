@@ -206,15 +206,15 @@ type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_atoms_rmsd
 type(simple_program), target :: tseries_core_atoms_analysis
-type(simple_program), target :: tseries_core_finder
+type(simple_program), target :: trajectory_core_finder
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_make_pickavg
-type(simple_program), target :: tseries_make_projavgs
+type(simple_program), target :: trajectory_make_projavgs
 type(simple_program), target :: tseries_motion_correct
-type(simple_program), target :: tseries_reconstruct3D
-type(simple_program), target :: tseries_swap_stack
-type(simple_program), target :: tseries_track_particles
+type(simple_program), target :: trajectory_reconstruct3D
+type(simple_program), target :: trajectory_swap_stack
+type(simple_program), target :: track_trajectory
 type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
@@ -537,15 +537,15 @@ contains
         call new_symmetry_test
         call new_tseries_atoms_rmsd
         call new_tseries_core_atoms_analysis
-        call new_tseries_core_finder
+        call new_trajectory_core_finder
         call new_tseries_import
-        call new_tseries_import_particles
+        call new_import_trajectory
         call new_tseries_make_pickavg
-        call new_tseries_make_projavgs
+        call new_trajectory_make_projavgs
         call new_tseries_motion_correct
-        call new_tseries_reconstruct3D
-        call new_tseries_swap_stack
-        call new_tseries_track_particles
+        call new_trajectory_reconstruct3D
+        call new_trajectory_swap_stack
+        call new_track_trajectory
         call new_uniform_filter2D
         call new_uniform_filter3D
         call new_update_project
@@ -688,14 +688,14 @@ contains
         call push2prg_ptr_array(symmetry_test)
         call push2prg_ptr_array(tseries_atoms_rmsd)
         call push2prg_ptr_array(tseries_core_atoms_analysis)
-        call push2prg_ptr_array(tseries_core_finder)
+        call push2prg_ptr_array(trajectory_core_finder)
         call push2prg_ptr_array(tseries_import)
         call push2prg_ptr_array(tseries_import_particles)
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
-        call push2prg_ptr_array(tseries_reconstruct3D)
-        call push2prg_ptr_array(tseries_swap_stack)
-        call push2prg_ptr_array(tseries_track_particles)
+        call push2prg_ptr_array(trajectory_reconstruct3D)
+        call push2prg_ptr_array(trajectory_swap_stack)
+        call push2prg_ptr_array(track_trajectory)
         call push2prg_ptr_array(uniform_filter2D)
         call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
@@ -852,15 +852,15 @@ contains
             case('symmetry_test');               ptr2prg => symmetry_test
             case('tseries_atoms_rmsd');          ptr2prg => tseries_atoms_rmsd
             case('tseries_core_atoms_analysis'); ptr2prg => tseries_core_atoms_analysis
-            case('tseries_core_finder');         ptr2prg => tseries_core_finder
+            case('trajectory_core_finder');         ptr2prg => trajectory_core_finder
             case('tseries_import');              ptr2prg => tseries_import
             case('tseries_import_particles');    ptr2prg => tseries_import_particles
             case('tseries_make_pickavg');        ptr2prg => tseries_make_pickavg
-            case('tseries_make_projavgs');       ptr2prg => tseries_make_projavgs
+            case('trajectory_make_projavgs');       ptr2prg => trajectory_make_projavgs
             case('tseries_motion_correct');      ptr2prg => tseries_motion_correct
-            case('tseries_reconstruct3D');       ptr2prg => tseries_reconstruct3D
-            case('tseries_swap_stack');          ptr2prg => tseries_swap_stack
-            case('tseries_track_particles');     ptr2prg => tseries_track_particles
+            case('trajectory_reconstruct3D');       ptr2prg => trajectory_reconstruct3D
+            case('trajectory_swap_stack');          ptr2prg => trajectory_swap_stack
+            case('track_trajectory');     ptr2prg => track_trajectory
             case('uniform_filter2D');            ptr2prg => uniform_filter2D
             case('uniform_filter3D');            ptr2prg => uniform_filter3D
             case('update_project');              ptr2prg => update_project
@@ -1014,7 +1014,7 @@ contains
         write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()
         write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
-        write(logfhandle,'(A)') tseries_track_particles%name%to_char()
+        write(logfhandle,'(A)') track_trajectory%name%to_char()
         write(logfhandle,'(A)') graphene_subtr%name%to_char()
         write(logfhandle,'(A)') denoise_trajectory%name%to_char()
         write(logfhandle,'(A)') ''
@@ -1031,8 +1031,8 @@ contains
         write(logfhandle,'(A)') extract_substk%name%to_char()
         write(logfhandle,'(A)') extract_subproj%name%to_char()
         write(logfhandle,'(A)') autorefine3D_nano%name%to_char()
-        write(logfhandle,'(A)') tseries_reconstruct3D%name%to_char()
-        write(logfhandle,'(A)') tseries_swap_stack%name%to_char()
+        write(logfhandle,'(A)') trajectory_reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') trajectory_swap_stack%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') vizoris%name%to_char()
@@ -1050,8 +1050,8 @@ contains
         write(logfhandle,'(A)') crys_score%name%to_char()
         write(logfhandle,'(A)') tseries_atoms_rmsd%name%to_char()
         write(logfhandle,'(A)') tseries_core_atoms_analysis%name%to_char()
-        write(logfhandle,'(A)') tseries_core_finder%name%to_char()
-        write(logfhandle,'(A)') tseries_make_projavgs%name%to_char()
+        write(logfhandle,'(A)') trajectory_core_finder%name%to_char()
+        write(logfhandle,'(A)') trajectory_make_projavgs%name%to_char()
     end subroutine list_single_prgs_in_ui
 
     ! private class methods
@@ -5383,7 +5383,7 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_atoms_rmsd%new(&
         &'tseries_atoms_rmsd',&                                                       ! name
-        &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
+        &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
         &0, 3, 0, 0, 1, 0, 0, .false., gui_advanced=.false.)                          ! # entries in each group, requires sp_project
@@ -5410,7 +5410,7 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_core_atoms_analysis%new(&
         &'tseries_core_atoms_analysis',&                                              ! name
-        &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
+        &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
         &0, 3, 0, 0, 1, 0, 0, .false., gui_advanced=.false.)                          ! # entries in each group, requires sp_project
@@ -5433,20 +5433,20 @@ contains
         ! <empty>
     end subroutine new_tseries_core_atoms_analysis
 
-    subroutine new_tseries_core_finder
+    subroutine new_trajectory_core_finder
         ! PROGRAM SPECIFICATION
-        call tseries_core_finder%new(&
-        &'tseries_core_finder',&                                                          ! name
+        call trajectory_core_finder%new(&
+        &'trajectory_core_finder',&                                                          ! name
         &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! descr_short
         &'is a program that analyses docked time-series density maps',&                   ! descr long
         &'single_exec',&                                                                  ! executable
         &1, 1, 0, 0, 0, 0, 0, .false., gui_advanced=.false.)                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_core_finder%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
+        call trajectory_core_finder%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
         &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
         ! parameter input/output
-        call tseries_core_finder%set_input('parm_ios', 1, smpd)
+        call trajectory_core_finder%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -5457,7 +5457,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_tseries_core_finder
+    end subroutine new_trajectory_core_finder
 
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
@@ -5488,7 +5488,7 @@ contains
         ! <empty>
     end subroutine new_tseries_import
 
-    subroutine new_tseries_import_particles
+    subroutine new_import_trajectory
         ! PROGRAM SPECIFICATION
         call tseries_import_particles%new(&
         &'tseries_import_particles',&                       ! name
@@ -5513,7 +5513,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_tseries_import_particles
+    end subroutine new_import_trajectory
 
     subroutine new_tseries_motion_correct
         ! PROGRAM SPECIFICATION
@@ -5598,10 +5598,10 @@ contains
         call tseries_make_pickavg%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_pickavg
 
-    subroutine new_tseries_make_projavgs
+    subroutine new_trajectory_make_projavgs
         ! PROGRAM SPECIFICATION
-        call tseries_make_projavgs%new(&
-        &'tseries_make_projavgs',&                                                       ! name
+        call trajectory_make_projavgs%new(&
+        &'trajectory_make_projavgs',&                                                       ! name
         &'Align & average the first few frames of the time-series',&                     ! descr_short
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
@@ -5611,8 +5611,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_make_projavgs%set_input('parm_ios', 1, nspace)
-        call tseries_make_projavgs%set_input('parm_ios', 2, 'athres', 'num', 'Angular threshold (degrees)', 'Angular threshold (degrees)', 'in degrees{10}', .false., 10.)
+        call trajectory_make_projavgs%set_input('parm_ios', 1, nspace)
+        call trajectory_make_projavgs%set_input('parm_ios', 2, 'athres', 'num', 'Angular threshold (degrees)', 'Angular threshold (degrees)', 'in degrees{10}', .false., 10.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -5620,23 +5620,23 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call tseries_make_projavgs%set_input('mask_ctrls', 1, mskdiam)
+        call trajectory_make_projavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        call tseries_make_projavgs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_make_projavgs
+        call trajectory_make_projavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_trajectory_make_projavgs
 
-    subroutine new_tseries_swap_stack
+    subroutine new_trajectory_swap_stack
         ! PROGRAM SPECIFICATION
-        call tseries_swap_stack%new(&
-        &'tseries_swap_stack',&                                           ! name
+        call trajectory_swap_stack%new(&
+        &'trajectory_swap_stack',&                                           ! name
         &'Substitutes stack into an existing project',&                   ! descr_short
         &'is a program for substituting stack into an existing project',& ! descr_long
         &'single_exec',&                                                  ! executable
         &1, 0, 0, 0, 0, 0, 0, .true., gui_advanced=.false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_swap_stack%set_input('img_ios', 1, stk)
-        tseries_swap_stack%img_ios(1)%required = .true.
+        call trajectory_swap_stack%set_input('img_ios', 1, stk)
+        trajectory_swap_stack%img_ios(1)%required = .true.
         ! parameter input/output
         ! <empty>
         ! alternative inputs
@@ -5649,12 +5649,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_tseries_swap_stack
+    end subroutine new_trajectory_swap_stack
 
-    subroutine new_tseries_track_particles
+    subroutine new_track_trajectory
         ! PROGRAM SPECIFICATION
-        call tseries_track_particles%new(&
-        &'tseries_track_particles',&                                             ! name
+        call track_trajectory%new(&
+        &'track_trajectory',&                                             ! name
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'single_exec',&                                                         ! executable
@@ -5663,39 +5663,39 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_track_particles%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
+        call track_trajectory%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
-        call tseries_track_particles%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
+        call track_trajectory%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
-        call tseries_track_particles%set_input('parm_ios', 3, neg)
-        call tseries_track_particles%set_input('parm_ios', 4, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
+        call track_trajectory%set_input('parm_ios', 3, neg)
+        call track_trajectory%set_input('parm_ios', 4, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call tseries_track_particles%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
+        call track_trajectory%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
         'e.g. pixels window halfwidth', .false., 10.)
-        call tseries_track_particles%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
+        call track_trajectory%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
         ! <empty>
         ! filter controls
-        call tseries_track_particles%set_input('filt_ctrls', 1, lp)
-        tseries_track_particles%filt_ctrls(1)%required     = .false.
-        tseries_track_particles%filt_ctrls(1)%rval_default = 2.3
-        tseries_track_particles%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
-        call tseries_track_particles%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call track_trajectory%set_input('filt_ctrls', 1, lp)
+        track_trajectory%filt_ctrls(1)%required     = .false.
+        track_trajectory%filt_ctrls(1)%rval_default = 2.3
+        track_trajectory%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
+        call track_trajectory%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
-        call tseries_track_particles%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
+        call track_trajectory%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
             &'Alternative filter for particle tracking(no|tv|nlmean){tv}', '(no|tv|nlmean){tv}', .false., 'tv')
-        call tseries_track_particles%set_input('filt_ctrls', 4, hp)
+        call track_trajectory%set_input('filt_ctrls', 4, hp)
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_track_particles%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_track_particles
+        call track_trajectory%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_track_trajectory
 
-    subroutine new_tseries_reconstruct3D
+    subroutine new_trajectory_reconstruct3D
         ! PROGRAM SPECIFICATION
-        call tseries_reconstruct3D%new(&
-        &'tseries_reconstruct3D',&                                       ! name
+        call trajectory_reconstruct3D%new(&
+        &'trajectory_reconstruct3D',&                                       ! name
         &'Time windowed 3D reconstruction from oriented particles',&     ! descr_long
         &'Time windowed 3D reconstruction from oriented particles',&
         &'single_exec',&                                                 ! executable
@@ -5704,23 +5704,23 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_reconstruct3D%set_input('parm_ios', 1, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500.)
-        call tseries_reconstruct3D%set_input('parm_ios', 2, 'fromp', 'num', 'From particle index', 'Start index for 3D reconstruction', 'start index', .false., 1.0)
-        call tseries_reconstruct3D%set_input('parm_ios', 3, 'top',   'num', 'To particle index', 'Stop index for 3D reconstruction', 'stop index', .false., 1.0)
+        call trajectory_reconstruct3D%set_input('parm_ios', 1, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500.)
+        call trajectory_reconstruct3D%set_input('parm_ios', 2, 'fromp', 'num', 'From particle index', 'Start index for 3D reconstruction', 'start index', .false., 1.0)
+        call trajectory_reconstruct3D%set_input('parm_ios', 3, 'top',   'num', 'To particle index', 'Stop index for 3D reconstruction', 'stop index', .false., 1.0)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call tseries_reconstruct3D%set_input('srch_ctrls', 1, pgrp)
+        call trajectory_reconstruct3D%set_input('srch_ctrls', 1, pgrp)
         ! filter controls
         ! <empty>
         ! mask controls
-        call tseries_reconstruct3D%set_input('mask_ctrls', 1, mskdiam)
-        call tseries_reconstruct3D%set_input('mask_ctrls', 2, mskfile)
+        call trajectory_reconstruct3D%set_input('mask_ctrls', 1, mskdiam)
+        call trajectory_reconstruct3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
-        call tseries_reconstruct3D%set_input('comp_ctrls', 1, nparts)
-        tseries_reconstruct3D%comp_ctrls(1)%required = .false.
-        call tseries_reconstruct3D%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_tseries_reconstruct3D
+        call trajectory_reconstruct3D%set_input('comp_ctrls', 1, nparts)
+        trajectory_reconstruct3D%comp_ctrls(1)%required = .false.
+        call trajectory_reconstruct3D%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_trajectory_reconstruct3D
 
     subroutine new_gen_pickrefs
         ! PROGRAM SPECIFICATION
