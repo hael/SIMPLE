@@ -1026,9 +1026,6 @@ contains
                 n3D = int(seginfos(i)%n_records)
             end select
         enddo
-        ! if( n2D /= n3D )then
-        !     THROW_WARN('Inconsistent # of particles in the 2D/3D segments; read_data_info: '//trim(fname))
-        ! endif
         nptcls = n2D
     end subroutine read_data_info
 

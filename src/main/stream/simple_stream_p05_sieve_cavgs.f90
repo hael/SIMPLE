@@ -639,7 +639,7 @@ contains
                     ! target: current set 2 cluster and transfer 2 pool2D
                     call cline_match_cavgs%set('projfile_target', basename(crec%projfile))
                     ! merged: is the dynamic reference
-                    call cline_match_cavgs%set('projfile_merged', string(MERGED_PROJFILE))
+                    call cline_match_cavgs%set('projfile_merged', string())
                     ! submission
                     path = stemname(crec%projfile)
                     call simple_chdir(path)
@@ -768,7 +768,7 @@ contains
                         if( iset==1 )then
                             source = crec%projfile  ! from cluster_cavgs
                         else
-                            source = stemname(crec%projfile)//'/'//trim(MATCH_PROJFILE)
+                            source = stemname(crec%projfile)//'/'//trim(MERGED_PROJFILE)
                         endif
                         destination = DIR_STREAM_COMPLETED//DIR_SET//int2str(iset)//METADATA_EXT
                         call simple_rename(source, destination)
