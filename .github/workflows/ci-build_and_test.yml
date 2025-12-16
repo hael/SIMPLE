@@ -1,4 +1,4 @@
-name: Build & Run SIMPLE Tests 
+name: Build SIMPLE & Run Tests (Linux/MacOS)
 
 on:
   workflow_dispatch:
@@ -7,13 +7,18 @@ on:
     branches: [ continuous-integration ]
 
 jobs:
-  Build_and_Test_Linux:
-    name: Build and Test SIMPLE on Linux Machine
-    runs-on: ubuntu-latest
+  Build_and_Test:
+    name: Build SIMPLE and Test 
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Dependencies 
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
@@ -39,20 +44,45 @@ jobs:
              sudo make install
              make distclean
              cd ..
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+             curl -o fftw-3.3.8.tar.gz http://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
+             tar zxvf fftw-3.3.8.tar.gz
+             # build double precision and threaded libraries:
+             cd fftw-3.8.8
+             ./bootstrap.sh –prefix=/usr/local
+             make -j
+             sudo make install
+             make distclean
+             # now build-single precision libraries:
+             ./bootstrap.sh –prefix=/usr/local –enable-single
+             make -j
+             sudo make install
+             make distclean
+             cd ..
+             brew install git
+             brew install cmake
+             brew install gcc
+             brew install libtiff
+             brew install jbigkit
+             brew install python@3.10
              
-      - name: Install SIMPLE debug mode
+      - name: Build SIMPLE in debug mode (Linux/MacOS)
         run: |
              ./compile_debug.sh
 
-      - name: Install SIMPLE GUI 
+      - name: Build SIMPLE GUI  (Linux/MacOS)
         run: |
              ./compile_gui.sh
 
-      - name: Install SIMPLE
+      - name: Install SIMPLE (Linux/MacOS)
         run: |
              ./compile_clean.sh
 
-      - name: Test SIMPLE
+      - name: Test SIMPLE (Linux/MacOS)
         run: |
              export SIMPLE_EMAIL="my.name@uni.edu"
              export SIMPLE_QSYS="local"
@@ -122,35 +152,3 @@ jobs:
              simple_test_units
          
 
-#  Build_and_Test_MacOS:
-#    name: Build and Test SIMPLE on MacOS x86_64
-#    runs-on: macos-latest
-#    steps:
-#      - uses: actions/checkout@v3
-#
-#      - name: Install Dependencies 
-#        run: |
-#             uname -a
-#             echo "Install Dependencies"
-#             brew update
-#             brew install cmake gcc fftw libtiff jbigkit sqlite 
-#             brew upgrade
-#             echo "Intall EMAN2"
-#             wget https://cryoem.bcm.edu/cryoem/static/software/release-2.99.47/eman2.99.47_sphire1.4_sparx.MacOS.sh
-#             echo "eman2" | bash eman2.99.47_sphire1.4_sparx.MacOS.sh 
-#             eval "$($GITHUB_WORKSPACE/eman2/bin/conda shell.bash hook)" 
-#
-#             which gfortran
-#     
-#      - name: Install SIMPLE
-#        run: |
-#             mkdir -p build
-#             cd build
-#             cmake -DGUI=OFF ..
-#             make -j install
-#             export SIMPLE_EMAIL="my.name@uni.edu"
-#             export SIMPLE_QSYS="local"
-#             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
-#             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-
-#             #xcode-select --install
