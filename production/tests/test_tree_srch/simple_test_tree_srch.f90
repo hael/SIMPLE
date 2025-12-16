@@ -22,7 +22,7 @@ implicit none
 ! integer, allocatable :: ptcl_rank_neigh(:), ref_rank_neigh(:,:)
 type(dendro)        :: test_tree
 real                :: objs(2), t1, t2
-integer             :: indxs(2), i , ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, i, NPLANES 
+integer             :: indxs(2), i , ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, NPLANES 
 real, allocatable   :: test_dist_mat(:,:)
 type(node), pointer :: p
 logical             :: done = .false. 
