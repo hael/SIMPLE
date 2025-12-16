@@ -1,22 +1,24 @@
 program simple_test_ptcl_center
 use simple_core_module_api
-use simple_parameters, only: parameters
-use simple_image,      only: image
-use simple_projector,  only: projector
-use simple_cmdline,    only: cmdline
+use simple_parameters,       only: parameters
+use simple_image,            only: image
+use simple_projector,        only: projector
+use simple_cmdline,          only: cmdline
+use simple_commanders_atoms, only: commander_pdb2mrc
 implicit none
 integer,          parameter   :: ORI_IND = 15, NPLANES = 100, MAX_R = 45, CENTER_RAD = 40
 character(len=:), allocatable :: cmd
 real,             allocatable :: pspec(:)
-type(parameters) :: p
-type(cmdline)    :: cline
-type(image)      :: vol, noise, ptcl, ptcl_pad, roavg
-type(projector)  :: vol_pad
-type(oris)       :: spiral
-type(ori)        :: o1
-integer          :: rc, ifoo, iind
-real             :: ave, sdev, maxv, minv, masscen(3), sh(2)
-logical          :: mrc_exists
+type(commander_pdb2mrc) :: xpdb2mrc
+type(parameters)        :: p
+type(cmdline)           :: cline, cline_pdb2mrc
+type(image)             :: vol, noise, ptcl, ptcl_pad, roavg
+type(projector)         :: vol_pad
+type(oris)              :: spiral
+type(ori)               :: o1
+integer                 :: rc, ifoo, iind
+real                    :: ave, sdev, maxv, minv, masscen(3), sh(2)
+logical                 :: mrc_exists
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_ptcl_center smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -27,16 +29,21 @@ if( command_argument_count() < 4 )then
         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
         call execute_command_line(cmd, exitstat=rc)
         write(*, *) 'Converting .pdb to .mrc...'
-        cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
-        call execute_command_line(cmd, exitstat=rc)
+        call cline_pdb2mrc%set('smpd',                            1.)
+        call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
+        call cline_pdb2mrc%checkvar('smpd',                        1)
+        call cline_pdb2mrc%checkvar('pdbfile',                     2)
+        call cline_pdb2mrc%check()
+        call xpdb2mrc%execute_safe(cline_pdb2mrc)
+        call cline_pdb2mrc%kill()
         cmd = 'rm 1JYX.pdb'
         call execute_command_line(cmd, exitstat=rc)
     endif
-    call cline%set('smpd'   , 1.)
-    call cline%set('nthr'   , 16.)
-    call cline%set('vol1'   , '1JYX.mrc')
-    call cline%set('mskdiam', 180.)
-    call cline%set('lp'   ,   3.)
+    call cline%set('smpd',            1.)
+    call cline%set('nthr',           16.)
+    call cline%set('vol1',    '1JYX.mrc')
+    call cline%set('mskdiam',       180.)
+    call cline%set('lp',              3.)
 else
     call cline%parse_oldschool
 endif

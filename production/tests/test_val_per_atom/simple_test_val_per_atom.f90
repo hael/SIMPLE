@@ -1,8 +1,10 @@
 program simple_test_val_per_atom
-! use simple_atoms, only: atoms
+! use simple_atoms,            only: atoms
+! use simple_commanders_atoms, only: commander_pdb2mrc
 ! use simple_image
 ! implicit none
 ! #include "simple_local_flags.inc"
+! type(cmdline)                 :: cline_pdb2mrc
 ! character(len=STDLEN)         :: pdb_file, vol_file, pdb_out
 ! type(atoms)                   :: molecule 
 ! type(image)                   :: vol 
@@ -25,8 +27,13 @@ program simple_test_val_per_atom
 !         call execute_command_line(cmd, exitstat=rc)
 !     endif
 !     !write(*, *) 'Creating vol from pdb...'
-!     !cmd      = 'e2pdb2mrc.py --apix 0.358 1JYX.pdb vol.mrc'
-!     !call execute_command_line(cmd, exitstat=rc)
+!     call cline_pdb2mrc%set('smpd',                        0.358.)
+!     call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
+!     call cline_pdb2mrc%checkvar('smpd',                        1)
+!     call cline_pdb2mrc%checkvar('pdbfile',                     2)
+!     call cline_pdb2mrc%check()
+!     call xpdb2mrc%execute_safe(cline_pdb2mrc)
+!     call cline_pdb2mrc%kill()
 !     pdb_file      = '1JYX.pdb'
 !     smpd          = 0.358
 ! else

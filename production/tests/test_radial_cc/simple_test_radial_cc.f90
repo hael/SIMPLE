@@ -1,7 +1,11 @@
 program simple_test_radial_cc
-! use simple_image, only: image
+! use simple_core_module_api
+! use simple_image,            only: image
+! use simple_commanders_atoms, only: commander_pdb2mrc
 ! implicit none
 ! #include "simple_local_flags.inc"
+! type(commander_pdb2mrc)       :: xpdb2mrc
+! type(cmdline)                 :: cline_pdb2mrc
 ! real,    parameter            :: smpd=0.358 
 ! type(image)                   :: img1, img2, img_w
 ! real,    allocatable          :: rad_corrs(:), rad_dists(:), filt(:)
@@ -20,8 +24,15 @@ program simple_test_radial_cc
 !     endif
 !     call execute_command_line(cmd, exitstat=rc)
 !     write(*, *) 'Creating two mrcs vols...'
-!     cmd     = 'e2pdb2mrc.py 1JYX.pdb vol1.mrc'
-!     call execute_command_line(cmd, exitstat=rc)
+
+!     call cline_pdb2mrc%set('smpd',                            1.)
+!     call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
+!     call cline_pdb2mrc%checkvar('smpd',                        1)
+!     call cline_pdb2mrc%checkvar('pdbfile',                     2)
+!     call cline_pdb2mrc%check()
+!     call xpdb2mrc%execute_safe(cline_pdb2mrc)
+!     call cline_pdb2mrc%kill()
+
 !     cmd     = 'cp vol1.mrc vol2.mrc'
 !     call execute_command_line(cmd, exitstat=rc)
 !     cmd     = 'rm 1JYX.pdb'

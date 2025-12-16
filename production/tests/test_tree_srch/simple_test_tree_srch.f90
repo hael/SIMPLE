@@ -1,27 +1,28 @@
 program simple_test_tree_srch
-! use simple_image,            only: image
-! use simple_cmdline,          only: cmdline
-! use simple_parameters,       only: parameters
+! use simple_image,             only: image
+! use simple_cmdline,           only: cmdline
+! use simple_parameters,        only: parameters
 ! use simple_oris
 ! use simple_stat
-! use simple_commanders_volops,  only: commander_reproject
-! use simple_commanders_sim,      only: commander_simulate_particles
+! use simple_commanders_volops, only: commander_reproject
+! use simple_commanders_sim,    only: commander_simulate_particles
+! use simple_commanders_atoms,  only: commander_pdb2mrc
 use simple_hierch_tree 
 implicit none 
-
-! type(image)  :: vol
-! type(parameters)    :: p 
-! type(image), allocatable    :: ptcls(:), refs(:)
-! type(cmdline)   :: cline
-! type(oris)   :: space, space_sub, spiral
-! type(commander_reproject)     :: xreproject
-! type(commander_simulate_particles)  :: xsimulate_particles 
+! type(commander_reproject)          :: xreproject
+! type(commander_pdb2mrc)            :: xpdb2mrc
+! type(commander_simulate_particles) :: xsimulate_particles 
+! type(image)                   :: vol
+! type(parameters)              :: p 
+! type(image), allocatable      :: ptcls(:), refs(:)
+! type(cmdline)                 :: cline, cline_pdb2mrc
+! type(oris)                    :: space, space_sub, spiral
 ! character(len=:), allocatable :: cmd
-! integer     :: ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, i, NPLANES 
-! real, allocatable   :: smat_ref(:,:)
-! integer, allocatable :: ptcl_rank_neigh(:), ref_rank_neigh(:,:)
-type(dendro)    :: test_tree
-real, allocatable            :: test_dist_mat(:,:)
+! real,             allocatable :: smat_ref(:,:)
+! integer,          allocatable :: ptcl_rank_neigh(:), ref_rank_neigh(:,:)
+! integer                       :: ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, i, NPLANES 
+type(dendro)                    :: test_tree
+real,               allocatable :: test_dist_mat(:,:)
 ! nspace = 1000 
 
 ! ! Load Volume 
@@ -29,8 +30,13 @@ real, allocatable            :: test_dist_mat(:,:)
 ! cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
 ! ! call execute_command_line(cmd, exitstat=rc)
 ! write(*, *) 'Converting .pdb to .mrc...'
-! cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
-! ! call execute_command_line(cmd, exitstat=rc)
+! call cline_pdb2mrc%set('smpd',                            1.)
+! call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
+! call cline_pdb2mrc%checkvar('smpd',                        1)
+! call cline_pdb2mrc%checkvar('pdbfile',                     2)
+! call cline_pdb2mrc%check()
+! call xpdb2mrc%execute_safe(cline_pdb2mrc)
+! call cline_pdb2mrc%kill()
 ! cmd = 'rm 1JYX.pdb'
 ! ! call execute_command_line(cmd, exitstat=rc)
 
@@ -51,14 +57,12 @@ real, allocatable            :: test_dist_mat(:,:)
 
 ! allocate(smat_ref(nspace, nspace))
 
-
 ! do ispace = 1, nspace - 1
 !     do jspace = ispace + 1, nspace 
 !         ! calc pairwise FM
 !         ! diagonal set to 0.
 !     end do 
 ! end do 
-
 
 ! Calc FM distance matrix no ctf 
 
@@ -69,7 +73,6 @@ real, allocatable            :: test_dist_mat(:,:)
 ! Hierarchical Clustering from distance mat 
 
 ! not sure if dendrogram balanced 
-
 
 allocate(test_dist_mat(10,10))
 
@@ -104,6 +107,4 @@ call test_tree%set_npnts(10)
 call test_tree%build_dendro
 call print_dendro(test_tree%root)
 print*, test_tree%root%left%right%left%subset
-end program simple_test_tree_srch
-
-    
+end program simple_test_tree_srch 
