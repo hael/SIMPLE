@@ -1,20 +1,23 @@
 program simple_test_shiftsrch
-! use simple_polarft_calc,  only: polarft_calc
+! use simple_core_module_api
+! use simple_polarft_calc,      only: polarft_calc, gen
 ! use simple_cmdline,           only: cmdline
 ! use simple_builder,           only: builder
 ! use simple_image,             only: image
 ! use simple_parameters,        only: parameters, params_glob
 ! use simple_polarizer,         only: polarizer
-! use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
-! use simple_commanders_volops,  only: commander_reproject
+! use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
+! use simple_commanders_volops, only: commander_reproject
+! use simple_commanders_atoms,  only: commander_pdb2mrc
 ! implicit none
-! type(cmdline)                 :: cline, cline_projection
+! type(cmdline)                 :: cline, cline_projection, cline_pdb2mrc
 ! type(builder)                 :: b
 ! type(parameters)              :: p
-! type(polarft_calc)        :: pftc
+! type(polarft_calc)            :: pftc
 ! type(polarizer)               :: img_copy
-! type(pftc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+! type(pftc_shsrch_grad)        :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 ! type(commander_reproject)     :: xreproject
+! type(commander_pdb2mrc)       :: xpdb2mrc
 ! character(len=:), allocatable :: cmd
 ! logical                :: be_verbose=.false.
 ! real,    parameter     :: SHMAG=1.0
@@ -35,8 +38,13 @@ program simple_test_shiftsrch
 !         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
 !         call execute_command_line(cmd, exitstat=rc)
 !         write(*, *) 'Converting .pdb to .mrc...'
-!         cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
-!         call execute_command_line(cmd, exitstat=rc)
+!         call cline_pdb2mrc%set('smpd',                            1.)
+!         call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
+!         call cline_pdb2mrc%checkvar('smpd',                        1)
+!         call cline_pdb2mrc%checkvar('pdbfile',                     2)
+!         call cline_pdb2mrc%check()
+!         call xpdb2mrc%execute_safe(cline_pdb2mrc)
+!         call cline_pdb2mrc%kill()
 !         cmd = 'rm 1JYX.pdb'
 !         call execute_command_line(cmd, exitstat=rc)
 !         write(*, *) 'Projecting 1JYX.mrc...'
@@ -61,7 +69,7 @@ program simple_test_shiftsrch
 ! call cline%check
 ! be_verbose = .false.
 ! if( cline%defined('verbose') )then
-!     if( trim(cline%get_carg('verbose')) .eq. 'yes' )then
+!     if( cline%get_carg('verbose') .eq. 'yes' )then
 !         be_verbose = .true.
 !     endif
 ! endif

@@ -7,11 +7,13 @@ use simple_commanders_volops, only: commander_reproject
 use simple_image,             only: image
 use simple_butterworth,       only: butterworth_filter
 use simple_math,              only: create_hist_vector
+use simple_commanders_atoms,  only: commander_pdb2mrc
 implicit none
 type(parameters)              :: p
-type(cmdline)                 :: cline, cline_projection
+type(cmdline)                 :: cline, cline_projection, cline_pdb2mrc
 type(image)                   :: img, noise, img_noisy, img_filt
 type(commander_reproject)     :: xreproject
+type(commander_pdb2mrc)       :: xpdb2mrc
 integer                       :: nptcls, rc, iptcl, find_stop, find_start, n_bin, n_vec, find_cur
 real                          :: ave, sdev, maxv, minv, noise_mean, noise_std
 type(string)                  :: cmd
@@ -29,8 +31,13 @@ if( command_argument_count() < 4 )then
         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
         call execute_command_line(cmd%to_char(), exitstat=rc)
         write(*, *) 'Converting .pdb to .mrc...'
-        cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
-        call execute_command_line(cmd%to_char(), exitstat=rc)
+        call cline_pdb2mrc%set('smpd',                            1.)
+        call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
+        call cline_pdb2mrc%checkvar('smpd',                        1)
+        call cline_pdb2mrc%checkvar('pdbfile',                     2)
+        call cline_pdb2mrc%check()
+        call xpdb2mrc%execute_safe(cline_pdb2mrc)
+        call cline_pdb2mrc%kill()
         cmd = 'rm 1JYX.pdb'
         call execute_command_line(cmd%to_char(), exitstat=rc)
         write(*, *) 'Projecting 1JYX.mrc...'
