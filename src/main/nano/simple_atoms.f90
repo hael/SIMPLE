@@ -1252,7 +1252,7 @@ contains
                     if( dist > max_dist ) max_dist = dist
                 enddo
             enddo
-            ldim(:) = ( ((max_dist * 2.)/smpd) )
+            ldim(:) = round2even( ((max_dist * 2.)/smpd) )
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         if( use_center )then
