@@ -1,14 +1,13 @@
-module simple_hierch_tree  
+module simple_tree  
 use simple_srch_sort_loc
 implicit none 
 #include "simple_local_flags.inc"
 type  :: node 
    type(node), pointer   :: left => null()
    type(node), pointer   :: right => null()
-   integer     :: medoid_ref_idx 
-   real        :: medoid_fm
+   type(node), pointer   :: parent => null()
+   integer     :: medoid_ref_idx = 0
    real        :: F_ptcl_ref2med  
-   real        :: F_ptcl2ref  ! Only need in end nodes. 
    integer, allocatable     :: subset(:) ! array of refs in node 
    integer     :: level
    logical     :: visit = .false.
@@ -29,7 +28,6 @@ contains
    procedure   :: set_distmat
    ! Constructors / Methods 
    procedure   :: build_dendro
-   procedure   :: walk_dendro ! probably need a queue for this. 
 end type dendro 
 
 ! might need backtracking 
@@ -64,15 +62,8 @@ contains
       self%root%indx = 0     
       allocate(self%root%subset(self%npnts))
       self%root%subset = [(i, i = 1,self%npnts )] 
-      allocate(tmp(self%npnts))
-      do i = 1, self%npnts
-         tmp(i) = sum(self%dist_mat(:, i)) / self%npnts
-      end do  
-      self%root%medoid_fm = maxval(tmp)
-      deallocate(tmp)
 
       call clust_insert_node(self%root, self%dist_mat, 0)
-      ! call print_dendro(self%root)
 
       contains 
          recursive subroutine clust_insert_node(root, dist_mat, level)
@@ -83,12 +74,11 @@ contains
             integer                    :: n1, n2
             integer                    :: new_med(2)
             real, allocatable          :: sub_distmat(:,:)
-            integer, allocatable       :: all_indxs(:), left_idx(:), right_idx(:)
+            integer, allocatable       :: all_indxs(:), left_idx(:), right_idx(:), all_indxs_c(:)
             real                       :: medoid_fm1, medoid_fm2
             root%level = level
-            if (.not. allocated(root%subset)) return
             sub_dim = size(root%subset)
-            if (sub_dim <= 1) return 
+            if (sub_dim <= 1) return
             allocate(sub_distmat(sub_dim, sub_dim))
             do i_dim = 1, sub_dim
                do j_dim = 1, sub_dim
@@ -105,10 +95,12 @@ contains
             do i = 1, sub_dim
                all_indxs(i) = root%subset(i)
             end do
+            allocate(all_indxs_c(size(all_indxs)))
+            all_indxs_c = all_indxs
             call hpsort(sub_distmat(:, new_med(1)), all_indxs)
 
             allocate(left_idx(n1), right_idx(n2))
-            ! need to make sure obj function values of right > left
+            
             do i = 1, n1
                left_idx(i) = all_indxs(i)
             end do
@@ -116,23 +108,20 @@ contains
                right_idx(i) = all_indxs(n1 + i)
             end do
 
-            medoid_fm1 = sum(sub_distmat(:, new_med(1))) / real(n1)
-            medoid_fm2 = sum(sub_distmat(:, new_med(2))) / real(n2)
-
             allocate(root%left)
             nullify(root%left%left, root%left%right)
-            root%left%medoid_fm = medoid_fm1
             allocate(root%left%subset(n1))
             root%left%subset = left_idx
+            root%left%medoid_ref_idx = all_indxs_c(new_med(1))
             root%left%indx   = 0
             root%left%visit  = .false.
             root%left%is_pop = .true.
 
             allocate(root%right)
             nullify(root%right%left, root%right%right)
-            root%right%medoid_fm = medoid_fm2
             allocate(root%right%subset(n2))
             root%right%subset = right_idx
+            root%right%medoid_ref_idx = all_indxs_c(new_med(2))
             root%right%indx   = 0
             root%right%visit  = .false.
             root%right%is_pop = .true.
@@ -149,16 +138,34 @@ contains
    recursive subroutine print_dendro(root)
       type(node), pointer  :: root
       if(associated(root)) then 
-         print *, root%subset
+         print *, root%subset, '//', root%medoid_ref_idx
          call print_dendro(root%right)
          call print_dendro(root%left)
       end if 
    end subroutine print_dendro 
 
-   subroutine walk_dendro(self, best_node)
-      class(dendro), intent(inout)  :: self
-      type(node), intent(out)       :: best_node 
+   recursive subroutine walk_dendro(root, indxs, objs, done)
+      type(node), pointer, intent(inout) :: root 
+      integer, intent(out)  :: indxs(2)
+      real, intent(in)    :: objs(2)
+      logical     :: done   
+      
+      root%left%F_ptcl_ref2med  = objs(1)
+      root%right%F_ptcl_ref2med = objs(2)
 
+      if(objs(1) > objs(2)) then 
+         root => root%left 
+      else 
+         root => root%right
+      end if 
+      root%visit = .true. 
+      if (.not.(associated(root%left) .and. associated(root%right))) then
+         done =.true. 
+         return
+      end if
+
+      indxs(1) = root%left%medoid_ref_idx
+      indxs(2) = root%right%medoid_ref_idx 
    end subroutine walk_dendro
 
-end module simple_hierch_tree
+end module simple_tree
