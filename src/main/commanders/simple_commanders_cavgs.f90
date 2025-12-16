@@ -394,9 +394,10 @@ contains
         use simple_projfile_utils, only: merge_chunk_projfiles
         class(commander_match_cavgs), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj_ref, spproj_match, spproj_merged
-        type(cmdline)    :: cline_cluster_cavgs
+        character(len=*), parameter    :: MATCH_PROJFILE = 'match.simple'
+        type(parameters)               :: params
+        type(sp_project)               :: spproj_ref, spproj_match, spproj_merged
+        type(cmdline)                  :: cline_cluster_cavgs
         type(commander_cluster_cavgs)  :: xcluster_cavgs
         type(string)                   :: chunk_fnames(2), folder
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), medoid_imgs_ref(:)
@@ -421,22 +422,39 @@ contains
         call params%new(cline)
         ! read base project file
         call spproj_ref%read(params%projfile)
+        ! call spproj_ref%write(string('reference.simple'))
         if( .not. spproj_ref%os_cls2D%isthere('cluster')    ) THROW_HARD('Reference project lacks clustering information in cls2D field')
         if( .not. spproj_ref%os_cls2D%isthere('medoid_ind') ) THROW_HARD('Reference project lacks medoid information in cls2D field')
         ! read match project file
         call spproj_match%read(params%projfile_target)
+        ! call spproj_ref%write(string('target.simple'))
         ! prepare class averages
         call prep_cavgs4clustering(spproj_ref,   cavg_imgs_ref,   params%mskdiam, clspops_ref,   clsinds_ref,   l_non_junk_ref,   mm_ref)
         call prep_cavgs4clustering(spproj_match, cavg_imgs_match, params%mskdiam, clspops_match, clsinds_match, l_non_junk_match, mm_match)
         nrefs        = size(cavg_imgs_ref)
+
+        print *, '# ref class averages: ', nrefs
+
         nmatch       = size(cavg_imgs_match)
+
+        print *, '# match class averages: ', nmatch
+
         nmerged      = nrefs + nmatch
+
+        print *, '# merged class averages: ', nmerged
+
         if( nmerged > SIEVING_MATCH_CAVGS_MAX )then
             ! only refine the matched solution before merging
             l_refine_before_merge = .true. 
+
+            print *, 'doing refinement before merge, becase # merged > ', SIEVING_MATCH_CAVGS_MAX
+
         else
             ! merge first, then refine the merged solution
             l_refine_before_merge = .false.
+
+            print *, 'doing refinement after merge, becase # merged <= ', SIEVING_MATCH_CAVGS_MAX
+        
         endif
         smpd         = cavg_imgs_ref(1)%get_smpd()
         ldim         = cavg_imgs_ref(1)%get_ldim()
@@ -499,23 +517,20 @@ contains
         folder          = PATH_HERE
         chunk_fnames(1) = params%projfile
         chunk_fnames(2) = simple_abspath(MATCH_PROJFILE)
-        if( .not. l_refine_before_merge )then
+        if( l_refine_before_merge )then
+             ! refine matched solution
+            call cline_cluster_cavgs%set('projfile', MATCH_PROJFILE)
+            call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
+            ! then merge
+            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
+            call spproj_merged%write(params%projfile_merged)
+        else
             ! merge spproj_ref & spproj_match projects
             call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
             call spproj_merged%write(params%projfile_merged)
             ! refine joint solution
             call cline_cluster_cavgs%set('projfile', params%projfile_merged)
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
-            ! reporting clusters selection to the match project
-            accept_match = spproj_match%os_cls2D%get_all_asint('accept')
-            call spproj_match%map_cavgs_selection(accept_match)
-            call spproj_match%write(string(MATCH_PROJFILE))
-        else
-            ! refine matched solution
-            call cline_cluster_cavgs%set('projfile', MATCH_PROJFILE)
-            call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
-            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
-            call spproj_merged%write(params%projfile_merged)
         endif
         ! cleanup
         call cline_cluster_cavgs%kill
@@ -525,6 +540,7 @@ contains
         call dealloc_imgarr(cavg_imgs_ref)
         call dealloc_imgarr(cavg_imgs_match)
         call dealloc_imgarr(medoid_imgs_ref)
+        call del_file(MATCH_PROJFILE)
         ! end gracefully
         call simple_end('**** SIMPLE_MATCH_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
 

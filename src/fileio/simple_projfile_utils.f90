@@ -63,7 +63,6 @@ contains
             evenname = add2fbody(stkname, params_glob%ext, '_even')
             oddname  = add2fbody(stkname, params_glob%ext, '_odd')
             do i = 1,ncls
-                if( chunks(ic)%os_cls2D%get_state(i) == 0 ) cycle
                 icls = icls+1
                 call img%read(stkname,i)
                 call img%write(cavgs,icls)
@@ -128,9 +127,7 @@ contains
                 top   = chunks(ic)%os_stk%get_top(i)
                 do j = fromp,top
                     iptcl_glob = iptcl_glob + 1
-                    if( chunks(ic)%os_ptcl2D%get_state(j) > 0 )then
-                        call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
-                    endif
+                    call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
                     call chunks(ic)%os_ptcl2D%set_stkind(j, istk)
                     call merged_proj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ic)%os_ptcl2D, j)
                 enddo
