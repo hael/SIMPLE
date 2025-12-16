@@ -42,9 +42,6 @@ call run_all_ori_tests
 call run_all_oris_tests
 call run_all_rec_list_tests
 call report_summary()
-
-stop
-
 ! hand-written unit tests
 write(*,*)'VALIDATING UI JSON FILE:'
 call validate_ui_json

@@ -45,7 +45,7 @@ include(GNUInstallDirs)
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     # Local install by default (easy testing / packaging)
     set(CMAKE_INSTALL_PREFIX
-        "${CMAKE_BINARY_DIR}/install"
+        "${CMAKE_BINARY_DIR}"
         CACHE PATH "Installation prefix" FORCE)
 endif()
 # Reasonable default build type
@@ -132,12 +132,12 @@ endif()
 # Environment setup scripts
 # ------------------------------------------------------------------------------
 configure_file(
-    "${CMAKE_SOURCE_DIR}/scripts/add2.bashrc.sharedtemplate"
+    "${CMAKE_SOURCE_DIR}/scripts/add2.bashrc.template"
     "${CMAKE_BINARY_DIR}/add2.bashrc"
     @ONLY
 )
 configure_file(
-    "${CMAKE_SOURCE_DIR}/scripts/add2.tcshrc.sharedtemplate"
+    "${CMAKE_SOURCE_DIR}/scripts/add2.tcshrc.template"
     "${CMAKE_BINARY_DIR}/add2.tcshrc"
     @ONLY
 )
