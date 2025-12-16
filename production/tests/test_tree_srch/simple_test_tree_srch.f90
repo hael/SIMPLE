@@ -7,7 +7,7 @@ program simple_test_tree_srch
 ! use simple_commanders_volops, only: commander_reproject
 ! use simple_commanders_sim,    only: commander_simulate_particles
 ! use simple_commanders_atoms,  only: commander_pdb2mrc
-use simple_hierch_tree 
+use simple_tree 
 implicit none 
 ! type(commander_reproject)          :: xreproject
 ! type(commander_pdb2mrc)            :: xpdb2mrc
@@ -18,11 +18,14 @@ implicit none
 ! type(cmdline)                 :: cline, cline_pdb2mrc
 ! type(oris)                    :: space, space_sub, spiral
 ! character(len=:), allocatable :: cmd
-! real,             allocatable :: smat_ref(:,:)
-! integer,          allocatable :: ptcl_rank_neigh(:), ref_rank_neigh(:,:)
-! integer                       :: ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, i, NPLANES 
-type(dendro)                    :: test_tree
-real,               allocatable :: test_dist_mat(:,:)
+! real,    allocatable :: smat_ref(:,:)
+! integer, allocatable :: ptcl_rank_neigh(:), ref_rank_neigh(:,:)
+type(dendro)        :: test_tree
+real                :: objs(2), t1, t2
+integer             :: indxs(2), i , ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, i, NPLANES 
+real, allocatable   :: test_dist_mat(:,:)
+type(node), pointer :: p
+logical             :: done = .false. 
 ! nspace = 1000 
 
 ! ! Load Volume 
@@ -100,11 +103,30 @@ test_dist_mat = reshape([ &
     40,40,30,30,20,20,10,10, 1, 0  &
 ], [10,10])
 
-print *, test_dist_mat
+! print *, test_dist_mat
 ! test_dist_mat = reshape( [0., 0.8, 0., 0.8], [2,2])
 call test_tree%set_distmat(test_dist_mat)
 call test_tree%set_npnts(10)
+call cpu_time(t1)
 call test_tree%build_dendro
+call cpu_time(t2)
+print *, 'tree build time', t2 - t1
+
+! point to root to preserve tree structure
+p => test_tree%root 
+! initialize 
+objs(1) = real(p%left%medoid_ref_idx)**2
+objs(2) = real(p%right%medoid_ref_idx)**2
+do 
+    print *, objs
+    call walk_dendro(p, indxs, objs, done)
+    if(done) exit
+    print *, indxs
+    objs(1) = real(indxs(1))**2
+    objs(2) = real(indxs(2))**2
+end do 
+
 call print_dendro(test_tree%root)
-print*, test_tree%root%left%right%left%subset
-end program simple_test_tree_srch 
+
+end program simple_test_tree_srch
+    
