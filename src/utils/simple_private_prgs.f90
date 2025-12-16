@@ -694,8 +694,8 @@ contains
         call private_prgs(20)%push_opt_key('bfac')
         call private_prgs(20)%push_opt_key('wcrit')
 
-        ! tseries_track_particles
-        call private_prgs(21)%set_name('tseries_track_particles')
+        ! track_trajectory
+        call private_prgs(21)%set_name('track_trajectory')
         ! required keys
         call private_prgs(21)%push_req_key('nthr')
         call private_prgs(21)%push_req_key('projfile')

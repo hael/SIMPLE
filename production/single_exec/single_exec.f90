@@ -1,75 +1,57 @@
-! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 program single_exec
-use simple_core_module_api
-use simple_cmdline,                 only: cmdline, cmdline_err
-use simple_commanders_cavgs,        only: commander_map_cavgs_selection
-use simple_commanders_imgproc,      only: commander_estimate_diam
-use simple_commanders_project_ptcl, only: commander_import_particles, commander_prune_project_distr
-use simple_commanders_sim,          only: commander_simulate_atoms
-use simple_exec_helpers,            only: script_exec, update_job_descriptions_in_project, restarted_exec
-use simple_jiffys,                  only: simple_print_git_version, simple_print_timer
-use simple_user_interface,          only: make_user_interface, list_single_prgs_in_ui
-use simple_commanders_atoms
-use simple_commanders_cluster2D
-use simple_commanders_oris
-use simple_commanders_project_core
-use simple_commanders_tseries
+use single_exec_module_api
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT PROGRAMS
-type(commander_new_project)                   :: xnew_project
-type(commander_update_project)                :: xupdate_project
-type(commander_print_project_info)            :: xprint_project_info
-type(commander_print_project_field)           :: xprint_project_field
-type(commander_tseries_import)                :: xtseries_import
-type(commander_import_particles)              :: ximport_particles
-type(commander_tseries_import_particles)      :: xtseries_import_particles
-type(commander_prune_project_distr)           :: xprune_project
+type(commander_new_project)                      :: xnew_project
+type(commander_update_project)                   :: xupdate_project
+type(commander_print_project_info)               :: xprint_project_info
+type(commander_print_project_field)              :: xprint_project_field
+type(commander_tseries_import)                   :: xtseries_import
+type(commander_import_particles)                 :: ximport_particles
+type(commander_import_trajectory)                :: ximport_trajectory
+type(commander_prune_project_distr)              :: xprune_project
 
 ! TIME-SERIES PRE-PROCESSING PROGRAMS
-type(commander_tseries_make_pickavg)          :: xtseries_make_pickavg
-type(commander_tseries_motion_correct_distr)  :: xmcorr
-type(commander_tseries_track_particles_distr) :: xtrack
-type(commander_graphene_subtr)                :: xgraphene_subtr
-type(commander_denoise_trajectory)            :: xden_traj
+type(commander_tseries_make_pickavg)             :: xtseries_make_pickavg
+type(commander_tseries_motion_correct_distr)     :: xmcorr
+type(commander_track_trajectory_distr)           :: xtrack
+type(commander_graphene_subtr)                   :: xgraphene_subtr
+type(commander_denoise_trajectory)               :: xden_traj
 
 ! PARTICLE 3D RECONSTRUCTION PROGRAMS
-type(commander_analysis2D_nano)               :: xanalysis2D_nano
-type(commander_center2D_nano)                 :: xcenter2D
-type(commander_cluster2D_nano)                :: xcluster2D
-type(commander_map_cavgs_selection)           :: xmap_cavgs_selection
-type(commander_ppca_denoise_classes)          :: xppca_denoise_classes
-type(commander_estimate_diam)                 :: xestimate_diam
-type(commander_simulate_atoms)                :: xsimulate_atoms
-type(commander_refine3D_nano)                 :: xrefine3D_nano
-type(commander_extract_substk)                :: xextract_substk
-type(commander_extract_subproj)               :: xextract_subproj
-type(commander_autorefine3D_nano)             :: xautorefine3D_nano
-type(commander_tseries_reconstruct3D_distr)   :: xtseries_reconstruct3D
-type(commander_tseries_core_finder)           :: xtseries_core_finder
-type(commander_tseries_swap_stack)            :: xtseries_swap_stack
+type(commander_analysis2D_nano)                  :: xanalysis2D_nano
+type(commander_center2D_nano)                    :: xcenter2D
+type(commander_cluster2D_nano)                   :: xcluster2D
+type(commander_map_cavgs_selection)              :: xmap_cavgs_selection
+type(commander_ppca_denoise_classes)             :: xppca_denoise_classes
+type(commander_estimate_diam)                    :: xestimate_diam
+type(commander_simulate_atoms)                   :: xsimulate_atoms
+type(commander_refine3D_nano)                    :: xrefine3D_nano
+type(commander_extract_substk)                   :: xextract_substk
+type(commander_extract_subproj)                  :: xextract_subproj
+type(commander_autorefine3D_nano)                :: xautorefine3D_nano
+type(commander_trajectory_reconstruct3D_distr)   :: xtrajectory_reconstruct3D
+type(commander_trajectory_core_finder)           :: xtrajectory_core_finder
+type(commander_trajectory_swap_stack)            :: xtrajectory_swap_stack
 
 ! VALIDATION PROGRAMS
-type(commander_vizoris)                       :: xvizoris
-type(commander_cavgsproc_nano)                :: xcavgsproc
-type(commander_cavgseoproc_nano)              :: xcavgseoproc
-type(commander_map2model_fsc)                 :: xmap2model_fsc
-type(commander_map_validation)                :: xmap_validation
-type(commander_model_validation)              :: xmodel_validation
-type(commander_model_validation_eo)           :: xmodel_validation_eo
-type(commander_ptclsproc_nano)                :: xptclsproc
+type(commander_vizoris)                          :: xvizoris
+type(commander_cavgsproc_nano)                   :: xcavgsproc
+type(commander_cavgseoproc_nano)                 :: xcavgseoproc
+type(commander_ptclsproc_nano)                   :: xptclsproc
+type(commander_trajectory_make_projavgs)         :: xtrajectory_make_projavgs
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
-type(commander_pdb2mrc)                       :: xpdb2mrc
-type(commander_detect_atoms)                  :: xdetect_atoms
-type(commander_conv_atom_denoise)             :: xconv_atom_denoise
-type(commander_atoms_stats)                   :: xatoms_stats
-type(commander_atoms_register)                :: xatoms_register
-type(commander_crys_score)                    :: xcrys_score
-type(commander_tseries_atoms_rmsd)            :: xtseries_atoms_rmsd
-type(commander_tseries_core_atoms_analysis)   :: xtseries_core_atoms_analysis
-type(commander_tseries_make_projavgs)         :: xtseries_make_projavgs
+type(commander_pdb2mrc)                          :: xpdb2mrc
+type(commander_detect_atoms)                     :: xdetect_atoms
+type(commander_conv_atom_denoise)                :: xconv_atom_denoise
+type(commander_atoms_stats)                      :: xatoms_stats
+type(commander_atoms_register)                   :: xatoms_register
+type(commander_crys_score)                       :: xcrys_score
+type(commander_tseries_atoms_rmsd)               :: xtseries_atoms_rmsd
+type(commander_tseries_core_atoms_analysis)      :: xtseries_core_atoms_analysis
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)      :: args, prg
@@ -119,7 +101,7 @@ select case(prg)
     case( 'import_particles')
         call ximport_particles%execute(cline)
     case( 'tseries_import_particles' )
-        call xtseries_import_particles%execute(cline)
+        call ximport_trajectory%execute(cline)
     case( 'prune_project' )
         call xprune_project%execute( cline )
 
@@ -128,7 +110,7 @@ select case(prg)
         call xtseries_make_pickavg%execute(cline)
     case( 'tseries_motion_correct' )
         call xmcorr%execute( cline )
-    case( 'tseries_track_particles' )
+    case( 'track_trajectory' )
         call xtrack%execute( cline )
     case( 'graphene_subtr' )
         call cline%set('mkdir', 'no')
@@ -166,12 +148,12 @@ select case(prg)
         else
             call xautorefine3D_nano%execute(cline)
         endif
-    case( 'tseries_reconstruct3D' )
-        call xtseries_reconstruct3D%execute(cline)
-    case( 'tseries_core_finder' )
-        call xtseries_core_finder%execute(cline)
-    case( 'tseries_swap_stack' ) 
-        call xtseries_swap_stack%execute(cline)
+    case( 'trajectory_reconstruct3D' )
+        call xtrajectory_reconstruct3D%execute(cline)
+    case( 'trajectory_core_finder' )
+        call xtrajectory_core_finder%execute(cline)
+    case( 'trajectory_swap_stack' ) 
+        call xtrajectory_swap_stack%execute(cline)
 
     ! VALIDATION PROGRAMS
     case( 'vizoris' )
@@ -180,14 +162,6 @@ select case(prg)
         call xcavgsproc%execute(cline)
     case( 'cavgseoproc_nano' )
         call xcavgseoproc%execute(cline)
-    case( 'map2model_fsc' )
-        call xmap2model_fsc%execute(cline)
-    case( 'map_validation' )
-        call xmap_validation%execute(cline)
-    case( 'model_validation' )
-        call xmodel_validation%execute(cline)
-    case( 'model_validation_eo' )
-        call xmodel_validation_eo%execute(cline)
     case( 'ptclsproc_nano' )
         call xptclsproc%execute(cline)
 
@@ -213,8 +187,8 @@ select case(prg)
         call xtseries_atoms_rmsd%execute(cline)
     case( 'tseries_core_atoms_analysis' )
         call xtseries_core_atoms_analysis%execute(cline)
-    case( 'tseries_make_projavgs' )
-        call xtseries_make_projavgs%execute(cline)
+    case( 'trajectory_make_projavgs' )
+        call xtrajectory_make_projavgs%execute(cline)
 
     ! UNSUPPORTED
     case DEFAULT
@@ -226,7 +200,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('03fd225a')
+    call simple_print_git_version('2030a3d0')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
