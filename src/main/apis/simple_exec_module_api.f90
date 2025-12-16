@@ -19,12 +19,20 @@ use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
 use iso_fortran_env,       only: output_unit
 use simple_cmdline,        only: cmdline, cmdline_err
 
-! project commanders, operations on projects (sp_project) and associated files
-use simple_commanders_project, only: commander_new_project, commander_update_project, commander_print_project_info,&
-commander_print_project_field, commander_zero_project_shifts, commander_import_movies, commander_import_boxes,&
-commander_import_particles, commander_import_cavgs, commander_replace_project_field, commander_selection,&
-commander_merge_projects, commander_extract_subproj, commander_sample_classes, commander_write_mic_filetab,&
-commander_prune_project_distr
+! core project commanders, operations on projects (sp_project) and associated files
+use simple_commanders_project_core, only: commander_new_project, commander_update_project, commander_print_project_info,&
+commander_print_project_field, commander_replace_project_field, commander_selection, commander_merge_projects,&
+commander_extract_subproj
+
+! ptcl project commanders, operations on ptcl fields of project
+use simple_commanders_project_ptcl, only: commander_zero_project_shifts, commander_import_boxes,&
+commander_import_particles, commander_prune_project_distr
+
+! mov project commanders, operations on the mov/mic fields of project
+use simple_commanders_project_mov, only: commander_import_movies, commander_write_mic_filetab
+
+! cls project commanders, operations on the cls2D field of project
+use simple_commanders_project_cls, only: commander_import_cavgs, commander_sample_classes
 
 ! RELION commanders, export utility for RELION
 use simple_commanders_relion, only: commander_export_relion

@@ -100,7 +100,7 @@ include(CompilerConfig)
 #   -> populates SIMPLE_LIBRARIES
 # ------------------------------------------------------------------------------
 include(Dependencies)
-# Library target name used in subdirs
+# # Library target name used in subdirs
 set(SIMPLELIB "SIMPLE${PROJECT_VERSION}")
 
 # ------------------------------------------------------------------------------
