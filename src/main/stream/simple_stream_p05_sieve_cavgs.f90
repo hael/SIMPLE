@@ -644,9 +644,6 @@ contains
                     call cline_match_cavgs%set('projfile_merged',  string(trim(MERGED_PROJFILE)))
                     ! match: current set selected ready for pool2D
                     call cline_match_cavgs%set('projfile_matched', string(trim(MATCH_PROJFILE)))
-
-                    call cline_match_cavgs%printline
-
                     ! submission
                     path = stemname(crec%projfile)
                     call simple_chdir(path)
