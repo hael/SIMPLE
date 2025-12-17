@@ -72,6 +72,12 @@ contains
         if( .not. cline%defined('cavgw')       ) call cline%set('cavgw',       'no')
         if( .not. cline%defined('lpstart')     ) call cline%set('lpstart',      20.)
         if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',        8.)
+        ! adjust cartesian/polar options
+        if( cline%get_carg('polar')=='yes' )then
+        if( .not. cline%defined('gauref')      ) call cline%set('gauref',     'yes')
+        else
+        if( .not. cline%defined('gauref')      ) call cline%set('gauref',      'no')
+        endif
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
@@ -81,6 +87,20 @@ contains
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .true.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
+        ! Polar representation
+        if( trim(params%polar).eq.'yes' )then
+            if( trim(params%multivol_mode).ne.'single' )then
+                THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
+            endif
+            if( trim(params%lp_auto).eq.'yes' )then
+                THROW_WARN('POLAR=YES not compatible LP_AUTO=YES; reverting to LP_AUTO=NO')
+            endif
+            params%lp_auto = 'no'; params%l_lpauto = .false.; l_lpauto=.false.
+            call cline%set('lp_auto', 'no')
+            l_polar = .true. ! global parameter
+        else
+            call cline%delete('ref_type')
+        endif
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
         if( cline%defined('nstages') )then
@@ -454,7 +474,6 @@ contains
                 call spproj%kill
             endif
         end subroutine prune_junk_classes
-
 
     end subroutine exec_abinitio3D_cavgs_fast
 
