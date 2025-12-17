@@ -9,12 +9,13 @@ implicit none
 
 contains
 
-    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj )
+    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out )
         class(string),           intent(in)    :: chunk_fnames(:) ! List of project files
         class(string),           intent(in)    :: folder          ! output folder
         class(sp_project),       intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
         class(string), optional, intent(in)    :: projname_out    ! name for output project file
         logical,       optional, intent(in)    :: write_proj      ! write project file
+        class(string), optional, intent(in)    :: cavgs_out       ! name for output cls2D stack
         type(sp_project), allocatable :: chunks(:)
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
@@ -42,7 +43,12 @@ contains
         call merged_proj%os_cls2D%kill
         call merged_proj%os_cls3D%kill
         call merged_proj%os_out%kill
-        cavgs     = dir%to_char()//'cavgs.mrc'
+        if( present(cavgs_out) )then
+            cavgs = dir//cavgs_out
+        else
+            cavgs = dir%to_char()//'cavgs.mrc'
+        endif
+        if( file_exists(cavgs) )THROW_WARN('ouput stack already exists: '//cavgs%to_char())
         nallptcls = 0
         nallstks  = 0
         nallmics  = 0
@@ -110,14 +116,15 @@ contains
             endif
             allocate(clsmap(ncls),source=0)
             do i = 1,ncls
-                if( chunks(ic)%os_cls2D%get_state(i) == 0 ) cycle
                 icls      = icls+1
                 clsmap(i) = icls
                 call merged_proj%os_cls2D%transfer_ori(icls,   chunks(ic)%os_cls2D, i)
                 call merged_proj%os_cls2D%set_class(icls, icls)
                 call merged_proj%os_cls2D%set(icls,'origclass',i)
                 call merged_proj%os_cls2D%set(icls,'chunk',    projname)
-                call frcs%set_frc(icls, frcs_chunk%get_frc(i,  box4frc))
+                if( chunks(ic)%os_cls2D%get_state(i) > 0 )then
+                    call frcs%set_frc(icls, frcs_chunk%get_frc(i,  box4frc))
+                endif
             enddo
             ! particles and stacks
             nstks  = chunks(ic)%os_stk%get_noris()
@@ -130,6 +137,7 @@ contains
                     call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
                     call chunks(ic)%os_ptcl2D%set_stkind(j, istk)
                     call merged_proj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ic)%os_ptcl2D, j)
+                    if( chunks(ic)%os_ptcl2D%get_state(j) == 0 ) call merged_proj%os_ptcl2D%reject(iptcl_glob)
                 enddo
                 top_glob = fromp_glob + top - fromp
                 call chunks(ic)%os_stk%set(i, 'fromp', fromp_glob)

@@ -189,6 +189,7 @@ type :: parameters
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
+    type(string)              :: projfile_matched     !< another SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name
     type(string)              :: refs                 !< initial2Dreferences.ext
     type(string)              :: refs_even
@@ -614,6 +615,7 @@ contains
         self%projfile_merged=''   !< merged SIMPLE *.simple project file output
         self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
         self%projfile_target=''   !< another SIMPLE *.simple project file
+        self%projfile_matched=''  !< another SIMPLE *.simple project file
         self%projname=''          !< SIMPLE  project name
         self%refs=''              !< initial2Dreferences.ext
         self%refs_even=''
@@ -883,6 +885,7 @@ contains
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
+        call check_file('projfile_matched',self%projfile_matched,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER

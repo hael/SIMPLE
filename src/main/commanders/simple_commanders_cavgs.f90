@@ -396,13 +396,13 @@ contains
         class(cmdline),               intent(inout) :: cline
         character(len=*), parameter    :: MATCH_PROJFILE = 'match.simple'
         type(parameters)               :: params
-        type(sp_project)               :: spproj_ref, spproj_match, spproj_merged
+        type(sp_project)               :: spproj_ref, spproj_match, spproj_merged, spproj
         type(cmdline)                  :: cline_cluster_cavgs
         type(commander_cluster_cavgs)  :: xcluster_cavgs
-        type(string)                   :: chunk_fnames(2), folder
+        type(string)                   :: chunk_fnames(2), folder, cavgs_merged
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), medoid_imgs_ref(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
-        integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:)
+        integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:), accept(:)
         integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:), accept_match(:)
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:)
@@ -504,6 +504,21 @@ contains
                 endif
             enddo
         enddo
+        ! optional output of match project with selection
+        ! spproj_match is unchanged, cavg_imgs_match is changed
+        if( cline%defined('projfile_matched') )then
+            spproj = spproj_match
+            accept = spproj%os_cls2D%get_all_asint('accept')
+            call spproj%map_cavgs_selection(accept)
+            call dealloc_imgarr(cavg_imgs_match)
+            cavg_imgs_match = read_cavgs_into_imgarr(spproj)
+            call write_imgarr(cavg_imgs_match, string('cavgs_matched.mrc'))
+            call spproj%add_cavgs2os_out(string('cavgs_matched.mrc'), params%smpd)
+            call spproj%update_projinfo( params%projfile_matched )
+            call spproj%write( params%projfile_matched )
+            deallocate(accept)
+            call spproj%kill
+        endif
         ! merging & refinement
         call spproj_match%write(string(MATCH_PROJFILE))
         call cline_cluster_cavgs%set('mkdir',                      'no')
@@ -517,16 +532,17 @@ contains
         folder          = PATH_HERE
         chunk_fnames(1) = params%projfile
         chunk_fnames(2) = simple_abspath(MATCH_PROJFILE)
+        cavgs_merged    = string('cavgs_merged')//params%ext
         if( l_refine_before_merge )then
              ! refine matched solution
             call cline_cluster_cavgs%set('projfile', MATCH_PROJFILE)
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
             ! then merge
-            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
+            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
             call spproj_merged%write(params%projfile_merged)
         else
             ! merge spproj_ref & spproj_match projects
-            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged)
+            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
             call spproj_merged%write(params%projfile_merged)
             ! refine joint solution
             call cline_cluster_cavgs%set('projfile', params%projfile_merged)

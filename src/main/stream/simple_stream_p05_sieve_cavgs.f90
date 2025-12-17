@@ -20,6 +20,7 @@ contains
         class(stream_p05_sieve_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         character(len=STDLEN), parameter :: MERGED_PROJFILE = 'merged.simple'
+        character(len=STDLEN), parameter :: MATCH_PROJFILE  = 'matched.simple'
         type(string),        allocatable :: projects(:), completed_projfiles(:)
         integer,             allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
         real,                allocatable :: cls_res(:), cls_pop(:)
@@ -167,7 +168,6 @@ contains
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
                 call qsys_cleanup
-            !    call nice_communicator%terminate(stop=.true.)
                 call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
                 call EXIT(0)
             endif
@@ -199,11 +199,9 @@ contains
                 endif
             endif
             ! Chunk book-keeping section
-            !call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             call update_user_params2D(cline, l_params_updated)
             call update_chunks
             call memoize_chunks(chunk_list, nchunks_imported)
-            !call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
             call update_user_params2D(cline, l_params_updated)
             if( nchunks_imported > 0 )then
                 nchunks_glob = nchunks_glob + nchunks_imported
@@ -611,7 +609,7 @@ contains
             subroutine submit_match_cavgs
                 type(cmdline)        :: cline_match_cavgs
                 type(string)         :: path, cwd
-                type(chunk_rec)      :: crec, crec1
+                type(chunk_rec)      :: crec, crecm1
                 integer              :: iset
                 type(rec_iterator)   :: it
                 logical, allocatable :: l_processed(:), l_busy(:)
@@ -626,7 +624,6 @@ contains
                 call cline_match_cavgs%set('mskdiam',      params%mskdiam)
                 call cline_match_cavgs%set('verbose_exit', 'yes')
                 call cline_match_cavgs%delete('nparts')
-                call set_list%at(1, crec1)  ! from the first cluster cavgs
                 it = set_list%begin()
                 do iset = 1,set_list%size()
                     call it%get(crec)
@@ -634,12 +631,22 @@ contains
                         call it%next()
                         cycle
                     endif
-                    ! constant clustering reference, will be updated to dynamic reference
-                    call cline_match_cavgs%set('projfile', simple_abspath(crec1%projfile))
+                    ! dynamic clustering reference
+                    call set_list%at(iset-1, crecm1)
+                    if( iset == 2 )then
+                        call cline_match_cavgs%set('projfile',     simple_abspath(crecm1%projfile))
+                    else
+                        call cline_match_cavgs%set('projfile',     stemname(simple_abspath(crecm1%projfile))//trim(MERGED_PROJFILE))
+                    endif
                     ! target: current set 2 cluster and transfer 2 pool2D
-                    call cline_match_cavgs%set('projfile_target', basename(crec%projfile))
-                    ! merged: is the dynamic reference
-                    call cline_match_cavgs%set('projfile_merged', string())
+                    call cline_match_cavgs%set('projfile_target',  basename(crec%projfile))
+                    ! merged: dynamic reference for next set
+                    call cline_match_cavgs%set('projfile_merged',  string(trim(MERGED_PROJFILE)))
+                    ! match: current set selected ready for pool2D
+                    call cline_match_cavgs%set('projfile_matched', string(trim(MATCH_PROJFILE)))
+
+                    call cline_match_cavgs%printline
+
                     ! submission
                     path = stemname(crec%projfile)
                     call simple_chdir(path)
@@ -765,10 +772,10 @@ contains
                         cycle
                     endif
                     if( crec%processed )then
-                        if( iset==1 )then
+                        if( iset == 1 )then
                             source = crec%projfile  ! from cluster_cavgs
                         else
-                            source = stemname(crec%projfile)//'/'//trim(MERGED_PROJFILE)
+                            source = stemname(crec%projfile)//'/'//trim(MATCH_PROJFILE)
                         endif
                         destination = DIR_STREAM_COMPLETED//DIR_SET//int2str(iset)//METADATA_EXT
                         call simple_rename(source, destination)
