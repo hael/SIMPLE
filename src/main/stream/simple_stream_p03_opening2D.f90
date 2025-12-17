@@ -441,7 +441,7 @@ contains
                 call http_gen_pickrefs_communicator%add_to_json("user_input",         .false.)
                 call json%create_array(latest_cls2D, "latest_cls2D")
                 call http_gen_pickrefs_communicator%add_to_json(latest_cls2D)
-                call json%create_array(selected_refs, "selected_refs")
+                call json%create_array(selected_refs, "selected_references")
                 call http_gen_pickrefs_communicator%add_to_json(selected_refs)
             end subroutine communicator_gen_pickrefs_init
 
