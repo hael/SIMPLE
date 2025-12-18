@@ -50,6 +50,37 @@ contains
         wvec = dexp(-wvec)
     end subroutine gen_rot_weights
 
+    module subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
+        class(polarft_calc), intent(inout) :: self
+        real,                intent(in)    :: psi
+        integer,             intent(inout) :: lrot
+        integer,             intent(inout) :: rrot
+        real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))
+        real(dp),            intent(out)   :: rw(self%kfromto(1):self%kfromto(2))
+        integer :: k
+        real    :: d, drot, max_dist
+        drot = self%get_dang()
+        lrot = self%get_roind_fast(psi)
+        d    = psi - self%get_rot(lrot)
+        if( d > drot ) d = d - 360.0
+        if( d < 0. )then
+            lrot = lrot - 1
+            if( lrot < 1 ) lrot = lrot + self%get_nrots()
+        endif
+        rrot = lrot + 1
+        if( rrot > self%get_nrots() ) rrot = rrot - self%get_nrots()
+        do k=self%kfromto(1),self%kfromto(2)
+            max_dist = real(sqrt(sum(([self%polar(lrot,k), self%polar(lrot+self%nrots,k)] -&
+                                     &[self%polar(rrot,k), self%polar(rrot+self%nrots,k)])**2)),dp)
+            lw(k)    = real(sqrt(sum(([self%polar(lrot,k), self%polar(lrot+self%nrots,k)] -&
+                                     &[sin(psi)*real(k),  -cos(psi)*real(k)])**2)),dp)
+            rw(k)    = real(sqrt(sum(([self%polar(rrot,k), self%polar(rrot+self%nrots,k)] -&
+                                     &[sin(psi)*real(k),  -cos(psi)*real(k)])**2)),dp)
+            lw(k)    = max_dist - lw(k)
+            rw(k)    = max_dist - rw(k)
+        end do
+    end subroutine gen_clin_weights
+
     module subroutine shift_ptcl( self, iptcl, shvec)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
