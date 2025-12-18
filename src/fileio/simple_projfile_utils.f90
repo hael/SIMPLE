@@ -73,9 +73,9 @@ contains
                 call img%read(stkname,i)
                 call img%write(cavgs,icls)
                 call img%read(evenname,i)
-                call img%write(dir//'cavgs_even.mrc',icls)
+                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even.mrc',icls)
                 call img%read(oddname,i)
-                call img%write(dir//'cavgs_odd.mrc',icls)
+                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd.mrc',icls)
             enddo
         enddo
         call img%kill

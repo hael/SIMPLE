@@ -681,9 +681,10 @@ contains
         type(sp_project)   :: snapshot_proj
         type(json_core)    :: json
         type(string)       :: projfile, projfname, cavgsfname, frcsfname, mapfileprefix
-        type(string)       :: pool_refs, src, l_frcsname
+        type(string)       :: pool_refs, src, l_frcsname, l_stkname
+        real               :: l_smpd
+        integer            :: lastmap, l_ncls
         logical            :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found
-        integer            :: lastmap
         l_write_star        = .false.
         l_clspath           = .false.
         l_snapshot          = .false.
@@ -728,8 +729,11 @@ contains
                 call apply_snapshot_selection(snapshot_proj)
                 cavgsfname = stemname(snapshot_projfile) // '/cavgs' // STK_EXT
                 frcsfname  = stemname(snapshot_projfile) // '/' // FRCS_FILE
-                call rescale_refs( cavgsfname )
+                call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd)
                 call snapshot_proj%get_frcs(l_frcsname, 'frc2D')
+                call simple_copy_file(l_stkname, cavgsfname)
+                call simple_copy_file(add2fbody(l_stkname, params_glob%ext,'_even'), stemname(snapshot_projfile)//"/cavgs_even"//STK_EXT)
+                call simple_copy_file(add2fbody(l_stkname, params_glob%ext,'_odd'),  stemname(snapshot_projfile)//"/cavgs_odd" //STK_EXT)
                 call simple_copy_file(l_frcsname, frcsfname)
                 call snapshot_proj%os_out%kill
                 call snapshot_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')

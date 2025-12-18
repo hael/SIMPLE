@@ -467,7 +467,11 @@ contains
             allocate(starparts(nbatches))
             call omp_set_num_threads(NTHR)
             if(self%verbose) ms0 = tic()
-            !$omp parallel do private(i, newpart) default(shared) proc_bind(close)
+
+            ! no string allocations or deallocations in OpenMP sections
+            ! starfile_table__write_omem uses allocatable strings they need to be changed to static
+
+            ! !$omp parallel do private(i, newpart) default(shared) proc_bind(close)
             do i=1, nbatches
                 newpart%index  = i 
                 newpart%nstart = 1 + ((i - 1) * BATCHSIZE)
@@ -481,13 +485,10 @@ contains
                 endif
                 call starfile_table__delete(newpart%startable)
                 starparts(newpart%index) = newpart
-                ! if( allocated(newpart%str) ) deallocate(newpart%str)
-
-                ! no string allocations or deallocations in OpenMP sections
-                ! if starfile_table__write_omem uses allocatable strings they need to be changed to static
-
+                if( allocated(newpart%str) ) deallocate(newpart%str)
             end do
-            !$omp end parallel do
+            ! !$omp end parallel do
+
             if(self%verbose) then
                 ms_complete = toc(ms0)
                 print *,'particle star parts generated in :', ms_complete, 'using', NTHR, 'threads'; call flush(6)
