@@ -138,6 +138,7 @@ type :: polarft_calc
     ! ===== GEOM: simple_polarft_geom.f90
     procedure          :: gen_shmat
     procedure, private :: gen_shmat_8
+    procedure          :: gen_rot_weights
     procedure          :: shift_ptcl
     procedure          :: shift_ref
     procedure          :: mirror_ref_pft
@@ -427,6 +428,12 @@ interface
         real(dp),             intent(in)    :: shift_8(2)
         complex(dp), pointer, intent(inout) :: shmat_8(:,:)
     end subroutine gen_shmat_8
+
+     module subroutine gen_rot_weights( self, irot, jrot, wvec )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: irot, jrot
+        real(dp),            intent(out)   :: wvec(self%kfromto(1):self%kfromto(2))
+    end subroutine gen_rot_weights
 
     module subroutine shift_ptcl( self, iptcl, shvec)
         class(polarft_calc), intent(inout) :: self
