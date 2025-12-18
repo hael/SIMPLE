@@ -608,11 +608,11 @@ contains
 
             subroutine submit_match_cavgs
                 type(cmdline)        :: cline_match_cavgs
-                type(string)         :: path, cwd
+                type(string)         :: path, cwd, projfile
                 type(chunk_rec)      :: crec, crecm1
-                integer              :: iset
                 type(rec_iterator)   :: it
                 logical, allocatable :: l_processed(:), l_busy(:)
+                integer              :: iset
                 if( set_list%size() < 2 ) return ! not enough sets generated
                 l_processed = set_list%get_processed_flags()
                 l_busy      = set_list%get_busy_flags()
@@ -631,13 +631,18 @@ contains
                         call it%next()
                         cycle
                     endif
-                    ! dynamic clustering reference
                     call set_list%at(iset-1, crecm1)
-                    if( iset == 2 )then
-                        call cline_match_cavgs%set('projfile',     simple_abspath(crecm1%projfile))
-                    else
-                        call cline_match_cavgs%set('projfile',     stemname(simple_abspath(crecm1%projfile))//trim(MERGED_PROJFILE))
+                    if( .not.crecm1%included )then
+                        call it%next()
+                        cycle
                     endif
+                    ! dynamic clustering reference
+                    if( iset == 2 )then
+                        projfile = simple_abspath(crecm1%projfile)
+                    else
+                        projfile = simple_abspath(string('set_')//int2str(iset-1))//'/'//trim(MERGED_PROJFILE)
+                    endif
+                    call cline_match_cavgs%set('projfile',         projfile)
                     ! target: current set 2 cluster and transfer 2 pool2D
                     call cline_match_cavgs%set('projfile_target',  basename(crec%projfile))
                     ! merged: dynamic reference for next set

@@ -477,6 +477,7 @@ contains
             l_ignoreheader = .false.
         endif
         call C_starfile_table__write_omem(this%object, c_str, partlength, l_ignoreheader)
+        if( allocated(str) ) deallocate(str)
         allocate( character(len=partlength) :: str )
         call c_f_pointer(c_str, f_str, [partlength])
         do i = 1, partlength

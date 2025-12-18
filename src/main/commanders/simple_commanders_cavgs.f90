@@ -564,7 +564,7 @@ contains
         
         function find_label_state( label ) result( state )
             integer, intent(in) :: label
-            integer :: state
+            integer :: i,state
             state = 1
             do i = 1, nrefs
                 if( labels(i) == label )then
