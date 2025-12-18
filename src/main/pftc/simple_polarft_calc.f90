@@ -436,7 +436,7 @@ interface
         real(dp),            intent(out)   :: wvec(self%kfromto(1):self%kfromto(2))
     end subroutine gen_rot_weights
 
-    module subroutine gen_clin_weights( self, lrot, rrot, psi, lw, rw )
+    module subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
         class(polarft_calc), intent(inout) :: self
         real,                intent(in)    :: psi
         integer,             intent(inout) :: lrot, rrot
