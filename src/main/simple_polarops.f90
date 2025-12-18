@@ -752,52 +752,23 @@ contains
                     eulers = m2euler_fast(Rj)
                     ! Weighted averaging
                     ! in plane rotation index of jref slice intersecting iref
-                    psi       = 360.0 - eulers(3)
-                    targ_irot = pftc_glob%get_roind_fast(psi)
-                    d         = psi - pftc_glob%get_rot(targ_irot)
-                    if( d > drot ) d = d - 360.0
+                    psi = 360.0 - eulers(3)
+                    call pftc_glob%gen_clin_weights(psi, rotl, rotr, wl, wr)
+                    call get_line(jref, rotl, .true., cl_l, rl_l)
+                    call get_line(jref, rotr, .true., cl_r, rl_r)
+                    cl_e = wl*cl_l + wr*cl_r
+                    rl_e = wl*rl_l + wr*rl_r
+                    call get_line(jref, rotl, .false., cl_l, rl_l)
+                    call get_line(jref, rotr, .false., cl_r, rl_r)
+                    cl_o = wl*cl_l + wr*cl_r
+                    rl_o = wl*rl_l + wr*rl_r
                     ! in plane rotation index of iref slice
-                    psi       = eulers(1)
-                    self_irot = pftc_glob%get_roind_fast(psi)
-                    d         = psi - pftc_glob%get_rot(self_irot)
-                    if( d > drot ) d = d - 360.0
-                    ! intepolate common line in jref-th slice
-                    rotl = targ_irot - 1; rotr = targ_irot + 1
-                    ! target line has weight 1 across all resolution shells
-                    w = 1.d0
-                    ! right-hand neighbor shell weights
-                    call pftc_glob%gen_rot_weights(targ_irot, rotr, wr)
-                    ! left-hand neighbor shell weights
-                    call pftc_glob%gen_rot_weights(targ_irot, rotl, wl)
-                    sumw = wl + w + wr
-                    w    = w / sumw; wl = wl / sumw; wr = wr / sumw
-                    call get_line(jref, targ_irot, .true., cl_e, rl_e)
-                    call get_line(jref, rotl,      .true., cl_l, rl_l)
-                    call get_line(jref, rotr,      .true., cl_r, rl_r)
-                    cl_e = wl*cl_l + w*cl_e + wr*cl_r
-                    rl_e = wl*rl_l + w*rl_e + wr*rl_r
-                    call get_line(jref, targ_irot, .false., cl_o, rl_o)
-                    call get_line(jref, rotl,      .false., cl_l, rl_l)
-                    call get_line(jref, rotr,      .false., cl_r, rl_r)
-                    cl_o = wl*cl_l + w*cl_o + wr*cl_r
-                    rl_o = wl*rl_l + w*rl_o + wr*rl_r
-                    ! extrapolate the common line to iref-th slice
-                    rotl = self_irot - 1; rotr = self_irot + 1
-                    if( rotr > nrots ) rotr = rotr - nrots
-                    ! self line has weight 1 across all resolution shells
-                    w = 1.d0
-                    ! right-hand neighbor shell weights
-                    call pftc_glob%gen_rot_weights(self_irot, rotr, wr)
-                    ! left-hand neighbor shell weights
-                    call pftc_glob%gen_rot_weights(self_irot, rotl, wl)
-                    sumw = wl + w + wr
-                    w    = w / sumw; wl = wl / sumw; wr = wr / sumw
+                    psi = eulers(1)
+                    call pftc_glob%gen_clin_weights(psi, rotl, rotr, wl, wr)
                     ! leftmost line
-                    call extrapolate_line(iref, rotl,      wl, cl_e, cl_o, rl_e, rl_o)
-                    ! nearest line
-                    call extrapolate_line(iref, self_irot, w,  cl_e, cl_o, rl_e, rl_o)
+                    call extrapolate_line(iref, rotl, wl, cl_e, cl_o, rl_e, rl_o)
                     ! rightmost line
-                    call extrapolate_line(iref, rotr,      wr, cl_e, cl_o, rl_e, rl_o)
+                    call extrapolate_line(iref, rotr, wr, cl_e, cl_o, rl_e, rl_o)
                 enddo
             enddo
         enddo
