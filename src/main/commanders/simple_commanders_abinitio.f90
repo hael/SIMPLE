@@ -61,23 +61,20 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('objfun')      ) call cline%set('objfun',  'euclid') ! use noise normalized Euclidean distances from the start
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap',     0.95)
-        if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
-        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', CENLP_DEFAULT)
-        if( .not. cline%defined('imgkind')     ) call cline%set('imgkind',   'cavg')
-        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',    'yes')
-        if( .not. cline%defined('noise_norm')  ) call cline%set('noise_norm',  'no')
-        if( .not. cline%defined('cavgw')       ) call cline%set('cavgw',       'no')
-        if( .not. cline%defined('lpstart')     ) call cline%set('lpstart',      20.)
-        if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',        8.)
-        ! adjust cartesian/polar options
-        if( cline%get_carg('polar')=='yes' )then
-        if( .not. cline%defined('gauref')      ) call cline%set('gauref',     'yes')
-        else
-        if( .not. cline%defined('gauref')      ) call cline%set('gauref',      'no')
-        endif
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('objfun')           ) call cline%set('objfun',  'euclid') ! use noise normalized Euclidean distances from the start
+        if( .not. cline%defined('overlap')          ) call cline%set('overlap',     0.95)
+        if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
+        if( .not. cline%defined('cenlp')            ) call cline%set('cenlp', CENLP_DEFAULT)
+        if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',   'cavg')
+        if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',    'yes')
+        if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',  'no')
+        if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',       'no')
+        if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',      20.)
+        if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',        8.)
+        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type', 'comlin_noself')
+        if( .not. cline%defined('gauref_last_stage')) call cline%set('gauref_last_stage', GAUREF_LAST_STAGE)
+        if( .not. cline%defined('gauref')           ) call cline%set('gauref',     'yes')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
@@ -509,15 +506,10 @@ contains
         if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                            'yes')
         if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                        'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                 'comlin_noself')
-        if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',            MAXITS_BETWEEN)
-        ! adjust cartesian/polar options
-        if( cline%get_carg('polar')=='yes' )then
+        if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
-        else
-        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                              'no')
-        endif
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
