@@ -1,37 +1,34 @@
 program simple_test_tree_srch
-! use simple_image,             only: image
-! use simple_cmdline,           only: cmdline
-! use simple_parameters,        only: parameters
-! use simple_oris
-! use simple_stat
-! use simple_commanders_volops, only: commander_reproject
-! use simple_commanders_sim,    only: commander_simulate_particles
-! use simple_commanders_atoms,  only: commander_pdb2mrc
+! Test to see if can find arbitrary reprojection in tree structure
+use simple_core_module_api
+use simple_image,             only: image
+use simple_cmdline,           only: cmdline
+use simple_parameters,        only: parameters
+use simple_oris
+use simple_projector,         only: projector
+use simple_commanders_sim,    only: commander_simulate_particles
+use simple_commanders_atoms,  only: commander_pdb2mrc
 use simple_tree 
 implicit none 
-! type(commander_reproject)          :: xreproject
-! type(commander_pdb2mrc)            :: xpdb2mrc
-! type(commander_simulate_particles) :: xsimulate_particles 
-! type(image)                   :: vol
-! type(parameters)              :: p 
-! type(image), allocatable      :: ptcls(:), refs(:)
-! type(cmdline)                 :: cline, cline_pdb2mrc
-! type(oris)                    :: space, space_sub, spiral
-! character(len=:), allocatable :: cmd
-! real,    allocatable :: smat_ref(:,:)
-! integer, allocatable :: ptcl_rank_neigh(:), ref_rank_neigh(:,:)
+type(commander_pdb2mrc)       :: xpdb2mrc 
+type(image)                   :: vol
+type(parameters)              :: p1
+type(cmdline)                 :: cline, cline_pdb2mrc
+type(oris)                    :: spiral
+type(ori)                     :: o1  
+character(len=:), allocatable :: cmd
+type(image), allocatable      :: reproj(:)
 type(dendro)        :: test_tree
 real                :: objs(2), t1, t2
-integer             :: indxs(2), i , ispace, jspace, nspace, nspace_sub, iptcl, nptcls, ifoo, rc, NPLANES 
-real, allocatable   :: test_dist_mat(:,:)
-type(node), pointer :: p
+integer             :: indxs(2), i, ifoo, rc, NPLANES = 500, ORI_IND = 10
+real, allocatable   :: test_dist_mat(:,:), smat_ref(:,:), dmat_ref(:,:)
+type(s2_node), pointer :: p
 logical             :: done = .false. 
-! nspace = 1000 
 
-! ! Load Volume 
+! Load Volume 
 ! write(*, *) 'Downloading the example dataset...'
 ! cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
-! ! call execute_command_line(cmd, exitstat=rc)
+! call execute_command_line(cmd, exitstat=rc)
 ! write(*, *) 'Converting .pdb to .mrc...'
 ! call cline_pdb2mrc%set('smpd',                            1.)
 ! call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
@@ -41,7 +38,7 @@ logical             :: done = .false.
 ! call xpdb2mrc%execute_safe(cline_pdb2mrc)
 ! call cline_pdb2mrc%kill()
 ! cmd = 'rm 1JYX.pdb'
-! ! call execute_command_line(cmd, exitstat=rc)
+! call execute_command_line(cmd, exitstat=rc)
 
 ! Reproject Volume 
 ! call cline%set('smpd'   , 1.)
@@ -51,31 +48,31 @@ logical             :: done = .false.
 ! call cline%set('lp'   ,   3.)
 
 ! Spiral Reprojections of Volume 
-! call p%new(cline)
-! call find_ldim_nptcls(p%vols(1), p%ldim, ifoo)
-! call vol%new(p%ldim, p%smpd)
-! call vol%read(p%vols(1))
+! call p1%new(cline)
+! call find_ldim_nptcls(p1%vols(1), p1%ldim, ifoo)
+! call vol%new(p1%ldim, p1%smpd)
+! call vol%read(p1%vols(1))
 ! call spiral%new(NPLANES, is_ptcl=.false.)
 ! call spiral%spiral
+! do i = 1, NPLANES
+!     call spiral%get_ori(o1, i)
+!     call vol%fproject(o1, reproj(i))
+!     call reproj(i)%ifft()
+! end do 
 
 ! allocate(smat_ref(nspace, nspace))
 
-! do ispace = 1, nspace - 1
-!     do jspace = ispace + 1, nspace 
-!         ! calc pairwise FM
-!         ! diagonal set to 0.
-!     end do 
+! do ispace = 1, NPLANES - 1
+!     do jspace = ispace + 1, NPLANES 
+!         smat_ref(ispace, jspace) = 
+!         smat_ref(jspace, ispace) = smat_ref(ispace, jspace)
+!     end do
+!     smat_ref(ispace, ispace) = 1.  
 ! end do 
 
 ! Calc FM distance matrix no ctf 
 
-! count number of nodes traversed 
-
-! can also try with cheaper similarity metric 
-
-! Hierarchical Clustering from distance mat 
-
-! not sure if dendrogram balanced 
+! D = 1 - S 
 
 allocate(test_dist_mat(10,10))
 
@@ -115,8 +112,8 @@ print *, 'tree build time', t2 - t1
 ! point to root to preserve tree structure
 p => test_tree%root 
 ! initialize 
-objs(1) = real(p%left%medoid_ref_idx)**2
-objs(2) = real(p%right%medoid_ref_idx)**2
+objs(1) = real(p%left%ref_idx)**2
+objs(2) = real(p%right%ref_idx)**2
 do 
     print *, objs
     call walk_dendro(p, indxs, objs, done)
