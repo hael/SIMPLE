@@ -104,8 +104,6 @@ contains
         endif
         templates_provided = cline%defined('pickrefs')
         select case(trim(params%picker))
-            case('old')
-                if( .not.templates_provided ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
             case('new')
                 if( templates_provided )then
                     ! reference-based picking
@@ -126,6 +124,8 @@ contains
             case('segdiam')
                 ! reference-free segmentation-based for diameter estimation
                 if( templates_provided ) THROW_HARD('SEGDIAM picker does not requires PICKREFS input')
+            case DEFAULT
+                THROW_HARD('Unsupported PICKER: '//trim(params%picker))
         end select
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
