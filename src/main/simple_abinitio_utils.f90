@@ -217,7 +217,7 @@ contains
         balance = 'yes'
         ! Gaussian filtering of reference volume
         gaufreq = -1.
-        if( (trim(params_glob%gauref)=='yes') .and. (istage <= params_glob%gauref_last_stage) )then
+        if( istage <= params_glob%gauref_last_stage )then
             gaufreq = lpinfo(istage)%lp
         endif
         ! trailing reconstruction
