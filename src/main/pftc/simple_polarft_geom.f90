@@ -38,18 +38,6 @@ contains
         ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
     end subroutine gen_shmat_8
 
-    module subroutine gen_rot_weights( self, irot, jrot, wvec )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: irot, jrot
-        real(dp),            intent(out)   :: wvec(self%kfromto(1):self%kfromto(2))
-        integer :: k
-        do k=self%kfromto(1),self%kfromto(2)
-            wvec(k) = real(sqrt(sum(([self%polar(irot,k),self%polar(irot+self%nrots,k)] -&
-                                    &[self%polar(jrot,k),self%polar(jrot+self%nrots,k)])**2)),dp)
-        end do
-        wvec = dexp(-wvec)
-    end subroutine gen_rot_weights
-
     module subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
         class(polarft_calc), intent(inout) :: self
         real,                intent(in)    :: psi

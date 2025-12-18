@@ -377,7 +377,6 @@ type :: parameters
     integer :: reliongroups=0
     integer :: shift_stage=0
     integer :: split_stage=7       !< splitting stage when multivol_mode==docked
-    integer :: switch_reftype_stage=0   !< When to switch from ref_type=comlin_noself to ref_type=comlin polar=yes{0}
     integer :: startit=1           !< start iterating from here
     integer :: stage=0
     integer :: state=1             !< state to extract
@@ -999,7 +998,6 @@ contains
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('shift_stage',    self%shift_stage)
         call check_iarg('split_stage',    self%split_stage)
-        call check_iarg('switch_reftype_stage', self%switch_reftype_stage)
         call check_iarg('startit',        self%startit)
         call check_iarg('stage',          self%stage)
         call check_iarg('state',          self%state)
