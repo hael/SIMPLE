@@ -331,7 +331,7 @@ contains
                 call calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
                 &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             endif
-        case('comlin_noself', 'comlin')
+        case('comlin_noself', 'comlin', 'comlin_fillin')
             ! Mirroring slices
             call mirror_slices(reforis, build_glob%pgrpsyms)
             ! Common-lines conribution
@@ -356,6 +356,8 @@ contains
                 call cavg2clin_frcs%write(string('frcs_cavg2clin'//BIN_EXT))
             case('comlin_noself')
                 call restore_comlins
+            case('comlin_fillin')
+                call restore_comlins(fillin=.false.)
             case('comlin')
                 call calc_cavg_comlin_frcs( cavg2clin_frcs )
                 call cavg2clin_frcs%write(string('frcs_cavg2clin'//BIN_EXT))
@@ -382,7 +384,7 @@ contains
             select case(trim(params_glob%ref_type))
             case('comlin_hybrid')
                 THROW_HARD('Not supported yet')
-            case('comlin_noself')
+            case('comlin_noself', 'comlin_fillin')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
                 !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo,sig2e,sig2o)
                 do icls = 1,ncls/2
@@ -419,8 +421,8 @@ contains
                         fsc(k)   = fsc(k)   + real(sum(even(:,k) * conjg(odd(:,k))) ,dp)
                         vare(k)  = vare(k)  + real(sum(even(:,k) * conjg(even(:,k))),dp)
                         varo(k)  = varo(k)  + real(sum(odd(:,k)  * conjg(odd(:,k))) ,dp)
-                        sig2e(k) = sig2e(k) + sum(ctf2_clin_even(:,k,icls))
-                        sig2o(k) = sig2o(k) + sum(ctf2_clin_odd(:,k,icls))
+                        sig2e(k) = sig2e(k) + sum(ctf2_even(:,k,icls) + ctf2_clin_even(:,k,icls))
+                        sig2o(k) = sig2o(k) + sum(ctf2_odd(:,k,icls)  + ctf2_clin_odd(:,k,icls))
                     enddo
                 enddo
                 !$omp end parallel do
@@ -609,12 +611,15 @@ contains
         end subroutine mirror_slices
 
         ! Restore common lines contributions only
-        subroutine restore_comlins
+        subroutine restore_comlins(fillin)
+            logical, optional, intent(in) :: fillin
             complex(dp) :: pft(pftsz,kfromto(1):kfromto(2)),pfte(pftsz,kfromto(1):kfromto(2)),pfto(pftsz,kfromto(1):kfromto(2))
             real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)),ctf2e(pftsz,kfromto(1):kfromto(2)),ctf2o(pftsz,kfromto(1):kfromto(2))
             real        :: psi
             integer     :: icls, m
-            logical     :: l_rotm
+            logical     :: l_rotm, l_fillin
+            l_fillin = .false.
+            if( present(fillin) )l_fillin = fillin
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
             !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,psi,l_rotm)
             do icls = 1,ncls/2
@@ -623,6 +628,16 @@ contains
                 pfto  = pfts_clin_odd(:,:,icls)
                 ctf2e = ctf2_clin_even(:,:,icls)
                 ctf2o = ctf2_clin_odd(:,:,icls)
+                if( l_fillin )then
+                    where( ctf2e < DTINY )
+                        pfte  = pfts_even(:,:,icls)
+                        ctf2e = ctf2_even(:,:,icls)
+                    endwhere
+                    where( ctf2o < DTINY )
+                        pfto  = pfts_odd(:,:,icls)
+                        ctf2o = ctf2_odd(:,:,icls)
+                    endwhere
+                endif
                 ! merged then e/o
                 pft   = pfte  + pfto
                 ctf2  = ctf2e + ctf2o
@@ -750,20 +765,23 @@ contains
                     endif
                     ! Euler angles identification
                     eulers = m2euler_fast(Rj)
-                    ! Weighted averaging
-                    ! in plane rotation index of jref slice intersecting iref
+                    ! in plane rotation angle of jref slice intersecting iref
                     psi = 360.0 - eulers(3)
+                    ! get the weights, rotation indeces and compute the interpolated common line
                     call pftc_glob%gen_clin_weights(psi, rotl, rotr, wl, wr)
+                    ! even
                     call get_line(jref, rotl, .true., cl_l, rl_l)
                     call get_line(jref, rotr, .true., cl_r, rl_r)
                     cl_e = wl*cl_l + wr*cl_r
                     rl_e = wl*rl_l + wr*rl_r
+                    ! odd
                     call get_line(jref, rotl, .false., cl_l, rl_l)
                     call get_line(jref, rotr, .false., cl_r, rl_r)
                     cl_o = wl*cl_l + wr*cl_r
                     rl_o = wl*rl_l + wr*rl_r
-                    ! in plane rotation index of iref slice
+                    ! in plane rotation angle of iref slice
                     psi = eulers(1)
+                    ! get the weights, rotation indeces and extrapolate the common line
                     call pftc_glob%gen_clin_weights(psi, rotl, rotr, wl, wr)
                     ! leftmost line
                     call extrapolate_line(iref, rotl, wl, cl_e, cl_o, rl_e, rl_o)
