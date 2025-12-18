@@ -2,21 +2,31 @@ module simple_tree
 use simple_srch_sort_loc
 implicit none 
 #include "simple_local_flags.inc"
-type  :: node 
-   type(node), pointer   :: left => null()
-   type(node), pointer   :: right => null()
-   type(node), pointer   :: parent => null()
-   integer     :: medoid_ref_idx = 0
+
+type :: s1_node
+   type(s1_node), pointer  :: left => null()
+   type(s1_node), pointer  :: right => null()
+   type(s1_node), pointer  :: parent => null()
+   real     :: inpl_ang
+   logical  :: visited = .true. 
+   integer, allocatable :: inpl_subset(:) ! array of inpl angles below s1 node
+end type s1_node
+
+type  :: s2_node 
+   type(s2_node), pointer   :: left => null()
+   type(s2_node), pointer   :: right => null()
+   type(s2_node), pointer   :: parent => null()
    real        :: F_ptcl_ref2med  
-   integer, allocatable     :: subset(:) ! array of refs in node 
    integer     :: level
    logical     :: visit = .false.
    logical     :: is_pop   = .false.
-   integer     :: indx
-end type node
+   real        :: psi, theta ! S2 Orientation (change to oris later)
+   integer     :: ref_idx = 0
+   integer, allocatable     :: o_subset(:) ! array of refs below s2_node 
+end type s2_node
 
 type  :: dendro
-   type(node), pointer :: root 
+   type(s2_node), pointer :: root 
    integer  :: height
    integer  :: npnts
    real, allocatable :: dist_mat(:,:) 
@@ -58,94 +68,101 @@ contains
       ! Initialize Root of Entire Tree
       allocate(self%root)
       nullify(self%root%right, self%root%left)
-      self%root%level = 0 
-      self%root%indx = 0     
-      allocate(self%root%subset(self%npnts))
-      self%root%subset = [(i, i = 1,self%npnts )] 
-
-      call clust_insert_node(self%root, self%dist_mat, 0)
+      self%root%level = 0      
+      allocate(self%root%o_subset(self%npnts))
+      allocate(tmp(self%npnts))
+      self%root%o_subset = [(i, i = 1,self%npnts )] 
+      do i = 1, self%npnts
+         tmp(i) = sum((self%dist_mat(i,:)))
+      end do  
+      self%root%ref_idx = maxloc(tmp, 1)
+      deallocate(tmp)
+      ! calculate s2_node psi, theta
+      ! loop over distmat and find the o^th column which maximizes sum FM 
+      ! psi, theta from o
+      call clust_insert_s2_node(self%root, self%dist_mat, 0)
 
       contains 
-         recursive subroutine clust_insert_node(root, dist_mat, level)
-            type(node), pointer, intent(inout) :: root
+         recursive subroutine clust_insert_s2_node(root, dist_mat, level)
+            type(s2_node), pointer, intent(inout) :: root
             real, intent(in)                   :: dist_mat(:,:)
             integer, intent(in)                :: level
             integer                    :: sub_dim, i_dim, j_dim, i
-            integer                    :: n1, n2
+            integer                    :: l, r
             integer                    :: new_med(2)
             real, allocatable          :: sub_distmat(:,:)
             integer, allocatable       :: all_indxs(:), left_idx(:), right_idx(:), all_indxs_c(:)
-            real                       :: medoid_fm1, medoid_fm2
             root%level = level
-            sub_dim = size(root%subset)
+            sub_dim = size(root%o_subset)
             if (sub_dim <= 1) return
             allocate(sub_distmat(sub_dim, sub_dim))
+            ! Could probably just use upper part
             do i_dim = 1, sub_dim
                do j_dim = 1, sub_dim
-                  sub_distmat(i_dim, j_dim) = dist_mat(root%subset(i_dim), root%subset(j_dim))
+                  sub_distmat(i_dim, j_dim) = dist_mat(root%o_subset(i_dim), root%o_subset(j_dim))
                end do
                sub_distmat(i_dim, i_dim) = 0.0
             end do
-            ! change this to upper part 
+            
             new_med = maxloc(sub_distmat)
    
-            n1 = ceiling(sub_dim / 2.)
-            n2 = floor(sub_dim / 2.)
+            l = ceiling(sub_dim / 2.)
+            r = floor(sub_dim / 2.)
             allocate(all_indxs(sub_dim))
             do i = 1, sub_dim
-               all_indxs(i) = root%subset(i)
+               all_indxs(i) = root%o_subset(i)
             end do
             allocate(all_indxs_c(size(all_indxs)))
             all_indxs_c = all_indxs
             call hpsort(sub_distmat(:, new_med(1)), all_indxs)
 
-            allocate(left_idx(n1), right_idx(n2))
+            allocate(left_idx(l), right_idx(r))
             
-            do i = 1, n1
+            do i = 1, l
                left_idx(i) = all_indxs(i)
             end do
-            do i = 1, n2
-               right_idx(i) = all_indxs(n1 + i)
+            do i = 1, r
+               right_idx(i) = all_indxs(l + i)
             end do
 
             allocate(root%left)
             nullify(root%left%left, root%left%right)
-            allocate(root%left%subset(n1))
-            root%left%subset = left_idx
-            root%left%medoid_ref_idx = all_indxs_c(new_med(1))
-            root%left%indx   = 0
+            allocate(root%left%o_subset(l))
+            root%left%o_subset = left_idx
+            root%left%ref_idx = all_indxs_c(new_med(1))
+            root%left%level = level + 1 
             root%left%visit  = .false.
             root%left%is_pop = .true.
 
             allocate(root%right)
             nullify(root%right%left, root%right%right)
-            allocate(root%right%subset(n2))
-            root%right%subset = right_idx
-            root%right%medoid_ref_idx = all_indxs_c(new_med(2))
-            root%right%indx   = 0
+            allocate(root%right%o_subset(r))
+            root%right%o_subset = right_idx
+            root%right%ref_idx = all_indxs_c(new_med(2))
+            root%right%level  = level + 1 
             root%right%visit  = .false.
             root%right%is_pop = .true.
 
             deallocate(sub_distmat, all_indxs, left_idx, right_idx)
 
-            call clust_insert_node(root%left,  dist_mat, level + 1)
-            call clust_insert_node(root%right, dist_mat, level + 1)
+            call clust_insert_s2_node(root%left,  dist_mat, level + 1)
+            call clust_insert_s2_node(root%right, dist_mat, level + 1)
 
-         end subroutine clust_insert_node
+         end subroutine clust_insert_s2_node
 
    end subroutine build_dendro  
 
    recursive subroutine print_dendro(root)
-      type(node), pointer  :: root
+      type(s2_node), pointer  :: root
       if(associated(root)) then 
-         print *, root%subset, '//', root%medoid_ref_idx
+         print *, root%o_subset, '//', root%ref_idx
          call print_dendro(root%right)
          call print_dendro(root%left)
       end if 
    end subroutine print_dendro 
 
    recursive subroutine walk_dendro(root, indxs, objs, done)
-      type(node), pointer, intent(inout) :: root 
+      type(s2_node), pointer, intent(inout) :: root 
       integer, intent(out)  :: indxs(2)
       real, intent(in)    :: objs(2)
       logical     :: done   
@@ -164,8 +181,8 @@ contains
          return
       end if
 
-      indxs(1) = root%left%medoid_ref_idx
-      indxs(2) = root%right%medoid_ref_idx 
+      indxs(1) = root%left%ref_idx
+      indxs(2) = root%right%ref_idx 
    end subroutine walk_dendro
 
 end module simple_tree
