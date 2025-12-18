@@ -799,6 +799,8 @@ contains
                     else if( L_NN )then
                         psi       = 360.0 - eulers(3)
                         targ_irot = pftc_glob%get_roind_fast(psi)
+                        call get_line(jref, targ_irot, .true.,  cl_e, rl_e)
+                        call get_line(jref, targ_irot, .false., cl_o, rl_o)
                         call extrapolate_line(iref, targ_irot, 1.d0, cl_e, cl_o, rl_e, rl_o)
                     else
                         ! Linear interpolation
