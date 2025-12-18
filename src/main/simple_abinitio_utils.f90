@@ -339,8 +339,6 @@ contains
             if( ml_reg.eq.'yes' )                  gaufreq = -1.
             ! CL-based approach
             ref_type = trim(params_glob%ref_type)
-            if( (istage >= params_glob%switch_reftype_stage) .and.&
-            &(params_glob%switch_reftype_stage > 0 )) ref_type = 'comlin'
         endif
         ! turn off ML-regularization when icm is on
         if( icm.eq.'yes' ) ml_reg = 'no'
