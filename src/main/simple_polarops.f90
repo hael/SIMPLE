@@ -690,7 +690,8 @@ contains
 
     ! Calculate common-lines contributions from all the slices
     subroutine calc_comlin_contrib( ref_space, symop, pfts_cl_even, pfts_cl_odd, ctf2_cl_even, ctf2_cl_odd )
-        logical, parameter :: L_KB = .true.
+        logical, parameter :: L_KB = .false.
+        logical, parameter :: L_NN = .true.
         type(oris),       intent(in)    :: ref_space
         type(sym),        intent(in)    :: symop
         complex(kind=dp), intent(inout) :: pfts_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
@@ -795,6 +796,10 @@ contains
                         call extrapolate_line(iref, self_irot, w,  cl_e, cl_o, rl_e, rl_o)
                         ! rightmost line
                         call extrapolate_line(iref, rotr,      wr, cl_e, cl_o, rl_e, rl_o)
+                    else if( L_NN )then
+                        psi       = 360.0 - eulers(3)
+                        targ_irot = pftc_glob%get_roind_fast(psi)
+                        call extrapolate_line(iref, targ_irot, 1.d0, cl_e, cl_o, rl_e, rl_o)
                     else
                         ! Linear interpolation
                         ! in plane rotation index of jref slice intersecting iref
