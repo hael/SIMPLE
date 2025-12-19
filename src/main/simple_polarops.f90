@@ -331,7 +331,7 @@ contains
                 call calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
                 &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             endif
-        case('comlin_noself', 'comlin', 'comlin_fillin')
+        case('comlin_noself', 'comlin')
             ! Mirroring slices
             call mirror_slices(reforis, build_glob%pgrpsyms)
             ! Common-lines conribution
@@ -356,8 +356,6 @@ contains
                 call cavg2clin_frcs%write(string('frcs_cavg2clin'//BIN_EXT))
             case('comlin_noself')
                 call restore_comlins
-            case('comlin_fillin')
-                call restore_comlins(fillin=.true.)
             case('comlin')
                 call calc_cavg_comlin_frcs( cavg2clin_frcs )
                 call cavg2clin_frcs%write(string('frcs_cavg2clin'//BIN_EXT))
@@ -384,7 +382,7 @@ contains
             select case(trim(params_glob%ref_type))
             case('comlin_hybrid')
                 THROW_HARD('Not supported yet')
-            case('comlin_noself', 'comlin_fillin')
+            case('comlin_noself')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
                 !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo,sig2e,sig2o)
                 do icls = 1,ncls/2
@@ -611,15 +609,12 @@ contains
         end subroutine mirror_slices
 
         ! Restore common lines contributions only
-        subroutine restore_comlins(fillin)
-            logical, optional, intent(in) :: fillin
+        subroutine restore_comlins
             complex(dp) :: pft(pftsz,kfromto(1):kfromto(2)),pfte(pftsz,kfromto(1):kfromto(2)),pfto(pftsz,kfromto(1):kfromto(2))
             real(dp)    :: ctf2(pftsz,kfromto(1):kfromto(2)),ctf2e(pftsz,kfromto(1):kfromto(2)),ctf2o(pftsz,kfromto(1):kfromto(2))
             real        :: psi
             integer     :: icls, m
-            logical     :: l_rotm, l_fillin
-            l_fillin = .false.
-            if( present(fillin) )l_fillin = fillin
+            logical     :: l_rotm
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
             !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,psi,l_rotm)
             do icls = 1,ncls/2
@@ -628,16 +623,6 @@ contains
                 pfto  = pfts_clin_odd(:,:,icls)
                 ctf2e = ctf2_clin_even(:,:,icls)
                 ctf2o = ctf2_clin_odd(:,:,icls)
-                if( l_fillin )then
-                    where( ctf2e < DTINY )
-                        pfte  = pfts_even(:,:,icls)
-                        ctf2e = ctf2_even(:,:,icls)
-                    endwhere
-                    where( ctf2o < DTINY )
-                        pfto  = pfts_odd(:,:,icls)
-                        ctf2o = ctf2_odd(:,:,icls)
-                    endwhere
-                endif
                 ! merged then e/o
                 pft   = pfte  + pfto
                 ctf2  = ctf2e + ctf2o
