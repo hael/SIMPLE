@@ -53,24 +53,9 @@ jobs:
              echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/runner/.bash_profile
              eval "$(/opt/homebrew/bin/brew shellenv)"
              brew install git
-             brew install cmake
-             brew install gcc
-             brew install libtiff
              brew install jbigkit
              brew install python@3.10
              brew install fftw
-             #curl -o fftw-3.3.8.tar.gz http://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
-             #tar zxvf fftw-3.3.8.tar.gz
-             #cd fftw-3.8.8
-             #./bootstrap.sh –prefix=/usr/local
-             #make -j
-             #sudo make install
-             #make distclean
-             #./bootstrap.sh –prefix=/usr/local –enable-single
-             #make -j
-             #sudo make install
-             #make distclean
-             #cd ..
              
       - name: Build SIMPLE in debug mode (Linux/MacOS)
         run: |
