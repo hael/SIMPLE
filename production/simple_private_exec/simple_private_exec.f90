@@ -66,7 +66,7 @@ type(commander_prune_project)           :: xprune_project
 type(commander_scale_project_distr)     :: xscale_project_distr
 
 ! TIME-SERIES ANALYSIS PROGRAMS
-type(commander_track_trajectory) :: xtrack_trajectory
+type(commander_track_trajectory)        :: xtrack_trajectory
 type(commander_tseries_motion_correct)  :: xtseries_mcorr
 
 ! PARALLEL PROCESSING PROGRAMS
