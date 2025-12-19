@@ -18,7 +18,7 @@ public :: polar_cavger_assemble_sums_from_parts, polar_cavger_set_ref_pftc
 public :: polar_cavger_zero_pft_refs, polar_cavger_kill
 ! I/O
 public :: polar_cavger_refs2cartesian, polar_cavger_write_cartrefs, polar_cavger_writeall_pftcrefs
-public :: polar_cavger_write, polar_cavger_writeall, polar_cavger_writeall_cartrefs
+public :: polar_cavger_write, polar_cavger_writeall
 public :: polar_cavger_readwrite_partial_sums, polar_cavger_read_all
 ! Book-keeping
 public :: polar_cavger_gen2Dclassdoc, polar_cavger_calc_pops
@@ -357,7 +357,7 @@ contains
             case('comlin_noself')
                 call restore_comlins
             case('comlin_fillin')
-                call restore_comlins(fillin=.false.)
+                call restore_comlins(fillin=.true.)
             case('comlin')
                 call calc_cavg_comlin_frcs( cavg2clin_frcs )
                 call cavg2clin_frcs%write(string('frcs_cavg2clin'//BIN_EXT))
@@ -1100,21 +1100,6 @@ contains
         end select
         call dealloc_imgarr(imgs)
     end subroutine polar_cavger_write_cartrefs
-
-    ! Converts all cavgs PFTS to cartesian grids and writes them
-    subroutine polar_cavger_writeall_cartrefs( pftc, tmpl_fname )
-        class(polarft_calc), intent(in) :: pftc
-        class(string),       intent(in) :: tmpl_fname
-        type(image), allocatable :: imgs(:)
-        call alloc_imgarr(ncls, [params_glob%box_crop, params_glob%box_crop,1], smpd, imgs)
-        call polar_cavger_refs2cartesian( pftc, imgs, 'even' )
-        call write_imgarr(imgs, tmpl_fname//'_even'//params_glob%ext%to_char())
-        call polar_cavger_refs2cartesian( pftc, imgs, 'odd' )
-        call write_imgarr(imgs, tmpl_fname//'_odd'//params_glob%ext%to_char())
-        call polar_cavger_refs2cartesian( pftc, imgs, 'merged' )
-        call write_imgarr(imgs, tmpl_fname//params_glob%ext)
-        call dealloc_imgarr(imgs)
-    end subroutine polar_cavger_writeall_cartrefs
 
     ! Read cavgs PFT array
     subroutine polar_cavger_read( fname, which )
