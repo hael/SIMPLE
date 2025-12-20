@@ -713,6 +713,7 @@ contains
         else if( .not. l_ini3D )then
             ! the ptcl3D field should be clean of updates at this stage
             call spproj%os_ptcl3D%clean_entry('updatecnt')
+            call spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
             ! randomize projection directions
             select case(trim(params%oritype))
                 case('ptcl3D')
