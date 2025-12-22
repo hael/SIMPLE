@@ -115,7 +115,7 @@ contains
     end subroutine exec_segdiampick
 
     subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, dir_out, nboxes_max )
-        use simple_strategy2D_utils, only: alloc_imgarr, dealloc_imgarr
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(string),              intent(in)  :: micname
         class(string),              intent(out) :: boxfile_out
         real,                       intent(in)  :: smpd    !< sampling distance in A

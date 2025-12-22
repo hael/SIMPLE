@@ -3,6 +3,7 @@ module simple_commanders_cavgs
 !$ use omp_lib_kinds
 use simple_commander_module_api
 use simple_strategy2D_utils
+use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs
 implicit none
 #include "simple_local_flags.inc"
 
@@ -202,7 +203,7 @@ contains
             !$omp end parallel do
             deallocate(l_msk)
         else
-            call prep_cavgs4clustering(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+            call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
         endif
         ncls_sel = size(cavg_imgs)
         smpd     = cavg_imgs(1)%get_smpd()
@@ -388,8 +389,6 @@ contains
         call simple_end('**** SIMPLE_SELECT_CLUSTERS_CAVGS NORMAL STOP ****')
     end subroutine exec_select_clusters
 
-    ! SIEVING_MATCH_CAVGS_MAX
-
     subroutine exec_match_cavgs( self, cline )
         use simple_projfile_utils, only: merge_chunk_projfiles
         class(commander_match_cavgs), intent(inout) :: self
@@ -397,6 +396,8 @@ contains
         character(len=*), parameter    :: MATCH_PROJFILE = 'match.simple'
         type(parameters)               :: params
         type(sp_project)               :: spproj_ref, spproj_match, spproj_merged, spproj
+        type(cmdline)                  :: cline_cluster_cavgs
+        type(commander_cluster_cavgs)  :: xcluster_cavgs
         type(string)                   :: chunk_fnames(2), folder, cavgs_merged
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), medoid_imgs_ref(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
@@ -406,6 +407,7 @@ contains
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:)
         integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch, nmerged
         real    :: smpd, oa_minmax(2)
+        logical :: l_recluster
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -426,11 +428,18 @@ contains
         call spproj_match%read(params%projfile_target)
         ! call spproj_ref%write(string('target.simple'))
         ! prepare class averages
-        call prep_cavgs4clustering(spproj_ref,   cavg_imgs_ref,   params%mskdiam, clspops_ref,   clsinds_ref,   l_non_junk_ref,   mm_ref)
-        call prep_cavgs4clustering(spproj_match, cavg_imgs_match, params%mskdiam, clspops_match, clsinds_match, l_non_junk_match, mm_match)
+        call id_junk_and_prep_cavgs4clust(spproj_ref,   cavg_imgs_ref,   params%mskdiam, clspops_ref,   clsinds_ref,   l_non_junk_ref,   mm_ref)
+        call id_junk_and_prep_cavgs4clust(spproj_match, cavg_imgs_match, params%mskdiam, clspops_match, clsinds_match, l_non_junk_match, mm_match)
         nrefs        = size(cavg_imgs_ref)
         nmatch       = size(cavg_imgs_match)
         nmerged      = nrefs + nmatch
+        if( nmerged <= SIEVING_MATCH_CAVGS_MAX )then
+            ! merge & recluster with affinity propagation 
+            l_recluster = .true. 
+        else
+            ! create a labeling by matching to medoids & merge
+            l_recluster = .false.         
+        endif
         smpd         = cavg_imgs_ref(1)%get_smpd()
         ldim         = cavg_imgs_ref(1)%get_ldim()
         ! ensure correct smpd/box in params class
@@ -494,17 +503,33 @@ contains
             deallocate(accept)
             call spproj%kill
         endif
-        ! merging & refinement
+        ! merging
         call spproj_match%write(string(MATCH_PROJFILE))
         folder          = PATH_HERE
         chunk_fnames(1) = params%projfile
         chunk_fnames(2) = simple_abspath(MATCH_PROJFILE)
         cavgs_merged    = string('cavgs_merged')//params%ext
-        ! merge spproj_ref & spproj_match projects
-        call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
-        call spproj_merged%write(params%projfile_merged)
+        if( l_recluster )then
+            ! merge spproj_ref & spproj_match projects
+            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
+            call spproj_merged%write(params%projfile_merged)
+            ! replace solution by reclustered solution
+            call cline_cluster_cavgs%set('mkdir',                      'no')
+            call cline_cluster_cavgs%set('prune',              params%prune)
+            call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
+            call cline_cluster_cavgs%set('hp',                    params%hp)
+            call cline_cluster_cavgs%set('lp',                    params%lp)
+            call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
+            call cline_cluster_cavgs%set('nthr',                params%nthr)
+            call cline_cluster_cavgs%set('have_clustering',            'no')
+            call cline_cluster_cavgs%set('projfile', params%projfile_merged)
+            call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
+        else
+            call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
+            call spproj_merged%write(params%projfile_merged)
+        endif
         ! cleanup
-        ! call cline_cluster_cavgs%kill
+        call cline_cluster_cavgs%kill
         call spproj_match%kill
         call spproj_ref%kill
         call spproj_merged%kill
@@ -531,8 +556,8 @@ contains
 
     end subroutine exec_match_cavgs
 
-     subroutine exec_map_cavgs_selection( self, cline )
-        use simple_corrmat,             only: calc_cartesian_corrmat
+    subroutine exec_map_cavgs_selection( self, cline )
+        use simple_corrmat, only: calc_cartesian_corrmat
         class(commander_map_cavgs_selection), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)              :: params
@@ -648,7 +673,6 @@ contains
     end subroutine exec_map_cavgs_states
 
     subroutine exec_shape_rank_cavgs( self, cline )
-        use simple_strategy2D_utils
         class(commander_shape_rank_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         real,        parameter   :: LP_BIN = 20.

@@ -18,8 +18,12 @@ use simple_pspecs,            only: pspecs
 use simple_segmentation,      only: otsu_img
 use simple_sp_project,        only: sp_project
 use simple_stack_io,          only: stack_io
-use simple_imgarr_utils
+use simple_imgarr_utils,      only: read_cavgs_into_imgarr, dealloc_imgarr, alloc_imgarr, pack_imgarr, write_imgarr
 implicit none
+
+public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
+public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset
+private
 #include "simple_local_flags.inc"
 
 ! objective function weights
@@ -32,7 +36,7 @@ real,    private, parameter :: HP_SPEC=20., LP_SPEC=6.
 
 contains
 
-    subroutine prep_cavgs4clustering( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm )
+    subroutine id_junk_and_prep_cavgs4clust( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm )
         class(sp_project),        intent(inout) :: spproj
         type(image), allocatable, intent(inout) :: cavg_imgs(:)
         real,                     intent(in)    :: mskdiam
@@ -40,7 +44,7 @@ contains
         logical,     allocatable, intent(inout) :: l_non_junk(:)
         real,        allocatable, intent(inout) :: mm(:,:)
         real,              parameter  :: LP_BIN = 20.
-        logical,           parameter  :: DEBUG = .true.
+        logical,           parameter  :: DEBUG = .false.
         real,    allocatable :: frcs(:,:), filter(:)
         logical, allocatable :: l_msk(:,:,:)
         type(string)         :: frcs_fname
@@ -117,7 +121,82 @@ contains
         end do
         !$omp end parallel do
         call clsfrcs%kill
-    end subroutine prep_cavgs4clustering
+    end subroutine id_junk_and_prep_cavgs4clust
+
+    subroutine prep_cavgs4clust( spproj, cavg_imgs, mskdiam, clspops, clsinds, mask, mm )
+        class(sp_project),        intent(inout) :: spproj
+        type(image), allocatable, intent(inout) :: cavg_imgs(:)
+        real,                     intent(in)    :: mskdiam
+        integer,     allocatable, intent(inout) :: clspops(:), clsinds(:)
+        logical,                  intent(in)    :: mask(:)
+        real,        allocatable, intent(inout) :: mm(:,:)
+        real,              parameter  :: LP_BIN = 20.
+        real,    allocatable :: frcs(:,:), filter(:)
+        logical, allocatable :: l_msk(:,:,:)
+        type(string)         :: frcs_fname
+        type(image)          :: img_msk
+        type(class_frcs)     :: clsfrcs
+        integer              :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
+        real                 :: smpd, mskrad
+        call dealloc_imgarr(cavg_imgs)
+        ncls      = spproj%os_cls2D%get_noris()
+        cavg_imgs = read_cavgs_into_imgarr(spproj)
+        if( allocated(clspops) ) deallocate(clspops)
+        clspops   = spproj%os_cls2D%get_all_asint('pop')
+        smpd      = cavg_imgs(1)%get_smpd()
+        ldim      = cavg_imgs(1)%get_ldim()
+        box       = ldim(1)
+        mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * mskdiam/smpd)
+        filtsz    = fdim(box) - 1
+        ! get FRCs
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        if( file_exists(frcs_fname) )then
+            call clsfrcs%read(frcs_fname)
+            filtsz = clsfrcs%get_filtsz()
+        else
+            THROW_HARD('FRC file: '//frcs_fname%to_char()//' does not exist!')
+        endif
+        ! re-create cavg_imgs
+        ncls_sel = count(mask)
+        write(logfhandle,'(A,I5)') '# classes left after mask application ', ncls_sel
+        call dealloc_imgarr(cavg_imgs)
+        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=mask)
+        ! keep track of the original class indices
+        if( allocated(clsinds) ) deallocate(clsinds)
+        clsinds = pack((/(i,i=1,ncls)/), mask=mask)
+        ! update class populations
+        clspops = pack(clspops, mask=mask)
+        ! create the stuff needed in the loop
+        allocate(frcs(filtsz,ncls_sel), filter(filtsz), mm(ncls_sel,2), source=0.)
+        ! prep mask
+        call img_msk%new([box,box,1], smpd)
+        img_msk = 1.
+        call img_msk%mask(mskrad, 'hard')
+        l_msk = img_msk%bin2logical()
+        call img_msk%kill
+        write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
+        !$omp parallel do default(shared) private(i,j,filter) schedule(static) proc_bind(close)
+        do i = 1, ncls_sel
+            j = clsinds(i)
+            ! FRC-based filter
+            call clsfrcs%frc_getter(j, frcs(:,i))
+            if( any(frcs(:,i) > 0.143) )then
+                call fsc2optlp_sub(clsfrcs%get_filtsz(), frcs(:,i), filter)
+                where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
+                call cavg_imgs(i)%fft()
+                call cavg_imgs(i)%apply_filter_serial(filter)
+                call cavg_imgs(i)%ifft()
+            endif
+            ! normalization
+            call cavg_imgs(i)%norm_within(l_msk)
+            ! mask
+            call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+            ! stash minmax
+            mm(i,:) = cavg_imgs(i)%minmax(mskrad)
+        end do
+        !$omp end parallel do
+        call clsfrcs%kill
+    end subroutine prep_cavgs4clust
 
     subroutine flag_non_junk_cavgs( cavgs, lp_bin, msk, l_non_junk, os_cls2D )
         class(image),          intent(inout) :: cavgs(:)

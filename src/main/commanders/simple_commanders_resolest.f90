@@ -109,8 +109,8 @@ contains
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common
         use simple_polarops
-        use simple_polarft_calc,     only: polarft_calc
-        use simple_strategy2D_utils, only: write_imgarr
+        use simple_polarft_calc, only: polarft_calc
+        use simple_imgarr_utils, only: write_imgarr
         class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
