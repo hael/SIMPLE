@@ -413,6 +413,7 @@ contains
 
     !> exec_project generate projections from volume
     subroutine exec_reproject( self, cline )
+        use simple_imgarr_utils, only: dealloc_imgarr
         class(commander_reproject), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)         :: params

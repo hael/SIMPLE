@@ -7,7 +7,8 @@ use simple_image,            only: image
 use simple_parameters,       only: params_glob
 use simple_polarft_calc,     only: polarft_calc, pftc_glob
 use simple_sp_project,       only: sp_project
-use simple_strategy2D_utils
+use simple_strategy2D_utils, only: calc_cavg_offset
+use simple_imgarr_utils,     only: alloc_imgarr, write_imgarr, dealloc_imgarr
 implicit none
 
 ! Restoration
