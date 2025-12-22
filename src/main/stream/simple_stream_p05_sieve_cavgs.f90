@@ -564,11 +564,11 @@ contains
                     ! update global list
                     call sets%push2chunk_list(tmpl//'/'//tmpl//METADATA_EXT, sets%size() + 1, .false.)
                     ! remove imported chunk
-                    if( trim(params%remove_chunks).eq.'yes' )then
-                        do ic = 1,size(projfiles)
-                            call simple_rmdir(stemname(projfiles(ic)))
-                        enddo
-                    endif
+                    ! if( trim(params%remove_chunks).eq.'yes' )then
+                    !     do ic = 1,size(projfiles)
+                    !         call simple_rmdir(stemname(projfiles(ic)))
+                    !     enddo
+                    ! endif
                     call projfiles%kill
                     call starfiles%kill
                     if( allocated(ids) ) deallocate(ids)
