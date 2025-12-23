@@ -17,6 +17,11 @@ type, extends(commander_base) :: commander_cluster_cavgs
         procedure :: execute      => exec_cluster_cavgs
 end type commander_cluster_cavgs
 
+type, extends(commander_base) :: commander_cluster_cavgs_selection
+    contains
+        procedure :: execute      => exec_cluster_cavgs_selection
+end type commander_cluster_cavgs_selection
+
 type, extends(commander_base) :: commander_select_clusters
     contains
         procedure :: execute      => exec_select_clusters
@@ -328,6 +333,124 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
     end subroutine exec_cluster_cavgs
+
+    ! to create medoid representatives of good/bad selection in cls2D field for fast matching later
+    subroutine exec_cluster_cavgs_selection( self, cline )
+        use simple_clustering_utils, only: cluster_dmat
+        class(commander_cluster_cavgs_selection), intent(inout) :: self
+        class(cmdline),                           intent(inout) :: cline
+        logical,          parameter   :: DEBUG = .true.
+        type(image),      allocatable :: cavg_imgs_state1(:), cavg_imgs_state0(:)
+        real,             allocatable :: mm_state1(:,:), mm_state0(:,:), dmat_state1(:,:), dmat_state0(:,:)
+        integer,          allocatable :: labels_state1(:), clsinds_state1(:), i_medoids_state1(:), clspops_state1(:)
+        integer,          allocatable :: labels_state0(:), clsinds_state0(:), i_medoids_state0(:), clspops_state0(:)
+        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), clspops(:), labels_state0_copy(:)
+        integer,          allocatable :: states(:)
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        integer          :: ncls, ncls_state1, ncls_state0, icls, cnt, nptcls
+        integer          :: i, nclust, nclust_state1, nclust_state0, iclust
+        integer          :: ldim(3), pop, box
+        real             :: mskrad
+        real             :: oa_minmax_state1(2), oa_minmax_state0(2), smpd
+        ! defaults
+        call cline%set('oritype', 'cls2D')
+        call cline%set('ctf',        'no')
+        call cline%set('objfun',     'cc')
+        call cline%set('sh_inv',    'yes') ! shift invariant search
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')   ) call cline%set('trs',       10.)
+        if( .not. cline%defined('lp')    ) call cline%set('lp',         6.)
+        if( .not. cline%defined('prune') ) call cline%set('prune',    'no')
+        ! master parameters
+        call params%new(cline)
+        ! read project file
+        call spproj%read(params%projfile)
+        ncls        = spproj%os_cls2D%get_noris()
+        states      = spproj%os_cls2D%get_all_asint('state')
+        call prep_cavgs4clust(spproj, cavg_imgs_state1, params%mskdiam, clspops_state1, clsinds_state1, states  > 0, mm_state1)
+        call prep_cavgs4clust(spproj, cavg_imgs_state0, params%mskdiam, clspops_state0, clsinds_state0, states == 0, mm_state0)
+        ncls_state1 = size(cavg_imgs_state1)
+        ncls_state0 = size(cavg_imgs_state0)
+        smpd        = cavg_imgs_state1(1)%get_smpd()
+        ldim        = cavg_imgs_state1(1)%get_ldim()
+        ! ensure correct smpd/box in params class
+        params%smpd = smpd
+        params%box  = ldim(1)
+        params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        ! calculate overall minmax
+        oa_minmax_state1(1) = minval(mm_state1(:,1))
+        oa_minmax_state1(2) = maxval(mm_state1(:,2))
+        oa_minmax_state0(1) = minval(mm_state0(:,1))
+        oa_minmax_state0(2) = maxval(mm_state0(:,2))
+        ! calculate distance matrices
+        dmat_state1 = calc_cluster_cavgs_dmat(params, cavg_imgs_state1, oa_minmax_state1, params%clust_crit)
+        dmat_state0 = calc_cluster_cavgs_dmat(params, cavg_imgs_state0, oa_minmax_state0, params%clust_crit)
+        ! cluster
+        call cluster_dmat(dmat_state1, 'aprop', nclust_state1, i_medoids_state1, labels_state1)
+        call cluster_dmat(dmat_state0, 'aprop', nclust_state0, i_medoids_state0, labels_state0)
+        ! merge solution
+        nclust = nclust_state1 + nclust_state0
+        labels_state0_copy = labels_state0
+        do iclust = 1, nclust_state0
+            where(labels_state0 == iclust) labels_state0_copy = nclust_state1 + iclust
+        end do
+        allocate(labels(ncls),      source=[labels_state1,labels_state0_copy])
+        allocate(clsinds(ncls),     source=[clsinds_state1,clsinds_state0])
+        allocate(i_medoids(nclust), source=[i_medoids_state1,i_medoids_state0])
+        allocate(clspops(ncls),     source=[clspops_state1,clspops_state0])
+        deallocate(labels_state0_copy)
+        ! communicate medoid indices to cls2D field of project
+        call spproj%os_cls2D%set_all2single('medoid_ind',  0)
+        do iclust = 1, nclust
+            if( i_medoids(iclust) > 0 )then
+                call spproj%os_cls2D%set(clsinds(i_medoids(iclust)), 'medoid_ind', iclust)
+            endif
+        end do
+        ! update project
+        call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
+        call spproj%os_cls2D%set_all2single('cluster',  0)
+        call spproj%os_cls3D%set_all2single('cluster',  0)
+        call spproj%os_cls2D%set_all2single('accept',   0)
+        call spproj%os_cls3D%set_all2single('accept',   0)
+        call spproj%os_ptcl2D%set_all2single('cluster', 0)
+        call spproj%os_ptcl3D%set_all2single('cluster', 0)
+        do iclust = 1, nclust
+            do icls = 1, ncls
+                if( labels(icls) == iclust )then
+                    call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust)                          ! 2D class field
+                    call spproj%os_cls3D%set(clsinds(icls),'cluster',iclust)                          ! 3D class field
+                    call spproj%os_cls2D%set(clsinds(icls),'accept', find_label_state(labels(icls)))  ! 2D class accepted field
+                    call spproj%os_cls3D%set(clsinds(icls),'accept', find_label_state(labels(icls)))  ! 3D class accepted field
+                    call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 2D particle field
+                    call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 3D particle field
+                endif
+            enddo
+        enddo
+        ! this needs to be a full write as many segments are updated
+        call spproj%write(params%projfile)
+        ! destruct
+        call spproj%kill
+        call dealloc_imgarr(cavg_imgs_state0)
+        call dealloc_imgarr(cavg_imgs_state1)
+        ! end gracefully
+        call simple_end('**** SIMPLE_CLUSTER_CAVGS_SELECTION NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
+
+        contains
+
+        function find_label_state( label ) result( state )
+            integer, intent(in) :: label
+            integer :: i,state
+            state = 1
+            do i = 1, ncls
+                if( labels(i) == label )then
+                    state = states(i)
+                    return
+                endif
+            end do
+        end function find_label_state
+
+    end subroutine exec_cluster_cavgs_selection
 
     subroutine exec_select_clusters( self, cline )
         class(commander_select_clusters), intent(inout) :: self

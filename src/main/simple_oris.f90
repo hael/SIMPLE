@@ -1344,7 +1344,7 @@ contains
             call rt%shuffle(inds)
             call rt%kill
             inds = inds(1:nptcls)
-            call hpsort(inds) !!
+            call hpsort(inds)
         endif
     end subroutine select_particles_set
 
