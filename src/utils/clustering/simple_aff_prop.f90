@@ -1,5 +1,6 @@
 ! clustering based on a similartity matrix using affinity propagation
 module simple_aff_prop
+!$ use omp_lib
 use simple_core_module_api
 implicit none
 
@@ -66,18 +67,6 @@ contains
         allocate( self%A(N,N), self%R(N,N), self%Aold(N,N), self%Rp(N,N),&
         self%Rold(N,N), self%AS(N,N), self%Y(N), self%Y2(N), self%tmp(N),&
         self%I(N), self%I2(N), self%dA(N) )
-        self%A      = 0.
-        self%R      = 0.
-        self%Aold   = 0.
-        self%Rp     = 0.
-        self%Rold   = 0.
-        self%AS     = 0.
-        self%Y      = 0.
-        self%Y2     = 0.
-        self%tmp    = 0.
-        self%I      = 0
-        self%I2     = 0
-        self%dA     = 0.
         self%exists = .true.
     end subroutine new
 
@@ -90,8 +79,9 @@ contains
         integer, allocatable, intent(inout) :: labels(:)  !< cluster labels
         real,                 intent(inout) :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
-        real              :: x, realmax
+        real              :: x, realmax, maxdiff, val
         integer           :: i, j, k, ncls
+        logical           :: converged
         ! initialize
         realmax   = huge(x)
         self%A    = 0.
@@ -108,39 +98,106 @@ contains
         self%dA   = 0.
         ! iterate
         do i=1,self%maxits
-            ! FIRST, COMPUTE THE RESPONSIBILITIES
+            !------------------------
+            ! RESPONSIBILITIES
+            !------------------------
             self%Rold = self%R
             self%AS   = self%A + self%S
             self%I    = maxloc(self%AS, dim=2)
-            forall(j=1:self%N) self%Y(j) = self%AS(j,self%I(j))
-            do j=1,self%N
+            !$omp parallel do default(shared) private(j,k)
+            do j = 1, self%N
+                self%Y(j) = self%AS(j,self%I(j))
                 self%AS(j,self%I(j)) = -realmax
-            end do
+            enddo
+            !$omp end parallel do
             self%I2 = maxloc(self%AS, dim=2)
-            forall(j=1:self%N) self%Y2(j) = self%AS(j,self%I2(j))
+            !$omp parallel default(shared) private(j)
+            !$omp do
+            do j = 1, self%N
+                self%Y2(j) = self%AS(j,self%I2(j))
+            enddo
+            !$omp end do
+            !$omp workshare
             self%R = self%S
-            forall(j=1:self%N) self%R(j,:) = self%R(j,:) - self%Y
+            !$omp end workshare
+            !$omp do
+            do j = 1, self%N
+                self%R(j,:) = self%R(j,:) - self%Y
+            enddo
+            !$omp end do
+            !$omp do 
             do j=1,self%N
-               self%R(j,self%I(j)) = self%S(j,self%I(j)) - self%Y2(j)
+                self%R(j,self%I(j)) = self%S(j,self%I(j)) - self%Y2(j)
             end do
+            !$omp end do
+            !$omp workshare
             ! update responsibilities (in a dampened fashion)
             self%R = (1. - self%lam) * self%R + self%lam * self%Rold
-            ! THEN, COMPUTE THE AVAILABILITIES
+            !------------------------
+            ! AVAILABILITIES
+            !------------------------
             self%Aold = self%A
             where(self%R > 0.)
                 self%Rp = self%R
             elsewhere
                 self%Rp = 0.
             end where
-            forall(k=1:self%N) self%Rp(k,k) = self%R(k,k)
-            forall(k=1:self%N) self%tmp(k)  = sum(self%Rp(:,k))
+            !$omp end workshare
+            !$omp do
+            do k = 1, self%N
+                self%Rp(k,k) = self%R(k,k)
+            end do
+            !$omp end do
+            !$omp do
+            do k = 1, self%N
+                self%tmp(k)  = sum(self%Rp(:,k))
+            end do
+            !$omp end do
+            !$omp workshare
             self%A = -self%Rp
-            forall(j=1:self%N) self%A(j,:)  = self%A(j,:) + self%tmp
-            forall(k=1:self%N) self%dA(k)   = self%A(k,k)
-            where(self%A > 0.) self%A       = 0.
-            forall(k=1:self%N) self%A(k,k)  = self%dA(k)
+            !$omp end workshare
+            !$omp do
+            do j = 1, self%N
+                self%A(j,:) = self%A(j,:) + self%tmp
+            end do
+            !$omp end do
+            !$omp do
+            do k = 1, self%N
+                self%dA(k) = self%A(k,k)
+            end do
+            !$omp end do
+            !$omp workshare
+            where(self%A > 0.) self%A = 0.
+            !$omp end workshare
+            !$omp do
+            do k = 1, self%N
+                self%A(k,k) = self%dA(k)
+            end do
+            !$omp end do
+            !$omp workshare
             ! update availabilities (in a dampened fashion)
             self%A = (1. - self%lam) * self%A + self%lam * self%Aold
+            !$omp end workshare
+            !$omp end parallel
+            !========================
+            ! Convergence check each 5th iter
+            !========================
+            if (mod(i,5) == 0) then
+                maxdiff = 0.0
+                !$omp parallel do default(shared) private(j,k,val) reduction(max:maxdiff)
+                do j = 1, self%N
+                    do k = 1, self%N
+                        val = max( abs(self%A(j,k)-self%Aold(j,k)), abs(self%R(j,k)-self%Rold(j,k)) )
+                        if (val > maxdiff) maxdiff = val
+                    end do
+                end do
+                !$omp end parallel do
+                if (maxdiff < self%ftol) then
+                    write(logfhandle,'(a,i6,1x,es12.4)') 'aff_prop converged at iter=', i, maxdiff
+                    converged = .true.
+                    exit
+                end if
+            endif
         end do
         self%R = self%R + self%A ! pseudomarginals
         ! count the number of clusters
