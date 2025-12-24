@@ -228,9 +228,8 @@ contains
     end function simple_getenv
 
     !> \brief Touch file, create file if necessary
-    subroutine simple_touch( fname, status )
-        class(*),          intent(in)  :: fname
-        integer, optional, intent(out) :: status
+    subroutine simple_touch( fname )
+        class(*), intent(in)  :: fname
         integer :: iostat
         select type(fname)
             type is (string)
@@ -240,16 +239,14 @@ contains
             class default
                 call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
         end select
-        if(iostat/=0)then
+        if(iostat < 0)then
             call simple_error_check(iostat, "simple_touch")
         endif
-        if(present(status))status=iostat
     end subroutine simple_touch
 
     !> \brief Soft link file
-    subroutine syslib_symlink( f1, f2, status)
-        class(*),          intent(in)  :: f1, f2
-        integer, optional, intent(out) :: status
+    subroutine syslib_symlink( f1, f2 )
+        class(*), intent(in)  :: f1, f2
         integer :: iostat
          select type(f1)
             type is (string)
@@ -276,7 +273,6 @@ contains
         if(iostat/=0)then
             call simple_error_check(iostat, "In syslib_symlink")
         endif
-        if(present(status))status=iostat
     end subroutine syslib_symlink
 
     !> \brief  Rename or move file

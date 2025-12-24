@@ -471,8 +471,7 @@ contains
         f1 = string('tmp_sys_touch_1.dat')
         f2 = string('tmp_sys_touch_2.dat')
         ! Touch first file
-        call simple_touch(f1, status_here)
-        call assert_int(0, status_here, 'simple_touch: status==0')
+        call simple_touch(f1)
         call assert_true(file_exists(f1), 'simple_touch + file_exists: f1 exists')
         ! Rename to f2 (and overwrite if needed)
         call simple_rename(f1, f2, overwrite=.true.)
