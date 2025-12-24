@@ -69,12 +69,10 @@ contains
 
     subroutine test_simple_touch_and_file_exists()
         type(string) :: fname
-        integer :: istat
         write(*,'(A)') 'test_simple_touch_and_file_exists'
         fname = 'touch_test.txt'
         call assert_true(.not. file_exists(fname), 'touch: file does not exist at start')
-        call simple_touch(fname, status=istat)
-        call assert_int(0, istat, 'simple_touch status')
+        call simple_touch(fname)
         call assert_true(file_exists(fname), 'touch: file exists after simple_touch')
         call del_file(fname)
         call assert_true(.not. file_exists(fname), 'del_file removes file')
@@ -99,12 +97,10 @@ contains
 
     subroutine test_simple_rename_and_del_file()
         type(string) :: src, dst
-        integer :: istat
         write(*,'(A)') 'test_simple_rename_and_del_file'
         src = 'rename_src.txt'
         dst = 'rename_dst.txt'
-        call simple_touch(src, status=istat)
-        call assert_int(0, istat, 'rename: touch src')
+        call simple_touch(src)
         call assert_true(file_exists(src), 'rename: src exists')
         call assert_true(.not. file_exists(dst), 'rename: dst does not exist initially')
         call simple_rename(src, dst, overwrite=.true.)
@@ -118,15 +114,12 @@ contains
 
     subroutine test_syslib_symlink()
         type(string) :: target, link
-        integer      :: istat
         write(*,'(A)') 'test_syslib_symlink'
         target = 'symlink_target.txt'
         link   = 'symlink_link.txt'
-        call simple_touch(target, status=istat)
-        call assert_int(0, istat, 'symlink: touch target')
+        call simple_touch(target)
         call assert_true(file_exists(target), 'symlink: target exists')
-        call syslib_symlink(target, link, status=istat)
-        call assert_int(0, istat, 'symlink: syslib_symlink status')
+        call syslib_symlink(target, link)
         call assert_true(file_exists(link), 'symlink: link appears in filesystem')
         call del_file(link)
         call del_file(target)
@@ -140,8 +133,7 @@ contains
         integer :: istat
         write(*,'(A)') 'test_simple_file_stat'
         fname = 'stat_test.txt'
-        call simple_touch(fname, status=istat)
-        call assert_int(0, istat, 'stat: touch file')
+        call simple_touch(fname)
         call simple_file_stat(fname, istat, buf)
         call assert_int(0, istat, 'stat: simple_file_stat status')
         call assert_true(allocated(buf), 'stat: buffer allocated')
@@ -229,12 +221,11 @@ contains
     subroutine test_simple_list_files()
         type(string), allocatable :: list(:)
         type(string) :: f1, f2
-        integer      :: istat
         write(*,'(A)') 'test_simple_list_files'
         f1 = 'file_a.txt'
         f2 = 'file_b.txt'
-        call simple_touch(f1, status=istat)
-        call simple_touch(f2, status=istat)
+        call simple_touch(f1)
+        call simple_touch(f2)
         call simple_list_files('file_*.txt', list)
         call assert_true(allocated(list), 'list_files: list allocated')
         call assert_true(any(list == f1), 'list_files: contains f1')
@@ -255,8 +246,8 @@ contains
         call simple_mkdir(d, verbose=.false.)
         f1 = d//'/'//'data_001.log'
         f2 = d//'/'//'note.txt'
-        call simple_touch(f1, status=istat)
-        call simple_touch(f2, status=istat)
+        call simple_touch(f1)
+        call simple_touch(f2)
         call simple_list_files_regexp(d, 'data_.*\.log', list)
         call assert_true(allocated(list), 'list_files_regexp: list allocated')
         call assert_true(any(list == f1), 'list_files_regexp: contains matching file')
@@ -274,8 +265,7 @@ contains
         integer :: istat
         write(*,'(A)') 'test_simple_abspath'
         fname = 'abs_test.txt'
-        call simple_touch(fname, status=istat)
-        call assert_int(0, istat, 'abspath: touch file')
+        call simple_touch(fname)
         absname = simple_abspath(fname, status=istat, check_exists=.true.)
         call assert_int(0, istat, 'abspath: status')
         ! crude check: absolute path should start with '/'
