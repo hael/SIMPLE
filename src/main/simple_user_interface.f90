@@ -791,15 +791,15 @@ contains
             case('symmetry_test');               ptr2prg => symmetry_test
             case('tseries_atoms_rmsd');          ptr2prg => tseries_atoms_rmsd
             case('tseries_core_atoms_analysis'); ptr2prg => tseries_core_atoms_analysis
-            case('trajectory_core_finder');         ptr2prg => trajectory_core_finder
+            case('trajectory_core_finder');      ptr2prg => trajectory_core_finder
             case('tseries_import');              ptr2prg => tseries_import
             case('tseries_import_particles');    ptr2prg => tseries_import_particles
             case('tseries_make_pickavg');        ptr2prg => tseries_make_pickavg
-            case('trajectory_make_projavgs');       ptr2prg => trajectory_make_projavgs
+            case('trajectory_make_projavgs');    ptr2prg => trajectory_make_projavgs
             case('tseries_motion_correct');      ptr2prg => tseries_motion_correct
-            case('trajectory_reconstruct3D');       ptr2prg => trajectory_reconstruct3D
-            case('trajectory_swap_stack');          ptr2prg => trajectory_swap_stack
-            case('track_trajectory');     ptr2prg => track_trajectory
+            case('trajectory_reconstruct3D');    ptr2prg => trajectory_reconstruct3D
+            case('trajectory_swap_stack');       ptr2prg => trajectory_swap_stack
+            case('track_trajectory');            ptr2prg => track_trajectory
             case('uniform_filter2D');            ptr2prg => uniform_filter2D
             case('uniform_filter3D');            ptr2prg => uniform_filter3D
             case('update_project');              ptr2prg => update_project
@@ -5422,6 +5422,7 @@ contains
         ! <empty>
         ! filter controls
         call volanalyze%set_input('filt_ctrls', 1, hp)
+        volanalyze%filt_ctrls(1)%required = .true.
         call volanalyze%set_input('filt_ctrls', 2, lp)
         volanalyze%filt_ctrls(2)%required = .true.
         ! mask controls
