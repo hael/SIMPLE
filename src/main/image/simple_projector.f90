@@ -31,11 +31,9 @@ type, extends(image) :: projector
     procedure          :: is_expanded
     ! FOURIER PROJECTORS
     procedure          :: fproject
-    ! procedure          :: fproject4cartftcc
     procedure, private :: fproject_serial_1
     procedure, private :: fproject_serial_2
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
-    ! procedure          :: fproject_correlate
     procedure          :: fproject_polar
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
@@ -196,35 +194,6 @@ contains
         !$omp end parallel do
     end subroutine fproject
 
-    ! used in prep4parallel_shift_srch in simple_cartft_corrcalc
-    ! subroutine fproject4cartftcc( self, os, lims, nptcls, cmats, resmsk )
-    !     class(projector),              intent(inout) :: self
-    !     class(oris),                   intent(in)    :: os
-    !     integer,                       intent(in)    :: lims(2,2), nptcls
-    !     complex(kind=c_float_complex), intent(inout) :: cmats( lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
-    !     logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-    !     real    :: loc(3), e_rotmat(3,3)
-    !     integer :: h, k, iptcl
-    !     !$omp parallel do collapse(3) schedule(static) default(shared)&
-    !     !$omp private(h,k,iptcl,e_rotmat,loc) proc_bind(close)
-    !     do h = lims(1,1),lims(1,2)
-    !         do k = lims(2,1),lims(2,2)
-    !             do iptcl = 1,nptcls
-    !                 if( resmsk(h,k) )then
-    !                     e_rotmat = os%get_mat(iptcl)
-    !                     loc      = matmul(real([h,k,0]), e_rotmat)
-    !                     if( h > 0 )then
-    !                         cmats(h,k,iptcl) = self%interp_fcomp(loc)
-    !                     else
-    !                         cmats(h,k,iptcl) = conjg(self%interp_fcomp(loc))
-    !                     endif
-    !                 endif
-    !             end do
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    ! end subroutine fproject4cartftcc
-
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
     subroutine fproject_serial_1( self, e, fplane )
         class(projector),  intent(inout) :: self
@@ -310,36 +279,6 @@ contains
             end do
         end do
     end subroutine fproject_polar
-
-    ! !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    ! subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
-    !     use simple_polarft_calc, only: polarft_calc
-    !     class(projector),        intent(inout) :: self    !< projector object
-    !     integer,                 intent(in)    :: iref    !< which reference
-    !     class(ori),              intent(in)    :: e       !< orientation
-    !     class(polarft_calc), intent(inout) :: pftc   !< object that holds the polar image
-    !     logical,                 intent(in)    :: iseven  !< eo flag
-    !     logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
-    !     integer :: irot, k, pdim(3), lims(3,2), sqlp, sqarg, hk(2)
-    !     real    :: loc(3), e_rotmat(3,3)
-    !     lims     = self%loop_lims(2)
-    !     sqlp     = (maxval(lims(:,2)))**2
-    !     pdim     = pftc%get_pdim()
-    !     e_rotmat = e%get_mat()
-    !     do irot = 1,pdim(1)
-    !         do k = pdim(2),pdim(3)
-    !             if( .not. mask(k) ) call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
-    !             hk    = pftc%get_coord(irot,k)
-    !             sqarg = dot_product([hk(1),hk(2)],[hk(1),hk(2)])
-    !             if( sqarg > sqlp .or. hk(1) < lims(1,1) .or. hk(1) > lims(1,2) .or. &
-    !                                  &hk(2) < lims(2,1) .or. hk(2) > lims(2,2) )then
-    !                 call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
-    !             endif
-    !             loc = matmul(real([hk(1), hk(2), 0]),e_rotmat)
-    !             call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
-    !         end do
-    !     end do
-    ! end subroutine fproject_polar
 
     !>  \brief is to interpolate from the expanded complex matrix
     pure function interp_fcomp_norm( self, loc )result( comp )
