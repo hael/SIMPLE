@@ -496,7 +496,12 @@ contains
         if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
         call init_volanalyzer(params%filetab)
-        call dock_compare_volumes
+        if( cline%defined('ref_ind') )then
+            call dock_compare_volumes(params%ref_ind)
+        else
+            call calc_volpair_corrmat
+            call dock_compare_volumes
+        endif
     end subroutine exec_volanalyze
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
