@@ -5409,13 +5409,14 @@ contains
         &'Analyze an emsemble of ab initio volumes',&                               ! descr_short
         &'is a program for statistical analysis an ensemble of ab initio volumes',& ! descr_long
         &'simple_exec',&                                                            ! executable
-        &1, 1, 0, 0, 2, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
+        &1, 2, 0, 0, 2, 1, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volanalyze%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
         &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
         ! parameter input/output
         call volanalyze%set_input('parm_ios', 1, smpd)
+        call volanalyze%set_input('parm_ios', 2, 'ref_ind', 'num', 'Reference volume index', 'Index of volume in voltab to use as reference', 'ref idx', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls

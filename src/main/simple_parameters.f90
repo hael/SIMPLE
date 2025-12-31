@@ -374,6 +374,7 @@ type :: parameters
     integer :: pid=0               !< process ID
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
+    integer :: ref_ind=0           !> reference index
     integer :: reliongroups=0
     integer :: shift_stage=0
     integer :: split_stage=7       !< splitting stage when multivol_mode==docked
@@ -996,6 +997,7 @@ contains
         call check_iarg('optics_offset',  self%optics_offset)
         call check_iarg('part',           self%part)
         call check_iarg('pspecsz',        self%pspecsz)
+        call check_iarg('ref_ind',        self%ref_ind)
         call check_iarg('shift_stage',    self%shift_stage)
         call check_iarg('split_stage',    self%split_stage)
         call check_iarg('startit',        self%startit)

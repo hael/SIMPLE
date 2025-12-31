@@ -7,23 +7,22 @@ use simple_simple_volinterp, only: rotvol
 use simple_ori,              only: ori
 implicit none
 
-public :: init_volanalyzer, dock_compare_volumes
+public :: init_volanalyzer, calc_volpair_corrmat, dock_compare_volumes
 private
 #include "simple_local_flags.inc"
 
 type(string), allocatable :: volnames(:)      !< names of volumes to analyze
 type(string), allocatable :: volnames_mirr(:) !< names of mirrored volumes to analyze
 real,         allocatable :: corrmat(:,:)     !< similarity matrix
-type(dock_vols) :: dvols
-integer         :: nvols = 0, ldim(3) = 0
+type(dock_vols)           :: dvols
+integer                   :: nvols = 0, ldim(3) = 0
 
 contains
 
     subroutine init_volanalyzer( voltab )
         class(string), intent(in) :: voltab
         type(image) :: vol_mirr
-        integer     :: i, j, ifoo, ldim_read(3), ipair, npairs
-        real        :: eul(3), eul_mirr(3), shift(3), shift_mirr(3), cc, cc_mirr
+        integer     :: i, ifoo, ldim_read(3)
         real        :: smpd_here
         call read_filetable(voltab, volnames)
         nvols = size(volnames)
@@ -47,6 +46,13 @@ contains
             call vol_mirr%mirror('x')
             call vol_mirr%write(volnames_mirr(i))
         end do
+        ! destruct
+        call vol_mirr%kill
+    end subroutine init_volanalyzer
+
+    subroutine calc_volpair_corrmat
+        integer :: i, j, npairs, ipair
+        real    :: eul(3), eul_mirr(3), shift(3), shift_mirr(3), cc, cc_mirr
         allocate(corrmat(nvols,nvols), source=1.)
         ! loop over volume pairs
         write(logfhandle,'(A)') '>>> DOCKING ALL PAIRS OF VOLUMES'
@@ -73,16 +79,19 @@ contains
                 corrmat(j,i) = corrmat(i,j)
             end do
         end do
-        ! destruct
-        call vol_mirr%kill
-    end subroutine init_volanalyzer
+    end subroutine calc_volpair_corrmat
 
-    subroutine dock_compare_volumes
+    subroutine dock_compare_volumes( iref )
+        integer, optional, intent(in) :: iref
         type(string) :: volfname
         integer      :: i_medoid, i, funit
         real         :: eul(3), eul_mirr(3), shift(3), shift_mirr(3), cc, cc_mirr
         type(image)  :: vol_medoid, vol_docked
-        call medoid_from_smat(corrmat, i_medoid)
+        if( present(iref) )then
+            i_medoid = iref
+        else
+            call medoid_from_smat(corrmat, i_medoid)
+        endif
         ! write ranked volumes
         write(logfhandle,'(A)') '>>> DOCKING VOLUMES WITH RESPECT TO THE MEDOID'
         do i = 1, nvols
@@ -132,7 +141,7 @@ contains
         ! delete mirrored volumes
         call del_files(volnames_mirr)
         ! destruct class vars
-        deallocate(corrmat)
+        if( allocated(corrmat) ) deallocate(corrmat)
         call volnames%kill
         call volnames_mirr%kill
         call dvols%kill
