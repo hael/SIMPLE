@@ -19,7 +19,7 @@ commander_trajectory_make_projavgs, commander_trajectory_core_finder
 use single_commanders_nano2D,       only: commander_analysis2D_nano, commander_center2D_nano, commander_cluster2D_nano
 use single_commanders_nano3D,       only: commander_refine3D_nano, commander_autorefine3D_nano,&
 commander_trajectory_reconstruct3D_distr, commander_trajectory_reconstruct3D_distr
-use single_commanders_trajectory,   only: commander_import_trajectory, commander_track_trajectory_distr, commander_graphene_subtr,&
+use single_commanders_trajectory,   only: commander_import_trajectory, commander_track_particles_distr, commander_graphene_subtr,&
 commander_denoise_trajectory, commander_extract_substk, commander_trajectory_swap_stack
 use single_commanders_tseries,      only: commander_tseries_import, commander_tseries_make_pickavg, commander_tseries_motion_correct_distr
 end module single_exec_module_api
