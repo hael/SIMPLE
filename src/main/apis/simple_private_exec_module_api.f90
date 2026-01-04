@@ -72,7 +72,7 @@ use simple_commanders_oris, only: commander_rotmats2oris
 
 ! tseries commanders, methods operating on time-series data obtained with GLC-EM
 use single_commanders_tseries,    only: commander_tseries_motion_correct
-use single_commanders_trajectory, only: commander_track_trajectory
+use single_commanders_trajectory, only: commander_track_particles
 
 ! distr commanders, support routines for distributed execution
 use simple_commanders_distr, only: commander_split

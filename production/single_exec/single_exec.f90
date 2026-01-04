@@ -16,7 +16,7 @@ type(commander_prune_project_distr)              :: xprune_project
 ! TIME-SERIES PRE-PROCESSING PROGRAMS
 type(commander_tseries_make_pickavg)             :: xtseries_make_pickavg
 type(commander_tseries_motion_correct_distr)     :: xmcorr
-type(commander_track_trajectory_distr)           :: xtrack
+type(commander_track_particles_distr)           :: xtrack
 type(commander_graphene_subtr)                   :: xgraphene_subtr
 type(commander_denoise_trajectory)               :: xden_traj
 
@@ -110,7 +110,7 @@ select case(prg)
         call xtseries_make_pickavg%execute(cline)
     case( 'tseries_motion_correct' )
         call xmcorr%execute( cline )
-    case( 'track_trajectory' )
+    case( 'track_particles' )
         call xtrack%execute( cline )
     case( 'graphene_subtr' )
         call cline%set('mkdir', 'no')
@@ -200,7 +200,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('6196e06c')
+    call simple_print_git_version('eb0d69b5')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

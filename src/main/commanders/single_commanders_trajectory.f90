@@ -3,15 +3,15 @@ use simple_commander_module_api
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_track_trajectory_distr
+type, extends(commander_base) :: commander_track_particles_distr
   contains
-    procedure :: execute      => exec_track_trajectory_distr
-end type commander_track_trajectory_distr
+    procedure :: execute      => exec_track_particles_distr
+end type commander_track_particles_distr
 
-type, extends(commander_base) :: commander_track_trajectory
+type, extends(commander_base) :: commander_track_particles
   contains
-    procedure :: execute      => exec_track_trajectory
-end type commander_track_trajectory
+    procedure :: execute      => exec_track_particles
+end type commander_track_particles
 
 type, extends(commander_base) :: commander_trajectory_backgr_subtr
   contains
@@ -45,8 +45,8 @@ end type commander_extract_substk
 
 contains
 
-    subroutine exec_track_trajectory_distr( self, cline )
-        class(commander_track_trajectory_distr), intent(inout) :: self
+    subroutine exec_track_particles_distr( self, cline )
+        class(commander_track_particles_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)              :: params
         type(qsys_env)                :: qenv
@@ -79,7 +79,7 @@ contains
                 endif
             end do
         else
-            THROW_HARD('inputted boxfile is empty; exec_track_trajectory')
+            THROW_HARD('inputted boxfile is empty; exec_track_particles')
         endif
         call boxfile%kill
         params%nptcls  = ndatlines
@@ -111,11 +111,11 @@ contains
         call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_track_trajectory NORMAL STOP ****')
-    end subroutine exec_track_trajectory_distr
+    end subroutine exec_track_particles_distr
 
-    subroutine exec_track_trajectory( self, cline )
+    subroutine exec_track_particles( self, cline )
         use simple_track_trajectory
-        class(commander_track_trajectory), intent(inout) :: self
+        class(commander_track_particles), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         type(sp_project)          :: spproj
         type(parameters)          :: params
@@ -129,12 +129,12 @@ contains
         orig_box = params%box
         ! coordinates input
         if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
-            if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_track_trajectory')
+            if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_track_particles')
             allocate( boxdata(1,2) )
             boxdata(1,1) = real(params%xcoord)
             boxdata(1,2) = real(params%ycoord)
         else
-            THROW_HARD('need xcoord/ycoord to be part of command line; exec_track_trajectory')
+            THROW_HARD('need xcoord/ycoord to be part of command line; exec_track_particles')
         endif
         ! frames input
         call spproj%read(params%projfile)
@@ -174,10 +174,10 @@ contains
         ! clean tracker
         call kill_tracker
         ! end gracefully
-        call qsys_job_finished(string('single_commanders_trajectory :: exec_track_trajectory'))
+        call qsys_job_finished(string('single_commanders_trajectory :: exec_track_particles'))
         call spproj%kill
         call simple_end('**** SIMPLE_track_trajectory NORMAL STOP ****')
-    end subroutine exec_track_trajectory
+    end subroutine exec_track_particles
 
     subroutine exec_trajectory_backgr_subtr( self, cline )
         ! for background subtraction in time-series data. The goal is to subtract the two graphene

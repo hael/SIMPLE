@@ -199,7 +199,7 @@ type(simple_program), target :: trajectory_make_projavgs
 type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: trajectory_reconstruct3D
 type(simple_program), target :: trajectory_swap_stack
-type(simple_program), target :: track_trajectory
+type(simple_program), target :: track_particles
 type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
@@ -514,7 +514,7 @@ contains
         call new_tseries_motion_correct
         call new_trajectory_reconstruct3D
         call new_trajectory_swap_stack
-        call new_track_trajectory
+        call new_track_particles
         call new_uniform_filter2D
         call new_uniform_filter3D
         call new_update_project
@@ -649,7 +649,7 @@ contains
         call push2prg_ptr_array(tseries_motion_correct)
         call push2prg_ptr_array(trajectory_reconstruct3D)
         call push2prg_ptr_array(trajectory_swap_stack)
-        call push2prg_ptr_array(track_trajectory)
+        call push2prg_ptr_array(track_particles)
         call push2prg_ptr_array(uniform_filter2D)
         call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
@@ -799,7 +799,7 @@ contains
             case('tseries_motion_correct');      ptr2prg => tseries_motion_correct
             case('trajectory_reconstruct3D');    ptr2prg => trajectory_reconstruct3D
             case('trajectory_swap_stack');       ptr2prg => trajectory_swap_stack
-            case('track_trajectory');            ptr2prg => track_trajectory
+            case('track_particles');            ptr2prg => track_particles
             case('uniform_filter2D');            ptr2prg => uniform_filter2D
             case('uniform_filter3D');            ptr2prg => uniform_filter3D
             case('update_project');              ptr2prg => update_project
@@ -938,7 +938,7 @@ contains
         write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()
         write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
-        write(logfhandle,'(A)') track_trajectory%name%to_char()
+        write(logfhandle,'(A)') track_particles%name%to_char()
         write(logfhandle,'(A)') graphene_subtr%name%to_char()
         write(logfhandle,'(A)') denoise_trajectory%name%to_char()
         write(logfhandle,'(A)') ''
@@ -5142,10 +5142,10 @@ contains
         ! <empty>
     end subroutine new_trajectory_swap_stack
 
-    subroutine new_track_trajectory
+    subroutine new_track_particles
         ! PROGRAM SPECIFICATION
-        call track_trajectory%new(&
-        &'track_trajectory',&                                             ! name
+        call track_particles%new(&
+        &'track_particles',&                                             ! name
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'single_exec',&                                                         ! executable
@@ -5154,34 +5154,34 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call track_trajectory%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
+        call track_particles%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
-        call track_trajectory%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
+        call track_particles%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
-        call track_trajectory%set_input('parm_ios', 3, neg)
-        call track_trajectory%set_input('parm_ios', 4, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
+        call track_particles%set_input('parm_ios', 3, neg)
+        call track_particles%set_input('parm_ios', 4, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call track_trajectory%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
+        call track_particles%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
         'e.g. pixels window halfwidth', .false., 10.)
-        call track_trajectory%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
+        call track_particles%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
         ! <empty>
         ! filter controls
-        call track_trajectory%set_input('filt_ctrls', 1, lp)
-        track_trajectory%filt_ctrls(1)%required     = .false.
-        track_trajectory%filt_ctrls(1)%rval_default = 2.3
-        track_trajectory%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
-        call track_trajectory%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call track_particles%set_input('filt_ctrls', 1, lp)
+        track_particles%filt_ctrls(1)%required     = .false.
+        track_particles%filt_ctrls(1)%rval_default = 2.3
+        track_particles%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
+        call track_particles%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
-        call track_trajectory%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
+        call track_particles%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
             &'Alternative filter for particle tracking(no|tv|nlmean){tv}', '(no|tv|nlmean){tv}', .false., 'tv')
-        call track_trajectory%set_input('filt_ctrls', 4, hp)
+        call track_particles%set_input('filt_ctrls', 4, hp)
         ! mask controls
         ! <empty>
         ! computer controls
-        call track_trajectory%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_track_trajectory
+        call track_particles%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_track_particles
 
     subroutine new_trajectory_reconstruct3D
         ! PROGRAM SPECIFICATION
