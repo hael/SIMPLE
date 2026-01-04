@@ -799,7 +799,7 @@ contains
             case('tseries_motion_correct');      ptr2prg => tseries_motion_correct
             case('trajectory_reconstruct3D');    ptr2prg => trajectory_reconstruct3D
             case('trajectory_swap_stack');       ptr2prg => trajectory_swap_stack
-            case('track_particles');            ptr2prg => track_particles
+            case('track_particles');             ptr2prg => track_particles
             case('uniform_filter2D');            ptr2prg => uniform_filter2D
             case('uniform_filter3D');            ptr2prg => uniform_filter3D
             case('update_project');              ptr2prg => update_project
