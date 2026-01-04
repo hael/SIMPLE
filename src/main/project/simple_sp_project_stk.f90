@@ -93,7 +93,6 @@ contains
         else
             THROW_HARD('Unsupported stack format; use *.mrc or *.mrcs for import')
         endif
-        if( projname%has_substr(fbody) ) THROW_HARD('stack for import('//stk%to_char()//') not allowed to have same name as project')
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
