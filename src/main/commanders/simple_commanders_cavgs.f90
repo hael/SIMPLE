@@ -361,7 +361,6 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')   ) call cline%set('trs',       10.)
         if( .not. cline%defined('lp')    ) call cline%set('lp',         6.)
-        if( .not. cline%defined('prune') ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
         ! read project file
