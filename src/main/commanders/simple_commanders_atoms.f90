@@ -135,20 +135,11 @@ contains
             call line%readline(fnr, io_stat)
             ! identity rotation matrix
             rot_mat=0.; do j=1,3 ; rot_mat(j,j)=1. ; end do
-
-            print *, 'line: ', line%to_char()
-
             ! zero translation
             scale       = 1.
             trans_vec   = 0.
             cur_pdb     = basename(line)
-
-            print *, 'cur_pdb: ', cur_pdb%to_char()
-
             params_file = 'PARAMS_'//cur_pdb%to_char()
-
-            print *, 'params_file: ', params_file%to_char()
-
             if( i == 1 )then
                 ! the first one is the reference pdb
                 ref_pdb = line
