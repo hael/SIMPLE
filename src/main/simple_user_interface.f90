@@ -100,6 +100,7 @@ type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster_cavgs
+type(simple_program), target :: cluster_cavgs_selection
 type(simple_program), target :: cluster_stack
 type(simple_program), target :: conv_atom_denoise
 type(simple_program), target :: convert
@@ -416,6 +417,7 @@ contains
         call new_cluster2D_stream
         call new_cluster2D_subsets
         call new_cluster_cavgs
+        call new_cluster_cavgs_selection
         call new_cluster_stack
         call new_conv_atom_denoise
         call new_convert
@@ -554,6 +556,7 @@ contains
         call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster_cavgs)
+        call push2prg_ptr_array(cluster_cavgs_selection)
         call push2prg_ptr_array(cluster_stack)
         call push2prg_ptr_array(conv_atom_denoise)
         call push2prg_ptr_array(convert)
@@ -701,6 +704,7 @@ contains
             case('cluster2D_stream');            ptr2prg => cluster2D_stream
             case('cluster2D_subsets');           ptr2prg => cluster2D_subsets
             case('cluster_cavgs');               ptr2prg => cluster_cavgs
+            case('cluster_cavgs_selection');     ptr2prg => cluster_cavgs_selection
             case('cluster_stack');               ptr2prg => cluster_stack
             case('conv_atom_denoise');           ptr2prg => conv_atom_denoise
             case('convert');                     ptr2prg => convert
@@ -815,103 +819,192 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_simple_prgs_in_ui
-        write(logfhandle,'(A)') abinitio2D%name%to_char()
-        write(logfhandle,'(A)') abinitio3D%name%to_char()
-        write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
-        write(logfhandle,'(A)') afm%name%to_char()
+
+        !====================================================================
+        ! PROJECT MANAGEMENT
+        !====================================================================
+        write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT:', C_UNDERLINED)
         write(logfhandle,'(A)') assign_optics_groups%name%to_char()
-        write(logfhandle,'(A)') auto_spher_mask%name%to_char()
-        write(logfhandle,'(A)') automask%name%to_char()
-        write(logfhandle,'(A)') automask2D%name%to_char()
-        write(logfhandle,'(A)') binarize%name%to_char()
-        write(logfhandle,'(A)') center%name%to_char()
-        write(logfhandle,'(A)') check_refpick%name%to_char()
-        write(logfhandle,'(A)') clin_fsc%name%to_char()
-        write(logfhandle,'(A)') cluster2D%name%to_char()
-        write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
-        write(logfhandle,'(A)') cluster_cavgs%name%to_char()
-        write(logfhandle,'(A)') cluster_stack%name%to_char()
-        write(logfhandle,'(A)') convert%name%to_char()
-        write(logfhandle,'(A)') ctf_estimate%name%to_char()
-        write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
-        write(logfhandle,'(A)') ctfops%name%to_char()
-        write(logfhandle,'(A)') dock_volpair%name%to_char()
-        write(logfhandle,'(A)') estimate_lpstages%name%to_char()
         write(logfhandle,'(A)') export_relion%name%to_char()
         write(logfhandle,'(A)') export_starproject%name%to_char()
-        write(logfhandle,'(A)') extract%name%to_char()
-        write(logfhandle,'(A)') filter%name%to_char()
-        write(logfhandle,'(A)') fsc%name%to_char()
-        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
-        write(logfhandle,'(A)') icm2D%name%to_char()
-        write(logfhandle,'(A)') icm3D%name%to_char()
+        write(logfhandle,'(A)') extract_subproj%name%to_char()
         write(logfhandle,'(A)') import_boxes%name%to_char()
         write(logfhandle,'(A)') import_cavgs%name%to_char()
         write(logfhandle,'(A)') import_movies%name%to_char()
         write(logfhandle,'(A)') import_particles%name%to_char()
         write(logfhandle,'(A)') import_starproject%name%to_char()
-        write(logfhandle,'(A)') info_image%name%to_char()
-        write(logfhandle,'(A)') info_stktab%name%to_char()
-        write(logfhandle,'(A)') make_cavgs%name%to_char()
-        write(logfhandle,'(A)') make_oris%name%to_char()
-        write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
-        write(logfhandle,'(A)') mask%name%to_char()
-        write(logfhandle,'(A)') match_cavgs%name%to_char()
-        write(logfhandle,'(A)') match_stacks%name%to_char()
         write(logfhandle,'(A)') merge_projects%name%to_char()
-        write(logfhandle,'(A)') mini_stream%name%to_char()
-        write(logfhandle,'(A)') mkdir_%name%to_char()
-        write(logfhandle,'(A)') motion_correct%name%to_char()
-        write(logfhandle,'(A)') multivol_assign%name%to_char()
         write(logfhandle,'(A)') new_project%name%to_char()
-        write(logfhandle,'(A)') noisevol%name%to_char()
-        write(logfhandle,'(A)') normalize_%name%to_char()
-        write(logfhandle,'(A)') nununiform_filter3D%name%to_char()
-        write(logfhandle,'(A)') orisops%name%to_char()
-        write(logfhandle,'(A)') oristats%name%to_char()
-        write(logfhandle,'(A)') pdb2mrc%name%to_char()
-        write(logfhandle,'(A)') pick%name%to_char()
-        write(logfhandle,'(A)') postprocess%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
-        write(logfhandle,'(A)') ppca_volvar%name%to_char()
-        write(logfhandle,'(A)') preprocess%name%to_char()
-        write(logfhandle,'(A)') print_dose_weights%name%to_char()
-        write(logfhandle,'(A)') print_fsc%name%to_char()
-        write(logfhandle,'(A)') print_magic_boxes%name%to_char()
         write(logfhandle,'(A)') print_project_field%name%to_char()
         write(logfhandle,'(A)') print_project_info%name%to_char()
         write(logfhandle,'(A)') prune_project%name%to_char()
-        write(logfhandle,'(A)') reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') replace_project_field%name%to_char()
+        write(logfhandle,'(A)') selection%name%to_char()
+        write(logfhandle,'(A)') update_project%name%to_char()
+        write(logfhandle,'(A)') zero_project_shifts%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! PRE-PROCESSING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('PRE-PROCESSING:', C_UNDERLINED)
+        write(logfhandle,'(A)') preprocess%name%to_char()
+        write(logfhandle,'(A)') extract%name%to_char()
         write(logfhandle,'(A)') reextract%name%to_char()
+        write(logfhandle,'(A)') motion_correct%name%to_char()
+        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
+        write(logfhandle,'(A)') ctf_estimate%name%to_char()
+        write(logfhandle,'(A)') pick%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! CLUSTER2D WORKFLOWS
+        !====================================================================
+        write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
+        write(logfhandle,'(A)') abinitio2D%name%to_char()
+        write(logfhandle,'(A)') cluster2D%name%to_char()
+        write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
+        write(logfhandle,'(A)') cluster_cavgs%name%to_char()
+        write(logfhandle,'(A)') cluster_cavgs_selection%name%to_char()
+        write(logfhandle,'(A)') cluster_stack%name%to_char()
+        write(logfhandle,'(A)') make_cavgs%name%to_char()
+        write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
+        write(logfhandle,'(A)') match_cavgs%name%to_char()
+        write(logfhandle,'(A)') match_stacks%name%to_char()
+        write(logfhandle,'(A)') sample_classes%name%to_char()
+        write(logfhandle,'(A)') select_clusters%name%to_char()
+        write(logfhandle,'(A)') write_classes%name%to_char()
+        write(logfhandle,'(A)') write_mic_filetab%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! AB INITIO 3D RECONSTRUCTION
+        !====================================================================
+        write(logfhandle,'(A)') format_str('AB INITIO 3D RECONSTRUCTION:', C_UNDERLINED)
+        write(logfhandle,'(A)') abinitio3D%name%to_char()
+        write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
+        write(logfhandle,'(A)') estimate_lpstages%name%to_char()
+        write(logfhandle,'(A)') multivol_assign%name%to_char()
+        write(logfhandle,'(A)') noisevol%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! REFINE3D
+        !====================================================================
+        write(logfhandle,'(A)') format_str('REFINE3D:', C_UNDERLINED)
         write(logfhandle,'(A)') refine3D%name%to_char()
         write(logfhandle,'(A)') refine3D_auto%name%to_char()
-        write(logfhandle,'(A)') replace_project_field%name%to_char()
-        write(logfhandle,'(A)') reproject%name%to_char()
-        write(logfhandle,'(A)') sample_classes%name%to_char()
+        write(logfhandle,'(A)') reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') postprocess%name%to_char()
+        write(logfhandle,'(A)') automask%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! DENOISING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('DENOISING:', C_UNDERLINED)
+        write(logfhandle,'(A)') icm2D%name%to_char()
+        write(logfhandle,'(A)') icm3D%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
+        write(logfhandle,'(A)') ppca_volvar%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! FILTERING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('FILTERING:', C_UNDERLINED)
+        write(logfhandle,'(A)') filter%name%to_char()
+        write(logfhandle,'(A)') uniform_filter2D%name%to_char()
+        write(logfhandle,'(A)') uniform_filter3D%name%to_char()
+        write(logfhandle,'(A)') nununiform_filter3D%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! GENERAL IMAGE PROCESSING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('GENERAL IMAGE PROCESSING:', C_UNDERLINED)
+        write(logfhandle,'(A)') binarize%name%to_char()
+        write(logfhandle,'(A)') convert%name%to_char()
+        write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
+        write(logfhandle,'(A)') ctfops%name%to_char()
+        write(logfhandle,'(A)') normalize_%name%to_char()
         write(logfhandle,'(A)') scale%name%to_char()
-        write(logfhandle,'(A)') select_%name%to_char()
-        write(logfhandle,'(A)') select_clusters%name%to_char()
-        write(logfhandle,'(A)') selection%name%to_char()
+        write(logfhandle,'(A)') stack%name%to_char()
+        write(logfhandle,'(A)') stackops%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! MASKING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('MASKING:', C_UNDERLINED)
+        write(logfhandle,'(A)') auto_spher_mask%name%to_char()
+        write(logfhandle,'(A)') automask2D%name%to_char()
+        write(logfhandle,'(A)') mask%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! ORIENTATION PROCESSING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('ORIENTATION PROCESSING:', C_UNDERLINED)
+        write(logfhandle,'(A)') make_oris%name%to_char()
+        write(logfhandle,'(A)') orisops%name%to_char()
+        write(logfhandle,'(A)') oristats%name%to_char()
+        write(logfhandle,'(A)') vizoris%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! PARALLEL UTILITIES
+        !====================================================================
+        write(logfhandle,'(A)') format_str('PARALLEL UTILITIES:', C_UNDERLINED)
+        write(logfhandle,'(A)') split_%name%to_char()
+        write(logfhandle,'(A)') split_stack%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! PRINT INFO
+        !====================================================================
+        write(logfhandle,'(A)') format_str('PRINT INFO:', C_UNDERLINED)
+        write(logfhandle,'(A)') info_image%name%to_char()
+        write(logfhandle,'(A)') info_stktab%name%to_char()
+        write(logfhandle,'(A)') print_dose_weights%name%to_char()
+        write(logfhandle,'(A)') print_fsc%name%to_char()
+        write(logfhandle,'(A)') print_magic_boxes%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! RESOLUTION ESTIMATION
+        !====================================================================
+        write(logfhandle,'(A)') format_str('RESOLUTION ESTIMATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') fsc%name%to_char()
+        write(logfhandle,'(A)') clin_fsc%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! SIMULATION
+        !====================================================================
+        write(logfhandle,'(A)') format_str('SIMULATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') pdb2mrc%name%to_char()
         write(logfhandle,'(A)') simulate_movie%name%to_char()
         write(logfhandle,'(A)') simulate_noise%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
-        write(logfhandle,'(A)') split_%name%to_char()
-        write(logfhandle,'(A)') split_stack%name%to_char()
-        write(logfhandle,'(A)') stack%name%to_char()
-        write(logfhandle,'(A)') stackops%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! STREAM VALIDATION
+        !====================================================================
+        write(logfhandle,'(A)') format_str('STREAM VALIDATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') mini_stream%name%to_char()
+        write(logfhandle,'(A)') check_refpick%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! SYMMETRY
+        !====================================================================
+        write(logfhandle,'(A)') format_str('SYMMETRY:', C_UNDERLINED)
         write(logfhandle,'(A)') symaxis_search%name%to_char()
         write(logfhandle,'(A)') symmetrize_map%name%to_char()
         write(logfhandle,'(A)') symmetry_test%name%to_char()
-        write(logfhandle,'(A)') uniform_filter2D%name%to_char()
-        write(logfhandle,'(A)') uniform_filter3D%name%to_char()
-        write(logfhandle,'(A)') update_project%name%to_char()
-        write(logfhandle,'(A)') vizoris%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! VOLUME DOCKING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('VOLUME DOCKING:', C_UNDERLINED)
+        write(logfhandle,'(A)') dock_volpair%name%to_char()
         write(logfhandle,'(A)') volanalyze%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! VOLUME PROCESSING
+        !====================================================================
+        write(logfhandle,'(A)') format_str('VOLUME PROCESSING:', C_UNDERLINED)
+        write(logfhandle,'(A)') center%name%to_char()
+        write(logfhandle,'(A)') reproject%name%to_char()
         write(logfhandle,'(A)') volops%name%to_char()
-        write(logfhandle,'(A)') write_classes%name%to_char()
-        write(logfhandle,'(A)') write_mic_filetab%name%to_char()
-        write(logfhandle,'(A)') zero_project_shifts%name%to_char()
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
@@ -1835,11 +1928,11 @@ contains
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION
         call cluster_cavgs%new(&
-        &'cluster_cavgs',&                                            ! name
-        &'Analysis of class averages with k-medoids',&                ! descr_short
-        &'is a program for analyzing class averages with k-medoids',& ! descr_long
-        &'simple_exec',&                                              ! executable
-        &0, 2, 0, 1, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        &'cluster_cavgs',&                                                       ! name
+        &'Analysis of class averages with affinity propagation',&                ! descr_short
+        &'is a program for analyzing class averages with affinity propagation',& ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &0, 2, 0, 1, 2, 1, 1, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1858,6 +1951,32 @@ contains
         ! computer controls
         call cluster_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cluster_cavgs
+
+    subroutine new_cluster_cavgs_selection
+        ! PROGRAM SPECIFICATION
+        call cluster_cavgs_selection%new(&
+        &'cluster_cavgs_selection',&                                                                  ! name
+        &'Analysis of selected class averages with affinity propagation to prepare for match_cavgs',& ! descr_short
+        &'is a program for analyzing selected class averages with affinity propagation',&             ! descr_long
+        &'simple_exec',&                                                                              ! executable
+        &0, 0, 0, 1, 2, 1, 1, .true.)                                                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster_cavgs_selection%set_input('srch_ctrls', 1, clust_crit)
+        ! filter controls
+        call cluster_cavgs_selection%set_input('filt_ctrls', 1, hp)
+        call cluster_cavgs_selection%set_input('filt_ctrls', 2, lp)
+        ! mask controls
+        call cluster_cavgs_selection%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call cluster_cavgs_selection%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_cluster_cavgs_selection
 
     subroutine new_cluster_stack
         ! PROGRAM SPECIFICATION

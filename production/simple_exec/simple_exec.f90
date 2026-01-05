@@ -4,132 +4,143 @@ use simple_exec_module_api
 implicit none
 #include "simple_local_flags.inc"
 
-! PROJECT MANAGEMENT PROGRAMS
-type(commander_new_project)                 :: xnew_project
-type(commander_update_project)              :: xupdate_project
-type(commander_print_project_info)          :: xprint_project_info
-type(commander_print_project_field)         :: xprint_project_field
-type(commander_zero_project_shifts)         :: xzero_project_shifts
-type(commander_import_movies)               :: ximport_movies
+! PROJECT MANAGEMENT
+type(commander_assign_optics_groups)        :: xassign_optics_groups
+type(commander_export_relion)               :: xexport_relion
+type(commander_export_starproject)          :: xexport_starproject
+type(commander_extract_subproj)             :: xextract_subproj
 type(commander_import_boxes)                :: ximport_boxes
-type(commander_import_particles)            :: ximport_particles
 type(commander_import_cavgs)                :: ximport_cavgs
+type(commander_import_movies)               :: ximport_movies
+type(commander_import_particles)            :: ximport_particles
+type(commander_import_starproject)          :: ximport_starproject
+type(commander_merge_projects)              :: xmerge_projects
+type(commander_new_project)                 :: xnew_project
+type(commander_print_project_field)         :: xprint_project_field
+type(commander_print_project_info)          :: xprint_project_info
+type(commander_prune_project_distr)         :: xprune_project
 type(commander_replace_project_field)       :: xreplace_project_field
 type(commander_selection)                   :: xselection
-type(commander_export_relion)               :: xexport_relion
-type(commander_import_starproject)          :: ximport_starproject
-type(commander_export_starproject)          :: xexport_starproject
-type(commander_assign_optics_groups)        :: xassign_optics_groups
-type(commander_merge_projects)              :: xmerge_projects
-type(commander_extract_subproj)             :: xextract_subproj
+type(commander_update_project)              :: xupdate_project
+type(commander_zero_project_shifts)         :: xzero_project_shifts
 
-! PRE-PROCESSING WORKFLOWS
-type(commander_preprocess_distr)            :: xpreprocess
-type(commander_extract_distr)               :: xextract_distr
-type(commander_reextract_distr)             :: xreextract_distr
-type(commander_motion_correct_distr)        :: xmotion_correct_distr
-type(commander_gen_pspecs_and_thumbs_distr) :: xgen_pspecs_and_thumbs
+! PRE-PROCESSING
 type(commander_ctf_estimate_distr)          :: xctf_estimate_distr
+type(commander_extract_distr)               :: xextract_distr
+type(commander_gen_pspecs_and_thumbs_distr) :: xgen_pspecs_and_thumbs
+type(commander_motion_correct_distr)        :: xmotion_correct_distr
 type(commander_pick_distr)                  :: xpick_distr
+type(commander_preprocess_distr)            :: xpreprocess
+type(commander_reextract_distr)             :: xreextract_distr
 
 ! CLUSTER2D WORKFLOWS
-type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_abinitio2D)                  :: xabinitio2D
 type(commander_cluster2D_autoscale)         :: xcluster2D
-type(stream_cluster2D_subsets)              :: xcluster2D_subsets
-type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
-type(commander_sample_classes)              :: xsample_classes
 type(commander_cluster_cavgs)               :: xcluster_cavgs
+type(commander_cluster_cavgs_selection)     :: xcluster_cavgs_selection
 type(commander_cluster_stack)               :: xcluster_stack
-type(commander_select_clusters)             :: xsel_clusts
+type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
+type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
 type(commander_match_cavgs)                 :: xmatch_cavgs
 type(commander_match_stacks)                :: xmatch_stacks
+type(commander_sample_classes)              :: xsample_classes
+type(commander_select_clusters)             :: xsel_clusts
 type(commander_write_classes)               :: xwrite_classes
 type(commander_write_mic_filetab)           :: xwrite_mic_filetab
+type(stream_cluster2D_subsets)              :: xcluster2D_subsets
 
-! AB INITIO 3D RECONSTRUCTION WORKFLOW
-type(commander_estimate_lpstages)           :: xestimate_lpstages
-type(commander_noisevol)                    :: xnoisevol
-type(commander_abinitio3D_cavgs)            :: xabinitio3D_cavgs
+! AB INITIO 3D RECONSTRUCTION
 type(commander_abinitio3D)                  :: xabinitio3D
+type(commander_abinitio3D_cavgs)            :: xabinitio3D_cavgs
+type(commander_estimate_lpstages)           :: xestimate_lpstages
 type(commander_multivol_assign)             :: xmultivol_assign
+type(commander_noisevol)                    :: xnoisevol
 
-! REFINE3D WORKFLOWS
-type(commander_refine3D_distr)              :: xrefine3D_distr
-type(commander_refine3D_auto)               :: xrefine3D_auto
-type(commander_reconstruct3D_distr)         :: xreconstruct3D
-
-! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(commander_symaxis_search)              :: xsymsrch
-type(commander_symmetry_test)               :: xsymtst
-type(commander_symmetrize_map)              :: xsymmetrize_map
-type(commander_dock_volpair)                :: xdock_volpair
-type(commander_postprocess)                 :: xpostprocess
+! REFINE3D
 type(commander_automask)                    :: xautomask
-type(commander_auto_spher_mask)             :: xauto_spher_mask
+type(commander_postprocess)                 :: xpostprocess
+type(commander_reconstruct3D_distr)         :: xreconstruct3D
+type(commander_refine3D_auto)               :: xrefine3D_auto
+type(commander_refine3D_distr)              :: xrefine3D_distr
 
-! VALIDATION WORKFLOWS
-type(commander_mini_stream)                 :: xmini_stream
-type(commander_check_refpick)               :: xcheck_refpick
-
-! IMAGE PROCESSING PROGRAMS
-type(commander_binarize)                    :: xbinarize
-type(commander_mask)                        :: xmask
-type(commander_automask2D)                  :: xautomask2D
-type(commander_fsc)                         :: xfsc
-type(commander_clin_fsc)                    :: xclin_fsc
-type(commander_centervol)                   :: xcenter
-type(commander_reproject)                   :: xreproject
-type(commander_volanalyze)                  :: xvolanalyze
-type(commander_volops)                      :: xvolops
-type(commander_convert)                     :: xconvert
-type(commander_ctfops)                      :: xctfops
-type(commander_ctf_phaseflip)               :: xctf_phaseflip
-type(commander_filter)                      :: xfilter
-type(commander_normalize)                   :: xnormalize
+! DENOISING
+type(commander_icm2D)                       :: xicm2D
+type(commander_icm3D)                       :: xicm3D
 type(commander_ppca_denoise)                :: xppca_denoise
 type(commander_ppca_denoise_classes)        :: xppca_denoise_classes
+
+! FILTERING
+type(commander_filter)                      :: xfilter
+type(commander_uniform_filter2D)            :: xuniform_filter2D
+type(commander_uniform_filter3D)            :: xuniform_filter3D
+
+! GENERAL IMAGE PROCESSING
+type(commander_binarize)                    :: xbinarize
+type(commander_convert)                     :: xconvert
+type(commander_ctf_phaseflip)               :: xctf_phaseflip
+type(commander_ctfops)                      :: xctfops
+type(commander_normalize)                   :: xnormalize
 type(commander_scale)                       :: xscale
 type(commander_stack)                       :: xstack
 type(commander_stackops)                    :: xstackops
-type(commander_uniform_filter2D)            :: xuniform_filter2D
-type(commander_uniform_filter3D)            :: xuniform_filter3D
-type(commander_icm2D)                       :: xicm2D
-type(commander_icm3D)                       :: xicm3D
 
-! ORIENTATION PROCESSING PROGRAMS
+! MASKING
+type(commander_auto_spher_mask)             :: xauto_spher_mask
+type(commander_automask2D)                  :: xautomask2D
+type(commander_mask)                        :: xmask
+
+! ORIENTATION PROCESSING
 type(commander_make_oris)                   :: xmake_oris
 type(commander_orisops)                     :: xorisops
 type(commander_oristats)                    :: xoristats
 type(commander_vizoris)                     :: xvizoris
 
-! PRINT INFO PROGRAMS
-type(commander_info_image)                  :: xinfo_image
-type(commander_info_stktab)                 :: xinfo_stktab
-type(commander_print_fsc)                   :: xprint_fsc
-type(commander_print_magic_boxes)           :: xprint_magic_boxes
-type(commander_print_dose_weights)          :: xprint_dose_weights
-
-! SIMULATOR PROGRAMS
-type(commander_simulate_noise)              :: xsimulate_noise
-type(commander_simulate_particles)          :: xsimulate_particles
-type(commander_simulate_movie)              :: xsimulate_movie
-
-! MISCELLANEOUS WORKFLOWS
-type(commander_prune_project_distr)         :: xprune_project
-type(commander_pdb2mrc)                     :: xpdb2mrc
-
-! PARALLEL PROCESSING PROGRAMS
+! PARALLEL UTILITIES
 type(commander_split)                       :: xsplit
 
+! PRINT INFO
+type(commander_info_image)                  :: xinfo_image
+type(commander_info_stktab)                 :: xinfo_stktab
+type(commander_print_dose_weights)          :: xprint_dose_weights
+type(commander_print_fsc)                   :: xprint_fsc
+type(commander_print_magic_boxes)           :: xprint_magic_boxes
+
+! RESOLUTION ESTIMATON
+type(commander_clin_fsc)                    :: xclin_fsc
+type(commander_fsc)                         :: xfsc
+
+! SIMULATION
+type(commander_pdb2mrc)                     :: xpdb2mrc
+type(commander_simulate_movie)              :: xsimulate_movie
+type(commander_simulate_noise)              :: xsimulate_noise
+type(commander_simulate_particles)          :: xsimulate_particles
+
+! STREAM VALIDATION
+type(commander_check_refpick)               :: xcheck_refpick
+type(commander_mini_stream)                 :: xmini_stream
+
+! SYMMETRY
+type(commander_symaxis_search)              :: xsymsrch
+type(commander_symmetrize_map)              :: xsymmetrize_map
+type(commander_symmetry_test)               :: xsymtst
+
+! VOLUME DOCKING
+type(commander_dock_volpair)                :: xdock_volpair
+type(commander_volanalyze)                  :: xvolanalyze
+
+! VOLUME PROCESSING
+type(commander_centervol)                   :: xcenter
+type(commander_reproject)                   :: xreproject
+type(commander_volops)                      :: xvolops
+
 ! OTHER DECLARATIONS
-character(len=STDLEN)                       :: xarg, prg
-character(len=XLONGSTRLEN)                  :: entire_line
-type(cmdline)                               :: cline
-integer                                     :: cmdstat, cmdlen, pos
-integer(timer_int_kind)                     :: t0
-real(timer_int_kind)                        :: rt_exec
-logical                                     :: l_silent
+character(len=STDLEN)      :: xarg, prg
+character(len=XLONGSTRLEN) :: entire_line
+type(cmdline)              :: cline
+integer                    :: cmdstat, cmdlen, pos
+integer(timer_int_kind)    :: t0
+real(timer_int_kind)       :: rt_exec
+logical                    :: l_silent
 
 ! start timer
 t0 = tic()
@@ -152,63 +163,69 @@ call script_exec(cline, string(trim(prg)), string('simple_exec'))
 l_silent = .false.
 select case(trim(prg))
 
-    ! PROJECT MANAGEMENT PROGRAMS
+    !====================================================================
+    ! PROJECT MANAGEMENT
+    !====================================================================
+    case( 'assign_optics_groups' )
+        call xassign_optics_groups%execute(cline)
+    case( 'export_relion' )
+        call xexport_relion%execute(cline)
+    case( 'export_starproject' )
+        call xexport_starproject%execute(cline)
+    case( 'extract_subproj' )
+        call xextract_subproj%execute(cline)
+    case( 'import_boxes' )
+        call ximport_boxes%execute(cline)
+    case( 'import_cavgs' )
+        call ximport_cavgs%execute(cline)
+    case( 'import_movies' )
+        call ximport_movies%execute(cline)
+    case( 'import_particles' )
+        call ximport_particles%execute(cline)
+    case( 'import_starproject' )
+        call ximport_starproject%execute(cline)
+    case( 'merge_projects' )
+        call xmerge_projects%execute(cline)
     case( 'new_project' )
         call xnew_project%execute(cline)
-    case( 'update_project' )
-        call xupdate_project%execute(cline)
+    case( 'print_project_field' )
+        call xprint_project_field%execute(cline)
+        l_silent = .true.
     case( 'print_project_info' )
         call xprint_project_info%execute(cline)
         l_silent = .true.
-    case( 'print_project_field' )
-        call xprint_project_field%execute(cline)
-         l_silent = .true.
-    case( 'zero_project_shifts' )
-        call xzero_project_shifts%execute(cline)
-    case( 'import_movies' )
-        call ximport_movies%execute(cline)
-    case( 'import_boxes' )
-        call ximport_boxes%execute(cline)
-    case( 'import_particles' )
-        call ximport_particles%execute(cline)
-    case( 'import_cavgs' )
-        call ximport_cavgs%execute(cline)
+    case( 'prune_project' )
+        call xprune_project%execute(cline)
     case( 'replace_project_field' )
         call xreplace_project_field%execute(cline)
     case( 'selection', 'report_selection' )
         call xselection%execute(cline)
-    case( 'export_relion' )
-        call xexport_relion%execute(cline)
-    case( 'import_starproject' )
-        call ximport_starproject%execute(cline)
-    case( 'export_starproject' )
-        call xexport_starproject%execute(cline)
-    case( 'assign_optics_groups' )
-        call xassign_optics_groups%execute(cline)
-    case( 'merge_projects' )
-        call xmerge_projects%execute(cline)
-    case( 'extract_subproj' )
-        call xextract_subproj%execute(cline)
+    case( 'update_project' )
+        call xupdate_project%execute(cline)
+    case( 'zero_project_shifts' )
+        call xzero_project_shifts%execute(cline)
 
-    ! PRE-PROCESSING WORKFLOWS
-    case( 'preprocess' )
-        call xpreprocess%execute(cline)
-    case( 'extract' )
-        call xextract_distr%execute(cline)
-    case( 'reextract' )
-        call xreextract_distr%execute(cline)
-    case( 'motion_correct' )
-        call xmotion_correct_distr%execute(cline)
-    case( 'gen_pspecs_and_thumbs' )
-        call xgen_pspecs_and_thumbs%execute(cline)
+    !====================================================================
+    ! PRE-PROCESSING
+    !====================================================================
     case( 'ctf_estimate' )
         call xctf_estimate_distr%execute(cline)
+    case( 'extract' )
+        call xextract_distr%execute(cline)
+    case( 'gen_pspecs_and_thumbs' )
+        call xgen_pspecs_and_thumbs%execute(cline)
+    case( 'motion_correct' )
+        call xmotion_correct_distr%execute(cline)
     case( 'pick' )
         call xpick_distr%execute(cline)
+    case( 'preprocess' )
+        call xpreprocess%execute(cline)
+    case( 'reextract' )
+        call xreextract_distr%execute(cline)
 
+    !====================================================================
     ! CLUSTER2D WORKFLOWS
-    case( 'make_cavgs' )
-        call xmake_cavgs_distr%execute(cline)
+    !====================================================================
     case( 'abinitio2D' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, string('abinitio2D'), string('simple_exec'))
@@ -219,46 +236,60 @@ select case(trim(prg))
         call xcluster2D%execute(cline)
     case( 'cluster2D_subsets' )
         call xcluster2D_subsets%execute(cline)
-    case( 'map_cavgs_selection' )
-        call xmap_cavgs_selection%execute(cline)
-    case('sample_classes')
-        call xsample_classes%execute(cline)
     case( 'cluster_cavgs' )
         call xcluster_cavgs%execute(cline)
+    case( 'cluster_cavgs_selection' )
+        call xcluster_cavgs_selection%execute(cline)
     case( 'cluster_stack' )
         call xcluster_stack%execute(cline)
-    case('select_clusters')
-        call xsel_clusts%execute(cline)
+    case( 'make_cavgs' )
+        call xmake_cavgs_distr%execute(cline)
+    case( 'map_cavgs_selection' )
+        call xmap_cavgs_selection%execute(cline)
     case( 'match_cavgs' )
         call xmatch_cavgs%execute(cline)
     case( 'match_stacks' )
         call xmatch_stacks%execute(cline)
+    case( 'sample_classes' )
+        call xsample_classes%execute(cline)
+    case( 'select_clusters' )
+        call xsel_clusts%execute(cline)
     case( 'write_classes' )
         call xwrite_classes%execute(cline)
     case( 'write_mic_filetab' )
         call xwrite_mic_filetab%execute(cline)
 
-    ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-    case('estimate_lpstages')
-        call xestimate_lpstages%execute(cline)
-    case( 'noisevol' )
-        call xnoisevol%execute(cline)
-    case( 'abinitio3D_cavgs' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('abinitio3D_cavgs'), string('simple_exec'))
-        else
-            call xabinitio3D_cavgs%execute(cline)
-        endif
+    !====================================================================
+    ! AB INITIO 3D RECONSTRUCTION
+    !====================================================================
     case( 'abinitio3D' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, string('abinitio3D'), string('simple_exec'))
         else
             call xabinitio3D%execute(cline)
         endif
-    case('multivol_assign')
+    case( 'abinitio3D_cavgs' )
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, string('abinitio3D_cavgs'), string('simple_exec'))
+        else
+            call xabinitio3D_cavgs%execute(cline)
+        endif
+    case( 'estimate_lpstages' )
+        call xestimate_lpstages%execute(cline)
+    case( 'multivol_assign' )
         call xmultivol_assign%execute(cline)
+    case( 'noisevol' )
+        call xnoisevol%execute(cline)
 
-    ! REFINE3D WORKFLOWS
+    !====================================================================
+    ! REFINE3D
+    !====================================================================
+    case( 'automask' )
+        call xautomask%execute(cline)
+    case( 'postprocess' )
+        call xpostprocess%execute(cline)
+    case( 'reconstruct3D' )
+        call xreconstruct3D%execute(cline)
     case( 'refine3D' )
         if( cline%defined('nrestarts') )then
             call restarted_exec(cline, string('refine3D'), string('simple_exec'))
@@ -271,80 +302,62 @@ select case(trim(prg))
         else
             call xrefine3D_auto%execute(cline)
         endif
-    case( 'reconstruct3D' )
-        call xreconstruct3D%execute( cline )
 
-    ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
-    case( 'symaxis_search' )
-        call xsymsrch%execute( cline )
-    case( 'symmetry_test' )
-        call xsymtst%execute( cline )
-    case( 'symmetrize_map' )
-        call xsymmetrize_map%execute(cline)
-    case( 'dock_volpair' )
-        call xdock_volpair%execute(cline)
-    case( 'postprocess' )
-        call xpostprocess%execute(cline)
-    case( 'automask' )
-        call xautomask%execute(cline)
-    case( 'auto_spher_mask' )
-        call xauto_spher_mask%execute(cline)
-
-    ! VALIDATION WORKFLOWS
-    case( 'mini_stream' )
-        call xmini_stream%execute(cline)
-    case( 'check_refpick' )
-        call xcheck_refpick%execute(cline)
-
-    ! IMAGE PROCESSING PROGRAMS
-    case( 'binarize' )
-        call xbinarize%execute(cline)
-    case( 'mask' )
-        call xmask%execute(cline)
-    case( 'automask2D' )
-        call xautomask2D%execute(cline)
-    case( 'fsc' )
-        call xfsc%execute(cline)
-    case( 'clin_fsc' )
-        call xclin_fsc%execute(cline)
-    case( 'center' )
-        call xcenter%execute(cline)
-    case( 'reproject' )
-        call xreproject%execute(cline)
-    case( 'volops' )
-        call xvolops%execute(cline)
-    case( 'volanalyze' )
-        call xvolanalyze%execute(cline)
-    case( 'convert' )
-        call xconvert%execute(cline)
-    case( 'ctfops' )
-        call xctfops%execute(cline)
-    case( 'ctf_phaseflip' )
-        call xctf_phaseflip%execute(cline)
-    case( 'filter' )
-        call xfilter%execute(cline)
-    case( 'normalize' )
-        call xnormalize%execute(cline)
+    !====================================================================
+    ! DENOISING
+    !====================================================================
+    case( 'icm2D' )
+        call xicm2D%execute(cline)
+    case( 'icm3D' )
+        call xicm3D%execute(cline)
     case( 'ppca_denoise' )
         call xppca_denoise%execute(cline)
     case( 'ppca_denoise_classes' )
         call xppca_denoise_classes%execute(cline)
+
+    !====================================================================
+    ! FILTERING
+    !====================================================================
+    case( 'filter' )
+        call xfilter%execute(cline)
+    case( 'uniform_filter2D' )
+        call xuniform_filter2D%execute(cline)
+    case( 'uniform_filter3D' )
+        call xuniform_filter3D%execute(cline)
+
+    !====================================================================
+    ! GENERAL IMAGE PROCESSING
+    !====================================================================
+    case( 'binarize' )
+        call xbinarize%execute(cline)
+    case( 'convert' )
+        call xconvert%execute(cline)
+    case( 'ctf_phaseflip' )
+        call xctf_phaseflip%execute(cline)
+    case( 'ctfops' )
+        call xctfops%execute(cline)
+    case( 'normalize' )
+        call xnormalize%execute(cline)
     case( 'scale' )
         call xscale%execute(cline)
     case( 'stack' )
         call xstack%execute(cline)
     case( 'stackops' )
         call xstackops%execute(cline)
-    case( 'uniform_filter2D' )
-        call xuniform_filter2D%execute(cline)
-    case( 'uniform_filter3D' )
-        call xuniform_filter3D%execute(cline)
-    case( 'icm2D' )
-        call xicm2D%execute(cline)
-    case( 'icm3D' )
-        call xicm3D%execute(cline)
 
-    ! ORIENTATION PROCESSING PROGRAMS
+    !====================================================================
+    ! MASKING
+    !====================================================================
+    case( 'auto_spher_mask' )
+        call xauto_spher_mask%execute(cline)
+    case( 'automask2D' )
+        call xautomask2D%execute(cline)
+    case( 'mask' )
+        call xmask%execute(cline)
+
+    !====================================================================
+    ! ORIENTATION PROCESSING
+    !====================================================================
     case( 'make_oris' )
         call xmake_oris%execute(cline)
     case( 'orisops' )
@@ -354,48 +367,97 @@ select case(trim(prg))
     case( 'vizoris' )
         call xvizoris%execute(cline)
 
-    ! PRINT INFO PROGRAMS
+    !====================================================================
+    ! PARALLEL UTILITIES
+    !====================================================================
+    case( 'split' )
+        call xsplit%execute(cline)
+
+    !====================================================================
+    ! PRINT INFO
+    !====================================================================
     case( 'info_image' )
         call xinfo_image%execute(cline)
     case( 'info_stktab' )
         call xinfo_stktab%execute(cline)
+    case( 'print_dose_weights' )
+        call xprint_dose_weights%execute(cline)
+        l_silent = .true.
     case( 'print_fsc' )
         call xprint_fsc%execute(cline)
         l_silent = .true.
     case( 'print_magic_boxes' )
         call xprint_magic_boxes%execute(cline)
         l_silent = .true.
-    case( 'print_dose_weights' )
-        call xprint_dose_weights%execute(cline)
-        l_silent = .true.
 
-    ! SIMULATOR PROGRAMS
+    !====================================================================
+    ! RESOLUTION ESTIMATION
+    !====================================================================
+    case( 'clin_fsc' )
+        call xclin_fsc%execute(cline)
+    case( 'fsc' )
+        call xfsc%execute(cline)
+
+    !====================================================================
+    ! SIMULATION
+    !====================================================================
+    case( 'pdb2mrc' )
+        call xpdb2mrc%execute(cline)
+    case( 'simulate_movie' )
+        call xsimulate_movie%execute(cline)
     case( 'simulate_noise' )
         call xsimulate_noise%execute(cline)
     case( 'simulate_particles' )
         call xsimulate_particles%execute(cline)
-    case( 'simulate_movie' )
-        call xsimulate_movie%execute(cline)
 
-    ! MISCELLANEOUS WORKFLOWS
-    case( 'pdb2mrc' )
-        call xpdb2mrc%execute( cline ) 
-    case( 'prune_project' )
-        call xprune_project%execute( cline )
+    !====================================================================
+    ! STREAM VALIDATION
+    !====================================================================
+    case( 'check_refpick' )
+        call xcheck_refpick%execute(cline)
+    case( 'mini_stream' )
+        call xmini_stream%execute(cline)
 
-    ! PARALLEL PROCESSING PROGRAMS
-    case( 'split' )
-        call xsplit%execute(cline)
-    case DEFAULT
+    !====================================================================
+    ! SYMMETRY
+    !====================================================================
+    case( 'symaxis_search' )
+        call xsymsrch%execute(cline)
+    case( 'symmetrize_map' )
+        call xsymmetrize_map%execute(cline)
+    case( 'symmetry_test' )
+        call xsymtst%execute(cline)
+
+    !====================================================================
+    ! VOLUME DOCKING
+    !====================================================================
+    case( 'dock_volpair' )
+        call xdock_volpair%execute(cline)
+    case( 'volanalyze' )
+        call xvolanalyze%execute(cline)
+
+    !====================================================================
+    ! VOLUME PROCESSING
+    !====================================================================
+    case( 'center' )
+        call xcenter%execute(cline)
+    case( 'reproject' )
+        call xreproject%execute(cline)
+    case( 'volops' )
+        call xvolops%execute(cline)
+
+    case default
         THROW_HARD('prg='//trim(prg)//' is unsupported')
+
 end select
+
 call update_job_descriptions_in_project( cline )
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('bce8e86a')
+    call simple_print_git_version('74a8ab8f')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
