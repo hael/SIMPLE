@@ -135,16 +135,25 @@ contains
             call line%readline(fnr, io_stat)
             ! identity rotation matrix
             rot_mat=0.; do j=1,3 ; rot_mat(j,j)=1. ; end do
+
+            print *, 'line: ', line%to_char()
+
             ! zero translation
             scale       = 1.
             trans_vec   = 0.
-            cur_pdb     = line
+            cur_pdb     = basename(line)
+
+            print *, 'cur_pdb: ', cur_pdb%to_char()
+
             params_file = 'PARAMS_'//cur_pdb%to_char()
+
+            print *, 'params_file: ', params_file%to_char()
+
             if( i == 1 )then
                 ! the first one is the reference pdb
-                ref_pdb = cur_pdb
+                ref_pdb = line
                 call read_pdb2matrix( ref_pdb, matrix1 )
-                call write_matrix2pdb( 'Pt', matrix1, string('DOCKED_')//ref_pdb )
+                call write_matrix2pdb( 'Pt', matrix1, string('DOCKED_')//cur_pdb )
             else
                 print *, 'Docking nanoparticle ', cur_pdb%to_char(), ' to the reference nanoparticle ', ref_pdb%to_char()
                 if( allocated(matrix_rot) )deallocate(matrix_rot)
@@ -163,7 +172,7 @@ contains
                     call atoms_register(matrix2, matrix1, matrix_rot, maxits=params%maxits,&
                         &out_mat=rot_mat, out_trans=trans_vec, out_scale=scale)
                 endif
-                call write_matrix2pdb( 'Pt', matrix_rot, string('DOCKED_')//line )
+                call write_matrix2pdb( 'Pt', matrix_rot, string('DOCKED_')//cur_pdb )
             endif
             if( .not. file_exists(params_file) )then
                 ! write out the rotation matrix and translation vector
