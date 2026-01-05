@@ -544,12 +544,10 @@ contains
         call params%new(cline)
         ! read base project file
         call spproj_ref%read(params%projfile)
-        ! call spproj_ref%write(string('reference.simple'))
         if( .not. spproj_ref%os_cls2D%isthere('cluster')    ) THROW_HARD('Reference project lacks clustering information in cls2D field')
         if( .not. spproj_ref%os_cls2D%isthere('medoid_ind') ) THROW_HARD('Reference project lacks medoid information in cls2D field')
         ! read match project file
         call spproj_match%read(params%projfile_target)
-        ! call spproj_ref%write(string('target.simple'))
         ! prepare class averages
         call id_junk_and_prep_cavgs4clust(spproj_ref,   cavg_imgs_ref,   params%mskdiam, clspops_ref,   clsinds_ref,   l_non_junk_ref,   mm_ref)
         call id_junk_and_prep_cavgs4clust(spproj_match, cavg_imgs_match, params%mskdiam, clspops_match, clsinds_match, l_non_junk_match, mm_match)
