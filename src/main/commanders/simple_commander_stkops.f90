@@ -447,10 +447,9 @@ contains
         real    :: smpd, mskrad, oa_min, oa_max
         integer :: i, ldim(3), box, nimgs, nclust
         ! defaults
-        call cline%set('oritype',      'cls2D')
-        call cline%set('ctf',             'no')
-        call cline%set('objfun',          'cc')
-        call cline%set('sh_inv',         'yes') ! shift invariant search
+        call cline%set('oritype', 'cls2D')
+        call cline%set('ctf',        'no')
+        call cline%set('objfun',     'cc')
         if( .not. cline%defined('hp')         ) THROW_HARD('Need high-pass limit (hp) on command line!')
         if( .not. cline%defined('lp')         ) THROW_HARD('Need low-pass limit (lp) on command line!')
         if( .not. cline%defined('mskdiam')    ) THROW_HARD('Need mask diameter in A (mskdiam) on command line!')
@@ -513,7 +512,6 @@ contains
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
-        call cline%set('sh_inv',    'yes') ! shift invariant search
         if( .not. cline%defined('hp')         ) THROW_HARD('Need high-pass limit (hp) on command line!')
         if( .not. cline%defined('lp')         ) THROW_HARD('Need low-pass limit (lp) on command line!')
         if( .not. cline%defined('mskdiam')    ) THROW_HARD('Need mask diameter in A (mskdiam) on command line!')

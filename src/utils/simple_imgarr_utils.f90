@@ -77,6 +77,25 @@ contains
         !$omp end parallel do
     end function copy_imgarr
 
+    function join_imgarrs( imgs1, imgs2 ) result( imgs_joined )
+        class(image), intent(in) :: imgs1(:), imgs2(:)
+        type(image), allocatable :: imgs_joined(:)
+        integer :: n1, n2, n, cnt, i
+        n1 = size(imgs1)
+        n2 = size(imgs2)
+        n  = n1 + n2
+        call alloc_imgarr(n, imgs1(1)%get_ldim(), imgs1(1)%get_smpd(), imgs_joined)
+        cnt = 0
+        do i = 1, n
+            if( i <= n1 )then
+                call imgs_joined(i)%copy(imgs1(i))
+            else
+                cnt = cnt + 1
+                call imgs_joined(i)%copy(imgs2(cnt))
+            endif
+        end do
+    end function join_imgarrs
+
     subroutine dealloc_imgarr( imgs )
         type(image), allocatable, intent(inout) :: imgs(:)
         integer :: n , i
