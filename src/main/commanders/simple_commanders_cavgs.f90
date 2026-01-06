@@ -485,11 +485,11 @@ contains
         type(string)                   :: chunk_fnames(2), folder, cavgs_merged
         type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), medoid_imgs_ref(:), cavg_imgs_joined(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
-        integer,           allocatable :: i_medoids_joined(:), states(:), labels_match(:), labels_joined(:), accept(:)
+        integer,           allocatable :: i_medoids_joined(:), states(:), labels_match(:), labels_joined(:)
         integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:)
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), dmat(:,:)
-        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch, nmerged
+        integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, nclust_joined, icls, iclust, imatch, nmerged
         real    :: smpd, oa_minmax(2)
         logical :: l_recluster
         ! defaults
@@ -535,20 +535,20 @@ contains
         states          = pack(states, mask=l_non_junk_ref)
         ! calculate overall minmax
         oa_minmax(1)    = min(minval(mm_ref(:,1)),minval(mm_match(:,1)))
-        oa_minmax(2)    = max(maxval(mm_ref(:,2)),maxval(mm_ref(:,2)))
+        oa_minmax(2)    = max(maxval(mm_ref(:,2)),maxval(mm_match(:,2)))
         ! set folder & file names
         folder          = PATH_HERE
         chunk_fnames(1) = params%projfile
         chunk_fnames(2) = params%projfile_target
         cavgs_merged    = string('cavgs_merged')//params%ext
         ! set cluster_cavgs command line
-        call cline_cluster_cavgs%set('mkdir',                      'no')
-        call cline_cluster_cavgs%set('prune',              params%prune)
-        call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
-        call cline_cluster_cavgs%set('hp',                    params%hp)
-        call cline_cluster_cavgs%set('lp',                    params%lp)
-        call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
-        call cline_cluster_cavgs%set('nthr',                params%nthr)
+        call cline_cluster_cavgs%set('mkdir',                   'no')
+        call cline_cluster_cavgs%set('prune',           params%prune)
+        call cline_cluster_cavgs%set('clust_crit', params%clust_crit)
+        call cline_cluster_cavgs%set('hp',                 params%hp)
+        call cline_cluster_cavgs%set('lp',                 params%lp)
+        call cline_cluster_cavgs%set('mskdiam',       params%mskdiam)
+        call cline_cluster_cavgs%set('nthr',             params%nthr)
         if( l_recluster )then
             ! merge spproj_ref & spproj_match projects
             call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
@@ -565,15 +565,16 @@ contains
             medoid_inds  = pack(medoid_inds, mask=medoid_inds > 0)         ! making medoid_inds congruent with medoid_map
             call hpsort(medoid_inds, medoid_map)                           ! ranking the mapping
             medoid_imgs_ref = extract_imgarr(cavg_imgs_ref, medoid_map)
+            if( size(medoid_imgs_ref) /= nclust ) THROW_HARD('size(medoid_imgs_ref) /= nclust')
             ! join the image array of medoids with the image array of class averages to match to the reference solution
             cavg_imgs_joined = join_imgarrs(medoid_imgs_ref, cavg_imgs_match)
             ! calculate distance matrix
             dmat = calc_cluster_cavgs_dmat(params, cavg_imgs_joined, oa_minmax, params%clust_crit)
             ! cluster
-            call cluster_dmat( dmat, 'aprop', nclust, i_medoids_joined, labels_joined, nclust_max=NCLUST_MAX)
-            if( nclust < 3 )then
-                nclust = 3
-                call cluster_dmat(dmat, 'kmed', nclust, i_medoids_joined, labels_joined)
+            call cluster_dmat( dmat, 'aprop', nclust_joined, i_medoids_joined, labels_joined, nclust_max=NCLUST_MAX)
+            if( nclust_joined < 3 )then
+                nclust_joined = 3
+                call cluster_dmat(dmat, 'kmed', nclust_joined, i_medoids_joined, labels_joined)
             endif
             ! translate to reference matching
             allocate(labels_match(nmatch), source=0)
