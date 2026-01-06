@@ -16,6 +16,7 @@ use simple_oris_tester
 use simple_rec_list_tester
 ! hand-written unit tests
 use simple_aff_prop,       only: test_aff_prop
+use simple_hclust,         only: test_hclust
 use simple_ftexp_shsrch,   only: test_ftexp_shsrch
 use simple_ftiter,         only: test_ftiter
 use simple_image,          only: test_image
@@ -57,6 +58,7 @@ call test_multinomal
 call test_euler_shift
 call simple_test_fit_line
 call test_aff_prop
+call test_hclust
 call simple_chdir( "../" )
 call simple_end('**** SIMPLE_UNIT_TEST NORMAL STOP ****')
 
