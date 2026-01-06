@@ -79,7 +79,6 @@ contains
         params_glob%nsig  = 1.5 
         call cline%set('objfun','cc')
         call cline%set('ctf',    'no')
-        call cline%set('sh_inv',  'yes')
         call cline%set('objfun', 'cc')
         call cline%set('mkdir', 'no')
         call cline%set('lambda', 0.)

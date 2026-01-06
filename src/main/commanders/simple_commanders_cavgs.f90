@@ -3,7 +3,7 @@ module simple_commanders_cavgs
 !$ use omp_lib_kinds
 use simple_commander_module_api
 use simple_strategy2D_utils
-use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs
+use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs
 implicit none
 #include "simple_local_flags.inc"
 
@@ -164,7 +164,6 @@ contains
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
-        call cline%set('sh_inv',    'yes') ! shift invariant search
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
@@ -175,41 +174,7 @@ contains
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         ! prep class average stack
-        if( trim(params%have_clustering).eq.'yes' )then
-            labels    = spproj%os_cls2D%get_all_asint('cluster')
-            allocate(l_non_junk(size(labels)), source=labels > 0)
-            labels    = pack(labels,mask=l_non_junk)
-            ncls_sel  = count(l_non_junk)
-            cavg_imgs = read_cavgs_into_imgarr(spproj, l_non_junk)
-            smpd      = cavg_imgs(1)%get_smpd()
-            ldim      = cavg_imgs(1)%get_ldim()
-            box       = ldim(1)
-            mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
-            clspops   = spproj%os_cls2D%get_all_asint('pop')
-            clspops   = pack(clspops, mask=l_non_junk)
-            clsinds   = pack((/(i,i=1,ncls)/), mask=l_non_junk)
-            ! create the stuff needed in the loop
-            allocate(mm(ncls_sel,2), source=0.)
-            ! prep mask
-            call img_msk%new([box,box,1], smpd)
-            img_msk = 1.
-            call img_msk%mask(mskrad, 'hard')
-            l_msk = img_msk%bin2logical()
-            call img_msk%kill
-            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-            do i = 1, ncls_sel
-                ! normalization
-                call cavg_imgs(i)%norm_within(l_msk)
-                ! mask
-                call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
-                ! stash minmax
-                mm(i,:) = cavg_imgs(i)%minmax(mskrad)
-            end do
-            !$omp end parallel do
-            deallocate(l_msk)
-        else
-            call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
-        endif
+        call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
         ncls_sel = size(cavg_imgs)
         smpd     = cavg_imgs(1)%get_smpd()
         ldim     = cavg_imgs(1)%get_ldim()
@@ -227,10 +192,7 @@ contains
         ! calculate distance matrix
         dmat = calc_cluster_cavgs_dmat(params, cavg_imgs, [oa_min,oa_max], params%clust_crit)
         ! cluster
-        if( trim(params%have_clustering).eq.'yes' )then
-            nclust = maxval(labels)
-            call cluster_dmat(dmat, 'refine', nclust, i_medoids, labels)
-        else if( cline%defined('ncls') )then
+        if( cline%defined('ncls') )then
             nclust = params%ncls
             call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
         else
@@ -357,7 +319,6 @@ contains
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
-        call cline%set('sh_inv',    'yes') ! shift invariant search
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('trs')   ) call cline%set('trs',       10.)
         if( .not. cline%defined('lp')    ) call cline%set('lp',         6.)
@@ -512,21 +473,22 @@ contains
     end subroutine exec_select_clusters
 
     subroutine exec_match_cavgs( self, cline )
-        use simple_projfile_utils, only: merge_chunk_projfiles
+        use simple_projfile_utils,   only: merge_chunk_projfiles
+        use simple_clustering_utils, only: cluster_dmat
         class(commander_match_cavgs), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        character(len=*), parameter    :: MATCH_PROJFILE = 'match.simple'
+        integer,           parameter   :: NCLUST_MAX = 65
         type(parameters)               :: params
-        type(sp_project)               :: spproj_ref, spproj_match, spproj_merged, spproj
+        type(sp_project)               :: spproj_ref, spproj_match, spproj_merged
         type(cmdline)                  :: cline_cluster_cavgs
         type(commander_cluster_cavgs)  :: xcluster_cavgs
         type(string)                   :: chunk_fnames(2), folder, cavgs_merged
-        type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), medoid_imgs_ref(:)
+        type(image),       allocatable :: cavg_imgs_ref(:), cavg_imgs_match(:), medoid_imgs_ref(:), cavg_imgs_joined(:)
         integer,           allocatable :: clspops_ref(:), clsinds_ref(:), clspops_match(:), clsinds_match(:), labels(:)
-        integer,           allocatable :: i_medoids_ref(:), states(:), labels_match(:), states_map(:), accept(:)
-        integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:), accept_match(:)
-        logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:), l_med_msk(:)
-        real,              allocatable :: mm_ref(:,:), mm_match(:,:), corrmat(:,:), dmat_clust(:,:)
+        integer,           allocatable :: i_medoids_joined(:), states(:), labels_match(:), labels_joined(:), accept(:)
+        integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:)
+        logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:)
+        real,              allocatable :: mm_ref(:,:), mm_match(:,:), dmat(:,:)
         integer :: nmatch, nrefs, ldim(3), i, j, ncls_match, nclust, icls, iclust, imatch, nmerged
         real    :: smpd, oa_minmax(2)
         logical :: l_recluster
@@ -534,11 +496,10 @@ contains
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
         call cline%set('objfun',     'cc')
-        call cline%set('sh_inv',    'yes') ! shift invariant search
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('trs')     ) call cline%set('trs',       10.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',         6.)
-        if( .not. cline%defined('prune')   ) call cline%set('prune',    'no')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('trs')   ) call cline%set('trs',       10.)
+        if( .not. cline%defined('lp')    ) call cline%set('lp',         6.)
+        if( .not. cline%defined('prune') ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
         ! read base project file
@@ -550,101 +511,100 @@ contains
         ! prepare class averages
         call id_junk_and_prep_cavgs4clust(spproj_ref,   cavg_imgs_ref,   params%mskdiam, clspops_ref,   clsinds_ref,   l_non_junk_ref,   mm_ref)
         call id_junk_and_prep_cavgs4clust(spproj_match, cavg_imgs_match, params%mskdiam, clspops_match, clsinds_match, l_non_junk_match, mm_match)
-        nrefs        = size(cavg_imgs_ref)
-        nmatch       = size(cavg_imgs_match)
-        nmerged      = nrefs + nmatch
+        nrefs           = size(cavg_imgs_ref)
+        nmatch          = size(cavg_imgs_match)
+        nmerged         = nrefs + nmatch
         if( nmerged <= SIEVING_MATCH_CAVGS_MAX )then
             ! merge & recluster with affinity propagation 
             l_recluster = .true. 
         else
-            ! create a labeling by matching to medoids & merge
+            ! cluster target (spproj_match) with affinity propagation and map onto reference solution
             l_recluster = .false.         
         endif
-        smpd         = cavg_imgs_ref(1)%get_smpd()
-        ldim         = cavg_imgs_ref(1)%get_ldim()
+        smpd            = cavg_imgs_ref(1)%get_smpd()
+        ldim            = cavg_imgs_ref(1)%get_ldim()
         ! ensure correct smpd/box in params class
-        params%smpd  = smpd
-        params%box   = ldim(1)
-        params%msk   = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
+        params%smpd     = smpd
+        params%box      = ldim(1)
+        params%msk      = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! extract nonzero cluster labels
-        labels       = spproj_ref%os_cls2D%get_all_asint('cluster')
-        labels       = pack(labels, mask=l_non_junk_ref)
-        nclust       = maxval(labels)
-        states       = spproj_ref%os_cls2D%get_all_asint('state')
-        states       = pack(states, mask=l_non_junk_ref)
+        labels          = spproj_ref%os_cls2D%get_all_asint('cluster')
+        labels          = pack(labels, mask=l_non_junk_ref)
+        nclust          = maxval(labels)
+        states          = spproj_ref%os_cls2D%get_all_asint('state')
+        states          = pack(states, mask=l_non_junk_ref)
         ! calculate overall minmax
-        oa_minmax(1) = minval(mm_ref(:,1))
-        oa_minmax(2) = maxval(mm_ref(:,2))
-        ! extract medoid class averages from reference set
-        inds         = (/(i,i=1,nrefs)/)
-        medoid_inds  = spproj_ref%os_cls2D%get_all_asint('medoid_ind') ! all medoid_inds
-        medoid_inds  = pack(medoid_inds, mask=l_non_junk_ref)          ! all included medoid_inds after junk rejection
-        medoid_map   = pack(inds,        mask=medoid_inds > 0)         ! mapping the medoids to physical class indices
-        medoid_inds  = pack(medoid_inds, mask=medoid_inds > 0)         ! making medoid_inds congruent with medoid_map
-        call hpsort(medoid_inds, medoid_map)                           ! ranking the mapping
-        medoid_imgs_ref = extract_imgarr(cavg_imgs_ref, medoid_map)
-        ! generate cluster distance matrix
-        dmat_clust = calc_match_cavgs_dmat(params, medoid_imgs_ref, cavg_imgs_match, oa_minmax, params%clust_crit)
-        allocate(labels_match(nmatch), source=0)
-        labels_match = minloc(dmat_clust, dim=1)
-        call  write_imgarr(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext%to_char())
-        ! update project
-        call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)
-        call spproj_match%os_cls2D%set_all2single('cluster',  0)
-        call spproj_match%os_cls3D%set_all2single('cluster',  0)
-        call spproj_match%os_cls2D%set_all2single('accept',   0)
-        call spproj_match%os_cls3D%set_all2single('accept',   0)
-        call spproj_match%os_ptcl2D%set_all2single('cluster', 0)
-        call spproj_match%os_ptcl3D%set_all2single('cluster', 0)
-        do iclust = 1, nclust
-            do icls = 1, nmatch
-                if( labels_match(icls) == iclust )then
-                    call spproj_match%os_cls2D%set(clsinds_match(icls),'cluster',iclust)                               ! 2D class field
-                    call spproj_match%os_cls3D%set(clsinds_match(icls),'cluster',iclust)                               ! 3D class field
-                    call spproj_match%os_cls2D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 2D class accepted field
-                    call spproj_match%os_cls3D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 3D class accepted field
-                    call spproj_match%os_ptcl2D%set_field2single('class', clsinds_match(icls), 'cluster', iclust)      ! 2D particle field
-                    call spproj_match%os_ptcl3D%set_field2single('class', clsinds_match(icls), 'cluster', iclust)      ! 3D particle field
-                endif
-            enddo
-        enddo
-        ! optional output of match project with selection
-        ! spproj_match is unchanged, cavg_imgs_match is changed
-        if( cline%defined('projfile_matched') )then
-            spproj = spproj_match
-            accept = spproj%os_cls2D%get_all_asint('accept')
-            call spproj%map_cavgs_selection(accept)
-            call dealloc_imgarr(cavg_imgs_match)
-            cavg_imgs_match = read_cavgs_into_imgarr(spproj)
-            call write_imgarr(cavg_imgs_match, string('cavgs_matched.mrc'))
-            call spproj%add_cavgs2os_out(string('cavgs_matched.mrc'), params%smpd)
-            call spproj%update_projinfo( params%projfile_matched )
-            call spproj%write( params%projfile_matched )
-            deallocate(accept)
-            call spproj%kill
-        endif
-        ! merging
-        call spproj_match%write(string(MATCH_PROJFILE))
+        oa_minmax(1)    = min(minval(mm_ref(:,1)),minval(mm_match(:,1)))
+        oa_minmax(2)    = max(maxval(mm_ref(:,2)),maxval(mm_ref(:,2)))
+        ! set folder & file names
         folder          = PATH_HERE
         chunk_fnames(1) = params%projfile
-        chunk_fnames(2) = simple_abspath(MATCH_PROJFILE)
+        chunk_fnames(2) = params%projfile_target
         cavgs_merged    = string('cavgs_merged')//params%ext
+        ! set cluster_cavgs command line
+        call cline_cluster_cavgs%set('mkdir',                      'no')
+        call cline_cluster_cavgs%set('prune',              params%prune)
+        call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
+        call cline_cluster_cavgs%set('hp',                    params%hp)
+        call cline_cluster_cavgs%set('lp',                    params%lp)
+        call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
+        call cline_cluster_cavgs%set('nthr',                params%nthr)
         if( l_recluster )then
             ! merge spproj_ref & spproj_match projects
             call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
             call spproj_merged%write(params%projfile_merged)
             ! replace solution by reclustered solution
-            call cline_cluster_cavgs%set('mkdir',                      'no')
-            call cline_cluster_cavgs%set('prune',              params%prune)
-            call cline_cluster_cavgs%set('clust_crit',    params%clust_crit)
-            call cline_cluster_cavgs%set('hp',                    params%hp)
-            call cline_cluster_cavgs%set('lp',                    params%lp)
-            call cline_cluster_cavgs%set('mskdiam',          params%mskdiam)
-            call cline_cluster_cavgs%set('nthr',                params%nthr)
-            call cline_cluster_cavgs%set('have_clustering',            'no')
             call cline_cluster_cavgs%set('projfile', params%projfile_merged)
             call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
         else
+            ! identify medoids in reference set
+            inds         = (/(i,i=1,nrefs)/)
+            medoid_inds  = spproj_ref%os_cls2D%get_all_asint('medoid_ind') ! all medoid_inds
+            medoid_inds  = pack(medoid_inds, mask=l_non_junk_ref)          ! all included medoid_inds after junk rejection
+            medoid_map   = pack(inds,        mask=medoid_inds > 0)         ! mapping the medoids to physical class indices
+            medoid_inds  = pack(medoid_inds, mask=medoid_inds > 0)         ! making medoid_inds congruent with medoid_map
+            call hpsort(medoid_inds, medoid_map)                           ! ranking the mapping
+            medoid_imgs_ref = extract_imgarr(cavg_imgs_ref, medoid_map)
+            ! join the image array of medoids with the image array of class averages to match to the reference solution
+            cavg_imgs_joined = join_imgarrs(medoid_imgs_ref, cavg_imgs_match)
+            ! calculate distance matrix
+            dmat = calc_cluster_cavgs_dmat(params, cavg_imgs_joined, oa_minmax, params%clust_crit)
+            ! cluster
+            call cluster_dmat( dmat, 'aprop', nclust, i_medoids_joined, labels_joined, nclust_max=NCLUST_MAX)
+            if( nclust < 3 )then
+                nclust = 3
+                call cluster_dmat(dmat, 'kmed', nclust, i_medoids_joined, labels_joined)
+            endif
+            ! translate to reference matching
+            allocate(labels_match(nmatch), source=0)
+            do iclust = 1,nclust
+                where( labels_joined(nclust + 1:) == labels_joined(iclust) ) labels_match = iclust
+            end do
+            ! write class averages
+            call  write_imgarr(nmatch, cavg_imgs_match, labels_match, 'cluster_match', params%ext%to_char())
+            ! update project
+            call spproj_match%os_ptcl2D%transfer_class_assignment(spproj_match%os_ptcl3D)
+            call spproj_match%os_cls2D%set_all2single('cluster',  0)
+            call spproj_match%os_cls3D%set_all2single('cluster',  0)
+            call spproj_match%os_cls2D%set_all2single('accept',   0)
+            call spproj_match%os_cls3D%set_all2single('accept',   0)
+            call spproj_match%os_ptcl2D%set_all2single('cluster', 0)
+            call spproj_match%os_ptcl3D%set_all2single('cluster', 0)
+            do iclust = 1, nclust
+                do icls = 1, nmatch
+                    if( labels_match(icls) == iclust )then
+                        call spproj_match%os_cls2D%set(clsinds_match(icls),'cluster',iclust)                               ! 2D class field
+                        call spproj_match%os_cls3D%set(clsinds_match(icls),'cluster',iclust)                               ! 3D class field
+                        call spproj_match%os_cls2D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 2D class accepted field
+                        call spproj_match%os_cls3D%set(clsinds_match(icls),'accept', find_label_state(labels_match(icls))) ! 3D class accepted field
+                        call spproj_match%os_ptcl2D%set_field2single('class', clsinds_match(icls), 'cluster', iclust)      ! 2D particle field
+                        call spproj_match%os_ptcl3D%set_field2single('class', clsinds_match(icls), 'cluster', iclust)      ! 3D particle field
+                    endif
+                enddo
+            enddo
+            ! write project file
+            call spproj_match%write(params%projfile_target)
+            ! merge
             call merge_chunk_projfiles(chunk_fnames, folder, spproj_merged, cavgs_out=cavgs_merged)
             call spproj_merged%write(params%projfile_merged)
         endif
@@ -656,7 +616,7 @@ contains
         call dealloc_imgarr(cavg_imgs_ref)
         call dealloc_imgarr(cavg_imgs_match)
         call dealloc_imgarr(medoid_imgs_ref)
-        call del_file(MATCH_PROJFILE)
+        call dealloc_imgarr(cavg_imgs_joined)
         ! end gracefully
         call simple_end('**** SIMPLE_MATCH_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
 

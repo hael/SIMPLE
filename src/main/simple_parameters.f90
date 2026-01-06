@@ -57,7 +57,6 @@ type :: parameters
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: gridding='no'        !< to test gridding correction
-    character(len=3)          :: have_clustering='no' !< to flag that project file has class average cluster labels assigned
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
@@ -189,7 +188,6 @@ type :: parameters
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
-    type(string)              :: projfile_matched     !< another SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name
     type(string)              :: refs                 !< initial2Dreferences.ext
     type(string)              :: refs_even
@@ -615,7 +613,6 @@ contains
         self%projfile_merged=''   !< merged SIMPLE *.simple project file output
         self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
         self%projfile_target=''   !< another SIMPLE *.simple project file
-        self%projfile_matched=''  !< another SIMPLE *.simple project file
         self%projname=''          !< SIMPLE  project name
         self%refs=''              !< initial2Dreferences.ext
         self%refs_even=''
@@ -732,7 +729,6 @@ contains
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('greedy_sampling',self%greedy_sampling)
         call check_carg('gridding',       self%gridding)
-        call check_carg('have_clustering', self%have_clustering)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
@@ -885,7 +881,6 @@ contains
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
-        call check_file('projfile_matched',self%projfile_matched,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER

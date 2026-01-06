@@ -20,6 +20,7 @@ contains
         class(stream_p05_sieve_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         character(len=STDLEN), parameter :: MERGED_PROJFILE = 'merged.simple'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         character(len=STDLEN), parameter :: MATCH_PROJFILE  = 'matched.simple'
         type(string),        allocatable :: projects(:), completed_projfiles(:)
         integer,             allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
@@ -648,7 +649,11 @@ contains
                     ! merged: dynamic reference for next set
                     call cline_match_cavgs%set('projfile_merged',  string(trim(MERGED_PROJFILE)))
                     ! match: current set selected ready for pool2D
-                    call cline_match_cavgs%set('projfile_matched', string(trim(MATCH_PROJFILE)))
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    ! call cline_match_cavgs%set('projfile_matched', string(trim(MATCH_PROJFILE)))
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
                     ! submission
                     path = stemname(crec%projfile)
                     call simple_chdir(path)
@@ -777,6 +782,7 @@ contains
                         if( iset == 1 )then
                             source = crec%projfile  ! from cluster_cavgs
                         else
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                             source = stemname(crec%projfile)//'/'//trim(MATCH_PROJFILE)
                         endif
                         destination = DIR_STREAM_COMPLETED//DIR_SET//int2str(iset)//METADATA_EXT
