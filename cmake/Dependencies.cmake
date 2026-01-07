@@ -53,15 +53,19 @@ if(USE_OPENACC)
 endif()
 
 # ------------------------------------------------------------------------------
-# Coarrays (optional, single-image coarrays via GFortran)
+# Coarrays (optional, multi-image coarrays via GFortran)
 # ------------------------------------------------------------------------------
 if(USE_COARRAYS)
     if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         message(FATAL_ERROR "Coarrays currently only wired for GFortran.")
     endif()
-    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fcoarray=single>)
-    message(STATUS "Coarray support enabled (single-image).")
-    message(STATUS "For multi-image coarrays, use -fcoarray=lib and link OpenCoarrays manually.")
+    find_package(OpenCoarrays REQUIRED)
+    find_library(COARRAYS_LIBRARY NAMES caf_mpi libcaf_mpi 
+        PATHS /mnt/nasapps/development/modules_elmlund/opencoarrays/2.10.3/lib64
+    REQUIRED)
+    list(APPEND SIMPLE_LIBRARIES ${COARRAYS_LIBRARY})
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fcoarray=lib>)
+    message(STATUS "Coarray support enabled (multi-image).")
 endif()
 
 # ------------------------------------------------------------------------------
