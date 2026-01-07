@@ -136,7 +136,7 @@ contains
         type(string)         :: frcs_fname
         type(image)          :: img_msk
         type(class_frcs)     :: clsfrcs
-        integer              :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
+        integer              :: ncls, ldim(3), box, filtsz, ncls_sel, i, j
         real                 :: smpd, mskrad
         call dealloc_imgarr(cavg_imgs)
         ncls      = spproj%os_cls2D%get_noris()

@@ -12,21 +12,16 @@ use simple_commanders_cluster2D,    only: commander_cluster2D
 implicit none
 character(len=*),    parameter     :: filetab_file='filetab.txt'
 type(cmdline)                      :: cline_pdb2mrc, cline_projection, cline_make_pick_refs, cline_sim_mov, cline_ctf_est, cline_mot_corr
-type(cmdline)                      :: cline_new_project, cline_import_movies, cline_sim_ptcls, cline_abinitio2D, cline_cluster2D, cline_segpick
-type(cmdline)                      :: cline_refpick
+type(cmdline)                      :: cline_new_project, cline_import_movies
 type(parameters)                   :: params
 type(commander_new_project)        :: xnew_project
 type(commander_pdb2mrc)            :: xpdb2mrc
 type(commander_reproject)          :: xreproject
 type(commander_make_pickrefs)      :: xmakepickrefs
 type(commander_simulate_movie)     :: xsimov
-type(commander_simulate_particles) :: xsimptcls
 type(commander_motion_correct)     :: xmotcorr
 type(commander_ctf_estimate)       :: xctf_estimate
 type(commander_import_movies)      :: ximport_movies
-type(commander_abinitio2D)         :: xabinitio2D
-type(commander_cluster2D)          :: xcluster2D
-type(sp_project)                   :: spproj
 integer                            :: rc
 type(string)                       :: cmd, projfile
 logical                            :: mrc_exists

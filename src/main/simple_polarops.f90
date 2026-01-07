@@ -697,7 +697,6 @@ contains
         complex(kind=dp), intent(inout) :: pfts_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
         real(kind=dp),    intent(inout) :: ctf2_cl_even(pftsz,kfromto(1):kfromto(2),ncls)
         real(kind=dp),    intent(inout) :: ctf2_cl_odd(pftsz,kfromto(1):kfromto(2),ncls)
-        type(kbinterpol)  :: kbwin
         real, allocatable :: Rsym(:,:,:)
         complex(dp) :: cl_l(kfromto(1):kfromto(2)), cl_r(kfromto(1):kfromto(2)), cl_e(kfromto(1):kfromto(2))
         complex(dp) :: cl_o(kfromto(1):kfromto(2)), pft(pftsz,kfromto(1):kfromto(2))

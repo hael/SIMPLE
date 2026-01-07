@@ -147,7 +147,7 @@ contains
         type(polarizer)    :: polartransform
         type(polarft_calc) :: pftc
         real, parameter    :: TRS_STEPSZ = 1.0
-        integer :: n, i, j, ithr, nrots, loc(1), irot, ldim(3), box, kfromto(2)
+        integer :: n, i, j, ithr, ldim(3), box, kfromto(2)
         real    :: offset(2), offsetm(2), ang, angm, smpd, cc, ccm
         logical :: ll_srch_mirr
         ll_srch_mirr = .true.

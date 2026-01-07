@@ -10,18 +10,10 @@ use simple_commanders_sim,    only: commander_simulate_particles
 use simple_commanders_atoms,  only: commander_pdb2mrc
 use simple_tree 
 implicit none 
-type(commander_pdb2mrc)       :: xpdb2mrc 
-type(image)                   :: vol
-type(parameters)              :: p1
-type(cmdline)                 :: cline, cline_pdb2mrc
-type(oris)                    :: spiral
-type(ori)                     :: o1  
-character(len=:), allocatable :: cmd
-type(image), allocatable      :: reproj(:)
 type(dendro)        :: test_tree
 real                :: objs(2), t1, t2
-integer             :: indxs(2), i, ifoo, rc, NPLANES = 500, ORI_IND = 10
-real, allocatable   :: test_dist_mat(:,:), smat_ref(:,:), dmat_ref(:,:)
+integer             :: indxs(2)
+real, allocatable   :: test_dist_mat(:, :)
 type(s2_node), pointer :: p
 logical             :: done = .false. 
 
