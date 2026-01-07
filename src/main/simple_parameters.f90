@@ -424,8 +424,6 @@ type :: parameters
     real    :: eullims(3,2)=0.
     real    :: extr_init=EXTRINITHRES !< initial extremal ratio (0-1)
     real    :: fny=0.
-    real    :: focusmsk=0.         !< spherical msk for use with focused refinement (radius in pixels)
-    real    :: focusmskdiam=0.     !< spherical msk for use with focused refinement (diameter in Angstroms)
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
@@ -523,7 +521,6 @@ type :: parameters
     logical :: l_eer_fraction = .false.
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
-    logical :: l_focusmsk     = .false.
     logical :: l_fillin       = .false.
     logical :: l_greedy_smpl  = .true.
     logical :: l_frac_best    = .false.
@@ -1036,8 +1033,6 @@ contains
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
         call check_rarg('extr_init',      self%extr_init)
-        call check_rarg('focusmsk',       self%focusmsk)
-        call check_rarg('focusmskdiam',   self%focusmskdiam)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
@@ -1654,20 +1649,6 @@ contains
                 write(logfhandle,*) 'file: ', self%mskfile%to_char()
                 THROW_HARD('input mask file not in cwd')
             endif
-        endif
-        ! focused masking
-        self%l_focusmsk = .false.
-        if( cline%defined('focusmsk') )then
-            THROW_HARD('focusmsk (focused mask radius in pixels) is deprecated! Use focusmskdiam (focused mask diameter in A)')
-        endif
-        if( cline%defined('focusmskdiam') )then
-            if( .not.cline%defined('mskdiam') )then
-                THROW_HARD('mskdiam must be provided together with focusmskdiam')
-            endif
-            self%focusmsk = round2even((self%focusmskdiam / self%smpd) / 2.)
-            self%l_focusmsk = .true.
-        else
-            self%focusmsk = self%msk
         endif
         ! scaling stuff
         self%l_autoscale = .false.

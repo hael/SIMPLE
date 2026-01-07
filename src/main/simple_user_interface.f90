@@ -247,7 +247,6 @@ type(simple_input_param) :: element
 type(simple_input_param) :: envfsc
 type(simple_input_param) :: eo
 type(simple_input_param) :: flipgain
-type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
 type(simple_input_param) :: fraction_dose_target
@@ -1138,7 +1137,6 @@ contains
         call set_param(envfsc,         'envfsc',          'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         call set_param(eo,             'eo',              'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(flipgain,       'flipgain',        'multi',  'Flip the gain reference', 'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', '(no|x|y|xy|yx){no}', .false., 'no')
-        call set_param(focusmskdiam,   'focusmskdiam',    'num',    'Mask diameter in focused refinement', 'Mask diameter in A for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask diameter in A', .false., 0.)
         call set_param(frac,           'frac',            'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)', 'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
         call set_param(fraca,          'fraca',           'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
         call set_param(fraction_dose_target,'fraction_dose_target','num','EER fraction dose target (e/Ang^2)', 'EER fraction dose target, used to determine how many EER frames are included in each movie fraction(e/Ang^2)', 'in e/Ang^2', .false., 1.)
@@ -4118,7 +4116,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 12, 12, 4, 2, .true.,&                                                            ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 12, 3, 2, .true.,&                                                            ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4165,8 +4163,7 @@ contains
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         call refine3D%set_input('mask_ctrls', 2, mskfile, gui_submenu="mask")
-        call refine3D%set_input('mask_ctrls', 3, focusmskdiam, gui_submenu="mask")
-        call refine3D%set_input('mask_ctrls', 4, automsk, gui_submenu="mask")
+        call refine3D%set_input('mask_ctrls', 3, automsk, gui_submenu="mask")
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts, gui_submenu="compute", gui_advanced=.false.)
         refine3D%comp_ctrls(1)%required = .false.

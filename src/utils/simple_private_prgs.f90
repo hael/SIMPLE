@@ -304,7 +304,6 @@ contains
         call cmd_dict%push('find',          'Fourier index')
         call cmd_dict%push('fname',         'file name')
         call cmd_dict%push('for3D',         'for 3D analysis(yes|no){yes}')
-        call cmd_dict%push('focusmskdiam',  'focused mask diameter(in A)')
         call cmd_dict%push('frac',          'fraction of ptcls(0-1){1}')
         call cmd_dict%push('frac_outliers', 'fraction of outliers(0-1){0.0}')
         call cmd_dict%push('fraca',         'fraction of amplitude contrast used for fitting CTF{0.1}')

@@ -74,19 +74,6 @@ contains
                 ! spherical
                 call build%vol%mask(params%msk, params%msktype)
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
-            else if( cline%defined('pdbfile') )then
-                ! focus masking
-                call pdb%new(params%pdbfile)
-                pdbout_fname = get_fbody(params%pdbfile, 'pdb') // string('_centered.pdb')
-                if( params%center.eq.'yes' )then
-                    call msker%mask_from_pdb( pdb, build%vol, os=build%spproj_field, pdbout=pdbout_fname)
-                else
-                    call msker%mask_from_pdb( pdb, build%vol)
-                endif
-                call build%spproj%write_segment_inside(params%oritype,params%projfile)
-                call build%spproj_field%write(params%outfile)
-                call build%vol%write(params%outvol)
-                call msker%write(string('maskfile')//params%ext)
             else
                 THROW_HARD('Nothing to do!')
             endif

@@ -70,9 +70,6 @@ contains
             else
                 call cline_cluster2D_chunk%set('cls_init',     'rand')
             endif
-            if( master_cline%defined('focusmskdiam') )then
-                call cline_cluster2D_chunk%set('focusmskdiam', params_glob%focusmskdiam)
-            endif
             if( cline%defined('gaufreq') )then
                 call cline_cluster2D_chunk%set('gaufreq',      params_glob%gaufreq)
             endif
