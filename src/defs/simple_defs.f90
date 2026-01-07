@@ -53,7 +53,7 @@ logical                       :: l_distr_exec_glob             !< global distrib
 integer                       :: part_glob                     !< global part index
 character(len=:), allocatable :: cmdline_glob                  !< global command line string
 integer,          parameter   :: NTHR_SHMEM_MAX     = 20       !< maximum number of shared-memory threads used by master process
-logical,          parameter   :: L_BENCH_GLOB       = .false.  !< global benchmarking flag
+logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
 logical,          parameter   :: L_DO_GRIDCORR_GLOB = .false.  !< global gridding correction flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
 logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate memory usage for parts

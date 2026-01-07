@@ -61,6 +61,7 @@ contains
         case DEFAULT
             THROW_HARD('Unsupported interpolation function: '//trim(params_glob%interpfun))
         end select
+        if( self%wdim /= 3 ) THROW_HARD('wdim = '//int2str(self%wdim)//' not allowed')
         self%wlen = self%wdim**2
         allocate( self%polcyc1_mat(    1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)),&
                   &self%polcyc2_mat(   1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)),&
@@ -163,33 +164,90 @@ contains
         call self%polarize_2(pftc, self, img_ind, isptcl, iseven, mask )
     end subroutine polarize_1
 
-    !> \brief  creates the polar Fourier transform from a given image
-    !!         KEEP THIS ROUTINE SERIAL
+    ! ORIGINAL NON-VECTORIZED ROUTINE KEPT FOR REFERENCE
+    ! subroutine polarize_2( self, pftc, img, img_ind, isptcl, iseven, mask )
+    !     class(polarizer),        intent(in)    :: self    !< projector instance
+    !     class(polarft_calc),     intent(inout) :: pftc   !< polarft_calc object to be filled
+    !     class(image),            intent(in)    :: img
+    !     integer,                 intent(in)    :: img_ind !< image index
+    !     logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
+    !     logical,                 intent(in)    :: iseven  !< is even (or odd)
+    !     logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
+    !     complex, pointer :: pft(:,:)
+    !     complex :: fcomps(self%wlen)
+    !     integer :: i, k, l, m, addr_m, ind
+    !     ! get temporary pft matrix
+    !     call pftc%get_work_pft_ptr(pft)
+    !     ! interpolate
+    !     do k=self%pdim(2),self%pdim(3)
+    !         do i=1,self%pdim(1)
+    !             ind = 0
+    !             do m=1,self%wdim
+    !                 addr_m = self%polcyc2_mat(m,i,k)
+    !                 do l=1,self%wdim
+    !                     ind         = ind + 1
+    !                     fcomps(ind) = img%get_fcomp2D(self%polcyc1_mat(l,i,k),addr_m)
+    !                 enddo
+    !             enddo
+    !             pft(i,k) = dot_product(self%polweights_mat(:,i,k), fcomps)
+    !         end do
+    !     end do
+    !     if( present(mask) )then
+    !         ! band masking
+    !         do k=self%pdim(2),self%pdim(3)
+    !             if( .not.mask(k) ) pft(:,k) = CMPLX_ZERO
+    !         enddo
+    !     endif
+    !     if( isptcl )then
+    !         call pftc%set_ptcl_pft(img_ind, pft)
+    !     else
+    !         call pftc%set_ref_pft(img_ind, pft, iseven)
+    !     endif
+    !     nullify(pft)
+    ! end subroutine polarize_2
+        
+    !> \brief  creates the polar Fourier transform from a given imageL
+    ! unrolled loop + dot_product, assumes self%wdim=3
     subroutine polarize_2( self, pftc, img, img_ind, isptcl, iseven, mask )
-        class(polarizer),        intent(in)    :: self    !< projector instance
-        class(polarft_calc),     intent(inout) :: pftc   !< polarft_calc object to be filled
-        class(image),            intent(in)    :: img
-        integer,                 intent(in)    :: img_ind !< image index
-        logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
-        logical,                 intent(in)    :: iseven  !< is even (or odd)
-        logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
+        class(polarizer), target, intent(in)    :: self    !< projector instance
+        class(polarft_calc),      intent(inout) :: pftc    !< polarft_calc object to be filled
+        class(image),             intent(in)    :: img
+        integer,                  intent(in)    :: img_ind !< image index
+        logical,                  intent(in)    :: isptcl  !< is ptcl (or reference)
+        logical,                  intent(in)    :: iseven  !< is even (or odd)
+        logical, optional,        intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         complex, pointer :: pft(:,:)
-        complex :: fcomps(self%wlen)
-        integer :: i, k, l, m, addr_m, ind
+        complex :: acc
+        integer :: i, k, addr_m, c1, c2, c3, a1, a2, a3
         ! get temporary pft matrix
         call pftc%get_work_pft_ptr(pft)
         ! interpolate
         do k=self%pdim(2),self%pdim(3)
+            !$omp simd
             do i=1,self%pdim(1)
-                ind = 0
-                do m=1,self%wdim
-                    addr_m = self%polcyc2_mat(m,i,k)
-                    do l=1,self%wdim
-                        ind         = ind + 1
-                        fcomps(ind) = img%get_fcomp2D(self%polcyc1_mat(l,i,k),addr_m)
-                    enddo
-                enddo
-                pft(i,k) = dot_product(self%polweights_mat(:,i,k), fcomps)
+                ! zero accumulator
+                acc = CMPLX_ZERO
+                ! Preload cyclic indices (reduces repeated loads/addressing & improves caching)
+                c1 = self%polcyc1_mat(1,i,k)
+                c2 = self%polcyc1_mat(2,i,k)
+                c3 = self%polcyc1_mat(3,i,k)
+                a1 = self%polcyc2_mat(1,i,k)
+                a2 = self%polcyc2_mat(2,i,k)
+                a3 = self%polcyc2_mat(3,i,k)
+                ! unrolled loop and dot_product
+                associate ( w => self%polweights_mat(:,i,k) )
+                    acc = acc + w(1) * img%get_fcomp2D(c1, a1)
+                    acc = acc + w(2) * img%get_fcomp2D(c2, a1)
+                    acc = acc + w(3) * img%get_fcomp2D(c3, a1)
+                    acc = acc + w(4) * img%get_fcomp2D(c1, a2)
+                    acc = acc + w(5) * img%get_fcomp2D(c2, a2)
+                    acc = acc + w(6) * img%get_fcomp2D(c3, a2)
+                    acc = acc + w(7) * img%get_fcomp2D(c1, a3)
+                    acc = acc + w(8) * img%get_fcomp2D(c2, a3)
+                    acc = acc + w(9) * img%get_fcomp2D(c3, a3)
+                end associate
+                ! set dot product
+                pft(i,k) = acc
             end do
         end do
         if( present(mask) )then
