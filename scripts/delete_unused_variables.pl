@@ -6,11 +6,11 @@ sub trim { $_[0] =~ s/^\s+|\s+$//gr }
 
 # compile code in debug mode
 print(">>> CLONE REPO & COMPILE SIMPLE IN DEBUG MODE\n");
-system("rm -f build_log\* unused_log unused_after_remove_log \;git clone git\@github.com:hael/SIMPLE.git\; cd SIMPLE\; ./compile_debug.sh >../build_log 2>&1\; cd ..\;grep \"Unused variable\" -B 4 build_log > unused_log"); 
+system("rm -f build.log\* unused.log unused_after_remove.log \;git clone git\@github.com:hael/SIMPLE.git\; cd SIMPLE\; ./compile_debug.sh >../build.log 2>&1\; cd ..\;grep \"Unused variable\" -B 4 build.log > unused.log"); 
 system("pwd"); 
 
 print(">>> REMOVE UNUSED VARIABLES\n");
-open( my $build_filehandle, "<", "unused_log" ) || die; # opening log compilation output file
+open( my $build_filehandle, "<", "unused.log" ) || die; # opening log compilation output file
 my $file;               
 my $line_to_edit;       
 my $col_to_edit;        
@@ -31,7 +31,7 @@ while($line = <$build_filehandle>)
         $line_to_edit = $2;
         $col_to_edit = $3;
     }
-    elsif($line =~ /Unused\s+variable\s+\‘([a-zA-Z0-9_]+)\’/) {
+    elsif($line =~ /Unused\s+variable\s+\‘([a-zA-Z0-9_]+)\’/ or $line =~ /Unused\s+variable\s+\'([a-zA-Z0-9_]+)\'/)  {
         $word_to_remove = $1;
         push(@files, $file);
         push(@line_nums, $line_to_edit);
@@ -159,10 +159,10 @@ for my $file (sort keys %lines_by_file) {
 
 # compile in debug mode to check that everything is fine
 print(">>> COMPILE NEW VERSION OF SIMPLE IN DEBUG MODE\n");
-system("cd SIMPLE\; ./compile_debug.sh > ../build_log_1 2>&1") == 0 
+system("cd SIMPLE\; ./compile_debug.sh > ../build.log_1 2>&1") == 0 
     or die ">>> FAILED DELETION OF UNUSED VARIABLES - SIMPLE COMPILATION ERROR: $?";;
-system("grep \"Unused variable\" build_log_1 > unused_after_removal_log");
-if (-z "unused_after_removal_log") {
+system("grep \"Unused variable\" build.log_1 > unused_after_removal.log");
+if (-z "unused_after_removal.log") {
     print ">>> SUCCESFUL DELETION OF UNUSED VARIABLES\n";
 }
 else {

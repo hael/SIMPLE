@@ -147,9 +147,8 @@ contains
         real,             parameter   :: SCORE_THRES_INCL = 75.
         integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:)
-        type(image)                   :: img_msk
         real,             allocatable :: mm(:,:), dmat(:,:), resvals_tmp(:), resvals(:)
-        logical,          allocatable :: l_non_junk(:), l_msk(:,:,:)
+        logical,          allocatable :: l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:)
         integer,          allocatable :: clspops(:), states(:), labels4write(:), inds_glob(:)
         type(clust_info), allocatable :: clust_info_arr(:)
@@ -157,8 +156,8 @@ contains
         type(sp_project)              :: spproj
         integer                       :: ncls, ncls_sel, icls, cnt, nptcls
         integer                       :: i, nclust, iclust, nptcls_good
-        integer                       :: ldim(3), pop, box
-        real                          :: frac_good, mskrad
+        integer                       :: ldim(3), pop
+        real                          :: frac_good
         real                          :: oa_min, oa_max, smpd
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -310,10 +309,9 @@ contains
         integer,          allocatable :: states(:)
         type(parameters) :: params
         type(sp_project) :: spproj
-        integer          :: ncls, ncls_state1, ncls_state0, icls, cnt, nptcls
-        integer          :: i, nclust, nclust_state1, nclust_state0, iclust
-        integer          :: ldim(3), pop, box
-        real             :: mskrad
+        integer          :: ncls, ncls_state1, ncls_state0, icls
+        integer          :: nclust, nclust_state1, nclust_state0, iclust
+        integer          :: ldim(3)
         real             :: oa_minmax_state1(2), oa_minmax_state0(2), smpd
         ! defaults
         call cline%set('oritype', 'cls2D')
@@ -490,7 +488,7 @@ contains
         integer,           allocatable :: inds(:), medoid_inds(:), medoid_map(:), medoid_inds_unique(:)
         logical,           allocatable :: l_non_junk_ref(:), l_non_junk_match(:)
         real,              allocatable :: mm_ref(:,:), mm_match(:,:), dmat(:,:), dmat_med(:,:)
-        integer :: nmatch, nrefs, ldim(3), i, j, nclust_match, nclust, icls, iclust, iclust_match, nmerged
+        integer :: nmatch, nrefs, ldim(3), i, nclust_match, nclust, icls, iclust, iclust_match, nmerged
         real    :: smpd, oa_minmax(2), oa_minmax_match(2)
         logical :: l_recluster
         ! defaults
