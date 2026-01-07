@@ -4,27 +4,32 @@ use simple_commanders_project_core, only: commander_new_project
 use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_atoms,        only: commander_pdb2mrc
 use simple_commanders_volops,       only: commander_reproject
-use simple_commanders_pick,         only: commander_make_pickrefs
+use simple_commanders_pick,         only: commander_make_pickrefs, commander_pick
 use simple_commanders_sim,          only: commander_simulate_particles, commander_simulate_movie
 use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct
 use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_cluster2D,    only: commander_cluster2D
 implicit none
-character(len=*),    parameter     :: filetab_file='filetab.txt'
-type(cmdline)                      :: cline_pdb2mrc, cline_projection, cline_make_pick_refs, cline_sim_mov, cline_ctf_est, cline_mot_corr
-type(cmdline)                      :: cline_new_project, cline_import_movies
-type(parameters)                   :: params
-type(commander_new_project)        :: xnew_project
-type(commander_pdb2mrc)            :: xpdb2mrc
-type(commander_reproject)          :: xreproject
-type(commander_make_pickrefs)      :: xmakepickrefs
-type(commander_simulate_movie)     :: xsimov
-type(commander_motion_correct)     :: xmotcorr
-type(commander_ctf_estimate)       :: xctf_estimate
-type(commander_import_movies)      :: ximport_movies
-integer                            :: rc
-type(string)                       :: cmd, projfile
-logical                            :: mrc_exists
+character(len=*), parameter         :: filetab_file='filetab.txt'
+type(cmdline)                       :: cline_pdb2mrc, cline_projection, cline_make_pick_refs, cline_sim_mov, cline_ctf_est, cline_mot_corr
+type(cmdline)                       :: cline_new_project, cline_import_movies, cline_segpick, cline_refpick, cline_sim_ptcls, cline_abinitio2D
+type(cmdline)                       :: cline_cluster2D 
+type(parameters)                    :: params
+type(commander_new_project)         :: xnew_project
+type(commander_pdb2mrc)             :: xpdb2mrc
+type(commander_reproject)           :: xreproject
+type(commander_make_pickrefs)       :: xmakepickrefs
+type(commander_simulate_movie)      :: xsimov
+type(commander_motion_correct)      :: xmotcorr
+type(commander_ctf_estimate)        :: xctf_estimate
+type(commander_import_movies)       :: ximport_movies
+type(commander_pick)                :: xsegpick, xrefpick
+type(commander_simulate_particles)  :: xsim_ptcls      
+type(commander_abinitio2D)          :: xabinitio2D
+type(commander_cluster2D)           :: xcluster2D
+integer                             :: rc
+type(string)                        :: cmd, projfile
+logical                             :: mrc_exists
 if( command_argument_count() .ne. 0 )then
    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_sim_workflow'
    call exit(-1)
@@ -98,70 +103,70 @@ call cline_mot_corr%set('nthr',            16)
 call xmotcorr%execute_safe(cline_mot_corr)
 call cline_mot_corr%kill()
 ! Motion correction - algorithm patch
-call cline_mot_corr%set('stk', 'simulated_movies.mrcs')
-call cline_mot_corr%set('algorithm',  'patch')
-call cline_mot_corr%set('nparts',           4)
-call cline_mot_corr%set('nthr',            16)
+call cline_mot_corr%set('stk',      'simulated_movies.mrcs')
+call cline_mot_corr%set('algorithm',                'patch')
+call cline_mot_corr%set('nparts',                         4)
+call cline_mot_corr%set('nthr',                          16)
 call xmotcorr%execute_safe(cline_mot_corr)
 call cline_mot_corr%kill()
 
 ! CTF estimate - patch yes
-call cline_ctf_est%set('ctfpatch',      'yes')
-call cline_ctf_est%set('nparts',            4)
-call cline_ctf_est%set('nthr',             16)
+call cline_ctf_est%set('ctfpatch', 'yes')
+call cline_ctf_est%set('nparts',       4)
+call cline_ctf_est%set('nthr',        16)
 call xctf_estimate%execute_safe(cline_ctf_est)
 call cline_ctf_est%kill()
 ! CTF estimate - patch yes
-call cline_ctf_est%set('prg',  'ctf_estimate')
-call cline_ctf_est%set('ctfpatch',       'no')
-call cline_ctf_est%set('nparts',            4)
-call cline_ctf_est%set('nthr',             16)
+call cline_ctf_est%set('prg',     'ctf_estimate')
+call cline_ctf_est%set('ctfpatch',          'no')
+call cline_ctf_est%set('nparts',               4)
+call cline_ctf_est%set('nthr',                16)
 call xctf_estimate%execute_safe(cline_ctf_est)
 call cline_ctf_est%kill()
 
 ! Segmentation-based picking
-! call cline_segpick%set('prg',          'pick')
-! call cline_segpick%set('picker',    'segdiam')
-! call cline_segpick%set('nparts',            4)
-! call cline_segpick%set('nthr',             16)      
-! call xsegpick%execute_safe(cline_segpick)
-! call cline_segpick%kill()  
-! ! Reference-based picking
-! call cline_refpick%set('prg',               'pick')
-! call cline_refpick%set('pickrefs', 'pickrefs.mrcs')
-! call cline_refpick%set('nparts',                 4)
-! call cline_refpick%set('nthr',                  16)      
-! call xrefpick%execute_safe(cline_refpick)
-! call cline_refpick%kill()  
+call cline_segpick%set('prg',       'pick')
+call cline_segpick%set('picker', 'segdiam')
+call cline_segpick%set('nparts',         4)
+call cline_segpick%set('nthr',          16)      
+call xsegpick%execute_safe(cline_segpick)
+call cline_segpick%kill()  
+
+! Reference-based picking
+ call cline_refpick%set('prg',               'pick')
+ call cline_refpick%set('pickrefs', 'pickrefs.mrcs')
+ call cline_refpick%set('nparts',                 4)
+ call cline_refpick%set('nthr',                  16)      
+ call xrefpick%execute_safe(cline_refpick)
+ call cline_refpick%kill()  
 
 ! 2D analysis
 ! generate simulate particles
-! call cline_sim_ptlcs%set('prg', 'simulate_particles')
-! call cline_sim_ptlcs%set('vol1',          '1JXY.mrc')
-! call cline_sim_ptlcs%set('ctf',                'yes')
-! call cline_sim_ptlcs%set('nptcls',               500)
-! call cline_sim_ptlcs%set('smpd',                 1.3)
-! call cline_sim_ptlcs%set('snr',                  0.5)
-! call cline_sim_ptlcs%set('pgrp',                'c1')
-! call cline_sim_ptlcs%set('mskdiam',              180)
-! call cline_sim_ptlcs%set('nthr',                  16)
-! call xsimptcls%executable_safe(cline_sim_ptcls)
-! call cline_sim_ptcls%kill()
+call cline_sim_ptcls%set('prg', 'simulate_particles')
+call cline_sim_ptcls%set('vol1',          '1JXY.mrc')
+call cline_sim_ptcls%set('ctf',                'yes')
+call cline_sim_ptcls%set('nptcls',               500)
+call cline_sim_ptcls%set('smpd',                 1.3)
+call cline_sim_ptcls%set('snr',                  0.5)
+call cline_sim_ptcls%set('pgrp',                'c1')
+call cline_sim_ptcls%set('mskdiam',              180)
+call cline_sim_ptcls%set('nthr',                  16)
+call xsim_ptcls%execute_safe(cline_sim_ptcls)
+call cline_sim_ptcls%kill()
 ! abinitio2D
+ call cline_abinitio2D%set('prg', 'abinitio2D')
+ call cline_abinitio2D%set('mskdiam',      180)
+ call cline_abinitio2D%set('ncls',         100)
+ call cline_abinitio2D%set('nthr',          16)
+ call xabinitio2D%execute_safe(cline_abinitio2D)
+ call cline_abinitio2D%kill()
 
-! call cline_abinitio2D%set('prg', 'abinitio2D')
-! call cline_abinitio2D%set('mskdiam',      180)
-! call cline_abinitio2D%set('ncls',         100)
-! call cline_abinitio2D%set('nthr',          16)
-! call xabinitio2D%executable_safe(cline_abinitio2D)
-! call cline_abinitio2D%kill()
-
-! ! cluster2D
-! call cline_cluster2D%set('prg', 'cluster2D')
-! call cline_cluster2D%set('mskdiam',      180)
-! call cline_cluster2D%set('ncls',         100)
-! call cline_cluster2D%set('nthr',          16)
-! call xcluster2D%executable_safe(cline_abinitio2D)
-! call cline_cluster2D%kill()
+! cluster2D
+call cline_cluster2D%set('prg', 'cluster2D')
+call cline_cluster2D%set('mskdiam',     180)
+call cline_cluster2D%set('ncls',        100)
+call cline_cluster2D%set('nthr',         16)
+call xcluster2D%execute_safe(cline_abinitio2D)
+call cline_cluster2D%kill()
 
 end program simple_test_sim_workflow 
