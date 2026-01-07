@@ -30,7 +30,6 @@ type, extends(image_bin) :: image_msk
     procedure          :: estimate_spher_mask_diam
     procedure          :: automask3D_filter
     procedure, private :: automask3D_binarize
-    procedure          :: mask_from_pdb
     procedure, private :: env_rproject
 end type image_msk
 
@@ -151,64 +150,6 @@ contains
         call ccimage%kill_bimg
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine automask3D_binarize
-
-    subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout )
-        use simple_atoms, only: atoms
-        class(image_msk),        intent(inout) :: self
-        type(atoms),             intent(inout) :: pdb
-        class(image),            intent(inout) :: vol_inout
-        class(oris),   optional, intent(inout) :: os
-        class(string), optional, intent(inout) :: pdbout
-        type(image) :: distimg, cos_img
-        type(atoms) :: shifted_pdb
-        real        :: centre(3), shift(3), pdb_center(3), minmax(2), radius, smpd
-        integer     :: i
-        logical     :: was_ft
-        if( vol_inout%is_2d() ) THROW_HARD('intended for volumes only; mask_from_pdb')
-        was_ft = vol_inout%is_ft()
-        smpd   = vol_inout%get_smpd()
-        call self%new(vol_inout%get_ldim(), smpd)
-        call distimg%new(vol_inout%get_ldim(), smpd)
-        call distimg%cendist()
-        pdb_center = pdb%get_geom_center()
-        centre     = real(self%get_ldim()-1)/2. * smpd
-        shift      = ( pdb_center - centre ) / smpd
-        if( params_glob%binwidth == 0 ) then
-            radius = smpd
-        else
-            radius = real(params_glob%binwidth) * smpd
-        endif
-        if( params_glob%center .eq. 'yes' )then
-            ! shift volume & oris
-            call vol_inout%shift(shift)
-            if( present(os) ) call os%map3dshift22d(-shift)
-            shift       = - shift * smpd
-            shifted_pdb = pdb
-            call shifted_pdb%translate(shift)
-            if( present(pdbout) ) call shifted_pdb%writepdb(pdbout) ! pdb output
-            do i = 1, shifted_pdb%get_n()
-                call self%set_within( shifted_pdb%get_coord(i), radius, 1.)
-            enddo
-            call shifted_pdb%kill
-        else
-            ! build mask
-            do i = 1, pdb%get_n()
-                call self%set_within( pdb%get_coord(i), radius, 1.)
-            enddo
-        endif
-        call self%grow_bins(1)
-        call distimg%mul(self) ! for suggested focusmsk
-        call self%cos_edge(params_glob%edge,cos_img)
-        ! multiply with mask
-        !call vol_inout%ifft()
-        call vol_inout%mul(cos_img)
-        if( was_ft ) call vol_inout%fft()
-        ! focusmsk
-        minmax = distimg%minmax()
-        write(logfhandle,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+params_glob%edge
-        call distimg%kill
-        call cos_img%kill
-    end subroutine mask_from_pdb
 
     ! CALCULATORS
 

@@ -363,18 +363,10 @@ contains
         ! Back to real space
         call img_out%ifft
         ! Soft-edged mask
-        if( params_glob%l_focusmsk )then
-            if( params_glob%l_needs_sigma )then
-                call img_out%mask(params_glob%focusmsk*crop_factor, 'softavg')
-            else
-                call img_out%mask(params_glob%focusmsk*crop_factor, 'soft')
-            endif
+        if( params_glob%l_needs_sigma )then
+            call img_out%mask(params_glob%msk_crop, 'softavg')
         else
-            if( params_glob%l_needs_sigma )then
-                call img_out%mask(params_glob%msk_crop, 'softavg')
-            else
-                call img_out%mask(params_glob%msk_crop, 'soft')
-            endif
+            call img_out%mask(params_glob%msk_crop, 'soft')
         endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)

@@ -154,11 +154,7 @@ contains
                     call build%imgbatch(imatch)%norm_within(build%lmsk)
                 endif
                 !  mask
-                if( params%l_focusmsk )then
-                    call build%imgbatch(imatch)%mask(params%focusmsk, 'softavg')
-                else
-                    call build%imgbatch(imatch)%mask(params%msk, 'softavg')
-                endif
+                call build%imgbatch(imatch)%mask(params%msk, 'softavg')
                 ! power spectrum
                 call build%imgbatch(imatch)%fft
                 call build%imgbatch(imatch)%power_spectrum(pspec)
