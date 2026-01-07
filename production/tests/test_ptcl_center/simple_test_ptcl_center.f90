@@ -29,21 +29,21 @@ if( command_argument_count() < 4 )then
         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
         call execute_command_line(cmd, exitstat=rc)
         write(*, *) 'Converting .pdb to .mrc...'
-        call cline_pdb2mrc%set('smpd',                            1.)
-        call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
-        call cline_pdb2mrc%checkvar('smpd',                        1)
-        call cline_pdb2mrc%checkvar('pdbfile',                     2)
+        call cline_pdb2mrc%set('smpd',                1.)
+        call cline_pdb2mrc%set('pdbfile',     '1JYX.pdb')
+        call cline_pdb2mrc%checkvar('smpd',            1)
+        call cline_pdb2mrc%checkvar('pdbfile',         2)
         call cline_pdb2mrc%check()
         call xpdb2mrc%execute_safe(cline_pdb2mrc)
         call cline_pdb2mrc%kill()
         cmd = 'rm 1JYX.pdb'
         call execute_command_line(cmd, exitstat=rc)
     endif
-    call cline%set('smpd',            1.)
-    call cline%set('nthr',           16.)
-    call cline%set('vol1',    '1JYX.mrc')
-    call cline%set('mskdiam',       180.)
-    call cline%set('lp',              3.)
+    call cline%set('smpd',           1.)
+    call cline%set('nthr',          16.)
+    call cline%set('vol1',   '1JYX.mrc')
+    call cline%set('mskdiam',      180.)
+    call cline%set('lp',             3.)
 else
     call cline%parse_oldschool
 endif
