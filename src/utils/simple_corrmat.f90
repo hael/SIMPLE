@@ -4,10 +4,14 @@ module simple_corrmat
 !$ use omp_lib_kinds
 use simple_core_module_api
 use simple_defs
-use simple_image, only: image
+use simple_pftc_shsrch_fm
+use simple_image,            only: image
+use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+use simple_polarft_calc,     only: polarft_calc
+use simple_polarizer,        only: polarizer
 implicit none
 
-public :: calc_cartesian_corrmat, calc_inpl_invariant_fm
+public :: calc_cartesian_corrmat, calc_inpl_invariant_cc_nomirr, calc_inpl_invariant_fm
 private
 
 interface calc_cartesian_corrmat
@@ -134,10 +138,80 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
+    function calc_inpl_invariant_cc_nomirr( hp, lp, trs, imgs ) result( ccmat )
+        real,         intent(in)    :: hp, lp, trs
+        class(image), intent(inout) :: imgs(:)
+        integer,      parameter     :: MAXITS_SH = 60
+        real,         allocatable   :: inpl_corrs(:)
+        type(pftc_shsrch_grad)      :: grad_shsrch_obj(nthr_glob)
+        type(polarizer)             :: polartransform
+        type(polarft_calc)          :: pftc
+        real,         allocatable   :: ccmat(:,:)
+        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, loc, nrots, irot, nimgs
+        real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
+        nimgs      = size(imgs)
+        ldim       = imgs(1)%get_ldim()
+        box        = ldim(1)
+        smpd       = imgs(1)%get_smpd()
+        kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
+        kfromto(2) =        calc_fourier_index(lp, box, smpd)
+        ! initialize
+        call pftc%new(nimgs, [1,nimgs], kfromto)
+        call polartransform%new([box,box,1], smpd)
+        call polartransform%init_polarizer(pftc, KBALPHA)
+        ! in-plane search object objects for parallel execution
+        lims(:,1)      = -trs
+        lims(:,2)      =  trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
+            &maxits=MAXITS_SH, opt_angle=.true.)
+        end do
+        !$omp parallel do default(shared)  private(i) proc_bind(close) schedule(static)
+        do i = 1, nimgs
+            call imgs(i)%fft()
+            call polartransform%polarize(pftc, imgs(i), i, isptcl=.false., iseven=.true.)
+            call pftc%cp_even_ref2ptcl(i, i)
+            call imgs(i)%ifft
+        end do
+        !$omp end parallel do
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        ! register imgs
+        nrots = pftc%get_nrots()
+        allocate(inpl_corrs(nrots), ccmat(nimgs,nimgs))
+        ccmat = 1. ! takes care of diagonal elements
+        !$omp parallel do private(i,j,ithr,inpl_corrs,loc,irot,cxy)&
+        !$omp default(shared) schedule(dynamic) proc_bind(close)
+        do i = 1, nimgs - 1
+            do j = i + 1, nimgs
+                ithr = omp_get_thread_num() + 1
+                call pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs)
+                loc  = maxloc(inpl_corrs,dim=1)
+                irot = loc
+                call grad_shsrch_obj(ithr)%set_indices(j, i)
+                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                if( irot == 0 )then ! no improved solution found, put back the old one
+                    cxy(1) = inpl_corrs(loc)
+                    cxy(2) = 0.
+                    cxy(3) = 0.
+                    irot   = loc
+                endif
+                ccmat(j,i) = cxy(1)
+                ccmat(i,j) = ccmat(j,i)
+            end do
+        end do
+        !$omp end parallel do
+        ! destruct
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%kill
+        end do
+        call pftc%kill
+        call polartransform%kill
+    end function calc_inpl_invariant_cc_nomirr
+
     subroutine calc_inpl_invariant_fm_1( imgs, hp, lp, trs, corrmat, l_srch_mirr )
-        use simple_pftc_shsrch_fm
-        use simple_polarizer,    only: polarizer
-        use simple_polarft_calc, only: polarft_calc
         class(image),          intent(inout) :: imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
@@ -243,9 +317,6 @@ contains
     end subroutine calc_inpl_invariant_fm_1
 
     subroutine calc_inpl_invariant_fm_2( refimgs, imgs, hp, lp, trs, corrmat )
-        use simple_pftc_shsrch_fm
-        use simple_polarizer,    only: polarizer
-        use simple_polarft_calc, only: polarft_calc
         class(image),          intent(inout) :: refimgs(:), imgs(:)
         real,                  intent(in)    :: hp, lp, trs
         real,    allocatable,  intent(inout) :: corrmat(:,:)
