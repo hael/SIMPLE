@@ -62,9 +62,6 @@ endif()
 # FILEIO C sources
 list(APPEND FILEIO_src "fileio/simple_posix.c")
 
-# OPERATORS C sources
-set(OPERATORS_src "main/interp/simple_kbinterpol_memo.c")
-
 # Generated simple_args.f90
 list(APPEND SIMPLE_src "${SIMPLE_GEN_DIR}/simple_args.f90")
 
@@ -80,7 +77,6 @@ set(SIMPLE_ALL_SOURCES
     ${XML_src}
     ${UNIX_src}
     ${JPG_src}
-    ${OPERATORS_src}
     ${SIMPLE_src}
 )
 

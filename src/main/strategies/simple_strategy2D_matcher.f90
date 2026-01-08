@@ -499,11 +499,12 @@ contains
 
     !>  \brief  fills batch particle images for polar alignment
     subroutine build_batch_particles2D( pftc, nptcls_here, pinds, l_ctf_here )
-        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align
+        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align, prepimg4align_bench
         class(polarft_calc), intent(inout) :: pftc
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
         logical, intent(in) :: l_ctf_here
+        real(timer_int_kind) :: rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot
         integer :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
@@ -511,12 +512,23 @@ contains
         if( .not.build_glob%img_crop_polarizer%polarizer_initialized() )then
             call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
         endif
-        ! call build_glob%spproj_field%write('ptcl2Dfield_going_in.txt')
+        rt_norm     = 0.
+        rt_fft      = 0.
+        rt_clip     = 0.
+        rt_shift    = 0.
+        rt_ctf      = 0.
+        rt_mask     = 0.
+        rt_gridding = 0.
+        rt_tot      = 0.
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
         !$omp schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
+
+            ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr),&
+            ! &rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot )
+
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
             call build_glob%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
@@ -524,6 +536,16 @@ contains
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
+
+        ! print *, 'rt_fft      =', rt_fft
+        ! print *, 'rt_clip     =', rt_clip
+        ! print *, 'rt_shift    =', rt_shift
+        ! print *, 'rt_ctf      =', rt_ctf
+        ! print *, 'rt_mask     =', rt_mask
+        ! print *, 'rt_gridding =', rt_gridding
+        ! print *, 'rt_tot      =', rt_tot
+        ! print *, ''
+
         ! Memoize particles FFT parameters
         ! always create this one, CTF logic internal
         call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')

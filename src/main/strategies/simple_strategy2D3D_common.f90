@@ -12,8 +12,8 @@ use simple_stack_io,          only: stack_io
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
-public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align, prep2Dref
-public :: build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
+public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align, prepimg4align_bench
+public :: prep2Dref, build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -373,6 +373,81 @@ contains
         ! return to Fourier space
         call img_out%fft()
     end subroutine prepimg4align
+
+    !>  \brief  prepares one particle image for alignment
+    !!          serial routine
+    subroutine prepimg4align_bench( iptcl, img, img_out, rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot )
+        use simple_ctf, only: ctf
+        integer,              intent(in)    :: iptcl
+        class(image),         intent(inout) :: img
+        class(image),         intent(inout) :: img_out
+        real(timer_int_kind), intent(inout) :: rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot
+        type(ctf)       :: tfun
+        type(ctfparams) :: ctfparms
+        real            :: x, y, sdev_noise, crop_factor
+        integer(timer_int_kind) :: t_norm, t_fft, t_clip, t_shift, t_ctf, t_mask, t_gridding, t_tot
+        t_norm = tic()
+        t_tot  = t_norm
+        ! Normalise
+        if( params_glob%l_noise_norm )then
+            call img%norm_noise(build_glob%lmsk, sdev_noise)
+        else
+            call img%norm_within(build_glob%lmsk)
+        endif
+        rt_norm = rt_norm + toc(t_norm)
+        t_fft   = tic()
+        ! Fourier cropping
+        call img%fft()
+        rt_fft  = rt_fft + toc(t_fft)
+        t_clip  = tic()
+        call img%clip(img_out)
+        rt_clip = rt_clip + toc(t_clip)
+        ! Shift image to rotational origin
+        t_shift = tic()
+        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
+            call img_out%shift2Dserial([-x,-y])
+        endif
+        rt_shift = rt_shift + toc(t_shift)
+        t_ctf    = tic()
+        ! Phase-flipping
+        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+        select case(ctfparms%ctfflag)
+            case(CTFFLAG_NO, CTFFLAG_FLIP)
+                ! nothing to do
+            case(CTFFLAG_YES)
+                ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
+                tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                call tfun%apply_serial(img_out, 'flip', ctfparms)
+            case DEFAULT
+                THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
+        end select
+        rt_ctf = rt_ctf + toc(t_ctf)
+        t_fft  = tic()
+        ! Back to real space
+        call img_out%ifft
+        rt_fft = rt_fft + toc(t_fft)
+        ! Soft-edged mask
+        t_mask = tic()
+        if( params_glob%l_needs_sigma )then
+            call img_out%mask(params_glob%msk_crop, 'softavg')
+        else
+            call img_out%mask(params_glob%msk_crop, 'soft')
+        endif
+        rt_mask = rt_mask + toc(t_mask)
+        ! gridding prep
+        t_gridding = tic()
+        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
+        rt_gridding = rt_gridding + toc(t_gridding)
+        
+        ! return to Fourier space
+        t_fft  = tic()
+        call img_out%fft()
+        rt_fft = rt_fft + toc(t_fft)
+        rt_tot  = rt_tot + toc(t_tot)
+    end subroutine prepimg4align_bench
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
@@ -1268,7 +1343,7 @@ contains
     end subroutine prepare_polar_references
 
     subroutine build_batch_particles( pftc, nptcls_here, pinds_here, tmp_imgs )
-        use simple_polarft_calc, only:  polarft_calc
+        use simple_polarft_calc, only: polarft_calc
         class(polarft_calc), intent(inout) :: pftc
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds_here(nptcls_here)
