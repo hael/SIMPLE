@@ -136,17 +136,17 @@ contains
         call pftc%allocate_refs_memoization
         call build_batch_particles(pftc, nptcls, pinds, tmp_imgs)
         ! Dealing with polar cavgs
-        call polar_cavger_new(pftc,.true.)
+        call polar_cavger_new(pftc, .true.)
         call polar_cavger_update_sums(nptcls, pinds, build%spproj, pftc, is3D=.true.)
         call polar_cavger_merge_eos_and_norm(reforis=build%eulspace)
         ! write
         allocate(cavgs(params%nspace))
         call polar_cavger_write(string('cavgs_even.bin'), 'even')
-        call polar_cavger_write(string('cavgs_odd.bin'),  'odd')
-        call polar_cavger_write(string('cavgs.bin'),     'merged')
-        call polar_cavger_refs2cartesian(pftc, cavgs, 'even')
+        call polar_cavger_write(string('cavgs_odd.bin'),   'odd')
+        call polar_cavger_write(string('cavgs.bin'),    'merged')
+        call polar_cavger_refs2cartesian(pftc, cavgs,   'even')
         call write_imgarr(cavgs, string('cavgs_even.mrc'))
-        call polar_cavger_refs2cartesian(pftc, cavgs, 'odd')
+        call polar_cavger_refs2cartesian(pftc, cavgs,    'odd')
         call write_imgarr(cavgs, string('cavgs_odd.mrc'))
         call polar_cavger_refs2cartesian(pftc, cavgs, 'merged')
         call write_imgarr(cavgs, string('cavgs_merged.mrc'))

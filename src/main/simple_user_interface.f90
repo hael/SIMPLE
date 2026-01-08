@@ -2396,7 +2396,7 @@ contains
     subroutine new_clin_fsc
         ! PROGRAM SPECIFICATION
         call clin_fsc%new(&
-        &'fsc', &                                                               ! name
+        &'clin_fsc', &                                                          ! name
         &'Calculate FSC between the two input volumes',&                        ! descr_short
         &'is a program for calculating the FSC between the two input volumes',& ! descr_long
         &'simple_exec',&                                                        ! executable
@@ -3552,7 +3552,7 @@ contains
     subroutine new_ppca_denoise
         ! PROGRAM SPECIFICATION
         call ppca_denoise%new(&
-        &'ppca-based denoising',&                             ! name
+        &'ppca_based_denoising',&                     ! name
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for ppca-based denoising of an image stack',&  ! descr_long
         &'simple_exec',&                              ! executable
