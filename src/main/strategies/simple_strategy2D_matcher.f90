@@ -440,18 +440,18 @@ contains
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'pftc preparation    : ', rt_prep_pftc
+                write(fnr,'(a,1x,f9.2)') 'pftc preparation     : ', rt_prep_pftc
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', rt_cavg
                 write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', rt_projio
                 write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)       * 100.
-                write(fnr,'(a,1x,f9.2)') 'pftc preparation    : ', (rt_prep_pftc/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)      * 100.
-                write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot)       * 100.
-                write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', (rt_projio/rt_tot)     * 100.
+                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'pftc preparation     : ', (rt_prep_pftc/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)     * 100.
+                write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', (rt_projio/rt_tot)    * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
                     &((rt_init+rt_prep_pftc+rt_align+rt_cavg+rt_projio)/rt_tot) * 100.
                 call fclose(fnr)
