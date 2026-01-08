@@ -339,7 +339,7 @@ contains
             call calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
             &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
         case DEFAULT
-            THROW_HARD('Invalid REF_TYPE in polar_cavger_merge_eos_and_norm')
+            THROW_HARD('Invalid REF_TYPE='//trim(params_glob%ref_type)//' in polar_cavger_merge_eos_and_norm')
         end select
         ! ML-regularization
         if( params_glob%l_ml_reg ) call add_invtausq2rho
@@ -1005,7 +1005,12 @@ contains
             !$omp end parallel workshare
         enddo
         ! merge eo-pairs and normalize
-        call polar_cavger_merge_eos_and_norm(reforis=reforis, cl_weight=clin_anneal)
+        select case(trim(params_glob%ref_type))
+            case('polar_cavg')
+                call polar_cavger_merge_eos_and_norm2D
+            case DEFAULT
+                call polar_cavger_merge_eos_and_norm(reforis=reforis, cl_weight=clin_anneal)
+        end select
     end subroutine polar_cavger_assemble_sums_from_parts
 
     ! I/O
