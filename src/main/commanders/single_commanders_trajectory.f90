@@ -183,7 +183,7 @@ contains
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
         ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
         ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
-        use simple_ctf,   only: ctf
+        use simple_ctf, only: ctf
         class(commander_trajectory_backgr_subtr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
