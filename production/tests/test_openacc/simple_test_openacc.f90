@@ -1,5 +1,5 @@
 subroutine seq_saxpy(x, y, n, a)
-   real :: a, x(n), y(n)
+   real    :: a, x(n), y(n)
    integer :: n, i
    do i = 1, n
        y(i) = a * x(i) + y(i)
@@ -7,7 +7,7 @@ subroutine seq_saxpy(x, y, n, a)
 end subroutine seq_saxpy
 
 subroutine par_saxpy(x, y, n, a)
-    real :: a, x(n), y(n)
+    real    :: a, x(n), y(n)
     integer :: n, i
     do concurrent (i = 1: n) 
         y(i) = a * x(i) + y(i)
@@ -15,7 +15,7 @@ subroutine par_saxpy(x, y, n, a)
 end subroutine par_saxpy
 
 subroutine acc_saxpy(x, y, n, a)
-    real :: a, x(n), y(n)
+    real    :: a, x(n), y(n)
     integer :: n, i  
     !$acc parallel loop copy(x, y)
     do i = 1, n
