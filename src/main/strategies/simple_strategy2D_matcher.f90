@@ -504,7 +504,7 @@ contains
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
         logical, intent(in) :: l_ctf_here
-        real(timer_int_kind) :: rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot
+        real(timer_int_kind) :: rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot, rt_sum
         integer :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
@@ -520,8 +520,7 @@ contains
         rt_mask     = 0.
         rt_gridding = 0.
         rt_tot      = 0.
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
-        !$omp schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
@@ -530,20 +529,23 @@ contains
             ! &rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot )
 
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
+
             ! transfer to polar coordinates
             call build_glob%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
+        rt_sum = rt_norm + rt_fft + rt_clip + rt_shift + rt_ctf + rt_mask + rt_gridding
 
-        ! print *, 'rt_fft      =', rt_fft
-        ! print *, 'rt_clip     =', rt_clip
-        ! print *, 'rt_shift    =', rt_shift
-        ! print *, 'rt_ctf      =', rt_ctf
-        ! print *, 'rt_mask     =', rt_mask
-        ! print *, 'rt_gridding =', rt_gridding
-        ! print *, 'rt_tot      =', rt_tot
+        ! print *, 'rt_fft      =', rt_fft,      ' % ', 100.*(rt_fft/rt_tot)
+        ! print *, 'rt_clip     =', rt_clip,     ' % ', 100.*(rt_clip/rt_tot)
+        ! print *, 'rt_shift    =', rt_shift,    ' % ', 100.*(rt_shift/rt_tot)
+        ! print *, 'rt_ctf      =', rt_ctf,      ' % ', 100.*(rt_ctf/rt_tot)
+        ! print *, 'rt_mask     =', rt_mask,     ' % ', 100.*(rt_mask/rt_tot)
+        ! print *, 'rt_gridding =', rt_gridding, ' % ', 100.*(rt_gridding/rt_tot)
+        ! print *, 'rt_tot      =', rt_tot,      ' % ', 100.*(rt_tot/rt_tot)
+        ! print *, 'accounted for % ', 100.*(rt_sum/rt_tot)
         ! print *, ''
 
         ! Memoize particles FFT parameters

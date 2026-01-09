@@ -441,7 +441,6 @@ contains
         t_gridding = tic()
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         rt_gridding = rt_gridding + toc(t_gridding)
-        
         ! return to Fourier space
         t_fft  = tic()
         call img_out%fft()

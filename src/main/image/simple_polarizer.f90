@@ -24,7 +24,6 @@ type, extends(image) :: polarizer
     logical               :: polarizer_exists = .false.
   contains
     procedure          :: init_polarizer
-    procedure, private :: copy_polarizer ! is private as it should not be required anymore
     procedure          :: div_by_instrfun
     procedure, private :: polarize_1, polarize_2
     generic            :: polarize => polarize_1, polarize_2
@@ -127,20 +126,6 @@ contains
         self%polarizer_exists = .true.
     end subroutine init_polarizer
 
-    subroutine copy_polarizer(self, self_in)
-        class(polarizer), intent(inout) :: self    !< projector instance
-        class(polarizer), intent(in)    :: self_in
-        if( .not.self_in%polarizer_exists ) THROW_HARD('Polarizer instance has not bee initialized!')
-        call self%kill_polarizer
-        self%pdim = self_in%pdim
-        self%wdim = self_in%wdim
-        self%wlen = self_in%wlen
-        allocate( self%polcyc1_mat(   1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)), source=self_in%polcyc1_mat )
-        allocate( self%polcyc2_mat(   1:self%wdim, 1:self%pdim(1), self%pdim(2):self%pdim(3)), source=self_in%polcyc2_mat )
-        allocate( self%polweights_mat(1:self%wlen, 1:self%pdim(1), self%pdim(2):self%pdim(3)), source=self_in%polweights_mat )
-        if( self_in%instrfun_img%exists() ) call self%instrfun_img%copy(self_in%instrfun_img)
-    end subroutine copy_polarizer
-
     !> \brief  divide by gridding weights in real-space prior to FFT &
     !>         change to polar coordinate system, keep serial
     subroutine div_by_instrfun( self, img )
@@ -163,7 +148,7 @@ contains
         logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         call self%polarize_2(pftc, self, img_ind, isptcl, iseven, mask )
     end subroutine polarize_1
-        
+
     ! keep serial
     subroutine polarize_2( self, pftc, img, img_ind, isptcl, iseven, mask )
         class(polarizer),        intent(in)    :: self    !< projector instance
@@ -174,15 +159,17 @@ contains
         logical,                 intent(in)    :: iseven  !< is even (or odd)
         logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)
+        complex(kind=c_float_complex) :: acc, fcomp
         complex, pointer :: pft(:,:)
-        complex :: acc
-        integer :: i, k, l, m, addr_m, ind, ldim(3)
+        logical :: h_negative
+        integer :: i, k, l, m, addr_m, ind, ldim(3), h_val, k_val, phys1, phys2
         ! get temporary pft matrix
         call pftc%get_work_pft_ptr(pft)
         ! get temporary pointer to complex image matrix to avoid overheads due to dynamic dispatch
         call img%get_cmat_ptr(cmat_ptr)
         ldim = img%get_ldim()
         ! interpolate
+        !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,addr_m,h_val,k_val,phys1,phys2,h_negative,fcomp)
         do k=self%pdim(2),self%pdim(3)
             do i=1,self%pdim(1)
                 acc = CMPLX_ZERO
@@ -190,18 +177,31 @@ contains
                 do m = 1, self%wdim
                     addr_m = self%polcyc2_mat(m,i,k)
                     do l = 1, self%wdim
-                        ind = ind + 1
-                        acc = acc + self%polweights_mat(ind,i,k) * get_fcomp2D_raw(self%polcyc1_mat(l,i,k), addr_m)
+                        ind         = ind + 1
+                        ! Get h and k values
+                        h_val       = self%polcyc1_mat(l,i,k)
+                        k_val       = addr_m
+                        ! Branch-free indexing computation
+                        h_negative  = (h_val < 0)
+                        phys1       = merge(-h_val, h_val, h_negative) + 1
+                        phys2       = merge(-k_val, k_val, h_negative) + 1 + merge(ldim(2), 0, merge(-k_val, k_val, h_negative) < 0)
+                        ! Fetch complex value
+                        fcomp       = merge(conjg(cmat_ptr(phys1,phys2,1)), cmat_ptr(phys1,phys2,1), h_negative)
+                        ! accumulate dot product
+                        acc         = acc + self%polweights_mat(ind,i,k) * fcomp
                     end do
                 end do
                 pft(i,k) = acc
             end do
         end do
+        !$OMP END SIMD
         if( present(mask) )then
             ! band masking
+            !$OMP SIMD
             do k=self%pdim(2),self%pdim(3)
                 if( .not.mask(k) ) pft(:,k) = CMPLX_ZERO
             enddo
+            !$OMP END SIMD
         endif
         if( isptcl )then
             call pftc%set_ptcl_pft(img_ind, pft)
@@ -209,24 +209,6 @@ contains
             call pftc%set_ref_pft(img_ind, pft, iseven)
         endif
         nullify(pft, cmat_ptr)
-
-        contains
-
-            ! to avoid overheads due to dynamic dispatch
-            elemental complex function get_fcomp2D_raw( h, k )
-                integer, intent(in) :: h,k
-                integer :: phys1, phys2
-                if (h .ge. 0) then
-                    phys1 = h + 1
-                    phys2 = k + 1 + merge(ldim(2),0, k<0)
-                    get_fcomp2D_raw = cmat_ptr(phys1,phys2,1)
-                else
-                    phys1 = -h + 1
-                    phys2 = -k + 1 + merge(ldim(2),0, -k<0)
-                    get_fcomp2D_raw = conjg(cmat_ptr(phys1,phys2,1))
-                endif
-            end function get_fcomp2D_raw
-
     end subroutine polarize_2
 
     complex(kind=sp) function extract_pixel( self, theta, ring, img )
