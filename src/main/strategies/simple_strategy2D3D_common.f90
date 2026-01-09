@@ -364,9 +364,9 @@ contains
         call img_out%ifft
         ! Soft-edged mask
         if( params_glob%l_needs_sigma )then
-            call img_out%mask(params_glob%msk_crop, 'softavg')
+            call img_out%mask2D_softavg_serial(params_glob%msk_crop)
         else
-            call img_out%mask(params_glob%msk_crop, 'soft')
+            call img_out%mask2D_soft_serial(params_glob%msk_crop)
         endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
@@ -1351,6 +1351,8 @@ contains
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
+        ! mask memoization for prepimg4align
+        call tmp_imgs(1)%memoize_mask_serial_coords
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1

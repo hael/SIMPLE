@@ -599,11 +599,11 @@ contains
         call img%kill
     end subroutine apply_ctf_imgfile
 
-    subroutine mask_imgfile( fname2mask, fname, mskrad, smpd, inner, width, which )
+    subroutine mask_imgfile( fname2mask, fname, mskrad, smpd, width, which )
         class(string),              intent(in) :: fname2mask, fname
         real,                       intent(in) :: mskrad
         real,                       intent(in) :: smpd
-        real,             optional, intent(in) :: inner, width
+        real,             optional, intent(in) :: width
         character(len=*), optional, intent(in) :: which
         type(stack_io)        :: stkio_r, stkio_w
         type(image)           :: img
@@ -618,11 +618,12 @@ contains
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
         write(logfhandle,'(a)') '>>> MASKING IMAGES'
+        call img%memoize_mask_serial_coords
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
             call img%norm()
-            call img%mask(mskrad, which, inner=inner, width=width)
+            call img%mask(mskrad, which, width=width)
             call stkio_w%write(i, img)
         end do
         call stkio_r%close

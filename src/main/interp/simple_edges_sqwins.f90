@@ -35,13 +35,6 @@ contains
 
     ! edge functions
 
-    !>   two-dimensional hard edge
-    !! \f$r^2 < x^2+y^2\f$.
-    !! \param x x position
-    !! \param y y position
-    !! \param mskrad masking radius
-    !! \return w on or off
-    !!
     pure function hardedge_1( x, y, mskrad ) result( w )
         real,intent(in) :: x, y, mskrad
         real :: w
@@ -49,13 +42,6 @@ contains
         if( x * x + y * y > mskrad * mskrad ) w = 0.
     end function hardedge_1
 
-    !>   three-dimensional hard edge
-    !! \f$r^2 < x^2+y^2+z^2\f$.
-    !! \param x x position
-    !! \param y y position
-    !! \param mskrad masking radius
-    !! \return w on or off
-    !!
     pure function hardedge_2( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
         real :: w
@@ -70,7 +56,7 @@ contains
         w = 1.
         if( real(x * x + y * y) > mskrad * mskrad ) w = 0.
     end function hardedge_3
-    !!
+
     pure function hardedge_4( x, y, z, mskrad ) result( w )
         integer,intent(in) :: x, y, z
         real, intent(in)   :: mskrad
@@ -78,6 +64,35 @@ contains
         w = 1.
         if( real(x * x + y * y + z * z) > mskrad * mskrad ) w = 0.
     end function hardedge_4
+
+    !> 2D hard edge using r^2 (no sqrt)
+    elemental function hardedge_r2_2d(r2, mskrad) result(w)
+        real, intent(in) :: r2       !< x*x + y*y
+        real, intent(in) :: mskrad   !< mask radius
+        real             :: w
+        real             :: rad2
+
+        rad2 = mskrad * mskrad
+        if (r2 > rad2) then
+            w = 0.0
+        else
+            w = 1.0
+        end if
+    end function hardedge_r2_2d
+
+    !> 3D hard edge using r^2 (no sqrt)
+    elemental function hardedge_r2_3d(r2, mskrad) result(w)
+        real, intent(in) :: r2       !< x*x + y*y + z*z
+        real, intent(in) :: mskrad   !< mask radius
+        real             :: w
+        real             :: rad2
+        rad2 = mskrad * mskrad
+        if (r2 > rad2) then
+            w = 0.0
+        else
+            w = 1.0
+        end if
+    end function hardedge_r2_3d
 
     !>   two-dimensional hard edge
     !! \f$r < \sqrt{x^2+y^2}\f$.
@@ -152,6 +167,55 @@ contains
             w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
         endif
     end function cosedge_2
+
+     elemental function cosedge_r2_3d(r2, box, mskrad) result(w)
+        real,    intent(in) :: r2
+        integer, intent(in) :: box
+        real,    intent(in) :: mskrad
+        real :: w
+        real :: maxrad, width, r0, maxrad2, r02, rad, t
+        maxrad  = real(box/2)
+        width   = 2.0*(maxrad - mskrad)
+        r0      = maxrad - width         ! start of cosine ramp
+        maxrad2 = maxrad*maxrad
+        r02     = r0*r0
+        if (r2 >= maxrad2) then
+            w = 0.0
+        else if (r2 <= r02) then
+            w = 1.0
+        else
+            rad = sqrt(r2)
+            t   = (rad - r0) / width       ! in [0,1]
+            w   = 0.5*(cos(t*pi) + 1.0)
+        end if
+    end function cosedge_r2_3d
+
+    elemental function cosedge_r2_2d(r2, box, mskrad) result(w)
+        real,    intent(in) :: r2        !< x*x + y*y
+        integer, intent(in) :: box       !< window size
+        real,    intent(in) :: mskrad    !< mask radius
+        real                :: w
+        real                :: maxrad, width, r0
+        real                :: maxrad2, r02
+        real                :: rad, t
+        ! same geometry as original cosedge_1
+        maxrad  = real(box) * 0.5
+        width   = 2.0 * (maxrad - mskrad)
+        r0      = maxrad - width          ! start of cosine ramp
+        maxrad2 = maxrad * maxrad
+        r02     = r0 * r0
+        ! fast paths (no sqrt/cos)
+        if (r2 >= maxrad2) then
+            w = 0.0
+        else if (r2 <= r02) then
+            w = 1.0
+        else
+            ! only here do we pay sqrt + cos
+            rad = sqrt(r2)
+            t   = (rad - r0) / width      ! t in [0,1]
+            w   = 0.5 * (cos(t * pi) + 1.0)
+        end if
+    end function cosedge_r2_2d
 
     !> \brief  two-dimensional gaussian edge
     !! \param x x position

@@ -512,6 +512,8 @@ contains
         if( .not.build_glob%img_crop_polarizer%polarizer_initialized() )then
             call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
         endif
+        ! mask memoization for prepimg4align
+        call ptcl_match_imgs(1)%memoize_mask_serial_coords
         rt_norm     = 0.
         rt_fft      = 0.
         rt_clip     = 0.
