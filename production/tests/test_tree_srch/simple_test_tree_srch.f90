@@ -6,116 +6,153 @@ use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
 use simple_oris
 use simple_projector,         only: projector
-use simple_commanders_sim,    only: commander_simulate_particles
 use simple_commanders_atoms,  only: commander_pdb2mrc
 use simple_tree 
+use simple_simple_volinterp
+use simple_corrmat
+use simple_timer
 implicit none 
-type(dendro)        :: test_tree
-real                :: objs(2), t1, t2
-integer             :: indxs(2)
-real, allocatable   :: test_dist_mat(:, :)
-type(s2_node), pointer :: p
-logical             :: done = .false. 
+type(parameters)         :: p1
+type(oris)               :: spiral
+type(commander_pdb2mrc)  :: xpdb2mrc
+type(cmdline)            :: cline_pdb2mrc, cline
+type(dendro)             :: test_tree
+real                     :: objs(2), t1, t2
+integer                  :: indxs(2), rc, ifoo, NPROJ = 300, nthr_max = 10, i, j
+type(image)              :: vol
+logical                  :: done = .false. 
+real(timer_int_kind)     :: rt_fm, rt_cc
+integer(timer_int_kind)  ::  t_fm,  t_cc
+character(len=:), allocatable   :: cmd  
+real, allocatable               :: dist_mat_fm(:,:), dist_mat_cc(:,:)
+type(image), allocatable        :: proj_arr(:)
+type(s2_node), pointer   :: p
 
 ! Load Volume 
-! write(*, *) 'Downloading the example dataset...'
-! cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
-! call execute_command_line(cmd, exitstat=rc)
-! write(*, *) 'Converting .pdb to .mrc...'
-! call cline_pdb2mrc%set('smpd',                            1.)
-! call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
-! call cline_pdb2mrc%checkvar('smpd',                        1)
-! call cline_pdb2mrc%checkvar('pdbfile',                     2)
-! call cline_pdb2mrc%check()
-! call xpdb2mrc%execute_safe(cline_pdb2mrc)
-! call cline_pdb2mrc%kill()
-! cmd = 'rm 1JYX.pdb'
-! call execute_command_line(cmd, exitstat=rc)
+write(*, *) 'Downloading the example dataset...'
+cmd = 'curl -s -O --cacert /etc/ssl/certs/ca-bundle.crt https://files.rcsb.org/download/1JYX.pdb'
+
+call execute_command_line(cmd, exitstat=rc)
+write(*, *) 'Converting .pdb to .mrc...'
+call cline_pdb2mrc%set('smpd',                            3.)
+call cline_pdb2mrc%set('pdbfile',                 '1JYX.pdb')
+call cline_pdb2mrc%checkvar('smpd',                        1)
+call cline_pdb2mrc%checkvar('pdbfile',                     2)
+call cline_pdb2mrc%check()
+call xpdb2mrc%execute_safe(cline_pdb2mrc)
+call cline_pdb2mrc%kill()
+cmd = 'rm 1JYX.pdb'
+call execute_command_line(cmd, exitstat=rc)
 
 ! Reproject Volume 
-! call cline%set('smpd'   , 1.)
-! call cline%set('nthr'   , 16.)
-! call cline%set('vol1'   , '1JYX.mrc')
-! call cline%set('mskdiam', 180.)
-! call cline%set('lp'   ,   3.)
+call cline%set('smpd'   , 3.)
+call cline%set('vol1'   , '1JYX.mrc')
+call cline%set('mskdiam', 180.)
+call cline%set('hp', 20.)
+call cline%set('lp'   ,   3.)
+call cline%set('trs', 5.)
+call cline%set('ctf', 'no')
+call cline%set('nthr', 12)
+call cline%set('sh_inv',  'yes')
+call cline%set('nsig', 1.5)
+call cline%set('objfun', 'cc')
+call cline%set('mkdir', 'no')
+
 
 ! Spiral Reprojections of Volume 
-! call p1%new(cline)
-! call find_ldim_nptcls(p1%vols(1), p1%ldim, ifoo)
-! call vol%new(p1%ldim, p1%smpd)
-! call vol%read(p1%vols(1))
-! call spiral%new(NPLANES, is_ptcl=.false.)
-! call spiral%spiral
-! do i = 1, NPLANES
-!     call spiral%get_ori(o1, i)
-!     call vol%fproject(o1, reproj(i))
-!     call reproj(i)%ifft()
+call p1%new(cline)
+call find_ldim_nptcls(p1%vols(1), p1%ldim, ifoo)
+call vol%new(p1%ldim, p1%smpd)
+call vol%read(p1%vols(1))
+call spiral%new(NPROJ, is_ptcl=.false.)
+call spiral%spiral
+
+allocate(proj_arr(NPROJ))
+proj_arr = reproject(vol, spiral, NPROJ)
+params_glob%ldim = proj_arr(1)%get_ldim()
+allocate(dist_mat_fm(NPROJ,NPROJ), dist_mat_cc(NPROJ,NPROJ))
+t_cc = tic()
+
+dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
+rt_cc = toc(t_cc)
+print *, rt_cc 
+
+! deallocate(dist_mat_cc)
+! deallocate(dist_mat_fm)
+
+! do i = 1, NPROJ 
+!     do j = 1, nthr_max  
+!         allocate(dist_mat_cc(i, i))
+!         allocate(dist_mat_fm(i, i))
+!         params_glob%nthr = j
+!         t_cc = tic()
+!         dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr(1:i))
+!         rt_cc = toc(t_cc)
+!         t_fm = tic()
+!         call calc_inpl_invariant_fm(proj_arr(1:i), p1%hp, p1%lp, p1%trs, dist_mat_fm, .false.)
+!         rt_fm = toc(t_cc)
+!         print *, 'nimgs', i, 'nthr', j, 'time_cc', rt_cc, 'time_fm', rt_fm
+!         deallocate(dist_mat_cc)
+!         deallocate(dist_mat_fm)
+!     end do 
 ! end do 
 
-! allocate(smat_ref(nspace, nspace))
+t_fm = tic()
+call calc_inpl_invariant_fm(proj_arr, p1%hp, p1%lp, p1%trs, dist_mat_fm, .false.)
+rt_fm = toc(t_fm)
 
-! do ispace = 1, NPLANES - 1
-!     do jspace = ispace + 1, NPLANES 
-!         smat_ref(ispace, jspace) = 
-!         smat_ref(jspace, ispace) = smat_ref(ispace, jspace)
-!     end do
-!     smat_ref(ispace, ispace) = 1.  
-! end do 
 
-! Calc FM distance matrix no ctf 
-
-! D = 1 - S 
-
-allocate(test_dist_mat(10,10))
+print *, 'N_PROJS:', NPROJ, 'cc time:', rt_cc, 'fm time:', rt_fm
+! allocate(test_dist_mat(10,10))
 
 ! test_dist_mat = reshape( [0., 0.1, 0.8, 0.9, 0.1, 0., 0.6, 0.3, 0.8, 0.6, 0., 0.7, 0.9, 0.3, 0.7, 0.], [4,4] )
 
-test_dist_mat = reshape([ &
-! Cluster 1 (1,2)
-    0, 1, 10,10,20,20,30,30,40,40, &
-    1, 0, 10,10,20,20,30,30,40,40, &
+! test_dist_mat = reshape([ &
+! ! Cluster 1 (1,2)
+!     0, 1, 10,10,20,20,30,30,40,40, &
+!     1, 0, 10,10,20,20,30,30,40,40, &
 
-! Cluster 2 (3,4)
-    10,10, 0, 1,10,10,20,20,30,30, &
-    10,10, 1, 0,10,10,20,20,30,30, &
+! ! Cluster 2 (3,4)
+!     10,10, 0, 1,10,10,20,20,30,30, &
+!     10,10, 1, 0,10,10,20,20,30,30, &
 
-! Cluster 3 (5,6)
-    20,20,10,10, 0, 1,10,10,20,20, &
-    20,20,10,10, 1, 0,10,10,20,20, &
+! ! Cluster 3 (5,6)
+!     20,20,10,10, 0, 1,10,10,20,20, &
+!     20,20,10,10, 1, 0,10,10,20,20, &
 
-! Cluster 4 (7,8)
-    30,30,20,20,10,10, 0, 1,10,10, &
-    30,30,20,20,10,10, 1, 0,10,10, &
+! ! Cluster 4 (7,8)
+!     30,30,20,20,10,10, 0, 1,10,10, &
+!     30,30,20,20,10,10, 1, 0,10,10, &
 
-! Cluster 5 (9,10)
-    40,40,30,30,20,20,10,10, 0, 1, &
-    40,40,30,30,20,20,10,10, 1, 0  &
-], [10,10])
+! ! Cluster 5 (9,10)
+!     40,40,30,30,20,20,10,10, 0, 1, &
+!     40,40,30,30,20,20,10,10, 1, 0  &
+! ], [10,10])
 
 ! print *, test_dist_mat
 ! test_dist_mat = reshape( [0., 0.8, 0., 0.8], [2,2])
-call test_tree%set_distmat(test_dist_mat)
-call test_tree%set_npnts(10)
-call cpu_time(t1)
-call test_tree%build_dendro
-call cpu_time(t2)
-print *, 'tree build time', t2 - t1
+! call test_tree%set_distmat(test_dist_mat)
+! call test_tree%set_npnts(10)
+! call cpu_time(t1)
+! call test_tree%build_dendro
+! call cpu_time(t2)
+! print *, 'tree build time', t2 - t1
 
-! point to root to preserve tree structure
-p => test_tree%root 
-! initialize 
-objs(1) = real(p%left%ref_idx)**2
-objs(2) = real(p%right%ref_idx)**2
-do 
-    print *, objs
-    call walk_dendro(p, indxs, objs, done)
-    if(done) exit
-    print *, indxs
-    objs(1) = real(indxs(1))**2
-    objs(2) = real(indxs(2))**2
-end do 
+! ! point to root to preserve tree structure
+! p => test_tree%root 
+! ! initialize 
+! objs(1) = real(p%left%ref_idx)**2
+! objs(2) = real(p%right%ref_idx)**2
+! do 
+!     print *, objs
+!     call walk_dendro(p, indxs, objs, done)
+!     if(done) exit
+!     print *, indxs
+!     objs(1) = real(indxs(1))**2
+!     objs(2) = real(indxs(2))**2
+! end do 
 
-call print_dendro(test_tree%root)
+! call print_dendro(test_tree%root)
 
 end program simple_test_tree_srch
     
