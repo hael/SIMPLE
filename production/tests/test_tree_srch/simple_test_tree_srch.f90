@@ -11,21 +11,26 @@ use simple_tree
 use simple_simple_volinterp
 use simple_corrmat
 use simple_timer
+use simple_aff_prop
 implicit none 
 type(parameters)         :: p1
 type(oris)               :: spiral
 type(commander_pdb2mrc)  :: xpdb2mrc
 type(cmdline)            :: cline_pdb2mrc, cline
 type(dendro)             :: test_tree
-real                     :: objs(2), t1, t2
-integer                  :: indxs(2), rc, ifoo, NPROJ = 300, nthr_max = 10, i, j
+
+real                     :: objs(2), t1, t2, simsum
+integer                  :: indxs(2), rc, ifoo, NPROJ = 100, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
-real(timer_int_kind)     :: rt_fm, rt_cc
-integer(timer_int_kind)  ::  t_fm,  t_cc
+real(timer_int_kind)     :: rt_fm, rt_cc, rt_ap, rt_tr 
+integer(timer_int_kind)  ::  t_fm,  t_cc, t_ap, t_tr 
+type(aff_prop)           :: affprop    
 character(len=:), allocatable   :: cmd  
-real, allocatable               :: dist_mat_fm(:,:), dist_mat_cc(:,:)
+real, allocatable               :: dist_mat_fm(:,:), dist_mat_cc(:,:), sub_distmats(:,:,:)
 type(image), allocatable        :: proj_arr(:)
+integer, allocatable            :: centers(:), labels(:)
+type(dendro), allocatable       :: roots(:)
 type(s2_node), pointer   :: p
 
 ! Load Volume 
@@ -49,12 +54,11 @@ call cline%set('smpd'   , 3.)
 call cline%set('vol1'   , '1JYX.mrc')
 call cline%set('mskdiam', 180.)
 call cline%set('hp', 20.)
-call cline%set('lp'   ,   3.)
+call cline%set('lp'   ,   6.)
 call cline%set('trs', 5.)
 call cline%set('ctf', 'no')
-call cline%set('nthr', 12)
+call cline%set('nthr', 8)
 call cline%set('sh_inv',  'yes')
-call cline%set('nsig', 1.5)
 call cline%set('objfun', 'cc')
 call cline%set('mkdir', 'no')
 
@@ -71,11 +75,11 @@ allocate(proj_arr(NPROJ))
 proj_arr = reproject(vol, spiral, NPROJ)
 params_glob%ldim = proj_arr(1)%get_ldim()
 allocate(dist_mat_fm(NPROJ,NPROJ), dist_mat_cc(NPROJ,NPROJ))
-t_cc = tic()
+! t_cc = tic()
 
-dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
-rt_cc = toc(t_cc)
-print *, rt_cc 
+! dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
+! rt_cc = toc(t_cc)
+
 
 ! deallocate(dist_mat_cc)
 ! deallocate(dist_mat_fm)
@@ -102,32 +106,23 @@ call calc_inpl_invariant_fm(proj_arr, p1%hp, p1%lp, p1%trs, dist_mat_fm, .false.
 rt_fm = toc(t_fm)
 
 
-print *, 'N_PROJS:', NPROJ, 'cc time:', rt_cc, 'fm time:', rt_fm
-! allocate(test_dist_mat(10,10))
+! print *, 'N_PROJS:', NPROJ, 'cc time:', rt_cc, 'fm time:', rt_fm
 
-! test_dist_mat = reshape( [0., 0.1, 0.8, 0.9, 0.1, 0., 0.6, 0.3, 0.8, 0.6, 0., 0.7, 0.9, 0.3, 0.7, 0.], [4,4] )
+call affprop%new(NPROJ, dist_mat_fm, pref=-2.)
+t_ap = tic()
+call affprop%propagate(centers, labels, simsum)
+rt_ap = toc(t_ap)
 
-! test_dist_mat = reshape([ &
-! ! Cluster 1 (1,2)
-!     0, 1, 10,10,20,20,30,30,40,40, &
-!     1, 0, 10,10,20,20,30,30,40,40, &
+print *, 'N_PROJS:', NPROJ, 'fm time:', rt_fm, 'ap time:', rt_ap
 
-! ! Cluster 2 (3,4)
-!     10,10, 0, 1,10,10,20,20,30,30, &
-!     10,10, 1, 0,10,10,20,20,30,30, &
+print *, simsum, size(centers), labels
 
-! ! Cluster 3 (5,6)
-!     20,20,10,10, 0, 1,10,10,20,20, &
-!     20,20,10,10, 1, 0,10,10,20,20, &
+allocate(roots(size(centers)))
 
-! ! Cluster 4 (7,8)
-!     30,30,20,20,10,10, 0, 1,10,10, &
-!     30,30,20,20,10,10, 1, 0,10,10, &
 
-! ! Cluster 5 (9,10)
-!     40,40,30,30,20,20,10,10, 0, 1, &
-!     40,40,30,30,20,20,10,10, 1, 0  &
-! ], [10,10])
+! split into sub_dmats to make the trees from 
+! exemplars will be tree roots
+
 
 ! print *, test_dist_mat
 ! test_dist_mat = reshape( [0., 0.8, 0., 0.8], [2,2])
