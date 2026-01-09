@@ -133,6 +133,9 @@ type(commander_centervol)                   :: xcenter
 type(commander_reproject)                   :: xreproject
 type(commander_volops)                      :: xvolops
 
+! MODEL ANALYSIS
+type(commander_model_validation)            :: xmodel_validation
+
 ! OTHER DECLARATIONS
 character(len=STDLEN)      :: xarg, prg
 character(len=XLONGSTRLEN) :: entire_line
@@ -446,6 +449,12 @@ select case(trim(prg))
     case( 'volops' )
         call xvolops%execute(cline)
 
+    !====================================================================
+    ! MODEL ANALYSIS
+    !====================================================================
+    case( 'model_validation' )
+        call xmodel_validation%execute(cline)
+
     case default
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 
@@ -457,7 +466,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('6eee9a18')
+    call simple_print_git_version('936a46b9')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
