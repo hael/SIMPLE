@@ -416,7 +416,7 @@ contains
         call cline_pdb2mrc%set('pdbfile', params%pdbfile)
         call cline_pdb2mrc%set('smpd', params%smpd)
         call cline_pdb2mrc%set('vol_dim', params%vol_dim)
-        params%outvol = get_fbody(params%pdbfile,'pdb')//'_sim.mrc'
+        params%outvol = get_fbody(params%pdbfile,'pdb')//'.mrc'
         call cline_pdb2mrc%set('outvol', params%outvol)
         call xpdb2mrc%execute(cline_pdb2mrc)
         call cline_fsc%set('prg', 'fsc')

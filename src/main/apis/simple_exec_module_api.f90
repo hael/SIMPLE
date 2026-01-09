@@ -112,7 +112,7 @@ use simple_commanders_misc, only: commander_print_fsc, commander_print_magic_box
 use simple_commanders_sim, only: commander_simulate_noise, commander_simulate_particles, commander_simulate_movie
 
 ! atoms commanders, routines involving PDB files
-use simple_commanders_atoms, only: commander_map2model_fsc, commander_pdb2mrc
+use simple_commanders_atoms, only: commander_map2model_fsc, commander_pdb2mrc, commander_model_validation
 
 ! distr commanders, support routines for distributed execution
 use simple_commanders_distr, only: commander_split
