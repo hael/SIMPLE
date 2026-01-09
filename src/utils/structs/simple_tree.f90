@@ -16,13 +16,13 @@ type  :: s2_node
    type(s2_node), pointer   :: left => null()
    type(s2_node), pointer   :: right => null()
    type(s2_node), pointer   :: parent => null()
-   real        :: F_ptcl_ref2med  
+   real        :: F_ptcl2ref  
    integer     :: level
    logical     :: visit = .false.
    logical     :: is_pop   = .false.
    real        :: psi, theta ! S2 Orientation (change to oris later)
    integer     :: ref_idx = 0
-   integer, allocatable     :: o_subset(:) ! array of refs below s2_node 
+   integer, allocatable     :: o_subset(:) ! array of refs remaining 
 end type s2_node
 
 type  :: dendro
@@ -76,6 +76,10 @@ contains
          tmp(i) = sum((self%dist_mat(i,:)))
       end do  
       self%root%ref_idx = maxloc(tmp, 1)
+      ! self%root%ref_idx is just exemplar for that cluster 
+      ! find closest and 2nd closest ref in dist_mat(exemplar, :), but only consider within cluster 
+      ! just track with subset. 
+      ! remove left and right from the subset 
       deallocate(tmp)
       ! calculate s2_node psi, theta
       ! loop over distmat and find the o^th column which maximizes sum FM 
@@ -167,8 +171,8 @@ contains
       real, intent(in)    :: objs(2)
       logical     :: done   
       
-      root%left%F_ptcl_ref2med  = objs(1)
-      root%right%F_ptcl_ref2med = objs(2)
+      root%left%F_ptcl2ref  = objs(1)
+      root%right%F_ptcl2ref = objs(2)
 
       if(objs(1) > objs(2)) then 
          root => root%left 
