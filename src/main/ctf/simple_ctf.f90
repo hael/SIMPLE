@@ -608,7 +608,7 @@ contains
         end do
     end subroutine eval_and_apply_before_first_zero
 
-    pure elemental real function kV2wl( self ) result (wavelength)
+    elemental real function kV2wl( self ) result (wavelength)
         class(ctf), intent(in) :: self
         wavelength = 12.26 / sqrt((1000.0 * self%kV) + (0.9784*(1000.0 * self%kV)**2)/(10.0**6.0))
     end function kV2wl

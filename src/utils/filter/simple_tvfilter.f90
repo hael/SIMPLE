@@ -326,12 +326,12 @@ contains
         end do
     end subroutine fill_b_3d
 
-    pure elemental function b3(x) result(y)
+    elemental function b3(x) result(y)
         real, intent(in) :: x
         real :: y
         y = b3_help(x + 1.5)
     contains
-        pure elemental function b3_help(xx) result(yy)
+        elemental function b3_help(xx) result(yy)
             real, intent(in) :: xx
             real :: yy
             if (xx < 0.) then

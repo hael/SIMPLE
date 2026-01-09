@@ -294,7 +294,7 @@ contains
     ! Checkers
     !======================
 
-    pure elemental integer function size(self) result(k)
+    elemental integer function size(self) result(k)
         class(linked_list), intent(in) :: self
         k = self%n
     end function size

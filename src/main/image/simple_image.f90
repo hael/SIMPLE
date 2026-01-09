@@ -285,6 +285,13 @@ contains
     procedure          :: density_inoutside
     procedure          :: calc_bin_thres
     procedure          :: mask
+    procedure          :: memoize_mask_serial_coords
+    procedure          :: mask2D_soft_serial
+    procedure          :: mask2D_softavg_serial
+    procedure          :: mask2D_hard_serial
+    procedure          :: mask3D_soft_serial
+    procedure          :: mask3D_softavg_serial
+    procedure          :: mask3D_hard_serial
     procedure          :: taper_edges, taper_edges_hann
     ! OPERATIONS, file: simple_image_ops.f90
     ! ctf
@@ -1832,12 +1839,50 @@ interface
         real,         intent(out)   :: thres 
     end subroutine calc_bin_thres
 
-    module subroutine mask( self, mskrad, which, inner, width, backgr )
+    module subroutine mask( self, mskrad, which, width, backgr )
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         character(len=*), intent(in)    :: which
-        real, optional,   intent(in)    :: inner, width, backgr
+        real, optional,   intent(in)    :: width, backgr
     end subroutine mask
+
+    module subroutine memoize_mask_serial_coords(self)
+        class(image), intent(inout) :: self
+    end subroutine memoize_mask_serial_coords
+
+    module subroutine mask2D_soft_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+    end subroutine mask2D_soft_serial
+
+    module subroutine mask2D_softavg_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+    end subroutine mask2D_softavg_serial
+
+    module subroutine mask2D_hard_serial(self, mskrad)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+    end subroutine mask2D_hard_serial
+
+    module subroutine mask3D_soft_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+    end subroutine mask3D_soft_serial
+
+    module subroutine mask3D_softavg_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+    end subroutine mask3D_softavg_serial
+
+    module subroutine mask3D_hard_serial(self, mskrad)
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+    end subroutine mask3D_hard_serial
 
     module subroutine taper_edges( self )
         class(image), intent(inout) :: self

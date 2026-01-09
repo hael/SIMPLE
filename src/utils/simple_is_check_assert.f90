@@ -65,7 +65,7 @@ contains
     end function is_odd
 
     !>   checking for is_a_number
-    pure elemental logical function is_a_number_1( number )
+    elemental logical function is_a_number_1( number )
         real, intent(in) :: number  !< input variable for checking
         is_a_number_1 = .true.
         if( number > 0. )then
@@ -76,13 +76,13 @@ contains
     end function is_a_number_1
 
     !>   validity check of complex number (so that it is not nan)
-    pure elemental logical function is_a_number_2( complex_number )
+    elemental logical function is_a_number_2( complex_number )
         complex, intent(in) :: complex_number !< input variable for checking
         is_a_number_2 = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
     end function is_a_number_2
 
      !>   checking for is_a_number
-    pure elemental logical function is_a_number_3( number )
+    elemental logical function is_a_number_3( number )
         real(dp), intent(in) :: number  !< input variable for checking
         is_a_number_3 = .true.
         if( number > 0. )then
@@ -93,7 +93,7 @@ contains
     end function is_a_number_3
 
     !>   validity check of complex number (so that it is not nan)
-    pure elemental logical function is_a_number_4( complex_number )
+    elemental logical function is_a_number_4( complex_number )
         complex(dp), intent(in) :: complex_number !< input variable for checking
 
         is_a_number_4 = is_a_number_3(real(complex_number)) .and. is_a_number_3(aimag(complex_number))

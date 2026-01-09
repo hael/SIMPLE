@@ -2,6 +2,11 @@ submodule (simple_image) simple_image_seg
 implicit none
 #include "simple_local_flags.inc"
 
+integer :: mem_msk_n1 = 0, mem_msk_n2 = 0, mem_msk_n3 = 0
+logical :: mem_msk_is3d = .false.
+real, allocatable :: mem_msk_cis(:),  mem_msk_cjs(:),  mem_msk_cks(:)
+real, allocatable :: mem_msk_cis2(:), mem_msk_cjs2(:), mem_msk_cks2(:)
+
 contains
 
     module function nforeground( self ) result( n )
@@ -208,206 +213,351 @@ contains
         thres    = pix_ts(loc(1))
     end subroutine calc_bin_thres
 
-    module subroutine mask( self, mskrad, which, inner, width, backgr )
+    module subroutine mask( self, mskrad, which, width, backgr )
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         character(len=*), intent(in)    :: which
-        real, optional,   intent(in)    :: inner, width, backgr
-        real(dp) :: sumv
-        real     :: e, wwidth, d_sq, rad_sq, ave
-        real     :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
-        integer  :: i, j, k, minlen, ir, jr, kr, npix
-        logical  :: didft, doinner, soft, avg_backgr
-        ! width
-        wwidth = 10.
-        if( present(width) ) wwidth = width
-        ! inner
-        doinner = .false.
-        if( present(inner) ) doinner = .true.
+        real, optional,   intent(in)    :: width, backgr
+        logical  :: didft, soft, avg_backgr
         ! FT
         didft = .false.
         if( self%ft )then
             call self%ifft()
             didft = .true.
         endif
-        ! minlen
-        if( self%is_3d() )then
-            minlen = minval(self%ldim)
-        else
-            minlen = minval(self%ldim(1:2))
-        endif
-        ! soft mask width limited to +/- COSMSKHALFWIDTH pixels
-        minlen = min(nint(2.*(mskrad+COSMSKHALFWIDTH)), minlen)
         ! soft/hard
         soft       = .true.
         avg_backgr = .false.
         select case(trim(which))
             case('soft')
-                soft  = .true.
-                if(present(backgr))then
-                    self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
-                        &self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - backgr
-                else
-                    call self%zero_background
-                endif
+                soft       = .true.
             case('softavg')
-                ! background is set to its average value
-                if( doinner )THROW_HARD('Inner masking not supported with softavg; simple_image :: mask')
                 soft       = .true.
                 avg_backgr = .true.
-                rad_sq     = mskrad*mskrad
-                sumv       = 0.d0
-                npix       = 0
             case('hard')
-                soft  = .false.
-                if(present(backgr))THROW_HARD('no backround subtraction with hard masking; simple_image :: mask')
+                soft       = .false.
             case DEFAULT
                 THROW_HARD('undefined which parameter; simple_image :: mask')
         end select
-        ! init center as origin
-        forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1))/2. + real(i-1)
-        forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2))/2. + real(i-1)
-        if(self%is_3d())forall(i=1:self%ldim(3)) cks(i) = -real(self%ldim(3))/2. + real(i-1)
+        call self%memoize_mask_serial_coords
         ! MASKING
         if( soft )then
-            ! Soft masking
             if( self%is_3d() )then
-                if( avg_backgr )then
-                    do k=1,self%ldim(3)
-                        do j=1,self%ldim(2)
-                            do i=1,self%ldim(1)
-                                d_sq = cis(i)*cis(i) + cjs(j)*cjs(j) + cks(k)*cks(k)
-                                if( d_sq > rad_sq )then
-                                    npix = npix + 1
-                                    sumv = sumv + real(self%rmat(i,j,k),dp)
-                                endif
-                            enddo
-                        enddo
-                    enddo
-                    if( npix > 0 )then
-                        ave = real(sumv/real(npix,dp))
-                        do i=1,self%ldim(1)
-                            do j=1,self%ldim(2)
-                                do k=1,self%ldim(3)
-                                    e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
-                                    if( e < 0.0001 )then
-                                        self%rmat(i,j,k) = ave
-                                    else
-                                        if( e < 0.9999 )then
-                                            self%rmat(i,j,k) = e*self%rmat(i,j,k) + (1.-e)*ave
-                                        endif
-                                    endif
-                                enddo
-                            enddo
-                        enddo
-                    endif
-                else
-                    ! 3d
-                    do i=1,self%ldim(1)/2
-                        ir = self%ldim(1)+1-i
-                        do j=1,self%ldim(2)/2
-                            jr = self%ldim(2)+1-j
-                            do k=1,self%ldim(3)/2
-                                e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
-                                if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
-                                if(e > 0.9999) cycle
-                                kr = self%ldim(3)+1-k
-                                self%rmat(i,j,k)    = e * self%rmat(i,j,k)
-                                self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
-                                self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
-                                self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
-                                self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
-                                self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
-                                self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
-                                self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
-                            enddo
-                        enddo
-                    enddo
+                if( avg_backgr )then ! 3D softavg masking
+                    call self%mask3D_softavg_serial(mskrad, width, backgr)
+                else                 ! 3D soft masking
+                    call self%mask3D_soft_serial(mskrad, width, backgr)
                 endif
             else
-                ! 2d
-                if( avg_backgr )then
-                    do j=1,self%ldim(2)
-                        do i=1,self%ldim(1)
-                            d_sq = cis(i)*cis(i) + cjs(j)*cjs(j)
-                            if( d_sq > rad_sq )then
-                                npix = npix + 1
-                                sumv = sumv + real(self%rmat(i,j,1),dp)
-                            endif
-                        enddo
-                    enddo
-                    if( npix > 0 )then
-                        ave  = real(sumv/real(npix,dp))
-                        do i=1,self%ldim(1)
-                            do j=1,self%ldim(2)
-                                e = cosedge(cis(i),cjs(j),minlen,mskrad)
-                                if( e < 0.0001 )then
-                                    self%rmat(i,j,1) = ave
-                                else
-                                    if( e < 0.9999 )then
-                                        self%rmat(i,j,1) = e*self%rmat(i,j,1) + (1.-e)*ave
-                                    endif
-                                endif
-                            enddo
-                        enddo
-                    endif
-                else
-                    do i=1,self%ldim(1)/2
-                        ir = self%ldim(1)+1-i
-                        do j=1,self%ldim(2)/2
-                            e = cosedge(cis(i),cjs(j),minlen,mskrad)
-                            if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
-                            if(e > 0.9999)cycle
-                            jr = self%ldim(2)+1-j
-                            self%rmat(i,j,1)   = e * self%rmat(i,j,1)
-                            self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
-                            self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
-                            self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
-                        enddo
-                    enddo
+                if( avg_backgr )then ! 2D softavg masking
+                    call self%mask2D_softavg_serial(mskrad, width, backgr)
+                else                 ! 2D soft masking
+                    call self%mask2D_soft_serial(mskrad, width, backgr)
                 endif
             endif
         else
-            ! Hard masking
-            if( self%is_3d() )then
-                ! 3d
-                do i=1,self%ldim(1)/2
-                    ir = self%ldim(1)+1-i
-                    do j=1,self%ldim(2)/2
-                        jr = self%ldim(2)+1-j
-                        do k=1,self%ldim(3)/2
-                            e = hardedge(cis(i),cjs(j),cks(k),mskrad)
-                            if( doinner )e = e * hardedge_inner(cis(i),cjs(j),cks(k),inner)
-                            kr = self%ldim(3)+1-k
-                            self%rmat(i,j,k)    = e * self%rmat(i,j,k)
-                            self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
-                            self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
-                            self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
-                            self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
-                            self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
-                            self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
-                            self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
-                        enddo
-                    enddo
-                enddo
-            else
-                ! 2d
-                do i=1,self%ldim(1)/2
-                    ir = self%ldim(1)+1-i
-                    do j=1,self%ldim(2)/2
-                        jr = self%ldim(2)+1-j
-                        e = hardedge(cis(i),cjs(j),mskrad)
-                        if( doinner )e = e * hardedge_inner(ir,jr,inner)
-                        self%rmat(i,j,1)   = e * self%rmat(i,j,1)
-                        self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
-                        self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
-                        self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
-                    enddo
-                enddo
+            if( self%is_3d() )then   ! 3D hard masking
+                call self%mask3D_hard_serial(mskrad)
+            else                     ! 2D hard masking
+                call self%mask2D_hard_serial(mskrad)
             endif
         endif
         if( didft ) call self%fft()
     end subroutine mask
+
+    module subroutine memoize_mask_serial_coords(self)
+        class(image), intent(inout) :: self
+        integer :: i, n1, n2, n3
+        logical :: is3d
+        n1   = self%ldim(1)
+        n2   = self%ldim(2)
+        n3   = self%ldim(3)
+        is3d = self%is_3d()
+        if(.not. is3d) n3 = 1
+        ! Rebuild only if geometry changed
+        if (mem_msk_n1 == n1 .and. mem_msk_n2 == n2 .and. mem_msk_n3 == n3 ) then
+            return
+        endif
+        ! Update cache keys
+        mem_msk_n1   = n1
+        mem_msk_n2   = n2
+        mem_msk_n3   = n3
+        mem_msk_is3d = is3d
+        ! (Re)allocate
+        if (allocated(mem_msk_cis)) then
+            deallocate(mem_msk_cis, mem_msk_cis2, mem_msk_cjs, mem_msk_cjs2, mem_msk_cks, mem_msk_cks2)
+        endif
+        allocate(mem_msk_cis(n1), mem_msk_cis2(n1), mem_msk_cjs(n2), mem_msk_cjs2(n2), mem_msk_cks(n3), mem_msk_cks2(n3))
+        ! Fill (origin at center) + squares
+        do i = 1, n1
+            mem_msk_cis(i)  = -0.5*real(n1) + real(i-1)
+            mem_msk_cis2(i) = mem_msk_cis(i) * mem_msk_cis(i)
+        end do
+        do i = 1, n2
+            mem_msk_cjs(i)  = -0.5*real(n2) + real(i-1)
+            mem_msk_cjs2(i) = mem_msk_cjs(i) * mem_msk_cjs(i)
+        end do
+        if( is3d )then
+            do i = 1, n3
+                mem_msk_cks(i)  = -0.5*real(n3) + real(i-1)
+                mem_msk_cks2(i) = mem_msk_cks(i) * mem_msk_cks(i)
+            end do
+        else
+            mem_msk_cks(1)  = 0.0
+            mem_msk_cks2(1) = 0.0
+        endif
+    end subroutine memoize_mask_serial_coords
+
+    module subroutine mask2D_soft_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+        real     :: wwidth, rad_sq, ave,  r2, e
+        integer  :: minlen, npix,  i, j, ir, jr, n1, n2, n3, h1, h2
+        ! width
+        wwidth = 10.0
+        if (present(width)) wwidth = width
+        ! dims
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = 1
+        ! minlen
+        minlen = minval(self%ldim(1:2))
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        ! mode
+        if (present(backgr)) then
+            self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = &
+                self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - backgr
+        else
+            call self%zero_background
+        endif
+        h1 = n1/2; h2 = n2/2
+        do j = 1, h2
+            jr = n2 + 1 - j
+            !$omp simd
+            do i = 1, h1
+                ir = n1 + 1 - i
+                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e > 0.9999) cycle
+                self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
+                self%rmat(i ,jr,1)  = e * self%rmat(i ,jr,1)
+                self%rmat(ir,j ,1)  = e * self%rmat(ir,j ,1)
+                self%rmat(ir,jr,1)  = e * self%rmat(ir,jr,1)
+            end do
+        end do
+    end subroutine mask2D_soft_serial
+
+    module subroutine mask2D_softavg_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+        real(dp) :: sumv, sv
+        real     :: wwidth, rad_sq, ave, r2, e
+        integer  :: minlen, npix, i, j, np, n1l, n2l
+        integer  :: n1, n2, n3
+        logical  :: soft, avg_backgr
+        ! width
+        wwidth = 10.0
+        if (present(width)) wwidth = width
+        ! dims
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = 1
+        ! minlen
+        minlen = minval(self%ldim(1:2))
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        ! mode
+        rad_sq     = mskrad * mskrad
+        sumv       = 0.0_dp
+        npix       = 0            
+        n1l = n1; n2l = n2
+        sv = 0.0_dp; np = 0
+        ! avg outside radius
+        do j = 1, n2l
+            do i = 1, n1l
+                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                if (r2 > rad_sq) then
+                    np = np + 1
+                    sv = sv + real(self%rmat(i,j,1), dp)
+                endif
+            end do
+        end do
+        if (np <= 0) return
+        ave = real(sv / real(np, dp))
+        ! apply (j,i with i contiguous)
+        do j = 1, n2l
+            do i = 1, n1l
+                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < 0.0001) then
+                    self%rmat(i,j,1) = ave
+                else if (e < 0.9999) then
+                    self%rmat(i,j,1) = e*self%rmat(i,j,1) + (1.0-e)*ave
+                endif
+            end do
+        end do
+    end subroutine mask2D_softavg_serial
+
+    module subroutine mask2D_hard_serial(self, mskrad)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        integer :: i, j, ir, jr, h1, h2, n1, n2, n3
+        real :: r2, e
+        ! dims
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = 1
+        h1 = n1/2; h2 = n2/2
+        do j = 1, h2
+            jr = n2 + 1 - j
+            !$omp simd
+            do i = 1, h1
+                ir = n1 + 1 - i
+                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                e  = hardedge_r2_2d(r2, mskrad)
+                if (e > 0.9999) cycle
+                self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
+                self%rmat(i ,jr,1)  = e * self%rmat(i ,jr,1)
+                self%rmat(ir,j ,1)  = e * self%rmat(ir,j ,1)
+                self%rmat(ir,jr,1)  = e * self%rmat(ir,jr,1)
+            end do
+        end do
+    end subroutine mask2D_hard_serial
+
+    module subroutine mask3D_soft_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+        real(dp) :: sumv
+        real     :: wwidth, rad_sq, ave, r2, e
+        integer  :: minlen, npix, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
+        ! width
+        wwidth = 10.0
+        if (present(width)) wwidth = width
+        ! dims
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = self%ldim(3)
+        ! minlen
+        minlen = minval(self%ldim)
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        ! mode
+        if (present(backgr)) then
+            self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = &
+                self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - backgr
+        else
+            call self%zero_background
+        endif            
+        h1 = n1/2; h2 = n2/2; h3 = n3/2
+        do j = 1, h2
+            jr = n2 + 1 - j
+            do k = 1, h3
+                kr = n3 + 1 - k
+                !$omp simd
+                do i = 1, h1
+                    ir = n1 + 1 - i
+                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    e  = cosedge_r2_3d(r2, minlen, mskrad)
+                    if (e > 0.9999) cycle
+                    self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )
+                    self%rmat(i ,j ,kr)  = e * self%rmat(i ,j ,kr)
+                    self%rmat(i ,jr,k )  = e * self%rmat(i ,jr,k )
+                    self%rmat(i ,jr,kr)  = e * self%rmat(i ,jr,kr)
+                    self%rmat(ir,j ,k )  = e * self%rmat(ir,j ,k )
+                    self%rmat(ir,j ,kr)  = e * self%rmat(ir,j ,kr)
+                    self%rmat(ir,jr,k )  = e * self%rmat(ir,jr,k )
+                    self%rmat(ir,jr,kr)  = e * self%rmat(ir,jr,kr)
+                end do
+            end do
+        end do
+    end subroutine mask3D_soft_serial
+
+    module subroutine mask3D_softavg_serial(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+        real(dp) :: sumv, sv
+        real     :: wwidth, rad_sq, ave, r2, e
+        integer  :: minlen, npix,  i, j, k, n1, n2, n3, np, n1l, n2l, n3l
+        ! width
+        wwidth = 10.0
+        if (present(width)) wwidth = width
+        ! dims
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = self%ldim(3)
+        ! minlen
+        minlen = minval(self%ldim)
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        ! mode
+        rad_sq     = mskrad * mskrad
+        sumv       = 0.0_dp
+        npix       = 0                
+        n1l = n1; n2l = n2; n3l = n3
+        sv = 0.0_dp; np = 0
+        ! avg outside radius (r^2 only)
+        do k = 1, n3l
+            do j = 1, n2l
+                do i = 1, n1l
+                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    if (r2 > rad_sq) then
+                        np = np + 1
+                        sv = sv + real(self%rmat(i,j,k), dp)
+                    endif
+                end do
+            end do
+        end do
+        if (np <= 0) return
+        ave = real(sv / real(np, dp))
+        ! apply (cache-friendly: k,j,i; i contiguous)
+        do k = 1, n3l
+            do j = 1, n2l
+                do i = 1, n1l
+                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    e  = cosedge_r2_3d(r2, minlen, mskrad)
+                    if (e < 0.0001) then
+                        self%rmat(i,j,k) = ave
+                    else if (e < 0.9999) then
+                        self%rmat(i,j,k) = e*self%rmat(i,j,k) + (1.0-e)*ave
+                    endif
+                end do
+            end do
+        end do
+    end subroutine mask3D_softavg_serial
+
+    module subroutine mask3D_hard_serial(self, mskrad)
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        real     :: r2, e
+        integer  :: i, j, k, ir, jr, kr, h1, h2, h3, n1, n2, n3 
+        ! dims
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = self%ldim(3)           
+        h1 = n1/2; h2 = n2/2; h3 = n3/2
+        do j = 1, h2
+            jr = n2 + 1 - j
+            do k = 1, h3
+                kr = n3 + 1 - k
+                !$omp simd
+                do i = 1, h1
+                    ir = n1 + 1 - i
+                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    e  = hardedge_r2_3d(r2, mskrad)
+                    if (e > 0.9999) cycle
+                    self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )
+                    self%rmat(i ,j ,kr)  = e * self%rmat(i ,j ,kr)
+                    self%rmat(i ,jr,k )  = e * self%rmat(i ,jr,k )
+                    self%rmat(i ,jr,kr)  = e * self%rmat(i ,jr,kr)
+                    self%rmat(ir,j ,k )  = e * self%rmat(ir,j ,k )
+                    self%rmat(ir,j ,kr)  = e * self%rmat(ir,j ,kr)
+                    self%rmat(ir,jr,k )  = e * self%rmat(ir,jr,k )
+                    self%rmat(ir,jr,kr)  = e * self%rmat(ir,jr,kr)
+                end do
+            end do
+        end do
+    end subroutine mask3D_hard_serial
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)

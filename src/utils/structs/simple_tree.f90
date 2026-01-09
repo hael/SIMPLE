@@ -44,7 +44,7 @@ end type dendro
 contains 
 
    ! getters / setters 
-   pure elemental integer function get_height(self) result(k)
+   elemental integer function get_height(self) result(k)
       class(dendro), intent(in) :: self
       k = self%height
    end function get_height
