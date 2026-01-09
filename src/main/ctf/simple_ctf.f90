@@ -378,7 +378,7 @@ contains
             end do
         end do
     end subroutine ctf_1stzero2img
-    
+
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square
     subroutine apply_serial( self, img, mode, ctfparms )
@@ -388,19 +388,27 @@ contains
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
         complex(kind=c_float_complex), pointer   :: cmat_ptr(:,:,:)=>null()
-        real(kind=c_float),            parameter :: PI_rk = real(PI, kind=c_float)
+        real(kind=c_float),            parameter :: PI_rk      = real(PI, kind=c_float)
+        real(kind=c_float),            parameter :: ONE        = 1.0_c_float
+        real(kind=c_float),            parameter :: ZERO       = 0.0_c_float
+        real(kind=c_float),            parameter :: NEG_ONE    = -1.0_c_float
+        real(kind=c_float),            parameter :: TWO        = 2.0_c_float
+        real(kind=c_float),            parameter :: HALF       = 0.5_c_float
+        real(kind=c_float),            parameter :: MIN_SQUARE = 0.001_c_float
         complex(kind=c_float_complex) :: tmp
         integer            :: lims(3,2),h,k,phys(3),ldim(3),imode,ph1,ph2,ph3
+        integer            :: h_offset, k_offset
         real(kind=c_float) :: ang,tval,s2,inv_s2,x,x2,y,y2,inv_ldim(3),t,rk,rh,df0,dfd,c2a,s2a
         real(kind=c_float) :: dfx,dfy,angast,wl,Cs,amp_contr_const,df,evalPhSh,chi,wl2
-        select case(mode)
-        case('abs');     imode = 1
-        case('ctf');     imode = 2
-        case('flip');    imode = 3
-        case('flipneg'); imode = 4
-        case('neg');     imode = 5
-        case('square');  imode = 6
-        end select
+        real(kind=c_float) :: pi_wl,half_wl2_cs,x_y_prod,x2_minus_y2
+        logical            :: is_abs,is_ctf,is_flip,is_flipneg,is_neg,is_square
+        ! Convert mode string to logical flags (SIMD-compatible)
+        is_abs     = (mode == 'abs')
+        is_ctf     = (mode == 'ctf')
+        is_flip    = (mode == 'flip')
+        is_flipneg = (mode == 'flipneg')
+        is_neg     = (mode == 'neg')
+        is_square  = (mode == 'square')
         ! init object
         call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
         ! init loop vars
@@ -413,58 +421,55 @@ contains
         amp_contr_const = self%amp_contr_const
         lims            = img%loop_lims(2)
         ldim            = img%get_ldim()
-        inv_ldim        = 1./real(ldim)
+        inv_ldim        = ONE / real(ldim, kind=c_float)
         ! pre-computed values
-        df0 = 0.5 * (dfx + dfy)
-        dfd = 0.5 * (dfx - dfy)
-        c2a = cos(2.0 * angast)
-        s2a = sin(2.0 * angast)
+        df0             = HALF * (dfx + dfy)
+        dfd             = HALF * (dfx - dfy)
+        c2a             = cos(TWO * angast)
+        s2a             = sin(TWO * angast)
+        pi_wl           = PI_rk * wl
+        half_wl2_cs     = HALF * wl2 * Cs
         ! get cmat pointer 
         call img%get_cmat_ptr(cmat_ptr)
-        do h=lims(1,1),lims(1,2)
-            rh = real(h)
-            x  = rh * inv_ldim(1)
-            x2 = x * x
-            do k=lims(2,1),lims(2,2)
-                rk     = real(k)
-                y      = rk * inv_ldim(2)
-                y2     = y * y
-                s2     = x2 + y2
-                !! compute the defocus
-                inv_s2 = 1.0_c_float / s2
-                df     = df0 + dfd * ((x2 - y2) * c2a + 2.0_c_float * x * y * s2a) * inv_s2
-                !! compute the ctf argument
-                chi    = PI_rk * wl * s2 * (df - 0.5_c_float * wl2 * s2 * Cs)
-                !! compute value of CTF, assuming white particles
-                tval   = sin(chi + amp_contr_const)
-                !! deal with indexing
-                if (h >= 0) then
-                    ph1 = h + 1
-                    ph2 = k + 1 + merge(ldim(2), 0, k < 0)
-                else
-                    ph1 = -h + 1
-                    ph2 = -k + 1 + merge(ldim(2), 0, -k < 0)
-                endif
-                ph3 = 1
-                !! deal with modes
-                select case(imode)
-                    case(1)
-                        t = abs(tval)
-                    case(2)
-                        t = tval
-                    case(3)
-                        t = sign(1.0, tval)
-                    case(4)
-                        t = -sign(1.0, tval)
-                    case(5)
-                        t = -tval
-                    case(6)
-                        t = min(1.0, max(tval*tval, 0.001))
-                end select
-                !! multiply
+        ! Outer loop over h
+        !$OMP SIMD COLLAPSE(2) PRIVATE(rh,x,x2,rk,y,y2,s2,inv_s2,x_y_prod,x2_minus_y2,df,chi,tval,t,ph1,ph2,ph3,h_offset,k_offset)
+        do h = lims(1,1), lims(1,2)
+            do k = lims(2,1), lims(2,2)
+                ! Compute spatial frequencies
+                rh = real(h, kind=c_float)
+                rk = real(k, kind=c_float)
+                x  = rh * inv_ldim(1)
+                y  = rk * inv_ldim(2)
+                x2 = x * x
+                y2 = y * y
+                s2 = x2 + y2
+                ! Compute the defocus (avoid division in inner computation)
+                inv_s2       = ONE / s2
+                x_y_prod     = x * y
+                x2_minus_y2  = x2 - y2
+                df           = df0 + dfd * (x2_minus_y2 * c2a + TWO * x_y_prod * s2a) * inv_s2
+                ! Compute the CTF argument
+                chi  = pi_wl * s2 * (df - half_wl2_cs * s2)
+                ! Compute value of CTF
+                tval = sin(chi + amp_contr_const)
+                ! Deal with indexing - branch-free computation
+                h_offset = merge(0, ldim(2), h >= 0)
+                k_offset = merge(k, -k, h >= 0)
+                ph1      = merge(h, -h, h >= 0) + 1
+                ph2      = k_offset + 1 + merge(ldim(2), 0, k_offset < 0)
+                ph3      = 1
+                ! SIMD-compatible mode handling using masked operations
+                t = merge(abs(tval), ZERO, is_abs) + &
+                    merge(tval, ZERO, is_ctf) + &
+                    merge(sign(ONE, tval), ZERO, is_flip) + &
+                    merge(-sign(ONE, tval), ZERO, is_flipneg) + &
+                    merge(-tval, ZERO, is_neg) + &
+                    merge(min(ONE, max(tval*tval, MIN_SQUARE)), ZERO, is_square)
+                ! Multiply (this is the key operation)
                 cmat_ptr(ph1,ph2,ph3) = cmat_ptr(ph1,ph2,ph3) * t
             end do
         end do
+        !$OMP END SIMD
     end subroutine apply_serial
 
     !>  \brief  is for applycation of wiener-like filter with SNR exponential assumption
