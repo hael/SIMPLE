@@ -275,32 +275,32 @@ contains
         endif
     end function comp_addr_phys1
 
-    pure function comp_addr_phys2(self, h, k, m) result(phys)
+    pure function comp_addr_phys2(self,h,k,m) result(phys)
         class(ftiter), intent(in) :: self
-        integer,       intent(in) :: h, k, m
-        integer                   :: phys(3)
-        logical :: hneg
-        integer :: hh, kk, mm
-        hneg = (h < 0)
-        hh = abs(h)
-        kk = merge(-k, k, hneg)
-        mm = merge(-m, m, hneg)
-        phys(1) = hh + 1
-        phys(2) = abs(kk) + 1 + merge(self%ldim(2), 0, kk < 0)
-        phys(3) = abs(mm) + 1 + merge(self%ldim(3), 0, mm < 0)
+        integer,       intent(in) :: h,k,m !<  Logical address
+        integer :: phys(3)                 !<  Physical address
+        if (h .ge. 0) then
+            phys(1) = h + 1
+            phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
+            phys(3) = m + 1 + MERGE(self%ldim(3),0, m < 0)
+        else
+            phys(1) = -h + 1
+            phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+            phys(3) = -m + 1 + MERGE(self%ldim(3),0, -m < 0)
+        endif
     end function comp_addr_phys2
 
-    pure function comp_addr_phys3(self, h, k) result(phys)
+    pure function comp_addr_phys3(self,h,k) result(phys)
         class(ftiter), intent(in) :: self
-        integer,       intent(in) :: h, k
-        integer                   :: phys(2)
-        logical :: hneg
-        integer :: hh, kk
-        hneg = (h < 0)
-        hh = abs(h)
-        kk = merge(-k, k, hneg)
-        phys(1) = hh + 1
-        phys(2) = abs(kk) + 1 + merge(self%ldim(2), 0, kk < 0)
+        integer,       intent(in) :: h,k   !<  Logical address
+        integer :: phys(2)                 !<  Physical address
+        if (h .ge. 0) then
+            phys(1) = h + 1
+            phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
+        else
+            phys(1) = -h + 1
+            phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+        endif
     end function comp_addr_phys3
 
     !> \brief Convert physical address to logical address. Complex image.
