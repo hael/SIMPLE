@@ -788,7 +788,7 @@ interface
     end subroutine ft2img
 
     module subroutine pad_fft( self, self_out )
-        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self
         class(image), intent(inout) :: self_out
     end subroutine pad_fft
 

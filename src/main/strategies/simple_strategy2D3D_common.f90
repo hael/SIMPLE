@@ -392,7 +392,7 @@ contains
         ! fused IFFT, masking, division with instrument function & FFT
         call img_out%ifft_mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
         rt_prep2 = rt_prep2 + toc(t_prep2)
-        rt_tot  = rt_tot    + toc(t_tot)
+        rt_tot   = rt_tot   + toc(t_tot)
     end subroutine prepimg4align_bench
 
     !>  \brief  prepares one cluster centre image for alignment
