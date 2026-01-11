@@ -101,6 +101,7 @@ contains
     procedure          :: ft2img
     procedure          :: pad_fft
     procedure          :: norm_noise_pad_fft
+    procedure          :: norm_noise_fft_clip_shift
     procedure          :: expand_ft
     ! I/O
     procedure, private :: open
@@ -789,6 +790,13 @@ interface
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
     end subroutine norm_noise_pad_fft
+
+    module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(inout) :: self_out
+        real,         intent(in)    :: shvec(2)
+    end subroutine norm_noise_fft_clip_shift
 
     module function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self
@@ -2322,7 +2330,6 @@ type :: image_stack
 end type image_stack
 
 ! CLASS PARAMETERS/VARIABLES
-logical,     parameter   :: shift_to_phase_origin=.true.
 type(image), allocatable :: thread_safe_tmp_imgs(:)
 
 contains

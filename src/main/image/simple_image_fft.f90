@@ -11,7 +11,7 @@ contains
     module subroutine fwd_ft(self)
         class(image), intent(inout) :: self
         if( self%ft ) return
-        if( shift_to_phase_origin ) call self%shift_phorig
+        call self%shift_phorig
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
         ! now scale the values so that a ifft() of the output yields the
         ! original image back following FFTW
@@ -24,7 +24,7 @@ contains
         if( self%ft )then
             call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
             self%ft = .false.
-            if( shift_to_phase_origin ) call self%shift_phorig
+            call self%shift_phorig
         endif
     end subroutine bwd_ft
 
@@ -183,9 +183,19 @@ contains
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
-        integer :: starts(3), stops(3)
-        real    :: sdev_noise
-        call self%norm_noise(lmsk, sdev_noise)
+        integer :: npix, starts(3), stops(3)
+        real    :: ave, var, ep, sdev_noise
+        npix = product(self%ldim) - count(lmsk) ! # background pixels
+        ave  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. lmsk) / real(npix) ! background average
+        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        ep         = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),      mask=.not. lmsk)
+        var        = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0, mask=.not. lmsk)
+        var        = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        sdev_noise = 0.
+        if( is_a_number(var) )then
+            sdev_noise = sqrt(var)
+            if( var > 0. ) self%rmat = self%rmat / sdev_noise
+        endif
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
@@ -194,6 +204,134 @@ contains
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
         call self_out%fft
     end subroutine norm_noise_pad_fft
+
+    module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
+        use, intrinsic :: iso_c_binding, only: c_float, c_float_complex
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(inout) :: self_out
+        real,         intent(in)    :: shvec(2)
+        real,          parameter :: SHTHRESH = 0.001
+        complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
+        integer       :: n1, n2, h1, h2,  i, j, ii, jj, npix, lims(3,2), h, hp, k, kpi, kpo 
+        real(dp)      :: mean_dp, M2_dp, x_dp, delta, var_dp,  sh(2)
+        real(c_float) :: mean_sp, invstd_sp,  rswap, scale_cmat, ratio
+        logical       :: k_neg
+        ! n3 is always 1 here
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        h1 = n1/2
+        h2 = n2/2
+        ! ============================================================
+        ! NORM_NOISE: one-pass Welford over background pixels (no temps)
+        ! ============================================================
+        mean_dp = 0.0_dp
+        M2_dp   = 0.0_dp
+        npix    = 0
+        do j = 1, n2
+            do i = 1, n1
+                if (.not. lmsk(i,j,1)) then
+                    npix = npix + 1
+                    x_dp = real(self%rmat(i,j,1), dp)
+                    delta   = x_dp - mean_dp
+                    mean_dp = mean_dp + delta / real(npix, dp)
+                    M2_dp   = M2_dp + delta * (x_dp - mean_dp)
+                end if
+            end do
+        end do
+        var_dp = 0.0_dp
+        if (npix > 1) var_dp = M2_dp / real(npix-1, dp)
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = 1.0_c_float
+        if (is_a_number(real(var_dp, kind=kind(1.0))) .and. var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp / sqrt(var_dp), c_float)
+        end if
+        ! ============================================================
+        ! SHIFT TO PHASE ORIGIN (fftshift) + apply normalization fused
+        ! ============================================================
+        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float) then
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    ! (1) swap (i,j) <-> (ii,jj), normalize on the fly
+                    rswap = (self%rmat(i, j, 1) - mean_sp) * invstd_sp
+                    self%rmat(i, j, 1) = (self%rmat(ii, jj, 1) - mean_sp) * invstd_sp
+                    self%rmat(ii, jj, 1) = rswap
+                    ! (2) swap (i,jj) <-> (ii,j), normalize on the fly
+                    rswap = (self%rmat(i, jj, 1) - mean_sp) * invstd_sp
+                    self%rmat(i, jj, 1) = (self%rmat(ii, j, 1) - mean_sp) * invstd_sp
+                    self%rmat(ii, j, 1) = rswap
+                end do
+            end do
+        else
+            ! mean ~ 0 and invstd ~ 1: just swap
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    rswap = self%rmat(i, j, 1)
+                    self%rmat(i, j, 1) = self%rmat(ii, jj, 1)
+                    self%rmat(ii, jj, 1) = rswap
+                    rswap = self%rmat(i, jj, 1)
+                    self%rmat(i, jj, 1) = self%rmat(ii, j, 1)
+                    self%rmat(ii, j, 1) = rswap
+                end do
+            end do
+        end if
+        ! ============================================================
+        ! FFT (FFTW r2c) + scale with reciprocal
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = 1.0_c_float / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+        ! ============================================================
+        ! CLIP (+ optional SHIFT in Fourier space) using phase recurrence
+        ! ============================================================
+        lims  = self_out%fit%loop_lims(2)
+        ratio = real(n1, c_float) / real(self_out%ldim(1), c_float)
+        if (abs(shvec(1)) > SHTHRESH .or. abs(shvec(2)) > SHTHRESH) then
+            sh = real(shvec * self_out%shconst(1:2), dp)
+            ! phase increments exp(i*sh1), exp(i*sh2)
+            w1 = cmplx( real(cos(sh(1)), c_float), real(sin(sh(1)), c_float), kind=c_float_complex )
+            w2 = cmplx( real(cos(sh(2)), c_float), real(sin(sh(2)), c_float), kind=c_float_complex )
+            ! starting phase for h: exp(i*hmin*sh1)
+            ph0 = cmplx( real(cos(real(lims(1,1),dp)*sh(1)), c_float), &
+                        real(sin(real(lims(1,1),dp)*sh(1)), c_float), kind=c_float_complex )
+            ! starting phase for k: exp(i*kmin*sh2)
+            ph_k = cmplx( real(cos(real(lims(2,1),dp)*sh(2)), c_float), &
+                        real(sin(real(lims(2,1),dp)*sh(2)), c_float), kind=c_float_complex )
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out%ldim(2), k + 1, k_neg)
+                ph_h  = ph0
+                do h = lims(1,1), lims(1,2)
+                    hp = h + 1
+                    phase = ph_k * ph_h
+                    self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1) * phase
+                    ph_h = ph_h * w1
+                end do
+                ph_k = ph_k * w2
+            end do
+            call self_out%set_smpd(self%smpd * ratio)
+            self_out%ft = .true.
+        else
+            ! CLIP only
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out%ldim(2), k + 1, k_neg)
+                do h = lims(1,1), lims(1,2)
+                    hp = h + 1
+                    self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1)
+                end do
+            end do
+            call self_out%set_smpd(self%smpd * ratio)
+            self_out%ft = .true.
+        endif
+    end subroutine norm_noise_fft_clip_shift
 
     !>  \brief  expand_ft is for getting a Fourier plane using the old SIMPLE logics
     module function expand_ft( self ) result( fplane )

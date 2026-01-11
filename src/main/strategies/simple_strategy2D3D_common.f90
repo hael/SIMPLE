@@ -23,7 +23,6 @@ interface read_imgbatch
     module procedure read_imgbatch_3
 end interface read_imgbatch
 
-real, parameter :: SHTHRESH = 0.001
 type(stack_io)  :: stkio_r
 
 contains
@@ -331,19 +330,12 @@ contains
         class(image), intent(inout) :: img_out
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: x, y, sdev_noise, crop_factor
+        real            :: shvec(2), crop_factor
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
-        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
-        ! Normalise
-        call img%norm_noise(build_glob%lmsk, sdev_noise)
-        ! Fourier cropping
-        call img%fft()
-        call img%clip(img_out)
-        ! Shift image to rotational origin
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
-            call img_out%shift2Dserial([-x,-y])
-        endif
+        shvec(1)    = -build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        shvec(2)    = -build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+        ! fused noise normalization, FFT, clip & shift
+        call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
         ! Phase-flipping
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         select case(ctfparms%ctfflag)
@@ -368,38 +360,25 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align_bench( iptcl, img, img_out, rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot )
+    subroutine prepimg4align_bench( iptcl, img, img_out, rt_prep1, rt_ctf, rt_mask, rt_gridding, rt_tot )
         use simple_ctf, only: ctf
         integer,              intent(in)    :: iptcl
         class(image),         intent(inout) :: img
         class(image),         intent(inout) :: img_out
-        real(timer_int_kind), intent(inout) :: rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot
+        real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_mask, rt_gridding, rt_tot
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise, crop_factor
-        integer(timer_int_kind) :: t_norm, t_fft, t_clip, t_shift, t_ctf, t_mask, t_gridding, t_tot
+        integer(timer_int_kind) :: t_prep1, t_ctf, t_mask, t_gridding, t_tot
+        t_prep1 = tic()
+        t_tot   = t_prep1
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
         x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
         y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
-        t_norm = tic()
-        t_tot  = t_norm
-        ! Normalise
-        call img%norm_noise(build_glob%lmsk, sdev_noise)
-        rt_norm = rt_norm + toc(t_norm)
-        t_fft   = tic()
-        ! Fourier cropping
-        call img%fft()
-        rt_fft  = rt_fft + toc(t_fft)
-        t_clip  = tic()
-        call img%clip(img_out)
-        rt_clip = rt_clip + toc(t_clip)
-        ! Shift image to rotational origin
-        t_shift = tic()
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
-            call img_out%shift2Dserial([-x,-y])
-        endif
-        rt_shift = rt_shift + toc(t_shift)
-        t_ctf    = tic()
+        ! fused noise normalization, FFT, clip & shift
+        call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
+        
+
         ! Phase-flipping
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         select case(ctfparms%ctfflag)
