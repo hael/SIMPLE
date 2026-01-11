@@ -23,16 +23,12 @@ contains
         kw = .true.
         if( present(kweight) ) kw = kweight
         calc_corr_rot_shift = 0.
-        i    = self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
+        i           = self%pinds(iptcl)
+        ithr        = omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_rot_ref => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref = self%pfts_refs_odd(:,:,iref)
-        endif
+        pft_ref     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         call self%gen_shmat_8(ithr, real(shvec,dp),shmat)
         pft_ref = pft_ref * shmat
         call self%rotate_pft(pft_ref, irot, pft_rot_ref)
@@ -84,11 +80,7 @@ contains
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_rot_ref => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref = self%pfts_refs_odd(:,:,iref)
-        endif
+        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
         pft_ref = pft_ref * shmat
         call self%rotate_pft(pft_ref, irot, pft_rot_ref)
@@ -139,11 +131,8 @@ contains
         self%drvec(ithr)%r          = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
             ! FT(CTF2) x FT(REF2)), REF2 is shift invariant
-            if( self%iseven(i) )then
-                self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
-            else
-                self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
-            endif
+            self%cvec1(ithr)%c = merge(self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref),&
+                                      &self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref), self%iseven(i))
             ! IFFT(FT(CTF2) x FT(REF2))
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             self%drvec(ithr)%r = self%drvec(ithr)%r + real(self%rvec1(ithr)%r(1:self%nrots),dp)
@@ -183,11 +172,8 @@ contains
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
             ! FT(CTF2) x FT(REF2)*
-            if( self%iseven(i) )then
-                self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
-            else
-                self%cvec1(ithr)%c = self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
-            endif
+            self%cvec1(ithr)%c = merge(self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref),&
+                                      &self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref), self%iseven(i))
             ! FT(S.REF), shifted reference
             self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
             self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
@@ -213,11 +199,7 @@ contains
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-        endif
+        pft_ref_8 = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         ! rotation
         call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
@@ -243,11 +225,7 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-        endif
+        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         ! shift
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
@@ -307,11 +285,7 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-        endif
+        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
@@ -400,11 +374,7 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-        endif
+        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
@@ -454,11 +424,7 @@ contains
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
         ! e/o
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-        endif
+        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         ! shift
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
