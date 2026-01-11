@@ -68,10 +68,12 @@ contains
                   &w(1:self%wdim,1:self%wdim))
         ! instrument function
         normalize_weights = trim(params_glob%interpfun) == 'kb'
+        call self%instrfun_img%new(self%get_ldim(), self%get_smpd())
         if( params_glob%gridding.eq.'yes' )then
             normalize_weights = .false.
-            call self%instrfun_img%new(self%get_ldim(), self%get_smpd())
             call gen_instrfun_img(self%instrfun_img, params_glob%interpfun, kbwin=kbwin)
+        else
+            self%instrfun_img = 1.
         endif
         ! cartesian to polar
         if( trim(params_glob%interpfun) == 'kb' )then
