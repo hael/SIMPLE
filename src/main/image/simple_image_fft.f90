@@ -333,6 +333,106 @@ contains
         endif
     end subroutine norm_noise_fft_clip_shift
 
+    module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        class(image), intent(in)    :: instrfun
+        integer       :: n1, n2, n3, h1, h2,  i, j, ii, jj, lims(3,2), minlen, npix, i, j, np, n1l, n2l
+        real(c_float), parameter :: WWIDTH = 10.
+        real(c_float) :: rswap
+        real(dp)      :: sumv, sv
+        real(c_float) :: rad_sq, ave, r2, e, scale_cmat
+        ! n3 is always 1 here
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = 1
+        h1 = n1/2
+        h2 = n2/2
+        ! ============================================================
+        ! IFFT
+        ! ============================================================
+        call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
+        self%ft = .false.
+        ! ============================================================
+        ! SHIFT TO PHASE ORIGIN (fftshift)
+        ! ============================================================
+        do j = 1, h2
+            jj = h2 + j
+            do i = 1, h1
+                ii = h1 + i
+                rswap = self%rmat(i, j, 1)
+                self%rmat(i, j, 1) = self%rmat(ii, jj, 1)
+                self%rmat(ii, jj, 1) = rswap
+                rswap = self%rmat(i, jj, 1)
+                self%rmat(i, jj, 1) = self%rmat(ii, j, 1)
+                self%rmat(ii, j, 1) = rswap
+            end do
+        end do
+        ! ============================================================
+        ! MASK (softavg)
+        ! ============================================================
+        ! minlen
+        minlen = minval(self%ldim(1:2))
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        ! mode
+        rad_sq     = mskrad * mskrad
+        sumv       = 0.0_dp
+        npix       = 0            
+        n1l = n1; n2l = n2
+        sv = 0.0_dp; np = 0
+        ! avg outside radius
+        do j = 1, n2l
+            do i = 1, n1l
+                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                if (r2 > rad_sq) then
+                    np = np + 1
+                    sv = sv + real(self%rmat(i,j,1), dp)
+                endif
+            end do
+        end do
+        if (np > 0) then
+            ave = real(sv / real(np, dp))
+            ! apply (j,i with i contiguous)
+            do j = 1, n2l
+                do i = 1, n1l
+                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                    e  = cosedge_r2_2d(r2, minlen, mskrad)
+                    if (e < 0.0001) then
+                        self%rmat(i,j,1) = ave
+                    else if (e < 0.9999) then
+                        self%rmat(i,j,1) = e*self%rmat(i,j,1) + (1.0-e)*ave
+                    endif
+                end do
+            end do
+        endif
+        ! ============================================================
+        ! DIVIDE WITH INSTRUMENT FUNCTION (mul w inv of instr)
+        ! ============================================================
+        where(abs(self%rmat) > 1.e-6) self%rmat = self%rmat/instrfun%rmat
+        ! ============================================================
+        ! SHIFT TO PHASE ORIGIN (fftshift)
+        ! ============================================================
+        do j = 1, h2
+            jj = h2 + j
+            do i = 1, h1
+                ii = h1 + i
+                rswap = self%rmat(i, j, 1)
+                self%rmat(i, j, 1) = self%rmat(ii, jj, 1)
+                self%rmat(ii, jj, 1) = rswap
+                rswap = self%rmat(i, jj, 1)
+                self%rmat(i, jj, 1) = self%rmat(ii, j, 1)
+                self%rmat(ii, j, 1) = rswap
+            end do
+        end do
+        ! ============================================================
+        ! FFT (FFTW r2c) + scale with reciprocal
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = 1.0_c_float / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+    end subroutine ifft_mask_divwinstrfun_fft
+
     !>  \brief  expand_ft is for getting a Fourier plane using the old SIMPLE logics
     module function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self

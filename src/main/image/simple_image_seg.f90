@@ -2,11 +2,6 @@ submodule (simple_image) simple_image_seg
 implicit none
 #include "simple_local_flags.inc"
 
-integer :: mem_msk_n1 = 0, mem_msk_n2 = 0, mem_msk_n3 = 0
-logical :: mem_msk_is3d = .false.
-real, allocatable :: mem_msk_cis(:),  mem_msk_cjs(:),  mem_msk_cks(:)
-real, allocatable :: mem_msk_cis2(:), mem_msk_cjs2(:), mem_msk_cks2(:)
-
 contains
 
     module function nforeground( self ) result( n )

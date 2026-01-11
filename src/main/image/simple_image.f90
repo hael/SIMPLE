@@ -22,6 +22,12 @@ type image_ptr
     complex(kind=c_float_complex), public, pointer :: cmat(:,:,:)
 end type image_ptr
 
+! mask memoization
+integer :: mem_msk_n1 = 0, mem_msk_n2 = 0, mem_msk_n3 = 0
+logical :: mem_msk_is3d = .false.
+real, allocatable :: mem_msk_cis(:),  mem_msk_cjs(:),  mem_msk_cks(:)
+real, allocatable :: mem_msk_cis2(:), mem_msk_cjs2(:), mem_msk_cks2(:)
+
 type :: image
     private
     logical                                :: ft=.false.           !< Fourier transformed or not
@@ -102,6 +108,7 @@ contains
     procedure          :: pad_fft
     procedure          :: norm_noise_pad_fft
     procedure          :: norm_noise_fft_clip_shift
+    procedure          :: ifft_mask_divwinstrfun_fft
     procedure          :: expand_ft
     ! I/O
     procedure, private :: open
@@ -797,6 +804,12 @@ interface
         class(image), intent(inout) :: self_out
         real,         intent(in)    :: shvec(2)
     end subroutine norm_noise_fft_clip_shift
+
+    module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        class(image), intent(in)    :: instrfun
+    end subroutine ifft_mask_divwinstrfun_fft
 
     module function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self

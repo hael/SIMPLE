@@ -36,7 +36,7 @@ contains
         select case(trim(interpfun))
         case('kb')
             ! Kaiser-bessel window
-            if(.not.present(kbwin)) THROW_HARD('KB interpolator must be gigen with interpfun=kb')
+            if(.not.present(kbwin)) THROW_HARD('KB interpolator must be given with interpfun=kb')
             allocate(w(ldim(1)),source=1.)
             do i = 1,ldim(1)
                 arg  = real(i-center(1))/real(dim)

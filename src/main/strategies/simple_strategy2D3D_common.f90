@@ -360,25 +360,25 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align_bench( iptcl, img, img_out, rt_prep1, rt_ctf, rt_mask, rt_gridding, rt_tot )
+    subroutine prepimg4align_bench( iptcl, img, img_out, rt_prep1, rt_ctf, rt_prep2, rt_tot )
         use simple_ctf, only: ctf
         integer,              intent(in)    :: iptcl
         class(image),         intent(inout) :: img
         class(image),         intent(inout) :: img_out
-        real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_mask, rt_gridding, rt_tot
+        real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_prep2, rt_tot
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: x, y, sdev_noise, crop_factor
-        integer(timer_int_kind) :: t_prep1, t_ctf, t_mask, t_gridding, t_tot
+        real            :: shvec(2), sdev_noise, crop_factor
+        integer(timer_int_kind) :: t_prep1, t_ctf, t_prep2, t_tot
         t_prep1 = tic()
         t_tot   = t_prep1
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
-        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+        shvec(1)    = -build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        shvec(2)    = -build_glob%spproj_field%get(iptcl, 'y') * crop_factor
         ! fused noise normalization, FFT, clip & shift
         call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
-        
-
+        rt_prep1 = rt_prep1 + toc(t_prep1)
+        t_ctf    = tic()
         ! Phase-flipping
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         select case(ctfparms%ctfflag)
@@ -391,25 +391,18 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
-        rt_ctf = rt_ctf + toc(t_ctf)
-        t_fft  = tic()
+        rt_ctf  = rt_ctf + toc(t_ctf)
+        t_prep2 = tic()
         ! Back to real space
         call img_out%ifft
-        rt_fft = rt_fft + toc(t_fft)
-        ! Soft-edged mask
-        t_mask = tic()
         ! Soft-edged mask
         call img_out%mask2D_softavg_serial(params_glob%msk_crop)
-        rt_mask = rt_mask + toc(t_mask)
         ! gridding prep
-        t_gridding = tic()
-        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
-        rt_gridding = rt_gridding + toc(t_gridding)
+        call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! return to Fourier space
-        t_fft  = tic()
         call img_out%fft()
-        rt_fft = rt_fft + toc(t_fft)
-        rt_tot  = rt_tot + toc(t_tot)
+        rt_prep2 = rt_prep2 + toc(t_prep2)
+        rt_tot  = rt_tot    + toc(t_tot)
     end subroutine prepimg4align_bench
 
     !>  \brief  prepares one cluster centre image for alignment
@@ -495,7 +488,7 @@ contains
         ! apply mask
         call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
+        call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref
