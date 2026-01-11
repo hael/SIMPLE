@@ -323,10 +323,11 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img, img_out )
+    subroutine prepimg4align( iptcl, img, img_instr, img_out )
         use simple_ctf, only: ctf
         integer,      intent(in)    :: iptcl
         class(image), intent(inout) :: img
+        class(image), intent(in)    :: img_instr
         class(image), intent(inout) :: img_out
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
@@ -348,22 +349,17 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
-        ! Back to real space
-        call img_out%ifft
-        ! Soft-edged mask
-        call img_out%mask2D_softavg_serial(params_glob%msk_crop)
-        ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
-        ! return to Fourier space
-        call img_out%fft()
+        ! fused IFFT, masking, division with instrument function & FFT
+        call img_out%ifft_mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
     end subroutine prepimg4align
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align_bench( iptcl, img, img_out, rt_prep1, rt_ctf, rt_prep2, rt_tot )
+    subroutine prepimg4align_bench( iptcl, img, img_instr, img_out, rt_prep1, rt_ctf, rt_prep2, rt_tot )
         use simple_ctf, only: ctf
         integer,              intent(in)    :: iptcl
         class(image),         intent(inout) :: img
+        class(image),         intent(in)    :: img_instr
         class(image),         intent(inout) :: img_out
         real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_prep2, rt_tot
         type(ctf)       :: tfun
@@ -393,14 +389,8 @@ contains
         end select
         rt_ctf  = rt_ctf + toc(t_ctf)
         t_prep2 = tic()
-        ! Back to real space
-        call img_out%ifft
-        ! Soft-edged mask
-        call img_out%mask2D_softavg_serial(params_glob%msk_crop)
-        ! gridding prep
-        call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
-        ! return to Fourier space
-        call img_out%fft()
+        ! fused IFFT, masking, division with instrument function & FFT
+        call img_out%ifft_mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
         rt_prep2 = rt_prep2 + toc(t_prep2)
         rt_tot  = rt_tot    + toc(t_tot)
     end subroutine prepimg4align_bench
@@ -1304,18 +1294,21 @@ contains
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds_here(nptcls_here)
         type(image),         intent(inout) :: tmp_imgs(params_glob%nthr)
-        integer :: iptcl_batch, iptcl, ithr
+        type(image) :: img_instr
+        integer     :: iptcl_batch, iptcl, ithr
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
         ! mask memoization for prepimg4align
         call tmp_imgs(1)%memoize_mask_serial_coords
+        ! get instrument function
+        img_instr =build_glob%img_crop_polarizer%get_instrfun_img()
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), img_instr, tmp_imgs(ithr))
             ! transfer to polar coordinates
             call build_glob%img_crop_polarizer%polarize(pftc, tmp_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flags
@@ -1325,6 +1318,8 @@ contains
         call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
         call pftc%memoize_ptcls
+        ! destruct
+        call img_instr%kill
     end subroutine build_batch_particles
 
 end module simple_strategy2D3D_common
