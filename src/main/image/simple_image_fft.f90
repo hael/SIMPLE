@@ -166,43 +166,130 @@ contains
     ! Padding / normalization
     !===========================
 
-    module subroutine pad_fft( self, self_out )
-        class(image), intent(inout) :: self
+    subroutine pad_fft( self, self_out )
+        use, intrinsic :: iso_c_binding, only: c_float
+        class(image), intent(in)    :: self
         class(image), intent(inout) :: self_out
-        integer :: starts(3), stops(3)
-        starts        = (self_out%ldim - self%ldim) / 2 + 1
-        stops         = self_out%ldim - starts + 1
+        integer       :: n1, n2, n1o, n2o, h1o, h2o
+        integer       :: i, j
+        integer       :: starts(3), stops(3)
+        integer       :: x0, y0, xo, yo
+        real(c_float) :: scale_cmat
+        ! n3 is always 1 here
+        n1  = self%ldim(1)
+        n2  = self%ldim(2)
+        n1o = self_out%ldim(1)
+        n2o = self_out%ldim(2)
+        h1o = n1o/2
+        h2o = n2o/2
+        starts = (self_out%ldim - self%ldim) / 2 + 1
+        stops  = self_out%ldim - starts + 1
         self_out%ft   = .false.
-        self_out%rmat = 0.
-        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
-            &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        call self_out%fft
+        self_out%rmat = 0.0_c_float
+        ! ============================================================
+        ! PAD + FFTSHIFT (fused): write each source pixel directly to
+        ! its fftshifted output index.
+        ! ============================================================
+        do j = 1, n2
+            y0 = starts(2) + j - 1
+            yo = modulo((y0 - 1) + h2o, n2o) + 1
+            do i = 1, n1
+                x0 = starts(1) + i - 1
+                xo = modulo((x0 - 1) + h1o, n1o) + 1
+                self_out%rmat(xo, yo, 1) = self%rmat(i,j,1)
+            end do
+        end do
+        ! ============================================================
+        ! FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self_out%plan_fwd, self_out%rmat, self_out%cmat)
+        scale_cmat    = 1.0_c_float / real(n1o*n2o, c_float)
+        self_out%cmat = self_out%cmat * scale_cmat
+        self_out%ft   = .true.
     end subroutine pad_fft
 
     subroutine norm_noise_pad_fft( self, lmsk, self_out )
+        use, intrinsic :: iso_c_binding, only: c_float
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
-        integer :: npix, starts(3), stops(3)
-        real    :: ave, var, ep, sdev_noise
-        npix = product(self%ldim) - count(lmsk) ! # background pixels
-        ave  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. lmsk) / real(npix) ! background average
-        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
-        ep         = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),      mask=.not. lmsk)
-        var        = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0, mask=.not. lmsk)
-        var        = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
-        sdev_noise = 0.
-        if( is_a_number(var) )then
-            sdev_noise = sqrt(var)
-            if( var > 0. ) self%rmat = self%rmat / sdev_noise
-        endif
-        starts        = (self_out%ldim - self%ldim) / 2 + 1
-        stops         = self_out%ldim - starts + 1
+        integer       :: n1, n2, n1o, n2o, h1o, h2o, i, j, npix, starts(3), stops(3), x0, y0, xo, yo
+        real(dp)      :: mean_dp, M2_dp, x_dp, delta, var_dp
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat
+        ! n3 is always 1 here
+        n1  = self%ldim(1)
+        n2  = self%ldim(2)
+        n1o = self_out%ldim(1)
+        n2o = self_out%ldim(2)
+        h1o = n1o/2
+        h2o = n2o/2
+        ! ============================================================
+        ! NOISE NORMALIZATION: one-pass Welford over background pixels
+        ! ============================================================
+        mean_dp = 0.0_dp
+        M2_dp   = 0.0_dp
+        npix    = 0
+        do j = 1, n2
+            do i = 1, n1
+                if (.not. lmsk(i,j,1)) then
+                    npix = npix + 1
+                    x_dp = real(self%rmat(i,j,1), dp)
+                    delta   = x_dp - mean_dp
+                    mean_dp = mean_dp + delta / real(npix, dp)
+                    M2_dp   = M2_dp + delta * (x_dp - mean_dp)
+                end if
+            end do
+        end do
+        var_dp = 0.0_dp
+        if (npix > 1) var_dp = M2_dp / real(npix-1, dp)
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = 1.0_c_float
+        if (is_a_number(real(var_dp, kind=kind(1.0))) .and. var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp / sqrt(var_dp), c_float)
+        end if
+        ! ============================================================
+        ! PAD + FFTSHIFT (fused) + apply normalization while copying
+        !
+        ! Instead of:
+        !   (1) center copy into self_out
+        !   (2) fftshift swap whole self_out
+        !
+        ! We write each source pixel directly to its fftshifted output index:
+        !   x0 = starts(1)+i-1;  xo = ((x0-1 + h1o) mod n1o) + 1
+        !   y0 = starts(2)+j-1;  yo = ((y0-1 + h2o) mod n2o) + 1
+        ! ============================================================
+        starts = (self_out%ldim - self%ldim) / 2 + 1
+        stops  = self_out%ldim - starts + 1
         self_out%ft   = .false.
-        self_out%rmat = 0.
-        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
-            &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        call self_out%fft
+        self_out%rmat = 0.0_c_float
+        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float) then
+            do j = 1, n2
+                y0 = starts(2) + j - 1
+                yo = modulo((y0 - 1) + h2o, n2o) + 1
+                do i = 1, n1
+                    x0 = starts(1) + i - 1
+                    xo = modulo((x0 - 1) + h1o, n1o) + 1
+                    self_out%rmat(xo, yo, 1) = (self%rmat(i,j,1) - mean_sp) * invstd_sp
+                end do
+            end do
+        else
+            do j = 1, n2
+                y0 = starts(2) + j - 1
+                yo = modulo((y0 - 1) + h2o, n2o) + 1
+                do i = 1, n1
+                    x0 = starts(1) + i - 1
+                    xo = modulo((x0 - 1) + h1o, n1o) + 1
+                    self_out%rmat(xo, yo, 1) = self%rmat(i,j,1)
+                end do
+            end do
+        end if
+        ! ============================================================
+        ! FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self_out%plan_fwd, self_out%rmat, self_out%cmat)
+        scale_cmat    = 1.0_c_float / real(n1o*n2o, c_float)
+        self_out%cmat = self_out%cmat * scale_cmat
+        self_out%ft   = .true.
     end subroutine norm_noise_pad_fft
 
     module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
@@ -334,94 +421,133 @@ contains
     end subroutine norm_noise_fft_clip_shift
 
     module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
+        use, intrinsic :: iso_c_binding, only: c_float
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
         class(image), intent(in)    :: instrfun
-        integer       :: n1, n2, n3, h1, h2,  i, j, ii, jj, lims(3,2), minlen, npix, i, j, np, n1l, n2l
-        real(c_float), parameter :: WWIDTH = 10.
-        real(c_float) :: rswap
-        real(dp)      :: sumv, sv
-        real(c_float) :: rad_sq, ave, r2, e, scale_cmat
-        ! n3 is always 1 here
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, minlen, np 
+        real(dp)      :: sv
+        real(c_float) :: rad_sq, ave, r2, e, v11, v22, v12, v21, u11, u22, u12, u21, scale_cmat
+        real(c_float), parameter :: EPS_DEN = 1.e-6_c_float   ! denom safety threshold
+        real(c_float), parameter :: EPS_E   = 1.e-4_c_float
+        real(c_float), parameter :: ONE     = 1.0_c_float
+        real(c_float) :: invden
         n1 = self%ldim(1)
         n2 = self%ldim(2)
-        n3 = 1
         h1 = n1/2
         h2 = n2/2
         ! ============================================================
         ! IFFT
         ! ============================================================
-        call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
+        call fftwf_execute_dft_c2r(self%plan_bwd, self%cmat, self%rmat)
         self%ft = .false.
         ! ============================================================
-        ! SHIFT TO PHASE ORIGIN (fftshift)
+        ! SHIFT TO PHASE ORIGIN (fftshift)  [needed before softavg stats]
         ! ============================================================
         do j = 1, h2
             jj = h2 + j
             do i = 1, h1
                 ii = h1 + i
-                rswap = self%rmat(i, j, 1)
-                self%rmat(i, j, 1) = self%rmat(ii, jj, 1)
-                self%rmat(ii, jj, 1) = rswap
-                rswap = self%rmat(i, jj, 1)
-                self%rmat(i, jj, 1) = self%rmat(ii, j, 1)
-                self%rmat(ii, j, 1) = rswap
+                v11 = self%rmat(i ,j ,1);  self%rmat(i ,j ,1)  = self%rmat(ii,jj,1); self%rmat(ii,jj,1) = v11
+                v12 = self%rmat(i ,jj,1);  self%rmat(i ,jj,1)  = self%rmat(ii,j ,1); self%rmat(ii,j ,1) = v12
             end do
         end do
         ! ============================================================
-        ! MASK (softavg)
+        ! MASK (softavg): compute average outside radius (r^2 only)
         ! ============================================================
-        ! minlen
         minlen = minval(self%ldim(1:2))
         minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
-        ! mode
-        rad_sq     = mskrad * mskrad
-        sumv       = 0.0_dp
-        npix       = 0            
-        n1l = n1; n2l = n2
-        sv = 0.0_dp; np = 0
-        ! avg outside radius
-        do j = 1, n2l
-            do i = 1, n1l
+        rad_sq = real(mskrad*mskrad, c_float)
+        sv = 0.0_dp
+        np = 0
+        do j = 1, n2
+            do i = 1, n1
                 r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
                 if (r2 > rad_sq) then
                     np = np + 1
                     sv = sv + real(self%rmat(i,j,1), dp)
-                endif
+                end if
             end do
         end do
         if (np > 0) then
-            ave = real(sv / real(np, dp))
-            ! apply (j,i with i contiguous)
-            do j = 1, n2l
-                do i = 1, n1l
-                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
-                    e  = cosedge_r2_2d(r2, minlen, mskrad)
-                    if (e < 0.0001) then
-                        self%rmat(i,j,1) = ave
-                    else if (e < 0.9999) then
-                        self%rmat(i,j,1) = e*self%rmat(i,j,1) + (1.0-e)*ave
-                    endif
-                end do
-            end do
-        endif
+            ave = real(sv / real(np, dp), c_float)
+        else
+            ave = 0.0_c_float
+        end if
         ! ============================================================
-        ! DIVIDE WITH INSTRUMENT FUNCTION (mul w inv of instr)
-        ! ============================================================
-        where(abs(self%rmat) > 1.e-6) self%rmat = self%rmat/instrfun%rmat
-        ! ============================================================
-        ! SHIFT TO PHASE ORIGIN (fftshift)
+        ! FUSED PASS:
+        !   - apply softavg mask
+        !   - divide by instrument function where denom is safe
+        !     (if denom is unsafe, leave value unchanged)
+        !   - do second fftshift while writing (in-place swaps)
         ! ============================================================
         do j = 1, h2
             jj = h2 + j
             do i = 1, h1
                 ii = h1 + i
-                rswap = self%rmat(i, j, 1)
-                self%rmat(i, j, 1) = self%rmat(ii, jj, 1)
-                self%rmat(ii, jj, 1) = rswap
-                rswap = self%rmat(i, jj, 1)
-                self%rmat(i, jj, 1) = self%rmat(ii, j, 1)
-                self%rmat(ii, j, 1) = rswap
+                ! load 4 pixels
+                v11 = self%rmat(i ,j ,1)
+                v22 = self%rmat(ii,jj,1)
+                v12 = self%rmat(i ,jj,1)
+                v21 = self%rmat(ii,j ,1)
+                ! load 4 denominators
+                u11 = instrfun%rmat(i ,j ,1)
+                u22 = instrfun%rmat(ii,jj,1)
+                u12 = instrfun%rmat(i ,jj,1)
+                u21 = instrfun%rmat(ii,j ,1)
+                ! ---- (i, j) ----
+                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < EPS_E) then
+                    v11 = ave
+                else if (e < (ONE - EPS_E)) then
+                    v11 = e*v11 + (ONE - e)*ave
+                end if
+                if (abs(u11) > EPS_DEN) then
+                    invden = ONE / u11
+                    v11 = v11 * invden
+                end if
+                ! ---- (ii, jj) ----
+                r2 = mem_msk_cis2(ii) + mem_msk_cjs2(jj)
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < EPS_E) then
+                    v22 = ave
+                else if (e < (ONE - EPS_E)) then
+                    v22 = e*v22 + (ONE - e)*ave
+                end if
+                if (abs(u22) > EPS_DEN) then
+                    invden = ONE / u22
+                    v22 = v22 * invden
+                end if
+                ! ---- (i, jj) ----
+                r2 = mem_msk_cis2(i) + mem_msk_cjs2(jj)
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < EPS_E) then
+                    v12 = ave
+                else if (e < (ONE - EPS_E)) then
+                    v12 = e*v12 + (ONE - e)*ave
+                end if
+                if (abs(u12) > EPS_DEN) then
+                    invden = ONE / u12
+                    v12 = v12 * invden
+                end if
+                ! ---- (ii, j) ----
+                r2 = mem_msk_cis2(ii) + mem_msk_cjs2(j)
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < EPS_E) then
+                    v21 = ave
+                else if (e < (ONE - EPS_E)) then
+                    v21 = e*v21 + (ONE - e)*ave
+                end if
+                if (abs(u21) > EPS_DEN) then
+                    invden = ONE / u21
+                    v21 = v21 * invden
+                end if
+                ! store swapped (fftshift)
+                self%rmat(i ,j ,1) = v22
+                self%rmat(ii,jj,1) = v11
+                self%rmat(i ,jj,1) = v21
+                self%rmat(ii,j ,1) = v12
             end do
         end do
         ! ============================================================
