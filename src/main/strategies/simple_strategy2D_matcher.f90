@@ -501,10 +501,11 @@ contains
     subroutine build_batch_particles2D( pftc, nptcls_here, pinds, l_ctf_here )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align, prepimg4align_bench
         class(polarft_calc), intent(inout) :: pftc
-        integer, intent(in) :: nptcls_here
-        integer, intent(in) :: pinds(nptcls_here)
-        logical, intent(in) :: l_ctf_here
-        real(timer_int_kind)    :: rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot, rt_sum
+        integer,             intent(in) :: nptcls_here
+        integer,             intent(in) :: pinds(nptcls_here)
+        logical,             intent(in) :: l_ctf_here
+        type(image) :: img_instr
+        real(timer_int_kind)    :: rt_prep1, rt_ctf, rt_prep2, rt_tot, rt_sum
         real(timer_int_kind)    :: rt_prep, rt_polarize
         integer(timer_int_kind) :: t_prep, t_polarize
         integer :: iptcl_batch, iptcl, ithr
@@ -516,13 +517,11 @@ contains
         endif
         ! mask memoization for prepimg4align
         call ptcl_match_imgs(1)%memoize_mask_serial_coords
-        rt_norm     = 0.
-        rt_fft      = 0.
-        rt_clip     = 0.
-        rt_shift    = 0.
+        ! get instrument function
+        img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
+        rt_prep1    = 0.
         rt_ctf      = 0.
-        rt_mask     = 0.
-        rt_gridding = 0.
+        rt_prep2    = 0.
         rt_tot      = 0.
         rt_prep     = 0.
         rt_polarize = 0.
@@ -532,53 +531,34 @@ contains
             iptcl = pinds(iptcl_batch)
             ! t_prep = tic()            
             ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr),&
-            ! &rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot )
+            ! &rt_prep1 rt_ctf, rt_prep2, rt_tot )
             ! rt_prep = rt_prep + toc(t_prep)
 
-            ! 90 % of the compute
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), img_instr, ptcl_match_imgs(ithr))
 
             ! transfer to polar coordinates
             ! t_polarize = tic()
-            ! 10 % of the compute
             call build_glob%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! rt_polarize = rt_polarize + toc(t_polarize)
             ! e/o flag
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
-        rt_sum = rt_norm + rt_fft + rt_clip + rt_shift + rt_ctf + rt_mask + rt_gridding
+        rt_sum = rt_prep1 + rt_ctf + rt_prep2
 
-        ! print *, 'rt_fft      =', rt_fft,      ' % ', 100.*(rt_fft/rt_tot)
-        ! print *, 'rt_clip     =', rt_clip,     ' % ', 100.*(rt_clip/rt_tot)
-        ! print *, 'rt_shift    =', rt_shift,    ' % ', 100.*(rt_shift/rt_tot)
+        ! print *, 'rt_prep1    =', rt_prep1,    ' % ', 100.*(rt_prep1/rt_tot)
         ! print *, 'rt_ctf      =', rt_ctf,      ' % ', 100.*(rt_ctf/rt_tot)
-        ! print *, 'rt_mask     =', rt_mask,     ' % ', 100.*(rt_mask/rt_tot)
-        ! print *, 'rt_gridding =', rt_gridding, ' % ', 100.*(rt_gridding/rt_tot)
-        ! print *, 'rt_tot      =', rt_tot,      ' % ', 100.*(rt_tot/rt_tot)
+        ! print *, 'rt_prep2    =', rt_prep2,    ' % ', 100.*(rt_prep2/rt_tot)
         ! print *, 'accounted for % ', 100.*(rt_sum/rt_tot)
         ! print *, 'rt_prep     =', rt_prep,     ' % ', 100.*(rt_prep/(rt_prep + rt_polarize))
         ! print *, 'rt_polarize =', rt_polarize, ' % ', 100.*(rt_polarize/(rt_prep + rt_polarize))
         ! print *, ''
 
-        ! rt_fft      =   1.2342455119999987       %    52.436977686610632     
-        ! rt_clip     =   8.2577560000000102E-003  %   0.35083114575139412     
-        ! rt_shift    =   3.5513376000000013E-002  %    1.5087874225855125     
-        ! rt_ctf      =  0.29300790100000013       %    12.448454231638834     
-        ! rt_mask     =  0.22102161699999967       %    9.3901136250496613     
-        ! rt_gridding =   3.7537768000000020E-002  %    1.5947938103753623     
-        ! rt_tot      =   2.3537693559999999       %    100.00000000000000     
-        ! accounted for %    99.982155430865348     
-        ! rt_prep     =   2.3538688060000017       %    89.325646774808121     
-        ! rt_polarize =  0.28128570000000014       %    10.674353225191872
-
-        ! Memoization strategy: norm, FFT, CTF mul
-        ! Left in prep: Fourier crop, shift, IFFT, mask, div w instr, FFT
-        ! anticipated speedup: 30%
-
         ! always create this one, CTF logic internal
         call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
         call pftc%memoize_ptcls
+        ! destruct
+        call img_instr%kill
     end subroutine build_batch_particles2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references

@@ -25,6 +25,7 @@ type, extends(image) :: polarizer
   contains
     procedure          :: init_polarizer
     procedure          :: div_by_instrfun
+    procedure          :: get_instrfun_img
     procedure, private :: polarize_1, polarize_2
     generic            :: polarize => polarize_1, polarize_2
     procedure          :: extract_pixel
@@ -138,6 +139,12 @@ contains
         if( .not.(self.eqdims.img) ) THROW_HARD('Incompatible dimensions in div_by_instrfun 2')
         call img%div(self%instrfun_img)
     end subroutine div_by_instrfun
+
+    function get_instrfun_img( self ) result( img_instr )
+        class(polarizer), intent(in) :: self
+        type(image) :: img_instr
+        call img_instr%copy(self%instrfun_img)
+    end function get_instrfun_img
 
     !> \brief  creates the polar Fourier transform from self
     !!         KEEP THIS ROUTINE SERIAL
