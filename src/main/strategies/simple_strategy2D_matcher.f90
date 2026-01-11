@@ -530,19 +530,19 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            t_prep = tic()            
+            ! t_prep = tic()            
             ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr),&
             ! &rt_norm, rt_fft, rt_clip, rt_shift, rt_ctf, rt_mask, rt_gridding, rt_tot )
-            rt_prep = rt_prep + toc(t_prep)
+            ! rt_prep = rt_prep + toc(t_prep)
 
             ! 90 % of the compute
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
 
             ! transfer to polar coordinates
-            t_polarize = tic()
+            ! t_polarize = tic()
             ! 10 % of the compute
             call build_glob%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            rt_polarize = rt_polarize + toc(t_polarize)
+            ! rt_polarize = rt_polarize + toc(t_polarize)
             ! e/o flag
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do

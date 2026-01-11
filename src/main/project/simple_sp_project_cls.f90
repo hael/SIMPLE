@@ -41,10 +41,12 @@ contains
         ix     = 1
         iy     = 1
         ntiles = 0
+        ! mask memoization
+        call img%memoize_mask_serial_coords
         do icls = 1,ncls_sel
             call img%new(ldim_read, smpd)
             call stkio_r%get_image(cavg_inds(icls), img)
-            if(present(mskdiam_px)) call img%mask(mskdiam_px / 2.0, 'softavg')
+            if(present(mskdiam_px)) call img%mask2D_softavg_serial(mskdiam_px / 2.0)
             call img%fft
             if(ldim_read(1) > JPEG_DIM) then
                 call img%clip_inplace([JPEG_DIM,JPEG_DIM,1])

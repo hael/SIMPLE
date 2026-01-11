@@ -332,19 +332,15 @@ contains
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise, crop_factor
+        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
         ! Normalise
-        if( params_glob%l_noise_norm )then
-            call img%norm_noise(build_glob%lmsk, sdev_noise)
-        else
-            call img%norm_within(build_glob%lmsk)
-        endif
+        call img%norm_noise(build_glob%lmsk, sdev_noise)
         ! Fourier cropping
         call img%fft()
         call img%clip(img_out)
         ! Shift image to rotational origin
-        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
-        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
             call img_out%shift2Dserial([-x,-y])
         endif
@@ -363,11 +359,7 @@ contains
         ! Back to real space
         call img_out%ifft
         ! Soft-edged mask
-        if( params_glob%l_needs_sigma )then
-            call img_out%mask2D_softavg_serial(params_glob%msk_crop)
-        else
-            call img_out%mask2D_soft_serial(params_glob%msk_crop)
-        endif
+        call img_out%mask2D_softavg_serial(params_glob%msk_crop)
         ! gridding prep
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! return to Fourier space
@@ -386,14 +378,13 @@ contains
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise, crop_factor
         integer(timer_int_kind) :: t_norm, t_fft, t_clip, t_shift, t_ctf, t_mask, t_gridding, t_tot
+        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
         t_norm = tic()
         t_tot  = t_norm
         ! Normalise
-        if( params_glob%l_noise_norm )then
-            call img%norm_noise(build_glob%lmsk, sdev_noise)
-        else
-            call img%norm_within(build_glob%lmsk)
-        endif
+        call img%norm_noise(build_glob%lmsk, sdev_noise)
         rt_norm = rt_norm + toc(t_norm)
         t_fft   = tic()
         ! Fourier cropping
@@ -404,9 +395,6 @@ contains
         rt_clip = rt_clip + toc(t_clip)
         ! Shift image to rotational origin
         t_shift = tic()
-        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
-        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
             call img_out%shift2Dserial([-x,-y])
         endif
@@ -431,11 +419,8 @@ contains
         rt_fft = rt_fft + toc(t_fft)
         ! Soft-edged mask
         t_mask = tic()
-        if( params_glob%l_needs_sigma )then
-            call img_out%mask(params_glob%msk_crop, 'softavg')
-        else
-            call img_out%mask(params_glob%msk_crop, 'soft')
-        endif
+        ! Soft-edged mask
+        call img_out%mask2D_softavg_serial(params_glob%msk_crop)
         rt_mask = rt_mask + toc(t_mask)
         ! gridding prep
         t_gridding = tic()
