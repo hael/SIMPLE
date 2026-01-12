@@ -12,6 +12,7 @@ use simple_simple_volinterp
 use simple_corrmat
 use simple_timer
 use simple_aff_prop
+use simple_stat
 implicit none 
 type(parameters)         :: p1
 type(oris)               :: spiral
@@ -20,7 +21,7 @@ type(cmdline)            :: cline_pdb2mrc, cline
 type(dendro)             :: test_tree
 
 real                     :: objs(2), t1, t2, simsum
-integer                  :: indxs(2), rc, ifoo, NPROJ = 100, nthr_max = 10, i, j
+integer                  :: indxs(2), rc, ifoo, NPROJ = 500, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
 real(timer_int_kind)     :: rt_fm, rt_cc, rt_ap, rt_tr 
@@ -76,7 +77,6 @@ proj_arr = reproject(vol, spiral, NPROJ)
 params_glob%ldim = proj_arr(1)%get_ldim()
 allocate(dist_mat_fm(NPROJ,NPROJ), dist_mat_cc(NPROJ,NPROJ))
 ! t_cc = tic()
-
 ! dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
 ! rt_cc = toc(t_cc)
 
@@ -104,11 +104,11 @@ allocate(dist_mat_fm(NPROJ,NPROJ), dist_mat_cc(NPROJ,NPROJ))
 t_fm = tic()
 call calc_inpl_invariant_fm(proj_arr, p1%hp, p1%lp, p1%trs, dist_mat_fm, .false.)
 rt_fm = toc(t_fm)
-
-
 ! print *, 'N_PROJS:', NPROJ, 'cc time:', rt_cc, 'fm time:', rt_fm
 
-call affprop%new(NPROJ, dist_mat_fm, pref=-2.)
+call normalize_minmax(dist_mat_fm)
+
+call affprop%new(NPROJ, dist_mat_fm)
 t_ap = tic()
 call affprop%propagate(centers, labels, simsum)
 rt_ap = toc(t_ap)
@@ -117,7 +117,7 @@ print *, 'N_PROJS:', NPROJ, 'fm time:', rt_fm, 'ap time:', rt_ap
 
 print *, simsum, size(centers), labels
 
-allocate(roots(size(centers)))
+! allocate(roots(size(centers)))
 
 
 ! split into sub_dmats to make the trees from 
