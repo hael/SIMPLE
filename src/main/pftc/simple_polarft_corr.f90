@@ -117,35 +117,59 @@ contains
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        integer :: i, ithr, k
+        integer :: i, ithr, k, kk, k0
+        logical :: even
         ithr    = omp_get_thread_num() + 1
         i       = self%pinds(iptcl)
+        even    = self%iseven(i)
         shmat   => self%heap_vars(ithr)%shmat
         pft_ref => self%heap_vars(ithr)%pft_ref
-        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
-        if( arg(shift) > SHERR )then
+        ! Materialize (possibly shifted) reference pft as before
+        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), even)
+        if (shift(1)*shift(1) + shift(2)*shift(2) > SHERR*SHERR) then
             call self%gen_shmat(ithr, shift, shmat)
             pft_ref = shmat * pft_ref
         endif
-        self%heap_vars(ithr)%kcorrs = 0.d0
-        self%drvec(ithr)%r          = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            ! FT(CTF2) x FT(REF2)), REF2 is shift invariant
-            self%cvec1(ithr)%c = merge(self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref),&
-                                      &self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref), self%iseven(i))
-            ! IFFT(FT(CTF2) x FT(REF2))
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r = self%drvec(ithr)%r + real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! FT(S.REF), shifted reference
-            self%cvec2(ithr)%c(1:self%pftsz)            = pft_ref(:,k)
-            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
-            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-            ! FT(X.CTF) x FT(S.REF)*
-            self%cvec1(ithr)%c = self%ft_ptcl_ctf(:,k,i) * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-            ! IFFT(FT(X.CTF) x FT(S.REF)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(self%rvec1(ithr)%r(1:self%nrots),dp)
+        ! -------- compute FFT(S.REF) for all k at once
+        k0 = self%kfromto(1)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%cmat2_many(ithr)%c(           1:self%pftsz, kk) = pft_ref(:,k)
+            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
         end do
+        call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+        ! ------------------------------------------------------------
+        ! ============================================================
+        ! Batched IFFT #1: IFFT( FT(CTF2) x FT(REF2) ) for all k
+        ! Accumulate into drvec
+        ! ============================================================
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crmat1_many(ithr)%c(:,kk) = merge( &
+                self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref), &
+                self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref),  even )
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
+        self%drvec(ithr)%r = 0.d0
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%drvec(ithr)%r = self%drvec(ithr)%r + real(self%crmat1_many(ithr)%r(1:self%nrots,kk), dp)
+        end do
+        ! ============================================================
+        ! Batched IFFT #2: IFFT( FT(X.CTF) x FT(S.REF)* ) for all k
+        ! Accumulate into kcorrs
+        ! ============================================================
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crmat1_many(ithr)%c(:,kk) = self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
+        self%heap_vars(ithr)%kcorrs = 0.d0
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(self%crmat1_many(ithr)%r(1:self%nrots,kk), dp)
+        end do
+        ! Finish exactly as before
         self%drvec(ithr)%r = self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots),dp)
         cc = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
     end subroutine gen_corrs
@@ -157,34 +181,48 @@ contains
         real(sp),            intent(out)   :: euclids(self%nrots)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(dp) :: w, sumsqptcl
-        integer  :: k, i, ithr
+        integer  :: k, i, ithr, kk, k0
+        logical  :: even
         ithr    = omp_get_thread_num() + 1
         i       = self%pinds(iptcl)
+        even    = self%iseven(i)
         shmat   => self%heap_vars(ithr)%shmat
         pft_ref => self%heap_vars(ithr)%pft_ref
-        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
-        if( arg(shift) > SHERR )then
+        ! Materialize (possibly shifted) reference pft as before
+        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), even)
+        if (shift(1)*shift(1) + shift(2)*shift(2) > SHERR*SHERR) then
             call self%gen_shmat(ithr, shift, shmat)
             pft_ref = shmat * pft_ref
         endif
+        ! -------- compute FFT(S.REF) for all k at once
+        k0 = self%kfromto(1)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%cmat2_many(ithr)%c(           1:self%pftsz, kk) = pft_ref(:,k)
+            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
+        end do
+        call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+        ! ------------------------------------------------------------
+        ! ============================================================
+        ! Batched IFFT: IFFT( FT(CTF2) x FT(REF2) - 2*FT(X.CTF)xFT(S.REF)* )
+        ! for all k at once
+        ! ============================================================
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crmat1_many(ithr)%c(:,kk) = merge( &
+                self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref), &
+                self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref),  even )
+            self%crmat1_many(ithr)%c(:,kk) = self%crmat1_many(ithr)%c(:,kk) - 2.0 * self%ft_ptcl_ctf(:,k,i) * &
+                                            conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
+        ! Accumulate exactly as before
         self%heap_vars(ithr)%kcorrs = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i)),dp))
-            ! FT(CTF2) x FT(REF2)*
-            self%cvec1(ithr)%c = merge(self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref),&
-                                      &self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref), self%iseven(i))
-            ! FT(S.REF), shifted reference
-            self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
-            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
-            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
-            self%cvec1(ithr)%c = self%cvec1(ithr)%c - 2.0 * self%ft_ptcl_ctf(:,k,i) * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-            ! IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
+            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%crmat1_many(ithr)%r(1:self%nrots,kk), dp)
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
