@@ -168,9 +168,9 @@ contains
             allocate(fft_wisdoms_fname, source='fft_wisdoms.dat'//c_null_char)
         endif
         wsdm_ret = fftw_import_wisdom_from_filename(fft_wisdoms_fname)
-        self%plan_fwd1    = fftwf_plan_dft_1d(    self%nrots, self%cvec2(1)%c, self%cvec2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        self%plan_bwd1    = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        self%plan_mem_r2c = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_fwd1    = fftwf_plan_dft_1d(    self%nrots, self%cvec2(1)%c, self%cvec2(1)%c, FFTW_FORWARD, ior(FFTW_MEASURE, FFTW_USE_WISDOM))
+        self%plan_bwd1    = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r,               ior(FFTW_MEASURE, FFTW_USE_WISDOM))
+        self%plan_mem_r2c = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c,               ior(FFTW_MEASURE, FFTW_USE_WISDOM))
         ! plan the many
         rank       = 1_c_int
         n(1)       = int(self%nrots, c_int)
@@ -185,7 +185,7 @@ contains
         self%plan_fwd1_many = fftwf_plan_many_dft( rank, n, howmany, &
         &self%cmat2_many(1)%c, inembed, istride, idist, &
         &self%cmat2_many(1)%c, onembed, ostride, odist, &
-        &FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        &FFTW_FORWARD, ior(FFTW_MEASURE, FFTW_USE_WISDOM))
         ! Input complex length is (n/2+1) = pftsz+1
         inembed(1) = int(self%pftsz+1, c_int)
         idist      = int(self%pftsz+1, c_int)
@@ -197,7 +197,7 @@ contains
         self%plan_bwd1_many = fftwf_plan_many_dft_c2r( rank, n, howmany, &
         &self%crmat1_many(1)%c, inembed, istride, idist, &
         &self%crmat1_many(1)%r, onembed, ostride, odist, &
-        &ior(FFTW_PATIENT, FFTW_USE_WISDOM) )
+        &ior(FFTW_MEASURE, FFTW_USE_WISDOM) )
         wsdm_ret = fftw_export_wisdom_to_filename(fft_wisdoms_fname)
         deallocate(fft_wisdoms_fname)
         if (wsdm_ret == 0) then
