@@ -5,7 +5,7 @@ use simple_core_module_api
 #include "simple_local_flags.inc"
 implicit none
 
-real, parameter :: SHERR = 0.001
+real, parameter :: SHERRSQ = 0.00001
 
 contains
 
@@ -122,8 +122,8 @@ contains
         logical  :: even, needs_shift
         ithr    =  omp_get_thread_num() + 1
         i       =  self%pinds(iptcl)
-        even    =  self%iseven(i)
         k0      =  self%kfromto(1)
+        even    =  self%iseven(i)
         shmat   => self%heap_vars(ithr)%shmat
         pft_ref => self%heap_vars(ithr)%pft_ref
         ! Select reference once using pointer (avoids merge overhead)
@@ -134,7 +134,7 @@ contains
         endif
         ! Check if shift is needed (hoist outside to avoid repeated checks)
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
-        needs_shift = shift_mag_sq > SHERR*SHERR
+        needs_shift = shift_mag_sq > SHERRSQ
         if (needs_shift) then
             call self%gen_shmat(ithr, shift, shmat)
             pft_ref = shmat * pft_ref_source
@@ -201,8 +201,8 @@ contains
         logical  :: even, needs_shift
         ithr         =  omp_get_thread_num() + 1
         i            =  self%pinds(iptcl)
-        even         =  self%iseven(i)
         k0           =  self%kfromto(1)
+        even         =  self%iseven(i)
         shmat        => self%heap_vars(ithr)%shmat
         pft_ref      => self%heap_vars(ithr)%pft_ref
         w_weights    => self%heap_vars(ithr)%w_weights
@@ -215,7 +215,7 @@ contains
         endif
         ! Check if shift is needed
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
-        needs_shift = shift_mag_sq > SHERR*SHERR
+        needs_shift = shift_mag_sq > SHERRSQ
         if (needs_shift) then
             call self%gen_shmat(ithr, shift, shmat)
             pft_ref = shmat * pft_ref_source
@@ -277,15 +277,19 @@ contains
     end subroutine gen_euclids
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:)
         integer :: ithr, i
-        i    =  self%pinds(iptcl)
+        i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        pft_ref_8 = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        if (self%iseven(i)) then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         ! rotation
         call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
@@ -300,18 +304,22 @@ contains
     end function gen_corr_for_rot_8_1
 
     module real(dp) function gen_corr_for_rot_8_2( self, iref, iptcl, shvec, irot )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real(dp),            intent(in)    :: shvec(2)
-        integer,             intent(in)    :: irot
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2)
+        integer,                     intent(in)    :: irot
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), shmat_8(:,:)
         integer :: ithr, i
-        i             =  self%pinds(iptcl)
-        ithr          =  omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        if (self%iseven(i)) then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         ! shift
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
@@ -332,13 +340,17 @@ contains
         class(polarft_calc),  intent(inout) :: self
         complex(dp), pointer, intent(inout) :: pft_ref(:,:)
         integer,              intent(in)    :: i
-        real(dp) :: sqsum_ref
+        real(dp) :: sqsum_ref, k_weight
         integer  :: k
         sqsum_ref             = 0.d0
         gen_corr_cc_for_rot_8 = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            sqsum_ref            = sqsum_ref +            real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
-            gen_corr_cc_for_rot_8 = gen_corr_cc_for_rot_8 + real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+        ! Single k-loop with cached weight computation
+        do k = self%kfromto(1), self%kfromto(2)
+            k_weight = real(k, kind=dp)
+            sqsum_ref             = sqsum_ref + k_weight * &
+                sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)), dp))
+            gen_corr_cc_for_rot_8 = gen_corr_cc_for_rot_8 + k_weight * &
+                sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)), dp))
         end do
         gen_corr_cc_for_rot_8 = gen_corr_cc_for_rot_8 / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
     end function gen_corr_cc_for_rot_8
@@ -347,23 +359,25 @@ contains
         class(polarft_calc),  intent(inout) :: self
         complex(dp), pointer, intent(inout) :: pft_ref(:,:)
         integer,              intent(in)    :: iptcl
-        integer :: i,k
+        real(dp) :: w, sum_term
+        integer  :: i, k
         i       = self%pinds(iptcl)
         pft_ref = pft_ref - self%pfts_ptcls(:,:,i)
         gen_euclid_for_rot_8 = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            gen_euclid_for_rot_8 = gen_euclid_for_rot_8 +&
-                &(real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(pft_ref(:,k)*conjg(pft_ref(:,k)),dp))
+        do k = self%kfromto(1), self%kfromto(2)
+            w = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+            sum_term = sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)), dp))
+            gen_euclid_for_rot_8 = gen_euclid_for_rot_8 + w * sum_term
         end do
-        gen_euclid_for_rot_8 = dexp( -gen_euclid_for_rot_8 / self%wsqsums_ptcls(i))
+        gen_euclid_for_rot_8 = dexp(-gen_euclid_for_rot_8 / self%wsqsums_ptcls(i))
     end function gen_euclid_for_rot_8
 
     module subroutine gen_corr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real(dp),            intent(in)    :: shvec(2)
-        integer,             intent(in)    :: irot
-        real(dp),            intent(out)   :: f, grad(2)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2)
+        integer,                     intent(in)    :: irot
+        real(dp),                    intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
         integer :: ithr, i
         i    = self%pinds(iptcl)
@@ -371,12 +385,16 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        if (self%iseven(i)) then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gen_corr_cc_grad_for_rot_8(    pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
+                call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
             case(OBJFUN_EUCLID)
                 call self%gen_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
         end select
@@ -387,38 +405,49 @@ contains
         complex(dp), pointer, intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
         integer,              intent(in)    :: iptcl, irot
         real(dp),             intent(out)   :: f, grad(2)
-        real(dp) :: sqsum_ref, sqsum_ptcl, denom
+        real(dp) :: sqsum_ref, sqsum_ptcl, denom, k_weight
         integer  :: k, i
-        i         = self%pinds(iptcl)
-        sqsum_ref = 0.d0
-        f         = 0.d0
-        grad      = 0.d0
+        i          = self%pinds(iptcl)
+        sqsum_ref  = 0.d0
+        f          = 0.d0
+        grad       = 0.d0
         sqsum_ptcl = self%ksqsums_ptcls(i)
+        ! First rotation and k-loop: compute sqsum_ref and f
         call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
-            f         = f         + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+        do k = self%kfromto(1), self%kfromto(2)
+            k_weight  = real(k, kind=dp)
+            sqsum_ref = sqsum_ref + k_weight * sum(real(self%ctfmats(:,k,i) * self%ctfmats(:,k,i) * &
+                                                        pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)), dp))
+            f         = f + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
+                                                conjg(self%pfts_ptcls(:,k,i)), dp))
         enddo
-        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+        ! Second rotation: gradient x-component
+        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+        do k = self%kfromto(1), self%kfromto(2)
+            k_weight = real(k, kind=dp)
+            grad(1)  = grad(1) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
+                                                    conjg(self%pfts_ptcls(:,k,i)), dp))
         enddo
-        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+        ! Third rotation: gradient y-component
+        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+        do k = self%kfromto(1), self%kfromto(2)
+            k_weight = real(k, kind=dp)
+            grad(2)  = grad(2) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
+                                                    conjg(self%pfts_ptcls(:,k,i)), dp))
         end do
+        ! Final normalization
         denom = dsqrt(sqsum_ref * sqsum_ptcl)
-        f     = f    / denom
+        f     = f / denom
         grad  = grad / denom
     end subroutine gen_corr_cc_grad_for_rot_8
 
     module subroutine gen_euclid_grad_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad )
-        class(polarft_calc),  intent(inout) :: self
-        complex(dp), pointer, intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,              intent(in)    :: iptcl, irot
-        real(dp),             intent(out)   :: f, grad(2)
+        class(polarft_calc),  target, intent(inout) :: self
+        complex(dp), pointer,         intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
+        integer,                      intent(in)    :: iptcl, irot
+        real(dp),                     intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_diff(:,:)
-        real(dp) :: denom, w
+        real(dp) :: denom, w, sum_diff
         integer  :: k, i, ithr
         ithr     = omp_get_thread_num() + 1
         i        = self%pinds(iptcl)
@@ -426,32 +455,40 @@ contains
         grad     = 0.d0
         denom    = self%wsqsums_ptcls(i)
         pft_diff => self%heap_vars(ithr)%shmat_8
+        ! First rotation: compute difference and f
         call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
         pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
-        pft_diff = pft_ref_tmp - self%pfts_ptcls(:,:,i) ! Ref(shift + rotation + CTF) - Ptcl
-        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
-        do k = self%kfromto(1),self%kfromto(2)
-            w       = real(k,dp) / real(self%sigma2_noise(k,iptcl))
-            f       = f + w * sum(real(pft_diff(:,k)*conjg(pft_diff(:,k)),dp))
-            grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
+        pft_diff    = pft_ref_tmp - self%pfts_ptcls(:,:,i)  ! Ref(shift + rotation + CTF) - Ptcl
+        do k = self%kfromto(1), self%kfromto(2)
+            w        = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+            sum_diff = sum(real(pft_diff(:,k) * conjg(pft_diff(:,k)), dp))
+            f        = f + w * sum_diff
         end do
-        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+        ! Second rotation: x-gradient
+        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
         pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
-        do k = self%kfromto(1),self%kfromto(2)
-            w       = real(k,dp) / real(self%sigma2_noise(k,iptcl))
-            grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
+        do k = self%kfromto(1), self%kfromto(2)
+            w       = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+            grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))), dp)
         end do
-        f    = dexp( -f / denom )
+        ! Third rotation: y-gradient
+        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
+        do k = self%kfromto(1), self%kfromto(2)
+            w       = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+            grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))), dp)
+        end do
+        ! Final computation
+        f    = dexp(-f / denom)
         grad = -f * 2.d0 * grad / denom
     end subroutine gen_euclid_grad_for_rot_8
 
     module subroutine gen_corr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real(dp),            intent(in)    :: shvec(2)
-        integer,             intent(in)    :: irot
-        real(dp),            intent(out)   :: grad(2)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2)
+        integer,                     intent(in)    :: irot
+        real(dp),                    intent(out)   :: grad(2)
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
         real(dp) :: f
         integer  :: ithr, i
@@ -460,7 +497,11 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        if (self%iseven(i)) then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
@@ -476,55 +517,70 @@ contains
         complex(dp), pointer, intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
         integer,              intent(in)    :: i, irot
         real(dp),             intent(out)   :: grad(2)
-        real(dp) :: sqsum_ref, sqsum_ptcl
+        real(dp) :: sqsum_ref, sqsum_ptcl, k_weight
         integer  :: k
-        sqsum_ref = 0.d0
-        grad      = 0.d0
+        sqsum_ref  = 0.d0
+        grad       = 0.d0
         sqsum_ptcl = self%ksqsums_ptcls(i)
+        ! First rotation: compute sqsum_ref
         call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+        do k = self%kfromto(1), self%kfromto(2)
+            k_weight  = real(k, kind=dp)
+            sqsum_ref = sqsum_ref + k_weight * sum(real(self%ctfmats(:,k,i) * self%ctfmats(:,k,i) * &
+                                                        pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)), dp))
         enddo
-        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+        ! Second rotation: x-gradient
+        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+        do k = self%kfromto(1), self%kfromto(2)
+            k_weight = real(k, kind=dp)
+            grad(1)  = grad(1) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
+                                                    conjg(self%pfts_ptcls(:,k,i)), dp))
         enddo
-        call self%rotate_pft(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-        do k = self%kfromto(1),self%kfromto(2)
-            grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+        ! Third rotation: y-gradient
+        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+        do k = self%kfromto(1), self%kfromto(2)
+            k_weight = real(k, kind=dp)
+            grad(2)  = grad(2) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
+                                                    conjg(self%pfts_ptcls(:,k,i)), dp))
         end do
         grad = grad / dsqrt(sqsum_ref * sqsum_ptcl)
     end subroutine gen_corr_cc_grad_only_for_rot_8
 
     module subroutine gen_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real(sp),            intent(in)    :: shvec(2)
-        integer,             intent(in)    :: irot
-        real(sp),  optional, intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shvec(2)
+        integer,                     intent(in)    :: irot
+        real(sp),  optional,         intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        integer  :: i, ithr
+        real(dp)    :: norm_factor
+        integer     :: i, ithr
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        ! e/o
-        pft_ref_8     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        if (self%iseven(i)) then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
         ! shift
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
         ! rotation
         call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
-        pft_ref_tmp_8 = pft_ref_tmp_8 * real(self%ctfmats(:,:,i),dp)
+        pft_ref_tmp_8 = pft_ref_tmp_8 * real(self%ctfmats(:,:,i), dp)
         ! difference
         pft_ref_tmp_8 = pft_ref_tmp_8 - self%pfts_ptcls(:,:,i)
-        ! sigma2
-        if( present(sigma_contrib) )then
-            sigma_contrib = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8),dp), dim=1) / (2.d0*real(self%pftsz,dp)))
+        ! sigma2 - pre-compute normalization factor
+        norm_factor = 2.d0 * real(self%pftsz, dp)
+        if (present(sigma_contrib)) then
+            sigma_contrib = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8), dp), dim=1) / norm_factor)
         else
-            self%sigma2_noise(self%kfromto(1):self%kfromto(2), iptcl) = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8),dp), dim=1) / (2.d0*real(self%pftsz,dp)))
+            self%sigma2_noise(self%kfromto(1):self%kfromto(2), iptcl) = &
+                real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8), dp), dim=1) / norm_factor)
         endif
     end subroutine gen_sigma_contrib
 
