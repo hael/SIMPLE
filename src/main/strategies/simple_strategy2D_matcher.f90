@@ -499,16 +499,13 @@ contains
 
     !>  \brief  fills batch particle images for polar alignment
     subroutine build_batch_particles2D( pftc, nptcls_here, pinds, l_ctf_here )
-        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align, prepimg4align_bench
+        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align
         class(polarft_calc), intent(inout) :: pftc
-        integer,             intent(in) :: nptcls_here
-        integer,             intent(in) :: pinds(nptcls_here)
-        logical,             intent(in) :: l_ctf_here
+        integer,             intent(in)    :: nptcls_here
+        integer,             intent(in)    :: pinds(nptcls_here)
+        logical,             intent(in)    :: l_ctf_here
         type(image) :: img_instr
-        real(timer_int_kind)    :: rt_prep1, rt_ctf, rt_prep2, rt_tot, rt_sum
-        real(timer_int_kind)    :: rt_prep, rt_polarize
-        integer(timer_int_kind) :: t_prep, t_polarize
-        integer :: iptcl_batch, iptcl, ithr
+        integer     :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds)
@@ -519,67 +516,16 @@ contains
         call ptcl_match_imgs(1)%memoize_mask_serial_coords
         ! get instrument function
         img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
-        ! rt_prep1    = 0.
-        ! rt_ctf      = 0.
-        ! rt_prep2    = 0.
-        ! rt_tot      = 0.
-        ! rt_prep     = 0.
-        ! rt_polarize = 0.
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            ! t_prep = tic()        
-            ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), img_instr, ptcl_match_imgs(ithr),&
-            ! &rt_prep1, rt_ctf, rt_prep2, rt_tot )
-            ! rt_prep = rt_prep + toc(t_prep)
-            ! prepare image for alignment (87% of total loop compute)
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), img_instr, ptcl_match_imgs(ithr))
-            ! transfer to polar coordinates (13% of total loop compute)
-            ! t_polarize = tic()
             call build_glob%img_crop_polarizer%polarize(pftc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! rt_polarize = rt_polarize + toc(t_polarize)
             ! e/o flag
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
-        ! rt_sum = rt_prep1 + rt_ctf + rt_prep2
-
-        ! print *, 'rt_prep1    =', rt_prep1,    ' % ', 100.*(rt_prep1/rt_tot)
-        ! print *, 'rt_ctf      =', rt_ctf,      ' % ', 100.*(rt_ctf/rt_tot)
-        ! print *, 'rt_prep2    =', rt_prep2,    ' % ', 100.*(rt_prep2/rt_tot)
-        ! print *, 'accounted for % ', 100.*(rt_sum/rt_tot)
-        ! print *, 'rt_prep     =', rt_prep,     ' % ', 100.*(rt_prep/(rt_prep + rt_polarize))
-        ! print *, 'rt_polarize =', rt_polarize, ' % ', 100.*(rt_polarize/(rt_prep + rt_polarize))
-        ! print *, ''
-
-        ! SERIAL BENCHMARK
-
-        ! rt_prep1    =   1.9594572470000005       %    59.664794773185427     
-        ! rt_ctf      =  0.38428368599999924       %    11.701305193046235     
-        ! rt_prep2    =  0.94024858699999969       %    28.630243943838675     
-        ! accounted for %    99.996343910070337     
-        ! rt_prep     =   3.2842123879999994       %    83.421954296124483     
-        ! rt_polarize =  0.65265580899999975       %    16.578045703875514
-
-        ! PARALLEL BENCHMARK, PFTC PREP IS NOW SO FAST THAT CACHING ON DISK IS POINTLESS
-
-        ! *** TIMINGS (s) ***
-        ! initialisation       :       0.06
-        ! pftc preparation     :       2.23
-        ! stochastic alignment :       7.13
-        ! class averaging      :       0.11
-        ! project file I/O     :       0.01
-        ! total time           :       9.66
-
-        ! *** RELATIVE TIMINGS (%) ***
-        ! initialisation       :       0.61
-        ! pftc preparation     :      23.08
-        ! stochastic alignment :      73.78
-        ! class averaging      :       1.09
-        ! project file I/O     :       0.07
-        ! % accounted for      :      98.62
-
         ! always create this one, CTF logic internal
         call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
         call pftc%memoize_ptcls
