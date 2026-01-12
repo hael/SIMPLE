@@ -591,15 +591,15 @@ interface
     end subroutine gen_euclids
 
     module function gen_corr_for_rot_8_1(self, iref, iptcl, irot) result(val)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
         real(dp) :: val
     end function gen_corr_for_rot_8_1
 
     module function gen_corr_for_rot_8_2(self, iref, iptcl, shvec, irot) result(val)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot
-        real(dp),            intent(in)    :: shvec(2)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
         real(dp) :: val
     end function gen_corr_for_rot_8_2
 
@@ -618,10 +618,10 @@ interface
     end function gen_euclid_for_rot_8
 
     module subroutine gen_corr_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot
-        real(dp),            intent(in)    :: shvec(2)
-        real(dp),            intent(out)   :: f, grad(2)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_corr_grad_for_rot_8
 
     module subroutine gen_corr_cc_grad_for_rot_8(self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad)
@@ -632,17 +632,17 @@ interface
     end subroutine gen_corr_cc_grad_for_rot_8
 
     module subroutine gen_euclid_grad_for_rot_8(self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad)
-        class(polarft_calc),  intent(inout) :: self
-        complex(dp), pointer, intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,              intent(in) :: iptcl, irot
-        real(dp),             intent(out) :: f, grad(2)
+        class(polarft_calc), target, intent(inout) :: self
+        complex(dp), pointer,        intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
+        integer,                     intent(in) :: iptcl, irot
+        real(dp),                    intent(out) :: f, grad(2)
     end subroutine gen_euclid_grad_for_rot_8
 
     module subroutine gen_corr_grad_only_for_rot_8(self, iref, iptcl, shvec, irot, grad)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
-        real(dp),            intent(in) :: shvec(2)
-        real(dp),            intent(out) :: grad(2)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in) :: iref, iptcl, irot
+        real(dp),                    intent(in) :: shvec(2)
+        real(dp),                    intent(out) :: grad(2)
     end subroutine gen_corr_grad_only_for_rot_8
 
     module subroutine gen_corr_cc_grad_only_for_rot_8(self, pft_ref, pft_ref_tmp, i, irot, grad)
@@ -653,10 +653,10 @@ interface
     end subroutine gen_corr_cc_grad_only_for_rot_8
 
     module subroutine gen_sigma_contrib(self, iref, iptcl, shvec, irot, sigma_contrib)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
-        real(sp),            intent(in) :: shvec(2)
-        real(sp), optional,  intent(out) :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in) :: iref, iptcl, irot
+        real(sp),                    intent(in) :: shvec(2)
+        real(sp), optional,          intent(out) :: sigma_contrib(self%kfromto(1):self%kfromto(2))
     end subroutine gen_sigma_contrib
 
     ! ===== CORR_MAG  =====
