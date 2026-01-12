@@ -26,6 +26,17 @@ type fftw_drvec
     real(kind=c_double), pointer :: r(:) => null()
 end type fftw_drvec
 
+type fftw_cmat
+    type(c_ptr)                            :: p
+    complex(kind=c_float_complex), pointer :: c(:,:) => null()
+end type fftw_cmat
+
+type fftw_crmat
+    type(c_ptr)                            :: p
+    complex(kind=c_float_complex), pointer :: c(:,:) => null()  ! (pftsz+1, nk)
+    real(kind=c_float),            pointer :: r(:,:) => null()  ! (nrots+2, nk) view on same memory
+end type fftw_crmat
+
 type heap_vars
     complex(sp), pointer :: pft_ref(:,:)       => null()
     complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
@@ -51,6 +62,7 @@ type :: polarft_calc
     integer                  :: ldim(3)    = 0           !< logical dimensions of original cartesian image
     integer                  :: kfromto(2)               !< band-pass Fourier index limits
     integer                  :: nk                       !< number of shells used during alignment
+    integer                  :: nk_many = 0
     real                     :: dang                     !< angular increment
     integer,     allocatable :: pinds(:)                 !< index array (to reduce memory when frac_update < 1)
     real,        allocatable :: npix_per_shell(:)        !< number of (cartesian) pixels per shell
@@ -70,12 +82,18 @@ type :: polarft_calc
     ! FFTW plans
     type(c_ptr)              :: plan_fwd1, plan_bwd1
     type(c_ptr)              :: plan_mem_r2c
+    ! batched FFT plans for vectors of length nrots (nk transforms)
+    type(c_ptr) :: plan_fwd1_many, plan_bwd1_many
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_absptcl_ctf(:,:,:)                   !< Fourier Transform of (particle times CTF)**2
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)                          !< Fourier Transform of CTF squared modulus
     complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),  ft_ref_odd(:,:,:)  !< Fourier Transform of even/odd references
     complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:) !< Fourier Transform of even/odd references squared modulus
+    ! buffer: (nrots, nk_many) holding cvec2 for all k
+    type(fftw_cmat),  allocatable :: cmat2_many(:)  ! per thread
+    ! batched backward (c2r) plan: nk transforms of length nrots, in-place
+    type(fftw_crmat), allocatable :: crmat1_many(:) ! per thread
     ! Convenience vectors, thread memoization
     type(heap_vars),               allocatable :: heap_vars(:)
     type(fftw_cvec),               allocatable :: cvec1(:), cvec2(:)
