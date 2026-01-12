@@ -50,6 +50,9 @@ type heap_vars
     complex(dp), pointer :: shmat_8(:,:)       => null()
     real(dp),    pointer :: pft_r1_8(:,:)      => null()
     real(sp),    pointer :: pft_r(:,:)         => null()
+    ! cache arrays for batched computations
+    real(dp),    pointer :: w_weights(:)       => null()  ! k/sigma2 weights
+    real(dp),    pointer :: sumsq_cache(:)     => null()  ! particle sumsq per k
 end type heap_vars
 
 type :: polarft_calc
@@ -574,17 +577,17 @@ interface
     end subroutine gen_objfun_vals
 
     module subroutine gen_corrs(self, iref, iptcl, shift, cc)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real(sp),            intent(in)    :: shift(2)
-        real(sp),            intent(out)   :: cc(self%nrots)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: cc(self%nrots)
     end subroutine gen_corrs
 
     module subroutine gen_euclids(self, iref, iptcl, shift, euclids)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real,                intent(in)    :: shift(2)
-        real(sp),            intent(out)   :: euclids(self%nrots)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real,                        intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids
 
     module function gen_corr_for_rot_8_1(self, iref, iptcl, irot) result(val)
