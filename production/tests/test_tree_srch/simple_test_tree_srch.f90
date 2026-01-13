@@ -18,7 +18,7 @@ type(parameters)         :: p1
 type(oris)               :: spiral
 type(commander_pdb2mrc)  :: xpdb2mrc
 type(cmdline)            :: cline_pdb2mrc, cline
-type(dendro)             :: test_tree
+type(multi_dendro)             :: test_tree
 
 real                     :: objs(2), t1, t2, simsum
 integer                  :: indxs(2), rc, ifoo, NPROJ = 500, nthr_max = 10, i, j
@@ -31,7 +31,7 @@ character(len=:), allocatable   :: cmd
 real, allocatable               :: dist_mat_fm(:,:), dist_mat_cc(:,:), sub_distmats(:,:,:)
 type(image), allocatable        :: proj_arr(:)
 integer, allocatable            :: centers(:), labels(:)
-type(dendro), allocatable       :: roots(:)
+type(multi_dendro), allocatable       :: roots(:)
 type(s2_node), pointer   :: p
 
 ! Load Volume 
