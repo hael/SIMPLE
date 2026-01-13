@@ -279,9 +279,12 @@ contains
         mem_msk_n3   = n3
         mem_msk_is3d = is3d
         ! (Re)allocate
-        if (allocated(mem_msk_cis)) then
-            deallocate(mem_msk_cis, mem_msk_cis2, mem_msk_cjs, mem_msk_cjs2, mem_msk_cks, mem_msk_cks2)
-        endif
+        if( allocated(mem_msk_cis)  ) deallocate(mem_msk_cis)
+        if( allocated(mem_msk_cis2) ) deallocate(mem_msk_cis2)
+        if( allocated(mem_msk_cjs)  ) deallocate(mem_msk_cjs)
+        if( allocated(mem_msk_cjs2) ) deallocate(mem_msk_cjs2)
+        if( allocated(mem_msk_cks)  ) deallocate(mem_msk_cks)
+        if( allocated(mem_msk_cks2) ) deallocate(mem_msk_cks2)
         allocate(mem_msk_cis(n1), mem_msk_cis2(n1), mem_msk_cjs(n2), mem_msk_cjs2(n2), mem_msk_cks(n3), mem_msk_cks2(n3))
         ! Fill (origin at center) + squares
         do i = 1, n1
