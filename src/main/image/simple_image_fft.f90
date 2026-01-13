@@ -214,8 +214,9 @@ contains
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
         integer       :: n1, n2, n1o, n2o, h1o, h2o, i, j, npix, starts(3), stops(3), x0, y0, xo, yo
-        real(dp)      :: mean_dp, M2_dp, x_dp, delta, var_dp
-        real(c_float) :: mean_sp, invstd_sp, scale_cmat
+        real(dp)      :: mean_dp, var_dp, sum_dp, sum_sq_dp, rnpix
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat, x_sp
+        logical       :: do_norm
         ! n3 is always 1 here
         n1  = self%ldim(1)
         n2  = self%ldim(2)
@@ -224,28 +225,36 @@ contains
         h1o = n1o/2
         h2o = n2o/2
         ! ============================================================
-        ! NOISE NORMALIZATION: one-pass Welford over background pixels
+        ! NOISE NORMALIZATION: Optimized two-pass with simple sums
         ! ============================================================
-        mean_dp = 0.0_dp
-        M2_dp   = 0.0_dp
-        npix    = 0
-        do j = 1, n2
-            do i = 1, n1
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        ! First pass: accumulate sums (column-major for Fortran)
+        do i = 1, n1
+            do j = 1, n2
                 if (.not. lmsk(i,j,1)) then
                     npix = npix + 1
-                    x_dp = real(self%rmat(i,j,1), dp)
-                    delta   = x_dp - mean_dp
-                    mean_dp = mean_dp + delta / real(npix, dp)
-                    M2_dp   = M2_dp + delta * (x_dp - mean_dp)
+                    x_sp = self%rmat(i,j,1)
+                    sum_dp = sum_dp + real(x_sp, dp)
+                    sum_sq_dp = sum_sq_dp + real(x_sp, dp) * real(x_sp, dp)
                 end if
             end do
         end do
+        ! Compute mean and variance
         var_dp = 0.0_dp
-        if (npix > 1) var_dp = M2_dp / real(npix-1, dp)
+        mean_dp = 0.0_dp
+        if (npix > 1) then
+            rnpix = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp = (sum_sq_dp - sum_dp * sum_dp / rnpix) / real(npix - 1, dp)
+        end if
         mean_sp   = real(mean_dp, c_float)
         invstd_sp = 1.0_c_float
+        do_norm = .false.
         if (is_a_number(real(var_dp, kind=kind(1.0))) .and. var_dp > 0.0_dp) then
             invstd_sp = real(1.0_dp / sqrt(var_dp), c_float)
+            do_norm = (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float)
         end if
         ! ============================================================
         ! PAD + FFTSHIFT (fused) + apply normalization while copying
@@ -262,7 +271,7 @@ contains
         stops  = self_out%ldim - starts + 1
         self_out%ft   = .false.
         self_out%rmat = 0.0_c_float
-        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float) then
+        if (do_norm) then
             do j = 1, n2
                 y0 = starts(2) + j - 1
                 yo = modulo((y0 - 1) + h2o, n2o) + 1
@@ -292,46 +301,55 @@ contains
         self_out%ft   = .true.
     end subroutine norm_noise_pad_fft
 
+    ! The big players in this subroutine are the normalization (17%) and the fft (70%)  
     module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
         use, intrinsic :: iso_c_binding, only: c_float, c_float_complex
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
         real,         intent(in)    :: shvec(2)
-        real,          parameter :: SHTHRESH = 0.001
+        real,         parameter     :: SHTHRESH = 0.001
+        ! FFT / phase
         complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
-        integer       :: n1, n2, h1, h2,  i, j, ii, jj, npix, lims(3,2), h, hp, k, kpi, kpo 
-        real(dp)      :: mean_dp, M2_dp, x_dp, delta, var_dp,  sh(2)
-        real(c_float) :: mean_sp, invstd_sp,  rswap, scale_cmat, ratio
-        logical       :: k_neg
-        ! n3 is always 1 here
+        real(dp)      :: sh(2)
+        ! dimensions / indices
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo, npix
+        ! normalization
+        real(dp)      :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat, ratio, rswap
+        ! logical flag
+        logical :: k_neg
         n1 = self%ldim(1)
         n2 = self%ldim(2)
         h1 = n1/2
         h2 = n2/2
         ! ============================================================
-        ! NORM_NOISE: one-pass Welford over background pixels (no temps)
+        ! NORM_NOISE (two-pass)
         ! ============================================================
-        mean_dp = 0.0_dp
-        M2_dp   = 0.0_dp
-        npix    = 0
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
         do j = 1, n2
             do i = 1, n1
                 if (.not. lmsk(i,j,1)) then
-                    npix = npix + 1
-                    x_dp = real(self%rmat(i,j,1), dp)
-                    delta   = x_dp - mean_dp
-                    mean_dp = mean_dp + delta / real(npix, dp)
-                    M2_dp   = M2_dp + delta * (x_dp - mean_dp)
+                    xdp = real(self%rmat(i,j,1), dp)
+                    sum_dp    = sum_dp    + xdp
+                    sum_sq_dp = sum_sq_dp + xdp*xdp
+                    npix      = npix + 1
                 end if
             end do
         end do
-        var_dp = 0.0_dp
-        if (npix > 1) var_dp = M2_dp / real(npix-1, dp)
+        mean_dp = 0.0_dp
+        var_dp  = 0.0_dp
+        if (npix > 1) then
+            rnpix  = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp*sum_dp/rnpix) / real(npix-1,dp)
+        end if
         mean_sp   = real(mean_dp, c_float)
         invstd_sp = 1.0_c_float
-        if (is_a_number(real(var_dp, kind=kind(1.0))) .and. var_dp > 0.0_dp) then
-            invstd_sp = real(1.0_dp / sqrt(var_dp), c_float)
+        if (var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp/sqrt(var_dp), c_float)
         end if
         ! ============================================================
         ! SHIFT TO PHASE ORIGIN (fftshift) + apply normalization fused
@@ -358,11 +376,11 @@ contains
                 do i = 1, h1
                     ii = h1 + i
                     rswap = self%rmat(i, j, 1)
-                    self%rmat(i, j, 1) = self%rmat(ii, jj, 1)
+                    self%rmat(i, j, 1)   = self%rmat(ii, jj, 1)
                     self%rmat(ii, jj, 1) = rswap
                     rswap = self%rmat(i, jj, 1)
-                    self%rmat(i, jj, 1) = self%rmat(ii, j, 1)
-                    self%rmat(ii, j, 1) = rswap
+                    self%rmat(i, jj, 1)  = self%rmat(ii, j, 1)
+                    self%rmat(ii, j, 1)  = rswap
                 end do
             end do
         end if
@@ -427,11 +445,11 @@ contains
         class(image), intent(in)    :: instrfun
         integer       :: n1, n2, h1, h2, i, j, ii, jj, minlen, np 
         real(dp)      :: sv
-        real(c_float) :: rad_sq, ave, r2, e, v11, v22, v12, v21, u11, u22, u12, u21, scale_cmat
-        real(c_float), parameter :: EPS_DEN = 1.e-6_c_float   ! denom safety threshold
+        real(c_float) :: temp(self%ldim(1),self%ldim(2)), rad_sq, ave, r2, e, scale_cmat
+        real(c_float) :: v_val, u_val, invden
+        real(c_float), parameter :: EPS_DEN = 1.e-6_c_float
         real(c_float), parameter :: EPS_E   = 1.e-4_c_float
         real(c_float), parameter :: ONE     = 1.0_c_float
-        real(c_float) :: invden
         n1 = self%ldim(1)
         n2 = self%ldim(2)
         h1 = n1/2
@@ -442,26 +460,26 @@ contains
         call fftwf_execute_dft_c2r(self%plan_bwd, self%cmat, self%rmat)
         self%ft = .false.
         ! ============================================================
-        ! SHIFT TO PHASE ORIGIN (fftshift)  [needed before softavg stats]
+        ! SHIFT TO PHASE ORIGIN (fftshift)
         ! ============================================================
         do j = 1, h2
             jj = h2 + j
             do i = 1, h1
                 ii = h1 + i
-                v11 = self%rmat(i ,j ,1);  self%rmat(i ,j ,1)  = self%rmat(ii,jj,1); self%rmat(ii,jj,1) = v11
-                v12 = self%rmat(i ,jj,1);  self%rmat(i ,jj,1)  = self%rmat(ii,j ,1); self%rmat(ii,j ,1) = v12
+                v_val = self%rmat(i ,j ,1);  self%rmat(i ,j ,1)  = self%rmat(ii,jj,1); self%rmat(ii,jj,1) = v_val
+                v_val = self%rmat(i ,jj,1);  self%rmat(i ,jj,1)  = self%rmat(ii,j ,1); self%rmat(ii,j ,1) = v_val
             end do
         end do
         ! ============================================================
-        ! MASK (softavg): compute average outside radius (r^2 only)
+        ! MASK (softavg): compute average outside radius
         ! ============================================================
         minlen = minval(self%ldim(1:2))
         minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
         rad_sq = real(mskrad*mskrad, c_float)
         sv = 0.0_dp
         np = 0
-        do j = 1, n2
-            do i = 1, n1
+        do i = 1, n1
+            do j = 1, n2
                 r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
                 if (r2 > rad_sq) then
                     np = np + 1
@@ -478,76 +496,35 @@ contains
         ! FUSED PASS:
         !   - apply softavg mask
         !   - divide by instrument function where denom is safe
-        !     (if denom is unsafe, leave value unchanged)
-        !   - do second fftshift while writing (in-place swaps)
+        !   - do second fftshift using temp buffer
         ! ============================================================
-        do j = 1, h2
-            jj = h2 + j
-            do i = 1, h1
-                ii = h1 + i
-                ! load 4 pixels
-                v11 = self%rmat(i ,j ,1)
-                v22 = self%rmat(ii,jj,1)
-                v12 = self%rmat(i ,jj,1)
-                v21 = self%rmat(ii,j ,1)
-                ! load 4 denominators
-                u11 = instrfun%rmat(i ,j ,1)
-                u22 = instrfun%rmat(ii,jj,1)
-                u12 = instrfun%rmat(i ,jj,1)
-                u21 = instrfun%rmat(ii,j ,1)
-                ! ---- (i, j) ----
+        ! Process with mask and division
+        do j = 1, n2
+            do i = 1, n1
+                v_val = self%rmat(i, j, 1)
+                u_val = instrfun%rmat(i, j, 1)
+                ! Apply softavg mask
                 r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e < EPS_E) then
-                    v11 = ave
+                    v_val = ave
                 else if (e < (ONE - EPS_E)) then
-                    v11 = e*v11 + (ONE - e)*ave
+                    v_val = e*v_val + (ONE - e)*ave
                 end if
-                if (abs(u11) > EPS_DEN) then
-                    invden = ONE / u11
-                    v11 = v11 * invden
+                ! Divide by instrument function if safe
+                if (abs(u_val) > EPS_DEN) then
+                    invden = ONE / u_val
+                    v_val = v_val * invden
                 end if
-                ! ---- (ii, jj) ----
-                r2 = mem_msk_cis2(ii) + mem_msk_cjs2(jj)
-                e  = cosedge_r2_2d(r2, minlen, mskrad)
-                if (e < EPS_E) then
-                    v22 = ave
-                else if (e < (ONE - EPS_E)) then
-                    v22 = e*v22 + (ONE - e)*ave
-                end if
-                if (abs(u22) > EPS_DEN) then
-                    invden = ONE / u22
-                    v22 = v22 * invden
-                end if
-                ! ---- (i, jj) ----
-                r2 = mem_msk_cis2(i) + mem_msk_cjs2(jj)
-                e  = cosedge_r2_2d(r2, minlen, mskrad)
-                if (e < EPS_E) then
-                    v12 = ave
-                else if (e < (ONE - EPS_E)) then
-                    v12 = e*v12 + (ONE - e)*ave
-                end if
-                if (abs(u12) > EPS_DEN) then
-                    invden = ONE / u12
-                    v12 = v12 * invden
-                end if
-                ! ---- (ii, j) ----
-                r2 = mem_msk_cis2(ii) + mem_msk_cjs2(j)
-                e  = cosedge_r2_2d(r2, minlen, mskrad)
-                if (e < EPS_E) then
-                    v21 = ave
-                else if (e < (ONE - EPS_E)) then
-                    v21 = e*v21 + (ONE - e)*ave
-                end if
-                if (abs(u21) > EPS_DEN) then
-                    invden = ONE / u21
-                    v21 = v21 * invden
-                end if
-                ! store swapped (fftshift)
-                self%rmat(i ,j ,1) = v22
-                self%rmat(ii,jj,1) = v11
-                self%rmat(i ,jj,1) = v21
-                self%rmat(ii,j ,1) = v12
+                temp(i, j) = v_val
+            end do
+        end do
+        ! Now apply second fftshift from temp back to self%rmat
+        do j = 1, n2
+            jj = mod(j + h2 - 1, n2) + 1
+            do i = 1, n1
+                ii = mod(i + h1 - 1, n1) + 1
+                self%rmat(ii, jj, 1) = temp(i, j)
             end do
         end do
         ! ============================================================

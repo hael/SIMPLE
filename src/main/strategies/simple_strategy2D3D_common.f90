@@ -322,7 +322,7 @@ contains
     end subroutine sample_ptcls4fillin
 
     !>  \brief  prepares one particle image for alignment
-    !!          serial routine
+    !          serial routine
     subroutine prepimg4align( iptcl, img, img_instr, img_out )
         use simple_ctf, only: ctf
         integer,      intent(in)    :: iptcl
