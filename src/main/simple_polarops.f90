@@ -977,6 +977,8 @@ contains
         !$omp end parallel do
     end subroutine polar_cavger_refs2cartesian
 
+    
+
     !>  \brief  Reads in and reduces partial matrices prior to restoration
     subroutine polar_cavger_assemble_sums_from_parts( reforis, clin_anneal )
         type(oris), optional, intent(in) :: reforis
@@ -993,6 +995,28 @@ contains
             cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
             cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//BIN_EXT
             cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
+
+
+            ! !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
+            !     do i = 1, 4
+            !         select case(i)
+            !             case(1)
+            !                 call prev_vol_e%get_rmat_ptr(rmat_ptr)
+            !                 call ioimg_e%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
+            !             case(2)
+            !                 call prev_vol_o%get_rmat_ptr(rmat_ptr)
+            !                 call ioimg_o%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
+            !             case(3)
+            !                 read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
+            !                 if( ierr .ne. 0 )&
+            !                     &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// even_rho%to_char(), ierr)
+            !             case(4)
+            !                 read(fhandle_rho_o, pos=1, iostat=ierr) rho_o
+            !                 if( ierr .ne. 0 )&
+            !                     &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// odd_rho%to_char(), ierr)
+            !             end select
+            !     end do
+            !     !$omp end parallel do
             call read_pft_array(cae, pfte)
             call read_pft_array(cao, pfto)
             call read_ctf2_array(cte, ctf2e)
@@ -1500,34 +1524,61 @@ contains
     ! Third  integer: KFROMTO(2)
     ! Fourth integer: NCLS
     ! input/ouput in kind=dp but read/written in kind=sp
+
+    subroutine open_pft_array_for_write( fname, funit )
+        class(string), intent(in)  :: fname
+        integer,       intent(out) :: funit
+        integer :: io_stat
+        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk("write_pft_array: "//fname%to_char(),io_stat)
+    end subroutine open_pft_array_for_write
+
+    subroutine write_pft_array_local( funit, array )
+        integer,     intent(in) :: funit
+        complex(dp), intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
+        write(unit=funit,pos=1) [pftsz, kfromto(1), kfromto(2), ncls]
+        write(unit=funit,pos=(4*sizeof(funit)+1)) cmplx(array,kind=sp)
+    end subroutine write_pft_array_local
+
     subroutine write_pft_array( array, fname )
         complex(dp),   intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
         class(string), intent(in) :: fname
-        integer :: funit,io_stat
-        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("write_pft_array: "//fname%to_char(),io_stat)
-        write(unit=funit,pos=1) [pftsz, kfromto(1), kfromto(2), ncls]
-        write(unit=funit,pos=(4*sizeof(funit)+1)) cmplx(array,kind=sp)
+        integer :: funit
+        call open_pft_array_for_write(fname, funit)
+        call write_pft_array_local(funit, array)
         call fclose(funit)
     end subroutine write_pft_array
+
+    subroutine open_ctf2_array_for_write( fname, funit )
+        class(string), intent(in)  :: fname
+        integer,       intent(out) :: funit
+        integer :: io_stat
+        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk("write_pft_array: "//fname%to_char(), io_stat)
+    end subroutine open_ctf2_array_for_write
+
+    subroutine write_ctf2_array_local( funit, array )
+        integer,  intent(in) :: funit
+        real(dp), intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
+        write(unit=funit,pos=1) [pftsz, kfromto(1), kfromto(2), ncls]
+        write(unit=funit,pos=(4*sizeof(funit)+1)) real(array,kind=sp)
+    end subroutine write_ctf2_array_local
 
     subroutine write_ctf2_array( array, fname )
         real(dp),      intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
         class(string), intent(in) :: fname
-        integer :: funit,io_stat
-        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("write_pft_array: "//fname%to_char(),io_stat)
-        write(unit=funit,pos=1) [pftsz, kfromto(1), kfromto(2), ncls]
-        write(unit=funit,pos=(4*sizeof(funit)+1)) real(array,kind=sp)
+        integer :: funit
+        call open_ctf2_array_for_write(fname, funit)
+        call write_ctf2_array_local(funit, array)
         call fclose(funit)
     end subroutine write_ctf2_array
 
-    subroutine read_pft_array( fname, array )
+    subroutine open_pft_array_for_read( fname, array, funit, dims, buffer )
         class(string),            intent(in)    :: fname
         complex(dp), allocatable, intent(inout) :: array(:,:,:)
-        complex(sp), allocatable :: tmp(:,:,:)
-        integer :: dims(4), funit,io_stat, k
-        logical :: samedims
+        integer,                  intent(out)   :: funit, dims(4)
+        complex(sp), allocatable, intent(inout) :: buffer(:,:,:)
+        integer :: io_stat
         if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
         call fileiochk('read_pft_array; fopen failed: '//fname%to_char(), io_stat)
@@ -1535,68 +1586,100 @@ contains
         if( .not.allocated(array) )then
             allocate(array(pftsz,kfromto(1):kfromto(2),ncls))
         endif
-        samedims = all(dims == [pftsz, kfromto(1), kfromto(2), ncls])
-        if( samedims )then
-            allocate(tmp(pftsz,kfromto(1):kfromto(2),ncls))
-            read(unit=funit, pos=(sizeof(dims)+1)) tmp
-            array(:,:,:) = cmplx(tmp(:,:,:),kind=dp)
-        else
+        if( .not. all(dims == [pftsz, kfromto(1), kfromto(2), ncls]) )then
             if( pftsz /= dims(1) )then
                 THROW_HARD('Incompatible PFT size in '//fname%to_char()//': '//int2str(pftsz)//' vs '//int2str(dims(1)))
             endif
             if( ncls /= dims(4) )then
                 THROW_HARD('Incompatible NCLS in '//fname%to_char()//': '//int2str(ncls)//' vs '//int2str(dims(4)))
             endif
-            allocate(tmp(dims(1),dims(2):dims(3),dims(4)))
-            read(unit=funit, pos=(sizeof(dims)+1)) tmp
-            do k = kfromto(1),kfromto(2)
-                if( (k >= dims(2)) .and. (k <= dims(3)) )then
-                    array(:,k,:) = cmplx(tmp(:,k,:),kind=dp)    ! from stored array
-                else
-                    array(:,k,:) = 0.d0                         ! pad with zeros
-                endif
+        endif
+        if( allocated(buffer) ) deallocate(buffer)
+        allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
+    end subroutine open_pft_array_for_read
+
+    subroutine transfer_pft_array_buffer( array, funit, dims, buffer )
+        complex(dp), intent(inout) :: array(pftsz,kfromto(1):kfromto(2),ncls)
+        integer,     intent(in)    :: funit, dims(4)
+        complex(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
+        integer :: k, klo, khi
+        ! Read stored (single-precision) array payload
+        read(unit=funit, pos=(sizeof(dims)+1)) buffer
+        ! Default to zero padding everywhere
+        array(:,:,:) = (0.0_dp, 0.0_dp)
+        ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
+        klo = max(kfromto(1), dims(2))
+        khi = min(kfromto(2), dims(3))
+        if( klo <= khi )then
+            do k = klo, khi
+                array(:,k,:) = cmplx(buffer(:,k,:), kind=dp)
             enddo
         endif
-        deallocate(tmp)
+    end subroutine transfer_pft_array_buffer
+
+    subroutine read_pft_array( fname, array)
+        class(string),            intent(in)    :: fname
+        complex(dp), allocatable, intent(inout) :: array(:,:,:)
+        complex(sp), allocatable :: buffer(:,:,:)
+        integer :: dims(4), funit
+        call open_pft_array_for_read(fname, array, funit, dims, buffer)
+        call transfer_pft_array_buffer(     array, funit, dims, buffer )
+        deallocate(buffer)
         call fclose(funit)
     end subroutine read_pft_array
 
-    subroutine read_ctf2_array( fname, array )
+    subroutine open_ctf2_array_for_read( fname, array, funit, dims, buffer )
         class(string),         intent(in)    :: fname
         real(dp), allocatable, intent(inout) :: array(:,:,:)
-        real(sp), allocatable :: tmp(:,:,:)
-        integer :: dims(4), funit,io_stat, k
-        logical :: samedims
+        integer,               intent(out)   :: funit, dims(4)
+        real(sp), allocatable, intent(inout) :: buffer(:,:,:)
+        integer :: io_stat
         if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('read_pft_array; fopen failed: '//fname%to_char(), io_stat)
+        call fileiochk('read_ctf2_array; fopen failed: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) dims
         if( .not.allocated(array) )then
             allocate(array(pftsz,kfromto(1):kfromto(2),ncls))
         endif
-        samedims = all(dims == [pftsz, kfromto(1), kfromto(2), ncls])
-        if( samedims )then
-            allocate(tmp(pftsz,kfromto(1):kfromto(2),ncls))
-            read(unit=funit, pos=(sizeof(dims)+1)) tmp
-            array(:,:,:) = real(tmp(:,:,:),dp)
-        else
+        if( .not. all(dims == [pftsz, kfromto(1), kfromto(2), ncls]) )then
             if( pftsz /= dims(1) )then
                 THROW_HARD('Incompatible real array size in '//fname%to_char()//': '//int2str(pftsz)//' vs '//int2str(dims(1)))
             endif
             if( ncls /= dims(4) )then
                 THROW_HARD('Incompatible NCLS in '//fname%to_char()//': '//int2str(ncls)//' vs '//int2str(dims(4)))
             endif
-            allocate(tmp(dims(1),dims(2):dims(3),dims(4)))
-            read(unit=funit, pos=(sizeof(dims)+1)) tmp
-            do k = kfromto(1),kfromto(2)
-                if( (k >= dims(2)) .or. (k <= dims(3)) )then
-                    array(:,k,:) = real(tmp(:,k,:),dp)  ! from stored array
-                else
-                    array(:,k,:) = 0.d0                 ! pad with zeros
-                endif
+        endif
+        if( allocated(buffer) ) deallocate(buffer)
+        allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
+    end subroutine open_ctf2_array_for_read
+
+    subroutine transfer_ctf2_array_buffer( array, funit, dims, buffer )
+        real(dp), intent(inout) :: array(pftsz,kfromto(1):kfromto(2),ncls)
+        integer,  intent(in)    :: funit, dims(4)
+        real(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
+        integer :: k, klo, khi
+        ! Read stored (single-precision) array payload
+        read(unit=funit, pos=(sizeof(dims)+1)) buffer
+        ! Default to zero padding everywhere
+        array(:,:,:) = 0.0_dp
+        ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
+        klo = max(kfromto(1), dims(2))
+        khi = min(kfromto(2), dims(3))
+        if( klo <= khi )then
+            do k = klo, khi
+                array(:,k,:) = real(buffer(:,k,:), dp)
             enddo
         endif
-        deallocate(tmp)
+    end subroutine transfer_ctf2_array_buffer
+
+    subroutine read_ctf2_array( fname, array )
+        class(string),         intent(in)    :: fname
+        real(dp), allocatable, intent(inout) :: array(:,:,:)
+        real(sp), allocatable :: buffer(:,:,:)
+        integer :: dims(4), funit
+        call open_ctf2_array_for_read(fname, array, funit, dims, buffer)
+        call transfer_ctf2_array_buffer(     array, funit, dims, buffer)
+        deallocate(buffer)
         call fclose(funit)
     end subroutine read_ctf2_array
 
