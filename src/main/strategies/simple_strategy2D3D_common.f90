@@ -12,7 +12,7 @@ use simple_stack_io,          only: stack_io
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
-public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align
+public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align,  prepimg4align_bench
 public :: prep2Dref, build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
@@ -352,6 +352,46 @@ contains
         ! fused IFFT, masking, division with instrument function & FFT
         call img_out%ifft_mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
     end subroutine prepimg4align
+
+    subroutine prepimg4align_bench( iptcl, img, img_instr, img_out, rt_prep1, rt_ctf, rt_prep2, rt_prep )
+        use simple_ctf, only: ctf
+        integer,              intent(in)    :: iptcl
+        class(image),         intent(inout) :: img
+        class(image),         intent(in)    :: img_instr
+        class(image),         intent(inout) :: img_out
+        real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_prep2, rt_prep
+        integer(timer_int_kind) :: t_prep1, t_ctf, t_prep2, t_prep
+        type(ctf)       :: tfun
+        type(ctfparams) :: ctfparms
+        real            :: shvec(2), crop_factor
+        t_prep1 = tic()
+        t_prep   = t_prep1
+        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+        shvec(1)    = -build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        shvec(2)    = -build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+        ! fused noise normalization, FFT, clip & shift
+        call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
+        rt_prep1 = rt_prep1 + toc(t_prep1)
+        ! Phase-flipping
+        t_ctf    = tic()
+        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+        select case(ctfparms%ctfflag)
+            case(CTFFLAG_NO, CTFFLAG_FLIP)
+                ! nothing to do
+            case(CTFFLAG_YES)
+                ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
+                tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                call tfun%apply_serial(img_out, 'flip', ctfparms)
+            case DEFAULT
+                THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
+        end select
+        rt_ctf  = rt_ctf + toc(t_ctf)
+        t_prep2 = tic()
+        ! fused IFFT, masking, division with instrument function & FFT
+        call img_out%ifft_mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
+        rt_prep2 = rt_prep2 + toc(t_prep2)
+        rt_prep   = rt_prep   + toc(t_prep)
+    end subroutine prepimg4align_bench
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
