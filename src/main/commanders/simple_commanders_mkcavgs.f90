@@ -225,6 +225,7 @@ contains
         type(builder)      :: build
         type(starproject)  :: starproj
         type(polarft_calc) :: pftc
+        type(string)       :: fname
         real, allocatable  :: states(:)
         real               :: clw
         integer            :: iterstr_start, iterstr_end, iter, io_stat, icls
@@ -248,7 +249,9 @@ contains
             params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
         endif
         if( trim(params%polar).eq.'yes' )then
-            call polar_cavger_dims_from_header(string('cavgs_even_part1')//BIN_EXT, pftsz, kfromto, ncls)
+            fname = 'cavgs_even_part'//int2str_pad(1,params%numlen)//BIN_EXT
+            call polar_cavger_dims_from_header(fname, pftsz, kfromto, ncls)
+            call fname%kill
             call pftc%new(1, [1,1], kfromto)
             if( trim(params%ref_type)=='comlin_hybrid' )then
                 call polar_cavger_new(pftc, .true., nrefs=params%ncls)
