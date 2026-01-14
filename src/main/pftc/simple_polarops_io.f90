@@ -174,7 +174,11 @@ contains
     ! Reads all cavgs PFT arrays
     module subroutine polar_cavger_read_all( fname )
         class(string),  intent(in) :: fname
+        complex(sp), allocatable :: buf_e(:,:,:), buf_o(:,:,:), buf_m(:,:,:)
         type(string) :: refs, refs_even, refs_odd, ext
+        integer :: funit_e, funit_o, funit_m
+        integer :: dims_e(4), dims_o(4), dims_m(4)
+        integer :: i
         ext = string('.')//fname2ext(fname)
         if( ext == params_glob%ext )then
             refs = get_fbody(fname, params_glob%ext, separator=.false.)//BIN_EXT
@@ -188,38 +192,98 @@ contains
         if( .not. file_exists(refs) )then
             THROW_HARD('Polar references do not exist in cwd: '//refs%to_char())
         endif
-        call polar_cavger_read(refs, 'merged')
-        if( file_exists(refs_even) )then
-            call polar_cavger_read(refs_even, 'even')
+        if( file_exists(refs_even) )then ! assume all files are there
+            call open_pft_array_for_read(refs,      pfts_merg, funit_m, dims_m, buf_m)
+            call open_pft_array_for_read(refs_even, pfts_even, funit_e, dims_e, buf_e)
+            call open_pft_array_for_read(refs_odd,  pfts_odd,  funit_o, dims_o, buf_o)
+            !$omp parallel do default(shared) private(i) num_threads(3) schedule(static)
+            do i = 1, 3
+                select case(i)
+                    case(1)
+                        call transfer_pft_array_buffer(pfts_merg, funit_m, dims_m, buf_m)
+                    case(2)
+                        call transfer_pft_array_buffer(pfts_even, funit_e, dims_e, buf_e)
+                    case(3)
+                        call transfer_pft_array_buffer(pfts_odd,  funit_o, dims_o, buf_o)
+                end select
+            end do
+            !$omp end parallel do
+            call fclose(funit_m)
+            call fclose(funit_e)
+            call fclose(funit_o)
+            deallocate(buf_m, buf_e, buf_o)
         else
-            call polar_cavger_read(refs, 'even')
-        endif
-        if( file_exists(refs_odd) )then
-            call polar_cavger_read(refs_odd, 'odd')
-        else
-            call polar_cavger_read(refs, 'odd')
+            call read_pft_array(refs, pfts_merg)
+            !$omp parallel workshare
+            pfts_even = pfts_merg
+            pfts_odd  = pfts_merg
+            !$omp end parallel workshare
         endif
     end subroutine polar_cavger_read_all
 
     !>  \brief  writes partial class averages (PFTS + CTF2) to disk (distributed execution)
     subroutine polar_cavger_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
+        complex(dp), allocatable :: pfte(:,:,:),      pfto(:,:,:)
+        complex(sp), allocatable :: pfte_buf(:,:,:),  pfto_buf(:,:,:)
+        real(dp),    allocatable :: ctf2e(:,:,:),     ctf2o(:,:,:)
+        real(sp),    allocatable :: ctf2e_buf(:,:,:), ctf2o_buf(:,:,:)
         type(string) :: cae, cao, cte, cto
+        integer :: dims_cae(4), dims_cao(4), dims_cte(4), dims_cto(4)
+        integer :: funit_cae, funit_cao, funit_cte, funit_cto
+        integer :: i
         cae = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
         cao = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
         cte = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
         cto = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
         select case(trim(which))
             case('read')
-                call read_pft_array(cae, pfts_even)
-                call read_pft_array(cao, pfts_odd)
-                call read_ctf2_array(cte, ctf2_even)
-                call read_ctf2_array(cto, ctf2_odd)
+                call open_pft_array_for_read(cae,  pfts_even, funit_cae, dims_cae, pfte_buf)
+                call open_pft_array_for_read(cao,  pfts_odd,  funit_cao, dims_cao, pfto_buf)
+                call open_ctf2_array_for_read(cte, ctf2_even, funit_cte, dims_cte, ctf2e_buf)
+                call open_ctf2_array_for_read(cto, ctf2_odd,  funit_cto, dims_cto, ctf2o_buf)
+                !$omp parallel do default(shared) private(i) num_threads(4) schedule(static)
+                do i = 1, 4
+                    select case(i)
+                        case(1)
+                            call transfer_pft_array_buffer(pfts_even,  funit_cae, dims_cae, pfte_buf)
+                        case(2)
+                            call transfer_pft_array_buffer(pfts_odd,   funit_cao, dims_cao, pfto_buf)
+                        case(3)
+                            call transfer_ctf2_array_buffer(ctf2_even, funit_cte, dims_cte, ctf2e_buf)
+                        case(4)
+                            call transfer_ctf2_array_buffer(ctf2_odd,  funit_cto, dims_cto, ctf2o_buf)
+                    end select
+                end do
+                !$omp end parallel do
+                call fclose(funit_cae)
+                call fclose(funit_cao)
+                call fclose(funit_cte)
+                call fclose(funit_cto)
+                deallocate(pfte_buf, pfto_buf, ctf2e_buf, ctf2o_buf)
             case('write')
-                call write_pft_array(pfts_even, cae)
-                call write_pft_array(pfts_odd,  cao)
-                call write_ctf2_array(ctf2_even, cte)
-                call write_ctf2_array(ctf2_odd,  cto)
+                call open_pft_or_ctf2_array_for_write(cae, funit_cae)
+                call open_pft_or_ctf2_array_for_write(cao, funit_cao)
+                call open_pft_or_ctf2_array_for_write(cte, funit_cte)
+                call open_pft_or_ctf2_array_for_write(cto, funit_cto)
+                !$omp parallel do default(shared) private(i) num_threads(4) schedule(static)
+                do i = 1, 4
+                    select case(i)
+                        case(1)
+                            call write_pft_array_local(funit_cae, pfts_even)
+                        case(2)
+                            call write_pft_array_local(funit_cao, pfts_odd)
+                        case(3)
+                            call write_ctf2_array_local(funit_cte, ctf2_even)
+                        case(4)
+                            call write_ctf2_array_local(funit_cto, ctf2_odd)
+                    end select
+                end do
+                !$omp end parallel do
+                call fclose(funit_cae)
+                call fclose(funit_cao)
+                call fclose(funit_cte)
+                call fclose(funit_cto)
             case DEFAULT
                 THROW_HARD('unknown which flag; only read & write supported; cavger_readwrite_partial_sums')
         end select
@@ -233,9 +297,9 @@ contains
     subroutine polar_cavger_assemble_sums_from_parts( reforis, clin_anneal )
         type(oris), optional, intent(in) :: reforis
         real,       optional, intent(in) :: clin_anneal
-        complex(dp), allocatable :: pfte(:,:,:), pfto(:,:,:)
-        complex(sp), allocatable :: pfte_buf(:,:,:), pfto_buf(:,:,:)
-        real(dp),    allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
+        complex(dp), allocatable :: pfte(:,:,:),      pfto(:,:,:)
+        complex(sp), allocatable :: pfte_buf(:,:,:),  pfto_buf(:,:,:)
+        real(dp),    allocatable :: ctf2e(:,:,:),     ctf2o(:,:,:)
         real(sp),    allocatable :: ctf2e_buf(:,:,:), ctf2o_buf(:,:,:)
         type(string) :: cae, cao, cte, cto
         integer :: dims_cae(4), dims_cao(4), dims_cte(4), dims_cto(4)
@@ -271,12 +335,12 @@ contains
                 end select
             end do
             !$omp end parallel do
-            deallocate(pfte_buf, pfto_buf, ctf2e_buf, ctf2o_buf)
             call fclose(funit_cae)
             call fclose(funit_cao)
             call fclose(funit_cte)
             call fclose(funit_cto)
         enddo
+        deallocate(pfte_buf, pfto_buf, ctf2e_buf, ctf2o_buf) ! needs to be explicit, the others are in local scope
         ! merge eo-pairs and normalize
         select case(trim(params_glob%ref_type))
             case('polar_cavg')
@@ -308,13 +372,13 @@ contains
     ! Fourth integer: NCLS
     ! input/ouput in kind=dp but read/written in kind=sp
 
-    module subroutine open_pft_array_for_write( fname, funit )
+    module subroutine open_pft_or_ctf2_array_for_write( fname, funit )
         class(string), intent(in)  :: fname
         integer,       intent(out) :: funit
         integer :: io_stat
         call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("write_pft_array: "//fname%to_char(),io_stat)
-    end subroutine open_pft_array_for_write
+        call fileiochk("open_pft_or_ctf2_array_for_write: "//fname%to_char(),io_stat)
+    end subroutine open_pft_or_ctf2_array_for_write
 
     module subroutine write_pft_array_local( funit, array )
         integer,     intent(in) :: funit
@@ -327,18 +391,10 @@ contains
         complex(dp),   intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
         class(string), intent(in) :: fname
         integer :: funit
-        call open_pft_array_for_write(fname, funit)
+        call open_pft_or_ctf2_array_for_write(fname, funit)
         call write_pft_array_local(funit, array)
         call fclose(funit)
     end subroutine write_pft_array
-
-    module subroutine open_ctf2_array_for_write( fname, funit )
-        class(string), intent(in)  :: fname
-        integer,       intent(out) :: funit
-        integer :: io_stat
-        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk("write_pft_array: "//fname%to_char(), io_stat)
-    end subroutine open_ctf2_array_for_write
 
     module subroutine write_ctf2_array_local( funit, array )
         integer,  intent(in) :: funit
@@ -351,7 +407,7 @@ contains
         real(dp),      intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
         class(string), intent(in) :: fname
         integer :: funit
-        call open_ctf2_array_for_write(fname, funit)
+        call open_pft_or_ctf2_array_for_write(fname, funit)
         call write_ctf2_array_local(funit, array)
         call fclose(funit)
     end subroutine write_ctf2_array
@@ -377,8 +433,7 @@ contains
                 THROW_HARD('Incompatible NCLS in '//fname%to_char()//': '//int2str(ncls)//' vs '//int2str(dims(4)))
             endif
         endif
-        if( allocated(buffer) ) deallocate(buffer)
-        allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
+        if( .not. allocated(buffer) ) allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
     end subroutine open_pft_array_for_read
 
     module subroutine transfer_pft_array_buffer( array, funit, dims, buffer )
@@ -432,8 +487,7 @@ contains
                 THROW_HARD('Incompatible NCLS in '//fname%to_char()//': '//int2str(ncls)//' vs '//int2str(dims(4)))
             endif
         endif
-        if( allocated(buffer) ) deallocate(buffer)
-        allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
+        if( .not. allocated(buffer) ) allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
     end subroutine open_ctf2_array_for_read
 
     module subroutine transfer_ctf2_array_buffer( array, funit, dims, buffer )

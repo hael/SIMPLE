@@ -176,10 +176,10 @@ interface
         integer,       intent(inout) :: pftsz_here, kfromto_here(2), ncls_here
     end subroutine
 
-    module subroutine open_pft_array_for_write( fname, funit )
+    module subroutine open_pft_or_ctf2_array_for_write( fname, funit )
         class(string), intent(in)  :: fname
         integer,       intent(out) :: funit
-    end subroutine open_pft_array_for_write
+    end subroutine open_pft_or_ctf2_array_for_write
 
     module subroutine write_pft_array_local( funit, array )
         integer,     intent(in) :: funit
@@ -190,11 +190,6 @@ interface
         complex(dp),   intent(in) :: array(pftsz,kfromto(1):kfromto(2),ncls)
         class(string), intent(in) :: fname
     end subroutine write_pft_array
-
-    module subroutine open_ctf2_array_for_write( fname, funit )
-        class(string), intent(in)  :: fname
-        integer,       intent(out) :: funit
-    end subroutine open_ctf2_array_for_write
 
     module subroutine write_ctf2_array_local( funit, array )
         integer,  intent(in) :: funit
