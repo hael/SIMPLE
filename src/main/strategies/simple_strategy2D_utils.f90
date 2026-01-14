@@ -5,7 +5,6 @@ use simple_core_module_api
 use simple_class_frcs,        only: class_frcs
 use simple_clustering_utils,  only: cluster_dmat
 use simple_cmdline,           only: cmdline
-use simple_corrmat,           only: calc_inpl_invariant_fm
 use simple_histogram,         only: histogram
 use simple_image,             only: image
 use simple_image_bin,         only: image_bin
