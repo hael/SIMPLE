@@ -900,24 +900,35 @@ contains
         complex(dp),   optional, intent(in)    :: pfts_in(1:pftsz,kfromto(1):kfromto(2),1:ncls)
         complex, allocatable :: cmat(:,:)
         real,    allocatable :: norm(:,:)
+        integer, parameter :: EVEN_CASE = 0, ODD_CASE = 1, MERGED_CASE = 2  
         complex :: pft(1:pftsz,kfromto(1):kfromto(2)), fc
         real    :: phys(2), dh,dk,mdk,mdh
-        integer :: k,c,irot,physh,physk,box,icls
+        integer :: k,c,irot,physh,physk,box,icls,case_sel
+        logical :: pfts_in_present
+        pfts_in_present = present(pfts_in)
         box = params_glob%box_crop
         c   = box/2+1
+        select case(trim(which))
+            case('even')
+                case_sel = EVEN_CASE
+            case('odd')
+                case_sel = ODD_CASE
+            case('merged')
+                case_sel = MERGED_CASE
+        end select
         allocate(cmat(c,box),norm(c,box))
         !$omp parallel do schedule(guided) proc_bind(close) default(shared)&
         !$omp private(icls,pft,cmat,norm,irot,k,phys,fc,physh,physk,dh,dk,mdh,mdk)
         do icls = 1, ncls
-            if( present(pfts_in) )then
+            if( pfts_in_present )then
                 pft = cmplx(pfts_in(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
             else
-                select case(trim(which))
-                    case('even')
+                select case(case_sel)
+                    case(EVEN_CASE)
                         pft = cmplx(pfts_even(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
-                    case('odd')
+                    case(ODD_CASE)
                         pft = cmplx(pfts_odd(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
-                    case('merged')
+                    case(MERGED_CASE)
                         pft = cmplx(pfts_merg(1:pftsz,kfromto(1):kfromto(2),icls), kind=sp)
                 end select
             endif
@@ -977,16 +988,18 @@ contains
         !$omp end parallel do
     end subroutine polar_cavger_refs2cartesian
 
-    
-
     !>  \brief  Reads in and reduces partial matrices prior to restoration
     subroutine polar_cavger_assemble_sums_from_parts( reforis, clin_anneal )
         type(oris), optional, intent(in) :: reforis
         real,       optional, intent(in) :: clin_anneal
         complex(dp), allocatable :: pfte(:,:,:), pfto(:,:,:)
+        complex(sp), allocatable :: pfte_buf(:,:,:), pfto_buf(:,:,:)
         real(dp),    allocatable :: ctf2e(:,:,:), ctf2o(:,:,:)
+        real(sp),    allocatable :: ctf2e_buf(:,:,:), ctf2o_buf(:,:,:)
         type(string) :: cae, cao, cte, cto
-        integer :: ipart
+        integer :: dims_cae(4), dims_cao(4), dims_cte(4), dims_cto(4)
+        integer :: funit_cae, funit_cao, funit_cte, funit_cto
+        integer :: ipart, i 
         allocate(pfte(pftsz,kfromto(1):kfromto(2),ncls),  pfto(pftsz,kfromto(1):kfromto(2),ncls),&
                &ctf2e(pftsz,kfromto(1):kfromto(2),ncls), ctf2o(pftsz,kfromto(1):kfromto(2),ncls))
         call polar_cavger_zero_pft_refs
@@ -995,38 +1008,33 @@ contains
             cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
             cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//BIN_EXT
             cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
-
-
-            ! !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
-            !     do i = 1, 4
-            !         select case(i)
-            !             case(1)
-            !                 call prev_vol_e%get_rmat_ptr(rmat_ptr)
-            !                 call ioimg_e%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
-            !             case(2)
-            !                 call prev_vol_o%get_rmat_ptr(rmat_ptr)
-            !                 call ioimg_o%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
-            !             case(3)
-            !                 read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
-            !                 if( ierr .ne. 0 )&
-            !                     &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// even_rho%to_char(), ierr)
-            !             case(4)
-            !                 read(fhandle_rho_o, pos=1, iostat=ierr) rho_o
-            !                 if( ierr .ne. 0 )&
-            !                     &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// odd_rho%to_char(), ierr)
-            !             end select
-            !     end do
-            !     !$omp end parallel do
-            call read_pft_array(cae, pfte)
-            call read_pft_array(cao, pfto)
-            call read_ctf2_array(cte, ctf2e)
-            call read_ctf2_array(cto, ctf2o)
-            !$omp parallel workshare proc_bind(close)
-            pfts_even = pfts_even + pfte
-            pfts_odd  = pfts_odd  + pfto
-            ctf2_even = ctf2_even + ctf2e
-            ctf2_odd  = ctf2_odd  + ctf2o
-            !$omp end parallel workshare
+            call open_pft_array_for_read(cae, pfte,  funit_cae, dims_cae, pfte_buf)
+            call open_pft_array_for_read(cao, pfto,  funit_cao, dims_cao, pfto_buf)
+            call open_ctf2_array_for_read(cte, ctf2e, funit_cte, dims_cte, ctf2e_buf)
+            call open_ctf2_array_for_read(cto, ctf2o, funit_cto, dims_cto, ctf2o_buf)
+            !$omp parallel do default(shared) private(i) num_threads(4) schedule(static)
+            do i = 1, 4
+                select case(i)
+                    case(1)
+                        call transfer_pft_array_buffer(pfte,  funit_cae, dims_cae, pfte_buf)
+                        pfts_even = pfts_even + pfte
+                    case(2)
+                        call transfer_pft_array_buffer(pfto,  funit_cao, dims_cao, pfto_buf)
+                        pfts_odd  = pfts_odd  + pfto
+                    case(3)
+                        call transfer_ctf2_array_buffer(ctf2e, funit_cte, dims_cte, ctf2e_buf)
+                        ctf2_even = ctf2_even + ctf2e
+                    case(4)
+                        call transfer_ctf2_array_buffer(ctf2o, funit_cto, dims_cto, ctf2o_buf)
+                        ctf2_odd  = ctf2_odd  + ctf2o
+                end select
+            end do
+            !$omp end parallel do
+            deallocate(pfte_buf, pfto_buf, ctf2e_buf, ctf2o_buf)
+            call fclose(funit_cae)
+            call fclose(funit_cao)
+            call fclose(funit_cte)
+            call fclose(funit_cto)
         enddo
         ! merge eo-pairs and normalize
         select case(trim(params_glob%ref_type))
@@ -1572,6 +1580,9 @@ contains
         call write_ctf2_array_local(funit, array)
         call fclose(funit)
     end subroutine write_ctf2_array
+
+    
+
 
     subroutine open_pft_array_for_read( fname, array, funit, dims, buffer )
         class(string),            intent(in)    :: fname
