@@ -18,10 +18,9 @@ type(parameters)         :: p1
 type(oris)               :: spiral
 type(commander_pdb2mrc)  :: xpdb2mrc
 type(cmdline)            :: cline_pdb2mrc, cline
-type(multi_dendro)             :: test_tree
-
+type(multi_dendro)       :: test_tree
 real                     :: objs(2), t1, t2, simsum
-integer                  :: indxs(2), rc, ifoo, NPROJ = 500, nthr_max = 10, i, j
+integer                  :: indxs(2), rc, ifoo, NPROJ = 10, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
 real(timer_int_kind)     :: rt_fm, rt_cc, rt_ap, rt_tr 
@@ -30,7 +29,7 @@ type(aff_prop)           :: affprop
 character(len=:), allocatable   :: cmd  
 real, allocatable               :: dist_mat_fm(:,:), dist_mat_cc(:,:), sub_distmats(:,:,:)
 type(image), allocatable        :: proj_arr(:)
-integer, allocatable            :: centers(:), labels(:)
+integer, allocatable            :: centers(:), labels(:), clus_pops(:)
 type(multi_dendro), allocatable       :: roots(:)
 type(s2_node), pointer   :: p
 
@@ -76,9 +75,9 @@ allocate(proj_arr(NPROJ))
 proj_arr = reproject(vol, spiral, NPROJ)
 params_glob%ldim = proj_arr(1)%get_ldim()
 allocate(dist_mat_fm(NPROJ,NPROJ), dist_mat_cc(NPROJ,NPROJ))
-! t_cc = tic()
-! dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
-! rt_cc = toc(t_cc)
+t_cc = tic()
+dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
+rt_cc = toc(t_cc)
 
 
 ! deallocate(dist_mat_cc)
@@ -108,18 +107,24 @@ rt_fm = toc(t_fm)
 
 call normalize_minmax(dist_mat_fm)
 
-call affprop%new(NPROJ, dist_mat_fm)
+call affprop%new(NPROJ, dist_mat_fm, pref=0.)
 t_ap = tic()
 call affprop%propagate(centers, labels, simsum)
 rt_ap = toc(t_ap)
 
-print *, 'N_PROJS:', NPROJ, 'fm time:', rt_fm, 'ap time:', rt_ap
+print *, 'N_PROJS:', NPROJ, 'fm time:', rt_fm, 'ap time:', rt_ap, 'cc time:', rt_cc
 
 print *, simsum, size(centers), labels
-
-! allocate(roots(size(centers)))
-
-
+allocate(clus_pops(size(centers)), source = 0)
+call test_tree%set_distmat(dist_mat_fm)
+do i = 1, size(labels)
+    clus_pops(labels(i)) = clus_pops(labels(i)) + 1 
+end do 
+call test_tree%set_clus_pops(clus_pops)
+call test_tree%set_medoids(centers)
+allocate(roots(size(centers)))
+call test_tree%set_subsets(labels)
+call test_tree%build_multi_dendro()
 ! split into sub_dmats to make the trees from 
 ! exemplars will be tree roots
 
