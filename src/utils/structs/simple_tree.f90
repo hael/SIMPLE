@@ -23,7 +23,7 @@ end type s2_node
 type  :: multi_dendro 
    type(s2_node), allocatable :: root_array(:)
    real, allocatable :: dist_mat(:,:) ! full_distmat
-   integer, allocatable :: npnts_array(:) 
+   integer, allocatable :: clus_pops(:) 
    integer  :: n_trees ! number of clusters
    integer, allocatable :: subsets(:,:) 
    integer, allocatable :: subsets_avail(:,:)
@@ -32,12 +32,12 @@ type  :: multi_dendro
 contains 
    ! Setters / Getters
    procedure   :: get_heights
-   procedure   :: set_npnts_array  
+   procedure   :: set_clus_pops  
    procedure   :: set_subsets
    procedure   :: set_distmat
    procedure   :: set_medoids
    ! Constructor
-   procedure   :: build_multi_dendro 
+   procedure   :: build_multi_dendro
 end type multi_dendro  
 
 contains 
@@ -49,61 +49,61 @@ contains
       k = self%heights
    end function get_heights
 
-   pure subroutine set_npnts_array(self, labels)
+   pure subroutine set_clus_pops(self, labels)
       class(multi_dendro ), intent(inout)  :: self 
       integer, intent(in)           :: labels(:)     
-      integer  :: npnts_array(self%n_trees), i 
+      integer  :: clus_pops(self%n_trees), i 
       do i = 1, maxval(labels)
-         npnts_array(i) = count(labels == i)
+         clus_pops(i) = count(labels == i)
       end do 
-      allocate(self%npnts_array(self%n_trees))
-      self%npnts_array = npnts_array
-   end subroutine set_npnts_array
+      allocate(self%clus_pops(self%n_trees))
+      self%clus_pops = clus_pops
+   end subroutine set_clus_pops
 
    pure subroutine set_subsets(self, labels)
       class(multi_dendro ), intent(inout)  :: self 
       integer, intent(in)           :: labels(:) 
       integer, allocatable          :: tmp1(:), tmp2(:)
       integer     :: i, j
-      allocate(self%subsets(size(self%npnts_array), maxval(self%npnts_array)))
-      do i = 1, size(self%npnts_array)
-         allocate(tmp1(self%npnts_array(i)))
-         allocate(tmp2( maxval(self%npnts_array) - size(tmp1)), source = -1)
+      allocate(self%subsets(size(self%clus_pops), maxval(self%clus_pops)))
+      do i = 1, size(self%clus_pops)
+         allocate(tmp1(self%clus_pops(i)))
+         allocate(tmp2( maxval(self%clus_pops) - size(tmp1)), source = -1)
          tmp1 = pack([(j, j=1,size(labels))], labels == i)
          self%subsets(i,:) = [tmp1, tmp2]
          deallocate(tmp1, tmp2)  
       end do 
-      allocate(self%subsets_avail(size(self%npnts_array), maxval(self%npnts_array)))
+      allocate(self%subsets_avail(size(self%clus_pops), maxval(self%clus_pops)))
       self%subsets_avail = self%subsets
    end subroutine set_subsets
 
    pure subroutine set_distmat(self, dist_mat)
-      class(multi_dendro ), intent(inout) :: self 
+      class(multi_dendro), intent(inout) :: self 
       real, intent(in)          :: dist_mat(:,:) 
       self%dist_mat = dist_mat
    end subroutine set_distmat
 
    pure subroutine set_medoids(self, centers)
-      class(multi_dendro ), intent(inout)  :: self
+      class(multi_dendro), intent(inout)  :: self
       integer, intent(in)           :: centers(:)
       integer  :: i
-      do i = 1, size(self%npnts_array)
+      do i = 1, size(self%clus_pops)
          self%root_array(i)%ref_idx = centers(i)
       end do 
    end subroutine 
 
    subroutine build_multi_dendro (self)
-      class(multi_dendro ), intent(inout)   :: self
+      class(multi_dendro), intent(inout)   :: self
       real, allocatable    :: tmp(:)
       integer  :: i, j 
       type(s2_node), pointer       :: print 
       ! Initialize each sub_tree 
-      allocate(self%root_array(size(self%npnts_array)))
-      do i = 1, size(self%npnts_array)
+      allocate(self%root_array(size(self%clus_pops)))
+      do i = 1, size(self%clus_pops)
          allocate(self%root_array(i))
          self%root_array(i)%level = 0 
-         allocate(self%root_array(i)%subset(self%npnts_array(i)))
-         self%root_array(i)%subset = self%subsets(i,1:self%npnts_array(i))
+         allocate(self%root_array(i)%subset(self%clus_pops(i)))
+         self%root_array(i)%subset = self%subsets(i,1:self%clus_pops(i))
          call clust_insert_s2_node(self%root_array(i), self%dist_mat, 0)
       end do 
       contains 
@@ -115,7 +115,7 @@ contains
             real                       :: d, d1, d2 
             integer, allocatable       :: new_subset(:), tmp1(:)
             ! update subsets available at multi_dendro level so each node is getting assigned from updated pool 
-            allocate(tmp1(maxval(self%npnts_array) - size(root%subset)), source = -1)
+            allocate(tmp1(maxval(self%clus_pops) - size(root%subset)), source = -1)
            
             self%subsets_avail(i,:) = [root%subset, tmp1]
             root%level = level
@@ -138,10 +138,15 @@ contains
                 l = l + 1
             end do 
             ! remove those from subset
-            allocate(new_subset(size(root%subset) - 2))
+            if(level > 0 ) then 
+               allocate(new_subset(size(root%subset) - 2))
+            else 
+               allocate(new_subset(size(root%subset) - 3))
+            end if 
             n = 0 
             do m = 1, size(root%subset)
-               if (root%subset(m) /= closest .and. root%subset(m) /= sec_closest) then
+               if (root%subset(m) /= closest .and. root%subset(m) /= sec_closest &
+               .and. root%subset(m) /= root%ref_idx) then
                   n = n + 1
                   new_subset(n) = root%subset(m)
                end if
@@ -149,7 +154,7 @@ contains
             ! push 2nd closest left 
             allocate(root%left)
             nullify(root%left%left, root%left%right)
-            allocate(root%left%subset(size(root%subset) - 2))
+            allocate(root%left%subset(size(new_subset)))
             root%left%subset = new_subset
             root%left%ref_idx = sec_closest
             root%left%level = level + 1 
@@ -158,13 +163,12 @@ contains
             ! push closest right 
             allocate(root%right)
             nullify(root%right%left, root%right%right)
-            allocate(root%right%subset(size(root%subset) - 2))
+            allocate(root%right%subset(size(new_subset)))
             root%right%subset = new_subset
             root%right%ref_idx = closest
             root%right%level  = level + 1 
             root%right%visit  = .false.
             root%right%is_pop = .true.
-
             ! cleanup
             deallocate(new_subset, tmp1)
 
