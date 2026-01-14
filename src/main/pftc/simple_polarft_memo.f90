@@ -46,8 +46,6 @@ contains
     module subroutine memoize_ptcls(self)
         class(polarft_calc), intent(inout) :: self
         integer :: ithr,i,k
-        logical :: l_memoize_absptcl_ctf
-        l_memoize_absptcl_ctf = trim(params_glob%sh_inv).eq.'yes'
         !$omp parallel do collapse(2) private(i,k,ithr) default(shared) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
@@ -70,16 +68,6 @@ contains
                 endif
                 call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
                 self%ft_ctf2(:,k,i) = self%cvec1(ithr)%c(1:self%pftsz+1)
-                if( l_memoize_absptcl_ctf )then
-                    if( self%with_ctf )then
-                        self%cvec2(ithr)%c(1:self%pftsz) = abs(self%pfts_ptcls(:,k,i)) * self%ctfmats(:,k,i)
-                    else
-                        self%cvec2(ithr)%c(1:self%pftsz) = abs(self%pfts_ptcls(:,k,i))
-                    endif
-                    self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
-                    call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-                    self%ft_absptcl_ctf(:,k,i) = self%cvec2(ithr)%c(1:self%pftsz+1)
-                endif
             enddo
         enddo
         !$omp end parallel do
@@ -124,9 +112,6 @@ contains
         class(polarft_calc), intent(inout) :: self
         allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
                 &self%ft_ctf2(    self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls))
-        if( trim(params_glob%sh_inv).eq.'yes' )then
-            allocate(self%ft_absptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls))
-        endif
     end subroutine allocate_ptcls_memoization
 
     module subroutine allocate_refs_memoization(self)

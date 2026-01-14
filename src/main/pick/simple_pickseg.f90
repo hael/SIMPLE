@@ -47,7 +47,7 @@ end type pickseg
 
 contains
 
-    subroutine pick( self, micname, is_AFM, moldiam, winsz )
+    subroutine pick( self, micname, moldiam, winsz )
         class(pickseg), intent(inout) :: self
         class(string),  intent(in)    :: micname !< micrograph file name
         real,             allocatable :: diams(:)
@@ -58,14 +58,12 @@ contains
         type(image_bin) :: img_sdevs
         real    :: px(3), otsu_t
         integer :: i, boxcoord(2), sz_max, sz_min, nframes, box
-        logical :: outside, is_AFM_l
-        logical, optional, intent(in) :: is_AFM
+        logical :: outside
         real,    optional, intent(in) :: moldiam
         integer, optional, intent(in) :: winsz
         logical :: l_moldiam, l_winsz
-        is_AFM_l = .false.; l_moldiam= .false.; l_winsz= .false.
+        l_moldiam= .false.; l_winsz= .false.
         if( present(moldiam) ) l_moldiam = .true.
-        if( present(is_AFM)  ) is_AFM_l  = is_AFM 
         if( present(winsz)   ) l_winsz   = .true.
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes, smpd_raw)
@@ -114,13 +112,8 @@ contains
         endif        
         call self%mic_shrink%set_imat
         if( L_WRITE ) call self%mic_shrink%write_bimg(fbody//'_lp_tv_bin.mrc')
-        if( is_AFM_l )then
-            call self%mic_shrink%erode 
-            call self%mic_shrink%dilate
-        else 
-            call self%mic_shrink%erode
-            call self%mic_shrink%erode
-        endif 
+        call self%mic_shrink%erode
+        call self%mic_shrink%erode
         if( l_winsz )then 
             call self%mic_shrink%set_largestcc2background
             call self%mic_shrink%inv_bimg()
@@ -180,7 +173,6 @@ contains
             print *, 'max diam: ', self%diam_stats%maxv
         endif 
         self%box_raw = find_magic_box(2 * nint(self%diam_stats%med/smpd_raw))
-        if( is_AFM_l  ) self%box_raw = find_magic_box(6 * nint(self%diam_stats%med/smpd_raw))
         if( l_moldiam ) self%box_raw = find_magic_box(3 * nint(moldiam/smpd_raw))
         call img_win%new([self%box_raw,self%box_raw,1], smpd_raw)
         if( allocated(self%masscens) ) deallocate(self%masscens)

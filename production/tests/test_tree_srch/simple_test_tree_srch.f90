@@ -23,14 +23,14 @@ real                     :: objs(2), t1, t2, simsum
 integer                  :: indxs(2), rc, ifoo, NPROJ = 10, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
-real(timer_int_kind)     :: rt_fm, rt_cc, rt_ap, rt_tr 
-integer(timer_int_kind)  ::  t_fm,  t_cc, t_ap, t_tr 
+real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr 
+integer(timer_int_kind)  ::  t_cc, t_ap, t_tr 
 type(aff_prop)           :: affprop    
 character(len=:), allocatable   :: cmd  
-real, allocatable               :: dist_mat_fm(:,:), dist_mat_cc(:,:), sub_distmats(:,:,:)
+real, allocatable               :: dist_mat_cc(:,:), sub_distmats(:,:,:)
 type(image), allocatable        :: proj_arr(:)
 integer, allocatable            :: centers(:), labels(:), clus_pops(:)
-type(multi_dendro), allocatable       :: roots(:)
+type(multi_dendro), allocatable :: roots(:)
 type(s2_node), pointer   :: p
 
 ! Load Volume 
@@ -58,7 +58,6 @@ call cline%set('lp'   ,   6.)
 call cline%set('trs', 5.)
 call cline%set('ctf', 'no')
 call cline%set('nthr', 8)
-call cline%set('sh_inv',  'yes')
 call cline%set('objfun', 'cc')
 call cline%set('mkdir', 'no')
 
@@ -74,49 +73,38 @@ call spiral%spiral
 allocate(proj_arr(NPROJ))
 proj_arr = reproject(vol, spiral, NPROJ)
 params_glob%ldim = proj_arr(1)%get_ldim()
-allocate(dist_mat_fm(NPROJ,NPROJ), dist_mat_cc(NPROJ,NPROJ))
+allocate(dist_mat_cc(NPROJ,NPROJ))
 t_cc = tic()
 dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
 rt_cc = toc(t_cc)
 
 
 ! deallocate(dist_mat_cc)
-! deallocate(dist_mat_fm)
 
 ! do i = 1, NPROJ 
 !     do j = 1, nthr_max  
 !         allocate(dist_mat_cc(i, i))
-!         allocate(dist_mat_fm(i, i))
 !         params_glob%nthr = j
 !         t_cc = tic()
 !         dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr(1:i))
 !         rt_cc = toc(t_cc)
-!         t_fm = tic()
-!         call calc_inpl_invariant_fm(proj_arr(1:i), p1%hp, p1%lp, p1%trs, dist_mat_fm, .false.)
-!         rt_fm = toc(t_cc)
-!         print *, 'nimgs', i, 'nthr', j, 'time_cc', rt_cc, 'time_fm', rt_fm
+!         print *, 'nimgs', i, 'nthr', j, 'time_cc', rt_cc
 !         deallocate(dist_mat_cc)
-!         deallocate(dist_mat_fm)
 !     end do 
 ! end do 
 
-t_fm = tic()
-call calc_inpl_invariant_fm(proj_arr, p1%hp, p1%lp, p1%trs, dist_mat_fm, .false.)
-rt_fm = toc(t_fm)
-! print *, 'N_PROJS:', NPROJ, 'cc time:', rt_cc, 'fm time:', rt_fm
+! print *, 'N_PROJS:', NPROJ, 'cc time:', rt_cc
 
-call normalize_minmax(dist_mat_fm)
-
-call affprop%new(NPROJ, dist_mat_fm, pref=0.)
+call affprop%new(NPROJ, dist_mat_cc, pref=0.)
 t_ap = tic()
 call affprop%propagate(centers, labels, simsum)
 rt_ap = toc(t_ap)
 
-print *, 'N_PROJS:', NPROJ, 'fm time:', rt_fm, 'ap time:', rt_ap, 'cc time:', rt_cc
+print *, 'N_PROJS:', NPROJ, 'ap time:', rt_ap, 'cc time:', rt_cc
 
 print *, simsum, size(centers), labels
 allocate(clus_pops(size(centers)), source = 0)
-call test_tree%set_distmat(dist_mat_fm)
+call test_tree%set_distmat(dist_mat_cc)
 do i = 1, size(labels)
     clus_pops(labels(i)) = clus_pops(labels(i)) + 1 
 end do 
