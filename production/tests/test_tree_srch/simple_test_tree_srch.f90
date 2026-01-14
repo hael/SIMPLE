@@ -103,7 +103,7 @@ rt_ap = toc(t_ap)
 print *, 'N_PROJS:', NPROJ, 'ap time:', rt_ap, 'cc time:', rt_cc
 
 ! print *, simsum, size(centers), labels
-call test_tree%set_distmat(dist_mat_fm)
+call test_tree%set_distmat(dist_mat_cc)
 call test_tree%set_medoids(centers)
 call test_tree%set_clus_pops(labels)
 call test_tree%set_subsets(labels)
