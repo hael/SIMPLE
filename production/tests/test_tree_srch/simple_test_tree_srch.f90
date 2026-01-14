@@ -102,17 +102,19 @@ rt_ap = toc(t_ap)
 
 print *, 'N_PROJS:', NPROJ, 'ap time:', rt_ap, 'cc time:', rt_cc
 
-print *, simsum, size(centers), labels
-allocate(clus_pops(size(centers)), source = 0)
-call test_tree%set_distmat(dist_mat_cc)
-do i = 1, size(labels)
-    clus_pops(labels(i)) = clus_pops(labels(i)) + 1 
-end do 
-call test_tree%set_clus_pops(clus_pops)
+! print *, simsum, size(centers), labels
+call test_tree%set_distmat(dist_mat_fm)
 call test_tree%set_medoids(centers)
-allocate(roots(size(centers)))
+call test_tree%set_clus_pops(labels)
 call test_tree%set_subsets(labels)
+print *, 'dim', shape(test_tree%subsets), 'n_trees', test_tree%n_trees, 'clus_pops', test_tree%clus_pops
+print *, 'matrix', test_tree%subsets
 call test_tree%build_multi_dendro()
+print *, test_tree%root_array(1)%subset
+print *, test_tree%root_array(2)%subset
+print *, test_tree%root_array(3)%subset
+
+! should be 1, 4, 9
 ! split into sub_dmats to make the trees from 
 ! exemplars will be tree roots
 

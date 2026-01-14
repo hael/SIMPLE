@@ -17,18 +17,18 @@ type  :: s2_node
    logical     :: visit = .false.
    logical     :: is_pop   = .false.
    integer     :: ref_idx = 0
-   integer, allocatable     :: subset(:) ! array of refs remaining 
+   integer, allocatable :: subset(:) ! array of refs remaining 
 end type s2_node
 
 type  :: multi_dendro 
    type(s2_node), allocatable :: root_array(:)
    real, allocatable :: dist_mat(:,:) ! full_distmat
    integer, allocatable :: clus_pops(:) 
-   integer  :: n_trees ! number of clusters
    integer, allocatable :: subsets(:,:) 
    integer, allocatable :: subsets_avail(:,:)
    integer, allocatable :: medoids(:)
    integer, allocatable :: heights(:)
+   integer  :: n_trees ! number of clusters
 contains 
    ! Setters / Getters
    procedure   :: get_heights
@@ -48,25 +48,27 @@ contains
       integer  :: k(self%n_trees)
       k = self%heights
    end function get_heights
-
+   
    pure subroutine set_clus_pops(self, labels)
-      class(multi_dendro ), intent(inout)  :: self 
-      integer, intent(in)           :: labels(:)     
-      integer  :: clus_pops(self%n_trees), i 
-      do i = 1, maxval(labels)
-         clus_pops(i) = count(labels == i)
-      end do 
-      allocate(self%clus_pops(self%n_trees))
-      self%clus_pops = clus_pops
+      class(multi_dendro), intent(inout) :: self
+      integer, intent(in)               :: labels(:)
+      integer :: i
+      if (allocated(self%clus_pops)) deallocate(self%clus_pops)
+      allocate(self%clus_pops(self%n_trees), source=0)
+      do i = 1, self%n_trees
+         self%clus_pops(i) = count(labels == i)
+      end do
    end subroutine set_clus_pops
 
    pure subroutine set_subsets(self, labels)
       class(multi_dendro ), intent(inout)  :: self 
-      integer, intent(in)           :: labels(:) 
+      integer, intent(inout)           :: labels(:) 
       integer, allocatable          :: tmp1(:), tmp2(:)
       integer     :: i, j
-      allocate(self%subsets(size(self%clus_pops), maxval(self%clus_pops)))
-      do i = 1, size(self%clus_pops)
+      if (allocated(self%subsets))        deallocate(self%subsets)
+      if (allocated(self%subsets_avail))  deallocate(self%subsets_avail)
+      allocate(self%subsets(self%n_trees, maxval(self%clus_pops)))
+      do i = 1, self%n_trees
          allocate(tmp1(self%clus_pops(i)))
          allocate(tmp2( maxval(self%clus_pops) - size(tmp1)), source = -1)
          tmp1 = pack([(j, j=1,size(labels))], labels == i)
@@ -85,9 +87,12 @@ contains
 
    pure subroutine set_medoids(self, centers)
       class(multi_dendro), intent(inout)  :: self
-      integer, intent(in)           :: centers(:)
+      integer, intent(inout)           :: centers(:)
       integer  :: i
-      do i = 1, size(self%clus_pops)
+      if(allocated(self%root_array)) deallocate(self%root_array)
+      allocate(self%root_array(size(centers)))
+      self%n_trees = size(centers)
+      do i = 1, size(centers)
          self%root_array(i)%ref_idx = centers(i)
       end do 
    end subroutine 
@@ -96,14 +101,13 @@ contains
       class(multi_dendro), intent(inout)   :: self
       real, allocatable    :: tmp(:)
       integer  :: i, j 
-      type(s2_node), pointer       :: print 
       ! Initialize each sub_tree 
-      allocate(self%root_array(size(self%clus_pops)))
-      do i = 1, size(self%clus_pops)
-         allocate(self%root_array(i))
+      ! print *, self%n_trees
+      do i = 1, self%n_trees
          self%root_array(i)%level = 0 
          allocate(self%root_array(i)%subset(self%clus_pops(i)))
          self%root_array(i)%subset = self%subsets(i,1:self%clus_pops(i))
+         self%root_array(i)%is_pop = .true.
          call clust_insert_s2_node(self%root_array(i), self%dist_mat, 0)
       end do 
       contains 
@@ -116,7 +120,6 @@ contains
             integer, allocatable       :: new_subset(:), tmp1(:)
             ! update subsets available at multi_dendro level so each node is getting assigned from updated pool 
             allocate(tmp1(maxval(self%clus_pops) - size(root%subset)), source = -1)
-           
             self%subsets_avail(i,:) = [root%subset, tmp1]
             root%level = level
             if(size(root%subset) < 2) return
@@ -124,6 +127,7 @@ contains
             l = 1
             do while (l <= size(root%subset))
                idx = self%subsets_avail(i,l) 
+               l = l + 1
                if(idx == root%ref_idx) cycle
                d = dist_mat(idx, root%ref_idx)
                if(d < d1) then 
@@ -135,8 +139,8 @@ contains
                   d2 = d 
                   sec_closest = idx
                end if
-                l = l + 1
             end do 
+            if (closest < 1 .or. sec_closest < 1) return
             ! remove those from subset
             if(level > 0 ) then 
                allocate(new_subset(size(root%subset) - 2))
