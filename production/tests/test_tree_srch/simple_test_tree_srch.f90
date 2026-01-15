@@ -20,7 +20,7 @@ type(commander_pdb2mrc)  :: xpdb2mrc
 type(cmdline)            :: cline_pdb2mrc, cline
 type(multi_dendro)       :: test_tree
 real                     :: objs(2), t1, t2, simsum
-integer                  :: indxs(2), rc, ifoo, NPROJ = 10, nthr_max = 10, i, j
+integer                  :: indxs(2), rc, ifoo, NPROJ = 20, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
 real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr 
@@ -29,7 +29,7 @@ type(aff_prop)           :: affprop
 character(len=:), allocatable   :: cmd  
 real, allocatable               :: dist_mat_cc(:,:), sub_distmats(:,:,:)
 type(image), allocatable        :: proj_arr(:)
-integer, allocatable            :: centers(:), labels(:), clus_pops(:)
+integer, allocatable            :: centers(:), labels(:), cls_pops(:)
 type(multi_dendro), allocatable :: roots(:)
 type(s2_node), pointer   :: p
 
@@ -77,42 +77,30 @@ allocate(dist_mat_cc(NPROJ,NPROJ))
 t_cc = tic()
 dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
 rt_cc = toc(t_cc)
-
-
-! deallocate(dist_mat_cc)
-
-! do i = 1, NPROJ 
-!     do j = 1, nthr_max  
-!         allocate(dist_mat_cc(i, i))
-!         params_glob%nthr = j
-!         t_cc = tic()
-!         dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr(1:i))
-!         rt_cc = toc(t_cc)
-!         print *, 'nimgs', i, 'nthr', j, 'time_cc', rt_cc
-!         deallocate(dist_mat_cc)
-!     end do 
-! end do 
-
-! print *, 'N_PROJS:', NPROJ, 'cc time:', rt_cc
-
+call normalize_minmax(dist_mat_cc)
 call affprop%new(NPROJ, dist_mat_cc, pref=0.)
 t_ap = tic()
 call affprop%propagate(centers, labels, simsum)
+print *, 'labels', labels
 rt_ap = toc(t_ap)
-
+! centers = [5]
+! labels = [1,1,1,1,1,1,1,1,1,1]
 print *, 'N_PROJS:', NPROJ, 'ap time:', rt_ap, 'cc time:', rt_cc
-
 ! print *, simsum, size(centers), labels
 call test_tree%set_distmat(dist_mat_cc)
 call test_tree%set_medoids(centers)
-call test_tree%set_clus_pops(labels)
+call test_tree%set_cls_pops(labels)
 call test_tree%set_subsets(labels)
-print *, 'dim', shape(test_tree%subsets), 'n_trees', test_tree%n_trees, 'clus_pops', test_tree%clus_pops
-print *, 'matrix', test_tree%subsets
+t_tr = tic()
 call test_tree%build_multi_dendro()
-print *, test_tree%root_array(1)%subset
-print *, test_tree%root_array(2)%subset
-print *, test_tree%root_array(3)%subset
+rt_tr = toc(t_tr)
+call print_multi_dendro(test_tree, show_subset = .false.)
+! print *, 'tree_build_time', rt_tr
+! print *, 'pool', test_tree%root_array(1)%subset
+! print *, 'right', test_tree%root_array(1)%right%subset
+! print *, 'left', test_tree%root_array(1)%left%subset
+! print *, 'right => left', test_tree%root_array(1)%right%left%subset
+! print *, 'right => right', test_tree%root_array(1)%right%right%subset
 
 ! should be 1, 4, 9
 ! split into sub_dmats to make the trees from 
