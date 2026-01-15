@@ -876,6 +876,7 @@ contains
     end subroutine get_line
 
     !>  \brief  Filter references
+    !! keep serial
     subroutine filterrefs( icls, filter )
         integer, intent(in) :: icls
         real,    intent(in) :: filter(:)
