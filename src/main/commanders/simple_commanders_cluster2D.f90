@@ -617,10 +617,12 @@ contains
         call nice_communicator%cycle()
         ! updates os_out
         if( trim(params%restore_cavgs).eq.'yes' )then
-            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
-            call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
             if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             call build%spproj%write_segment_inside('out', params%projfile)
+            if( .not. params%l_polar )then
+                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
+                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            endif
         endif
         call qsys_cleanup
         ! report the last iteration on exit
