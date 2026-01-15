@@ -20,7 +20,7 @@ type(commander_pdb2mrc)  :: xpdb2mrc
 type(cmdline)            :: cline_pdb2mrc, cline
 type(multi_dendro)       :: test_tree
 real                     :: objs(2), t1, t2, simsum
-integer                  :: indxs(2), rc, ifoo, NPROJ = 50, nthr_max = 10, i, j
+integer                  :: indxs(2), rc, ifoo, NPROJ = 100, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
 real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr 

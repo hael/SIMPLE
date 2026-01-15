@@ -127,12 +127,10 @@ contains
             integer, allocatable       :: new_subset(:)
             root%level = level
             if(level > self%heights(i)) self%heights(i) = level
-            if(size(root%subset) < 2) return
             ! if (level == 0 .and. (size(root%subset) < 2)) return
             closest     = -1 ; sec_closest = -1
             d1 = huge(1.0) ; d2 = huge(1.0)
-            
-            ! identify closest and 2nd closest to root
+            ! identify closest and 2nd closest to root of unused ref
             do l = 1, size(root%subset)
                idx = root%subset(l)
                if (idx < 1) cycle               
@@ -149,10 +147,7 @@ contains
                   sec_closest = idx
                end if
             end do
-            if (closest == -1) return
-            if (sec_closest == -1) return
-            used(closest) = .true.
-            used(sec_closest) = .true.
+            if (closest == -1 .and. sec_closest == -1) return
             ! remove those from subset
             if(level > 0 ) then 
                allocate(new_subset(size(root%subset) - 2))
@@ -164,6 +159,24 @@ contains
                   root%subset /= sec_closest .and. &
                   root%subset /= root%ref_idx .and. &
                   .not. used(root%subset))
+            ! if only one unused ref is available push left 
+            if (sec_closest == -1) then
+               used(closest) = .true.
+               allocate(root%left)
+               nullify(root%left%left, root%left%right)
+               root%left%parent = c_loc(root)
+               root%left%ref_idx = closest
+               root%left%level  = level + 1
+               root%left%visit  = .false.
+               root%left%is_pop = .true.
+               allocate(root%left%subset(size(new_subset)))
+               if (size(new_subset) > 0) root%left%subset = new_subset
+               if (allocated(new_subset)) deallocate(new_subset)
+               return
+            end if
+            ! if there's two children 
+            used(closest) = .true.
+            used(sec_closest) = .true.      
             ! push 2nd closest left 
             allocate(root%left)
             nullify(root%left%left, root%left%right)
@@ -174,7 +187,6 @@ contains
             root%left%visit  = .false.
             root%left%is_pop = .true.
             root%left%parent = c_loc(root)
-
             ! push closest right 
             allocate(root%right)
             nullify(root%right%left, root%right%right)
@@ -184,9 +196,7 @@ contains
             root%right%level  = level + 1 
             root%right%visit  = .false.
             root%right%is_pop = .true.
-            root%right%parent = c_loc(root)
-            ! cleanup
-            if (size(root%subset) < 3) return
+            root%right%parent = c_loc(root)         
             deallocate(new_subset)
             call clust_insert_s2_node(root%left,  dist_mat, level + 1, used)
             call clust_insert_s2_node(root%right, dist_mat, level + 1, used)
