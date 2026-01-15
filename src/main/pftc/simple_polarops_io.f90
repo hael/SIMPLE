@@ -100,7 +100,7 @@ contains
         !$omp end parallel do
     end subroutine polar_cavger_refs2cartesian
 
-    ! Read cavgs PFT array
+    ! Read cavgs PFT array, poorly optimized but only used in unit test
     module subroutine polar_cavger_read( fname, which )
         class(string),    intent(in) :: fname
         character(len=*), intent(in) :: which
@@ -116,7 +116,7 @@ contains
         end select
     end subroutine polar_cavger_read
 
-    ! Writes cavgs PFT array
+    ! Writes cavgs PFT array, poorly optimized but only used in unit test
     module subroutine polar_cavger_write( fname, which )
         class(string),    intent(in) :: fname
         character(len=*), intent(in) :: which
@@ -133,27 +133,62 @@ contains
     end subroutine polar_cavger_write
 
     ! Writes all cavgs PFT arrays
+    !! performance critical code
     module subroutine polar_cavger_writeall( tmpl_fname )
         class(string), intent(in) :: tmpl_fname
-        call polar_cavger_write(tmpl_fname//'_even'//BIN_EXT,'even')
-        call polar_cavger_write(tmpl_fname//'_odd'//BIN_EXT, 'odd')
-        call polar_cavger_write(tmpl_fname//BIN_EXT,         'merged')
+        integer :: funit_e, funit_o, funit_m
+        integer :: i
+        call open_pft_or_ctf2_array_for_write(tmpl_fname//'_even'//BIN_EXT, funit_e)
+        call open_pft_or_ctf2_array_for_write(tmpl_fname//'_odd'//BIN_EXT, funit_o)
+        call open_pft_or_ctf2_array_for_write(tmpl_fname//BIN_EXT, funit_m)
+        !$omp parallel do default(shared) private(i) num_threads(3) schedule(static)
+        do i = 1, 3
+            select case(i)
+                case(1)
+                    call write_pft_array_local(funit_e, pfts_even)
+                case(2)
+                    call write_pft_array_local(funit_o, pfts_odd)
+                case(3)
+                    call write_pft_array_local(funit_m, pfts_merg)
+            end select
+        end do
+        !$omp end parallel do
+        call fclose(funit_e)
+        call fclose(funit_o)
+        call fclose(funit_m)
     end subroutine polar_cavger_writeall
 
     ! Write references contained in pftc
+    !! performance critical code
     module subroutine polar_cavger_writeall_pftcrefs( tmpl_fname )
         class(string),  intent(in) :: tmpl_fname
         complex(sp),  pointer :: ptre(:,:,:), ptro(:,:,:)
-        call pftc_glob%get_refs_ptr( ptre, ptro )
-        pfts_even = cmplx(ptre,kind=dp)
-        pfts_odd  = cmplx(ptro,kind=dp)
-        call polar_cavger_write(tmpl_fname//'_even'//BIN_EXT,'even')
-        call polar_cavger_write(tmpl_fname//'_odd'//BIN_EXT, 'odd')
+        integer :: funit_e, funit_o, i
+        call pftc_glob%get_refs_ptr(ptre, ptro)
+        call open_pft_or_ctf2_array_for_write(tmpl_fname//'_even'//BIN_EXT, funit_e)
+        call open_pft_or_ctf2_array_for_write(tmpl_fname//'_odd'//BIN_EXT, funit_o)
+        !$omp parallel do default(shared) private(i) num_threads(2) schedule(static)
+        do i = 1, 2
+            select case(i)
+                case(1)
+                    pfts_even = cmplx(ptre,kind=dp)
+                    call write_pft_array_local(funit_e, pfts_even)
+                case(2)
+                    pfts_odd  = cmplx(ptro,kind=dp)
+                    call write_pft_array_local(funit_o, pfts_odd)
+            end select
+        end do
+        !$omp end parallel do
+        call fclose(funit_e)
+        call fclose(funit_o)
         call polar_cavger_zero_pft_refs !! removed after writing
         nullify(ptre, ptro)
     end subroutine polar_cavger_writeall_pftcrefs
 
     ! Converts cavgs PFTS to cartesian grids and writes them
+    !! this should be removed in performance critical code beacause it is costly
+    !! and the outputted averages suffer from severe interpolation artefacts
+    !! if we need Cartesian class averages we should generate them properly periodically
     module subroutine polar_cavger_write_cartrefs( pftc, tmpl_fname, which )
         class(polarft_calc), intent(in) :: pftc
         class(string),       intent(in) :: tmpl_fname
@@ -172,6 +207,7 @@ contains
     end subroutine polar_cavger_write_cartrefs
 
     ! Reads all cavgs PFT arrays
+    !! performance critical code
     module subroutine polar_cavger_read_all( fname )
         class(string),  intent(in) :: fname
         complex(sp), allocatable :: buf_e(:,:,:), buf_o(:,:,:), buf_m(:,:,:)
@@ -222,6 +258,7 @@ contains
     end subroutine polar_cavger_read_all
 
     !>  \brief  writes partial class averages (PFTS + CTF2) to disk (distributed execution)
+    !! performance critical code
     subroutine polar_cavger_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
         complex(dp), allocatable :: pfte(:,:,:),      pfto(:,:,:)
@@ -294,6 +331,7 @@ contains
     end subroutine polar_cavger_readwrite_partial_sums
 
     !>  \brief  Reads in and reduces partial matrices prior to restoration
+    !! performance critical code
     subroutine polar_cavger_assemble_sums_from_parts( reforis, clin_anneal )
         type(oris), optional, intent(in) :: reforis
         real,       optional, intent(in) :: clin_anneal

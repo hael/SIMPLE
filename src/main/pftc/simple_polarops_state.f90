@@ -28,10 +28,12 @@ contains
     end subroutine polar_cavger_new
 
     module subroutine polar_cavger_zero_pft_refs
+        !$omp parallel workshare
         pfts_even = DCMPLX_ZERO
         pfts_odd  = DCMPLX_ZERO
         ctf2_even = 0.d0
         ctf2_odd  = 0.d0
+        !$omp end parallel workshare
     end subroutine polar_cavger_zero_pft_refs
 
     module subroutine polar_cavger_set_ref_pftc( icls, which, pftc )
