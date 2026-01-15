@@ -25,12 +25,11 @@ end type s2_node
 
 type  :: multi_dendro 
    type(s2_node), allocatable :: root_array(:)
-   real, allocatable :: dist_mat(:,:) ! full_distmat
-   integer, allocatable :: cls_pops(:) 
-   integer, allocatable :: subsets(:,:) 
-   integer, allocatable :: subsets_avail(:,:)
-   integer, allocatable :: medoids(:)
-   integer, allocatable :: heights(:)
+   real, allocatable          :: dist_mat(:,:) ! full_distmat
+   integer, allocatable       :: cls_pops(:) 
+   integer, allocatable       :: subsets(:,:) 
+   integer, allocatable       :: medoids(:)
+   integer, allocatable       :: heights(:)
    integer  :: n_trees ! number of clusters
 contains 
    ! Setters / Getters
@@ -70,7 +69,6 @@ contains
       integer, allocatable          :: tmp1(:), tmp2(:)
       integer     :: i, j
       if (allocated(self%subsets))        deallocate(self%subsets)
-      if (allocated(self%subsets_avail))  deallocate(self%subsets_avail)
       allocate(self%subsets(self%n_trees, maxval(self%cls_pops)))
       do i = 1, self%n_trees
          allocate(tmp1(self%cls_pops(i)))
@@ -79,8 +77,6 @@ contains
          self%subsets(i,:) = [tmp1, tmp2]
          deallocate(tmp1, tmp2)  
       end do 
-      allocate(self%subsets_avail(size(self%cls_pops), maxval(self%cls_pops)))
-      self%subsets_avail = self%subsets
    end subroutine set_subsets
 
    pure subroutine set_distmat(self, dist_mat)
@@ -104,7 +100,8 @@ contains
    subroutine build_multi_dendro (self)
       class(multi_dendro), intent(inout)   :: self
       real, allocatable    :: tmp(:)
-      integer  :: i, j 
+      logical, allocatable :: used(:)
+      integer  :: i, j, nref
       ! Initialize each sub_tree 
       allocate(self%heights(self%n_trees))
       do i = 1, self%n_trees
@@ -113,31 +110,34 @@ contains
          self%root_array(i)%subset = self%subsets(i,1:self%cls_pops(i))
          self%root_array(i)%is_pop = .true.
          self%heights(i) = 0
-         call clust_insert_s2_node(self%root_array(i), self%dist_mat, 0)
+         nref = size(self%dist_mat, 1)
+         allocate(used(nref), source = .false.)
+         used(self%root_array(i)%ref_idx) = .true.
+         call clust_insert_s2_node(self%root_array(i), self%dist_mat, 0, used)
+         deallocate(used)
       end do 
       contains 
-         recursive subroutine clust_insert_s2_node(root, dist_mat, level)
+         recursive subroutine clust_insert_s2_node(root, dist_mat, level, used)
             type(s2_node), intent(inout), target:: root
             real, intent(in)             :: dist_mat(:,:)
             integer, intent(in)          :: level
+            logical, intent(inout)       :: used(:)
             integer                    :: l, idx, new_med(2), closest, sec_closest, n, m
             real                       :: d, d1, d2 
-            integer, allocatable       :: new_subset(:), tmp1(:)
-            ! update subsets available at multi_dendro level so each node is getting assigned from updated pool 
-            allocate(tmp1(maxval(self%cls_pops) - size(root%subset)), source = -1)
-            self%subsets_avail(i,:) = [root%subset, tmp1]
+            integer, allocatable       :: new_subset(:)
             root%level = level
             if(level > self%heights(i)) self%heights(i) = level
             if(size(root%subset) < 2) return
-            ! identify closest and 2nd closest to root
+            ! if (level == 0 .and. (size(root%subset) < 2)) return
             closest     = -1 ; sec_closest = -1
             d1 = huge(1.0) ; d2 = huge(1.0)
-            if (level == 0 .and. (size(root%subset) < 2)) return
-            l = 1
-            do while (l <= size(root%subset))
-               idx = self%subsets_avail(i,l)
-               l = l + 1
+            
+            ! identify closest and 2nd closest to root
+            do l = 1, size(root%subset)
+               idx = root%subset(l)
+               if (idx < 1) cycle               
                if (idx == root%ref_idx) cycle
+               if (used(idx)) cycle            
                d = dist_mat(idx, root%ref_idx)
                if (d < d1) then
                   d2 = d1
@@ -149,6 +149,10 @@ contains
                   sec_closest = idx
                end if
             end do
+            if (closest == -1) return
+            if (sec_closest == -1) return
+            used(closest) = .true.
+            used(sec_closest) = .true.
             ! remove those from subset
             if(level > 0 ) then 
                allocate(new_subset(size(root%subset) - 2))
@@ -156,8 +160,10 @@ contains
                allocate(new_subset(size(root%subset) - 3))
             end if 
             new_subset = pack(root%subset, &
-            root%subset /= closest .and. root%subset /= sec_closest .and. root%subset /= root%ref_idx)
-
+                  root%subset /= closest .and. &
+                  root%subset /= sec_closest .and. &
+                  root%subset /= root%ref_idx .and. &
+                  .not. used(root%subset))
             ! push 2nd closest left 
             allocate(root%left)
             nullify(root%left%left, root%left%right)
@@ -181,10 +187,9 @@ contains
             root%right%parent = c_loc(root)
             ! cleanup
             if (size(root%subset) < 3) return
-            deallocate(new_subset, tmp1)
-
-            call clust_insert_s2_node(root%left,  dist_mat, level + 1)
-            call clust_insert_s2_node(root%right, dist_mat, level + 1)
+            deallocate(new_subset)
+            call clust_insert_s2_node(root%left,  dist_mat, level + 1, used)
+            call clust_insert_s2_node(root%right, dist_mat, level + 1, used)
          end subroutine clust_insert_s2_node
 
    end subroutine build_multi_dendro   
