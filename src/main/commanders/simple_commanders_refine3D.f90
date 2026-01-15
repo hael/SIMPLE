@@ -242,7 +242,7 @@ contains
         integer,      allocatable :: state_pops(:)
         real,         allocatable :: res(:), fsc(:) 
         logical :: err, vol_defined, have_oris, converged, fall_over, l_multistates, l_automsk
-        logical :: l_combine_eo, l_griddingset, do_automsk, l_polar
+        logical :: l_combine_eo, l_griddingset, do_automsk
         real    :: smpd
         integer :: i, state, iter, box, nfiles, niters, nthr_here
         601 format(A,1X,F12.3)
@@ -260,8 +260,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init
         call build%init_params_and_build_spproj(cline, params)
-        l_polar = trim(params%polar).eq.'yes'
-        if( l_polar )then
+        if( params%l_polar )then
             call build%build_general_tbox(params, cline, do3d=.true.)
             call pftc%new(1, [1,1], params%kfromto)
         endif
@@ -408,7 +407,7 @@ contains
                 have_oris = .true.
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( l_polar )then
+            if( params%l_polar )then
                 ! performs reconstruction only if polar references
                 ! are absent and a volume is not provided
                 if( .not.vol_defined )then
@@ -647,7 +646,7 @@ contains
                         enddo
                 end select
             endif
-            if( l_polar )then
+            if( params%l_polar )then
                 ! Assemble polar references
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
                 call polar_cavger_new(pftc, .true., nrefs=params%nspace)
@@ -656,7 +655,6 @@ contains
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
                 call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
                 call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                call polar_cavger_write_cartrefs(pftc, get_fbody(params%refs,params%ext,separator=.false.), 'merged')
                 call polar_cavger_kill
                 call job_descr%delete('vol1')
                 call cline%delete('vol1')
@@ -745,7 +743,7 @@ contains
         else
             if( trim(params%continue) == 'yes' ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             ! Input reference
-            if( trim(params%polar).eq.'yes' )then
+            if( params%l_polar )then
                 if( cline%defined('vol1') )then
                     if( .not.file_exists(params%vols(1)) ) then
                         THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
@@ -832,7 +830,7 @@ contains
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
                 ! making sure the input volume is only used once
-                if( trim(params%polar).eq.'yes' ) call cline%delete('vol1')
+                if( params%l_polar ) call cline%delete('vol1')
                 ! convergence
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
@@ -1022,7 +1020,7 @@ contains
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
         call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, tmp_imgs, nptcls, params%which_iter,&
-                                        do_polar=((trim(params%polar).eq.'yes') .and. (.not.cline%defined('vol1'))) )
+                                        do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
         ! Build polar particle images
         call build_batch_particles(pftc, nptcls, pinds, tmp_imgs)
         ! Filling prob table in eul_prob_tab

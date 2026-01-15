@@ -85,7 +85,7 @@ contains
         l_lpauto = .true.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
         ! Polar representation
-        if( trim(params%polar).eq.'yes' )then
+        if( params%l_polar )then
             if( trim(params%multivol_mode).ne.'single' )then
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
@@ -543,7 +543,7 @@ contains
             call cline%delete('nstates')
         endif
         ! Polar representation
-        if( trim(params%polar).eq.'yes' )then
+        if( params%l_polar )then
             if( trim(params%multivol_mode).ne.'single' )then
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif

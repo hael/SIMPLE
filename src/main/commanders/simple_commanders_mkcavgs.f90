@@ -248,7 +248,7 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext%to_char()
             params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
         endif
-        if( trim(params%polar).eq.'yes' )then
+        if( params%l_polar )then
             fname = 'cavgs_even_part'//int2str_pad(1,params%numlen)//BIN_EXT
             call polar_cavger_dims_from_header(fname, pftsz, kfromto, ncls)
             call fname%kill
@@ -271,7 +271,6 @@ contains
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
             call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
             call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call polar_cavger_write_cartrefs(pftc, get_fbody(params%refs,params_glob%ext,separator=.false.), 'merged')
             call pftc%kill
             call polar_cavger_gen2Dclassdoc(build_glob%spproj)
             call polar_cavger_kill
@@ -308,7 +307,9 @@ contains
                 call build%spproj%os_cls3D%set_all('state',states)
                 deallocate(states)
                 call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
-                call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
+                if( .not. params%l_polar )then ! no Cartesian class averages in the polar version
+                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
+                endif
                 ! multiple fields updated, do a full write
                 call build%spproj%write(params%projfile)
             case('ptcl3D')
@@ -324,7 +325,9 @@ contains
                     call build%spproj%os_cls3D%write(string('cls3D_oris.txt'))
                 endif
                 call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc3D')
-                call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg3D')
+                if( .not. params%l_polar )then ! no Cartesian class averages in the polar version
+                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg3D')
+                endif
                 call build%spproj%write_segment_inside('out', params%projfile)
             case DEFAULT
                 THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
