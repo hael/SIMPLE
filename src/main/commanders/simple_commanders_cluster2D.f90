@@ -649,20 +649,12 @@ contains
         type(string)              :: finalcavgs, orig_objfun, refs_sc, fname, fname_sigma
         real,         allocatable :: corrs(:), corrs_all(:)
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
-        real    :: smpd_refs
-        integer :: ldim_refs(3), startit, ncls_from_refs, i, cnt, iptcl, ptclind
+        integer :: startit, i, cnt, iptcl, ptclind
         integer :: iter_switch2euclid, j, io_stat, funit, class_ind, class_max
         logical :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg, l_scale_inirefs
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        ! References dimensions
-        if( cline%defined('refs') )then
-            call find_ldim_nptcls(params%refs, ldim_refs, ncls_from_refs, smpd=smpd_refs)
-            ldim_refs(3) = 1
-            ! consistency check
-            if( params%ncls /=  ncls_from_refs ) THROW_HARD('nrefs /= inputted ncls')
-        endif
         ! Streaming flag
         l_stream = .false.
         if( cline%defined('stream') )then
@@ -882,24 +874,26 @@ contains
                     call del_file(params%outfile)
                     ! update os_out
                     if( trim(params%restore_cavgs).eq.'yes' )then
-                        finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%startit,3)//params%ext%to_char()
-                        call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
                         if( file_exists(FRCS_FILE) ) call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
-                        call build%spproj%write_segment_inside('out', params%projfile)
-                        if( trim(params%chunk).eq.'yes' )then
-                            call cavger_write(params%refs_even,'even')
-                            call cavger_write(params%refs_odd, 'odd')
-                            call cavger_readwrite_partial_sums('write')
-                            call cavger_kill
-                        else
-                            if( trim(params%tseries).eq.'yes' )then
+                        if( .not. params%l_polar )then ! no Cartesian class averages in the polar version
+                            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%startit,3)//params%ext%to_char()
+                            call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+                            if( trim(params%chunk).eq.'yes' )then
                                 call cavger_write(params%refs_even,'even')
                                 call cavger_write(params%refs_odd, 'odd')
+                                call cavger_readwrite_partial_sums('write')
                                 call cavger_kill
                             else
-                                call cavger_kill(dealloccavgs=.false.)
+                                if( trim(params%tseries).eq.'yes' )then
+                                    call cavger_write(params%refs_even,'even')
+                                    call cavger_write(params%refs_odd, 'odd')
+                                    call cavger_kill
+                                else
+                                    call cavger_kill(dealloccavgs=.false.)
+                                endif
                             endif
                         endif
+                        call build%spproj%write_segment_inside('out', params%projfile)
                     endif
                     exit
                 endif

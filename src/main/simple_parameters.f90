@@ -537,6 +537,7 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
+    logical :: l_polar        = .false. 
     logical :: l_prob_inpl    = .false.
     logical :: l_prob_sh      = .false.
     logical :: l_sh_first     = .false.
@@ -1599,12 +1600,13 @@ contains
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
         ! comlin generation
-        if( trim(self%polar).eq.'yes' )then
+        self%l_polar = trim(self%polar).eq.'yes'
+        if( self%l_polar )then
             select case(trim(self%ref_type))
-            case('comlin_noself', 'comlin', 'polar_cavg', 'comlin_hybrid')
-                ! supported
-            case DEFAULT
-                THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))
+                case('comlin_noself', 'comlin', 'polar_cavg', 'comlin_hybrid')
+                    ! supported
+                case DEFAULT
+                    THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))
             end select
             ! deactivates post-alignment cartesian reconstruction
             self%volrec = 'no'

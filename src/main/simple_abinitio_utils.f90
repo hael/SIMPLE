@@ -447,10 +447,7 @@ contains
         call del_file(DIST_FBODY//'.dat')
         call del_file(ASSIGNMENT_FBODY//'.dat')
         stage = '_stage_'//int2str(istage)
-        if( l_polar )then
-            vol_name = CAVGS_ITER_FBODY//int2str_pad(cline_refine3D%get_iarg('endit'),3)//params_glob%ext%to_char()
-            call simple_copy_file(vol_name, string('cavgs')//stage//params_glob%ext)
-        else
+        if( .not. l_polar )then
             do state = 1, params_glob%nstates
                 str_state = int2str_pad(state,2)
                 vol_name  = string(VOL_FBODY)//str_state//params_glob%ext

@@ -392,7 +392,6 @@ contains
             call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
             call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
             call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call polar_cavger_write_cartrefs(pftc, get_fbody(params_glob%refs,params_glob%ext,separator=.false.), 'merged')
             call polar_cavger_kill
         end subroutine polar_restoration
 

@@ -397,7 +397,7 @@ contains
             ! filter for Fourier polar representation
             l_gauref        = .false.
             l_gaufreq_input = .false.
-            if( trim(params%polar).eq.'yes' )then
+            if( params%l_polar )then
                 l_gauref        = trim(params%gauref).eq.'yes'
                 l_gaufreq_input = cline%defined('gaufreq')
                 ! ICM used for cartesian filtering of random refs
@@ -579,7 +579,7 @@ contains
             else
                 call cline_cluster2D%delete('gaufreq')
             endif
-            if( trim(params%polar).eq.'yes')then
+            if( params%l_polar )then
                 if( trim(params%ref_type)=='comlin_hybrid') center = 'no' ! because the references form a volume
             endif
             call cline_cluster2D%set('minits',    minits)
