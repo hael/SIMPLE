@@ -2,15 +2,9 @@ module simple_tree
 use simple_srch_sort_loc
 use iso_c_binding
 use iso_fortran_env
+use simple_hclust
 implicit none 
 #include "simple_local_flags.inc"
-
-type :: s1_node
-   type(s1_node), pointer  :: left => null(), right => null(), parent => null()
-   real     :: inpl_ang
-   logical  :: visited = .true. 
-   integer, allocatable :: inpl_subset(:) ! array of inpl angles below s1 node
-end type s1_node
 
 type  :: s2_node 
    type(s2_node), pointer   :: left => null(), right => null()
@@ -30,7 +24,8 @@ type  :: multi_dendro
    integer, allocatable       :: subsets(:,:) 
    integer, allocatable       :: medoids(:)
    integer, allocatable       :: heights(:)
-   integer  :: n_trees ! number of clusters
+   integer  :: n_trees ! number of AP clusters
+   integer  :: linkage
 contains 
    ! Setters / Getters
    procedure   :: get_heights
@@ -99,11 +94,13 @@ contains
 
    subroutine build_multi_dendro (self)
       class(multi_dendro), intent(inout)   :: self
-      real, allocatable    :: tmp(:)
+      real, allocatable    :: tmp(:), sub_distmat(:,:)
       logical, allocatable :: used(:)
       integer  :: i, j, nref
+      type(hclust), allocatable  :: hierch_cls_arr(:)
       ! Initialize each sub_tree 
       allocate(self%heights(self%n_trees))
+      allocate(hierch_cls_arr(self%n_trees))
       do i = 1, self%n_trees
          self%root_array(i)%level = 0 
          allocate(self%root_array(i)%subset(self%cls_pops(i)))
@@ -115,7 +112,20 @@ contains
          used(self%root_array(i)%ref_idx) = .true.
          call clust_insert_s2_node(self%root_array(i), self%dist_mat, 0, used)
          deallocate(used)
+         ! allocate sub_distmat(self%cls_pos(i), self%cls_posp(i), source = 0.)
+         ! need map to from overall references to per AP cluster reference 
+         ! call hierch_cls_arr(i)%new()
+         ! don't need used references anymore 
+         ! don't need recursive subroutine, just do until node%subset size = AP cluster size
+         ! do while(size(root%subset) < self%cls_pops(i))
+         ! nodes come in with their dist mat (or 1 value initially)
+         ! call new(self, N, dmat, linkage) ! this is the full dmat
+         ! cluster(self, merge_mat, height, labels, ncls = 1) 
+         ! use cut tree to track all merges 
+         ! node --> parent, parent --> left, parent --> right
+         ! end do 
       end do 
+
       contains 
          recursive subroutine clust_insert_s2_node(root, dist_mat, level, used)
             type(s2_node), intent(inout), target:: root
@@ -201,6 +211,12 @@ contains
             call clust_insert_s2_node(root%left,  dist_mat, level + 1, used)
             call clust_insert_s2_node(root%right, dist_mat, level + 1, used)
          end subroutine clust_insert_s2_node
+
+         ! subroutine 
+
+
+
+         ! end subroutine 
 
    end subroutine build_multi_dendro   
 
