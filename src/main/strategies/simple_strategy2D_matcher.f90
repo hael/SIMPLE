@@ -499,6 +499,7 @@ contains
     !>  \brief  fills batch particle images for polar alignment
     subroutine build_batch_particles2D( pftc, nptcls_here, pinds, l_ctf_here )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align!, prepimg4align_bench
+        use simple_ctf, only: memoize4ctf_apply, unmemoize4ctf_apply
         class(polarft_calc), intent(inout) :: pftc
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds(nptcls_here)
@@ -517,6 +518,8 @@ contains
         call ptcl_match_imgs(1)%memoize_mask_serial_coords
         ! get instrument function
         img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
+        ! memoize CTF stuff
+        call memoize4ctf_apply(ptcl_match_imgs(1))
         ! rt_prep1    = 0.
         ! rt_ctf      = 0.
         ! rt_prep2    = 0.
@@ -566,6 +569,7 @@ contains
         call pftc%memoize_ptcls
         ! destruct
         call img_instr%kill
+        call unmemoize4ctf_apply
     end subroutine build_batch_particles2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references

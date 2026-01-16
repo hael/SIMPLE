@@ -2,7 +2,7 @@ module simple_classaverager
 use simple_core_module_api
 !$ use omp_lib
 use simple_builder,           only: build_glob
-use simple_ctf,               only: ctf
+use simple_ctf,               only: ctf, memoize4ctf_apply, unmemoize4ctf_apply
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
 use simple_image,             only: image, image_ptr
@@ -354,6 +354,7 @@ contains
         &rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
         interp_shlim = nyq_crop + 1
         call dstkio_r%new(smpd, ldim(1))
+        call memoize4ctf_apply(cgrid_imgs_crop(1))
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -401,7 +402,7 @@ contains
                     ! shift
                     call cgrid_imgs_crop(i)%shift2Dserial(-precs(iprec)%shift*crop_scale)
                     ! apply CTF to image, stores CTF values
-                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs_crop(i), ctfflag, logi_lims_crop, fdims_crop(1:2), tvals(:,:,i), &
+                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs_crop(i), ctfflag, fdims_crop(1:2), tvals(:,:,i), &
                         & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast)
                     ! ML-regularization
                     if( l_ml_reg )then
@@ -503,6 +504,7 @@ contains
         !$omp end parallel do
         ! Cleanup
         call dstkio_r%kill
+        call unmemoize4ctf_apply
         do i = 1,READBUFFSZ
             call read_imgs(i)%kill
             call cgrid_imgs(i)%kill
