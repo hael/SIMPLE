@@ -544,7 +544,6 @@ type :: parameters
     logical :: l_sigma_glob   = .false.
     logical :: l_trail_rec    = .false.
     logical :: l_remap_cls    = .false.
-    logical :: l_wiener_part  = .false.
     logical :: sp_required    = .false.
     contains
     procedure, private :: init_strings
@@ -1622,7 +1621,6 @@ contains
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode
-        self%l_wiener_part = str_has_substr(trim(self%wiener), 'partial')
         if( self%l_corrw )then
             select case(trim(self%wcrit))
                 case('softmax')

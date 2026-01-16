@@ -38,7 +38,6 @@ contains
         call seed_rnd
         ! general parameters
         master_cline => cline
-        l_wfilt          = .false.
         l_scaling        = .true.
         params_glob%ncls_start = params_glob%ncls ! backwards compatibility
         nptcls_per_chunk = params_glob%nptcls_per_cls*params_glob%ncls_start
@@ -103,9 +102,6 @@ contains
         call cline_cluster2D_chunk%set('sigma_est', params_glob%sigma_est)
         call cline_cluster2D_chunk%set('rank_cavgs','no')
         call cline_cluster2D_chunk%set('chunk',     'yes')
-        if( l_wfilt )then
-            call cline_cluster2D_chunk%set('wiener',     'partial')
-        endif
         ! objective function
         call cline_cluster2D_chunk%set('objfun', 'euclid')
         call cline_cluster2D_chunk%set('ml_reg', params_glob%ml_reg)

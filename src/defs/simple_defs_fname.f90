@@ -37,7 +37,6 @@ character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
 character(len=*), parameter :: MAKECAVGS_FINISHED   = 'MAKECAVGS_FINISHED'
 character(len=*), parameter :: CLUSTER2D_FINISHED   = 'CLUSTER2D_FINISHED'
 character(len=*), parameter :: ABINITIO2D_FINISHED  = 'ABINITIO2D_FINISHED'
-character(len=*), parameter :: WFILT_SUFFIX         = '_wfilt'
 character(len=*), parameter :: CLUSTER2D_ITER_THUMB = 'cls2D_thumbnail.jpeg'
 character(len=*), parameter :: CLS2D_STARFBODY      = 'clusters2D'
 ! AUTOMASK2D
