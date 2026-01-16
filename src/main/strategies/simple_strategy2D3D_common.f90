@@ -766,7 +766,7 @@ contains
         type(fplane),      allocatable   :: fpls(:)
         type(ctfparams),   allocatable   :: ctfparms(:)
         type(ori) :: orientation, o_thres, o_mirr
-        real      :: shift(2), sdev_noise, euls(3), euls_mirr(3)
+        real      :: shift(2), euls(3), euls_mirr(3)
         integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff
         logical   :: l_rec_state
         if( trim(params_glob%recthres).eq.'yes' )then
@@ -789,17 +789,12 @@ contains
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
-            !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,sdev_noise) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(i,iptcl,ibatch,shift) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
                 if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                if( params_glob%l_noise_norm )then
-                    call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
-                else
-                    call build_glob%imgbatch(ibatch)%norm_within(build_glob%lmsk)
-                endif
-                call build_glob%imgbatch(ibatch)%fft
+                call build_glob%imgbatch(ibatch)%norm_noise_fft(build_glob%lmsk)
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
                 call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
@@ -846,7 +841,7 @@ contains
         type(ctfparams) :: ctfparms
         type(image)     :: instrimg, numimg, denomimg
         type(ori)       :: orientation, o_thres, o_mirr
-        real            :: shift(2), e3, sdev_noise, w, euls(3), euls_mirr(3)
+        real            :: shift(2), e3, w, euls(3), euls_mirr(3)
         integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
         integer         :: s, state_nptcls, pop
         logical         :: DEBUG    = .false.
@@ -939,7 +934,7 @@ contains
                 ! particles in-plane transformation
                 call discrete_read_imgbatch(state_nptcls, state_pinds, batchlims)
                 if( DEBUG ) t = tic()
-                !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,e3,sdev_noise,ctfparms,ithr)&
+                !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,e3,ctfparms,ithr)&
                 !$omp schedule(static) proc_bind(close)
                 do i = batchlims(1),batchlims(2)
                     iptcl    = state_pinds(i)
@@ -947,13 +942,7 @@ contains
                     ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                     shift    = build_glob%spproj_field%get_2Dshift(iptcl)
                     e3       = build_glob%spproj_field%e3get(iptcl)
-                    if( params_glob%l_noise_norm )then
-                        call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
-                    else
-                        call build_glob%imgbatch(ibatch)%norm_within(build_glob%lmsk)
-                    endif
-                    call build_glob%imgbatch(ibatch)%div(instrimg)
-                    call build_glob%imgbatch(ibatch)%fft
+                    call build_glob%imgbatch(ibatch)%norm_noise_divwinstrfun_fft(build_glob%lmsk, instrimg)
                     call fpls(ibatch)%gen_planes_pad(build_glob%imgbatch(ibatch), ctfparms, shift, e3, iptcl, BILINEAR)
                 end do
                 !$omp end parallel do

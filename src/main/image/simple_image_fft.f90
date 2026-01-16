@@ -167,7 +167,6 @@ contains
     !===========================
 
     subroutine pad_fft( self, self_out )
-        use, intrinsic :: iso_c_binding, only: c_float
         class(image), intent(in)    :: self
         class(image), intent(inout) :: self_out
         integer       :: n1, n2, n1o, n2o, h1o, h2o
@@ -208,8 +207,80 @@ contains
         self_out%ft   = .true.
     end subroutine pad_fft
 
+    module subroutine norm_noise_fft( self, lmsk )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, npix
+        real(dp)      :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat, rswap
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        h1 = n1/2
+        h2 = n2/2
+        ! ---- two-pass background mean/variance on unmasked pixels ----
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        do j = 1, n2
+            do i = 1, n1
+                if (.not. lmsk(i,j,1)) then
+                    xdp = real(self%rmat(i,j,1), dp)
+                    sum_dp    = sum_dp    + xdp
+                    sum_sq_dp = sum_sq_dp + xdp*xdp
+                    npix      = npix + 1
+                end if
+            end do
+        end do
+        mean_dp = 0.0_dp
+        var_dp  = 0.0_dp
+        if (npix > 1) then
+            rnpix   = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp*sum_dp/rnpix) / real(npix-1,dp)
+        end if
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = 1.0_c_float
+        if (var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp/sqrt(var_dp), c_float)
+        end if
+        ! ---- fftshift + normalization fused ----
+        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float) then
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    rswap = (self%rmat(i, j, 1) - mean_sp) * invstd_sp
+                    self%rmat(i, j, 1) = (self%rmat(ii, jj, 1) - mean_sp) * invstd_sp
+                    self%rmat(ii, jj, 1) = rswap
+
+                    rswap = (self%rmat(i, jj, 1) - mean_sp) * invstd_sp
+                    self%rmat(i, jj, 1) = (self%rmat(ii, j, 1) - mean_sp) * invstd_sp
+                    self%rmat(ii, j, 1) = rswap
+                end do
+            end do
+        else
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    rswap = self%rmat(i, j, 1)
+                    self%rmat(i, j, 1)   = self%rmat(ii, jj, 1)
+                    self%rmat(ii, jj, 1) = rswap
+
+                    rswap = self%rmat(i, jj, 1)
+                    self%rmat(i, jj, 1)  = self%rmat(ii, j, 1)
+                    self%rmat(ii, j, 1)  = rswap
+                end do
+            end do
+        end if
+        ! ---- FFT + scale ----
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = 1.0_c_float / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+    end subroutine norm_noise_fft
+
     subroutine norm_noise_pad_fft( self, lmsk, self_out )
-        use, intrinsic :: iso_c_binding, only: c_float
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
@@ -303,7 +374,6 @@ contains
 
     ! The big players in this subroutine are the normalization (17%) and the fft (70%)  
     module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
-        use, intrinsic :: iso_c_binding, only: c_float, c_float_complex
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
@@ -438,8 +508,136 @@ contains
         endif
     end subroutine norm_noise_fft_clip_shift
 
+    module subroutine norm_noise_divwinstrfun_fft( self, lmsk, instrfun )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(in)    :: instrfun
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, npix
+        real(dp)      :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat
+        real(c_float) :: v11, v22, v12, v21
+        real(c_float) :: u11, u22, u12, u21
+        real(c_float) :: rswap, invden
+        real(c_float), parameter :: EPS_DEN = 1.e-6_c_float
+        real(c_float), parameter :: ONE     = 1.0_c_float
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        h1 = n1/2
+        h2 = n2/2
+        ! ============================================================
+        ! NORM_NOISE (two-pass) on unmasked pixels
+        ! ============================================================
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        do j = 1, n2
+            do i = 1, n1
+                if (.not. lmsk(i,j,1)) then
+                    xdp = real(self%rmat(i,j,1), dp)
+                    sum_dp    = sum_dp    + xdp
+                    sum_sq_dp = sum_sq_dp + xdp*xdp
+                    npix      = npix + 1
+                end if
+            end do
+        end do
+        mean_dp = 0.0_dp
+        var_dp  = 0.0_dp
+        if (npix > 1) then
+            rnpix   = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp*sum_dp/rnpix) / real(npix-1, dp)
+        end if
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = ONE
+        if (var_dp > 0.0_dp) then
+            invstd_sp = real(ONE / sqrt(var_dp), c_float)
+        end if
+        ! ============================================================
+        ! FFTSHIFT + (optional) normalization + division-by-instrfun
+        !
+        ! Division is applied in the *shifted* layout, consistent with
+        ! ifft_mask_divwinstrfun_fft (which divides after fftshift).
+        ! ============================================================
+        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= ONE) then
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    ! load 4 source pixels
+                    v11 = self%rmat(i ,j ,1)
+                    v22 = self%rmat(ii,jj,1)
+                    v12 = self%rmat(i ,jj,1)
+                    v21 = self%rmat(ii,j ,1)
+                    ! normalize sources
+                    v11 = (v11 - mean_sp) * invstd_sp
+                    v22 = (v22 - mean_sp) * invstd_sp
+                    v12 = (v12 - mean_sp) * invstd_sp
+                    v21 = (v21 - mean_sp) * invstd_sp
+                    ! denom values at DESTINATION (shifted) locations
+                    u11 = instrfun%rmat(i ,j ,1)   ! dest for v22
+                    u22 = instrfun%rmat(ii,jj,1)   ! dest for v11
+                    u12 = instrfun%rmat(i ,jj,1)   ! dest for v21
+                    u21 = instrfun%rmat(ii,j ,1)   ! dest for v12
+                    ! apply safe division at destination
+                    if (abs(u22) > EPS_DEN) then
+                        invden = ONE / u22
+                        v11 = v11 * invden
+                    end if
+                    if (abs(u11) > EPS_DEN) then
+                        invden = ONE / u11
+                        v22 = v22 * invden
+                    end if
+                    if (abs(u21) > EPS_DEN) then
+                        invden = ONE / u21
+                        v12 = v12 * invden
+                    end if
+                    if (abs(u12) > EPS_DEN) then
+                        invden = ONE / u12
+                        v21 = v21 * invden
+                    end if
+                    ! store swapped (fftshift)
+                    self%rmat(i ,j ,1)  = v22
+                    self%rmat(ii,jj,1)  = v11
+                    self%rmat(i ,jj,1)  = v21
+                    self%rmat(ii,j ,1)  = v12
+                end do
+            end do
+        else
+            ! mean ~ 0 and invstd ~ 1: only do division + shift
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    v11 = self%rmat(i ,j ,1)
+                    v22 = self%rmat(ii,jj,1)
+                    v12 = self%rmat(i ,jj,1)
+                    v21 = self%rmat(ii,j ,1)
+                    u11 = instrfun%rmat(i ,j ,1)
+                    u22 = instrfun%rmat(ii,jj,1)
+                    u12 = instrfun%rmat(i ,jj,1)
+                    u21 = instrfun%rmat(ii,j ,1)
+                    ! apply division at destination (same mapping)
+                    if (abs(u22) > EPS_DEN) v11 = v11 * (ONE / u22)
+                    if (abs(u11) > EPS_DEN) v22 = v22 * (ONE / u11)
+                    if (abs(u21) > EPS_DEN) v12 = v12 * (ONE / u21)
+                    if (abs(u12) > EPS_DEN) v21 = v21 * (ONE / u12)
+                    self%rmat(i ,j ,1) = v22
+                    self%rmat(ii,jj,1) = v11
+                    self%rmat(i ,jj,1) = v21
+                    self%rmat(ii,j ,1) = v12
+                end do
+            end do
+        end if
+        ! ============================================================
+        ! FFT (FFTW r2c) + scale with reciprocal
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = ONE / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+    end subroutine norm_noise_divwinstrfun_fft
+
     module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
-        use, intrinsic :: iso_c_binding, only: c_float
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
         class(image), intent(in)    :: instrfun

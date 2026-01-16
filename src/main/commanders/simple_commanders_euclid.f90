@@ -150,11 +150,7 @@ contains
             do imatch = 1,nbatch
                 iptcl = pinds(batchlims(1)+imatch-1)
                 ! normalize
-                if( params%l_noise_norm )then
-                    call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
-                else
-                    call build%imgbatch(imatch)%norm_within(build%lmsk)
-                endif
+                call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
                 !  mask
                 call build%imgbatch(imatch)%mask2D_softavg_serial(params%msk)
                 ! power spectrum
