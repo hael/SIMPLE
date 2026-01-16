@@ -533,7 +533,6 @@ type :: parameters
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_noise_reg    = .false.
-    logical :: l_noise_norm   = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
@@ -1610,8 +1609,6 @@ contains
             ! deactivates post-alignment cartesian reconstruction
             self%volrec = 'no'
         endif
-        ! image normalization
-        self%l_noise_norm = trim(self%noise_norm).eq.'yes'
         ! set lpset flag
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag

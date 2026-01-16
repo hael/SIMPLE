@@ -106,8 +106,10 @@ contains
     procedure          :: img2ft
     procedure          :: ft2img
     procedure          :: pad_fft
+    procedure          :: norm_noise_fft
     procedure          :: norm_noise_pad_fft
     procedure          :: norm_noise_fft_clip_shift
+    procedure          :: norm_noise_divwinstrfun_fft
     procedure          :: ifft_mask_divwinstrfun_fft
     procedure          :: expand_ft
     ! I/O
@@ -792,6 +794,11 @@ interface
         class(image), intent(inout) :: self_out
     end subroutine pad_fft
 
+    module subroutine norm_noise_fft( self, lmsk )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+    end subroutine norm_noise_fft
+
     module subroutine norm_noise_pad_fft( self, lmsk, self_out )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -804,6 +811,12 @@ interface
         class(image), intent(inout) :: self_out
         real,         intent(in)    :: shvec(2)
     end subroutine norm_noise_fft_clip_shift
+
+    module subroutine norm_noise_divwinstrfun_fft( self, lmsk, instrfun )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(in)    :: instrfun
+    end subroutine norm_noise_divwinstrfun_fft
 
     module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
         class(image), intent(inout) :: self
