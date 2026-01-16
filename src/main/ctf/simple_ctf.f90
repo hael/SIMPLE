@@ -10,9 +10,10 @@ module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_core_module_api
+use simple_image, only: image
 implicit none
 
-public :: ctf
+public :: ctf, memoize4ctf_apply, unmemoize4ctf_apply
 private
 #include "simple_local_flags.inc"
 
@@ -50,6 +51,14 @@ end type ctf
 interface ctf
     module procedure constructor
 end interface
+
+type mem_ctf_apply
+    real    :: spaFreqSq, ang
+    integer :: ph1, ph2, ph3
+end type mem_ctf_apply
+
+type(mem_ctf_apply), allocatable :: mem_ctf_apply_mat(:,:)
+integer                          :: lims_memo(3,2)
 
 contains
 
@@ -250,14 +259,13 @@ contains
 
     !>  \brief  is for applying CTF to an image
     subroutine apply( self, img, dfx, mode, dfy, angast, bfac )
-        use simple_image, only: image
-        class(ctf),       intent(inout) :: self        !< instance
-        class(image),     intent(inout) :: img         !< image (output)
-        real,             intent(in)    :: dfx         !< defocus x-axis
-        character(len=*), intent(in)    :: mode        !< abs, ctf, flip, flipneg, neg, square
-        real, optional,   intent(in)    :: dfy         !< defocus y-axis
-        real, optional,   intent(in)    :: angast      !< angle of astigmatism
-        real, optional,   intent(in)    :: bfac        !< bfactor
+        class(ctf),       intent(inout) :: self   !< instance
+        class(image),     intent(inout) :: img    !< image (output)
+        real,             intent(in)    :: dfx    !< defocus x-axis
+        character(len=*), intent(in)    :: mode   !< abs, ctf, flip, flipneg, neg, square
+        real, optional,   intent(in)    :: dfy    !< defocus y-axis
+        real, optional,   intent(in)    :: angast !< angle of astigmatism
+        real, optional,   intent(in)    :: bfac   !< bfactor
         integer         :: ldim(3), ldim_pd(3)
         type(ctfparams) :: ctfvars
         type(image)     :: img_pd
@@ -290,42 +298,79 @@ contains
         if( present(bfac) ) call img%apply_bfac(bfac)
     end subroutine apply
 
-    !>  \brief  is for generating an image of CTF
-    subroutine ctf2img( self, img, dfx, dfy, angast )
-        use simple_image, only: image
-        class(ctf),       intent(inout) :: self
-        class(image),     intent(inout) :: img
-        real,             intent(in)    :: dfx, dfy, angast
-        complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)=>null()
-        integer :: lims(3,2),h,k,phys(3),ldim(3),k_offset
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),hinvsq,rh,rk
-        ! flag image as FT
-        call img%set_ft(.true.)
-        ! init object
-        call self%init(dfx, dfy, angast)
+    subroutine memoize4ctf_apply( img )
+        class(image), intent(inout) :: img   !< image (output)
+        integer :: h,k,phys(3),ldim(3)
+        real    :: rh,hinv,hinvsq,rk,kinv,inv_ldim(3)
         ! initialize
-        lims     = img%loop_lims(2)
-        ldim     = img%get_ldim()
+        ldim = img%get_ldim()
+        if( any(ldim == 0) .or. ldim(3) /= 1 ) THROW_HARD('Image incompatible with CTF application')
+        lims_memo = img%loop_lims(2)
+        if( allocated(mem_ctf_apply_mat) ) deallocate(mem_ctf_apply_mat)
+        allocate(mem_ctf_apply_mat(lims_memo(1,1):lims_memo(1,2),lims_memo(2,1):lims_memo(2,2)))
         inv_ldim = 1./real(ldim)
-        ! get cmat pointer 
-        call img%get_cmat_ptr(cmat_ptr)
-        do h=lims(1,1),lims(1,2)
+        ! pre-calulate
+        do h=lims_memo(1,1),lims_memo(1,2)
             rh     = real(h)
             hinv   = rh * inv_ldim(1)
-            hinvsq = hinv*hinv
-            do k=lims(2,1),lims(2,2)
-                rk        = real(k)
-                kinv      = rk * inv_ldim(2)
-                spaFreqSq = hinvsq + kinv*kinv
-                ang       = atan2(rk,rh)
+            hinvsq = hinv * hinv
+            do k=lims_memo(2,1),lims_memo(2,2)
+                rk   = real(k)
+                kinv = rk * inv_ldim(2)
+                phys = img%comp_addr_phys([h,k,0])
+                ! stash
+                mem_ctf_apply_mat(h,k)%spaFreqSq = hinvsq + kinv * kinv
+                mem_ctf_apply_mat(h,k)%ang       = atan2(rk,rh)
+                mem_ctf_apply_mat(h,k)%ph1       = phys(1)
+                mem_ctf_apply_mat(h,k)%ph2       = phys(2)
+                mem_ctf_apply_mat(h,k)%ph3       = phys(3)
+            end do
+        end do
+    end subroutine memoize4ctf_apply
+
+    subroutine unmemoize4ctf_apply
+        if( allocated(mem_ctf_apply_mat) ) deallocate(mem_ctf_apply_mat)
+    end subroutine unmemoize4ctf_apply
+
+    ! local fast CTF kernel (numerically equivalent refactor)
+    pure elemental real function fast_ctf_kernel( h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs ) result(tval)
+        integer, intent(in) :: h, k
+        real,    intent(in) :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs
+        real :: df, evalPhSh, sum_df, diff_df, cterm, pi_wl_s2
+        ! Defocus term: exactly the same expression, just factored
+        sum_df  = dfx + dfy
+        diff_df = dfx - dfy
+        cterm   = cos( 2.0 * (mem_ctf_apply_mat(h,k)%ang - angast) )
+        df      = 0.5 * ( sum_df + cterm * diff_df )
+        ! Phase shift term: preserve the same evaluation structure
+        pi_wl_s2 = PI * wl * mem_ctf_apply_mat(h,k)%spaFreqSq
+        evalPhSh = pi_wl_s2 * (df - half_wl2_cs * mem_ctf_apply_mat(h,k)%spaFreqSq)
+        tval     = sin( evalPhSh + amp_contr_const )
+    end function fast_ctf_kernel
+
+    !>  \brief  is for generating an image of CTF
+    subroutine ctf2img( self, img, dfx_in, dfy_in, angast_in)
+        class(ctf),       intent(inout) :: self
+        class(image),     intent(inout) :: img
+        real,             intent(in)    :: dfx_in, dfy_in, angast_in
+        integer :: h,k
+        real    :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval
+        ! flag image as FT
+        call img%set_ft(.true.)
+        ! init
+        call self%init(dfx_in, dfy_in, angast_in) ! conversions
+        wl              = self%wl
+        half_wl2_cs     = 0.5 * wl * wl * self%cs
+        dfx             = self%dfx
+        dfy             = self%dfy
+        angast          = self%angast
+        amp_contr_const = self%amp_contr_const
+        do h=lims_memo(1,1),lims_memo(1,2)
+            do k=lims_memo(2,1),lims_memo(2,2)
                 ! calculate CTF
-                tval      = self%eval(spaFreqSq, ang)
-                ! get physical indices
-                phys(1)  = merge(h,  -h,  h >= 0) + 1
-                k_offset = merge(k, -k,  h >= 0)
-                phys(2)  = k_offset + 1 + merge(ldim(2), 0, k_offset < 0)
+                tval = fast_ctf_kernel(h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs)
                 ! set cmat
-                cmat_ptr(phys(1),phys(2),1) = cmplx(tval,0.)
+                call img%set_cmat_at(mem_ctf_apply_mat(h,k)%ph1,mem_ctf_apply_mat(h,k)%ph2,1, cmplx(tval,0.))
             end do
         end do
     end subroutine ctf2img
@@ -333,16 +378,13 @@ contains
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square
     subroutine apply_serial( self, img, mode, ctfparms )
-        use simple_image, only: image
         class(ctf),       intent(inout) :: self     !< instance
         class(image),     intent(inout) :: img      !< image (output)
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
-        complex(kind=c_float_complex), pointer   :: cmat_ptr(:,:,:)=>null()
         real, parameter :: ZERO = 0., ONE = 1.0, MIN_SQUARE = 0.001
-        integer :: ldim(3),h,k,phys(2),lims(3,2),k_offset
-        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,inv_ldim(3)
-        real    :: rh,rk,t
+        integer :: h,k
+        real    :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval, t
         logical :: is_abs,is_ctf,is_flip,is_flipneg,is_neg,is_square
         ! Convert mode string to logical flags (SIMD-compatible)
         is_abs     = (mode == 'abs')
@@ -352,85 +394,63 @@ contains
         is_neg     = (mode == 'neg')
         is_square  = (mode == 'square')
         ! initialize
-        call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
-        ldim     = img%get_ldim()
-        inv_ldim = 1./real(ldim)
-        lims     = img%loop_lims(2)
-        ! get cmat pointer 
-        call img%get_cmat_ptr(cmat_ptr)
-        do h = lims(1,1), lims(1,2)
-            rh     = real(h)
-            hinv   = rh * inv_ldim(1)
-            hinvsq = hinv*hinv
-            do k = lims(2,1), lims(2,2)
-                rk        = real(k)
-                kinv      = rk * inv_ldim(2)
-                spaFreqSq = hinvsq + kinv*kinv
-                ang       = atan2(rk,rh)
+        call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast) ! conversions
+        wl              = self%wl
+        half_wl2_cs     = 0.5 * wl * wl * self%cs
+        dfx             = self%dfx
+        dfy             = self%dfy
+        angast          = self%angast
+        amp_contr_const = self%amp_contr_const
+        do h = lims_memo(1,1), lims_memo(1,2)
+            do k = lims_memo(2,1), lims_memo(2,2)
                 ! calculate CTF
-                tval      = self%eval(spaFreqSq, ang, 0.)
+                tval = fast_ctf_kernel(h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs)
                 ! SIMD-compatible mode handling using masked operations
-                t = merge(abs(tval), ZERO, is_abs) + &
-                    merge(tval, ZERO, is_ctf) + &
-                    merge(sign(ONE, tval), ZERO, is_flip) + &
-                    merge(-sign(ONE, tval), ZERO, is_flipneg) + &
-                    merge(-tval, ZERO, is_neg) + &
+                t = merge(       abs(tval),                     ZERO, is_abs)     + &
+                    merge(           tval,                      ZERO, is_ctf)     + &
+                    merge( sign(ONE, tval),                     ZERO, is_flip)    + &
+                    merge(-sign(ONE, tval),                     ZERO, is_flipneg) + &
+                    merge(          -tval,                      ZERO, is_neg)     + &
                     merge(min(ONE, max(tval*tval, MIN_SQUARE)), ZERO, is_square)
-                ! get physical indices
-                phys(1)  = merge(h,  -h,  h >= 0) + 1
-                k_offset = merge(k, -k,  h >= 0)
-                phys(2)  = k_offset + 1 + merge(ldim(2), 0, k_offset < 0)
                 ! Multiply (this is the key operation)
-                cmat_ptr(phys(1),phys(2),1) = cmat_ptr(phys(1),phys(2),1) * t
+                call img%mul_cmat_at(mem_ctf_apply_mat(h,k)%ph1,mem_ctf_apply_mat(h,k)%ph2,1, t)
             end do
         end do
     end subroutine apply_serial
 
     ! apply CTF to image, CTF values are also returned
-    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast )
+    subroutine eval_and_apply( self, img, imode, tvalsdims, tvals, dfx_in, dfy_in, angast_in)
         use simple_image, only: image
-        class(ctf),     intent(inout) :: self           !< instance
-        class(image),   intent(inout) :: img            !< modified image (output)
-        integer,        intent(in)    :: imode          !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
-        integer,        intent(in)    :: logi_lims(3,2) !< logical limits
-        integer,        intent(in)    :: tvalsdims(2)   !< tvals dimensions
+        class(ctf),     intent(inout) :: self         !< instance
+        class(image),   intent(inout) :: img          !< modified image (output)
+        integer,        intent(in)    :: imode        !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
+        integer,        intent(in)    :: tvalsdims(2) !< tvals dimensions
         real,           intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-        real,           intent(in)    :: dfx            !< defocus x-axis
-        real,           intent(in)    :: dfy            !< defocus y-axis
-        real,           intent(in)    :: angast         !< angle of astigmatism
-        complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)=>null()
-        integer :: ldim(3),h,k,phys(2),k_offset
-        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,inv_ldim(3)
-        real    :: rh,rk
+        real,           intent(in)    :: dfx_in       !< defocus x-axis
+        real,           intent(in)    :: dfy_in       !< defocus y-axis
+        real,           intent(in)    :: angast_in    !< angle of astigmatism
+        integer :: h,k
+        real    :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval
         if( imode == CTFFLAG_NO )then
             tvals = 1.0
             return
         endif
         ! initialize
-        call self%init(dfx, dfy, angast)
-        ldim     = img%get_ldim()
-        inv_ldim = 1./real(ldim)
-        ! get cmat pointer 
-        call img%get_cmat_ptr(cmat_ptr)
-        do h=logi_lims(1,1),logi_lims(1,2)
-            rh     = real(h)
-            hinv   = rh * inv_ldim(1)
-            hinvsq = hinv*hinv
-            do k=logi_lims(2,1),logi_lims(2,2)
-                rk = real(k)
+        call self%init(dfx_in, dfy_in, angast_in) ! conversions
+        wl              = self%wl
+        half_wl2_cs     = 0.5 * wl * wl * self%cs
+        dfx             = self%dfx
+        dfy             = self%dfy
+        angast          = self%angast
+        amp_contr_const = self%amp_contr_const    
+        do h = lims_memo(1,1), lims_memo(1,2)
+            do k = lims_memo(2,1), lims_memo(2,2)
                 ! calculate CTF
-                kinv      = rk * inv_ldim(2)
-                spaFreqSq = hinvsq + kinv*kinv
-                ang       = atan2(rk,rh)
-                tval      = self%eval(spaFreqSq, ang, 0.)
+                tval = fast_ctf_kernel(h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs)
                 if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                ! get physical indices
-                phys(1)  = merge(h,  -h,  h >= 0) + 1
-                k_offset = merge(k, -k,  h >= 0)
-                phys(2)  = k_offset + 1 + merge(ldim(2), 0, k_offset < 0)
                 ! store tval and multiply image with tval
-                tvals(phys(1),phys(2)) = tval
-                call img%mul_cmat_at(phys(1),phys(2),1, tval)
+                tvals(mem_ctf_apply_mat(h,k)%ph1,mem_ctf_apply_mat(h,k)%ph2) = tval
+                call img%mul_cmat_at(mem_ctf_apply_mat(h,k)%ph1,mem_ctf_apply_mat(h,k)%ph2,1, tval)
             end do
         end do
     end subroutine eval_and_apply
@@ -456,7 +476,6 @@ contains
 
     ! Calculate Joe's Ice Fraction Score for images, not intended for micrographs
     subroutine calc_ice_frac( self, img, ctfparms, score )
-        use simple_image, only: image
         class(ctf),       intent(inout) :: self
         class(image),     intent(in)    :: img
         class(ctfparams), intent(in)    :: ctfparms
