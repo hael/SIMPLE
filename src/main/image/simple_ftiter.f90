@@ -260,47 +260,70 @@ contains
         endif
     end function comp_addr_phys_orig
 
-    pure function comp_addr_phys1(self,logi) result(phys)
+    pure function comp_addr_phys1(self, logi) result(phys)
         class(ftiter), intent(in) :: self
-        integer,       intent(in) :: logi(3) !<  Logical address
-        integer :: phys(3)                   !<  Physical address
-        if (logi(1) .ge. 0) then
-            phys(1) = logi(1) + 1
-            phys(2) = logi(2) + 1 + MERGE(self%ldim(2),0, logi(2) < 0)
-            phys(3) = logi(3) + 1 + MERGE(self%ldim(3),0, logi(3) < 0)
-        else
-            phys(1) = -logi(1) + 1
-            phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
-            phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
-        endif
+        integer,       intent(in) :: logi(3)   !< Logical address
+        integer                   :: phys(3)   !< Physical address
+        integer                   :: l2, l3
+        ! if (logi(1) .ge. 0) then
+        !     phys(1) = logi(1) + 1
+        !     phys(2) = logi(2) + 1 + MERGE(self%ldim(2),0, logi(2) < 0)
+        !     phys(3) = logi(3) + 1 + MERGE(self%ldim(3),0, logi(3) < 0)
+        ! else
+        !     phys(1) = -logi(1) + 1
+        !     phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
+        !     phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
+        ! endif
+
+        ! phys(1)
+        phys(1) = merge(logi(1), -logi(1), logi(1) >= 0) + 1
+        ! logi(2), logi(3) follow the sign of logi(1)
+        l2      = merge(logi(2), -logi(2), logi(1) >= 0)
+        l3      = merge(logi(3), -logi(3), logi(1) >= 0)
+        phys(2) = l2 + 1 + merge(self%ldim(2), 0, l2 < 0)
+        phys(3) = l3 + 1 + merge(self%ldim(3), 0, l3 < 0)
     end function comp_addr_phys1
 
-    pure function comp_addr_phys2(self,h,k,m) result(phys)
+    pure function comp_addr_phys2(self, h, k, m) result(phys)
         class(ftiter), intent(in) :: self
-        integer,       intent(in) :: h,k,m !<  Logical address
-        integer :: phys(3)                 !<  Physical address
-        if (h .ge. 0) then
-            phys(1) = h + 1
-            phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
-            phys(3) = m + 1 + MERGE(self%ldim(3),0, m < 0)
-        else
-            phys(1) = -h + 1
-            phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
-            phys(3) = -m + 1 + MERGE(self%ldim(3),0, -m < 0)
-        endif
+        integer,       intent(in) :: h, k, m
+        integer                   :: phys(3)
+        integer                   :: k_off, m_off
+        ! if (h .ge. 0) then
+        !     phys(1) = h + 1
+        !     phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
+        !     phys(3) = m + 1 + MERGE(self%ldim(3),0, m < 0)
+        ! else
+        !     phys(1) = -h + 1
+        !     phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+        !     phys(3) = -m + 1 + MERGE(self%ldim(3),0, -m < 0)
+        ! endif
+
+        ! phys(1)
+        phys(1) = merge(h, -h, h >= 0) + 1
+        ! k and m follow the sign of h
+        k_off   = merge(k, -k, h >= 0)
+        m_off   = merge(m, -m, h >= 0)
+        phys(2) = k_off + 1 + merge(self%ldim(2), 0, k_off < 0)
+        phys(3) = m_off + 1 + merge(self%ldim(3), 0, m_off < 0)
     end function comp_addr_phys2
 
     pure function comp_addr_phys3(self,h,k) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: h,k   !<  Logical address
         integer :: phys(2)                 !<  Physical address
-        if (h .ge. 0) then
-            phys(1) = h + 1
-            phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
-        else
-            phys(1) = -h + 1
-            phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
-        endif
+        integer :: k_off
+        ! if (h .ge. 0) then
+        !     phys(1) = h + 1
+        !     phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
+        ! else
+        !     phys(1) = -h + 1
+        !     phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+        ! endif
+
+        phys(1) = merge(h,  -h,  h >= 0) + 1
+        k_off   = merge(k, -k,  h >= 0)
+        phys(2) = k_off + 1 + merge(self%ldim(2), 0, k_off < 0)
     end function comp_addr_phys3
 
     !> \brief Convert physical address to logical address. Complex image.
@@ -415,38 +438,6 @@ contains
                 enddo
             enddo
         enddo
-        ! write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (with Friedel redundancy)'
-        ! do k=self%clogi_lbounds_all(3),self%clogi_ubounds_all(3)
-        !     do j=self%clogi_lbounds_all(2),self%clogi_ubounds_all(2)
-        !         do i=self%clogi_lbounds_all(1),self%clogi_ubounds_all(1)
-        !             phys = self%comp_addr_phys([i,j,k])
-        !             logi = self%comp_addr_logi(phys)
-        !             if (any([i,j,k]    .ne. logi) .and. &
-        !                 any([-i,-j,-k] .ne. logi)) then
-        !                 write(logfhandle,'(a,3(i0,1x))') '          i,j,k   = ', i,j,k
-        !                 write(logfhandle,'(a,3(i0,1x))') '     phys(i,j,k)  = ', phys
-        !                 write(logfhandle,'(a,3(i0,1x))') 'logi(phys(i,j,k)) = ', logi
-        !                 THROW_HARD('failed complex logi->phys->logi address conversion test (with redundant voxels)')
-        !             endif
-        !         enddo
-        !     enddo
-        ! enddo
-        !  write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (with Friedel redundancy, scalar)'
-        ! do k=self%clogi_lbounds_all(3),self%clogi_ubounds_all(3)
-        !     do j=self%clogi_lbounds_all(2),self%clogi_ubounds_all(2)
-        !         do i=self%clogi_lbounds_all(1),self%clogi_ubounds_all(1)
-        !             phys = self%comp_addr_phys(i,j,k)
-        !             logi = self%comp_addr_logi(phys(1),phys(2),phys(3))
-        !             if (any([i,j,k]    .ne. logi) .and. &
-        !                 any([-i,-j,-k] .ne. logi)) then
-        !                 write(logfhandle,'(a,3(i0,1x))') '          i,j,k   = ', i,j,k
-        !                 write(logfhandle,'(a,3(i0,1x))') '     phys(i,j,k)  = ', phys
-        !                 write(logfhandle,'(a,3(i0,1x))') 'logi(phys(i,j,k)) = ', logi
-        !                 THROW_HARD('failed complex logi->phys->logi address conversion test (with redundant voxels)')
-        !             endif
-        !         enddo
-        !     enddo
-        ! enddo
     end subroutine test_addr
 
 end module simple_ftiter
