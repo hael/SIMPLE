@@ -165,7 +165,7 @@ contains
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
                         inv        = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
-                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift, .not.params_glob%l_wiener_part)
+                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                         tvalsq     = tval * tval
                         if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                         c          = tval * c
@@ -268,7 +268,7 @@ contains
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
                         inv        = real([h,k]) / real(self%ldim(1:2))
                         sqSpatFreq = dot_product(inv,inv)
-                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift, .not.params_glob%l_wiener_part)
+                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                         tvalsq     = tval * tval
                         if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                         c          = tval * c
@@ -341,7 +341,7 @@ contains
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
                         inv        = real([h,k]) / real(self%ldim(1:2))
                         sqSpatFreq = dot_product(inv,inv)
-                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift, .not.params_glob%l_wiener_part)
+                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                         tvalsq     = tval * tval
                         if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                         c          = tval * c
@@ -398,7 +398,7 @@ contains
         ! Interpolation free DC
         c = img%get_fcomp2D(0,0)
         if( ctfvars%ctfflag /= CTFFLAG_NO )then
-            tval       = tfun%eval(0., 0., add_phshift, .not.params_glob%l_wiener_part)
+            tval       = tfun%eval(0., 0., add_phshift)
             tvalsq     = tval * tval
             if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
             c          = tval * c

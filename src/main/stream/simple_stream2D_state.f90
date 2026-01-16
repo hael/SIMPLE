@@ -33,7 +33,6 @@ logical :: l_abinitio2D      = .false.
 logical :: l_no_chunks       = .false.
 logical :: l_scaling         = .false.
 logical :: l_update_sigmas   = .false.
-logical :: l_wfilt           = .false.
 logical :: l_stream2D_active = .false.
 logical :: l_pool_available  = .false.
 

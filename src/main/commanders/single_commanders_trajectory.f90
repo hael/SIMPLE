@@ -229,7 +229,7 @@ contains
                 if( do_flip )then
                     ctfvars = build%spproj_field%get_ctfvars(iptcl)
                     tfun = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
-                    call tfun%apply_serial(build%img, 'flip', ctfvars)
+                    call tfun%apply_serial(build%img,       'flip', ctfvars)
                     call tfun%apply_serial(img_backgr_wctf, 'flip', ctfvars)
                 endif
                 ! filter background image

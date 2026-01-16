@@ -183,11 +183,7 @@ contains
         type(string)               :: refs_ranked, stk
         refs_ranked = add2fbody(refs_glob, params_glob%ext ,'_ranked')
         call cline_rank_cavgs%set('projfile', orig_projfile)
-        if( l_wfilt )then
-            stk = string(POOL_DIR)//add2fbody(refs_glob,params_glob%ext,WFILT_SUFFIX)
-        else
-            stk = string(POOL_DIR)//refs_glob
-        endif
+        stk = string(POOL_DIR)//refs_glob
         call cline_rank_cavgs%set('stk',            stk)
         call cline_rank_cavgs%set('outstk', refs_ranked)
         call xrank_cavgs%execute_safe(cline_rank_cavgs)
@@ -420,11 +416,6 @@ contains
             call del_file(prefix//'_even'//params_glob%ext%to_char())
             call del_file(prefix//'_odd'//params_glob%ext%to_char())
             call del_file(prefix//params_glob%ext%to_char())
-            if( l_wfilt )then
-                call del_file(prefix//WFILT_SUFFIX//'_even'//params_glob%ext%to_char())
-                call del_file(prefix//WFILT_SUFFIX//'_odd'//params_glob%ext%to_char())
-                call del_file(prefix//WFILT_SUFFIX//params_glob%ext%to_char())
-            endif
             call del_file(POOL_DIR//CLS2D_STARFBODY//'_iter'//int2str_pad(pool_iter-5,3)//STAR_EXT)
             call del_file(prefix // '.jpg')
             if( l_update_sigmas ) call del_file(string(POOL_DIR)//sigma2_star_from_iter(pool_iter-5))
@@ -446,14 +437,6 @@ contains
         refs_out_here = string(POOL_DIR)//refs_out
         ! merged class
         call read_pad_write(refs_in_here, indin, refs_out_here, indout)
-        if( l_wfilt )then
-            stkout = add2fbody(refs_out_here,params_glob%ext,WFILT_SUFFIX)
-            if( pool_dims%box > chunk_dims%box )then
-                call img2%write(stkout,indout)
-            else
-                call img%write(stkout,indout)
-            endif
-        endif
         ! e/o
         stkin  = add2fbody(refs_in_here, params_glob%ext,'_even')
         stkout = add2fbody(refs_out_here,params_glob%ext,'_even')
@@ -465,10 +448,10 @@ contains
         call img%new([chunk_dims%boxpd,chunk_dims%boxpd,1], chunk_dims%smpd)
         call img%zero_and_flag_ft
         if( pool_dims%box > chunk_dims%box ) call img2%new([pool_dims%boxpd,pool_dims%boxpd,1], pool_dims%smpd)
-        call write_inside_ftstack('/cavgs_even_part',     'cavgs_even_part',     'cavgs_even_wfilt_part')
-        call write_inside_ftstack('/cavgs_odd_part',      'cavgs_odd_part',      'cavgs_odd_wfilt_part')
-        call write_inside_ftstack('/ctfsqsums_even_part', 'ctfsqsums_even_part', 'ctfsqsums_even_wfilt_part')
-        call write_inside_ftstack('/ctfsqsums_odd_part',  'ctfsqsums_odd_part',  'ctfsqsums_odd_wfilt_part')
+        call write_inside_ftstack('/cavgs_even_part',     'cavgs_even_part'    )
+        call write_inside_ftstack('/cavgs_odd_part',      'cavgs_odd_part'     )
+        call write_inside_ftstack('/ctfsqsums_even_part', 'ctfsqsums_even_part')
+        call write_inside_ftstack('/ctfsqsums_odd_part',  'ctfsqsums_odd_part' )
         ! cleanup
         call img%kill
         call img2%kill
@@ -490,8 +473,8 @@ contains
                 endif
             end subroutine read_pad_write
 
-            subroutine write_inside_ftstack(tmplin, tmplout, tmplout_wfilt)
-                character(len=*), intent(in) :: tmplin, tmplout, tmplout_wfilt
+            subroutine write_inside_ftstack(tmplin, tmplout)
+                character(len=*), intent(in) :: tmplin, tmplout
                 stkin = dir//trim(tmplin)//params_glob%ext%to_char()
                 call img%read(stkin, indin)
                 if( pool_dims%box > chunk_dims%box )then
@@ -499,19 +482,11 @@ contains
                     do ipart = 1,params_glob%nparts_pool
                         stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//params_glob%ext%to_char()
                         call img2%write(stkout,indout)
-                        if( l_wfilt )then
-                            stkout = POOL_DIR//trim(tmplout_wfilt)//int2str_pad(ipart,numlen)//params_glob%ext%to_char()
-                            call img2%write(stkout,indout)
-                        endif
                     enddo
                 else
                     do ipart = 1,params_glob%nparts_pool
                         stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//params_glob%ext%to_char()
                         call img%write(stkout,indout)
-                        if( l_wfilt )then
-                            stkout = POOL_DIR//trim(tmplout_wfilt)//int2str_pad(ipart,numlen)//params_glob%ext%to_char()
-                            call img%write(stkout,indout)
-                        endif
                     enddo
                 endif
             end subroutine write_inside_ftstack
@@ -771,10 +746,6 @@ contains
                 call rescale_refs( cavgsfname )
                 call pool_proj%os_out%kill
                 call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
-                if( l_wfilt )then
-                    src = add2fbody(cavgsfname,params_glob%ext,WFILT_SUFFIX)
-                    call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//WFILT_SUFFIX, clspath=l_clspath)
-                endif
                 pool_proj%os_cls2D = os_backup
                 call os_backup%kill
                 ! rescale frcs
@@ -786,10 +757,6 @@ contains
             else
                 call pool_proj%os_out%kill
                 call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
-                if( l_wfilt )then
-                    src = add2fbody(cavgsfname,params_glob%ext,WFILT_SUFFIX)
-                    call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//WFILT_SUFFIX)
-                endif
                 call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             endif
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D ! test addition
@@ -853,17 +820,6 @@ contains
         subroutine rescale_refs( cavgs_fname )
             class(string), intent(in) :: cavgs_fname
             type(string) :: source, destination
-            if( l_wfilt )then
-                source  = add2fbody(pool_refs, params_glob%ext, WFILT_SUFFIX)
-                destination = add2fbody(cavgs_fname, params_glob%ext, WFILT_SUFFIX)
-                call rescale_cavgs(source, destination)
-                source  = add2fbody(pool_refs, params_glob%ext, WFILT_SUFFIX//'_even')
-                destination = add2fbody(cavgs_fname, params_glob%ext, WFILT_SUFFIX//'_even')
-                call rescale_cavgs(source, destination)
-                source  = add2fbody(pool_refs, params_glob%ext,WFILT_SUFFIX//'_odd')
-                destination = add2fbody(cavgs_fname, params_glob%ext,WFILT_SUFFIX//'_odd')
-                call rescale_cavgs(source, destination)
-            endif
             call rescale_cavgs(pool_refs, cavgs_fname)
             source  = add2fbody(pool_refs, params_glob%ext, '_even')
             destination = add2fbody(cavgs_fname, params_glob%ext, '_even')

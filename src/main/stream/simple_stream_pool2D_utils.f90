@@ -152,7 +152,6 @@ contains
         ! general parameters
         master_cline => cline
         call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
-        l_wfilt            = .false.
         l_scaling          = .true.
         ncls_max           = params_glob%ncls
         ncls_glob          = params_glob%ncls
@@ -843,17 +842,6 @@ contains
         ! upsample cavgs
         ldim = [pool_dims%box,pool_dims%box,1]
         str_tmp_mrc = str_tmp_mrc
-        if( l_wfilt )then
-            str  = add2fbody(refs_glob, params_glob%ext, WFILT_SUFFIX)
-            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
-            call simple_rename(str_tmp_mrc,str)
-            str  = add2fbody(refs_glob, params_glob%ext,WFILT_SUFFIX//'_even')
-            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
-            call simple_rename(str_tmp_mrc,str)
-            str  = add2fbody(refs_glob, params_glob%ext,WFILT_SUFFIX//'_odd')
-            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
-            call simple_rename(str_tmp_mrc,str)
-        endif
         call scale_imgfile(refs_glob, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,refs_glob)
         str  = add2fbody(refs_glob, params_glob%ext,'_even')
@@ -878,30 +866,10 @@ contains
             call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
         enddo
-        if( l_wfilt )then
-            do p = 1,params_glob%nparts_pool
-                str = POOL_DIR//'cavgs_even_wfilt_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
-                call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
-                call simple_rename(str_tmp_mrc,str)
-                str = POOL_DIR//'cavgs_odd_wfilt_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
-                call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
-                call simple_rename(str_tmp_mrc,str)
-                str = POOL_DIR//'ctfsqsums_even_wfilt_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
-                call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
-                call simple_rename(str_tmp_mrc,str)
-                str = POOL_DIR//'ctfsqsums_odd_wfilt_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
-                call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
-                call simple_rename(str_tmp_mrc,str)
-            enddo
-        endif
         ! update cls2D field
         os = pool_proj%os_cls2D
         call pool_proj%os_out%kill
         call pool_proj%add_cavgs2os_out(refs_glob, pool_dims%smpd, 'cavg', clspath=.true.)
-        if( l_wfilt )then
-            str = add2fbody(refs_glob,params_glob%ext,WFILT_SUFFIX)
-            call pool_proj%add_cavgs2os_out(str, pool_dims%smpd, 'cavg'//WFILT_SUFFIX, clspath=.true.)
-        endif
         pool_proj%os_cls2D = os
         call os%kill
         ! rescale frcs
@@ -919,10 +887,6 @@ contains
         type(string)      :: src
         os_backup = pool_proj%os_cls2D
         call pool_proj%add_cavgs2os_out(string(POOL_DIR)//refs_glob, pool_dims%smpd, 'cavg')
-        if( l_wfilt )then
-            src = string(POOL_DIR)//add2fbody(refs_glob,params_glob%ext,WFILT_SUFFIX)
-            call pool_proj%add_cavgs2os_out(src, pool_dims%smpd, 'cavg'//WFILT_SUFFIX)
-        endif
         pool_proj%os_cls2D = os_backup
         call pool_proj%write_segment_inside('out',   projfile4gui)
         call pool_proj%write_segment_inside('cls2D', projfile4gui)
