@@ -592,10 +592,11 @@ contains
     end subroutine calc_start_rec
 
     ! Performs reconstruction at some set stages when polar=yes
-    subroutine calc_rec4polar( xreconstruct3D, istage )
+    subroutine calc_rec4polar( xreconstruct3D, istage, projfile )
         use simple_class_frcs, only: class_frcs
-        class(commander_base), intent(inout) :: xreconstruct3D
-        integer,               intent(in)    :: istage
+        class(commander_base),   intent(inout) :: xreconstruct3D
+        integer,                 intent(in)    :: istage
+        class(string), optional, intent(in)    :: projfile
         real, allocatable :: fsc(:)
         type(cmdline)     :: cline_rec
         type(class_frcs)  :: frcs
@@ -609,7 +610,11 @@ contains
         cline_rec = cline_refine3D
         call cline_rec%set('prg',       'reconstruct3D')
         call cline_rec%set('mkdir',     'no')
-        call cline_rec%set('projfile',  params_glob%projfile)
+        if( present(projfile) )then
+            call cline_rec%set('projfile',  projfile)
+        else
+            call cline_rec%set('projfile',  params_glob%projfile)
+        endif
         call cline_rec%set('pgrp',      pgrp)
         call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
         call cline_rec%set('projrec',   'yes')
