@@ -201,7 +201,9 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
             ! Reconstruction for polar representation
-            if( l_polar ) call calc_rec4polar( xreconstruct3D, istage )
+            if( l_polar )then
+                call calc_rec4polar( xreconstruct3D, istage, work_projfile )
+            endif
             ! Probabilistic search
             call exec_refine3D(istage, xrefine3D) 
             ! Symmetrization
