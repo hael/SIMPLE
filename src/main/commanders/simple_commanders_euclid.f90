@@ -149,13 +149,7 @@ contains
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
             do imatch = 1,nbatch
                 iptcl = pinds(batchlims(1)+imatch-1)
-                ! normalize
-                call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
-                !  mask
-                call build%imgbatch(imatch)%mask2D_softavg_serial(params%msk)
-                ! power spectrum
-                call build%imgbatch(imatch)%fft
-                call build%imgbatch(imatch)%power_spectrum(pspec)
+                call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, pspec)
                 if( l_scale_update_frac )then
                     ! To account for spectra not included in sampling and yield the correct average
                     sigma2(:,iptcl) = pspec / (2.0 * params_glob%update_frac)
