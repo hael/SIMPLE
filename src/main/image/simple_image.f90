@@ -110,6 +110,7 @@ contains
     procedure          :: norm_noise_pad_fft
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_divwinstrfun_fft
+    procedure          :: norm_noise_mask_fft_powspec
     procedure          :: ifft_mask_divwinstrfun_fft
     procedure          :: expand_ft
     ! I/O
@@ -817,6 +818,13 @@ interface
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(in)    :: instrfun
     end subroutine norm_noise_divwinstrfun_fft
+
+    module subroutine norm_noise_mask_fft_powspec( self, lmsk, mskrad, spec )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        real,         intent(in)    :: mskrad
+        real,         intent(inout) :: spec(fdim(self%ldim(1)) - 1)
+    end subroutine norm_noise_mask_fft_powspec
 
     module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
         class(image), intent(inout) :: self

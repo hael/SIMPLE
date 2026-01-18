@@ -310,7 +310,7 @@ contains
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
-        real     :: wwidth, rad_sq, ave,  r2, e
+        real     :: wwidth, rad_sq, ave,  r2, e, cjs2
         integer  :: minlen, npix,  i, j, ir, jr, n1, n2, n3, h1, h2
         ! width
         wwidth = 10.0
@@ -332,10 +332,11 @@ contains
         h1 = n1/2; h2 = n2/2
         do j = 1, h2
             jr = n2 + 1 - j
+            cjs2 = mem_msk_cjs2(j)
             !$omp simd
             do i = 1, h1
                 ir = n1 + 1 - i
-                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                r2 = mem_msk_cis2(i) + cjs2
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e > 0.9999) cycle
                 self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
@@ -351,7 +352,7 @@ contains
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
         real(dp) :: sumv, sv
-        real     :: wwidth, rad_sq, ave, r2, e
+        real     :: wwidth, rad_sq, ave, r2, e, cjs2
         integer  :: minlen, npix, i, j, np, n1l, n2l
         integer  :: n1, n2, n3
         logical  :: soft, avg_backgr
@@ -373,8 +374,9 @@ contains
         sv = 0.0_dp; np = 0
         ! avg outside radius
         do j = 1, n2l
+            cjs2 = mem_msk_cjs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                r2 = mem_msk_cis2(i) + cjs2 
                 if (r2 > rad_sq) then
                     np = np + 1
                     sv = sv + real(self%rmat(i,j,1), dp)
@@ -385,8 +387,9 @@ contains
         ave = real(sv / real(np, dp))
         ! apply (j,i with i contiguous)
         do j = 1, n2l
+            cjs2 = mem_msk_cjs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                r2 = mem_msk_cis2(i) + cjs2 
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e < 0.0001) then
                     self%rmat(i,j,1) = ave
@@ -401,18 +404,19 @@ contains
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         integer :: i, j, ir, jr, h1, h2, n1, n2, n3
-        real :: r2, e
+        real :: r2, e, cjs2
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
         n3 = 1
         h1 = n1/2; h2 = n2/2
         do j = 1, h2
-            jr = n2 + 1 - j
+            jr   = n2 + 1 - j
+            cjs2 = mem_msk_cjs2(j)
             !$omp simd
             do i = 1, h1
                 ir = n1 + 1 - i
-                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                r2 = mem_msk_cis2(i) + cjs2
                 e  = hardedge_r2_2d(r2, mskrad)
                 if (e > 0.9999) cycle
                 self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
@@ -428,7 +432,7 @@ contains
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
         real(dp) :: sumv
-        real     :: wwidth, rad_sq, ave, r2, e
+        real     :: wwidth, rad_sq, ave, r2, e, cjs2, cks2
         integer  :: minlen, npix, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
         ! width
         wwidth = 10.0
@@ -449,13 +453,15 @@ contains
         endif            
         h1 = n1/2; h2 = n2/2; h3 = n3/2
         do j = 1, h2
-            jr = n2 + 1 - j
+            jr   = n2 + 1 - j
+            cjs2 = mem_msk_cjs2(j)
             do k = 1, h3
-                kr = n3 + 1 - k
+                kr   = n3 + 1 - k
+                cks2 = mem_msk_cks2(k)
                 !$omp simd
                 do i = 1, h1
                     ir = n1 + 1 - i
-                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    r2 = mem_msk_cis2(i) + cjs2 + cks2
                     e  = cosedge_r2_3d(r2, minlen, mskrad)
                     if (e > 0.9999) cycle
                     self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )
@@ -476,7 +482,7 @@ contains
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
         real(dp) :: sumv, sv
-        real     :: wwidth, rad_sq, ave, r2, e
+        real     :: wwidth, rad_sq, ave, r2, e, cjs2, cks2
         integer  :: minlen, npix,  i, j, k, n1, n2, n3, np, n1l, n2l, n3l
         ! width
         wwidth = 10.0
@@ -496,9 +502,11 @@ contains
         sv = 0.0_dp; np = 0
         ! avg outside radius (r^2 only)
         do k = 1, n3l
+            cks2 = mem_msk_cks2(k)
             do j = 1, n2l
+                cjs2 = mem_msk_cjs2(j)
                 do i = 1, n1l
-                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    r2 = mem_msk_cis2(i) + cjs2 + cks2 
                     if (r2 > rad_sq) then
                         np = np + 1
                         sv = sv + real(self%rmat(i,j,k), dp)
@@ -510,9 +518,11 @@ contains
         ave = real(sv / real(np, dp))
         ! apply (cache-friendly: k,j,i; i contiguous)
         do k = 1, n3l
+            cks2 = mem_msk_cks2(k)
             do j = 1, n2l
+                cjs2 = mem_msk_cjs2(j)
                 do i = 1, n1l
-                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    r2 = mem_msk_cis2(i) + cjs2 + cks2 
                     e  = cosedge_r2_3d(r2, minlen, mskrad)
                     if (e < 0.0001) then
                         self%rmat(i,j,k) = ave
@@ -527,7 +537,7 @@ contains
     module subroutine mask3D_hard_serial(self, mskrad)
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
-        real     :: r2, e
+        real     :: r2, e, cjs2, cks2
         integer  :: i, j, k, ir, jr, kr, h1, h2, h3, n1, n2, n3 
         ! dims
         n1 = self%ldim(1)
@@ -535,13 +545,15 @@ contains
         n3 = self%ldim(3)           
         h1 = n1/2; h2 = n2/2; h3 = n3/2
         do j = 1, h2
-            jr = n2 + 1 - j
+            jr   = n2 + 1 - j
+            cjs2 = mem_msk_cjs2(j)
             do k = 1, h3
-                kr = n3 + 1 - k
+                kr   = n3 + 1 - k
+                cks2 = mem_msk_cks2(k)
                 !$omp simd
                 do i = 1, h1
                     ir = n1 + 1 - i
-                    r2 = mem_msk_cis2(i) + mem_msk_cjs2(j) + mem_msk_cks2(k)
+                    r2 = mem_msk_cis2(i) + cjs2 + cks2 
                     e  = hardedge_r2_3d(r2, mskrad)
                     if (e > 0.9999) cycle
                     self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )

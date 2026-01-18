@@ -637,13 +637,169 @@ contains
         self%ft    = .true.
     end subroutine norm_noise_divwinstrfun_fft
 
+    !>  \brief  Fused: noise-normalize (on unmasked bg) + fftshift + soft-avg mask + FFT + power spectrum
+    !!
+    !!  This is a *fuse-only* drop-in building block for later optimization:
+    !!    1) norm_noise (two-pass stats on .not. lmsk, then fftshift + normalize)
+    !!    2) mask2D_softavg_serial (uses mem_msk_* tables + cosedge_r2_2d)
+    !!    3) FFT r2c + scale
+    !!    4) power_spectrum (2D path)
+    !!
+    !!  Assumptions:
+    !!    - 2D images: self%ldim(3)=1
+    !!    - self has plan_fwd, rmat/cmat allocated
+    !!    - mem_msk_cis2/mem_msk_cjs2 are already memoized for this image size
+    module subroutine norm_noise_mask_fft_powspec( self, lmsk, mskrad, spec )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        real,         intent(in)    :: mskrad
+        real,         intent(inout) :: spec(fdim(self%ldim(1)) - 1)
+        ! ---- locals: norm_noise_fft ----
+        integer  :: n1, n2, h1, h2, i, j, ii, jj, npix
+        real(dp) :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat, rswap
+        ! ---- locals: mask2D_softavg_serial ----
+        real     :: rad_sq, ave, r2, e, cjs2
+        integer  :: minlen, np, n1l, n2l
+        real(dp) :: sv
+        ! ---- locals: power_spectrum (2D only) ----
+        integer  :: counts(fdim(self%ldim(1)) - 1)
+        real(dp) :: dspec (fdim(self%ldim(1)) - 1)
+        integer  :: lims(3,2), filtsz, h, k, sh, hp, kpi
+        logical  :: k_neg
+        ! ============================================================
+        ! 1) NORM_NOISE (two-pass) + fftshift + normalize (fused)
+        ! ============================================================
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        h1 = n1/2
+        h2 = n2/2
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        do j = 1, n2
+            do i = 1, n1
+                if (.not. lmsk(i,j,1)) then
+                    xdp = real(self%rmat(i,j,1), dp)
+                    sum_dp    = sum_dp    + xdp
+                    sum_sq_dp = sum_sq_dp + xdp*xdp
+                    npix      = npix + 1
+                end if
+            end do
+        end do
+        mean_dp = 0.0_dp
+        var_dp  = 0.0_dp
+        if (npix > 1) then
+            rnpix   = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp*sum_dp/rnpix) / real(npix-1, dp)
+        end if
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = 1.0_c_float
+        if (var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp/sqrt(var_dp), c_float)
+        end if
+        ! ---- fftshift + apply normalization on the fly ----
+        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float) then
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    rswap = (self%rmat(i,  j,  1) - mean_sp) * invstd_sp
+                    self%rmat(i,  j,  1) = (self%rmat(ii, jj, 1) - mean_sp) * invstd_sp
+                    self%rmat(ii, jj, 1) = rswap
+                    rswap = (self%rmat(i,  jj, 1) - mean_sp) * invstd_sp
+                    self%rmat(i,  jj, 1) = (self%rmat(ii, j,  1) - mean_sp) * invstd_sp
+                    self%rmat(ii, j,  1) = rswap
+                end do
+            end do
+        else
+            do j = 1, h2
+                jj = h2 + j
+                do i = 1, h1
+                    ii = h1 + i
+                    rswap = self%rmat(i,  j,  1)
+                    self%rmat(i,  j,  1)   = self%rmat(ii, jj, 1)
+                    self%rmat(ii, jj, 1)   = rswap
+                    rswap = self%rmat(i,  jj, 1)
+                    self%rmat(i,  jj, 1)  = self%rmat(ii, j,  1)
+                    self%rmat(ii, j,  1)  = rswap
+                end do
+            end do
+        end if
+        ! ============================================================
+        ! 2) MASK (softavg) in real-space (same math as mask2D_softavg_serial)
+        ! ============================================================
+        n1l = n1
+        n2l = n2
+        minlen = minval(self%ldim(1:2))
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        rad_sq = mskrad * mskrad
+        sv = 0.0_dp
+        np = 0
+        do j = 1, n2l
+            cjs2 =  mem_msk_cjs2(j)
+            do i = 1, n1l
+                r2 = mem_msk_cis2(i) + cjs2
+                if (r2 > rad_sq) then
+                    np = np + 1
+                    sv = sv + real(self%rmat(i,j,1), dp)
+                endif
+            end do
+        end do
+        if (np <= 0) return
+        ave = real(sv / real(np, dp))
+        do j = 1, n2l
+            cjs2 = mem_msk_cjs2(j)
+            do i = 1, n1l
+                r2 = mem_msk_cis2(i) + cjs2 
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < 0.0001) then
+                    self%rmat(i,j,1) = ave
+                else if (e < 0.9999) then
+                    self%rmat(i,j,1) = e*self%rmat(i,j,1) + (1.0-e)*ave
+                endif
+            end do
+        end do
+        ! ============================================================
+        ! 3) FFT (r2c) + scale (same as norm_noise_fft)
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = 1.0_c_float / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+        ! ============================================================
+        ! 4) POWER SPECTRUM (2D path from power_spectrum)
+        ! ============================================================
+        filtsz = fdim(self%ldim(1)) - 1
+        dspec  = 0.0_dp
+        counts = 0
+        lims   = self%fit%loop_lims(2)
+        do k = lims(2,1), lims(2,2)
+            k_neg = (k < 0)
+            ! k physical index in [1..n2], wrapping negatives to the upper half
+            kpi   = merge(k + 1 + n2, k + 1, k_neg)
+            do h = lims(1,1), lims(1,2)
+                hp = h + 1
+                sh = nint(hyp(h,k))
+                if (sh == 0 .or. sh > filtsz) cycle
+                dspec(sh)  = dspec(sh)  + real(csq_fast(self%cmat(hp, kpi, 1)), dp)
+                counts(sh) = counts(sh) + 1
+            end do
+        end do
+        where(counts > 0)
+            dspec = dspec / real(counts, dp)
+        end where
+        spec = real(dspec, kind=sp)
+    end subroutine norm_noise_mask_fft_powspec
+
     module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
         class(image), intent(in)    :: instrfun
         integer       :: n1, n2, h1, h2, i, j, ii, jj, minlen, np 
         real(dp)      :: sv
-        real(c_float) :: temp(self%ldim(1),self%ldim(2)), rad_sq, ave, r2, e, scale_cmat
+        real(c_float) :: temp(self%ldim(1),self%ldim(2)), rad_sq, ave, r2, e, scale_cmat, cis2, cjs2
         real(c_float) :: v_val, u_val, invden
         real(c_float), parameter :: EPS_DEN = 1.e-6_c_float
         real(c_float), parameter :: EPS_E   = 1.e-4_c_float
@@ -677,8 +833,9 @@ contains
         sv = 0.0_dp
         np = 0
         do i = 1, n1
+            cis2 = mem_msk_cis2(i)
             do j = 1, n2
-                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                r2 = cis2 + mem_msk_cjs2(j)
                 if (r2 > rad_sq) then
                     np = np + 1
                     sv = sv + real(self%rmat(i,j,1), dp)
@@ -698,11 +855,12 @@ contains
         ! ============================================================
         ! Process with mask and division
         do j = 1, n2
+            cjs2 = mem_msk_cjs2(j)
             do i = 1, n1
                 v_val = self%rmat(i, j, 1)
                 u_val = instrfun%rmat(i, j, 1)
                 ! Apply softavg mask
-                r2 = mem_msk_cis2(i) + mem_msk_cjs2(j)
+                r2 = mem_msk_cis2(i) + cjs2
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e < EPS_E) then
                     v_val = ave
