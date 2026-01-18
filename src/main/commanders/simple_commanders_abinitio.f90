@@ -605,7 +605,7 @@ contains
                 if( trim(params%multivol_mode).eq.'single' )then
                     l_automsk = .true.
                 else
-                    THROW_WARN('automasking not supported for modes other than multivol_mod.eq.single, turning automasking off')
+                    THROW_WARN('automasking not supported for modes other than multivol_mode.eq.single, turning automasking off')
                     l_automsk = .false.
                 endif
             endif

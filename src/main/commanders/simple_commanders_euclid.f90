@@ -110,7 +110,6 @@ contains
         integer,     allocatable :: pinds(:)
         real,        allocatable :: pspec(:), sigma2(:,:)
         complex(dp), allocatable :: cmat_thr_sum(:,:,:)
-        real    :: sdev_noise
         integer :: batchlims(2),kfromto(2)
         integer :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
         logical :: l_scale_update_frac
@@ -120,7 +119,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! Sampling
         ! Because this is always run prior to reconstruction/search, sampling is not always informed
-        ! or may change with workflows. Instead of setting a sampling for the following oprations when
+        ! or may change with workflows. Instead of setting a sampling for the following operations when
         ! l_update_frac, we sample uniformly AND do not write the corresponding field
         l_scale_update_frac = .false.
         if( params%l_update_frac )then
@@ -145,7 +144,7 @@ contains
             nbatch    = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
             cmat_thr_sum = dcmplx(0.d0,0.d0)
-            !$omp parallel do default(shared) private(iptcl,imatch,pspec,cmat,sdev_noise)&
+            !$omp parallel do default(shared) private(iptcl,imatch,pspec,cmat)&
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
             do imatch = 1,nbatch
                 iptcl = pinds(batchlims(1)+imatch-1)
