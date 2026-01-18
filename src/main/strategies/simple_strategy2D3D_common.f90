@@ -1167,9 +1167,10 @@ contains
         integer,                  intent(in)    :: batchsz
         integer,                  intent(in)    :: which_iter
         logical,     optional,    intent(in)    :: do_polar
-        type(string) :: fname
-        integer      :: ithr, iproj, nrefs
-        logical      :: l_polar
+        real, allocatable :: gaufilter(:)
+        type(string)      :: fname
+        integer           :: ithr, iproj, nrefs, filtsz
+        logical           :: l_polar, l_filtrefs
         l_polar = .false.
         if( present(do_polar) ) l_polar = do_polar
         ! PREPARATION OF pftc AND REFERENCES
@@ -1182,11 +1183,19 @@ contains
             call polar_cavger_new(pftc, .true.)
             call polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
             call build_glob%clsfrcs%read(string(FRCS_FILE))
+            ! prepare filter
+            l_filtrefs = .false.
+            if(trim(params_glob%gauref).eq.'yes')then
+                l_filtrefs = .true.
+                filtsz = build_glob%clsfrcs%get_filtsz()
+                allocate(gaufilter(filtsz),source=0.)
+                call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
+            endif
             ! PREPARATION OF REFERENCES IN pftc
             !$omp parallel do default(shared) private(iproj)&
             !$omp schedule(static) proc_bind(close)
             do iproj = 1,params_glob%nspace
-                call polar_prep3Dref(iproj)
+                if( l_filtrefs ) call polar_filterrefs(iproj, gaufilter)
                 ! transfer to pftc
                 if( params_glob%l_lpset )then
                     ! put the merged class average in both even and odd positions
@@ -1229,6 +1238,7 @@ contains
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
         call build_glob%vol2%kill
+        if( allocated(gaufilter) ) deallocate(gaufilter)
     end subroutine prepare_refs_sigmas_ptcls
 
     subroutine prepare_polar_references( pftc, cline, batchsz )
