@@ -72,7 +72,7 @@ contains
         if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',       'no')
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',      20.)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',        8.)
-        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type', 'comlin')
+        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type', 'comlin_noself')
         if( .not. cline%defined('gauref_last_stage')) call cline%set('gauref_last_stage', GAUREF_LAST_STAGE)
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',     'yes')
         ! make master parameters

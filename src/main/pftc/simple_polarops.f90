@@ -25,7 +25,7 @@ public :: polar_cavger_merge_eos_and_norm2D
 public :: polar_cavger_merge_eos_and_norm
 public :: polar_cavger_calc_and_write_frcs_and_eoavg
 public :: polar_prep2Dref
-public :: polar_prep3Dref
+public :: polar_filterrefs
 public :: polar_cavger_gen2Dclassdoc
 ! I/O
 public :: polar_cavger_refs2cartesian
@@ -117,8 +117,9 @@ interface
         real,         optional, intent(out)   :: xyz(3)
     end subroutine
 
-    module subroutine polar_prep3Dref(icls)
+    module subroutine polar_filterrefs( icls, filter )
         integer, intent(in) :: icls
+        real,    intent(in) :: filter(:)
     end subroutine
 
     module subroutine polar_cavger_gen2Dclassdoc(spproj)

@@ -561,25 +561,10 @@ contains
                 forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
                 deallocate(gaufilter)
             endif
-            call filterrefs(icls, filter)
+            call polar_filterrefs(icls, filter)
             deallocate(frc,filter)
         endif
     end subroutine polar_prep2Dref
-
-    !>  \brief  prepares one polar cluster centre image for alignment
-    module subroutine polar_prep3Dref( icls )
-        integer, intent(in) :: icls
-        real, allocatable   :: gaufilter(:)
-        integer :: filtsz
-        ! Gaussian filter if needed
-        if(trim(params_glob%gauref).eq.'yes')then
-            filtsz = build_glob%clsfrcs%get_filtsz()
-            allocate(gaufilter(filtsz),source=0.)
-            call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
-            call filterrefs(icls, gaufilter)
-            deallocate(gaufilter)
-        endif
-    end subroutine polar_prep3Dref
 
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         population, average correlation and weight
@@ -650,6 +635,19 @@ contains
             if( pop == 0 )call cls_field%set_state(icls, 0)
         end do
     end subroutine polar_cavger_gen2Dclassdoc
+
+     !>  \brief  Filter references
+    !! keep serial
+    module subroutine polar_filterrefs( icls, filter )
+        integer, intent(in) :: icls
+        real,    intent(in) :: filter(:)
+        integer :: n, k
+        do k = kfromto(1),kfromto(2)
+            pfts_merg(:,k,icls) = filter(k) * pfts_merg(:,k,icls)
+            pfts_even(:,k,icls) = filter(k) * pfts_even(:,k,icls)
+            pfts_odd(:,k,icls)  = filter(k) * pfts_odd(:,k,icls)
+        enddo
+    end subroutine polar_filterrefs
 
     ! PRIVATE UTILITIES
 
@@ -874,23 +872,6 @@ contains
             ctf2line = ctf2_odd(irot,:,ref)
         endif
     end subroutine get_line
-
-    !>  \brief  Filter references
-    !! keep serial
-    subroutine filterrefs( icls, filter )
-        integer, intent(in) :: icls
-        real,    intent(in) :: filter(:)
-        integer :: n, k
-        n = size(filter)
-        if( n < kfromto(2) )then
-            THROW_HARD('Incompatible filter size!; polar_cavger_filterref')
-        endif
-        do k = kfromto(1),kfromto(2)
-            pfts_merg(:,k,icls) = filter(k) * pfts_merg(:,k,icls)
-            pfts_even(:,k,icls) = filter(k) * pfts_even(:,k,icls)
-            pfts_odd(:,k,icls)  = filter(k) * pfts_odd(:,k,icls)
-        enddo
-    end subroutine filterrefs
 
     subroutine calc_frc( pft1, pft2, n, frc )
         complex(dp), intent(in)    :: pft1(pftsz,kfromto(1):kfromto(2)), pft2(pftsz,kfromto(1):kfromto(2))
