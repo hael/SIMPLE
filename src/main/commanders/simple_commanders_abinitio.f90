@@ -72,7 +72,7 @@ contains
         if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',       'no')
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',      20.)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',        8.)
-        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type', 'comlin_noself')
+        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type', 'comlin')
         if( .not. cline%defined('gauref_last_stage')) call cline%set('gauref_last_stage', GAUREF_LAST_STAGE)
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',     'yes')
         ! make master parameters
@@ -200,11 +200,13 @@ contains
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
+            ! Reconstruction for polar representation
+            if( l_polar ) call calc_rec4polar( xreconstruct3D, istage )
             ! Probabilistic search
-            call exec_refine3D(istage, xrefine3D)
+            call exec_refine3D(istage, xrefine3D) 
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
-                call symmetrize(istage, work_proj, work_projfile)
+                call symmetrize(istage, work_proj, work_projfile, xreconstruct3D)
             endif
         end do
         ! update original cls3D segment

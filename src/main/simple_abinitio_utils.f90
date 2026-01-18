@@ -2,11 +2,11 @@
 module simple_abinitio_utils
 use simple_commander_module_api
 use simple_abinitio_config
-use simple_commanders_volops,   only: commander_postprocess, commander_symmetrize_map
-use simple_commanders_mask,     only: commander_automask
-use simple_cluster_seed,        only: gen_labelling
-use simple_class_frcs,          only: class_frcs
-use simple_decay_funs,          only: calc_update_frac_dyn
+use simple_commanders_volops, only: commander_postprocess, commander_symmetrize_map
+use simple_commanders_mask,   only: commander_automask
+use simple_cluster_seed,      only: gen_labelling
+use simple_class_frcs,        only: class_frcs
+use simple_decay_funs,        only: calc_update_frac_dyn
 implicit none
 
 public :: prep_class_command_lines
