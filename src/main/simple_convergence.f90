@@ -381,7 +381,6 @@ contains
         if( params_glob%l_update_frac )then
             call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION',    trail_rec_ufrac)
         endif
-        
         call ostats%write(string(STATS_FILE))
         call self%append_stats(ostats)
         call self%plot_projdirs(mask)

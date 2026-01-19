@@ -73,7 +73,7 @@ contains
         ! CONVERGENCE STATS
         ! projection direction overlap
         mi_proj  = 0.
-        if( euldist < 0.5 ) mi_proj  = 1.
+        if( euldist <= params_glob%angthres_mi_proj ) mi_proj  = 1.
         call build_glob%spproj_field%set(s%iptcl, 'mi_proj', mi_proj)
         ! fraction of search space scanned
         neff_states = 1

@@ -395,6 +395,7 @@ type :: parameters
     real    :: alpha=KBALPHA
     real    :: amsklp=8.           !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
+    real    :: angthres_mi_proj = ANGTHRES_MI_PROJ_DEFAULT !< 4 convergence checking
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigthreshold=ASTIG_THRESHOLD !< ice fraction threshold{1.0}
@@ -1007,6 +1008,7 @@ contains
         call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)
         call check_rarg('angerr',         self%angerr)
+        call check_rarg('angthres_mi_proj', self%angthres_mi_proj)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigthreshold', self%astigthreshold)
