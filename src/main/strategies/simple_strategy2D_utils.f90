@@ -951,7 +951,7 @@ contains
         call bincavg%bpgau2D(hp, lp)
         call bincavg%ifft
         ! mask
-        call bincavg%mask(msk, 'hard')
+        call bincavg%mask2D_hard_serial(msk)
         ! ignore negative values
         call bincavg%zero_below(0.)
         ! normalize
