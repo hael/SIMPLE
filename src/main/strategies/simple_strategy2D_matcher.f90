@@ -602,6 +602,8 @@ contains
         call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls),tmp_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
+        ! mask memoization
+        call cavgs_merged(1)%memoize_mask_serial_coords
         ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
@@ -694,6 +696,8 @@ contains
             allocate(tmp_imgs(params_glob%ncls))
             call polar_cavger_refs2cartesian(pftc, tmp_imgs, 'merged')
             call tmp_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
+            ! mask memoization
+            call tmp_imgs(1)%memoize_mask_serial_coords
         endif
         ! PREPARATION OF REFERENCES IN pftc
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,xyz,l_center)&
