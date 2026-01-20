@@ -242,19 +242,19 @@ contains
       end do 
    end subroutine make_subtree_ll
 
-   subroutine search_tree4ref(root, ref_indx)
-      type(s2_node), pointer, intent(inout) :: root 
-      integer, intent(out)  :: indxs(2)
-      integer, intent(in)   :: ref_idx   
-      ! found which subtree to which reference belongs to 
-      ! dfs from bottom, maybe just follow to root node... 
-   end subroutine search_tree4ref
+   ! subroutine search_tree4ref(root, ref_indx)
+   !    type(s2_node), pointer, intent(inout) :: root 
+   !    integer, intent(out)  :: indxs(2)
+   !    integer, intent(in)   :: ref_idx   
+   !    ! found which subtree to which reference belongs to 
+   !    ! dfs from bottom, maybe just follow to root node... 
+   ! end subroutine search_tree4ref
 
 
-   recursive subroutine walk_anywhere() 
+   ! recursive subroutine walk_anywhere() 
 
 
-   end subroutine walk_anywhere()
+   ! end subroutine walk_anywhere()
 
    recursive subroutine print_s2_tree(root, unit, indent, show_subset, max_subset)
       type(s2_node), intent(in) :: root
