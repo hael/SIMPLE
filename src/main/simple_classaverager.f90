@@ -1297,6 +1297,7 @@ contains
             call  img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
             call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
         end do
+        call memoize4ctf_apply(img(1))
         logi_lims      = img(1)%loop_lims(2)
         cyc_lims       = img(1)%loop_lims(3)
         cyc_limsR(:,1) = cyc_lims(1,:)
@@ -1377,6 +1378,7 @@ contains
             enddo
             call cavg%div(real(pop))
         endif
+        call unmemoize4ctf_apply
         do ithr = 1, nthr_glob
             call img(ithr)%kill
             call timg(ithr)%kill

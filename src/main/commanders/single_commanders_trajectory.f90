@@ -183,32 +183,21 @@ contains
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
         ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
         ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
-        use simple_ctf, only: ctf
         class(commander_trajectory_backgr_subtr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        type(image)      :: img_backgr, img_backgr_wctf, ave_img
-        type(ctf)        :: tfun
-        type(ctfparams)  :: ctfvars
+        type(image)      :: img_backgr, ave_img
         type(string)     :: ext,imgname
         real             :: ave,sdev,minv,maxv
         integer          :: iptcl, nptcls, ldim(3)
-        logical          :: do_flip, err
+        logical          :: err
         call cline%set('oritype','mic')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! dimensions
         call find_ldim_nptcls(params%stk,ldim,nptcls)
-        ! CTF logics
-        do_flip = .false.
-        if( (build%spproj_field%isthere('ctf')) .and. (cline%defined('ctf').and.params%ctf.eq.'flip') )then
-            if( build%spproj%get_nintgs() /= nptcls ) THROW_HARD('Incompatible # of images and micrographs!')
-            if( .not.build%spproj_field%isthere('dfx') ) THROW_HARD('Missing CTF parameters')
-            do_flip = .true.
-        endif
         ! get background image
         call img_backgr%new([params%box,params%box,1], params%smpd)
-        call img_backgr_wctf%new([params%box,params%box,1], params%smpd)
         call img_backgr%read(params%stk_backgr, 1)
         ! background image is skipped if sdev is small because this neighbour was
         ! outside the micrograph
@@ -221,21 +210,13 @@ contains
                 call progress(iptcl,nptcls)
                 ! read particle image
                 call build%img%read(params%stk, iptcl)
-                ! copy background image & CTF
-                img_backgr_wctf = img_backgr
                 ! fwd ft
                 call build%img%fft()
-                call img_backgr_wctf%fft()
-                if( do_flip )then
-                    ctfvars = build%spproj_field%get_ctfvars(iptcl)
-                    tfun = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
-                    call tfun%apply_serial(build%img,       'flip', ctfvars)
-                    call tfun%apply_serial(img_backgr_wctf, 'flip', ctfvars)
-                endif
-                ! filter background image
-                call img_backgr_wctf%bp(params%hp,params%lp,width=params%width)
+                call img_backgr%fft()
+                ! filter background image copy
+                call img_backgr%bp(params%hp,params%lp,width=params%width)
                 ! subtract background
-                call build%img%subtr(img_backgr_wctf)
+                call build%img%subtr(img_backgr)
                 ! bwd ft
                 call build%img%ifft()
                 ! normalise
@@ -252,7 +233,6 @@ contains
         endif
         call ave_img%kill
         call img_backgr%kill
-        call img_backgr_wctf%kill
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_BACKGR_SUBTR NORMAL STOP ****')
@@ -350,14 +330,12 @@ contains
     end subroutine exec_graphene_subtr
 
     subroutine exec_import_trajectory( self, cline )
-        use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(commander_import_trajectory), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
-        type(parameters)       :: params
-        type(sp_project)       :: spproj
-        type(ctfparams)        :: ctfvars
-        type(ctf_estimate_fit) :: ctffit
-        type(oris)             :: os
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(ctfparams)  :: ctfvars
+        type(oris)       :: os
         integer :: iframe, lfoo(3)
         call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -373,25 +351,10 @@ contains
         ctfvars%dfy     = 0.
         ctfvars%angast  = 0.
         ctfvars%l_phaseplate = .false.
-        if( cline%defined('deftab') )then
-            call ctffit%read_doc(params%deftab)
-            call ctffit%get_parms(ctfvars)
-            if( .not.is_equal(ctfvars%smpd,params%smpd) )then
-                THROW_HARD('Iconsistent sampling distance; exec_import_trajectory')
-            endif
-            ctfvars%ctfflag = CTFFLAG_YES
-            do iframe = 1,spproj%os_mic%get_noris()
-                call spproj%os_mic%set(iframe,'ctf','yes')
-            enddo
-            call os%set_all2single('dfx', ctfvars%dfx)
-            call os%set_all2single('dfy', ctfvars%dfy)
-            call os%set_all2single('angast', ctfvars%angast)
-        else
-            ctfvars%ctfflag = CTFFLAG_NO
-            do iframe = 1,spproj%os_mic%get_noris()
-                call spproj%os_mic%set(iframe,'ctf','no')
-            enddo
-        endif
+        ctfvars%ctfflag = CTFFLAG_NO
+        do iframe = 1,spproj%os_mic%get_noris()
+            call spproj%os_mic%set(iframe,'ctf','no')
+        enddo
         ! import stack
         call os%set_all2single('state', 1.0)
         call spproj%add_single_stk(params%stk, ctfvars, os)
