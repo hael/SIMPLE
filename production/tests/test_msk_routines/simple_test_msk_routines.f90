@@ -14,7 +14,9 @@ smpd = 3.0
 call img%new(ldim, smpd)
 call img%ran()
 call img%mask(ldim(1)/2., 'soft')
+call img%ran()
 call img%mask(ldim(1)/2., 'softavg')
+call img%ran()
 call img%mask(ldim(1)/2., 'hard')
 
 allocate(stk(nimgs))
@@ -30,18 +32,17 @@ do i = 1, nimgs
     call stk(i)%mask(ldim(1)/2., 'soft')
 end do
 !$omp end parallel do
+
 do i = 1, nimgs
-    call stk(i)%new(ldim, smpd)
     call stk(i)%ran()
 end do 
-
 !$omp parallel do default(shared)  private(i) proc_bind(close) schedule(static)
 do i = 1, nimgs
     call stk(i)%mask(ldim(1)/2., 'softavg')
 end do
 !$omp end parallel do
+
 do i = 1, nimgs
-    call stk(i)%new(ldim, smpd)
     call stk(i)%ran()
 end do 
 
