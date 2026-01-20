@@ -1,7 +1,5 @@
 ! optimization(search)-based masking
 module simple_opt_mask
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image,      only: image, image_ptr
 use simple_parameters, only: params_glob
@@ -21,6 +19,7 @@ contains
         type(image) :: targ_copy, targ_msk
         integer     :: box, ldim(3), imsk
         real        :: smpd, cur_cost, best_cost
+        logical     :: is3d
         if( mskfromto(1) == mskfromto(2) )then  
             best_msk = mskfromto(1)
             return
@@ -34,13 +33,20 @@ contains
         call targ_msk%new(ldim, smpd)
         best_msk  = mskfromto(1)
         best_cost = huge(best_cost)
+        is3d = .false.
         if( ldim(3) > 1 )then ! 3D, so parallelize
             call targ_msk%set_wthreads(.true.)
             call ref%set_wthreads(.true.)
+            is3d = .true.
         endif
+        call targ_msk%memoize_mask_coords
         do imsk = mskfromto(1), mskfromto(2)
             call targ_msk%copy_fast(targ_copy)
-            call targ_msk%mask(real(imsk), 'hard')
+            if( is3d )then 
+                call targ_msk%mask3D_hard(real(imsk))
+            else
+                call targ_msk%mask2D_hard(real(imsk))
+            endif
             ! calculate squared Euclidean distance
             cur_cost = targ_msk%sqeuclid(ref, lmask)
             if( cur_cost <= best_cost )then

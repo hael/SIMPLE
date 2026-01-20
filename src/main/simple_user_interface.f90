@@ -3026,7 +3026,7 @@ contains
         &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
         & falloff, set mskdiam to the diameter in A',&                   ! descr_long
         &'simple_exec',&                                                 ! executable
-        &0, 3, 2, 1, 1, 7, 1, .false.)                                   ! # entries in each group, requires sp_project
+        &0, 3, 2, 1, 1, 6, 1, .false.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3047,14 +3047,12 @@ contains
         call mask%set_input('mask_ctrls', 1, mskdiam)
         mask%mask_ctrls(1)%required = .false.
         call mask%set_input('mask_ctrls', 2, mskfile)
-        call mask%set_input('mask_ctrls', 3, 'msktype', 'multi', 'Mask type',&
-        &'Type of mask to use(soft|hard){soft}', '(soft|hard){soft}', .false., 'soft')
-        call mask%set_input('mask_ctrls', 4, width)
-        call mask%set_input('mask_ctrls', 5, 'edge', 'num', 'Envelope mask soft edge',&
+        call mask%set_input('mask_ctrls', 3, width)
+        call mask%set_input('mask_ctrls', 4, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
-        call mask%set_input('mask_ctrls', 6, 'taper_edges', 'binary', 'Taper edges',&
+        call mask%set_input('mask_ctrls', 5, 'taper_edges', 'binary', 'Taper edges',&
         &'Whether to taper the edges of image/volume(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call mask%set_input('mask_ctrls', 7, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
+        call mask%set_input('mask_ctrls', 6, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
         &'PDB file used to determine the mask', 'e.g. molecule.pdb', .false., '')
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)

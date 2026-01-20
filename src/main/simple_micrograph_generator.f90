@@ -1,6 +1,4 @@
 module simple_micrograph_generator
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_eer_factory,          only: eer_decoder
 use simple_image,                only: image, image_ptr

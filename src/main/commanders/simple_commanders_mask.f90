@@ -46,7 +46,7 @@ contains
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
             if( cline%defined('mskdiam') )then
                 ! spherical
-                call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, which=params%msktype)
+                call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd)
             else if( params%taper_edges.eq.'yes' )then
                 call taper_edges_imgfile(params%stk, params%outstk, params%smpd)
             else
@@ -72,7 +72,7 @@ contains
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('mskdiam') )then
                 ! spherical
-                call build%vol%mask(params%msk, params%msktype)
+                call build%vol%mask3D_softavg(params%msk)
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else
                 THROW_HARD('Nothing to do!')
@@ -166,7 +166,7 @@ contains
         call build%vol%read(params%vols(1))
         call mskvol%estimate_spher_mask_diam(build%vol, params%amsklp, msk_in_pix)
         write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * params%smpd
-        call build%vol%mask(msk_in_pix, 'soft')
+        call build%vol%mask3D_soft(msk_in_pix)
         if( cline%defined('outfile') )then
             fname_out = params%outfile%to_char()
         else

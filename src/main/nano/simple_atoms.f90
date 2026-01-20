@@ -1,7 +1,5 @@
 ! atomic structures and pdb parser
 module simple_atoms
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_defs_atoms
 implicit none
@@ -1305,9 +1303,9 @@ contains
             call vol_at2%new([atom_box, atom_box, atom_box], smpd)
             center(:) = ang2vox(atom_coord(:), smpd) - atom_box/2
             call vol1%window_slim(center, atom_box, vol_at1, outside)
-            call vol_at1%mask(real(atom_box)/2., 'soft')
+            call vol_at1%mask3D_soft(real(atom_box)/2.)
             call vol2%window_slim(center, atom_box, vol_at2, outside)
-            call vol_at2%mask(real(atom_box)/2., 'soft')
+            call vol_at2%mask3D_soft(real(atom_box)/2.)
             ! compute cross-correlation between both volumes
             cc = vol_at1%real_corr(vol_at2)
             call self%set_atom_corr(i_atom, cc)
@@ -1437,7 +1435,7 @@ contains
             call vol_at%new([atom_box, atom_box, atom_box], smpd)
             center(:) = ang2vox(atom_coord(:), smpd) - atom_box/2
             call vol%window_slim(center, atom_box, vol_at, outside)
-            call vol_at%mask(real(atom_box)/2., 'soft')
+            call vol_at%mask3D_soft(real(atom_box)/2.)
             ! compute cross-correlation between both volumes
             cc       = vol_atom%real_corr(vol_at)
             cc_score = cc_score + cc

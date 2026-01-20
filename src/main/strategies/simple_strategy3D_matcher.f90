@@ -1,6 +1,4 @@
 module simple_strategy3D_matcher
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_strategy3D_alloc ! singleton s3D
 use simple_binoris_io

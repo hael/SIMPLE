@@ -1,5 +1,4 @@
 module simple_stream_communicator
-use, intrinsic :: iso_c_binding 
 use simple_core_module_api
 use json_kinds
 use json_module

@@ -541,8 +541,8 @@ contains
                     call odd%mul(self%envmask)
                     call self%envmask%write(string(MSKVOL_FILE))
                 else
-                    call even%mask(self%msk, 'soft', backgr=0.)
-                    call odd%mask(self%msk, 'soft', backgr=0.)
+                    call even%mask3D_soft(self%msk, backgr=0.)
+                    call odd%mask3D_soft(self%msk, backgr=0.)
                 endif
                 ! calculate FSC
                 call even%fft()
@@ -606,8 +606,8 @@ contains
                     call odd%mul(self%envmask)
                     call self%envmask%write(string(MSKVOL_FILE))
                 else
-                    call even%mask(self%msk, 'soft', backgr=0.)
-                    call odd%mask(self%msk, 'soft', backgr=0.)
+                    call even%mask3D_soft(self%msk, backgr=0.)
+                    call odd%mask3D_soft(self%msk, backgr=0.)
                 endif
                 ! calculate FSC
                 call even%fft()
@@ -644,8 +644,8 @@ contains
             call even_tmp%mul(self%envmask)
             call odd_tmp%mul(self%envmask)
         else
-            call even_tmp%mask(self%msk, 'soft', backgr=0.)
-            call odd_tmp%mask(self%msk, 'soft', backgr=0.)
+            call even_tmp%mask3D_soft(self%msk, backgr=0.)
+            call odd_tmp%mask3D_soft(self%msk, backgr=0.)
         endif
         ! calculate FSC
         call even_tmp%fft()

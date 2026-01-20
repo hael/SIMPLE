@@ -1,6 +1,5 @@
 module simple_starproject
 use simple_core_module_api
-!$ use omp_lib
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: params_glob

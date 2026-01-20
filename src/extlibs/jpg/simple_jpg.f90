@@ -4,7 +4,6 @@
 !! (better than 8-bit PNG)
 
 module simple_jpg
-use, intrinsic :: iso_c_binding
 use simple_core_module_api
 implicit none
 

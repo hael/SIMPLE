@@ -301,7 +301,7 @@ contains
             if( DEBUG_HERE ) write(logfhandle,*) 'rotating input volume to symmetry axis'
             call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
             if( WRITE_VOLUMES ) call vol_asym_aligned2axis%write(string('vol_c1_aligned2_'//trim(pgrps(igrp)%str)//'axis.mrc'))
-            call vol_asym_aligned2axis%mask(msk, 'soft')
+            call vol_asym_aligned2axis%mask3D_soft(msk)
             ! generate symmetrized volume
             if( DEBUG_HERE ) write(logfhandle,*) 'generating symmetrized volume'
             call symaverage
@@ -310,7 +310,7 @@ contains
             else
                 call del_file('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             endif
-            call vol_sym%mask(msk, 'soft')
+            call vol_sym%mask3D_soft(msk)
             call vol_sym%fft
             ! calculate a correlation coefficient
             if( DEBUG_HERE ) write(logfhandle,*) 'calculating correlation'

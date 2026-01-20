@@ -7,8 +7,6 @@
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 module simple_ctf
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image, only: image
 implicit none
@@ -302,6 +300,9 @@ contains
         class(image), intent(inout) :: img   !< image (output)
         integer :: h,k,phys(3),ldim(3)
         real    :: rh,hinv,hinvsq,rk,kinv,inv_ldim(3)
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
+        endif
         ! initialize
         ldim = img%get_ldim()
         if( any(ldim == 0) .or. ldim(3) /= 1 ) THROW_HARD('Image incompatible with CTF application')

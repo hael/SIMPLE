@@ -1,6 +1,4 @@
 module simple_picker_utils 
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_parameters, only: params_glob
 use simple_image,      only: image
@@ -198,12 +196,13 @@ contains
                     call pickrefs(1)%gauimg2D(sig, sig)
                     r = 0.5*params_glob%moldiam/smpd - 1.0
                     pickrefs(2) = 1.
-                    call pickrefs(2)%mask(r, 'soft', backgr=0.)
+                    call pickrefs(2)%memoize_mask_coords
+                    call pickrefs(2)%mask2D_soft(r, backgr=0.)
                     ang = 0.
                     do i = 3,8
                         call pickrefs(i)%disc_sideview([box, box,1], smpd, r)
                         if( ang > 0.5 ) call pickrefs(i)%rtsq(ang,0.,0.)
-                        call pickrefs(i)%mask(real(box/2-1),'hard')
+                        call pickrefs(i)%mask2D_hard(real(box/2-1))
                         ang = ang + 30.0
                     enddo
                 case('ring')

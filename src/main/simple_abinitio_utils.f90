@@ -800,7 +800,7 @@ contains
                 b = 5.0/real(box)
                 call signal%new([box,box,box], smpd)
                 call signal%gauran(0.0, b)
-                call signal%mask(0.25*real(box), 'soft', backgr=0.)
+                call signal%mask3D_soft(0.25*real(box), backgr=0.)
                 do s = 1, params_glob%nstates
                     call noisevol%gauran(0., b)
                     call noisevol%add(signal)

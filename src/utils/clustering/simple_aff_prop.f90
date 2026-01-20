@@ -1,6 +1,5 @@
 ! clustering based on a similartity matrix using affinity propagation
 module simple_aff_prop
-!$ use omp_lib
 use simple_core_module_api
 implicit none
 

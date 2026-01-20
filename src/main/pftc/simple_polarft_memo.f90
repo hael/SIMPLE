@@ -1,6 +1,4 @@
 submodule (simple_polarft_calc) simple_polarft_memo
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 #include "simple_local_flags.inc"
 implicit none
@@ -46,6 +44,9 @@ contains
     module subroutine memoize_ptcls(self)
         class(polarft_calc), intent(inout) :: self
         integer :: ithr,i,k
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
+        endif
         !$omp parallel do collapse(2) private(i,k,ithr) default(shared) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
@@ -76,6 +77,9 @@ contains
     module subroutine memoize_refs(self)
         class(polarft_calc), intent(inout) :: self
         integer :: k, ithr, iref
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
+        endif
         ! allocations
         call self%allocate_refs_memoization
         ! memoization

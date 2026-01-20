@@ -124,6 +124,9 @@ contains
         integer,      intent(in) :: nthr
         integer :: i, sz, ldim(3)
         logical :: do_allocate
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
+        endif
         if( allocated(thread_safe_tmp_imgs) )then
             ldim = thread_safe_tmp_imgs(1)%get_ldim()
             sz   = size(thread_safe_tmp_imgs)

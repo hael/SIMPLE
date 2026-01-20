@@ -43,7 +43,7 @@ print *,'---------------------'
 
 call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
 call b%vol%read(p%vols(1))
-call b%vol%mask(p%msk,'soft')
+call b%vol%mask3D_soft(p%msk)
 if( p%gridding.eq.'yes' ) call b%vol%div_w_instrfun(p%interpfun, alpha=p%alpha)
 call b%vol%fft()
 call b%vol%expand_cmat(p%alpha,norm4proj=.true.)

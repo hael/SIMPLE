@@ -1,7 +1,5 @@
 ! motion_correct does motion correction, dose-weighting and frame-weighting of DDD movies
 module simple_motion_correct
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_ft_expanded,          only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_patched,       only: motion_patched

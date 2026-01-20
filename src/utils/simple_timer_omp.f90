@@ -1,6 +1,6 @@
 module simple_timer_omp
 use simple_defs
-!$   use omp_lib
+!$ use omp_lib
 implicit none
 real(dp), save :: last_time_point_mp = REAL(0., dp) !< Starting timesamp
 public :: tic_omp, tickrate_omp

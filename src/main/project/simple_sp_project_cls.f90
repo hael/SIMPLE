@@ -15,6 +15,7 @@ contains
         type(stack_io) :: stkio_r
         integer        :: icls, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
         real           :: smpd
+        logical        :: present_mskdiam_px
         ncls = self%os_cls2D%get_noris()
         if( ncls == 0 ) return
         if( .not. self%os_cls2D%isthere('shape_rank') ) THROW_HARD('No shape ranking available!')
@@ -42,11 +43,12 @@ contains
         iy     = 1
         ntiles = 0
         ! mask memoization
-        call img%memoize_mask_serial_coords
+        call img%memoize_mask_coords
+        present_mskdiam_px = present(mskdiam_px)
         do icls = 1,ncls_sel
             call img%new(ldim_read, smpd)
             call stkio_r%get_image(cavg_inds(icls), img)
-            if(present(mskdiam_px)) call img%mask2D_softavg_serial(mskdiam_px / 2.0)
+            if(present_mskdiam_px) call img%mask2D_softavg(mskdiam_px / 2.0)
             call img%fft
             if(ldim_read(1) > JPEG_DIM) then
                 call img%clip_inplace([JPEG_DIM,JPEG_DIM,1])

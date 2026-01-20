@@ -530,7 +530,6 @@ contains
         contains
 
             subroutine calculate_histogram( seg_oris )
-                use, intrinsic :: iso_c_binding 
                 type(oris),        intent(in)  :: seg_oris
                 type(histogram)                :: histgrm
                 type(json_value),  pointer     :: data, labels

@@ -1,4 +1,7 @@
 module simple_core_module_api
+!$ use omp_lib
+!$ use omp_lib_kinds
+use, intrinsic :: iso_c_binding
 use simple_defs_fname
 use simple_defs_conv
 use simple_defs_stream

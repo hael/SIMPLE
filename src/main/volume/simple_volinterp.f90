@@ -2,8 +2,6 @@
 ! to generate band-pass limited Cartesian and polar 2D Fourier transforms,
 ! high-level routines
 module simple_simple_volinterp
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image,      only: image
 use simple_projector,  only: projector

@@ -991,8 +991,6 @@ contains
     end subroutine exec_check_3Dconv
 
     subroutine exec_prob_tab( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_strategy2D3D_common
         use simple_polarft_calc,  only: polarft_calc
         use simple_eul_prob_tab,  only: eul_prob_tab
@@ -1042,8 +1040,6 @@ contains
     end subroutine exec_prob_tab
 
     subroutine exec_prob_align( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
         class(commander_prob_align), intent(inout) :: self

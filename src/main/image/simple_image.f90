@@ -1,9 +1,6 @@
 ! the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class
 ! and Fourier transformations done in-place to reduce memory usage
 module simple_image
-!$ use omp_lib
-!$ use omp_lib_kinds
-use, intrinsic :: iso_c_binding
 use simple_core_module_api
 use simple_fftw3
 use simple_ftiter,  only: ftiter
@@ -13,7 +10,7 @@ use simple_neighs
 use gnufor2
 implicit none
 
-public :: image, image_ptr, test_image, image_stack
+public :: image, image_ptr, test_image, image_stack, unmemoize_mask_coords
 private
 #include "simple_local_flags.inc"
 
@@ -23,10 +20,8 @@ type image_ptr
 end type image_ptr
 
 ! mask memoization
-integer :: mem_msk_n1 = 0, mem_msk_n2 = 0, mem_msk_n3 = 0
-logical :: mem_msk_is3d = .false.
-real, allocatable :: mem_msk_cis(:),  mem_msk_cjs(:),  mem_msk_cks(:)
-real, allocatable :: mem_msk_cis2(:), mem_msk_cjs2(:), mem_msk_cks2(:)
+integer           :: mem_msk_box = 0
+real, allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
 
 type :: image
     private
@@ -295,14 +290,13 @@ contains
     procedure          :: logical2bin
     procedure          :: density_inoutside
     procedure          :: calc_bin_thres
-    procedure          :: mask
-    procedure          :: memoize_mask_serial_coords
-    procedure          :: mask2D_soft_serial
-    procedure          :: mask2D_softavg_serial
-    procedure          :: mask2D_hard_serial
-    procedure          :: mask3D_soft_serial
-    procedure          :: mask3D_softavg_serial
-    procedure          :: mask3D_hard_serial
+    procedure          :: memoize_mask_coords
+    procedure          :: mask2D_soft
+    procedure          :: mask2D_softavg
+    procedure          :: mask2D_hard
+    procedure          :: mask3D_soft
+    procedure          :: mask3D_softavg
+    procedure          :: mask3D_hard
     procedure          :: taper_edges, taper_edges_hann
     ! OPERATIONS, file: simple_image_ops.f90
     ! ctf
@@ -1881,50 +1875,43 @@ interface
         real,         intent(out)   :: thres 
     end subroutine calc_bin_thres
 
-    module subroutine mask( self, mskrad, which, width, backgr )
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        character(len=*), intent(in)    :: which
-        real, optional,   intent(in)    :: width, backgr
-    end subroutine mask
+    module subroutine memoize_mask_coords(self)
+        class(image), intent(in) :: self
+    end subroutine memoize_mask_coords
 
-    module subroutine memoize_mask_serial_coords(self)
-        class(image), intent(inout) :: self
-    end subroutine memoize_mask_serial_coords
-
-    module subroutine mask2D_soft_serial(self, mskrad, width, backgr)
+    module subroutine mask2D_soft(self, mskrad, width, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
-    end subroutine mask2D_soft_serial
+    end subroutine mask2D_soft
 
-    module subroutine mask2D_softavg_serial(self, mskrad, width, backgr)
+    module subroutine mask2D_softavg(self, mskrad, width, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
-    end subroutine mask2D_softavg_serial
+    end subroutine mask2D_softavg
 
-    module subroutine mask2D_hard_serial(self, mskrad)
+    module subroutine mask2D_hard(self, mskrad)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-    end subroutine mask2D_hard_serial
+    end subroutine mask2D_hard
 
-    module subroutine mask3D_soft_serial(self, mskrad, width, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
-    end subroutine mask3D_soft_serial
-
-    module subroutine mask3D_softavg_serial(self, mskrad, width, backgr)
+    module subroutine mask3D_soft(self, mskrad, width, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
-    end subroutine mask3D_softavg_serial
+    end subroutine mask3D_soft
 
-    module subroutine mask3D_hard_serial(self, mskrad)
+    module subroutine mask3D_softavg(self, mskrad, width, backgr)
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        real, optional,   intent(in)    :: width, backgr
+    end subroutine mask3D_softavg
+
+    module subroutine mask3D_hard(self, mskrad)
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
-    end subroutine mask3D_hard_serial
+    end subroutine mask3D_hard
 
     module subroutine taper_edges( self )
         class(image), intent(inout) :: self
@@ -2438,6 +2425,12 @@ contains
           endif
     end subroutine ellipse
 
+    subroutine unmemoize_mask_coords
+        mem_msk_box = 0
+        if( allocated(mem_msk_cs)  ) deallocate(mem_msk_cs)
+        if( allocated(mem_msk_cs2) ) deallocate(mem_msk_cs2)
+    end subroutine unmemoize_mask_coords
+
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
         logical, intent(in)  :: doplot
@@ -2525,12 +2518,13 @@ contains
             if( doplot ) call img%vis
 
             write(logfhandle,'(a)') '**info(simple_image_unit_test, part 10): testing spherical mask'
+            call img%memoize_mask_coords
             call img%ran
             if( doplot ) call img%vis
-            call img%mask(35.,'hard')
+            call img%mask2D_hard(35.)
             if( doplot ) call img%vis
             call img%ran
-            call img%mask(35.,'soft')
+            call img%mask2D_soft(35.)
             if( doplot ) call img%vis
 
             write(logfhandle,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'

@@ -539,8 +539,6 @@ contains
     end subroutine exec_prune_project_distr
 
     subroutine exec_prune_project( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(commander_prune_project), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)     :: params

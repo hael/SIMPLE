@@ -1,6 +1,5 @@
 module simple_starfile
 use simple_core_module_api
-!$ use omp_lib
 use simple_starfile_wrappers
 implicit none
 

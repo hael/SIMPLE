@@ -1,6 +1,4 @@
 module simple_strategy2D_utils
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_class_frcs,        only: class_frcs
 use simple_clustering_utils,  only: cluster_dmat
@@ -95,7 +93,8 @@ contains
         ! prep mask
         call img_msk%new([box,box,1], smpd)
         img_msk = 1.
-        call img_msk%mask(mskrad, 'hard')
+        call img_msk%memoize_mask_coords
+        call img_msk%mask2D_hard(mskrad)
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
@@ -114,7 +113,7 @@ contains
             ! normalization
             call cavg_imgs(i)%norm_within(l_msk)
             ! mask
-            call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+            call cavg_imgs(i)%mask2D_soft(mskrad, backgr=0.)
             ! stash minmax
             mm(i,:) = cavg_imgs(i)%minmax(mskrad)
         end do
@@ -170,7 +169,8 @@ contains
         ! prep mask
         call img_msk%new([box,box,1], smpd)
         img_msk = 1.
-        call img_msk%mask(mskrad, 'hard')
+        call img_msk%memoize_mask_coords
+        call img_msk%mask2D_hard(mskrad)
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
@@ -189,7 +189,7 @@ contains
             ! normalization
             call cavg_imgs(i)%norm_within(l_msk)
             ! mask
-            call cavg_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+            call cavg_imgs(i)%mask2D_soft(mskrad, backgr=0.)
             ! stash minmax
             mm(i,:) = cavg_imgs(i)%minmax(mskrad)
         end do
@@ -230,6 +230,7 @@ contains
         kfromto(1) = calc_fourier_index(HP_SPEC, ldim(1), smpd)
         kfromto(2) = calc_fourier_index(LP_SPEC, ldim(1), smpd)
         call alloc_imgarr(nthr_glob, ldim, smpd, cavg_threads)
+        call cavg_threads(1)%memoize_mask_coords
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk,cen,ave,sdev,maxv,minv)
         do icls = 1, ncls
@@ -245,7 +246,7 @@ contains
             call density_inoutside_mask(cavg_threads(ithr), lp_bin, msk, nin, nout, nmsk, cen)
             l_dens_inoutside = (nout > 0) .or.&                           ! object oustide of mask
                               &(real(nin)/real(nmsk) > RATIO_THRESHOLD)   ! or object too big inside mask
-            call cavg_threads(ithr)%mask(msk, 'soft', backgr=0.)
+            call cavg_threads(ithr)%mask2D_soft(msk, backgr=0.)
             call cavg_threads(ithr)%spectrum('sqrt', pspec)
             dynrange = pspec(kfromto(1)) - pspec(kfromto(2))
             l_non_junk(icls) = .false. ! exclusion by default
@@ -486,7 +487,8 @@ contains
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
         img_msk = 1.
-        call img_msk%mask(params%msk, 'hard')
+        call img_msk%memoize_mask_coords
+        call img_msk%mask2D_hard(params%msk)
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         ! align clusters to medoids and gather information
@@ -951,7 +953,7 @@ contains
         call bincavg%bpgau2D(hp, lp)
         call bincavg%ifft
         ! mask
-        call bincavg%mask2D_hard_serial(msk)
+        call bincavg%mask2D_hard(msk)
         ! ignore negative values
         call bincavg%zero_below(0.)
         ! normalize

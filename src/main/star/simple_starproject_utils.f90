@@ -1,6 +1,5 @@
 module simple_starproject_utils
 use simple_core_module_api
-!$ use omp_lib
 use simple_sp_project, only: sp_project
 implicit none
 

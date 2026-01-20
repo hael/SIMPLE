@@ -76,7 +76,7 @@ contains
         call vol%new([box,box,box],smpd)
         call vol%zero
         call sheet%convolve(vol, 3.*gdist)
-        call vol%mask(real(box/2-5),'soft')
+        call vol%mask3D_soft(real(box/2-5))
         ! extraction, copy plane so no interpolation
         call vol%mul(real(box))
         call vol%fft

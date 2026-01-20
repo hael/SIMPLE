@@ -207,111 +207,48 @@ contains
         loc      = minloc(abs(frac_fgs(:cnt) - frac_fg_target))
         thres    = pix_ts(loc(1))
     end subroutine calc_bin_thres
-
-    module subroutine mask( self, mskrad, which, width, backgr )
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        character(len=*), intent(in)    :: which
-        real, optional,   intent(in)    :: width, backgr
-        logical  :: didft, soft, avg_backgr
-        ! FT
-        didft = .false.
-        if( self%ft )then
-            call self%ifft()
-            didft = .true.
+    
+    module subroutine memoize_mask_coords(self)
+        class(image), intent(in) :: self
+        integer :: i, box
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
         endif
-        ! soft/hard
-        soft       = .true.
-        avg_backgr = .false.
-        select case(trim(which))
-            case('soft')
-                soft       = .true.
-            case('softavg')
-                soft       = .true.
-                avg_backgr = .true.
-            case('hard')
-                soft       = .false.
-            case DEFAULT
-                THROW_HARD('undefined which parameter; simple_image :: mask')
-        end select
-        call self%memoize_mask_serial_coords
-        ! MASKING
-        if( soft )then
-            if( self%is_3d() )then
-                if( avg_backgr )then ! 3D softavg masking
-                    call self%mask3D_softavg_serial(mskrad, width, backgr)
-                else                 ! 3D soft masking
-                    call self%mask3D_soft_serial(mskrad, width, backgr)
-                endif
-            else
-                if( avg_backgr )then ! 2D softavg masking
-                    call self%mask2D_softavg_serial(mskrad, width, backgr)
-                else                 ! 2D soft masking
-                    call self%mask2D_soft_serial(mskrad, width, backgr)
-                endif
-            endif
+        if( self%ldim(1) /= self%ldim(2) )then
+            THROW_HARD('square images assumed')
+        endif
+        if( (self%ldim(3) == 1) .or. (self%ldim(3) == self%ldim(2)) )then
+            ! all good
         else
-            if( self%is_3d() )then   ! 3D hard masking
-                call self%mask3D_hard_serial(mskrad)
-            else                     ! 2D hard masking
-                call self%mask2D_hard_serial(mskrad)
-            endif
+            THROW_HARD('square images assumed')
         endif
-        if( didft ) call self%fft()
-    end subroutine mask
-
-    module subroutine memoize_mask_serial_coords(self)
-        class(image), intent(inout) :: self
-        integer :: i, n1, n2, n3
-        logical :: is3d
-        n1   = self%ldim(1)
-        n2   = self%ldim(2)
-        n3   = self%ldim(3)
-        is3d = self%is_3d()
-        if(.not. is3d) n3 = 1
-        ! Rebuild only if geometry changed
-        if (mem_msk_n1 == n1 .and. mem_msk_n2 == n2 .and. mem_msk_n3 == n3 ) then
+        box = self%ldim(1)
+        ! Rebuild only if geometry in the first two logical dimensions has changed
+        if (mem_msk_box == box ) then
             return
         endif
-        ! Update cache keys
-        mem_msk_n1   = n1
-        mem_msk_n2   = n2
-        mem_msk_n3   = n3
-        mem_msk_is3d = is3d
+        ! Update cache key
+        mem_msk_box = box
         ! (Re)allocate
-        if( allocated(mem_msk_cis)  ) deallocate(mem_msk_cis)
-        if( allocated(mem_msk_cis2) ) deallocate(mem_msk_cis2)
-        if( allocated(mem_msk_cjs)  ) deallocate(mem_msk_cjs)
-        if( allocated(mem_msk_cjs2) ) deallocate(mem_msk_cjs2)
-        if( allocated(mem_msk_cks)  ) deallocate(mem_msk_cks)
-        if( allocated(mem_msk_cks2) ) deallocate(mem_msk_cks2)
-        allocate(mem_msk_cis(n1), mem_msk_cis2(n1), mem_msk_cjs(n2), mem_msk_cjs2(n2), mem_msk_cks(n3), mem_msk_cks2(n3))
+        if( allocated(mem_msk_cs)  ) deallocate(mem_msk_cs)
+        if( allocated(mem_msk_cs2) ) deallocate(mem_msk_cs2)
+        ! memoize 3D coordinates
+        allocate(mem_msk_cs(box), mem_msk_cs2(box))
         ! Fill (origin at center) + squares
-        do i = 1, n1
-            mem_msk_cis(i)  = -0.5*real(n1) + real(i-1)
-            mem_msk_cis2(i) = mem_msk_cis(i) * mem_msk_cis(i)
+        do i = 1, box
+            mem_msk_cs(i)  = -0.5*real(box) + real(i-1)
+            mem_msk_cs2(i) = mem_msk_cs(i) * mem_msk_cs(i)
         end do
-        do i = 1, n2
-            mem_msk_cjs(i)  = -0.5*real(n2) + real(i-1)
-            mem_msk_cjs2(i) = mem_msk_cjs(i) * mem_msk_cjs(i)
-        end do
-        if( is3d )then
-            do i = 1, n3
-                mem_msk_cks(i)  = -0.5*real(n3) + real(i-1)
-                mem_msk_cks2(i) = mem_msk_cks(i) * mem_msk_cks(i)
-            end do
-        else
-            mem_msk_cks(1)  = 0.0
-            mem_msk_cks2(1) = 0.0
-        endif
-    end subroutine memoize_mask_serial_coords
+    end subroutine memoize_mask_coords
 
-    module subroutine mask2D_soft_serial(self, mskrad, width, backgr)
+    module subroutine mask2D_soft(self, mskrad, width, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
         real     :: wwidth, rad_sq, ave,  r2, e, cjs2
         integer  :: minlen, npix,  i, j, ir, jr, n1, n2, n3, h1, h2
+        if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
+        if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
         ! width
         wwidth = 10.0
         if (present(width)) wwidth = width
@@ -332,11 +269,11 @@ contains
         h1 = n1/2; h2 = n2/2
         do j = 1, h2
             jr = n2 + 1 - j
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             !$omp simd
             do i = 1, h1
                 ir = n1 + 1 - i
-                r2 = mem_msk_cis2(i) + cjs2
+                r2 = mem_msk_cs2(i) + cjs2
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e > 0.9999) cycle
                 self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
@@ -345,9 +282,9 @@ contains
                 self%rmat(ir,jr,1)  = e * self%rmat(ir,jr,1)
             end do
         end do
-    end subroutine mask2D_soft_serial
+    end subroutine mask2D_soft
 
-    module subroutine mask2D_softavg_serial(self, mskrad, width, backgr)
+    module subroutine mask2D_softavg(self, mskrad, width, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
@@ -356,6 +293,8 @@ contains
         integer  :: minlen, npix, i, j, np, n1l, n2l
         integer  :: n1, n2, n3
         logical  :: soft, avg_backgr
+        if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
+        if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
         ! width
         wwidth = 10.0
         if (present(width)) wwidth = width
@@ -374,9 +313,9 @@ contains
         sv = 0.0_dp; np = 0
         ! avg outside radius
         do j = 1, n2l
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cis2(i) + cjs2 
+                r2 = mem_msk_cs2(i) + cjs2 
                 if (r2 > rad_sq) then
                     np = np + 1
                     sv = sv + real(self%rmat(i,j,1), dp)
@@ -387,9 +326,9 @@ contains
         ave = real(sv / real(np, dp))
         ! apply (j,i with i contiguous)
         do j = 1, n2l
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cis2(i) + cjs2 
+                r2 = mem_msk_cs2(i) + cjs2 
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e < 0.0001) then
                     self%rmat(i,j,1) = ave
@@ -398,13 +337,15 @@ contains
                 endif
             end do
         end do
-    end subroutine mask2D_softavg_serial
+    end subroutine mask2D_softavg
 
-    module subroutine mask2D_hard_serial(self, mskrad)
+    module subroutine mask2D_hard(self, mskrad)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         integer :: i, j, ir, jr, h1, h2, n1, n2, n3
         real :: r2, e, cjs2
+        if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
+        if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
@@ -412,11 +353,11 @@ contains
         h1 = n1/2; h2 = n2/2
         do j = 1, h2
             jr   = n2 + 1 - j
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             !$omp simd
             do i = 1, h1
                 ir = n1 + 1 - i
-                r2 = mem_msk_cis2(i) + cjs2
+                r2 = mem_msk_cs2(i) + cjs2
                 e  = hardedge_r2_2d(r2, mskrad)
                 if (e > 0.9999) cycle
                 self%rmat(i ,j ,1)  = e * self%rmat(i ,j ,1)
@@ -425,15 +366,23 @@ contains
                 self%rmat(ir,jr,1)  = e * self%rmat(ir,jr,1)
             end do
         end do
-    end subroutine mask2D_hard_serial
+    end subroutine mask2D_hard
 
-    module subroutine mask3D_soft_serial(self, mskrad, width, backgr)
+    module subroutine mask3D_soft(self, mskrad, width, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
         real(dp) :: sumv
         real     :: wwidth, rad_sq, ave, r2, e, cjs2, cks2
         integer  :: minlen, npix, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
+        if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
+        if( self%ldim(1) /= mem_msk_box  )then
+            if( OMP_IN_PARALLEL() )then
+                THROW_HARD('incongruent mask memoization')
+            else
+                call memoize_mask_coords(self)
+            endif
+        endif
         ! width
         wwidth = 10.0
         if (present(width)) wwidth = width
@@ -454,14 +403,14 @@ contains
         h1 = n1/2; h2 = n2/2; h3 = n3/2
         do j = 1, h2
             jr   = n2 + 1 - j
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             do k = 1, h3
                 kr   = n3 + 1 - k
-                cks2 = mem_msk_cks2(k)
+                cks2 = mem_msk_cs2(k)
                 !$omp simd
                 do i = 1, h1
                     ir = n1 + 1 - i
-                    r2 = mem_msk_cis2(i) + cjs2 + cks2
+                    r2 = mem_msk_cs2(i) + cjs2 + cks2
                     e  = cosedge_r2_3d(r2, minlen, mskrad)
                     if (e > 0.9999) cycle
                     self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )
@@ -475,15 +424,23 @@ contains
                 end do
             end do
         end do
-    end subroutine mask3D_soft_serial
+    end subroutine mask3D_soft
 
-    module subroutine mask3D_softavg_serial(self, mskrad, width, backgr)
+    module subroutine mask3D_softavg(self, mskrad, width, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
         real(dp) :: sumv, sv
         real     :: wwidth, rad_sq, ave, r2, e, cjs2, cks2
         integer  :: minlen, npix,  i, j, k, n1, n2, n3, np, n1l, n2l, n3l
+        if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
+        if( self%ldim(1) /= mem_msk_box  )then
+            if( OMP_IN_PARALLEL() )then
+                THROW_HARD('incongruent mask memoization')
+            else
+                call memoize_mask_coords(self)
+            endif
+        endif
         ! width
         wwidth = 10.0
         if (present(width)) wwidth = width
@@ -502,11 +459,11 @@ contains
         sv = 0.0_dp; np = 0
         ! avg outside radius (r^2 only)
         do k = 1, n3l
-            cks2 = mem_msk_cks2(k)
+            cks2 = mem_msk_cs2(k)
             do j = 1, n2l
-                cjs2 = mem_msk_cjs2(j)
+                cjs2 = mem_msk_cs2(j)
                 do i = 1, n1l
-                    r2 = mem_msk_cis2(i) + cjs2 + cks2 
+                    r2 = mem_msk_cs2(i) + cjs2 + cks2 
                     if (r2 > rad_sq) then
                         np = np + 1
                         sv = sv + real(self%rmat(i,j,k), dp)
@@ -518,11 +475,11 @@ contains
         ave = real(sv / real(np, dp))
         ! apply (cache-friendly: k,j,i; i contiguous)
         do k = 1, n3l
-            cks2 = mem_msk_cks2(k)
+            cks2 = mem_msk_cs2(k)
             do j = 1, n2l
-                cjs2 = mem_msk_cjs2(j)
+                cjs2 = mem_msk_cs2(j)
                 do i = 1, n1l
-                    r2 = mem_msk_cis2(i) + cjs2 + cks2 
+                    r2 = mem_msk_cs2(i) + cjs2 + cks2 
                     e  = cosedge_r2_3d(r2, minlen, mskrad)
                     if (e < 0.0001) then
                         self%rmat(i,j,k) = ave
@@ -532,13 +489,21 @@ contains
                 end do
             end do
         end do
-    end subroutine mask3D_softavg_serial
+    end subroutine mask3D_softavg
 
-    module subroutine mask3D_hard_serial(self, mskrad)
+    module subroutine mask3D_hard(self, mskrad)
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
         real     :: r2, e, cjs2, cks2
-        integer  :: i, j, k, ir, jr, kr, h1, h2, h3, n1, n2, n3 
+        integer  :: i, j, k, ir, jr, kr, h1, h2, h3, n1, n2, n3
+        if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
+        if( self%ldim(1) /= mem_msk_box  )then
+            if( OMP_IN_PARALLEL() )then
+                THROW_HARD('incongruent mask memoization')
+            else
+                call memoize_mask_coords(self)
+            endif
+        endif
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
@@ -546,14 +511,14 @@ contains
         h1 = n1/2; h2 = n2/2; h3 = n3/2
         do j = 1, h2
             jr   = n2 + 1 - j
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             do k = 1, h3
                 kr   = n3 + 1 - k
-                cks2 = mem_msk_cks2(k)
+                cks2 = mem_msk_cs2(k)
                 !$omp simd
                 do i = 1, h1
                     ir = n1 + 1 - i
-                    r2 = mem_msk_cis2(i) + cjs2 + cks2 
+                    r2 = mem_msk_cs2(i) + cjs2 + cks2 
                     e  = hardedge_r2_3d(r2, mskrad)
                     if (e > 0.9999) cycle
                     self%rmat(i ,j ,k )  = e * self%rmat(i ,j ,k )
@@ -567,7 +532,7 @@ contains
                 end do
             end do
         end do
-    end subroutine mask3D_hard_serial
+    end subroutine mask3D_hard
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)

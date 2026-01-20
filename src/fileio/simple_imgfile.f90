@@ -258,7 +258,6 @@ contains
     !>  \brief  reads a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rSlices( self, first_slice, last_slice, rarr, is_mrc )
-        use, intrinsic :: iso_c_binding
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
@@ -379,7 +378,6 @@ contains
     !!          2-Dimensional images are assumed
     subroutine rTiffSlices( self, image_index, rarr )
         use simple_string_utils, only: int2str, to_cstring
-        use, intrinsic :: iso_c_binding
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: image_index  !<
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
@@ -516,7 +514,6 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
-        use, intrinsic :: iso_c_binding
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
@@ -645,8 +642,7 @@ contains
 
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
-    subroutine wmrcSlices( self, first_slice, last_slice, rarr, ldim, is_ft )
-        use, intrinsic :: iso_c_binding
+    subroutine wmrcSlices( self, first_slice, last_slice, rarr, ldim, is_ft )        
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
@@ -692,7 +688,6 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine update_MRC_stats( self, stats )
-        use, intrinsic :: iso_c_binding
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         real,                   intent(in)    :: stats(4)
         select case(self%head_format)

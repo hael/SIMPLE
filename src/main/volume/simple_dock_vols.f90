@@ -1,7 +1,5 @@
 module simple_dock_vols
 use simple_core_module_api
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_image,            only: image
 use simple_projector,        only: projector
 use simple_simple_volinterp, only: rotvol
@@ -90,7 +88,7 @@ contains
         self%box = self%ldim(1)
         call self%vol_ref%new(self%ldim, self%smpd)
         call self%vol_ref%read(vol_ref_fname)
-        call self%vol_ref%mask(self%msk, 'soft')
+        call self%vol_ref%mask3D_soft(self%msk)
         smpd_target = max(self%smpd, (self%lp * LP2SMPD_TARGET))
         call autoscale(self%box, self%smpd, smpd_target, self%box_clip, self%smpd_clip, self%scale, minbox=64)
         self%ldim_clip = [self%box_clip,self%box_clip,self%box_clip]
@@ -111,7 +109,7 @@ contains
         if( any(ldim_here /= self%ldim ) ) THROW_HARD('Nonconforming volume dimensions')
         call self%vol%new(self%ldim, self%smpd)
         call self%vol%read(vol_fname)
-        call self%vol%mask(self%msk, 'soft')
+        call self%vol%mask3D_soft(self%msk)
         ! clip
         call self%vol%fft
         call self%vol%clip_inplace(self%ldim_clip)

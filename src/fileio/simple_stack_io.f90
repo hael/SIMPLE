@@ -1,6 +1,5 @@
 ! This type is for single-threaded buffered contiguous reading/writing of image stacks and volumes
 module simple_stack_io
-use, intrinsic :: iso_c_binding
 use simple_core_module_api
 use simple_image,   only: image
 use simple_imgfile, only: imgfile

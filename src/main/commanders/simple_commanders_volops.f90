@@ -274,7 +274,7 @@ contains
         call vol_no_bfac%write(fname_lp)
         ! mask
         call vol_bfac%ifft()
-        call vol_bfac%mask(params%msk_crop, 'soft')
+        call vol_bfac%mask3D_soft(params%msk_crop)
         ! output in cwd
         call vol_bfac%write(fname_pproc)
         ! also output mirrored by default (unless otherwise stated on command line)
@@ -396,7 +396,7 @@ contains
         call vol_no_bfac%write(fname_lp)
         ! mask
         call vol_bfac%ifft()
-        call vol_bfac%mask(params%msk_crop, 'soft')
+        call vol_bfac%mask3D_soft(params%msk_crop)
         ! output in cwd
         call vol_bfac%write(fname_pproc)
         ! also output mirrored by default (unless otherwise stated on command line)
@@ -454,7 +454,7 @@ contains
             if( any(states==s) )then
                 ! read and mask
                 call build%vol%read(params%vols(s))
-                if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft',backgr=0.)
+                if(cline%defined('mskdiam')) call build%vol%mask3D_soft(params%msk,backgr=0.)
                 ! project
                 where( states == s )
                     tmp = 1
@@ -667,7 +667,7 @@ contains
             call build%vol%write(fbody//'_centered.mrc')
         endif
         ! mask volume
-        call build%vol%mask(params%msk_crop, 'soft')
+        call build%vol%mask3D_soft(params%msk_crop)
         ! init search object
         call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
         ! search
@@ -760,7 +760,7 @@ contains
             params%zsh = 0.
         endif
         ! mask volume
-        call build%vol%mask(params%msk, 'soft')
+        call build%vol%mask3D_soft(params%msk)
         ! symmetrize
         call symmetrize_map(build%vol, params, build%vol2, symaxis)
         if( cline%defined('projfile') )then
@@ -835,7 +835,7 @@ contains
             call build%vol%shift(shvec)
         endif
         ! mask volume
-        call build%vol%mask(params%msk, 'soft')
+        call build%vol%mask3D_soft(params%msk)
         ! run test
         if(cline%defined('fname')) then
           call symmetry_tester(build%vol, params%msk, params%hp,&
@@ -870,7 +870,7 @@ contains
         if( .not.file_exists(params%vols(1)) ) THROW_HARD('cannot find the inputvolume')
         call build%vol%read(params%vols(1))
         ! masking
-        if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft', backgr=0.)
+        if(cline%defined('mskdiam')) call build%vol%mask3D_soft(params%msk, backgr=0.)
         call make_pcavol(build%vol, npix, avg, pcavec)
         ! pca allocation
         select case(trim(params%pca_mode))

@@ -1,7 +1,5 @@
 ! for calculation of correlation matrices
 module simple_corrmat
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_defs
 use simple_image,            only: image
@@ -31,11 +29,12 @@ contains
         integer :: iptcl, jptcl, ipair, cnt
         nptcls = size(imgs)
         ! prep imgs for corrcalc
+        call imgs(1)%memoize_mask_coords
         do iptcl=1,nptcls
             if( present(lp) )then
                 ! if( .not. present(msk) ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
                 ! apply a soft-edged mask
-                call imgs(iptcl)%mask(msk, 'soft')
+                call imgs(iptcl)%mask2D_soft(msk)
                 ! Fourier transform
                 call imgs(iptcl)%fft()
             endif
@@ -90,11 +89,12 @@ contains
         domsk    = present(msk)
         doftcalc = present(lp)
         ! prep sel imgs for corrcalc
+        call imgs_sel(1)%memoize_mask_coords
         do iptcl=1,nsel
             if( doftcalc )then
                 ! if( .not. domsk ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
                 ! apply a soft-edged mask
-                call imgs_sel(iptcl)%mask(msk, 'soft')
+                call imgs_sel(iptcl)%mask2D_soft(msk)
                 ! Fourier transform
                 call imgs_sel(iptcl)%fft()
             endif
@@ -103,7 +103,7 @@ contains
         do iptcl=1,norig
             if( doftcalc )then
                 ! apply a soft-edged mask
-                call imgs_orig(iptcl)%mask(msk, 'soft')
+                call imgs_orig(iptcl)%mask2D_soft(msk)
                 ! Fourier transform
                 call imgs_orig(iptcl)%fft()
             endif

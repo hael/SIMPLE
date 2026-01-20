@@ -1,6 +1,5 @@
 ! Agglomerative hierarchical clustering using nearest-neighbor chain
 module simple_hclust
-!$ use omp_lib
 use simple_core_module_api
 implicit none
 

@@ -1,7 +1,5 @@
 ! 2D/3D envelope and adaptive masking
 module simple_image_msk
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image,      only: image
 use simple_image_bin,  only: image_bin

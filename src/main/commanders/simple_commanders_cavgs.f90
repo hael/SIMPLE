@@ -1,6 +1,4 @@
 module simple_commanders_cavgs
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_commander_module_api
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs

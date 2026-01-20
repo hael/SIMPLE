@@ -1,6 +1,5 @@
 module simple_starfile_wrappers
 use simple_core_module_api
-use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_NULL_CHAR, C_char, C_double, C_float, C_bool, C_long, C_F_pointer
 implicit none
 
 include "starfile_enum.inc"

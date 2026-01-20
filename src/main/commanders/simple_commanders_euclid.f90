@@ -138,7 +138,7 @@ contains
         call sum_img%get_cmat_ptr(cmat_sum)
         allocate(cmat_thr_sum(size(cmat_sum,dim=1),size(cmat_sum,dim=2),1))
         ! mask memoization
-        call build%imgbatch(1)%memoize_mask_serial_coords
+        call build%imgbatch(1)%memoize_mask_coords
         do i = 1,nptcls_part_sel,batchsz_max
             batchlims = [i, min(i+batchsz_max-1,nptcls_part_sel)]
             nbatch    = batchlims(2) - batchlims(1) + 1

@@ -1,7 +1,5 @@
 ! concrete commander: resolest for resolution estimation
 module simple_commanders_resolest
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_commander_module_api
 use simple_fsc
 use simple_commanders_euclid, only: commander_calc_pspec_distr
@@ -76,8 +74,8 @@ contains
             call phase_rand_fsc(even, odd, mskvol, params%msk, 1, nyq, fsc, fsc_t, fsc_n)
         else
             ! spherical masking
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk, 'soft')
+            call even%mask3D_soft(params%msk)
+            call odd%mask3D_soft(params%msk)
             call even%fft()
             call odd%fft()
             allocate(fsc(nyq),source=0.)
@@ -105,8 +103,6 @@ contains
     end subroutine exec_fsc
 
     subroutine exec_clin_fsc( self, cline )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_strategy2D3D_common
         use simple_polarops
         use simple_polarft_calc, only: polarft_calc
@@ -185,8 +181,8 @@ contains
             have_mask_file = .true.
         else
             ! spherical masking
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk, 'soft')
+            call even%mask3D_soft(params%msk)
+            call odd%mask3D_soft(params%msk)
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
@@ -200,8 +196,8 @@ contains
             call even%mul(mskvol)
             call odd%mul(mskvol)
         else
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk, 'soft')
+            call even%mask3D_soft(params%msk)
+            call odd%mask3D_soft(params%msk)
         endif
         call odd%write(file_tag//'_odd.mrc')
         call even%write(file_tag//'_even.mrc')
@@ -241,8 +237,8 @@ contains
                     &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
         ! soft masking needed for FT
-        call even%mask(params%msk, 'soft')
-        call  odd%mask(params%msk, 'soft')
+        call even%mask3D_soft(params%msk)
+        call  odd%mask3D_soft(params%msk)
         call estimate_lplim(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
         print *, 'found optimal low-pass limit: ', lpopt
         call odd_filt%write(string('odd_filt.mrc'))

@@ -778,7 +778,11 @@ contains
             call tmp%bp(0., lp)
         endif
         call tmp%ifft()
-        call tmp%mask(rmsk, 'hard')
+        if( self%ldim(3) == 1 )then
+            call tmp%mask2D_hard(rmsk)
+        else
+            call tmp%mask3D_hard(rmsk)
+        endif
         ! such that norm_minmax will neglect everything < 0. and preserve zero
         where(tmp%rmat < TINY) tmp%rmat=0.
         call tmp%norm_minmax
@@ -806,7 +810,7 @@ contains
                 call thread_safe_tmp_imgs(ithr)%bp(0., lp)
             endif
             call thread_safe_tmp_imgs(ithr)%ifft()
-            call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
+            call thread_safe_tmp_imgs(ithr)%mask2D_hard(msk)
             where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
             call thread_safe_tmp_imgs(ithr)%norm_minmax
             call thread_safe_tmp_imgs(ithr)%masscen(xyz)

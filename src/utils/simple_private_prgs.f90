@@ -356,7 +356,6 @@ contains
         call cmd_dict%push('moldiam',       'molecular diameter(in A)')
         call cmd_dict%push('mskdiam',       'mask diameter(in A)')
         call cmd_dict%push('mskfile',       'maskfile.ext')
-        call cmd_dict%push('msktype',       'type of mask(hard|soft){soft}')
         call cmd_dict%push('mul',           'origin shift multiplication factor{1}')
         call cmd_dict%push('mw',            'molecular weight(in kD)')
         call cmd_dict%push('msklist',       'table (text file) of mask volume files(.txt)')

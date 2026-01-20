@@ -76,18 +76,19 @@ allocate(yest( n_bin),       source=0.)
 allocate(yhist(n_bin),       source=0)
 find_stop  = calc_fourier_index(p%lpstart,   p%ldim(1), p%smpd)
 find_start = calc_fourier_index(p%lpstart_nonuni, p%ldim(1), p%smpd)
+call img%memoize_mask_coords
 do iptcl = 1, 1
     write(*, *) 'Particle # ', iptcl
     cur_fil = 0.
     call img%read(p%stk, iptcl)
     call img_noisy%copy(img)
     ! spherical masking
-    call img%mask(p%msk, 'soft')
+    call img%mask2D_soft(p%msk)
     ! img stats
     call img%stats('foreground', ave, sdev, maxv, minv)
     ! add noise in a small center region of the even
     call noise%gauran(0., .2 * sdev)
-    call noise%mask(1.5 * p%msk, 'soft')
+    call noise%mask2D_soft(1.5 * p%msk)
     call img_noisy%add(noise)
     call img_noisy%write(string('stk_noisy.mrc'), iptcl)
     call img_noisy%get_rmat_ptr(rmat_img_noisy)
