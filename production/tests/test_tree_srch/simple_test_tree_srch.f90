@@ -20,7 +20,7 @@ type(commander_pdb2mrc)  :: xpdb2mrc
 type(cmdline)            :: cline_pdb2mrc, cline
 type(multi_dendro)       :: test_tree
 real                     :: objs(2), t1, t2, simsum
-integer                  :: indxs(2), rc, ifoo, NPROJ = 100, nthr_max = 10, i, j
+integer                  :: indxs(2), rc, ifoo, NPROJ = 10, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
 real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr 
@@ -88,14 +88,14 @@ rt_ap = toc(t_ap)
 print *, 'N_PROJS:', NPROJ, 'ap time:', rt_ap, 'cc time:', rt_cc
 ! print *, simsum, size(centers), labels
 call test_tree%set_distmat(dist_mat_cc)
-call test_tree%set_medoids(centers)
+! call test_tree%set_medoids(centers)
 call test_tree%set_cls_pops(labels)
 call test_tree%set_subsets(labels)
 t_tr = tic()
 call test_tree%build_multi_dendro()
 rt_tr = toc(t_tr)
-call print_multi_dendro(test_tree, show_subset = .false.)
-print *, 'tree build time', rt_tr
+! call print_multi_dendro(test_tree, show_subset = .false.)
+! print *, 'tree build time', rt_tr
 ! print *, 'tree_build_time', rt_tr
 ! print *, 'pool', test_tree%root_array(1)%subset
 ! print *, 'right', test_tree%root_array(1)%right%subset
