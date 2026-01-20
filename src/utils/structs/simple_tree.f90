@@ -1,8 +1,7 @@
 module simple_tree  
 use simple_srch_sort_loc
-use iso_c_binding
-use iso_fortran_env
 use simple_hclust
+use simple_linked_list
 implicit none 
 #include "simple_local_flags.inc"
 
@@ -28,7 +27,6 @@ type  :: multi_dendro
    integer, allocatable       :: medoids(:)
    integer, allocatable       :: heights(:)
    integer  :: n_trees ! number of AP clusters
-   integer  :: linkage = 3
 contains 
    ! Setters / Getters
    procedure   :: get_heights
@@ -45,12 +43,13 @@ contains
       integer  :: k(self%n_trees)
       k = self%heights
    end function get_heights
-   
+
    pure subroutine set_cls_pops(self, labels)
       class(multi_dendro), intent(inout) :: self
       integer, intent(in)               :: labels(:)
       integer :: i
       if (allocated(self%cls_pops)) deallocate(self%cls_pops)
+      self%n_trees = maxval(labels)
       allocate(self%cls_pops(self%n_trees), source=0)
       do i = 1, self%n_trees
          self%cls_pops(i) = count(labels == i)
@@ -81,8 +80,9 @@ contains
       self%dist_mat = dist_mat
    end subroutine set_distmat
 
-   subroutine build_multi_dendro(self)
+   subroutine build_multi_dendro(self, linkage)
       class(multi_dendro), intent(inout)   :: self
+      integer, intent(in)  :: linkage
       real, allocatable    :: sub_distmat(:,:), height(:)
       integer, allocatable :: refs(:), merge_mat(:,:)
       integer  :: icls, i, j, ncls_ap, nref_sub
@@ -116,7 +116,7 @@ contains
          ! Aggl. Clustering
          allocate(merge_mat(2, nref_sub-1))
          allocate(height(nref_sub - 1))
-         call hc%new(nref_sub, sub_distmat, self%linkage)
+         call hc%new(nref_sub, sub_distmat, linkage)
          call hc%cluster(merge_mat, height)
          call hc%kill()
          ! Tracking Merges
@@ -212,30 +212,49 @@ contains
          call print_tree(root%left)
       end if 
    end subroutine print_tree
+   ! find cluster to which an aribitrary reference belongs to 
+   subroutine make_subtree_ll(self, ref_idx, tree_idx)
+      type(multi_dendro), intent(inout)   :: self 
+      integer, intent(in)        :: ref_idx
+      integer, intent(out)       :: tree_idx
+      type(s2_node), allocatable :: roots(:) 
+      integer, allocatable :: refs(:), tmp(:)
+      type(linked_list) :: list
+      integer           :: i, nrefs, ncls, icls, iref
+      allocate(roots(self%n_trees))
+      nrefs = size(self%dist_mat)
+      allocate(refs(nrefs))
+      do icls = 1, ncls
+         allocate(tmp(self%cls_pops(icls)))
+         tmp = self%node_store(icls)%nodes(self%node_store(icls)%root_idx)%subset
+         if(icls == 1) then
+            refs(1:size(tmp)) = tmp 
+         else 
+            refs(self%cls_pops(icls - 1):self%cls_pops(icls - 1) + self%cls_pops(icls)) = tmp
+         end if 
+         deallocate(tmp)
+      end do 
+      do iref = 1, nrefs
+         call list%push_back(iref)
+      end do 
+      do iref = 1, nrefs
+         call list%at_int(iref, refs(iref))
+      end do 
+   end subroutine make_subtree_ll
 
-   recursive subroutine walk_tree(root, indxs, objs, done)
+   subroutine search_tree4ref(root, ref_indx)
       type(s2_node), pointer, intent(inout) :: root 
       integer, intent(out)  :: indxs(2)
-      real, intent(in)    :: objs(2)
-      logical     :: done   
-      
-      root%left%F_ptcl2ref  = objs(1)
-      root%right%F_ptcl2ref = objs(2)
+      integer, intent(in)   :: ref_idx   
+      ! found which subtree to which reference belongs to 
+      ! dfs from bottom, maybe just follow to root node... 
+   end subroutine search_tree4ref
 
-      if(objs(1) > objs(2)) then 
-         root => root%left 
-      else 
-         root => root%right
-      end if 
-      root%visit = .true. 
-      if (.not.(associated(root%left) .and. associated(root%right))) then
-         done =.true. 
-         return
-      end if
 
-      indxs(1) = root%left%ref_idx
-      indxs(2) = root%right%ref_idx 
-   end subroutine walk_tree
+   recursive subroutine walk_anywhere() 
+
+
+   end subroutine walk_anywhere()
 
    recursive subroutine print_s2_tree(root, unit, indent, show_subset, max_subset)
       type(s2_node), intent(in) :: root
