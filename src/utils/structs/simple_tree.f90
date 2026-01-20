@@ -7,8 +7,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 type  :: s2_node 
-   type(s2_node), pointer   :: left => null(), right => null()
-   type(c_ptr)              :: parent = c_null_ptr
+   type(s2_node), pointer   :: left => null(), right => null(), parent => null()
    real        :: F_ptcl2ref  
    integer     :: level
    logical     :: visit = .false.
@@ -16,31 +15,31 @@ type  :: s2_node
    integer     :: ref_idx = 0
    integer, allocatable :: subset(:) ! array of refs remaining 
 end type s2_node
-
+type :: node_storage
+   type(s2_node), pointer :: nodes(:) => null()
+   integer :: root_idx = 0
+end type node_storage
 type  :: multi_dendro 
    type(s2_node), allocatable :: root_array(:)
+   type(node_storage), allocatable :: node_store(:)
    real, allocatable          :: dist_mat(:,:) ! full_distmat
    integer, allocatable       :: cls_pops(:) 
    integer, allocatable       :: subsets(:,:) 
    integer, allocatable       :: medoids(:)
    integer, allocatable       :: heights(:)
    integer  :: n_trees ! number of AP clusters
-   integer  :: linkage
+   integer  :: linkage = 3
 contains 
    ! Setters / Getters
    procedure   :: get_heights
    procedure   :: set_cls_pops  
    procedure   :: set_subsets
    procedure   :: set_distmat
-   procedure   :: set_medoids
    ! Constructor
    procedure   :: build_multi_dendro
 end type multi_dendro  
-
 contains 
 
-   ! getters / setters 
-   ! rewrite this 
    pure function get_heights(self) result(k)
       class(multi_dendro ), intent(in) :: self
       integer  :: k(self%n_trees)
@@ -72,6 +71,8 @@ contains
          self%subsets(i,:) = [tmp1, tmp2]
          deallocate(tmp1, tmp2)  
       end do 
+      if(allocated(self%root_array)) deallocate(self%root_array)
+      allocate(self%root_array(self%n_trees))
    end subroutine set_subsets
 
    pure subroutine set_distmat(self, dist_mat)
@@ -80,144 +81,126 @@ contains
       self%dist_mat = dist_mat
    end subroutine set_distmat
 
-   pure subroutine set_medoids(self, centers)
-      class(multi_dendro), intent(inout)  :: self
-      integer, intent(inout)           :: centers(:)
-      integer  :: i
-      if(allocated(self%root_array)) deallocate(self%root_array)
-      self%n_trees = size(centers)
-      allocate(self%root_array(self%n_trees))
-      do i = 1, size(centers)
-         self%root_array(i)%ref_idx = centers(i)
-      end do 
-   end subroutine 
-
-   subroutine build_multi_dendro (self)
+   subroutine build_multi_dendro(self)
       class(multi_dendro), intent(inout)   :: self
-      real, allocatable    :: tmp(:), sub_distmat(:,:)
-      logical, allocatable :: used(:)
-      integer  :: i, j, nref
-      type(hclust), allocatable  :: hierch_cls_arr(:)
-      ! Initialize each sub_tree 
-      allocate(self%heights(self%n_trees))
-      allocate(hierch_cls_arr(self%n_trees))
-      do i = 1, self%n_trees
-         self%root_array(i)%level = 0 
-         allocate(self%root_array(i)%subset(self%cls_pops(i)))
-         self%root_array(i)%subset = self%subsets(i,1:self%cls_pops(i))
-         self%root_array(i)%is_pop = .true.
-         self%heights(i) = 0
-         nref = size(self%dist_mat, 1)
-         allocate(used(nref), source = .false.)
-         used(self%root_array(i)%ref_idx) = .true.
-         call clust_insert_s2_node(self%root_array(i), self%dist_mat, 0, used)
-         deallocate(used)
-         ! allocate sub_distmat(self%cls_pos(i), self%cls_posp(i), source = 0.)
-         ! need map to from overall references to per AP cluster reference 
-         ! call hierch_cls_arr(i)%new()
-         ! don't need used references anymore 
-         ! don't need recursive subroutine, just do until node%subset size = AP cluster size
-         ! do while(size(root%subset) < self%cls_pops(i))
-         ! nodes come in with their dist mat (or 1 value initially)
-         ! call new(self, N, dmat, linkage) ! this is the full dmat
-         ! cluster(self, merge_mat, height, labels, ncls = 1) 
-         ! use cut tree to track all merges 
-         ! node --> parent, parent --> left, parent --> right
-         ! end do 
+      real, allocatable    :: sub_distmat(:,:), height(:)
+      integer, allocatable :: refs(:), merge_mat(:,:)
+      integer  :: icls, i, j, ncls_ap, nref_sub
+      type(hclust) :: hc
+      ncls_ap = self%n_trees
+      allocate(self%node_store(ncls_ap))
+      allocate(self%heights(ncls_ap))
+      do icls = 1, ncls_ap
+         nref_sub = self%cls_pops(icls)
+         allocate(refs(nref_sub))
+         refs = self%subsets(icls, 1:nref_sub)
+         allocate(sub_distmat(nref_sub, nref_sub))
+         sub_distmat = 1.0
+         do i=1,nref_sub
+            do j=i+1,nref_sub
+               sub_distmat(i,j) = self%dist_mat(refs(i), refs(j))
+               sub_distmat(j,i) = sub_distmat(i,j)
+            end do
+         end do
+         ! if cluster size is 1, done 
+         if(nref_sub == 1) then 
+            allocate(self%node_store(icls)%nodes(1))
+            self%node_store(icls)%nodes(1)%ref_idx = refs(1)
+            allocate(self%node_store(icls)%nodes(1)%subset(1))
+            self%node_store(icls)%nodes(1)%subset = [refs(1)]
+            self%node_store(icls)%root_idx = 1
+            self%heights(icls) = 0
+            deallocate(refs, sub_distmat)
+            cycle 
+         end if 
+         ! Aggl. Clustering
+         allocate(merge_mat(2, nref_sub-1))
+         allocate(height(nref_sub - 1))
+         call hc%new(nref_sub, sub_distmat, self%linkage)
+         call hc%cluster(merge_mat, height)
+         call hc%kill()
+         ! Tracking Merges
+         call merge2node(merge_mat, height, refs, self%node_store(icls)%nodes, self%node_store(icls)%root_idx)
+         ! point root to rest of the tree 
+         associate(r => self%node_store(icls)%nodes(self%node_store(icls)%root_idx))
+            self%root_array(icls)%left  => r%left
+            self%root_array(icls)%right => r%right
+            self%root_array(icls)%ref_idx = r%ref_idx
+            self%root_array(icls)%level   = r%level
+            if (allocated(self%root_array(icls)%subset)) deallocate(self%root_array(icls)%subset)
+            allocate(self%root_array(icls)%subset(size(r%subset)))
+            self%root_array(icls)%subset = r%subset
+         end associate
+         self%heights(icls) = nref_sub - 1
+         deallocate(sub_distmat, refs, merge_mat, height)
       end do 
-
       contains 
-         recursive subroutine clust_insert_s2_node(root, dist_mat, level, used)
-            type(s2_node), intent(inout), target:: root
-            real, intent(in)             :: dist_mat(:,:)
-            integer, intent(in)          :: level
-            logical, intent(inout)       :: used(:)
-            integer                    :: l, idx, new_med(2), closest, sec_closest, n, m
-            real                       :: d, d1, d2 
-            integer, allocatable       :: new_subset(:)
-            root%level = level
-            if(level > self%heights(i)) self%heights(i) = level
-            ! if (level == 0 .and. (size(root%subset) < 2)) return
-            closest     = -1 ; sec_closest = -1
-            d1 = huge(1.0) ; d2 = huge(1.0)
-            ! identify closest and 2nd closest to root of unused ref
-            do l = 1, size(root%subset)
-               idx = root%subset(l)
-               if (idx < 1) cycle               
-               if (idx == root%ref_idx) cycle
-               if (used(idx)) cycle            
-               d = dist_mat(idx, root%ref_idx)
-               if (d < d1) then
-                  d2 = d1
-                  sec_closest = closest
-                  d1 = d
-                  closest = idx
-               else if (d < d2) then
-                  d2 = d
-                  sec_closest = idx
+         subroutine merge2node(merge_mat, height, refs, nodes, root_idx)
+            integer, intent(in) :: merge_mat(:,:)
+            real,    intent(in) :: height(:)
+            integer, intent(in) :: refs(:)
+            type(s2_node), pointer, intent(inout) :: nodes(:)
+            integer, intent(out) :: root_idx
+            integer :: k, s, l, r, m, best, n_nodes
+            real    :: best_sum, sum 
+            integer, allocatable :: tmp(:)
+            n_nodes = 2*nref_sub - 1
+            allocate(nodes(n_nodes))
+            ! allocating nodes 
+            do k = 1, n_nodes
+               nullify(nodes(k)%left, nodes(k)%right, nodes(k)%parent)
+               nodes(k)%level      = 0
+               nodes(k)%visit      = .false.
+               nodes(k)%is_pop     = .false.
+               nodes(k)%ref_idx    = 0
+               ! nodes(k)%F_ptcl2ref = 0.0
+               if (allocated(nodes(k)%subset)) deallocate(nodes(k)%subset)
+               ! can set all leaves
+               if (k <= nref_sub) then
+                  nodes(k)%ref_idx = refs(k)
+                  nodes(k)%is_pop  = .true.
+                  nodes(k)%level   = 0 
+                  allocate(nodes(k)%subset(1))
+                  nodes(k)%subset = [refs(k)]
                end if
             end do
-            if (closest == -1 .and. sec_closest == -1) return
-            ! remove those from subset
-            if(level > 0 ) then 
-               allocate(new_subset(size(root%subset) - 2))
-            else 
-               allocate(new_subset(size(root%subset) - 3))
-            end if 
-            new_subset = pack(root%subset, &
-                  root%subset /= closest .and. &
-                  root%subset /= sec_closest .and. &
-                  root%subset /= root%ref_idx .and. &
-                  .not. used(root%subset))
-            ! if only one unused ref is available push left 
-            if (sec_closest == -1) then
-               used(closest) = .true.
-               allocate(root%left)
-               nullify(root%left%left, root%left%right)
-               root%left%parent = c_loc(root)
-               root%left%ref_idx = closest
-               root%left%level  = level + 1
-               root%left%visit  = .false.
-               root%left%is_pop = .true.
-               allocate(root%left%subset(size(new_subset)))
-               if (size(new_subset) > 0) root%left%subset = new_subset
-               if (allocated(new_subset)) deallocate(new_subset)
-               return
-            end if
-            ! if there's two children 
-            used(closest) = .true.
-            used(sec_closest) = .true.      
-            ! push 2nd closest left 
-            allocate(root%left)
-            nullify(root%left%left, root%left%right)
-            allocate(root%left%subset(size(new_subset)))
-            root%left%subset = new_subset
-            root%left%ref_idx = sec_closest
-            root%left%level = level + 1 
-            root%left%visit  = .false.
-            root%left%is_pop = .true.
-            root%left%parent = c_loc(root)
-            ! push closest right 
-            allocate(root%right)
-            nullify(root%right%left, root%right%right)
-            allocate(root%right%subset(size(new_subset)))
-            root%right%subset = new_subset
-            root%right%ref_idx = closest
-            root%right%level  = level + 1 
-            root%right%visit  = .false.
-            root%right%is_pop = .true.
-            root%right%parent = c_loc(root)         
-            deallocate(new_subset)
-            call clust_insert_s2_node(root%left,  dist_mat, level + 1, used)
-            call clust_insert_s2_node(root%right, dist_mat, level + 1, used)
-         end subroutine clust_insert_s2_node
-
-         ! subroutine 
-
-
-
-         ! end subroutine 
-
+            ! set internal nodes / root. 
+            m = size(refs)
+            do s = 1, nref_sub - 1
+               l = merge_mat(1, s)
+               r = merge_mat(2, s)
+               k = m + s
+               ! assigning pointers 
+               nodes(k)%left  => nodes(l)
+               nodes(k)%right => nodes(r)
+               nodes(l)%parent => nodes(k)
+               nodes(r)%parent => nodes(k)
+               nodes(k)%level      = s
+               nodes(k)%is_pop     = .true.
+               ! parent subset is union of children 
+               allocate(tmp(size(nodes(l)%subset) + size(nodes(r)%subset)))
+               tmp = [nodes(l)%subset, nodes(r)%subset]
+               allocate(nodes(k)%subset(size(tmp)))
+               nodes(k)%subset = tmp
+               deallocate(tmp)
+               ! Calculate a new medoid in merged set 
+               ! probably large opportunity to memoize (can store partial sums )
+               best = -1
+               best_sum = huge(1.0)
+               do i = 1, size(nodes(k)%subset)
+                  sum = 0.0
+                  do j = 1, size(nodes(k)%subset)
+                     sum = sum + self%dist_mat(nodes(k)%subset(i), nodes(k)%subset(j))
+                  end do
+                  if (sum < best_sum) then
+                     best_sum = sum 
+                     best = nodes(k)%subset(i)
+                  end if
+               end do
+               nodes(k)%ref_idx = best
+            end do
+            root_idx = n_nodes
+         end subroutine merge2node
    end subroutine build_multi_dendro   
 
    recursive subroutine print_tree(root)
@@ -359,6 +342,5 @@ contains
          write(u,'(/,"=== Tree ",i0," (root ref=",i0,") ===")') i, self%root_array(i)%ref_idx
          call print_s2_tree(self%root_array(i), unit=u, indent=0, show_subset=do_subset, max_subset=ms)
       end do
-   end subroutine print_multi_dendro
-
+   end subroutine print_multi_dendro      
 end module simple_tree
