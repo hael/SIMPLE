@@ -31,7 +31,7 @@ real, allocatable               :: dist_mat_cc(:,:), sub_distmats(:,:,:)
 type(image), allocatable        :: proj_arr(:)
 integer, allocatable            :: centers(:), labels(:), cls_pops(:)
 type(multi_dendro), allocatable :: roots(:)
-type(s2_node), pointer   :: p
+type(s2_node), pointer   :: rootp
 
 ! Load Volume 
 write(*, *) 'Downloading the example dataset...'
@@ -77,6 +77,8 @@ allocate(dist_mat_cc(NPROJ,NPROJ))
 t_cc = tic()
 dist_mat_cc = calc_inpl_invariant_cc_nomirr(p1%hp, p1%lp, p1%trs, proj_arr)
 rt_cc = toc(t_cc)
+
+print *, dist_mat_cc
 call normalize_minmax(dist_mat_cc)
 call affprop%new(NPROJ, dist_mat_cc, pref=-2.)
 t_ap = tic()
@@ -87,14 +89,17 @@ rt_ap = toc(t_ap)
 ! labels = [1,1,1,1,1,1,1,1,1,1]
 print *, 'N_PROJS:', NPROJ, 'ap time:', rt_ap, 'cc time:', rt_cc
 ! print *, simsum, size(centers), labels
+dist_mat_cc = 1. - dist_mat_cc
 call test_tree%set_distmat(dist_mat_cc)
-! call test_tree%set_medoids(centers)
 call test_tree%set_cls_pops(labels)
 call test_tree%set_subsets(labels)
 t_tr = tic()
-call test_tree%build_multi_dendro()
+call test_tree%build_multi_dendro(2)
 rt_tr = toc(t_tr)
-! call print_multi_dendro(test_tree, show_subset = .false.)
+print *, 'tree build time', rt_tr
+rootp => test_tree%node_store(1)%nodes(test_tree%node_store(1)%root_idx)
+call print_s2_tree(rootp)
+
 ! print *, 'tree build time', rt_tr
 ! print *, 'tree_build_time', rt_tr
 ! print *, 'pool', test_tree%root_array(1)%subset
