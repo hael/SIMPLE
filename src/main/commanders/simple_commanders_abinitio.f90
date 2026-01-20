@@ -340,7 +340,7 @@ contains
                     call simple_rename(src, dest)
                 enddo
             end subroutine rndstart
-    
+
             subroutine conv_eo( os )
                 class(oris), intent(in) :: os
                 type(sym) :: se
@@ -793,7 +793,13 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
             ! Reconstruction for polar representation
-            if( l_polar ) call calc_rec4polar( xreconstruct3D_distr, istage )
+            if( l_polar )then
+                if( l_ini3D .and. (istage==start_stage) )then
+                    ! reconstruction has been performed above
+                else
+                    call calc_rec4polar( xreconstruct3D_distr, istage )
+                endif
+            endif
             ! Executing the refinement with the above settings
             call exec_refine3D(istage, xrefine3D)
             ! Symmetrization
