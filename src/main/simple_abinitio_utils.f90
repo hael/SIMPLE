@@ -603,6 +603,7 @@ contains
         type(string)      :: src, dest, sstate, sstage, ext, pgrp
         integer :: i, inspace
         if( trim(params_glob%polar) /= 'yes' ) return
+        ! 3D Reconstruction only at the very beginning of phases 2 & 3
         if( (istage /= NSPACE_PHASE_POLAR(1)+1) .and. (istage /= NSPACE_PHASE_POLAR(2)+1) ) return
         ! Reconstruction
         pgrp = trim(params_glob%pgrp)
@@ -620,7 +621,7 @@ contains
         call cline_rec%set('projrec',   'yes')
         call cline_rec%set('trail_rec', 'no')
         if( cline_rec%get_carg('ml_reg').ne.'yes' )then
-            call cline_rec%set('objfun',    'cc')
+            call cline_rec%set('objfun','cc')
         endif
         call cline_rec%delete('update_frac')
         call cline_rec%delete('endit')
