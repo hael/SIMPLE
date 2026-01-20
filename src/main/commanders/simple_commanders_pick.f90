@@ -420,7 +420,6 @@ contains
     end subroutine exec_extract_distr
 
     subroutine exec_extract( self, cline )
-        use simple_ctf,                 only: ctf
         use simple_ctf_estimate_fit,    only: ctf_estimate_fit
         use simple_particle_extractor,  only: ptcl_extractor
         class(commander_extract), intent(inout) :: self
@@ -433,7 +432,6 @@ contains
         type(image)                             :: micrograph, micrograph_pad
         type(oris)                              :: os_mic
         type(ori)                               :: o_mic, o_tmp
-        type(ctf)                               :: tfun
         type(ctfparams)                         :: ctfparms
         type(ctf_estimate_fit)                  :: ctffit
         type(stack_io)                          :: stkio_w
@@ -641,18 +639,6 @@ contains
                     ! extraction from micrograph
                     call micrograph%read(mic_name, 1)
                     if( trim(params%backgr_subtr).eq.'yes') call micrograph%subtract_background(HP_BACKGR_SUBTR)
-                    ! phase-flip micrograph
-                    if( cline%defined('ctf') )then
-                        if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
-                            tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                            call micrograph%zero_edgeavg
-                            call micrograph%fft
-                            call tfun%apply_serial(micrograph, 'flip', ctfparms)
-                            call micrograph%ifft
-                            ! update stack ctf flag, mic flag unchanged
-                            ctfparms%ctfflag = CTFFLAG_FLIP
-                        endif
-                    endif
                     ! extraction
                     call extractor%extract_particles_from_mic(micrograph, ptcl_inds, nint(boxdata), imgs,&
                         &stk_min,stk_max,stk_mean,stk_sdev)
@@ -967,7 +953,6 @@ contains
     end subroutine exec_reextract_distr
 
     subroutine exec_reextract( self, cline )
-        use simple_ctf,                 only: ctf
         use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
         use simple_particle_extractor,  only: ptcl_extractor
         class(commander_reextract), intent(inout) :: self
@@ -977,7 +962,6 @@ contains
         type(builder)                 :: build
         type(image)                   :: micrograph, micrograph_sc
         type(ori)                     :: o_mic, o_stk
-        type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
         type(stack_io)                :: stkio_w
         type(ptcl_extractor)          :: extractor
@@ -1196,16 +1180,6 @@ contains
                         call micrograph%read(mic_name)
                         ! preprocess micrograph
                         if( trim(params%backgr_subtr).eq.'yes') call micrograph%subtract_background(HP_BACKGR_SUBTR)
-                        if( ctfparms%ctfflag == CTFFLAG_FLIP )then
-                            if( o_mic%isthere('dfx') )then
-                                ! phase flip micrograph
-                                tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                                call micrograph%zero_edgeavg
-                                call micrograph%fft
-                                call tfun%apply_serial(micrograph, 'flip', ctfparms)
-                                call micrograph%ifft
-                            endif
-                        endif
                         ! Actual extraction
                         if( l_scale_particles )then
                             ! scale

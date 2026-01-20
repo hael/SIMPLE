@@ -2282,7 +2282,7 @@ contains
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                        ! executable
-        &1, 5, 0, 0, 0, 0, 2, .true.,&                                          ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 0, 0, 2, .true.,&                                          ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "extract,compute")            ! GUI      
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2293,9 +2293,7 @@ contains
         extract%parm_ios(1)%required = .false.
         call extract%set_input('parm_ios', 2, pcontrast, gui_submenu="extract", gui_advanced=.false.)
         call extract%set_input('parm_ios', 3, outside, gui_submenu="extract")
-        call extract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases &
-        &flipped(flip|no){no}', '(flip|no){no}', .false., 'no', gui_submenu="extract")
-        call extract%set_input('parm_ios', 5, backgr_subtr, gui_submenu="extract")
+        call extract%set_input('parm_ios', 4, backgr_subtr, gui_submenu="extract")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3872,7 +3870,7 @@ contains
         &'Re-extract particle images from integrated movies',&                  ! descr_short
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
         &'simple_exec',&                                                  ! executable
-        &0, 6, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 5, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3882,9 +3880,8 @@ contains
         call reextract%set_input('parm_ios', 2, oritype)
         reextract%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl3D}'
         call reextract%set_input('parm_ios', 3, pcontrast)
-        call reextract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
-        call reextract%set_input('parm_ios', 5, backgr_subtr)
-        call reextract%set_input('parm_ios', 6, outside)
+        call reextract%set_input('parm_ios', 4, backgr_subtr)
+        call reextract%set_input('parm_ios', 5, outside)
         ! alternative inputs
         ! <empty>
         ! search controls
