@@ -333,7 +333,7 @@ contains
     end subroutine unmemoize4ctf_apply
 
     ! local fast CTF kernel (numerically equivalent refactor)
-    pure elemental real function fast_ctf_kernel( h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs ) result(tval)
+    pure elemental real function fast_ctf_kernel( h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs ) result( tval )
         integer, intent(in) :: h, k
         real,    intent(in) :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs
         real :: df, evalPhSh, sum_df, diff_df, cterm, pi_wl_s2
@@ -349,7 +349,7 @@ contains
     end function fast_ctf_kernel
 
     !>  \brief  is for generating an image of CTF
-    subroutine ctf2img( self, img, dfx_in, dfy_in, angast_in)
+    subroutine ctf2img( self, img, dfx_in, dfy_in, angast_in )
         class(ctf),       intent(inout) :: self
         class(image),     intent(inout) :: img
         real,             intent(in)    :: dfx_in, dfy_in, angast_in
@@ -419,7 +419,7 @@ contains
     end subroutine apply_serial
 
     ! apply CTF to image, CTF values are also returned
-    subroutine eval_and_apply( self, img, imode, tvalsdims, tvals, dfx_in, dfy_in, angast_in)
+    subroutine eval_and_apply( self, img, imode, tvalsdims, tvals, dfx_in, dfy_in, angast_in )
         use simple_image, only: image
         class(ctf),     intent(inout) :: self         !< instance
         class(image),   intent(inout) :: img          !< modified image (output)
@@ -455,12 +455,12 @@ contains
         end do
     end subroutine eval_and_apply
 
-    elemental real function kV2wl( self ) result (wavelength)
+    elemental real function kV2wl( self ) result( wavelength )
         class(ctf), intent(in) :: self
         wavelength = 12.26 / sqrt((1000.0 * self%kV) + (0.9784*(1000.0 * self%kV)**2)/(10.0**6.0))
     end function kV2wl
 
-    subroutine apply_convention(self, dfx, dfy, angast)
+    subroutine apply_convention( self, dfx, dfy, angast )
         class(ctf), intent(in)    :: self
         real,       intent(inout) :: dfx,dfy,angast
         real :: tmp
