@@ -3,8 +3,6 @@
 ! [110] = 2.77
 ! [111] = 6.79
 module simple_nanoparticle_utils
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_defs_atoms
 use simple_qr_solve

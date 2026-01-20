@@ -1,6 +1,4 @@
 module simple_pspecs
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image, only: image
 use simple_fsc,   only: plot_fsc
@@ -62,13 +60,14 @@ contains
         do ithr = 1, nthr_glob
             call cavg_threads(ithr)%new(ldim, self%smpd)
         end do
+        call cavg_threads(1)%memoize_mask_coords
         !$omp parallel do default(shared) private(ispec,ithr,pspec) proc_bind(close) schedule(static)
         do ispec = 1, self%nspecs
             ithr = omp_get_thread_num() + 1
             ! power spectrum
             call cavg_threads(ithr)%copy(imgs(ispec))
             call cavg_threads(ithr)%norm
-            call cavg_threads(ithr)%mask(msk, 'soft')
+            call cavg_threads(ithr)%mask2D_soft(msk)
             call cavg_threads(ithr)%spectrum('sqrt', pspec)
             self%pspecs(ispec,:) = pspec(self%kfromto(1):self%kfromto(2))
             deallocate(pspec)

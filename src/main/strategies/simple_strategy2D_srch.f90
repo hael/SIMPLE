@@ -1,14 +1,12 @@
 ! common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
 module simple_strategy2D_srch
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
-use simple_polarft_calc,  only: pftc_glob
+use simple_polarft_calc,     only: pftc_glob
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad ! gradient-based angle and shift search
-use simple_parameters,        only: params_glob
-use simple_builder,           only: build_glob
-use simple_eul_prob_tab2D,    only: eul_prob_tab2D
-use simple_strategy2D_alloc   ! s2D singleton
+use simple_parameters,       only: params_glob
+use simple_builder,          only: build_glob
+use simple_eul_prob_tab2D,   only: eul_prob_tab2D
+use simple_strategy2D_alloc  ! s2D singleton
 implicit none
 
 public :: strategy2D_srch, strategy2D_spec

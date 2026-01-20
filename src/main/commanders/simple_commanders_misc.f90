@@ -215,7 +215,8 @@ contains
         ! prep mask
         call img_msk%new([params_glob%box,params_glob%box,1],params_glob%smpd)
         img_msk = 1.
-        call img_msk%mask(params_glob%msk, 'hard')
+        call img_msk%memoize_mask_coords
+        call img_msk%mask2D_hard(params_glob%msk)
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         ! centers, calculates self to rotational averages images & radii
@@ -232,7 +233,7 @@ contains
             corrs(i) = read_img%real_corr(roavg_img, l_msk)
             ! radii
             call read_img%bp(0., params_glob%cenlp)
-            call read_img%mask(params_glob%msk, 'hard')
+            call read_img%mask2D_hard(params_glob%msk)
             call otsu_robust_fast(read_img, is2d=.true., noneg=.false., thresh=thresh)
             call read_img%write(string('bin.mrc'),i)
             call read_img%mul(dist_img)
@@ -294,7 +295,7 @@ contains
         call topview%roavg(nint(ang), roavg_img)
         topview = roavg_img
         call topview%norm()
-        call topview%mask(params_glob%msk, 'soft')
+        call topview%mask2D_soft(params_glob%msk)
         cylinder = 0.
         do i=1,params_glob%box
             if( abs( real(i-1)-real(params_glob%box)/2. ) < height/2.)then

@@ -1,6 +1,4 @@
 module simple_nanoparticle
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_defs_atoms
 use simple_image,      only: image
@@ -266,11 +264,11 @@ contains
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img%read(fname)
         if( present(msk) )then
-            call self%img%mask(msk, 'soft')
+            call self%img%mask3D_soft(msk)
         else
             call mskvol%estimate_spher_mask_diam(self%img, AMSKLP_NANO, msk_in_pix)
             write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * self%smpd
-            call self%img%mask(msk_in_pix, 'soft')
+            call self%img%mask3D_soft(msk_in_pix)
             call mskvol%kill
         endif
         call self%img_raw%copy(self%img)

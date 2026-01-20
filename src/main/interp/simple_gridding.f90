@@ -1,7 +1,5 @@
 ! utilities for convolution interpolation (gridding)
 module simple_gridding
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image,     only: image
 use simple_projector, only: projector

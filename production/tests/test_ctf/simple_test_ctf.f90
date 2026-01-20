@@ -1,6 +1,4 @@
 program simple_test_ctf
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image, only: image
 use simple_ctf,   only: ctf, memoize4ctf_apply, unmemoize4ctf_apply
@@ -17,5 +15,4 @@ call memoize4ctf_apply(img)
 call tfun%ctf2img(img, DFX, DFY, ANGAST)
 call img%ft2img('real', img_spec)
 call img_spec%write(string('ctfimg.mrc'))
-call unmemoize4ctf_apply
 end program simple_test_ctf

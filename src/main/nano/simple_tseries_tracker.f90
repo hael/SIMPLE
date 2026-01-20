@@ -1,7 +1,5 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
 module simple_track_trajectory
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_parameters, only: params_glob
 use simple_image,      only: image
@@ -125,6 +123,7 @@ contains
                 if( cnt==1 ) call frame_avg%add(frame_img,w=0.01)
             enddo
             ! prep images: norm, mask, filter, FFT
+            call ptcls(1)%memoize_mask_coords
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1,nrange
                 call ptcls(i)%norm
@@ -138,7 +137,7 @@ contains
                 end select
                 call ptcls_saved(i)%copy(ptcls(i))
                 call ptcls_saved(i)%fft
-                call ptcls(i)%mask(msk,'soft')
+                call ptcls(i)%mask2D_soft(msk)
                 call ptcls(i)%fft
             enddo
             !$omp end parallel do
@@ -181,7 +180,7 @@ contains
             end select
             call reference%shift(xyz)
             call reference%ifft
-            call reference%mask(msk,'soft')
+            call reference%mask2D_soft(msk)
             call reference%fft
             ! updates shifts
             pos = particle_locations(iframe,:)
@@ -338,7 +337,7 @@ contains
     ! PRIVATE FUNCTIONS
 
     function center_reference( iframe )result( shift )
-        use simple_image_bin,     only: image_bin
+        use simple_image_bin,    only: image_bin
         use simple_segmentation, only: otsu_robust_fast
         integer, intent(in) :: iframe
         type(image_bin)       :: img, tmp, tmpcc
@@ -352,7 +351,8 @@ contains
         call img%bp(0., params_glob%cenlp)
         call img%ifft()
         ! mask
-        call img%mask(0.45*real(params_glob%box), 'hard')
+        call img%memoize_mask_coords
+        call img%mask2D_soft(0.45*real(params_glob%box))
         ! median filtering
         call img%real_space_filter(5,'median')
         ! thresholding

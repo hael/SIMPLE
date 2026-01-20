@@ -38,8 +38,8 @@ contains
             ! reverts to sherical masking
             call even%ifft()
             call odd%ifft()
-            call even%mask(msk, 'soft')
-            call odd%mask(msk,  'soft')
+            call even%mask3D_soft(msk)
+            call odd%mask3D_soft(msk)
             call even%fft()
             call odd%fft()
             call even%fsc(odd, fsc)

@@ -1,6 +1,4 @@
 program simple_test_lpstages
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 implicit none
 #include "simple_local_flags.inc"

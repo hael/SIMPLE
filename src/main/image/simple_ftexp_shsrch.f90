@@ -391,7 +391,8 @@ contains
         call img_ref%new([32,32,1], 2.)
         call img_ptcl%new([32,32,1], 2.)
         img_ref = 1.
-        call img_ref%mask(8.,'soft',backgr=0.)
+        call img_ref%memoize_mask_coords
+        call img_ref%mask2D_soft(8.,backgr=0.)
         call img_ref%fft()
         call ftexp_ref%new(img_ref, hp, lp, .true.)
         call ftexp_ptcl%new(img_ptcl, hp, lp, .false.)

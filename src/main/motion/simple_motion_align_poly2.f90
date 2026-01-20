@@ -1,6 +1,4 @@
 module simple_motion_align_poly2
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image,          only: image, image_stack
 use simple_ft_expanded_dp, only: ft_expanded_dp

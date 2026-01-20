@@ -1,7 +1,5 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commanders_cluster2D
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_commander_module_api
 use simple_classaverager
 use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr, commander_cavgassemble

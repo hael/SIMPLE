@@ -1,7 +1,5 @@
 ! class probability table eul_prob_tab2D, used in abinitio2D
 module simple_eul_prob_tab2D
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_parameters,       only: params_glob
 use simple_builder,          only: build_glob

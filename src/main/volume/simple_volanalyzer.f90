@@ -123,13 +123,13 @@ contains
         ! calculate volume correlations
         call vol_medoid%new(ldim, params_glob%smpd)
         call vol_medoid%read(volnames(i_medoid))
-        call vol_medoid%mask(params_glob%msk, 'soft')
+        call vol_medoid%mask3D_soft(params_glob%msk)
         call vol_docked%new(ldim, params_glob%smpd)
         call fopen(funit, string('volanayze_stats.txt'), 'replace', 'unknown')
         do i = 1, nvols
             volfname = 'vol_docked'//int2str_pad(i,2)//'.mrc'
             call vol_docked%read(volfname)
-            call vol_docked%mask(params_glob%msk, 'soft')
+            call vol_docked%mask3D_soft(params_glob%msk)
             cc = vol_medoid%corr(vol_docked, params_glob%lp, params_glob%hp)
             if( i == i_medoid )then
                 write(funit,'(A,1X,I2,1X,A,1X,F7.3,1X,A)') '>>> VOLUME:', i, '>>> CORRELATION:', cc, '***MEDOID***'

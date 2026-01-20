@@ -1,7 +1,5 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_strategy2D3D_common
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_builder,           only: build_glob
 use simple_cmdline,           only: cmdline
@@ -474,7 +472,7 @@ contains
             call img_out%ICM2D( params_glob%lambda, verbose=.false. )
         endif
         ! apply mask
-        call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+        call img_out%mask2D_soft(params_glob%msk_crop, backgr=0.0)
         ! gridding prep
         call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! move to Fourier space
@@ -644,8 +642,8 @@ contains
             call build_glob%vol_odd%mul(build_glob%mskvol)
         else
             ! circular masking
-            call build_glob%vol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
-            call build_glob%vol_odd%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+            call build_glob%vol%mask3D_soft(params_glob%msk_crop, backgr=0.0)
+            call build_glob%vol_odd%mask3D_soft(params_glob%msk_crop, backgr=0.0)
         endif
         ! FILTER
         if( params_glob%l_icm )then
@@ -674,7 +672,7 @@ contains
                 call build_glob%vol%mul(build_glob%mskvol)
             else
                 ! circular masking
-                call build_glob%vol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+                call build_glob%vol%mask3D_soft(params_glob%msk_crop, backgr=0.0)
             endif
             ! odd <- even
             call build_glob%vol_odd%copy(build_glob%vol)
@@ -828,8 +826,6 @@ contains
 
     !> Volumetric 3d reconstruction from summed projection directions
     subroutine calc_projdir3Drec( cline, nptcls2update, pinds )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_fplane,   only: fplane
         use simple_gridding, only: gen_instrfun_img
         use simple_timer
@@ -1298,7 +1294,7 @@ contains
         call pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
         ! mask memoization for prepimg4align
-        call tmp_imgs(1)%memoize_mask_serial_coords
+        call tmp_imgs(1)%memoize_mask_coords
         ! get instrument function
         img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
         ! memoize CTF stuff

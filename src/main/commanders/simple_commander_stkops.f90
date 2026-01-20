@@ -467,12 +467,13 @@ contains
         mskrad   = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
         ! create the stuff needed in the loop
         allocate(mm(nimgs,2), source=0.)
+        call stk_imgs(1)%memoize_mask_coords
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, nimgs
             ! normalization
             call stk_imgs(i)%norm
             ! mask
-            call stk_imgs(i)%mask(mskrad, 'soft', backgr=0.)
+            call stk_imgs(i)%mask2D_soft(mskrad, backgr=0.)
             ! stash minmax
             mm(i,:) = stk_imgs(i)%minmax(mskrad)
         end do
@@ -532,12 +533,13 @@ contains
         mskrad         = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
         ! create the stuff needed in the loop
         allocate(mm_ref(nrefs,2), source=0.)
+        call stk_imgs_ref(1)%memoize_mask_coords
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, nrefs
             ! normalization
             call stk_imgs_ref(i)%norm
             ! mask
-            call stk_imgs_ref(i)%mask(mskrad, 'soft', backgr=0.)
+            call stk_imgs_ref(i)%mask2D_soft(mskrad, backgr=0.)
             ! stash minmax
             mm_ref(i,:) = stk_imgs_ref(i)%minmax(mskrad)
         end do

@@ -1,7 +1,5 @@
 ! operations on micrographs
 module simple_micproc
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image,     only: image
 use simple_image_bin, only: image_bin
@@ -574,12 +572,13 @@ contains
         call img%ifft
         allocate(scores(ldim(1),ldim(2)),source=0.)
         allocate(counts(ldim(1),ldim(2)),source=0)
+        call boximgs_heap(1)%memoize_mask_coords
         !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,ithr,outside,score) proc_bind(close)
         do i = 1,ldim(1)-BOX+1,BOX/2
             do j = 1,ldim(2)-BOX+1,BOX/2
                 ithr = omp_get_thread_num() + 1
                 call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
-                call boximgs_heap(ithr)%mask(radius,'soft')
+                call boximgs_heap(ithr)%mask2D_soft(radius)
                 call boximgs_heap(ithr)%fft
                 call boximgs_heap(ithr)%calc_ice_score(score)
                 !$omp critical
@@ -594,7 +593,7 @@ contains
         do j = 1,ldim(2)-BOX+1,BOX/2
             ithr = omp_get_thread_num() + 1
             call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
-            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%mask2D_soft(radius)
             call boximgs_heap(ithr)%fft
             call boximgs_heap(ithr)%calc_ice_score(score)
             !$omp critical
@@ -608,7 +607,7 @@ contains
         do i = 1,ldim(1)-BOX+1,BOX/2
             ithr = omp_get_thread_num() + 1
             call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
-            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%mask2D_soft(radius)
             call boximgs_heap(ithr)%fft
             call boximgs_heap(ithr)%calc_ice_score(score)
             !$omp critical

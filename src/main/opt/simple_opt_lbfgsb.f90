@@ -54,8 +54,6 @@ contains
     subroutine lbfgsb_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(opt_lbfgsb), intent(inout) :: self        !< instance
         class(opt_spec),   intent(inout) :: spec        !< specification
         class(*),          intent(inout) :: fun_self    !< self-pointer for cost function

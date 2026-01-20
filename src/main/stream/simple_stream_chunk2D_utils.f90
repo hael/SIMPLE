@@ -243,6 +243,9 @@ contains
         integer,         intent(out)   :: nchunks_imported
         type(string) :: fname
         integer      :: i, id, nchunks2import
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
+        endif
         nchunks_imported = 0
         if( .not.allocated(converged_chunks) ) return
         nchunks2import = size(converged_chunks)

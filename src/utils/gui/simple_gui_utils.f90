@@ -65,14 +65,14 @@ contains
         iy = 1
         l_ntiles = 0
         ! mask memoization
-        call img%memoize_mask_serial_coords
+        call img%memoize_mask_coords
         do icls=1, ncls_here
             if(present(msk)) then
                 if( .not. msk(icls)) cycle
             end if
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
-            if(present(mskdiam_px)) call img%mask2D_softavg_serial(mskdiam_px / 2.0)
+            if(present(mskdiam_px)) call img%mask2D_softavg(mskdiam_px / 2.0)
             call img%fft
             if(ldim_stk(1) > JPEG_DIM) then
                 call img%clip(img_pad)

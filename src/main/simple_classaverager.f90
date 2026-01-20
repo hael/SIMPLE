@@ -1,6 +1,5 @@
 module simple_classaverager
 use simple_core_module_api
-!$ use omp_lib
 use simple_builder,           only: build_glob
 use simple_ctf,               only: ctf, memoize4ctf_apply, unmemoize4ctf_apply
 use simple_discrete_stack_io, only: dstack_io
@@ -581,15 +580,15 @@ contains
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
         end do
-        call even_imgs(1)%memoize_mask_serial_coords
+        call even_imgs(1)%memoize_mask_coords
         if( l_ml_reg )then
             !$omp parallel do default(shared) private(icls,frc,find,pop,eo_pop) schedule(static) proc_bind(close)
             do icls=1,ncls
                 eo_pop = eo_class_pop(icls)
                 pop    = sum(eo_pop)
                 if( pop > 0 )then
-                    call even_imgs(icls)%mask2D_soft_serial(params_glob%msk_crop)
-                    call odd_imgs(icls)%mask2D_soft_serial(params_glob%msk_crop)
+                    call even_imgs(icls)%mask2D_soft(params_glob%msk_crop)
+                    call odd_imgs(icls)%mask2D_soft(params_glob%msk_crop)
                     call even_imgs(icls)%fft()
                     call odd_imgs(icls)%fft()
                     call even_imgs(icls)%fsc(odd_imgs(icls), frc)
@@ -635,11 +634,11 @@ contains
             end do
             !$omp end parallel do
         else
-            call even_imgs(1)%memoize_mask_serial_coords
+            call even_imgs(1)%memoize_mask_coords
             !$omp parallel do default(shared) private(icls,frc,find) schedule(static) proc_bind(close)
             do icls=1,ncls
-                call even_imgs(icls)%mask2D_soft_serial(params_glob%msk_crop)
-                call odd_imgs(icls)%mask2D_soft_serial(params_glob%msk_crop)
+                call even_imgs(icls)%mask2D_soft(params_glob%msk_crop)
+                call odd_imgs(icls)%mask2D_soft(params_glob%msk_crop)
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)

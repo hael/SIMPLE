@@ -1,6 +1,4 @@
 module simple_exec_helpers
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_qsys_env,   only: qsys_env
 use simple_parameters, only: parameters, params_glob

@@ -1,7 +1,5 @@
 ! projection-matching based on Hadamard products, high-level search routines for CLUSTER2D
 module simple_strategy2D_matcher
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_builder,                only: build_glob
 use simple_cmdline,                only: cmdline
@@ -515,7 +513,7 @@ contains
             call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
         endif
         ! mask memoization for prepimg4align
-        call ptcl_match_imgs(1)%memoize_mask_serial_coords
+        call ptcl_match_imgs(1)%memoize_mask_coords
         ! get instrument function
         img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
         ! memoize CTF stuff
@@ -603,7 +601,7 @@ contains
         allocate(match_imgs(params_glob%ncls),tmp_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! mask memoization
-        call cavgs_merged(1)%memoize_mask_serial_coords
+        call cavgs_merged(1)%memoize_mask_coords
         ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
@@ -697,7 +695,7 @@ contains
             call polar_cavger_refs2cartesian(pftc, tmp_imgs, 'merged')
             call tmp_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
             ! mask memoization
-            call tmp_imgs(1)%memoize_mask_serial_coords
+            call tmp_imgs(1)%memoize_mask_coords
         endif
         ! PREPARATION OF REFERENCES IN pftc
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,xyz,l_center)&

@@ -945,7 +945,7 @@ contains
         iy = 1
         ntiles = 0
         ! mask memoization
-        call img%memoize_mask_serial_coords
+        call img%memoize_mask_coords
         do icls=1, ncls_here
             if(pool_proj%os_cls2D%get(icls,'state') < 0.5) cycle
             if(pool_proj%os_cls2D%get(icls,'pop')   < 0.5) cycle
@@ -954,7 +954,7 @@ contains
             pool_jpeg_res = [pool_jpeg_res, pool_proj%os_cls2D%get(icls,'res')]
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
-            call img%mask2D_softavg_serial(params_glob%mskdiam / (2 * pool_dims%smpd))
+            call img%mask2D_softavg(params_glob%mskdiam / (2 * pool_dims%smpd))
             call img%fft
             if(ldim_stk(1) > JPEG_DIM) then
                 call img%clip(img_pad)

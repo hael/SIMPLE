@@ -599,18 +599,13 @@ contains
         call img%kill
     end subroutine apply_ctf_imgfile
 
-    subroutine mask_imgfile( fname2mask, fname, mskrad, smpd, width, which )
+    subroutine mask_imgfile( fname2mask, fname, mskrad, smpd )
         class(string),              intent(in) :: fname2mask, fname
         real,                       intent(in) :: mskrad
         real,                       intent(in) :: smpd
-        real,             optional, intent(in) :: width
-        character(len=*), optional, intent(in) :: which
         type(stack_io)        :: stkio_r, stkio_w
         type(image)           :: img
         integer               :: n, i, ldim(3)
-        character(len=STDLEN) :: msktype
-        msktype = 'soft'
-        if( present(which) )msktype=which
         call find_ldim_nptcls(fname2mask, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'mask_imgfile' )
@@ -618,12 +613,12 @@ contains
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
         write(logfhandle,'(a)') '>>> MASKING IMAGES'
-        call img%memoize_mask_serial_coords
+        call img%memoize_mask_coords
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
             call img%norm()
-            call img%mask(mskrad, which, width=width)
+            call img%mask2D_softavg(mskrad)
             call stkio_w%write(i, img)
         end do
         call stkio_r%close

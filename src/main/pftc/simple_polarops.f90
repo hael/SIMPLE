@@ -1,7 +1,5 @@
 module simple_polarops
 use simple_core_module_api
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_builder,          only: builder, build_glob
 use simple_image,            only: image
 use simple_parameters,       only: params_glob

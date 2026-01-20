@@ -641,14 +641,14 @@ contains
     !!
     !!  This is a *fuse-only* drop-in building block for later optimization:
     !!    1) norm_noise (two-pass stats on .not. lmsk, then fftshift + normalize)
-    !!    2) mask2D_softavg_serial (uses mem_msk_* tables + cosedge_r2_2d)
+    !!    2) mask2D_softavg (uses mem_msk_* tables + cosedge_r2_2d)
     !!    3) FFT r2c + scale
     !!    4) power_spectrum (2D path)
     !!
     !!  Assumptions:
     !!    - 2D images: self%ldim(3)=1
     !!    - self has plan_fwd, rmat/cmat allocated
-    !!    - mem_msk_cis2/mem_msk_cjs2 are already memoized for this image size
+    !!    - mem_msk_cs2/mem_msk_cs2 are already memoized for this image size
     module subroutine norm_noise_mask_fft_powspec( self, lmsk, mskrad, spec )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
@@ -658,7 +658,7 @@ contains
         integer  :: n1, n2, h1, h2, i, j, ii, jj, npix
         real(dp) :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
         real(c_float) :: mean_sp, invstd_sp, scale_cmat, rswap
-        ! ---- locals: mask2D_softavg_serial ----
+        ! ---- locals: mask2D_softavg ----
         real     :: rad_sq, ave, r2, e, cjs2
         integer  :: minlen, np, n1l, n2l
         real(dp) :: sv
@@ -728,7 +728,7 @@ contains
             end do
         end if
         ! ============================================================
-        ! 2) MASK (softavg) in real-space (same math as mask2D_softavg_serial)
+        ! 2) MASK (softavg) in real-space (same math as mask2D_softavg)
         ! ============================================================
         n1l = n1
         n2l = n2
@@ -738,9 +738,9 @@ contains
         sv = 0.0_dp
         np = 0
         do j = 1, n2l
-            cjs2 =  mem_msk_cjs2(j)
+            cjs2 =  mem_msk_cs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cis2(i) + cjs2
+                r2 = mem_msk_cs2(i) + cjs2
                 if (r2 > rad_sq) then
                     np = np + 1
                     sv = sv + real(self%rmat(i,j,1), dp)
@@ -750,9 +750,9 @@ contains
         if (np <= 0) return
         ave = real(sv / real(np, dp))
         do j = 1, n2l
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cis2(i) + cjs2 
+                r2 = mem_msk_cs2(i) + cjs2 
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e < 0.0001) then
                     self%rmat(i,j,1) = ave
@@ -833,9 +833,9 @@ contains
         sv = 0.0_dp
         np = 0
         do i = 1, n1
-            cis2 = mem_msk_cis2(i)
+            cis2 = mem_msk_cs2(i)
             do j = 1, n2
-                r2 = cis2 + mem_msk_cjs2(j)
+                r2 = cis2 + mem_msk_cs2(j)
                 if (r2 > rad_sq) then
                     np = np + 1
                     sv = sv + real(self%rmat(i,j,1), dp)
@@ -855,12 +855,12 @@ contains
         ! ============================================================
         ! Process with mask and division
         do j = 1, n2
-            cjs2 = mem_msk_cjs2(j)
+            cjs2 = mem_msk_cs2(j)
             do i = 1, n1
                 v_val = self%rmat(i, j, 1)
                 u_val = instrfun%rmat(i, j, 1)
                 ! Apply softavg mask
-                r2 = mem_msk_cis2(i) + cjs2
+                r2 = mem_msk_cs2(i) + cjs2
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e < EPS_E) then
                     v_val = ave

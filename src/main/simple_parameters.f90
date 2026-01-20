@@ -1,7 +1,5 @@
 ! provides global distribution of constants and derived constants
 module simple_parameters
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_cmdline,        only: cmdline
 use simple_user_interface, only: simple_program, get_prg_ptr
@@ -234,7 +232,6 @@ type :: parameters
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
-    character(len=STDLEN)     :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
@@ -747,7 +744,6 @@ contains
         call check_carg('ml_reg',         self%ml_reg)
         call check_carg('ml_reg_chunk',   self%ml_reg_chunk)
         call check_carg('ml_reg_pool',    self%ml_reg_pool)
-        call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('multi_moldiams', self%multi_moldiams)
         call check_carg('multivol_mode',  self%multivol_mode)

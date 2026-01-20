@@ -1,7 +1,5 @@
 ! This type is for single-threaded non-contiguous reading of image stacks
 module simple_discrete_stack_io
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_core_module_api
 use simple_image,   only: image, image_ptr
 use simple_imgfile, only: imgfile
