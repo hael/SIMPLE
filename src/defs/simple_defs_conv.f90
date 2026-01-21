@@ -7,7 +7,7 @@ real, parameter :: OVERLAP_3D          = 0.99
 real, parameter :: OVERLAP_STATE       = 0.98
 real, parameter :: OVERLAP_STATE_JOINT = 0.96
 real, parameter :: OVERLAP_STATE_HET   = 0.98
-real, parameter :: ANGTHRES_MI_PROJ_DEFAULT = 3.5 ! default euldist in degrees for when a projection direction recieves an overlap (mi_proj) of 1 
+real, parameter :: ANGTHRES_MI_PROJ_DEFAULT = 3.0 ! default euldist in degrees for when a projection direction recieves an overlap (mi_proj) of 1 
 ! fraction of search space scanned limits
 real, parameter :: FRACSRCHSPACE_2D    = 90.0  ! based on Susan's observations on the small stuff, early stopping reduces overfitting
 real, parameter :: FRACSRCHSPACE_3D    = 99.0
