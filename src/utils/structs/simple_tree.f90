@@ -180,6 +180,7 @@ contains
                ! parent subset is union of children 
                allocate(tmp(size(nodes(l)%subset) + size(nodes(r)%subset)))
                tmp = [nodes(l)%subset, nodes(r)%subset]
+               call hpsort(tmp)
                allocate(nodes(k)%subset(size(tmp)))
                nodes(k)%subset = tmp
                deallocate(tmp)
@@ -267,7 +268,6 @@ contains
             if (n > 0) then
             allocate(tmp(n))
             tmp = cur%left%subset
-            call hpsort(tmp)
             j = locate(tmp, n, ref_idx)
             if (j >= 1 .and. j < n) then
                if (tmp(j) == ref_idx .or. tmp(j+1) == ref_idx) in_left = .true.

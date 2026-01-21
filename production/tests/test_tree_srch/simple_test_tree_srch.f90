@@ -23,8 +23,8 @@ real                     :: objs(2), t1, t2, simsum
 integer                  :: indxs(2), rc, ifoo, NPROJ = 10, nthr_max = 10, i, j
 type(image)              :: vol
 logical                  :: done = .false. 
-real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr 
-integer(timer_int_kind)  ::  t_cc, t_ap, t_tr 
+real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr_build, rt_tr_search, rt_tr_tot 
+integer(timer_int_kind)  ::  t_cc, t_ap, t_tr_build, t_tr_search
 type(aff_prop)           :: affprop    
 character(len=:), allocatable   :: cmd  
 real, allocatable               :: dist_mat_cc(:,:), sub_distmats(:,:,:)
@@ -90,16 +90,22 @@ rt_ap = toc(t_ap)
 print *, 'N_PROJS:', NPROJ, 'ap time:', rt_ap, 'cc time:', rt_cc
 ! print *, simsum, size(centers), labels
 dist_mat_cc = 1. - dist_mat_cc
+
 call test_tree%set_distmat(dist_mat_cc)
 call test_tree%set_cls_pops(labels)
 call test_tree%set_subsets(labels)
-t_tr = tic()
+t_tr_build = tic()
 call test_tree%build_multi_dendro(2)
-rt_tr = toc(t_tr)
-print *, 'tree build time', rt_tr
+rt_tr_build = toc(t_tr_build)
+print *, 'tree build time', rt_tr_build
+
 rootp => test_tree%node_store(1)%nodes(test_tree%node_store(1)%root_idx)
 call print_s2_tree(rootp, show_subset = .true.)
+t_tr_search = tic()
 found => search_tree4ref(rootp, 5)
+rt_tr_search = toc(t_tr_search)
+print *, 'tree search time', rt_tr_search
+
 if (.not. associated(found)) then
     print *, "found is NULL"
   else
