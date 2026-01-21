@@ -282,7 +282,7 @@ contains
             ! resolution band mask
             allocate(self%l_resmsk(fdim(params%box)-1),source=.true.)
             ! mask memoization
-            call self%img%memozie_mask_coords
+            call self%img%memoize_mask_coords
         endif
         if( params%box_crop > 0 )then
             ! build image objects
@@ -298,7 +298,7 @@ contains
             lfny = self%img_crop_polarizer%get_lfny(1)
             allocate( self%fsc(params%nstates,lfny), source = 0.0 )
             ! mask memoization
-            call self%img_crop_polarizer%%memozie_mask_coords
+            call self%img_crop_polarizer%memoize_mask_coords
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
