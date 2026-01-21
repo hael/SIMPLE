@@ -242,19 +242,54 @@ contains
       end do 
    end subroutine make_subtree_ll
 
-   ! subroutine search_tree4ref(root, ref_indx)
-   !    type(s2_node), pointer, intent(inout) :: root 
-   !    integer, intent(out)  :: indxs(2)
-   !    integer, intent(in)   :: ref_idx   
-   !    ! found which subtree to which reference belongs to 
-   !    ! dfs from bottom, maybe just follow to root node... 
-   ! end subroutine search_tree4ref
+   ! Find first instance of ref_idx in subtree
+   recursive function search_tree4ref(root, ref_idx) result(final)
+      type(s2_node), pointer, intent(in) :: root
+      integer, intent(in)                :: ref_idx
+      type(s2_node), pointer             :: final
+      type(s2_node), pointer             :: cur
+      integer, allocatable               :: tmp(:)
+      integer                            :: j, n
+      logical                            :: in_left
+      ! root should be immutable 
+      final => null()
+      cur   => root
+      do while (associated(cur))
+         ! return if ref_idx found   
+         if (cur%ref_idx == ref_idx) then
+            final => cur
+            return
+         end if
+         in_left = .false.
+         ! heap sort + binary search to check if ref_idx is in the subset
+         if (associated(cur%left)) then
+            n = size(cur%left%subset)
+            if (n > 0) then
+            allocate(tmp(n))
+            tmp = cur%left%subset
+            call hpsort(tmp)
+            j = locate(tmp, n, ref_idx)
+            if (j >= 1 .and. j < n) then
+               if (tmp(j) == ref_idx .or. tmp(j+1) == ref_idx) in_left = .true.
+            end if
+            deallocate(tmp)
+            end if
+         end if
+         if (in_left) then
+            cur => cur%left
+         else
+            cur => cur%right
+         end if
+      end do
+      final => null()
+   end function search_tree4ref
 
-
-   ! recursive subroutine walk_anywhere() 
-
-
-   ! end subroutine walk_anywhere()
+   ! Walk from specific node by computing obejctive function
+   recursive subroutine walk_from_node(root) 
+      type(s2_node), pointer, intent(in)  :: root
+      type(s2_node), pointer  :: curr
+      curr => root
+   end subroutine walk_from_node
 
    recursive subroutine print_s2_tree(root, unit, indent, show_subset, max_subset)
       type(s2_node), intent(in) :: root
