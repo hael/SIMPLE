@@ -31,7 +31,7 @@ real, allocatable               :: dist_mat_cc(:,:), sub_distmats(:,:,:)
 type(image), allocatable        :: proj_arr(:)
 integer, allocatable            :: centers(:), labels(:), cls_pops(:)
 type(multi_dendro), allocatable :: roots(:)
-type(s2_node), pointer   :: rootp
+type(s2_node), pointer   :: rootp, found
 
 ! Load Volume 
 write(*, *) 'Downloading the example dataset...'
@@ -98,8 +98,13 @@ call test_tree%build_multi_dendro(2)
 rt_tr = toc(t_tr)
 print *, 'tree build time', rt_tr
 rootp => test_tree%node_store(1)%nodes(test_tree%node_store(1)%root_idx)
-call print_s2_tree(rootp)
-
+call print_s2_tree(rootp, show_subset = .true.)
+found => search_tree4ref(rootp, 5)
+if (.not. associated(found)) then
+    print *, "found is NULL"
+  else
+    print *, "found%ref_idx = ", found%ref_idx
+end if
 ! print *, 'tree build time', rt_tr
 ! print *, 'tree_build_time', rt_tr
 ! print *, 'pool', test_tree%root_array(1)%subset
