@@ -215,7 +215,7 @@ contains
       end if 
    end subroutine print_tree
    ! find cluster to which an aribitrary reference belongs to 
-   subroutine make_subtree_hash(self, ref_idx, tree_idx)
+   subroutine get_cls_indx(self, ref_idx, tree_idx)
       type(multi_dendro), intent(inout)   :: self 
       integer, intent(in)        :: ref_idx
       integer, intent(out)       :: tree_idx 
@@ -232,14 +232,15 @@ contains
       do icls = 1, ncls
          allocate(tmp(self%cls_pops(icls)))
          tmp = self%node_store(icls)%nodes(self%node_store(icls)%root_idx)%subset
-         deallocate(tmp)
+         nrefs = size(tmp)
          hsh(icls) = hash()
          ! set keys for each hash table
          do iref = 1, nrefs 
-            write(key, '(I0)') iref
-            key = trim(key)         
+            write(key, '(I0)') tmp(iref)
+            key = trim(key)  
             call hsh(icls)%set(key, iref)
          end do 
+         deallocate(tmp)
          write(key, '(I0)') ref_idx
          key = trim(key) 
          if(hsh(icls)%isthere(trim(key))) then 
@@ -247,7 +248,7 @@ contains
             return 
          end if
       end do 
-   end subroutine make_subtree_hash
+   end subroutine get_cls_indx
 
    ! Find first instance of ref_idx in subtree
    recursive function search_tree4ref(root, ref_idx) result(final)
@@ -290,11 +291,30 @@ contains
       final => null()
    end function search_tree4ref
 
-   ! Walk from specific node by computing obejctive function
-   recursive subroutine walk_from_node(root) 
-      type(s2_node), pointer, intent(in)  :: root
-      type(s2_node), pointer  :: curr
-      curr => root
+   ! Walk from Node
+   recursive subroutine walk_from_node(cur, indxs, objs, done) 
+      type(s2_node), pointer, intent(inout)  :: cur
+      integer, intent(out)  :: indxs(2)
+      real, intent(in)    :: objs(2)
+      logical     :: done 
+      cur%left%F_ptcl2ref  = objs(1)
+      cur%right%F_ptcl2ref = objs(2)
+      ! need to cache
+      if(cur%F_ptcl2ref > objs(1) .and. cur%F_ptcl2ref > objs(2)) then 
+         done = .true. 
+         return 
+      end if 
+      if(objs(1) > objs(2)) then 
+         cur => cur%left 
+      else 
+         cur => cur%right    
+      end if
+      if (.not.(associated(cur%left) .and. associated(cur%right))) then
+         done =.true. 
+         return
+      end if
+      indxs(1) = cur%left%ref_idx
+      indxs(2) = cur%right%ref_idx 
    end subroutine walk_from_node
 
    recursive subroutine print_s2_tree(root, unit, indent, show_subset, max_subset)
