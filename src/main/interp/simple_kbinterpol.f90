@@ -1,4 +1,4 @@
-! Kaiser-Bessel interpolation kernel
+!@descr: Kaiser-Bessel interpolation kernel
 module simple_kbinterpol
 use simple_defs
 use iso_c_binding

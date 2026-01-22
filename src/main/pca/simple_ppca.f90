@@ -1,3 +1,4 @@
+!@descr: class for probabilistic principal component analysis 
 !==Class simple_ppca
 !
 ! simple_ppca is the SIMPLE class for probabilistic principal component analysis.

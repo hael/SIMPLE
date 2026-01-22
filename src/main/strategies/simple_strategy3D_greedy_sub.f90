@@ -1,4 +1,4 @@
-! concrete strategy3D: greedy refinement
+!@descr: concrete strategy3D: greedy refinement
 module simple_strategy3D_greedy_sub
 use simple_core_module_api
 use simple_strategy3D_alloc

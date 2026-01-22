@@ -1,4 +1,4 @@
-! helper routines and definitions for certain optimizer routines (those taken from the gsl library)
+!@descr: helper routines and definitions for certain optimizer routines (those taken from the gsl library)
 module simple_opt_helpers
 use simple_core_module_api
 implicit none

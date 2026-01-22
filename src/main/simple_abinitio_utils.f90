@@ -1,4 +1,4 @@
-! concrete commander: high-level workflows
+!@descr: concrete commander: high-level workflows
 module simple_abinitio_utils
 use simple_commander_module_api
 use simple_abinitio_config

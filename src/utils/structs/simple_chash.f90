@@ -1,4 +1,4 @@
-! character hash
+!@descr: Character hash
 module simple_chash
 use simple_error,        only: simple_exception
 use simple_fileio,       only: fopen, fileiochk, fclose

@@ -1,4 +1,4 @@
-! brute force function minimisation
+!@descr: brute force function minimisation
 module simple_opt_bforce
 use simple_core_module_api
 use simple_optimizer, only: optimizer

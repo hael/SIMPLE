@@ -1,4 +1,4 @@
-! defines protein point-group symmetries
+!@descr: defines protein point-group symmetries
 module simple_sym
 use simple_math
 use simple_ori

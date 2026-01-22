@@ -1,4 +1,4 @@
-! patched-based anisotropic motion correction
+!@descr: patched-based anisotropic motion correction
 module simple_motion_patched
 use simple_core_module_api
 use simple_parameters,          only: params_glob

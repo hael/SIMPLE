@@ -1,4 +1,4 @@
-! kPCA using 'Learning to Find Pre-Images', using svd for eigvals/eigvecs
+!@descr: kPCA using 'Learning to Find Pre-Images', using svd for eigvals/eigvecs
 module simple_kpca_svd
 use simple_core_module_api
 use simple_pca, only: pca

@@ -1,4 +1,4 @@
-! fast cross-correlation calculation between Fourier volumes using defined sampling space geometries
+!@descr: fast cross-correlation calculation between Fourier volumes using defined sampling space geometries
 module simple_volpft_corrcalc
 use simple_core_module_api
 use simple_projector, only: projector

@@ -1,624 +1,551 @@
 # SIMPLE Codebase Map
 
 - **SIMPLE/**
-  - **cmake/**
-    - **PostInstall/**
-  - **CMakeFiles/**
-  - **doc/**
-    - **CodeOverview/**
-    - **ForDevelopers/**
-      - **Commander/**
-      - **CPUtopo/**
-      - **LayeredArch/**
-        - **old/**
-      - **SIMPLE_logo/**
-      - **SuppleDesign/**
-    - **how2s/**
-    - **PolicyDrafts/**
-    - **RefactoringNotes/**
-    - **ReleaseNotes/**
-    - **SimpleTutorials2017/**
-      - **astigctf/**
-      - **bgal/**
-      - **CPUtopo/**
-      - **Pfrib3D/**
-      - **pspec/**
-      - **SIMPLE_logo/**
-      - **spectra/**
-      - **straightvsintg/**
-      - **trpv1iters/**
-  - **gui/**
-    - **client/**
-      - **public/**
-        - **img/**
-      - **src/**
-        - **Chartist/**
-        - **LiteMol/**
-          - **css/**
-          - **fonts/**
-          - **js/**
-    - **precompiled/**
-    - **server/**
-      - **multi_user/**
-      - **single_user/**
-        - **icons/**
-          - **mac/**
-          - **png/**
-      - **src/**
-        - **DensityServer/**
-          - **common/**
-          - **lib/**
-          - **pack/**
-          - **server/**
-            - **algebra/**
-            - **query/**
-            - **utils/**
-  - **nice/**
-    - **artwork/**
-    - **example_proxy/**
-    - **example_systemd/**
-    - **example_templates/**
-    - **nice_lite/**
-      - **app_views/**
-      - **data_structures/**
-      - **management/**
-        - **commands/**
-      - **migrations/**
-      - **static/**
-        - **images/**
-        - **nice_classic/**
-        - **nice_stream/**
-      - **templates/**
-        - **nice_classic/**
-        - **nice_stream/**
-      - **templatetags/**
-    - **nice_project/**
-    - **test_display/**
   - **production/** — home of executables
-    - `production/simple_exec.f90`
-    - `production/simple_private_exec.f90`
-    - `production/simple_stream.f90`
-    - `production/single_exec.f90`
+    - `simple_exec.f90`
+    - `simple_private_exec.f90`
+    - `simple_stream.f90`
+    - `single_exec.f90`
     - **tests/** — home of executable unit tests
-      - `production/tests/simple_ft_expanded_tester.f90`
-      - `production/tests/simple_test_angres.f90`
-      - `production/tests/simple_test_ansi_colors.f90`
-      - `production/tests/simple_test_binoris.f90`
-      - `production/tests/simple_test_binoris_io.f90`
-      - `production/tests/simple_test_bounds_from_mask3D.f90`
-      - `production/tests/simple_test_class_sample.f90`
-      - `production/tests/simple_test_clustering.f90`
-      - `production/tests/simple_test_cmdline.f90`
-      - `production/tests/simple_test_coarrays.f90`
-      - `production/tests/simple_test_corrs2weights.f90`
-      - `production/tests/simple_test_ctf.f90`
-      - `production/tests/simple_test_eigh.f90`
-      - `production/tests/simple_test_eo_diff.f90`
-      - `production/tests/simple_test_eval_polarftcc.f90`
-      - `production/tests/simple_test_extr_frac.f90`
-      - `production/tests/simple_test_ft_expanded.f90`
-      - `production/tests/simple_test_gencorrs_fft.f90`
-      - `production/tests/simple_test_graphene_mask.f90`
-      - `production/tests/simple_test_image_bin.f90`
-      - `production/tests/simple_test_imgfile.f90`
-      - `production/tests/simple_test_insert_plane.f90`
-      - `production/tests/simple_test_inside_write.f90`
-      - `production/tests/simple_test_install.f90`
-      - `production/tests/simple_test_io.f90`
-      - `production/tests/simple_test_io_parallel.f90`
-      - `production/tests/simple_test_lbfgsb.f90`
-      - `production/tests/simple_test_lbfgsb_cosine.f90`
-      - `production/tests/simple_test_lplims.f90`
-      - `production/tests/simple_test_lpstages.f90`
-      - `production/tests/simple_test_mask.f90`
-      - `production/tests/simple_test_maxnloc.f90`
-      - `production/tests/simple_test_mini_stream.f90`
-      - `production/tests/simple_test_mrc2jpeg.f90`
-      - `production/tests/simple_test_mrc_validation.f90`
-      - `production/tests/simple_test_msk_routines.f90`
-      - `production/tests/simple_test_multinomal.f90`
-      - `production/tests/simple_test_nano_mask.f90`
-      - `production/tests/simple_test_neigh.f90`
-      - `production/tests/simple_test_nice.f90`
-      - `production/tests/simple_test_openacc.f90`
-      - `production/tests/simple_test_openmp.f90`
-      - `production/tests/simple_test_opt_lp.f90`
-      - `production/tests/simple_test_order_corr.f90`
-      - `production/tests/simple_test_ori.f90`
-      - `production/tests/simple_test_oris.f90`
-      - `production/tests/simple_test_otsu.f90`
-      - `production/tests/simple_test_pca_all.f90`
-      - `production/tests/simple_test_pca_imgvar.f90`
-      - `production/tests/simple_test_phasecorr.f90`
-      - `production/tests/simple_test_ptcl_center.f90`
-      - `production/tests/simple_test_rank_weights.f90`
-      - `production/tests/simple_test_rotate_ref.f90`
-      - `production/tests/simple_test_serialize.f90`
-      - `production/tests/simple_test_sim_workflow.f90`
-      - `production/tests/simple_test_simd.f90`
-      - `production/tests/simple_test_socket_client.f90`
-      - `production/tests/simple_test_socket_io.f90`
-      - `production/tests/simple_test_socket_server.f90`
-      - `production/tests/simple_test_sp_project.f90`
-      - `production/tests/simple_test_stack_io.f90`
-      - `production/tests/simple_test_star_export.f90`
-      - `production/tests/simple_test_starfile.f90`
-      - `production/tests/simple_test_stringmatch.f90`
-      - `production/tests/simple_test_sym.f90`
-      - `production/tests/simple_test_tree_srch.f90`
-      - `production/tests/simple_test_uniform_euler.f90`
-      - `production/tests/simple_test_uniform_rot.f90`
-      - `production/tests/simple_test_units.f90`
-      - `production/tests/test_socket_comm_distr.f90`
+      - `simple_ft_expanded_tester.f90`
+      - `simple_test_angres.f90`
+      - `simple_test_ansi_colors.f90`
+      - `simple_test_binoris.f90`
+      - `simple_test_binoris_io.f90`
+      - `simple_test_bounds_from_mask3D.f90`
+      - `simple_test_class_sample.f90`
+      - `simple_test_clustering.f90`
+      - `simple_test_cmdline.f90`
+      - `simple_test_coarrays.f90`
+      - `simple_test_corrs2weights.f90`
+      - `simple_test_ctf.f90`
+      - `simple_test_eigh.f90`
+      - `simple_test_eo_diff.f90`
+      - `simple_test_eval_polarftcc.f90`
+      - `simple_test_extr_frac.f90`
+      - `simple_test_ft_expanded.f90`
+      - `simple_test_gencorrs_fft.f90`
+      - `simple_test_graphene_mask.f90`
+      - `simple_test_image_bin.f90`
+      - `simple_test_imgfile.f90`
+      - `simple_test_insert_plane.f90`
+      - `simple_test_inside_write.f90`
+      - `simple_test_install.f90`
+      - `simple_test_io.f90`
+      - `simple_test_io_parallel.f90`
+      - `simple_test_lbfgsb.f90`
+      - `simple_test_lbfgsb_cosine.f90`
+      - `simple_test_lplims.f90`
+      - `simple_test_lpstages.f90`
+      - `simple_test_mask.f90`
+      - `simple_test_maxnloc.f90`
+      - `simple_test_mini_stream.f90`
+      - `simple_test_mrc2jpeg.f90`
+      - `simple_test_mrc_validation.f90`
+      - `simple_test_msk_routines.f90`
+      - `simple_test_multinomal.f90`
+      - `simple_test_nano_mask.f90`
+      - `simple_test_neigh.f90`
+      - `simple_test_nice.f90`
+      - `simple_test_openacc.f90`
+      - `simple_test_openmp.f90`
+      - `simple_test_opt_lp.f90`
+      - `simple_test_order_corr.f90`
+      - `simple_test_ori.f90`
+      - `simple_test_oris.f90`
+      - `simple_test_otsu.f90`
+      - `simple_test_pca_all.f90`
+      - `simple_test_pca_imgvar.f90`
+      - `simple_test_phasecorr.f90`
+      - `simple_test_ptcl_center.f90`
+      - `simple_test_rank_weights.f90`
+      - `simple_test_rotate_ref.f90`
+      - `simple_test_serialize.f90`
+      - `simple_test_sim_workflow.f90`
+      - `simple_test_simd.f90`
+      - `simple_test_socket_client.f90`
+      - `simple_test_socket_io.f90`
+      - `simple_test_socket_server.f90`
+      - `simple_test_sp_project.f90`
+      - `simple_test_stack_io.f90`
+      - `simple_test_star_export.f90`
+      - `simple_test_starfile.f90`
+      - `simple_test_stringmatch.f90`
+      - `simple_test_sym.f90`
+      - `simple_test_tree_srch.f90`
+      - `simple_test_uniform_euler.f90`
+      - `simple_test_uniform_rot.f90`
+      - `simple_test_units.f90`
+      - `test_socket_comm_distr.f90`
   - **scripts/** — home of scripts and code generators
   - **src/** — main source code folder
     - **defs/** — home of singleton modules with parameter and type definitions
-      - `src/defs/simple_ansi_ctrls.f90`
-      - `src/defs/simple_default_clines.f90`
-      - `src/defs/simple_defs.f90`
-      - `src/defs/simple_defs_atoms.f90`
-      - `src/defs/simple_defs_conv.f90`
-      - `src/defs/simple_defs_environment.f90`
-      - `src/defs/simple_defs_fname.f90`
-      - `src/defs/simple_defs_ori.f90`
-      - `src/defs/simple_defs_stream.f90`
-      - `src/defs/simple_defs_string.f90`
-      - `src/defs/simple_fftw3.f90`
-      - `src/defs/simple_type_defs.f90`
+      - `simple_ansi_ctrls.f90` — ANSI C control parameters for text formatting
+      - `simple_default_clines.f90` — setting command line defaults
+      - `simple_defs.f90` — eclectic mix of definitions
+      - `simple_defs_atoms.f90` — covalent atomic radii and lattice parameter definitions
+      - `simple_defs_conv.f90` — parameters controlling convergence 2D and 3D orientation search
+      - `simple_defs_environment.f90` — environment variable flags
+      - `simple_defs_fname.f90` — standard file name, body, suffix, and extension definitions
+      - `simple_defs_ori.f90` — static orientation record value enumerators and flag conversions
+      - `simple_defs_stream.f90` — constants used in streaming
+      - `simple_defs_string.f90` — string constants
+      - `simple_fftw3.f90` — FFTW3 interface. See www.fftw.org and /usr/include/fftw3.f03
+      - `simple_type_defs.f90` — type and enumerator definitions
     - **extlibs/** — home of external libraries
       - **CPlot2D/** — home of the CPlot2D library
-        - `src/extlibs/CPlot2D/simple_CPlot2D_wrapper.f90`
+        - `simple_CPlot2D_wrapper.f90`
       - **gnufor/** — home of the gnufor library for plotting with GNU plot
-        - `src/extlibs/gnufor/gnufor2.f90`
+        - `gnufor2.f90` — GNUplot interface module
       - **jpg/** — home of the jpg library
-        - `src/extlibs/jpg/simple_jpg.f90`
+        - `simple_jpg.f90`
       - **json/** — home of the json library
-        - `src/extlibs/json/json_file_module.f90`
-        - `src/extlibs/json/json_kinds.f90`
-        - `src/extlibs/json/json_module.f90`
-        - `src/extlibs/json/json_parameters.f90`
-        - `src/extlibs/json/json_string_utilities.f90`
-        - `src/extlibs/json/json_value_module.f90`
+        - `json_file_module.f90` — Higher-level [[json_file]] interface for the [[json_value]] type.
+        - `json_kinds.f90` — JSON-Fortran kind definitions
+        - `json_module.f90` — A Fortran 2008 JSON (JavaScript Object Notation) API
+        - `json_parameters.f90` — Other parameters used by JSON-Fortran
+        - `json_string_utilities.f90` — JSON-Fortran support module for string manipulation
+        - `json_value_module.f90` — This module provides a low-level interface for manipulation of JSON data
       - **netlib/** — home of the netlib library
-        - `src/extlibs/netlib/ssyevr.f90`
+        - `ssyevr.f90` — some lapack routines
       - **starfile/** — home of C++ code for star file i/o
       - **tiff/** — home of the tiff library
       - **unix/** — home of the fortran-unix library
         - **src/**
-          - `src/extlibs/unix/src/unix.f90`
-          - `src/extlibs/unix/src/unix_dirent.F90`
-          - `src/extlibs/unix/src/unix_errno.F90`
-          - `src/extlibs/unix/src/unix_fcntl.F90`
-          - `src/extlibs/unix/src/unix_inet.F90`
-          - `src/extlibs/unix/src/unix_ioctl.F90`
-          - `src/extlibs/unix/src/unix_ipc.F90`
-          - `src/extlibs/unix/src/unix_mqueue.F90`
-          - `src/extlibs/unix/src/unix_msg.F90`
-          - `src/extlibs/unix/src/unix_netdb.F90`
-          - `src/extlibs/unix/src/unix_pthread.F90`
-          - `src/extlibs/unix/src/unix_regex.F90`
-          - `src/extlibs/unix/src/unix_semaphore.F90`
-          - `src/extlibs/unix/src/unix_signal.F90`
-          - `src/extlibs/unix/src/unix_socket.F90`
-          - `src/extlibs/unix/src/unix_stat.F90`
-          - `src/extlibs/unix/src/unix_stdio.F90`
-          - `src/extlibs/unix/src/unix_stdlib.F90`
-          - `src/extlibs/unix/src/unix_string.F90`
-          - `src/extlibs/unix/src/unix_syslog.F90`
-          - `src/extlibs/unix/src/unix_termios.F90`
-          - `src/extlibs/unix/src/unix_time.F90`
-          - `src/extlibs/unix/src/unix_types.F90`
-          - `src/extlibs/unix/src/unix_unistd.F90`
-          - `src/extlibs/unix/src/unix_utsname.F90`
-          - `src/extlibs/unix/src/unix_wait.F90`
+          - `unix.f90`
+          - `unix_dirent.F90`
+          - `unix_errno.F90`
+          - `unix_fcntl.F90`
+          - `unix_inet.F90`
+          - `unix_ioctl.F90`
+          - `unix_ipc.F90`
+          - `unix_mqueue.F90`
+          - `unix_msg.F90`
+          - `unix_netdb.F90`
+          - `unix_pthread.F90`
+          - `unix_regex.F90`
+          - `unix_semaphore.F90`
+          - `unix_signal.F90`
+          - `unix_socket.F90`
+          - `unix_stat.F90`
+          - `unix_stdio.F90`
+          - `unix_stdlib.F90`
+          - `unix_string.F90`
+          - `unix_syslog.F90`
+          - `unix_termios.F90`
+          - `unix_time.F90`
+          - `unix_types.F90`
+          - `unix_unistd.F90`
+          - `unix_utsname.F90`
+          - `unix_wait.F90`
       - **xml/** — home of the xml library
         - **common/**
-          - `src/extlibs/xml/common/FoX_common.F90`
-          - `src/extlibs/xml/common/m_common_attrs.F90`
-          - `src/extlibs/xml/common/m_common_buffer.F90`
-          - `src/extlibs/xml/common/m_common_charset.F90`
-          - `src/extlibs/xml/common/m_common_content_model.F90`
-          - `src/extlibs/xml/common/m_common_element.F90`
-          - `src/extlibs/xml/common/m_common_elstack.F90`
-          - `src/extlibs/xml/common/m_common_entities.F90`
-          - `src/extlibs/xml/common/m_common_entity_expand.F90`
-          - `src/extlibs/xml/common/m_common_error.F90`
-          - `src/extlibs/xml/common/m_common_io.F90`
-          - `src/extlibs/xml/common/m_common_namecheck.F90`
-          - `src/extlibs/xml/common/m_common_namespaces.F90`
-          - `src/extlibs/xml/common/m_common_notations.F90`
-          - `src/extlibs/xml/common/m_common_struct.F90`
+          - `FoX_common.F90`
+          - `m_common_attrs.F90`
+          - `m_common_buffer.F90`
+          - `m_common_charset.F90`
+          - `m_common_content_model.F90`
+          - `m_common_element.F90`
+          - `m_common_elstack.F90`
+          - `m_common_entities.F90`
+          - `m_common_entity_expand.F90`
+          - `m_common_error.F90`
+          - `m_common_io.F90`
+          - `m_common_namecheck.F90`
+          - `m_common_namespaces.F90`
+          - `m_common_notations.F90`
+          - `m_common_struct.F90`
         - **dom/**
-          - `src/extlibs/xml/dom/FoX_dom.f90`
-          - `src/extlibs/xml/dom/m_dom_dom.F90`
-          - `src/extlibs/xml/dom/m_dom_error.f90`
-          - `src/extlibs/xml/dom/m_dom_extras.F90`
-          - `src/extlibs/xml/dom/m_dom_parse.f90`
-          - `src/extlibs/xml/dom/m_dom_utils.f90`
+          - `FoX_dom.f90`
+          - `m_dom_dom.F90`
+          - `m_dom_error.f90`
+          - `m_dom_extras.F90`
+          - `m_dom_parse.f90`
+          - `m_dom_utils.f90`
         - **fsys/**
-          - `src/extlibs/xml/fsys/fox_m_fsys_abort_flush.F90`
-          - `src/extlibs/xml/fsys/fox_m_fsys_array_str.F90`
-          - `src/extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
-          - `src/extlibs/xml/fsys/fox_m_fsys_format.F90`
-          - `src/extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
-          - `src/extlibs/xml/fsys/fox_m_fsys_realtypes.f90`
-          - `src/extlibs/xml/fsys/fox_m_fsys_string.F90`
-          - `src/extlibs/xml/fsys/fox_m_fsys_string_list.F90`
-          - `src/extlibs/xml/fsys/m_ieee.f90`
+          - `fox_m_fsys_abort_flush.F90`
+          - `fox_m_fsys_array_str.F90`
+          - `fox_m_fsys_count_parse_input.F90`
+          - `fox_m_fsys_format.F90`
+          - `fox_m_fsys_parse_input.F90`
+          - `fox_m_fsys_realtypes.f90`
+          - `fox_m_fsys_string.F90`
+          - `fox_m_fsys_string_list.F90`
+          - `m_ieee.f90`
         - **sax/**
-          - `src/extlibs/xml/sax/FoX_sax.f90`
-          - `src/extlibs/xml/sax/m_sax_operate.F90`
-          - `src/extlibs/xml/sax/m_sax_parser.F90`
-          - `src/extlibs/xml/sax/m_sax_reader.F90`
-          - `src/extlibs/xml/sax/m_sax_tokenizer.F90`
-          - `src/extlibs/xml/sax/m_sax_types.F90`
-          - `src/extlibs/xml/sax/m_sax_xml_source.F90`
+          - `FoX_sax.f90`
+          - `m_sax_operate.F90`
+          - `m_sax_parser.F90`
+          - `m_sax_reader.F90`
+          - `m_sax_tokenizer.F90`
+          - `m_sax_types.F90`
+          - `m_sax_xml_source.F90`
         - **utils/**
-          - `src/extlibs/xml/utils/fox_m_utils_mtprng.F90`
-          - `src/extlibs/xml/utils/fox_m_utils_uri.F90`
-          - `src/extlibs/xml/utils/fox_m_utils_uuid.F90`
-          - `src/extlibs/xml/utils/FoX_utils.f90`
+          - `fox_m_utils_mtprng.F90`
+          - `fox_m_utils_uri.F90`
+          - `fox_m_utils_uuid.F90`
+          - `FoX_utils.f90`
         - **wcml/**
-          - `src/extlibs/xml/wcml/FoX_wcml.f90`
-          - `src/extlibs/xml/wcml/m_wcml_coma.F90`
-          - `src/extlibs/xml/wcml/m_wcml_core.F90`
-          - `src/extlibs/xml/wcml/m_wcml_geometry.F90`
-          - `src/extlibs/xml/wcml/m_wcml_lattice.F90`
-          - `src/extlibs/xml/wcml/m_wcml_lists.F90`
-          - `src/extlibs/xml/wcml/m_wcml_metadata.F90`
-          - `src/extlibs/xml/wcml/m_wcml_molecule.F90`
-          - `src/extlibs/xml/wcml/m_wcml_parameter.F90`
-          - `src/extlibs/xml/wcml/m_wcml_property.F90`
-          - `src/extlibs/xml/wcml/m_wcml_stml.F90`
+          - `FoX_wcml.f90`
+          - `m_wcml_coma.F90`
+          - `m_wcml_core.F90`
+          - `m_wcml_geometry.F90`
+          - `m_wcml_lattice.F90`
+          - `m_wcml_lists.F90`
+          - `m_wcml_metadata.F90`
+          - `m_wcml_molecule.F90`
+          - `m_wcml_parameter.F90`
+          - `m_wcml_property.F90`
+          - `m_wcml_stml.F90`
         - **wkml/**
-          - `src/extlibs/xml/wkml/FoX_wkml.f90`
-          - `src/extlibs/xml/wkml/m_contours.F90`
-          - `src/extlibs/xml/wkml/m_wkml_chart.F90`
-          - `src/extlibs/xml/wkml/m_wkml_color.F90`
-          - `src/extlibs/xml/wkml/m_wkml_color_def.F90`
-          - `src/extlibs/xml/wkml/m_wkml_contours.F90`
-          - `src/extlibs/xml/wkml/m_wkml_core.F90`
-          - `src/extlibs/xml/wkml/m_wkml_coverage.F90`
-          - `src/extlibs/xml/wkml/m_wkml_features.F90`
-          - `src/extlibs/xml/wkml/m_wkml_lowlevel.F90`
-          - `src/extlibs/xml/wkml/m_wkml_styling.F90`
+          - `FoX_wkml.f90`
+          - `m_contours.F90`
+          - `m_wkml_chart.F90`
+          - `m_wkml_color.F90`
+          - `m_wkml_color_def.F90`
+          - `m_wkml_contours.F90`
+          - `m_wkml_core.F90`
+          - `m_wkml_coverage.F90`
+          - `m_wkml_features.F90`
+          - `m_wkml_lowlevel.F90`
+          - `m_wkml_styling.F90`
         - **wxml/**
-          - `src/extlibs/xml/wxml/FoX_wxml.f90`
-          - `src/extlibs/xml/wxml/m_wxml_core.F90`
-          - `src/extlibs/xml/wxml/m_wxml_escape.F90`
-          - `src/extlibs/xml/wxml/m_wxml_overloads.F90`
+          - `FoX_wxml.f90`
+          - `m_wxml_core.F90`
+          - `m_wxml_escape.F90`
+          - `m_wxml_overloads.F90`
     - **fileio/** — home of modules for i/o related to project files, mrc files, eer movies, star files etc.
-      - `src/fileio/simple_binoris.f90`
-      - `src/fileio/simple_binoris_io.f90`
-      - `src/fileio/simple_class_sample_io.f90`
-      - `src/fileio/simple_discrete_stack_io.f90`
-      - `src/fileio/simple_eer_factory.f90`
-      - `src/fileio/simple_error.f90`
-      - `src/fileio/simple_fileio.f90`
-      - `src/fileio/simple_fileio_tester.f90`
-      - `src/fileio/simple_imgfile.f90`
-      - `src/fileio/simple_imghead.f90`
-      - `src/fileio/simple_nrtxtfile.f90`
-      - `src/fileio/simple_projfile_utils.f90`
-      - `src/fileio/simple_sigma2_binfile.f90`
-      - `src/fileio/simple_stack_io.f90`
-      - `src/fileio/simple_syslib.f90`
-      - `src/fileio/simple_syslib_tester.f90`
-      - `src/fileio/simple_tifflib.f90`
+      - `simple_binoris.f90` — for manging orientation data using binary files
+      - `simple_binoris_io.f90` — high-level binoris i/o routines
+      - `simple_class_sample_io.f90` — for storing class sampling information on disk
+      - `simple_discrete_stack_io.f90` — this type is for single-threaded non-contiguous reading of image stacks
+      - `simple_eer_factory.f90` — for eer movie format i/o
+      - `simple_error.f90` — exception handling
+      - `simple_fileio.f90` — file handling module
+      - `simple_fileio_tester.f90` — unit tests for fileio module
+      - `simple_imgfile.f90` — class to deal with image files on disks
+      - `simple_imghead.f90` — type and routine definitions to deal with image file headers
+      - `simple_nrtxtfile.f90` — deals with text files of numbers
+      - `simple_projfile_utils.f90` — project file utilities
+      - `simple_sigma2_binfile.f90` — sigma2 file i/o class
+      - `simple_stack_io.f90` — This class is for single-threaded buffered contiguous reading/writing of image stacks and volumes
+      - `simple_syslib.f90` — System utilities & POSIX/OS wrappers
+      - `simple_syslib_tester.f90` — unit tests for the syslib module
+      - `simple_tifflib.f90` — Fortran wrapper for libtiff, edited from Unblur
     - **inc/** — home of *.inc files containing macro definitions and enumerations
     - **main/** — main source code directory
-      - `src/main/simple_abinitio_config.f90`
-      - `src/main/simple_abinitio_utils.f90`
-      - `src/main/simple_builder.f90`
-      - `src/main/simple_class_frcs.f90`
-      - `src/main/simple_classaverager.f90`
-      - `src/main/simple_cmdline.f90`
-      - `src/main/simple_cmdline_tester.f90`
-      - `src/main/simple_convergence.f90`
-      - `src/main/simple_euclid_sigma2.f90`
-      - `src/main/simple_eul_prob_tab.f90`
-      - `src/main/simple_eul_prob_tab2D.f90`
-      - `src/main/simple_micrograph_generator.f90`
-      - `src/main/simple_ori.f90`
-      - `src/main/simple_ori_tester.f90`
-      - `src/main/simple_oris.f90`
-      - `src/main/simple_oris_tester.f90`
-      - `src/main/simple_parameters.f90`
-      - `src/main/simple_particle_extractor.f90`
-      - `src/main/simple_pspec_thumb_iter.f90`
-      - `src/main/simple_pspecs.f90`
-      - `src/main/simple_simulator.f90`
-      - `src/main/simple_sym.f90`
-      - `src/main/simple_symanalyzer.f90`
-      - `src/main/simple_user_interface.f90`
+      - `simple_abinitio_config.f90`
+      - `simple_abinitio_utils.f90` — concrete commander: high-level workflows
+      - `simple_builder.f90` — centralised builder (the main object constructor in SIMPLE)
+      - `simple_class_frcs.f90`
+      - `simple_classaverager.f90`
+      - `simple_cmdline.f90` — command line parsersimple_cmdline
+      - `simple_cmdline_tester.f90`
+      - `simple_convergence.f90` — for checking convergence
+      - `simple_euclid_sigma2.f90`
+      - `simple_eul_prob_tab.f90`
+      - `simple_eul_prob_tab2D.f90` — class probability table eul_prob_tab2D, used in abinitio2D
+      - `simple_micrograph_generator.f90`
+      - `simple_ori.f90` — an orientation
+      - `simple_ori_tester.f90`
+      - `simple_oris.f90` — an agglomeration of orientations
+      - `simple_oris_tester.f90`
+      - `simple_parameters.f90` — provides global distribution of constants and derived constants
+      - `simple_particle_extractor.f90`
+      - `simple_pspec_thumb_iter.f90` — iterator for pspec_thumb (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
+      - `simple_pspecs.f90`
+      - `simple_simulator.f90` — simulation of single-particle images
+      - `simple_sym.f90` — defines protein point-group symmetries
+      - `simple_symanalyzer.f90` — symmetry analyzer
+      - `simple_user_interface.f90`
       - **apis/** — application programming interfaces for cleaner use inclusion and faster compilation
-        - `src/main/apis/simple_commander_module_api.f90`
-        - `src/main/apis/simple_core_module_api.f90`
-        - `src/main/apis/simple_exec_module_api.f90`
-        - `src/main/apis/simple_private_exec_module_api.f90`
-        - `src/main/apis/simple_stream_module_api.f90`
-        - `src/main/apis/single_exec_module_api.f90`
+        - `simple_commander_module_api.f90` — API for the commanders
+        - `simple_core_module_api.f90` — API for the core modules
+        - `simple_exec_module_api.f90` — Aggregated public API for simple_exec
+        - `simple_private_exec_module_api.f90` — Aggregated public API for simple_private_exec.
+        - `simple_stream_module_api.f90` — Aggregated public API for stream_exec.
+        - `single_exec_module_api.f90` — Aggregated public API for single_exec
       - **commanders/** — home of the commanders implementing high-level application code
-        - `src/main/commanders/simple_commander_base.f90`
-        - `src/main/commanders/simple_commander_imgops.f90`
-        - `src/main/commanders/simple_commander_stkops.f90`
-        - `src/main/commanders/simple_commanders_abinitio.f90`
-        - `src/main/commanders/simple_commanders_abinitio2D.f90`
-        - `src/main/commanders/simple_commanders_atoms.f90`
-        - `src/main/commanders/simple_commanders_cavgs.f90`
-        - `src/main/commanders/simple_commanders_checks.f90`
-        - `src/main/commanders/simple_commanders_cluster2D.f90`
-        - `src/main/commanders/simple_commanders_distr.f90`
-        - `src/main/commanders/simple_commanders_euclid.f90`
-        - `src/main/commanders/simple_commanders_imgproc.f90`
-        - `src/main/commanders/simple_commanders_mask.f90`
-        - `src/main/commanders/simple_commanders_misc.f90`
-        - `src/main/commanders/simple_commanders_mkcavgs.f90`
-        - `src/main/commanders/simple_commanders_oris.f90`
-        - `src/main/commanders/simple_commanders_pick.f90`
-        - `src/main/commanders/simple_commanders_preprocess.f90`
-        - `src/main/commanders/simple_commanders_project_cls.f90`
-        - `src/main/commanders/simple_commanders_project_core.f90`
-        - `src/main/commanders/simple_commanders_project_mov.f90`
-        - `src/main/commanders/simple_commanders_project_ptcl.f90`
-        - `src/main/commanders/simple_commanders_rec.f90`
-        - `src/main/commanders/simple_commanders_refine3D.f90`
-        - `src/main/commanders/simple_commanders_relion.f90`
-        - `src/main/commanders/simple_commanders_resolest.f90`
-        - `src/main/commanders/simple_commanders_sim.f90`
-        - `src/main/commanders/simple_commanders_starproject.f90`
-        - `src/main/commanders/simple_commanders_validate.f90`
-        - `src/main/commanders/simple_commanders_volops.f90`
-        - `src/main/commanders/single_commanders_experimental.f90`
-        - `src/main/commanders/single_commanders_nano2D.f90`
-        - `src/main/commanders/single_commanders_nano3D.f90`
-        - `src/main/commanders/single_commanders_trajectory.f90`
-        - `src/main/commanders/single_commanders_tseries.f90`
+        - `simple_commander_base.f90` — abstract base commander
+        - `simple_commander_imgops.f90` — commanders for standard image operations: binarize, filter, denoise, normalize, scale etc.
+        - `simple_commander_stkops.f90` — commanders for operations on image stacks
+        - `simple_commanders_abinitio.f90` — commanders for abinitio 3D reconstruction in single- and multi-particle mode
+        - `simple_commanders_abinitio2D.f90` — commanders for ab initio 2D analysis
+        - `simple_commanders_atoms.f90` — commanders for operations on atoms, mostly used in SINGLE
+        - `simple_commanders_cavgs.f90` — commanders for analysis of class averages
+        - `simple_commanders_checks.f90` — checking routines
+        - `simple_commanders_cluster2D.f90` — cluster2D for simultanous 2D alignment and clustering of single-particle images
+        - `simple_commanders_distr.f90` — routines for managing distributed SIMPLE execution
+        - `simple_commanders_euclid.f90` — commanders for sigma2 calculations in objfun=euclid 2D and 3D refinement
+        - `simple_commanders_imgproc.f90` — standard EM image processing commanders
+        - `simple_commanders_mask.f90` — masking routines
+        - `simple_commanders_misc.f90` — miscallenaous routines
+        - `simple_commanders_mkcavgs.f90` — commanders for producing class averages
+        - `simple_commanders_oris.f90`
+        - `simple_commanders_pick.f90`
+        - `simple_commanders_preprocess.f90`
+        - `simple_commanders_project_cls.f90`
+        - `simple_commanders_project_core.f90`
+        - `simple_commanders_project_mov.f90`
+        - `simple_commanders_project_ptcl.f90`
+        - `simple_commanders_rec.f90`
+        - `simple_commanders_refine3D.f90`
+        - `simple_commanders_relion.f90`
+        - `simple_commanders_resolest.f90`
+        - `simple_commanders_sim.f90`
+        - `simple_commanders_starproject.f90`
+        - `simple_commanders_validate.f90`
+        - `simple_commanders_volops.f90`
+        - `single_commanders_experimental.f90`
+        - `single_commanders_nano2D.f90`
+        - `single_commanders_nano3D.f90`
+        - `single_commanders_trajectory.f90`
+        - `single_commanders_tseries.f90`
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
-        - `src/main/ctf/simple_ctf.f90`
-        - `src/main/ctf/simple_ctf_estimate_cost.f90`
-        - `src/main/ctf/simple_ctf_estimate_fit.f90`
-        - `src/main/ctf/simple_ctf_estimate_iter.f90`
+        - `simple_ctf.f90` — defines the Contrast Transfer Function (CTF) of the electron microscope
+        - `simple_ctf_estimate_cost.f90`
+        - `simple_ctf_estimate_fit.f90`
+        - `simple_ctf_estimate_iter.f90`
       - **image/** — home of the submodules of the image class, its extensions, and its variants
-        - `src/main/image/simple_fplane.f90`
-        - `src/main/image/simple_ft_expanded.f90`
-        - `src/main/image/simple_ft_expanded_dp.f90`
-        - `src/main/image/simple_ftexp_shsrch.f90`
-        - `src/main/image/simple_ftiter.f90`
-        - `src/main/image/simple_image.f90`
-        - `src/main/image/simple_image_access.f90`
-        - `src/main/image/simple_image_arith.f90`
-        - `src/main/image/simple_image_bin.f90`
-        - `src/main/image/simple_image_calc.f90`
-        - `src/main/image/simple_image_checks.f90`
-        - `src/main/image/simple_image_core.f90`
-        - `src/main/image/simple_image_fft.f90`
-        - `src/main/image/simple_image_filt.f90`
-        - `src/main/image/simple_image_freq_anal.f90`
-        - `src/main/image/simple_image_geom.f90`
-        - `src/main/image/simple_image_io.f90`
-        - `src/main/image/simple_image_msk.f90`
-        - `src/main/image/simple_image_norm.f90`
-        - `src/main/image/simple_image_ops.f90`
-        - `src/main/image/simple_image_seg.f90`
-        - `src/main/image/simple_image_vis.f90`
-        - `src/main/image/simple_polarizer.f90`
-        - `src/main/image/simple_projector.f90`
+        - `simple_fplane.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
+        - `simple_ft_expanded.f90`
+        - `simple_ft_expanded_dp.f90` — expanded Fourier transform class for improved cache utilisation
+        - `simple_ftexp_shsrch.f90` — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
+        - `simple_ftiter.f90` — Fourier index iterator
+        - `simple_image.f90`
+        - `simple_image_access.f90`
+        - `simple_image_arith.f90`
+        - `simple_image_bin.f90`
+        - `simple_image_calc.f90`
+        - `simple_image_checks.f90`
+        - `simple_image_core.f90`
+        - `simple_image_fft.f90`
+        - `simple_image_filt.f90`
+        - `simple_image_freq_anal.f90`
+        - `simple_image_geom.f90`
+        - `simple_image_io.f90`
+        - `simple_image_msk.f90` — 2D/3D envelope and adaptive masking
+        - `simple_image_norm.f90`
+        - `simple_image_ops.f90`
+        - `simple_image_seg.f90`
+        - `simple_image_vis.f90`
+        - `simple_polarizer.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
+        - `simple_projector.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms
       - **interp/** — home of the window functions for Fourier gridding interpolation
-        - `src/main/interp/simple_edges_sqwins.f90`
-        - `src/main/interp/simple_gridding.f90`
-        - `src/main/interp/simple_kbinterpol.f90`
-        - `src/main/interp/simple_winfuns.f90`
+        - `simple_edges_sqwins.f90`
+        - `simple_gridding.f90` — utilities for convolution interpolation (gridding)
+        - `simple_kbinterpol.f90` — Kaiser-Bessel interpolation kernel
+        - `simple_winfuns.f90` — window functions for Fourier interpolation
       - **motion/** — home of modules for movie motion correction
-        - `src/main/motion/simple_motion_align_hybrid.f90`
-        - `src/main/motion/simple_motion_align_nano.f90`
-        - `src/main/motion/simple_motion_align_poly.f90`
-        - `src/main/motion/simple_motion_align_poly2.f90`
-        - `src/main/motion/simple_motion_correct.f90`
-        - `src/main/motion/simple_motion_correct_iter.f90`
-        - `src/main/motion/simple_motion_correct_utils.f90`
-        - `src/main/motion/simple_motion_patched.f90`
+        - `simple_motion_align_hybrid.f90`
+        - `simple_motion_align_nano.f90`
+        - `simple_motion_align_poly.f90`
+        - `simple_motion_align_poly2.f90`
+        - `simple_motion_correct.f90` — motion_correct does motion correction, dose-weighting and frame-weighting of DDD movies
+        - `simple_motion_correct_iter.f90` — iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
+        - `simple_motion_correct_utils.f90`
+        - `simple_motion_patched.f90` — patched-based anisotropic motion correction
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
-        - `src/main/nano/simple_atoms.f90`
-        - `src/main/nano/simple_nanoparticle.f90`
-        - `src/main/nano/simple_nanoparticle_utils.f90`
-        - `src/main/nano/simple_tseries_graphene_subtr.f90`
-        - `src/main/nano/simple_tseries_tracker.f90`
+        - `simple_atoms.f90` — atomic structures and pdb parser
+        - `simple_nanoparticle.f90`
+        - `simple_nanoparticle_utils.f90`
+        - `simple_tseries_graphene_subtr.f90`
+        - `simple_tseries_tracker.f90` — time series tracker intended for movies of nanoparticles spinning in solution
       - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function
-        - `src/main/opt/simple_opt_bfgs.f90`
-        - `src/main/opt/simple_opt_bfgs2.f90`
-        - `src/main/opt/simple_opt_bforce.f90`
-        - `src/main/opt/simple_opt_de.f90`
-        - `src/main/opt/simple_opt_factory.f90`
-        - `src/main/opt/simple_opt_fr_cg.f90`
-        - `src/main/opt/simple_opt_helpers.f90`
-        - `src/main/opt/simple_opt_image_weights.f90`
-        - `src/main/opt/simple_opt_lbfgsb.f90`
-        - `src/main/opt/simple_opt_particle_swarm.f90`
-        - `src/main/opt/simple_opt_powell.f90`
-        - `src/main/opt/simple_opt_pr_cg.f90`
-        - `src/main/opt/simple_opt_simplex.f90`
-        - `src/main/opt/simple_opt_spec.f90`
-        - `src/main/opt/simple_opt_stde.f90`
-        - `src/main/opt/simple_opt_subs.f90`
-        - `src/main/opt/simple_optimizer.f90`
+        - `simple_opt_bfgs.f90` — function minimization by L-BFGS (Limited memory BroydenâFletcherâGoldfarbâShannon optimisation)
+        - `simple_opt_bfgs2.f90`
+        - `simple_opt_bforce.f90` — brute force function minimisation
+        - `simple_opt_de.f90` — continuous function optimisation by differential evolution
+        - `simple_opt_factory.f90`
+        - `simple_opt_fr_cg.f90` — function minimization by Fletcher-Reeves conjugate gradient algorithm, translated from gsl 2.4
+        - `simple_opt_helpers.f90` — helper routines and definitions for certain optimizer routines (those taken from the gsl library)
+        - `simple_opt_image_weights.f90` — numerically find optimal weights for frames
+        - `simple_opt_lbfgsb.f90` — memory limited bound-constained BFGS optimiser
+        - `simple_opt_particle_swarm.f90` — continuous particle swarm optimisation
+        - `simple_opt_powell.f90` — continuous function optimisation by Powell's method of conjugate search directions
+        - `simple_opt_pr_cg.f90` — function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4
+        - `simple_opt_simplex.f90`
+        - `simple_opt_spec.f90` — optimiser specification
+        - `simple_opt_stde.f90` — function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)
+        - `simple_opt_subs.f90` — generic optimisation subroutines
+        - `simple_optimizer.f90` — abstract optimiser defining an interface for the extending optimisation classes
       - **pca/** — home of modules implementing principal component analysis: SVD, probabilistic, and nonlinear kernel variants
-        - `src/main/pca/simple_kpca_svd.f90`
-        - `src/main/pca/simple_pca.f90`
-        - `src/main/pca/simple_pca_svd.f90`
-        - `src/main/pca/simple_ppca.f90`
-        - `src/main/pca/simple_ppca_inmem.f90`
+        - `simple_kpca_svd.f90` — kPCA using 'Learning to Find Pre-Images', using svd for eigvals/eigvecs
+        - `simple_pca.f90` — abstract strategy3D base class
+        - `simple_pca_svd.f90`
+        - `simple_ppca.f90` — class for probabilistic principal component analysis
+        - `simple_ppca_inmem.f90` — class for probabilistic principal component analysis
       - **pftc/** — home of the polar FT calc submodules and modules for operations on polar FTs
-        - `src/main/pftc/simple_pftc_shsrch_grad.f90`
-        - `src/main/pftc/simple_polarft_access.f90`
-        - `src/main/pftc/simple_polarft_calc.f90`
-        - `src/main/pftc/simple_polarft_core.f90`
-        - `src/main/pftc/simple_polarft_corr.f90`
-        - `src/main/pftc/simple_polarft_corr_mag.f90`
-        - `src/main/pftc/simple_polarft_ctf.f90`
-        - `src/main/pftc/simple_polarft_geom.f90`
-        - `src/main/pftc/simple_polarft_memo.f90`
-        - `src/main/pftc/simple_polarft_vis.f90`
-        - `src/main/pftc/simple_polarops.f90`
-        - `src/main/pftc/simple_polarops_io.f90`
-        - `src/main/pftc/simple_polarops_restore.f90`
-        - `src/main/pftc/simple_polarops_state.f90`
+        - `simple_pftc_shsrch_grad.f90` — rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
+        - `simple_polarft_access.f90`
+        - `simple_polarft_calc.f90`
+        - `simple_polarft_core.f90`
+        - `simple_polarft_corr.f90`
+        - `simple_polarft_corr_mag.f90`
+        - `simple_polarft_ctf.f90`
+        - `simple_polarft_geom.f90`
+        - `simple_polarft_memo.f90`
+        - `simple_polarft_vis.f90`
+        - `simple_polarops.f90`
+        - `simple_polarops_io.f90`
+        - `simple_polarops_restore.f90`
+        - `simple_polarops_state.f90`
       - **pick/** — home of modules for particle picking
-        - `src/main/pick/simple_picker_iter.f90`
-        - `src/main/pick/simple_picker_utils.f90`
-        - `src/main/pick/simple_pickref.f90`
-        - `src/main/pick/simple_pickseg.f90`
-        - `src/main/pick/simple_picksegdiam.f90`
+        - `simple_picker_iter.f90` — particle picker iterator
+        - `simple_picker_utils.f90`
+        - `simple_pickref.f90`
+        - `simple_pickseg.f90`
+        - `simple_picksegdiam.f90`
       - **project/** — home of the submodules of the single-particle project class for managing project information in memory and on disk
-        - `src/main/project/simple_sp_project.f90`
-        - `src/main/project/simple_sp_project_cls.f90`
-        - `src/main/project/simple_sp_project_core.f90`
-        - `src/main/project/simple_sp_project_io.f90`
-        - `src/main/project/simple_sp_project_mic.f90`
-        - `src/main/project/simple_sp_project_optics.f90`
-        - `src/main/project/simple_sp_project_out.f90`
-        - `src/main/project/simple_sp_project_ptcl.f90`
-        - `src/main/project/simple_sp_project_stk.f90`
+        - `simple_sp_project.f90`
+        - `simple_sp_project_cls.f90`
+        - `simple_sp_project_core.f90`
+        - `simple_sp_project_io.f90`
+        - `simple_sp_project_mic.f90`
+        - `simple_sp_project_optics.f90`
+        - `simple_sp_project_out.f90`
+        - `simple_sp_project_ptcl.f90`
+        - `simple_sp_project_stk.f90`
       - **star/** — home of modules for star file and star project handling
-        - `src/main/star/simple_relion.f90`
-        - `src/main/star/simple_starfile.f90`
-        - `src/main/star/simple_starfile_wrapper.f90`
-        - `src/main/star/simple_starproject.f90`
-        - `src/main/star/simple_starproject_stream.f90`
-        - `src/main/star/simple_starproject_tester.f90`
-        - `src/main/star/simple_starproject_utils.f90`
+        - `simple_relion.f90`
+        - `simple_starfile.f90`
+        - `simple_starfile_wrapper.f90`
+        - `simple_starproject.f90`
+        - `simple_starproject_stream.f90`
+        - `simple_starproject_tester.f90`
+        - `simple_starproject_utils.f90`
       - **strategies/** — home of strategies for 2D and 3D orientation search
-        - `src/main/strategies/simple_strategy2D.f90`
-        - `src/main/strategies/simple_strategy2D3D_common.f90`
-        - `src/main/strategies/simple_strategy2D_alloc.f90`
-        - `src/main/strategies/simple_strategy2D_eval.f90`
-        - `src/main/strategies/simple_strategy2D_greedy.f90`
-        - `src/main/strategies/simple_strategy2D_greedy_smpl.f90`
-        - `src/main/strategies/simple_strategy2D_inpl.f90`
-        - `src/main/strategies/simple_strategy2D_inpl_smpl.f90`
-        - `src/main/strategies/simple_strategy2D_matcher.f90`
-        - `src/main/strategies/simple_strategy2D_prob.f90`
-        - `src/main/strategies/simple_strategy2D_snhc.f90`
-        - `src/main/strategies/simple_strategy2D_snhc_smpl.f90`
-        - `src/main/strategies/simple_strategy2D_srch.f90`
-        - `src/main/strategies/simple_strategy2D_tseries.f90`
-        - `src/main/strategies/simple_strategy2D_utils.f90`
-        - `src/main/strategies/simple_strategy3D.f90`
-        - `src/main/strategies/simple_strategy3D_alloc.f90`
-        - `src/main/strategies/simple_strategy3D_eval.f90`
-        - `src/main/strategies/simple_strategy3D_greedy.f90`
-        - `src/main/strategies/simple_strategy3D_greedy_smpl.f90`
-        - `src/main/strategies/simple_strategy3D_greedy_sub.f90`
-        - `src/main/strategies/simple_strategy3D_matcher.f90`
-        - `src/main/strategies/simple_strategy3D_prob.f90`
-        - `src/main/strategies/simple_strategy3D_shc.f90`
-        - `src/main/strategies/simple_strategy3D_shc_smpl.f90`
-        - `src/main/strategies/simple_strategy3D_snhc_smpl.f90`
-        - `src/main/strategies/simple_strategy3D_srch.f90`
-        - `src/main/strategies/simple_strategy3D_utils.f90`
+        - `simple_strategy2D.f90`
+        - `simple_strategy2D3D_common.f90` — common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
+        - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
+        - `simple_strategy2D_eval.f90`
+        - `simple_strategy2D_greedy.f90`
+        - `simple_strategy2D_greedy_smpl.f90`
+        - `simple_strategy2D_inpl.f90`
+        - `simple_strategy2D_inpl_smpl.f90`
+        - `simple_strategy2D_matcher.f90` — projection-matching based on Hadamard products, high-level search routines for CLUSTER2D
+        - `simple_strategy2D_prob.f90`
+        - `simple_strategy2D_snhc.f90`
+        - `simple_strategy2D_snhc_smpl.f90`
+        - `simple_strategy2D_srch.f90` — common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
+        - `simple_strategy2D_tseries.f90`
+        - `simple_strategy2D_utils.f90`
+        - `simple_strategy3D.f90` — abstract strategy3D base class
+        - `simple_strategy3D_alloc.f90` — array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
+        - `simple_strategy3D_eval.f90`
+        - `simple_strategy3D_greedy.f90` — concrete strategy3D: greedy refinement
+        - `simple_strategy3D_greedy_smpl.f90` — concrete strategy3D: refinement
+        - `simple_strategy3D_greedy_sub.f90` — concrete strategy3D: greedy refinement
+        - `simple_strategy3D_matcher.f90`
+        - `simple_strategy3D_prob.f90` — concrete strategy3D: probabilistic refinement
+        - `simple_strategy3D_shc.f90` — concrete strategy3D: refinement
+        - `simple_strategy3D_shc_smpl.f90` — concrete strategy3D: refinement
+        - `simple_strategy3D_snhc_smpl.f90` — concrete strategy3D: refinement
+        - `simple_strategy3D_srch.f90`
+        - `simple_strategy3D_utils.f90`
       - **stream/** — home of the stream task commanders in the pipelined stream application and their utilities
-        - `src/main/stream/simple_mini_stream_utils.f90`
-        - `src/main/stream/simple_stream2D_state.f90`
-        - `src/main/stream/simple_stream_chunk.f90`
-        - `src/main/stream/simple_stream_chunk2D_utils.f90`
-        - `src/main/stream/simple_stream_cluster2D_subsets.f90`
-        - `src/main/stream/simple_stream_cluster2D_utils.f90`
-        - `src/main/stream/simple_stream_p01_preprocess.f90`
-        - `src/main/stream/simple_stream_p02_assign_optics.f90`
-        - `src/main/stream/simple_stream_p03_opening2D.f90`
-        - `src/main/stream/simple_stream_p04_refpick_extract.f90`
-        - `src/main/stream/simple_stream_p05_sieve_cavgs.f90`
-        - `src/main/stream/simple_stream_p06_pool2D.f90`
-        - `src/main/stream/simple_stream_pool2D_utils.f90`
-        - `src/main/stream/simple_stream_utils.f90`
-        - `src/main/stream/simple_stream_watcher.f90`
+        - `simple_mini_stream_utils.f90`
+        - `simple_stream2D_state.f90`
+        - `simple_stream_chunk.f90`
+        - `simple_stream_chunk2D_utils.f90`
+        - `simple_stream_cluster2D_subsets.f90`
+        - `simple_stream_cluster2D_utils.f90`
+        - `simple_stream_p01_preprocess.f90`
+        - `simple_stream_p02_assign_optics.f90`
+        - `simple_stream_p03_opening2D.f90`
+        - `simple_stream_p04_refpick_extract.f90`
+        - `simple_stream_p05_sieve_cavgs.f90`
+        - `simple_stream_p06_pool2D.f90`
+        - `simple_stream_pool2D_utils.f90`
+        - `simple_stream_utils.f90`
+        - `simple_stream_watcher.f90`
       - **volume/** — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search
-        - `src/main/volume/simple_dock_vols.f90`
-        - `src/main/volume/simple_reconstructor.f90`
-        - `src/main/volume/simple_reconstructor_eo.f90`
-        - `src/main/volume/simple_volanalyzer.f90`
-        - `src/main/volume/simple_volinterp.f90`
-        - `src/main/volume/simple_volpft_corrcalc.f90`
-        - `src/main/volume/simple_volpft_symsrch.f90`
+        - `simple_dock_vols.f90`
+        - `simple_reconstructor.f90`
+        - `simple_reconstructor_eo.f90` — 3D reconstruction of even-odd pairs for FSC estimation
+        - `simple_volanalyzer.f90`
+        - `simple_volinterp.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms, high-level routines
+        - `simple_volpft_corrcalc.f90` — fast cross-correlation calculation between Fourier volumes using defined sampling space geometries
+        - `simple_volpft_symsrch.f90`
     - **utils/** — utilities source code directory
-      - `src/utils/simple_corrmat.f90`
-      - `src/utils/simple_exec_helpers.f90`
-      - `src/utils/simple_gauss2Dfit.f90`
-      - `src/utils/simple_imgarr_utils.f90`
-      - `src/utils/simple_imgproc.f90`
-      - `src/utils/simple_is_check_assert.f90`
-      - `src/utils/simple_jiffys.f90`
-      - `src/utils/simple_magic_boxes.f90`
-      - `src/utils/simple_map_reduce.f90`
-      - `src/utils/simple_mem_estimator.f90`
-      - `src/utils/simple_micproc.f90`
-      - `src/utils/simple_opt_mask.f90`
-      - `src/utils/simple_private_prgs.f90`
-      - `src/utils/simple_procimgstk.f90`
-      - `src/utils/simple_progress.f90`
-      - `src/utils/simple_sauron.f90`
-      - `src/utils/simple_segmentation.f90`
-      - `src/utils/simple_stackops.f90`
-      - `src/utils/simple_string.f90`
-      - `src/utils/simple_string_tester.f90`
-      - `src/utils/simple_string_utils.f90`
-      - `src/utils/simple_test_utils.f90`
-      - `src/utils/simple_timer.f90`
-      - `src/utils/simple_timer_omp.f90`
+      - `simple_corrmat.f90`
+      - `simple_exec_helpers.f90`
+      - `simple_gauss2Dfit.f90`
+      - `simple_imgarr_utils.f90`
+      - `simple_imgproc.f90`
+      - `simple_is_check_assert.f90`
+      - `simple_jiffys.f90`
+      - `simple_magic_boxes.f90`
+      - `simple_map_reduce.f90`
+      - `simple_mem_estimator.f90`
+      - `simple_micproc.f90`
+      - `simple_opt_mask.f90`
+      - `simple_private_prgs.f90`
+      - `simple_procimgstk.f90`
+      - `simple_progress.f90`
+      - `simple_sauron.f90`
+      - `simple_segmentation.f90`
+      - `simple_stackops.f90`
+      - `simple_string.f90`
+      - `simple_string_tester.f90`
+      - `simple_string_utils.f90`
+      - `simple_test_utils.f90`
+      - `simple_timer.f90`
+      - `simple_timer_omp.f90`
       - **clustering/** — algorithms for clustering a distance matrix
-        - `src/utils/clustering/simple_aff_prop.f90`
-        - `src/utils/clustering/simple_cluster_seed.f90`
-        - `src/utils/clustering/simple_clustering_utils.f90`
-        - `src/utils/clustering/simple_hclust.f90`
-        - `src/utils/clustering/simple_kmedoids.f90`
-        - `src/utils/clustering/simple_kmedoids_online.f90`
+        - `simple_aff_prop.f90`
+        - `simple_cluster_seed.f90`
+        - `simple_clustering_utils.f90`
+        - `simple_hclust.f90`
+        - `simple_kmedoids.f90`
+        - `simple_kmedoids_online.f90`
       - **comm/** — utilities for interprocess communication with web sockets
-        - `src/utils/comm/simple_distr_comm.f90`
-        - `src/utils/comm/simple_socket_comm.f90`
-        - `src/utils/comm/simple_stream_communicator.f90`
+        - `simple_distr_comm.f90`
+        - `simple_socket_comm.f90`
+        - `simple_stream_communicator.f90`
       - **filter/** — utilities for filtering and regularization
-        - `src/utils/filter/simple_butterworth.f90`
-        - `src/utils/filter/simple_estimate_ssnr.f90`
-        - `src/utils/filter/simple_fsc.f90`
-        - `src/utils/filter/simple_opt_filter.f90`
-        - `src/utils/filter/simple_tvfilter.f90`
+        - `simple_butterworth.f90`
+        - `simple_estimate_ssnr.f90`
+        - `simple_fsc.f90`
+        - `simple_opt_filter.f90`
+        - `simple_tvfilter.f90`
       - **gui/** — utilities for feeding information to the GUI
-        - `src/utils/gui/simple_gui_utils.f90`
-        - `src/utils/gui/simple_guistats.f90`
-        - `src/utils/gui/simple_nice.f90`
+        - `simple_gui_utils.f90`
+        - `simple_guistats.f90`
+        - `simple_nice.f90`
       - **math/** — home of mathematical and statistical utility routines
-        - `src/utils/math/simple_decay_funs.f90`
-        - `src/utils/math/simple_histogram.f90`
-        - `src/utils/math/simple_linalg.f90`
-        - `src/utils/math/simple_math.f90`
-        - `src/utils/math/simple_math_ft.f90`
-        - `src/utils/math/simple_neighs.f90`
-        - `src/utils/math/simple_online_var.f90`
-        - `src/utils/math/simple_qr_solve.f90`
-        - `src/utils/math/simple_r8lib.f90`
-        - `src/utils/math/simple_ran_tabu.f90`
-        - `src/utils/math/simple_rnd.f90`
-        - `src/utils/math/simple_srch_sort_loc.f90`
-        - `src/utils/math/simple_stat.f90`
-        - `src/utils/math/simple_testfuns.f90`
+        - `simple_decay_funs.f90`
+        - `simple_histogram.f90`
+        - `simple_linalg.f90`
+        - `simple_math.f90`
+        - `simple_math_ft.f90`
+        - `simple_neighs.f90`
+        - `simple_online_var.f90`
+        - `simple_qr_solve.f90`
+        - `simple_r8lib.f90`
+        - `simple_ran_tabu.f90`
+        - `simple_rnd.f90`
+        - `simple_srch_sort_loc.f90`
+        - `simple_stat.f90`
+        - `simple_testfuns.f90`
       - **qsys/** — utilities for controlling queue systems in distributed computing environments
-        - `src/utils/qsys/simple_qsys_base.f90`
-        - `src/utils/qsys/simple_qsys_ctrl.f90`
-        - `src/utils/qsys/simple_qsys_env.f90`
-        - `src/utils/qsys/simple_qsys_factory.f90`
-        - `src/utils/qsys/simple_qsys_funs.f90`
-        - `src/utils/qsys/simple_qsys_local.f90`
-        - `src/utils/qsys/simple_qsys_lsf.f90`
-        - `src/utils/qsys/simple_qsys_pbs.f90`
-        - `src/utils/qsys/simple_qsys_sge.f90`
-        - `src/utils/qsys/simple_qsys_slurm.f90`
+        - `simple_qsys_base.f90`
+        - `simple_qsys_ctrl.f90`
+        - `simple_qsys_env.f90`
+        - `simple_qsys_factory.f90`
+        - `simple_qsys_funs.f90`
+        - `simple_qsys_local.f90`
+        - `simple_qsys_lsf.f90`
+        - `simple_qsys_pbs.f90`
+        - `simple_qsys_sge.f90`
+        - `simple_qsys_slurm.f90`
       - **structs/** — implementation of various standard and non-standard data structures
-        - `src/utils/structs/simple_chash.f90`
-        - `src/utils/structs/simple_chash_tester.f90`
-        - `src/utils/structs/simple_hash.f90`
-        - `src/utils/structs/simple_hash_tester.f90`
-        - `src/utils/structs/simple_linked_list.f90`
-        - `src/utils/structs/simple_linked_list_tester.f90`
-        - `src/utils/structs/simple_rec_list.f90`
-        - `src/utils/structs/simple_rec_list_tester.f90`
-        - `src/utils/structs/simple_tree.f90`
+        - `simple_chash.f90` — Character hash
+        - `simple_chash_tester.f90`
+        - `simple_hash.f90`
+        - `simple_hash_tester.f90`
+        - `simple_linked_list.f90`
+        - `simple_linked_list_tester.f90`
+        - `simple_rec_list.f90`
+        - `simple_rec_list_tester.f90`
+        - `simple_tree.f90`

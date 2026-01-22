@@ -1,4 +1,4 @@
-! particle picker iterator
+!@descr: particle picker iterator
 module simple_picker_iter
 use simple_core_module_api
 use simple_parameters

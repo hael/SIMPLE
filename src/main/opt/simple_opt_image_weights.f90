@@ -1,4 +1,4 @@
-! numerically find optimal weights for frames
+!@descr: numerically find optimal weights for frames
 module simple_opt_image_weights
 use simple_core_module_api
 use simple_image,        only: image

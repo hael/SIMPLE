@@ -1,4 +1,4 @@
-! projection-matching based on Hadamard products, high-level search routines for CLUSTER2D
+!@descr: projection-matching based on Hadamard products, high-level search routines for CLUSTER2D
 module simple_strategy2D_matcher
 use simple_core_module_api
 use simple_builder,                only: build_glob

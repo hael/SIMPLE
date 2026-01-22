@@ -1,4 +1,4 @@
-! utilities for convolution interpolation (gridding)
+!@descr: utilities for convolution interpolation (gridding)
 module simple_gridding
 use simple_core_module_api
 use simple_image,     only: image

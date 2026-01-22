@@ -1,4 +1,4 @@
-! memory limited bound-constained BFGS optimiser
+!@descr: memory limited bound-constained BFGS optimiser
 module simple_opt_lbfgsb
 use simple_core_module_api
 use simple_optimizer, only: optimizer

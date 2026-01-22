@@ -1,4 +1,4 @@
-! iterator for pspec_thumb (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
+!@descr: iterator for pspec_thumb (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_pspec_thumb_iter
 use simple_core_module_api
 use simple_image,      only: image
