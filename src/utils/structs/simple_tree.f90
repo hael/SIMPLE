@@ -1,8 +1,7 @@
 module simple_tree  
 use simple_srch_sort_loc
-use simple_hclust
-use simple_string
 use simple_hash
+use simple_hclust
 implicit none 
 #include "simple_local_flags.inc"
 
@@ -142,7 +141,7 @@ contains
             integer, intent(in) :: refs(:)
             type(s2_node), pointer, intent(inout) :: nodes(:)
             integer, intent(out) :: root_idx
-            integer :: k, s, l, r, m, best, n_nodes
+            integer :: p, k, s, l, r, m, best, n_nodes
             real    :: best_sum, sum 
             integer, allocatable :: tmp(:)
             n_nodes = 2*nref_sub - 1
@@ -170,36 +169,36 @@ contains
             do s = 1, nref_sub - 1
                l = merge_mat(1, s)
                r = merge_mat(2, s)
-               k = m + s
+               p = m + s
                ! assigning pointers 
-               nodes(k)%left  => nodes(l)
-               nodes(k)%right => nodes(r)
-               nodes(l)%parent => nodes(k)
-               nodes(r)%parent => nodes(k)
-               nodes(k)%level      = s
-               nodes(k)%is_pop     = .true.
+               nodes(p)%left  => nodes(l)
+               nodes(p)%right => nodes(r)
+               nodes(l)%parent => nodes(p)
+               nodes(r)%parent => nodes(p)
+               nodes(p)%level      = s
+               nodes(p)%is_pop     = .true.
                ! parent subset is union of children 
                allocate(tmp(size(nodes(l)%subset) + size(nodes(r)%subset)))
                tmp = [nodes(l)%subset, nodes(r)%subset]
                call hpsort(tmp)
-               allocate(nodes(k)%subset(size(tmp)))
-               nodes(k)%subset = tmp
+               allocate(nodes(p)%subset(size(tmp)))
+               nodes(p)%subset = tmp
                deallocate(tmp)
                ! Calculate a new medoid in merged set 
                ! probably large opportunity to memoize (can store partial sums )
                best = -1
                best_sum = huge(1.0)
-               do i = 1, size(nodes(k)%subset)
+               do i = 1, size(nodes(p)%subset)
                   sum = 0.0
-                  do j = 1, size(nodes(k)%subset)
-                     sum = sum + self%dist_mat(nodes(k)%subset(i), nodes(k)%subset(j))
+                  do j = 1, size(nodes(p)%subset)
+                     sum = sum + self%dist_mat(nodes(p)%subset(i), nodes(p)%subset(j))
                   end do
                   if (sum < best_sum) then
                      best_sum = sum 
-                     best = nodes(k)%subset(i)
+                     best = nodes(p)%subset(i)
                   end if
                end do
-               nodes(k)%ref_idx = best
+               nodes(p)%ref_idx = best
             end do
             root_idx = n_nodes
          end subroutine merge2node
@@ -229,6 +228,7 @@ contains
          return 
       end if 
       allocate(hsh(ncls))
+      ! need to cache these hashtables 
       do icls = 1, ncls
          allocate(tmp(self%cls_pops(icls)))
          tmp = self%node_store(icls)%nodes(self%node_store(icls)%root_idx)%subset
@@ -276,7 +276,7 @@ contains
             allocate(tmp(n))
             tmp = cur%left%subset
             j = locate(tmp, n, ref_idx)
-            if (j >= 1 .and. j < n) then
+            if (j >= 1 .and. j <= n) then
                if (tmp(j) == ref_idx .or. tmp(j+1) == ref_idx) in_left = .true.
             end if
             deallocate(tmp)
@@ -296,7 +296,12 @@ contains
       type(s2_node), pointer, intent(inout)  :: cur
       integer, intent(out)  :: indxs(2)
       real, intent(in)    :: objs(2)
-      logical     :: done 
+      logical, intent(out)     :: done
+      done =.false. 
+      if (.not. associated(cur%left) .and. .not. associated(cur%right)) then
+         done = .true.
+         return
+      end if
       cur%left%F_ptcl2ref  = objs(1)
       cur%right%F_ptcl2ref = objs(2)
       ! need to cache
