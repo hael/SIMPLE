@@ -1,2 +1,0 @@
-for I in $(seq 1 10000) ; do simple_test_openacc  ; done
-

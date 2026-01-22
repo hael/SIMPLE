@@ -1,2 +1,0 @@
-FC=mpifort cmake -DUSE_MPI=ON <simple_src>
-
