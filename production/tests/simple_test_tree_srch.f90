@@ -99,6 +99,7 @@ call test_tree%build_multi_dendro(2)
 rt_tr_build = toc(t_tr_build)
 print *, 'tree build time', rt_tr_build
 
+! 2n - 1 th node is root 
 rootp => test_tree%node_store(1)%nodes(test_tree%node_store(1)%root_idx)
 call print_s2_tree(rootp, show_subset = .true.)
 t_tr_search = tic()
@@ -140,7 +141,7 @@ end if
 ! objs(2) = real(p%right%ref_idx)**2
 ! do 
 !     print *, objs
-!     call walk_dendro(p, indxs, objs, done)
+!     call walk_from_node(p, indxs, objs, done)
 !     if(done) exit
 !     print *, indxs
 !     objs(1) = real(indxs(1))**2

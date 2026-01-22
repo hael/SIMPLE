@@ -1,7 +1,8 @@
 module simple_tree  
 use simple_srch_sort_loc
 use simple_hclust
-use simple_linked_list
+use simple_string
+use simple_hash
 implicit none 
 #include "simple_local_flags.inc"
 
@@ -214,34 +215,39 @@ contains
       end if 
    end subroutine print_tree
    ! find cluster to which an aribitrary reference belongs to 
-   subroutine make_subtree_ll(self, ref_idx, tree_idx)
+   subroutine make_subtree_hash(self, ref_idx, tree_idx)
       type(multi_dendro), intent(inout)   :: self 
       integer, intent(in)        :: ref_idx
-      integer, intent(out)       :: tree_idx
-      type(s2_node), allocatable :: roots(:) 
+      integer, intent(out)       :: tree_idx 
       integer, allocatable :: refs(:), tmp(:)
-      type(linked_list) :: list
+      type(hash), allocatable     :: hsh(:)
       integer           :: i, nrefs, ncls, icls, iref
-      allocate(roots(self%n_trees))
-      nrefs = size(self%dist_mat)
-      allocate(refs(nrefs))
+      character(len=KEYLEN)      :: key
+      ncls  = self%n_trees
+      if(ncls == 1) then 
+         tree_idx = 1
+         return 
+      end if 
+      allocate(hsh(ncls))
       do icls = 1, ncls
          allocate(tmp(self%cls_pops(icls)))
          tmp = self%node_store(icls)%nodes(self%node_store(icls)%root_idx)%subset
-         if(icls == 1) then
-            refs(1:size(tmp)) = tmp 
-         else 
-            refs(self%cls_pops(icls - 1):self%cls_pops(icls - 1) + self%cls_pops(icls)) = tmp
-         end if 
          deallocate(tmp)
+         hsh(icls) = hash()
+         ! set keys for each hash table
+         do iref = 1, nrefs 
+            write(key, '(I0)') iref
+            key = trim(key)         
+            call hsh(icls)%set(key, iref)
+         end do 
+         write(key, '(I0)') ref_idx
+         key = trim(key) 
+         if(hsh(icls)%isthere(trim(key))) then 
+            tree_idx = icls
+            return 
+         end if
       end do 
-      do iref = 1, nrefs
-         call list%push_back(iref)
-      end do 
-      do iref = 1, nrefs
-         call list%at_int(iref, refs(iref))
-      end do 
-   end subroutine make_subtree_ll
+   end subroutine make_subtree_hash
 
    ! Find first instance of ref_idx in subtree
    recursive function search_tree4ref(root, ref_idx) result(final)
