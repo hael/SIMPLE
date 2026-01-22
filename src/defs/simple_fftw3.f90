@@ -1,6 +1,4 @@
-!>  \brief  FFTW3 interface
-!!
-!! See www.fftw.org and /usr/include/fftw3.f03
+!@descr: FFTW3 interface. See www.fftw.org and /usr/include/fftw3.f03
 module simple_fftw3
   use, intrinsic :: iso_c_binding
   integer, parameter :: C_FFTW_R2R_KIND = C_INT32_T

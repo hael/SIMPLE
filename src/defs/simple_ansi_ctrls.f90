@@ -1,3 +1,4 @@
+!@descr: ANSI C control parameters for text formatting
 module simple_ansi_ctrls
 implicit none
 character(len=*), parameter :: C_ESC            = achar(27)

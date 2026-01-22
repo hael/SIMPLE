@@ -1,4 +1,4 @@
-!> \brief GNUplot interface module
+!@descr: GNUplot interface module
 !!
 !! Author: Alexey Kuznetsov
 !! Modified: 28/12/2008

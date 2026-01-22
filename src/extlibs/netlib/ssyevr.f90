@@ -1,3 +1,4 @@
+!@descr: some lapack routines
 !> \brief \b IEEECK                                                     
 !                                                                       
 !  =========== DOCUMENTATION ===========                                

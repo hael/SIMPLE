@@ -1,3 +1,4 @@
+!@descr: standard file name, body, suffix, and extension definitions
 module simple_defs_fname
 use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
 ! GLOBAL FILE CONSTANTS

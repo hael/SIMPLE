@@ -1,8 +1,7 @@
+!@descr: Higher-level [[json_file]] interface for the [[json_value]] type.
 !*****************************************************************************************
 !> author: Jacob Williams
 !  license: BSD
-!
-!  Higher-level [[json_file]] interface for the [[json_value]] type.
 !
 !### License
 !  * JSON-Fortran is released under a BSD-style license.

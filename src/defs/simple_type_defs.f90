@@ -1,3 +1,4 @@
+!@descr: type and enumerator definitions
 module simple_type_defs
 
 ! CTF flag type

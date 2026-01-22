@@ -1,8 +1,8 @@
+!@descr: This module provides a low-level interface for manipulation of JSON data
 !*****************************************************************************************
 !> author: Jacob Williams
 !  license: BSD
-!
-!  This module provides a low-level interface for manipulation of JSON data.
+! 
 !  The two public entities are [[json_value]], and [[json_core(type)]].
 !  The [[json_file_module]] provides a higher-level interface to some
 !  of these routines.

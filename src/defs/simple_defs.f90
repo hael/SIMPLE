@@ -1,3 +1,4 @@
+!@descr: eclectic mix of definitions
 module simple_defs
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
