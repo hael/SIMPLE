@@ -1,3 +1,4 @@
+!@descr: exception handling
 module simple_error
 use simple_defs
 use, intrinsic :: iso_fortran_env

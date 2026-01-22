@@ -1,4 +1,4 @@
-! concrete commander: miscallenaous routines
+!@descr: miscallenaous routines
 module simple_commanders_misc
 include "starfile_enum.inc"
 use simple_commander_module_api

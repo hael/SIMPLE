@@ -1,4 +1,4 @@
-! concrete commander: checking routines
+!@descr: checking routines
 module simple_commanders_checks
 use simple_commander_module_api
 implicit none

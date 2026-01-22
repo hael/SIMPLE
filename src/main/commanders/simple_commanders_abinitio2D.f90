@@ -1,3 +1,4 @@
+!@descr: commanders for ab initio 2D analysis
 module simple_commanders_abinitio2D
 use simple_commander_module_api
 use simple_commanders_cavgs

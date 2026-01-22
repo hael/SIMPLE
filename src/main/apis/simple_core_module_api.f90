@@ -1,3 +1,4 @@
+!@descr: API for the core modules
 module simple_core_module_api
 !$ use omp_lib
 !$ use omp_lib_kinds

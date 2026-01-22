@@ -1,3 +1,4 @@
+!@descr: System utilities & POSIX/OS wrappers
 module simple_syslib
 use simple_defs
 use simple_defs_fname

@@ -1,4 +1,4 @@
-! concrete commander: masking routines
+!@descr: masking routines
 module simple_commanders_mask
 use simple_commander_module_api
 implicit none

@@ -1,4 +1,4 @@
-! type and routine definitions to deal with image file headers supporting
+!@descr: type and routine definitions to deal with image file headers
 !  - Spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
 !  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
 ! file formats

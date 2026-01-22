@@ -1,4 +1,4 @@
-! Fortran wrapper for libtiff, edited from Unblur
+!@descr: Fortran wrapper for libtiff, edited from Unblur
 ! Copyright 2014 Howard Hughes Medical Institute
 ! All rights reserved
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1

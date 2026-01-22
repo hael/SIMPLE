@@ -1,3 +1,4 @@
+!@descr: commanders for operations on image stacks
 module simple_commanders_stkops
 use simple_commander_module_api
 use simple_imgarr_utils,     only: read_stk_into_imgarr, write_imgarr, dealloc_imgarr

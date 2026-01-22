@@ -1,3 +1,4 @@
+!@descr: sigma2 file i/o class
 module simple_sigma2_binfile
 use simple_core_module_api
 implicit none

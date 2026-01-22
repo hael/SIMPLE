@@ -1,4 +1,4 @@
-! concrete commander: routines for managing distributed SIMPLE execution
+!@descr: routines for managing distributed SIMPLE execution
 module simple_commanders_distr
 use simple_commander_module_api
 implicit none

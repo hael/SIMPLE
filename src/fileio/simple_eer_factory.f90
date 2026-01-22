@@ -1,3 +1,4 @@
+!@descr: for eer movie format i/o
 module simple_eer_factory
 use simple_core_module_api
 use simple_tifflib

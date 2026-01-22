@@ -1,4 +1,4 @@
-! This type is for single-threaded non-contiguous reading of image stacks
+!@descr: this type is for single-threaded non-contiguous reading of image stacks
 module simple_discrete_stack_io
 use simple_core_module_api
 use simple_image,   only: image, image_ptr

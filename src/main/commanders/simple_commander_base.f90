@@ -1,4 +1,4 @@
-! abstract commander
+!@descr: abstract base commander
 module simple_commander_base
 use simple_core_module_api
 use simple_defs

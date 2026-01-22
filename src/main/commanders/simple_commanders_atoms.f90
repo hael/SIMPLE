@@ -1,3 +1,4 @@
+!@descr: commanders for operations on atoms, mostly used in SINGLE
 module simple_commanders_atoms
 use simple_commander_module_api
 use simple_nanoparticle_utils

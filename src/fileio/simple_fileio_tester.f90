@@ -1,3 +1,4 @@
+!@descr: unit tests for fileio module
 module simple_fileio_tester
 use simple_defs
 use simple_string

@@ -1,3 +1,4 @@
+!@descr: Aggregated public API for single_exec
 module single_exec_module_api
 use simple_core_module_api
 use simple_cmdline,                 only: cmdline, cmdline_err

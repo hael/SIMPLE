@@ -1,3 +1,4 @@
+!@descr: file handling module
 module simple_fileio
 use simple_defs
 use simple_string

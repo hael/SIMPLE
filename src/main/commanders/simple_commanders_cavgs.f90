@@ -1,3 +1,4 @@
+!@descr: commanders for analysis of class averages
 module simple_commanders_cavgs
 use simple_commander_module_api
 use simple_strategy2D_utils

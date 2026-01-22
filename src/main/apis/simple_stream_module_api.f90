@@ -1,3 +1,4 @@
+!@descr: Aggregated public API for stream_exec.
 module simple_stream_module_api
 use simple_core_module_api
 use simple_defs_environment

@@ -1,3 +1,4 @@
+!@descr: project file utilities
 module simple_projfile_utils
 use simple_core_module_api
 use simple_image,      only: image

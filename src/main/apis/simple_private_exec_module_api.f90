@@ -1,4 +1,4 @@
-!> Aggregated public API for simple_private_exec.
+!@descr: Aggregated public API for simple_private_exec.
 !! 
 !! This module centralizes all commander types used by the simple_private_exec
 !! front-end. It:
