@@ -42,44 +42,56 @@ install(TARGETS ${SIMPLE_EXECUTABLES}
 # Tests
 # ------------------------------------------------------------------------------
 if(BUILD_TESTS)
-    # Find all test directories
-    file(GLOB TEST_DIRS
-        LIST_DIRECTORIES TRUE
-        RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-        "tests/test_*"
+  enable_testing()
+
+  # Find all test "main" programs
+  file(GLOB TEST_MAINS
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_test_*.[fF]90"
+  )
+
+  # Optional filtering (adjust patterns to your actual filenames)
+  if(NOT USE_MPI)
+    list(FILTER TEST_MAINS EXCLUDE REGEX "mpi")
+  endif()
+  if(NOT USE_COARRAYS)
+    list(FILTER TEST_MAINS EXCLUDE REGEX "coarray|coarrays")
+  endif()
+
+  foreach(main_src IN LISTS TEST_MAINS)
+    get_filename_component(main_we "${main_src}" NAME_WE)         # simple_test_ft_expanded
+    string(REGEX REPLACE "^simple_test_" "" test_id "${main_we}") # ft_expanded
+    set(test_name "${test_id}")              # ctest name
+    set(test_exe  "simple_test_${test_id}")  # executable name (choose what you like)
+    # Supporting sources for this test (e.g., simple_ft_expanded_tester.f90)
+    file(GLOB test_deps
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_${test_id}_*.[fF]90"
     )
-    if(NOT USE_MPI)
-        list(REMOVE_ITEM TEST_DIRS "tests/test_mpi")
+    # Build executable from main + deps
+    set(test_sources
+      "${CMAKE_CURRENT_SOURCE_DIR}/${main_src}"
+      ${test_deps}
+    )
+    list(REMOVE_DUPLICATES test_sources)
+    add_executable(${test_exe} ${test_sources})
+    target_link_libraries(${test_exe}
+      PRIVATE
+        ${SIMPLELIB}
+        ${SIMPLE_LIBRARIES}
+    )
+    install(TARGETS ${test_exe}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+    # Optional per-test data: tests/<prefix>*.txt
+    file(GLOB test_data
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/${main_we}*.txt"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_${test_id}_*.txt"
+    )
+    if(test_data)
+      install(FILES ${test_data}
+        DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/${test_id}"
+      )
     endif()
-    if(NOT USE_COARRAYS)
-        list(REMOVE_ITEM TEST_DIRS "tests/test_coarrays")
-    endif()
-    foreach(test_dir IN LISTS TEST_DIRS)
-        string(REPLACE "tests/" "" test_name "${test_dir}")
-        set(test_exe "simple_${test_name}")
-        file(GLOB_RECURSE test_sources
-            "${CMAKE_CURRENT_SOURCE_DIR}/${test_dir}/*.[fF][90][0538]"
-        )
-        if(test_sources)
-            add_executable(${test_exe} ${test_sources})
-            target_link_libraries(${test_exe}
-                PRIVATE
-                    ${SIMPLELIB}
-                    ${SIMPLE_LIBRARIES}
-            )
-            install(TARGETS ${test_exe}
-                RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-            )
-            file(GLOB test_data
-                "${CMAKE_CURRENT_SOURCE_DIR}/${test_dir}/*.txt"
-            )
-            if(test_data)
-                install(FILES ${test_data}
-                    DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/${test_name}"
-                )
-            endif()
-            add_test(NAME ${test_name}
-                     COMMAND ${test_exe})
-        endif()
-    endforeach()
+    add_test(NAME ${test_name} COMMAND ${test_exe})
+  endforeach()
 endif()
