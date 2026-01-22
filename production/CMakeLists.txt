@@ -43,13 +43,11 @@ install(TARGETS ${SIMPLE_EXECUTABLES}
 # ------------------------------------------------------------------------------
 if(BUILD_TESTS)
   enable_testing()
-
   # Find all test "main" programs
   file(GLOB TEST_MAINS
     RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/simple_test_*.[fF]90"
   )
-
   # Optional filtering (adjust patterns to your actual filenames)
   if(NOT USE_MPI)
     list(FILTER TEST_MAINS EXCLUDE REGEX "mpi")
@@ -57,7 +55,6 @@ if(BUILD_TESTS)
   if(NOT USE_COARRAYS)
     list(FILTER TEST_MAINS EXCLUDE REGEX "coarray|coarrays")
   endif()
-
   foreach(main_src IN LISTS TEST_MAINS)
     get_filename_component(main_we "${main_src}" NAME_WE)         # simple_test_ft_expanded
     string(REGEX REPLACE "^simple_test_" "" test_id "${main_we}") # ft_expanded
