@@ -11,13 +11,13 @@ set(STREAM_EXE          simple_stream)
 set(SIMPLE_PRIVATE_EXE  simple_private_exec)
 
 add_executable(${SIMPLE_EXE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/simple_exec.f90")
+    "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec.f90")
 add_executable(${SINGLE_EXE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exec.f90")
+    "${CMAKE_CURRENT_SOURCE_DIR}/single_exec.f90")
 add_executable(${STREAM_EXE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream/simple_stream.f90")
+    "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream.f90")
 add_executable(${SIMPLE_PRIVATE_EXE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
+    "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec.f90")
 
 set(SIMPLE_EXECUTABLES
     ${SIMPLE_EXE}
