@@ -74,12 +74,12 @@
       - **templatetags/**
     - **nice_project/**
     - **test_display/**
-  - **production/** — home of simple executables
+  - **production/** — home of executables
     - `production/simple_exec.f90`
     - `production/simple_private_exec.f90`
     - `production/simple_stream.f90`
     - `production/single_exec.f90`
-    - **tests/** — home of executable simple unit tests
+    - **tests/** — home of executable unit tests
       - `production/tests/simple_ft_expanded_tester.f90`
       - `production/tests/simple_test_angres.f90`
       - `production/tests/simple_test_ansi_colors.f90`
@@ -150,9 +150,9 @@
       - `production/tests/simple_test_uniform_rot.f90`
       - `production/tests/simple_test_units.f90`
       - `production/tests/test_socket_comm_distr.f90`
-  - **scripts/**
-  - **src/**
-    - **defs/**
+  - **scripts/** — home of scripts and code generators
+  - **src/** — main source code folder
+    - **defs/** — home of singleton modules with parameter and type definitions
       - `src/defs/simple_ansi_ctrls.f90`
       - `src/defs/simple_default_clines.f90`
       - `src/defs/simple_defs.f90`
@@ -165,24 +165,25 @@
       - `src/defs/simple_defs_string.f90`
       - `src/defs/simple_fftw3.f90`
       - `src/defs/simple_type_defs.f90`
-    - **extlibs/**
-      - **CPlot2D/**
+    - **extlibs/** — home of external libraries
+      - **CPlot2D/** — home of the CPlot2D library
         - `src/extlibs/CPlot2D/simple_CPlot2D_wrapper.f90`
-      - **gnufor/**
+      - **gnufor/** — home of the gnufor library for plotting with GNU plot
         - `src/extlibs/gnufor/gnufor2.f90`
-      - **jpg/**
+      - **jpg/** — home of the jpg library
         - `src/extlibs/jpg/simple_jpg.f90`
-      - **json/**
+      - **json/** — home of the json library
         - `src/extlibs/json/json_file_module.f90`
         - `src/extlibs/json/json_kinds.f90`
         - `src/extlibs/json/json_module.f90`
         - `src/extlibs/json/json_parameters.f90`
         - `src/extlibs/json/json_string_utilities.f90`
         - `src/extlibs/json/json_value_module.f90`
-      - **netlib/**
+      - **netlib/** — home of the netlib library
         - `src/extlibs/netlib/ssyevr.f90`
-      - **tiff/**
-      - **unix/**
+      - **starfile/** — home of C++ code for star file i/o
+      - **tiff/** — home of the tiff library
+      - **unix/** — home of the fortran-unix library
         - **src/**
           - `src/extlibs/unix/src/unix.f90`
           - `src/extlibs/unix/src/unix_dirent.F90`
@@ -210,7 +211,7 @@
           - `src/extlibs/unix/src/unix_unistd.F90`
           - `src/extlibs/unix/src/unix_utsname.F90`
           - `src/extlibs/unix/src/unix_wait.F90`
-      - **xml/**
+      - **xml/** — home of the xml library
         - **common/**
           - `src/extlibs/xml/common/FoX_common.F90`
           - `src/extlibs/xml/common/m_common_attrs.F90`
@@ -286,7 +287,7 @@
           - `src/extlibs/xml/wxml/m_wxml_core.F90`
           - `src/extlibs/xml/wxml/m_wxml_escape.F90`
           - `src/extlibs/xml/wxml/m_wxml_overloads.F90`
-    - **fileio/**
+    - **fileio/** — home of modules for i/o related to project files, mrc files, eer movies, star files etc.
       - `src/fileio/simple_binoris.f90`
       - `src/fileio/simple_binoris_io.f90`
       - `src/fileio/simple_class_sample_io.f90`
@@ -304,9 +305,8 @@
       - `src/fileio/simple_syslib.f90`
       - `src/fileio/simple_syslib_tester.f90`
       - `src/fileio/simple_tifflib.f90`
-      - **starfile/**
-    - **inc/**
-    - **main/**
+    - **inc/** — home of *.inc files containing macro definitions and enumerations
+    - **main/** — main source code directory
       - `src/main/simple_abinitio_config.f90`
       - `src/main/simple_abinitio_utils.f90`
       - `src/main/simple_builder.f90`
@@ -331,14 +331,14 @@
       - `src/main/simple_sym.f90`
       - `src/main/simple_symanalyzer.f90`
       - `src/main/simple_user_interface.f90`
-      - **apis/**
+      - **apis/** — application programming interfaces for cleaner use inclusion and faster compilation
         - `src/main/apis/simple_commander_module_api.f90`
         - `src/main/apis/simple_core_module_api.f90`
         - `src/main/apis/simple_exec_module_api.f90`
         - `src/main/apis/simple_private_exec_module_api.f90`
         - `src/main/apis/simple_stream_module_api.f90`
         - `src/main/apis/single_exec_module_api.f90`
-      - **commanders/**
+      - **commanders/** — home of the commanders implementing high-level application code
         - `src/main/commanders/simple_commander_base.f90`
         - `src/main/commanders/simple_commander_imgops.f90`
         - `src/main/commanders/simple_commander_stkops.f90`
@@ -374,12 +374,12 @@
         - `src/main/commanders/single_commanders_nano3D.f90`
         - `src/main/commanders/single_commanders_trajectory.f90`
         - `src/main/commanders/single_commanders_tseries.f90`
-      - **ctf/**
+      - **ctf/** — home of the modules for estimation and application of the contrast transfer function
         - `src/main/ctf/simple_ctf.f90`
         - `src/main/ctf/simple_ctf_estimate_cost.f90`
         - `src/main/ctf/simple_ctf_estimate_fit.f90`
         - `src/main/ctf/simple_ctf_estimate_iter.f90`
-      - **image/**
+      - **image/** — home of the submodules of the image class, its extensions, and its variants
         - `src/main/image/simple_fplane.f90`
         - `src/main/image/simple_ft_expanded.f90`
         - `src/main/image/simple_ft_expanded_dp.f90`
@@ -404,12 +404,12 @@
         - `src/main/image/simple_image_vis.f90`
         - `src/main/image/simple_polarizer.f90`
         - `src/main/image/simple_projector.f90`
-      - **interp/**
+      - **interp/** — home of the window functions for Fourier gridding interpolation
         - `src/main/interp/simple_edges_sqwins.f90`
         - `src/main/interp/simple_gridding.f90`
         - `src/main/interp/simple_kbinterpol.f90`
         - `src/main/interp/simple_winfuns.f90`
-      - **motion/**
+      - **motion/** — home of modules for movie motion correction
         - `src/main/motion/simple_motion_align_hybrid.f90`
         - `src/main/motion/simple_motion_align_nano.f90`
         - `src/main/motion/simple_motion_align_poly.f90`
@@ -418,13 +418,13 @@
         - `src/main/motion/simple_motion_correct_iter.f90`
         - `src/main/motion/simple_motion_correct_utils.f90`
         - `src/main/motion/simple_motion_patched.f90`
-      - **nano/**
+      - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `src/main/nano/simple_atoms.f90`
         - `src/main/nano/simple_nanoparticle.f90`
         - `src/main/nano/simple_nanoparticle_utils.f90`
         - `src/main/nano/simple_tseries_graphene_subtr.f90`
         - `src/main/nano/simple_tseries_tracker.f90`
-      - **opt/**
+      - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function
         - `src/main/opt/simple_opt_bfgs.f90`
         - `src/main/opt/simple_opt_bfgs2.f90`
         - `src/main/opt/simple_opt_bforce.f90`
@@ -442,13 +442,13 @@
         - `src/main/opt/simple_opt_stde.f90`
         - `src/main/opt/simple_opt_subs.f90`
         - `src/main/opt/simple_optimizer.f90`
-      - **pca/**
+      - **pca/** — home of modules implementing principal component analysis: SVD, probabilistic, and nonlinear kernel variants
         - `src/main/pca/simple_kpca_svd.f90`
         - `src/main/pca/simple_pca.f90`
         - `src/main/pca/simple_pca_svd.f90`
         - `src/main/pca/simple_ppca.f90`
         - `src/main/pca/simple_ppca_inmem.f90`
-      - **pftc/**
+      - **pftc/** — home of the polar FT calc submodules and modules for operations on polar FTs
         - `src/main/pftc/simple_pftc_shsrch_grad.f90`
         - `src/main/pftc/simple_polarft_access.f90`
         - `src/main/pftc/simple_polarft_calc.f90`
@@ -463,13 +463,13 @@
         - `src/main/pftc/simple_polarops_io.f90`
         - `src/main/pftc/simple_polarops_restore.f90`
         - `src/main/pftc/simple_polarops_state.f90`
-      - **pick/**
+      - **pick/** — home of modules for particle picking
         - `src/main/pick/simple_picker_iter.f90`
         - `src/main/pick/simple_picker_utils.f90`
         - `src/main/pick/simple_pickref.f90`
         - `src/main/pick/simple_pickseg.f90`
         - `src/main/pick/simple_picksegdiam.f90`
-      - **project/**
+      - **project/** — home of the submodules of the single-particle project class for managing project information in memory and on disk
         - `src/main/project/simple_sp_project.f90`
         - `src/main/project/simple_sp_project_cls.f90`
         - `src/main/project/simple_sp_project_core.f90`
@@ -479,7 +479,7 @@
         - `src/main/project/simple_sp_project_out.f90`
         - `src/main/project/simple_sp_project_ptcl.f90`
         - `src/main/project/simple_sp_project_stk.f90`
-      - **star/**
+      - **star/** — home of modules for star file and star project handling
         - `src/main/star/simple_relion.f90`
         - `src/main/star/simple_starfile.f90`
         - `src/main/star/simple_starfile_wrapper.f90`
@@ -487,7 +487,7 @@
         - `src/main/star/simple_starproject_stream.f90`
         - `src/main/star/simple_starproject_tester.f90`
         - `src/main/star/simple_starproject_utils.f90`
-      - **strategies/**
+      - **strategies/** — home of strategies for 2D and 3D orientation search
         - `src/main/strategies/simple_strategy2D.f90`
         - `src/main/strategies/simple_strategy2D3D_common.f90`
         - `src/main/strategies/simple_strategy2D_alloc.f90`
@@ -516,7 +516,7 @@
         - `src/main/strategies/simple_strategy3D_snhc_smpl.f90`
         - `src/main/strategies/simple_strategy3D_srch.f90`
         - `src/main/strategies/simple_strategy3D_utils.f90`
-      - **stream/**
+      - **stream/** — home of the stream task commanders in the pipelined stream application and their utilities
         - `src/main/stream/simple_mini_stream_utils.f90`
         - `src/main/stream/simple_stream2D_state.f90`
         - `src/main/stream/simple_stream_chunk.f90`
@@ -532,7 +532,7 @@
         - `src/main/stream/simple_stream_pool2D_utils.f90`
         - `src/main/stream/simple_stream_utils.f90`
         - `src/main/stream/simple_stream_watcher.f90`
-      - **volume/**
+      - **volume/** — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search
         - `src/main/volume/simple_dock_vols.f90`
         - `src/main/volume/simple_reconstructor.f90`
         - `src/main/volume/simple_reconstructor_eo.f90`
@@ -540,7 +540,7 @@
         - `src/main/volume/simple_volinterp.f90`
         - `src/main/volume/simple_volpft_corrcalc.f90`
         - `src/main/volume/simple_volpft_symsrch.f90`
-    - **utils/**
+    - **utils/** — utilities source code directory
       - `src/utils/simple_corrmat.f90`
       - `src/utils/simple_exec_helpers.f90`
       - `src/utils/simple_gauss2Dfit.f90`
@@ -565,28 +565,28 @@
       - `src/utils/simple_test_utils.f90`
       - `src/utils/simple_timer.f90`
       - `src/utils/simple_timer_omp.f90`
-      - **clustering/**
+      - **clustering/** — algorithms for clustering a distance matrix
         - `src/utils/clustering/simple_aff_prop.f90`
         - `src/utils/clustering/simple_cluster_seed.f90`
         - `src/utils/clustering/simple_clustering_utils.f90`
         - `src/utils/clustering/simple_hclust.f90`
         - `src/utils/clustering/simple_kmedoids.f90`
         - `src/utils/clustering/simple_kmedoids_online.f90`
-      - **comm/**
+      - **comm/** — utilities for interprocess communication with web sockets
         - `src/utils/comm/simple_distr_comm.f90`
         - `src/utils/comm/simple_socket_comm.f90`
         - `src/utils/comm/simple_stream_communicator.f90`
-      - **filter/**
+      - **filter/** — utilities for filtering and regularization
         - `src/utils/filter/simple_butterworth.f90`
         - `src/utils/filter/simple_estimate_ssnr.f90`
         - `src/utils/filter/simple_fsc.f90`
         - `src/utils/filter/simple_opt_filter.f90`
         - `src/utils/filter/simple_tvfilter.f90`
-      - **gui/**
+      - **gui/** — utilities for feeding information to the GUI
         - `src/utils/gui/simple_gui_utils.f90`
         - `src/utils/gui/simple_guistats.f90`
         - `src/utils/gui/simple_nice.f90`
-      - **math/**
+      - **math/** — home of mathematical and statistical utility routines
         - `src/utils/math/simple_decay_funs.f90`
         - `src/utils/math/simple_histogram.f90`
         - `src/utils/math/simple_linalg.f90`
@@ -601,7 +601,7 @@
         - `src/utils/math/simple_srch_sort_loc.f90`
         - `src/utils/math/simple_stat.f90`
         - `src/utils/math/simple_testfuns.f90`
-      - **qsys/**
+      - **qsys/** — utilities for controlling queue systems in distributed computing environments
         - `src/utils/qsys/simple_qsys_base.f90`
         - `src/utils/qsys/simple_qsys_ctrl.f90`
         - `src/utils/qsys/simple_qsys_env.f90`
@@ -612,7 +612,7 @@
         - `src/utils/qsys/simple_qsys_pbs.f90`
         - `src/utils/qsys/simple_qsys_sge.f90`
         - `src/utils/qsys/simple_qsys_slurm.f90`
-      - **structs/**
+      - **structs/** — implementation of various standard and non-standard data structures
         - `src/utils/structs/simple_chash.f90`
         - `src/utils/structs/simple_chash_tester.f90`
         - `src/utils/structs/simple_hash.f90`
