@@ -20,11 +20,11 @@ type(commander_pdb2mrc)  :: xpdb2mrc
 type(cmdline)            :: cline_pdb2mrc, cline
 type(multi_dendro)       :: test_tree
 real                     :: objs(2), t1, t2, simsum
-integer                  :: indxs(2), rc, ifoo, NPROJ = 10, nthr_max = 10, i, j
+integer                  :: indxs(2), rc, ifoo, NPROJ = 10, nthr_max = 10, i, j, icls
 type(image)              :: vol
 logical                  :: done = .false. 
-real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr_build, rt_tr_search, rt_tr_tot 
-integer(timer_int_kind)  ::  t_cc, t_ap, t_tr_build, t_tr_search
+real(timer_int_kind)     :: rt_cc, rt_ap, rt_tr_build, rt_tr_search, rt_tr_cls_hash, rt_tr_tot
+integer(timer_int_kind)  ::  t_cc, t_ap, t_tr_build, t_tr_search, t_tr_cls_hash
 type(aff_prop)           :: affprop    
 character(len=:), allocatable   :: cmd  
 real, allocatable               :: dist_mat_cc(:,:), sub_distmats(:,:,:)
@@ -80,7 +80,7 @@ rt_cc = toc(t_cc)
 
 print *, dist_mat_cc
 call normalize_minmax(dist_mat_cc)
-call affprop%new(NPROJ, dist_mat_cc, pref=-2.)
+call affprop%new(NPROJ, dist_mat_cc, pref=0.)
 t_ap = tic()
 call affprop%propagate(centers, labels, simsum)
 print *, 'labels', labels
@@ -98,57 +98,35 @@ t_tr_build = tic()
 call test_tree%build_multi_dendro(2)
 rt_tr_build = toc(t_tr_build)
 print *, 'tree build time', rt_tr_build
-
-! 2n - 1 th node is root 
-rootp => test_tree%node_store(1)%nodes(test_tree%node_store(1)%root_idx)
+t_tr_cls_hash = tic()
+call get_cls_indx(test_tree, 10, icls)
+rt_tr_search = toc(t_tr_cls_hash)
+print *, 'cls search time', rt_tr_search
+! 2n - 1 th node is root, point to icls root 
+rootp => test_tree%node_store(icls)%nodes(test_tree%node_store(icls)%root_idx)
 call print_s2_tree(rootp, show_subset = .true.)
 t_tr_search = tic()
-found => search_tree4ref(rootp, 5)
+found => search_tree4ref(rootp, 10)
 rt_tr_search = toc(t_tr_search)
 print *, 'tree search time', rt_tr_search
-
 if (.not. associated(found)) then
     print *, "found is NULL"
   else
     print *, "found%ref_idx = ", found%ref_idx
 end if
-! print *, 'tree build time', rt_tr
-! print *, 'tree_build_time', rt_tr
-! print *, 'pool', test_tree%root_array(1)%subset
-! print *, 'right', test_tree%root_array(1)%right%subset
-! print *, 'left', test_tree%root_array(1)%left%subset
-! print *, 'right => left', test_tree%root_array(1)%right%left%subset
-! print *, 'right => right', test_tree%root_array(1)%right%right%subset
 
-! should be 1, 4, 9
-! split into sub_dmats to make the trees from 
-! exemplars will be tree roots
+! walking from found
+! Arbitary objective function
+if(associated(rootp)) continue  
+objs(1) = real(rootp%left%ref_idx)**2
+objs(2) = real(rootp%right%ref_idx)**2
+do 
+    call walk_from_node(rootp, indxs, objs, done)
+    if(done) exit
+    objs(1) = real(indxs(1))**2
+    objs(2) = real(indxs(2))**2
+end do 
 
-
-! print *, test_dist_mat
-! test_dist_mat = reshape( [0., 0.8, 0., 0.8], [2,2])
-! call test_tree%set_distmat(test_dist_mat)
-! call test_tree%set_npnts(10)
-! call cpu_time(t1)
-! call test_tree%build_dendro
-! call cpu_time(t2)
-! print *, 'tree build time', t2 - t1
-
-! ! point to root to preserve tree structure
-! p => test_tree%root 
-! ! initialize 
-! objs(1) = real(p%left%ref_idx)**2
-! objs(2) = real(p%right%ref_idx)**2
-! do 
-!     print *, objs
-!     call walk_from_node(p, indxs, objs, done)
-!     if(done) exit
-!     print *, indxs
-!     objs(1) = real(indxs(1))**2
-!     objs(2) = real(indxs(2))**2
-! end do 
-
-! call print_dendro(test_tree%root)
 
 end program simple_test_tree_srch
     
