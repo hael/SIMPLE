@@ -1,4 +1,4 @@
-! Fourier index iterator
+!@descr: Fourier index iterator
 module simple_ftiter
 use simple_core_module_api
 implicit none

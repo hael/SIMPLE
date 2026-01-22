@@ -1,4 +1,4 @@
-! command line parsersimple_cmdline
+!@descr: command line parsersimple_cmdline
 module simple_cmdline
 use simple_core_module_api
 use simple_user_interface

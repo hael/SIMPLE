@@ -1,4 +1,4 @@
-! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
+!@descr: rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
 module simple_pftc_shsrch_grad
 use simple_core_module_api
 use simple_opt_spec,         only: opt_spec

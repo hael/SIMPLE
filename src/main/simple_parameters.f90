@@ -1,4 +1,4 @@
-! provides global distribution of constants and derived constants
+!@descr: provides global distribution of constants and derived constants
 module simple_parameters
 use simple_core_module_api
 use simple_cmdline,        only: cmdline

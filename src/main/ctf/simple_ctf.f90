@@ -1,3 +1,4 @@
+!@descr: defines the Contrast Transfer Function (CTF) of the electron microscope
 ! defines the Contrast Transfer Function (CTF) of the electron microscope
 ! based on a class used in CTFFIND4, developed by Alexis Rohou and Nikolaus
 ! Grigorieff at Janelia Farm. The below copyright statement therefore

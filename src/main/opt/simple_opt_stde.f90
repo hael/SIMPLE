@@ -1,4 +1,4 @@
-! function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)
+!@descr: function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)
 module simple_opt_stde
 use simple_core_module_api
 

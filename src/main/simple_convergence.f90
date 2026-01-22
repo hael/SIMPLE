@@ -1,4 +1,4 @@
-! for checking convergence
+!@descr: for checking convergence
 module simple_convergence
 use simple_core_module_api
 use simple_parameters, only: params_glob

@@ -1,4 +1,4 @@
-! time series tracker intended for movies of nanoparticles spinning in solution
+!@descr: time series tracker intended for movies of nanoparticles spinning in solution
 module simple_track_trajectory
 use simple_core_module_api
 use simple_parameters, only: params_glob

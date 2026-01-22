@@ -1,4 +1,4 @@
-! continuous function optimisation by Powell's method of conjugate search directions
+!@descr: continuous function optimisation by Powell's method of conjugate search directions
 
 module simple_opt_powell
 use simple_core_module_api

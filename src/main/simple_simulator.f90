@@ -1,4 +1,4 @@
-! simulation of single-particle images
+!@descr: simulation of single-particle images
 module simple_simulator
 use simple_core_module_api
 implicit none

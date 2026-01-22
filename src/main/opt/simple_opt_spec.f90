@@ -1,4 +1,4 @@
-! optimiser specification
+!@descr: optimiser specification
 module simple_opt_spec
 use simple_core_module_api
 implicit none

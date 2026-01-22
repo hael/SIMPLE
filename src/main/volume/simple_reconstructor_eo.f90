@@ -1,4 +1,4 @@
-! 3D reconstruction of even-odd pairs for FSC estimation
+!@descr: 3D reconstruction of even-odd pairs for FSC estimation
 module simple_reconstructor_eo
 use simple_core_module_api
 use simple_reconstructor, only: reconstructor

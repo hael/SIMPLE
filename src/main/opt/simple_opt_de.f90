@@ -1,4 +1,4 @@
-! continuous function optimisation by differential evolution
+!@descr: continuous function optimisation by differential evolution
 module simple_opt_de
 use simple_core_module_api
 use simple_optimizer, only: optimizer

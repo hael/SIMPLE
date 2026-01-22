@@ -1,4 +1,4 @@
-! array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
+!@descr: array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
 module simple_strategy3D_alloc
 use simple_core_module_api
 use simple_parameters,   only: params_glob

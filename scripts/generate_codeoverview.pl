@@ -29,6 +29,8 @@ my $file_scan_lines    = 40;
 my @exts               = ('f90', 'F90');
 my $include_nonfortran = 0;
 my @exclude_dirs_user  = ();
+# Only include these top-level directories (relative to repo root)
+my %ALLOWED_TOP_DIRS = map { $_ => 1 } qw(src production scripts);
 
 GetOptions(
   'root=s'              => \$root,
@@ -90,10 +92,6 @@ sub read_one_line_desc_file {
     next if is_blank($ln);
     $ln =~ s/\s+/ /g;
 
-    # If it uses !@desc: prefix, strip it
-    if ($ln =~ /^\s*!\s*\@desc\s*:\s*(.+?)\s*$/i) {
-      return $1;
-    }
     # If it uses !@descr: prefix, strip it
     if ($ln =~ /^\s*!\s*\@descr\s*:\s*(.+?)\s*$/i) {
       return $1;
@@ -132,7 +130,7 @@ sub read_fortran_desc {
   my @lines = slurp_first_n_lines($path, $file_scan_lines);
   for my $ln (@lines) {
     chomp $ln;
-    if ($ln =~ /^\s*!\s*\@desc\s*:\s*(.+?)\s*$/i) {
+    if ($ln =~ /^\s*!\s*\@descr\s*:\s*(.+?)\s*$/i) {
       my $d = $1;
       $d =~ s/\s+/ /g;
       return $d;
@@ -151,24 +149,43 @@ find(
     wanted => sub {
       my $path = $File::Find::name;
 
-      if (-d $path) {
-        my $name = basename($path);
+      # Normalize path
+      my $abs = abs_path($path) // return;
+
+      # Skip everything outside allowed top-level dirs
+      if ($abs ne $root) {
+        my $rel = File::Spec->abs2rel($abs, $root);
+        $rel =~ s{\\}{/}g;
+
+        my ($top) = split('/', $rel, 2);
+        unless ($ALLOWED_TOP_DIRS{$top}) {
+          if (-d $abs) {
+            $File::Find::prune = 1;
+          }
+          return;
+        }
+      }
+
+      # Directory handling
+      if (-d $abs) {
+        my $name = basename($abs);
         if ($DEFAULT_EXCLUDES{$name}) {
           $File::Find::prune = 1;
           return;
         }
-        $dirs{$path} = 1;
+        $dirs{$abs} = 1;
         return;
       }
 
-      return unless -f $path;
+      # File handling
+      return unless -f $abs;
 
-      my $dir = dirname($path);
+      my $dir = dirname($abs);
       if ($include_nonfortran) {
-        push @{ $files_by_dir{$dir} }, $path;
+        push @{ $files_by_dir{$dir} }, $abs;
       } else {
-        return unless is_fortran_file($path);
-        push @{ $files_by_dir{$dir} }, $path;
+        return unless is_fortran_file($abs);
+        push @{ $files_by_dir{$dir} }, $abs;
       }
     },
   },
@@ -200,13 +217,6 @@ for my $d (@dir_list) {
 for my $p (keys %children) {
   my @sorted = sort { lc(basename($a)) cmp lc(basename($b)) } @{ $children{$p} };
   $children{$p} = \@sorted;
-}
-
-sub relpath {
-  my ($path) = @_;
-  my $rel = File::Spec->abs2rel($path, $root);
-  $rel =~ s/\\/\//g;
-  return $rel eq '.' ? '' : $rel;
 }
 
 # Ensure output directory exists
@@ -251,13 +261,13 @@ while (@stack) {
   # Files
   if (exists $files_by_dir{$dir}) {
     for my $f (@{ $files_by_dir{$dir} }) {
-      my $rel = relpath($f);
+      my $fname = basename($f);
       my $fdesc = $include_nonfortran ? '' : read_fortran_desc($f);
 
       if ($fdesc ne '') {
-        print $out_fh "${indent}  - `$rel` — $fdesc\n";
+        print $out_fh "${indent}  - `$fname` — $fdesc\n";
       } else {
-        print $out_fh "${indent}  - `$rel`\n";
+        print $out_fh "${indent}  - `$fname`\n";
       }
     }
   }

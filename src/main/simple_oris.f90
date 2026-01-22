@@ -1,4 +1,4 @@
-! an agglomeration of orientations
+!@descr: an agglomeration of orientations
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds

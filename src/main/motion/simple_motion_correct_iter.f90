@@ -1,4 +1,4 @@
-! iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
+!@descr: iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_motion_correct_iter
 use simple_core_module_api
 use simple_image,      only: image

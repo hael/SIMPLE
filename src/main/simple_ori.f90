@@ -1,4 +1,4 @@
-! an orientation
+!@descr: an orientation
 module simple_ori
 use json_kinds
 use json_module

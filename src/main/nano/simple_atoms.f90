@@ -1,4 +1,4 @@
-! atomic structures and pdb parser
+!@descr: atomic structures and pdb parser
 module simple_atoms
 use simple_core_module_api
 use simple_defs_atoms

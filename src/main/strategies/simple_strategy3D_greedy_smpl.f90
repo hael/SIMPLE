@@ -1,4 +1,4 @@
-! concrete strategy3D: refinement
+!@descr: concrete strategy3D: refinement
 module simple_strategy3D_greedy_smpl
 use simple_core_module_api
 use simple_strategy3D_alloc

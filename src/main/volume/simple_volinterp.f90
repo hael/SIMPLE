@@ -1,6 +1,4 @@
-! projection of 3D volumes in the Fourier domain by convolution interpolation
-! to generate band-pass limited Cartesian and polar 2D Fourier transforms,
-! high-level routines
+!@descr: projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms, high-level routines
 module simple_simple_volinterp
 use simple_core_module_api
 use simple_image,      only: image

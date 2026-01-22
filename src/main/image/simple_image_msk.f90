@@ -1,4 +1,4 @@
-! 2D/3D envelope and adaptive masking
+!@descr: 2D/3D envelope and adaptive masking
 module simple_image_msk
 use simple_core_module_api
 use simple_image,      only: image

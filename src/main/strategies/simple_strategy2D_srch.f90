@@ -1,4 +1,4 @@
-! common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
+!@descr: common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
 module simple_strategy2D_srch
 use simple_core_module_api
 use simple_polarft_calc,     only: pftc_glob

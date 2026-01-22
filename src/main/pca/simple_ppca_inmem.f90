@@ -1,3 +1,4 @@
+!@descr: class for probabilistic principal component analysis
 !==Class simple_ppca_inmem
 !
 ! simple_ppca_inmem is the SIMPLE class for probabilistic principal component analysis.
