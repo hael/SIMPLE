@@ -1,3 +1,4 @@
+!@descr: constants used in streaming
 module simple_defs_stream
 character(len=*), parameter :: CHUNK_CLS_REJECTED         = 'cls_rejected_chunks.mrc'
 character(len=*), parameter :: CHUNK_PROJNAME             = 'chunk'

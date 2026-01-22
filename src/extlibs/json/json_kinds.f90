@@ -1,8 +1,7 @@
+!@descr: JSON-Fortran kind definitions
 !*****************************************************************************************
 !> author: Jacob Williams
 !  license: BSD
-!
-!  JSON-Fortran kind definitions.
 !
 !### License
 !  * JSON-Fortran is released under a BSD-style license.

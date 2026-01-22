@@ -1,3 +1,4 @@
+!@descr: string constants
 module simple_defs_string
 use, intrinsic :: iso_c_binding
 implicit none

@@ -1,8 +1,8 @@
+!@descr: Other parameters used by JSON-Fortran
 !*****************************************************************************************
 !> author: Jacob Williams
 !  license: BSD
 !
-!  Other parameters used by JSON-Fortran.
 !  This is a low-level module not meant to be used by a JSON-Fortran user.
 !
 !## License

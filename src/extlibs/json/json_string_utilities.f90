@@ -1,8 +1,7 @@
+!@descr: JSON-Fortran support module for string manipulation
 !*****************************************************************************************
 !> author: Jacob Williams
 !  license: BSD
-!
-!  JSON-Fortran support module for string manipulation.
 !
 !## License
 !  * JSON-Fortran is released under a BSD-style license.

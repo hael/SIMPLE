@@ -44,12 +44,12 @@ file(GLOB DEFS_src               "defs/*.[Ff][90][08]")
 file(GLOB GNUFOR_src             "extlibs/gnufor/*.[Ff][90][08]")
 file(GLOB JSON_src               "extlibs/json/*.[Ff][90][08]")
 file(GLOB NETLIB_src             "extlibs/netlib/*.[Ff][90][08]")
+file(GLOB STARFILE_src           "extlibs/starfile/*.cpp")
 file(GLOB UNIX_src               "extlibs/unix/src/*.[Ff][90][08]")
 file(GLOB XML_src                "extlibs/xml/*/*.[Ff][90][08]")
 file(GLOB CPLOT2D_src            "extlibs/CPlot2D/*.cpp" "extlibs/CPlot2D/*.[Ff][90][08]")
 file(GLOB_RECURSE UTILS_src      "utils/*.[Ff][90][08]")
 file(GLOB FILEIO_src             "fileio/*.[Ff][90][08]")
-file(GLOB STARFILE_src           "fileio/starfile/*.cpp")
 file(GLOB_RECURSE SIMPLE_src     "main/*.[Ff][90][08]")
 
 # JPG sources including C

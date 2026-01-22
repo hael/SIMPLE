@@ -1,3 +1,4 @@
+!@descr: static orientation record value enumerators and flag conversions
 module simple_defs_ori
 implicit none
 

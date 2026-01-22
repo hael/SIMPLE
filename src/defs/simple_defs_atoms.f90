@@ -1,3 +1,4 @@
+!@descr: covalent atomic radii and lattice parameter definitions 
 module simple_defs_atoms
 implicit none
 

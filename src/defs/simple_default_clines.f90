@@ -1,3 +1,4 @@
+!@descr: setting command line defaults
 module simple_default_clines
 use simple_defs
 use simple_cmdline,       only: cmdline
