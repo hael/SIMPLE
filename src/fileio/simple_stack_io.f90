@@ -1,4 +1,4 @@
-! This type is for single-threaded buffered contiguous reading/writing of image stacks and volumes
+!@descr: This class is for single-threaded buffered contiguous reading/writing of image stacks and volumes
 module simple_stack_io
 use simple_core_module_api
 use simple_image,   only: image

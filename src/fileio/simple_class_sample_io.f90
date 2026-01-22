@@ -1,3 +1,4 @@
+!@descr: for storing class sampling information on disk
 module simple_class_sample_io
 use simple_type_defs
 use simple_string_utils

@@ -1,4 +1,5 @@
-! class to deal with image files on disks. Supported formats are:
+!@descr: class to deal with image files on disks
+! Supported formats are:
 !  - Spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
 !  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
 ! This class is based on a class used in CTFFIND4, developed by Alexis Rohou

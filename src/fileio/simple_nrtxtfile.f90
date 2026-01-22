@@ -1,4 +1,4 @@
-! deals with text files of numbers
+!@descr: deals with text files of numbers
 module simple_nrtxtfile
 use simple_defs
 use simple_error

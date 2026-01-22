@@ -1,4 +1,4 @@
-! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
+!@descr: commanders for producing class averages
 module simple_commanders_mkcavgs
 use simple_commander_module_api
 use simple_classaverager

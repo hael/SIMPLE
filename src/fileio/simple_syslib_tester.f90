@@ -1,3 +1,4 @@
+!@descr: unit tests for the syslib module
 module simple_syslib_tester
 use simple_syslib
 use simple_string

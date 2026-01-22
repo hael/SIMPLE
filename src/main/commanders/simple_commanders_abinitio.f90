@@ -1,4 +1,4 @@
-! concrete commander: high-level workflows
+!@descr: commanders for abinitio 3D reconstruction in single- and multi-particle mode
 module simple_commanders_abinitio
 use simple_commander_module_api
 use simple_abinitio_config

@@ -1,3 +1,4 @@
+!@descr: standard EM image processing commanders
 module simple_commanders_imgproc
 use simple_commander_module_api
 implicit none
