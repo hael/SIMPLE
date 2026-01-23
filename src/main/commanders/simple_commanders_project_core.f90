@@ -432,9 +432,9 @@ contains
             case DEFAULT
                 ! generate file with defocus values
                 if( cline%defined('cluster') )then
-                    call spproj%os_ptcl2D%write(string(DEFTAB))
+                    call os_ptcl2D_prev%write(string(DEFTAB))
                 else
-                    call spproj%os_ptcl2D%write(string(DEFTAB), [params%fromp,params%top])
+                    call os_ptcl2D_prev%write(string(DEFTAB))
                 endif
                 ctfflag = spproj%get_ctfflag('ptcl2D', 1)
         end select
