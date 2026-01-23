@@ -1,4 +1,4 @@
-! 3D reconstruction from projections using convolution interpolation (gridding)
+!@descr: 3D reconstruction from projections using convolution interpolation (gridding)
 module simple_reconstructor
 use simple_core_module_api
 use simple_fftw3

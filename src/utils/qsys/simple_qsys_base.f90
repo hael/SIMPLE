@@ -1,4 +1,4 @@
-! batch-processing manager - abstract interface
+!@descr: batch-processing manager - abstract interface
 module simple_qsys_base
 implicit none
 

@@ -1,3 +1,4 @@
+!@descr: the abstract data type for sigma2 used when objfun=euclid
 module simple_euclid_sigma2
 use simple_core_module_api
 use simple_parameters,       only: params_glob

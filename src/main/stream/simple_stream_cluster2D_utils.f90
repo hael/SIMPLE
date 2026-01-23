@@ -1,3 +1,4 @@
+!@descr: utilities for running 2D clustering in the stream
 module simple_stream_cluster2D_utils
 use simple_core_module_api
 use simple_stream2D_state

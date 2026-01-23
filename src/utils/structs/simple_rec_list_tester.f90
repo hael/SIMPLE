@@ -1,3 +1,4 @@
+!@descr: unit test routines for class rec_list
 module simple_rec_list_tester
 use simple_rec_list
 use simple_defs

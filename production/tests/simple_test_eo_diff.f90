@@ -1,3 +1,4 @@
+!@descr: tests randomization of phases below noise power
 program simple_test_eo_diff
 use simple_core_module_api
 use simple_image, only: image

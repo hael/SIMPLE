@@ -1,4 +1,4 @@
-!@descr: concrete commander: high-level workflows
+!@descr: utilities for ab initio 3D reconstruction used by commanders_abinitio
 module simple_abinitio_utils
 use simple_commander_module_api
 use simple_abinitio_config

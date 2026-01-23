@@ -1,3 +1,4 @@
+!@descr: used for generating dose fractionated micrographs from movies
 module simple_micrograph_generator
 use simple_core_module_api
 use simple_eer_factory,          only: eer_decoder

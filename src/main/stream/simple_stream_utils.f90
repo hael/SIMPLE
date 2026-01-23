@@ -1,3 +1,4 @@
+!@descr: various stream utilities
 module simple_stream_utils
 use simple_core_module_api
 use json_kinds

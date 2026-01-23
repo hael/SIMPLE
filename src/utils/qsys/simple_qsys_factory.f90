@@ -1,4 +1,4 @@
-! batch-processing manager - Factory class
+!@descr: batch-processing manager - Factory class
 module simple_qsys_factory
 use simple_core_module_api
 use simple_qsys_base,  only: qsys_base

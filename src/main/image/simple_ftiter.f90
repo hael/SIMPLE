@@ -1,4 +1,4 @@
-!@descr: Fourier index loop range genrator and mapping of logical indexing to physical indexing
+!@descr: Fourier index loop range generator and mapping of logical indexing to physical indexing
 module simple_ftiter
 use simple_core_module_api
 implicit none

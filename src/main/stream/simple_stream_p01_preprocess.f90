@@ -1,3 +1,4 @@
+!@descr: task 1 in the stream pipeline: pre-processing (movie registration, CTF estimation, segmentation-based picking)
 module simple_stream_p01_preprocess
 use simple_stream_module_api
 use simple_motion_correct_utils, only: flip_gain

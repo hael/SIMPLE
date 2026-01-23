@@ -1,4 +1,4 @@
-! batch-processing manager - environment module
+!@descr: batch-processing manager - environment module
 module simple_qsys_env
 use simple_core_module_api
 use simple_defs_environment

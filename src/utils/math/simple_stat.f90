@@ -1,4 +1,4 @@
-! statistics utility functions
+!@descr: statistics utility functions
 module simple_stat
 !$ use omp_lib
 !$ use omp_lib_kinds

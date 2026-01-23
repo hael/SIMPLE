@@ -1,4 +1,4 @@
-! box sizes optimised for FFTW perfomance
+!@descr: box sizes optimised for FFTW perfomance
 module simple_magic_boxes
 use simple_math,  only: find, round2even
 use simple_error, only: simple_exception

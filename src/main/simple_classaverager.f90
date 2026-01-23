@@ -1,3 +1,4 @@
+!@descr: for production of Cartesian class averages
 module simple_classaverager
 use simple_core_module_api
 use simple_builder,           only: build_glob

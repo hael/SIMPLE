@@ -1,3 +1,4 @@
+!@descr: abstract data type for the stream_chunk, defining a chunk of data processed in parallel 
 module simple_stream_chunk
 use simple_core_module_api
 use simple_defs_environment

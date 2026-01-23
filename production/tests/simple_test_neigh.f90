@@ -1,3 +1,4 @@
+!@descr: test for refine=neigh modes
 program simple_test_neigh
 use simple_core_module_api
 implicit none

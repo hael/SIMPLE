@@ -1,3 +1,4 @@
+!@descr: segmentation routines: peak detection, edge detection, otsu's algorithm, Hough transform, Sauvola etc.
 module simple_segmentation
 use simple_core_module_api
 use simple_image,     only: image

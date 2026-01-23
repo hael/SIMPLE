@@ -1,4 +1,4 @@
-!@descr: environment variable flags
+!@descr: environment variable flag definitions
 module simple_defs_environment
 use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
 ! SLURM ENVIRONMENT VARIABLES

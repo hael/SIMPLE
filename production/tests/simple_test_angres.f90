@@ -1,3 +1,4 @@
+!@descr: angular resolution as a function of number of projection directions
 program simple_test_angres
 use simple_core_module_api
 implicit none

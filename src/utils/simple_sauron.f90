@@ -1,4 +1,4 @@
-! SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
+!@descr: SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
 ! provides support for one-line per one particle input/output
 module simple_sauron
 use simple_hash,    only: hash

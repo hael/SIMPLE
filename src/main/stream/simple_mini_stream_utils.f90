@@ -1,3 +1,4 @@
+!@descr: utilities for running the mini batch version of the stream
 module simple_mini_stream_utils
 use simple_core_module_api
 use simple_micproc

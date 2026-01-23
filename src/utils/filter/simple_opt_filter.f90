@@ -1,4 +1,4 @@
-! optimization(search)-based filter (uniform/nonuniform)
+!@descr: optimization(search)-based filtering (uniform/nonuniform)
 module simple_opt_filter
 use simple_core_module_api
 use simple_image,      only: image, image_ptr

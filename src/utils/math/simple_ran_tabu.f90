@@ -1,4 +1,4 @@
-! routines for generation of directed random numbers
+!@descr: routines for generation of directed random numbers
 module simple_ran_tabu
 use simple_defs
 use simple_error, only: simple_exception

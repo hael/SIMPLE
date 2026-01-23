@@ -1,4 +1,4 @@
-!@descr: parameters controlling convergence 2D and 3D orientation search 
+!@descr: parameters controlling convergence of 2D and 3D orientation search 
 module simple_defs_conv
 ! overlap limits
 real, parameter :: OVERLAP_2D          = 0.80   ! based on Susan's observations on the small stuff, early stopping reduces overfitting

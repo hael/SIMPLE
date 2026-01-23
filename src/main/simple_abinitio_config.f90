@@ -1,3 +1,4 @@
+!@descr: singleton for common state variables used in abinitio_utils and commanders_abinitio
 module simple_abinitio_config
 use simple_type_defs, only: lp_crop_inf
 use simple_sym,       only: sym

@@ -1,4 +1,4 @@
-! real hash data structure
+!@descr: real hash data structure
 module simple_hash
 use simple_error, only: simple_exception
 use simple_string_utils

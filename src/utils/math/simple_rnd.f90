@@ -1,5 +1,4 @@
-! random number generation module
-
+!@descr: random number generation module
 module simple_rnd
 use simple_defs
 use simple_math

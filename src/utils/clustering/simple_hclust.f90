@@ -1,4 +1,4 @@
-! Agglomerative hierarchical clustering using nearest-neighbor chain
+!@descr: agglomerative hierarchical clustering of a distance matrix using nearest-neighbor chain
 module simple_hclust
 use simple_core_module_api
 implicit none

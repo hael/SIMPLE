@@ -1,3 +1,4 @@
+!@descr: utilities for chunk-based 2D clustering in stream
 module simple_stream_chunk2D_utils
 use simple_core_module_api
 use simple_defs_environment

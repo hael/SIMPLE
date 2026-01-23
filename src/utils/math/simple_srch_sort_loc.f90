@@ -1,3 +1,4 @@
+!@descr: searching ordered tables, sorting, locate etc.
 module simple_srch_sort_loc
 use simple_defs
 use simple_error, only: simple_exception

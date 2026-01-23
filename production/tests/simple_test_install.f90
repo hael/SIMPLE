@@ -1,3 +1,4 @@
+!@descr: for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
 program simple_test_install
 use simple_core_module_api
 use simple_testfuns ! use all in there

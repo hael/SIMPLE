@@ -1,3 +1,4 @@
+!@descr: pixel neighborhood definitions and generation
 module simple_neighs
 use simple_core_module_api
 implicit none

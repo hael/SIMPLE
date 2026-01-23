@@ -1,4 +1,4 @@
-! for calculation of correlation matrices
+!@descr: for calculation of correlation matrices
 module simple_corrmat
 use simple_core_module_api
 use simple_defs

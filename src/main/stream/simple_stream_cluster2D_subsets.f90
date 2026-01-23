@@ -1,3 +1,4 @@
+!@descr: high-level batch testing of the sieving logics used in the stream
 module simple_stream_cluster2D_subsets
 use simple_stream_module_api
 use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_match_cavgs

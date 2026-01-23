@@ -1,3 +1,4 @@
+!@descr: unit test routines for hash class
 module simple_hash_tester
 use simple_defs
 use simple_hash

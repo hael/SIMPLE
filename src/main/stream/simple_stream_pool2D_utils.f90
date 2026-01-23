@@ -1,3 +1,4 @@
+!@descr: utilities for running the pool 2D refinement
 module simple_stream_pool2D_utils
 use simple_stream_module_api
 implicit none

@@ -1,4 +1,4 @@
-! seeding methods for state labelling
+!@descr: seeding methods for state labelling
 module simple_cluster_seed
 use simple_core_module_api
 

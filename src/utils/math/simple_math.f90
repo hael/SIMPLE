@@ -1,4 +1,4 @@
-! various mathematical subroutines and functions
+!@descr: various mathematical subroutines and functions
 module simple_math
 !$ use omp_lib
 use simple_defs

@@ -1,4 +1,4 @@
-! routines for distributed SIMPLE execution
+!@descr: routines for distributed SIMPLE execution
 module simple_map_reduce
 use simple_defs
 use simple_fileio

@@ -1,3 +1,4 @@
+!@descr: unit test routines for the ori class
 module simple_ori_tester
 use simple_ori                 ! the class under test
 use simple_string, only: string

@@ -1,4 +1,4 @@
-! k-medoids clustering of a similarity matrix
+!@descr: k-medoids clustering of a similarity matrix
 module simple_kmedoids
 use simple_core_module_api
 implicit none

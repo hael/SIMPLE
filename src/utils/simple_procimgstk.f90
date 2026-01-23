@@ -1,4 +1,4 @@
-! stack image processing routines for SPIDER/MRC files
+!@descr: stack image processing routines, applying a subset of image class methods to stacks
 module simple_procimgstk
 use simple_core_module_api
 use simple_image,    only: image

@@ -1,4 +1,4 @@
-! spectral signal-to-noise ratio estimation routines
+!@descr: spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
 !$ use omp_lib
 !$ use omp_lib_kinds

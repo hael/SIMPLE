@@ -1,4 +1,4 @@
-! optimization(search)-based masking
+!@descr: optimization(search)-based masking
 module simple_opt_mask
 use simple_core_module_api
 use simple_image,      only: image, image_ptr

@@ -1,3 +1,4 @@
+!@descr: decay functions for annealing
 module simple_decay_funs
 use simple_core_module_api
 implicit none

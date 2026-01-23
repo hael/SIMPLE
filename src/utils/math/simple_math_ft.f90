@@ -1,3 +1,4 @@
+!@descr: Fourier transform-related math routines
 module simple_math_ft
 use simple_defs
 use simple_error, only: simple_exception

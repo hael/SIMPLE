@@ -1,4 +1,4 @@
-! stack image processing routines for SPIDER/MRC files and other useful img jiffys
+!@descr: various image processing routines
 module simple_imgproc
 use simple_core_module_api
 use simple_image, only: image

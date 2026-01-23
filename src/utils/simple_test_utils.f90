@@ -1,3 +1,4 @@
+!@descr: utilities for unit testing, assertions etc.
 module simple_test_utils
 use simple_string, only: string
 use simple_defs

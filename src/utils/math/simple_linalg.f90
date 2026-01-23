@@ -1,3 +1,4 @@
+!@descr: linear algebra stuff
 module simple_linalg
 use simple_defs
 use simple_is_check_assert

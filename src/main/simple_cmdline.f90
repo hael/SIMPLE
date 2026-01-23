@@ -1,4 +1,4 @@
-!@descr: command line parsersimple_cmdline
+!@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
 use simple_user_interface

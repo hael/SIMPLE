@@ -1,4 +1,4 @@
-! executes the shared-memory parallelised programs in SIMPLE
+!@descr: executes SIMPLE workflows
 program simple_exec
 use simple_exec_module_api
 implicit none
@@ -466,7 +466,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('a96af2dc')
+    call simple_print_git_version('ff23a6f1')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

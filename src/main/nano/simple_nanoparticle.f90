@@ -1,5 +1,5 @@
 
-!@descr: the nanoparticle abstract data type, used for automated atomic model building on SINGLE
+!@descr: the nanoparticle abstract data type, used for automated atomic model building in SINGLE
 module simple_nanoparticle
 use simple_core_module_api
 use simple_defs_atoms

@@ -1,3 +1,4 @@
+!@descr: various GUI utility functions
 module simple_gui_utils
 use simple_core_module_api
 use simple_image,      only: image

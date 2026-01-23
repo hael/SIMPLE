@@ -1,3 +1,4 @@
+!@descr: polymorphic linked list class
 module simple_linked_list
 use simple_core_module_api
 implicit none

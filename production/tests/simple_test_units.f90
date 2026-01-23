@@ -1,3 +1,4 @@
+!@descr: runs all implemented unit tests
 program simple_test_units
 use simple_core_module_api
 use simple_imghead, only: test_imghead

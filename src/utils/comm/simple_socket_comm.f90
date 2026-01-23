@@ -1,3 +1,4 @@
+!@descr: abstract data type for a web socket
 module simple_socket_comm
 use, intrinsic :: iso_c_binding
 implicit none

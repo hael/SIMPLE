@@ -1,3 +1,4 @@
+!@descr: for analyzing sets of ab initio volumes, current implementation just outputting the medoid
 module simple_volanalyzer
 use simple_core_module_api
 use simple_dock_vols,        only: dock_vols

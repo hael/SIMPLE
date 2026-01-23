@@ -1,4 +1,4 @@
-! clustering based on a similartity matrix using affinity propagation
+!@descr: clustering of a similartity matrix using affinity propagation
 module simple_aff_prop
 use simple_core_module_api
 implicit none
