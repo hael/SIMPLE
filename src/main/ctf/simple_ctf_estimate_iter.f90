@@ -1,4 +1,4 @@
-! ctf_estimate iterator
+!@descr: does one iteration of CTF estimation
 module simple_ctf_estimate_iter
 use simple_core_module_api
 use simple_parameters,       only: params_glob

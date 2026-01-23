@@ -1,4 +1,4 @@
-! concrete commander: resolest for resolution estimation
+!@descr: for resolution estimation
 module simple_commanders_resolest
 use simple_commander_module_api
 use simple_fsc

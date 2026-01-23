@@ -1,4 +1,4 @@
-! concrete commander: operations on projects (spproject) and associated files
+!@descr: project commanders for particle-related things
 module simple_commanders_project_ptcl
 use simple_commander_module_api
 use simple_stream_watcher, only: stream_watcher

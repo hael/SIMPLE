@@ -1,3 +1,4 @@
+!@descr: starproject import, export, etc.
 module simple_commanders_starproject
 use simple_commander_module_api
 use simple_starproject, only: starproject

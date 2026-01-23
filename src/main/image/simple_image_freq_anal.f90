@@ -1,3 +1,4 @@
+!@descr: image frequency domain analysis, power spectrum etc.
 submodule (simple_image) simple_image_freq_anal
 implicit none
 #include "simple_local_flags.inc"

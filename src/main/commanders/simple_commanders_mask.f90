@@ -1,4 +1,4 @@
-!@descr: masking routines
+!@descr: masking and auto-masking
 module simple_commanders_mask
 use simple_commander_module_api
 implicit none

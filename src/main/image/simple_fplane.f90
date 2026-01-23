@@ -1,4 +1,4 @@
-!@descr: 3D reconstruction from projections using convolution interpolation (gridding)
+!@descr: re-arranged Fourier transformed image for fast 3D gridding
 module simple_fplane
 use simple_core_module_api
 use simple_memoize_ft_mapping

@@ -1,5 +1,4 @@
-! the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class
-! and Fourier transformations done in-place to reduce memory usage
+!@descr: the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class and FTs done in-place to reduce memory usage
 module simple_image
 use simple_core_module_api
 use simple_fftw3

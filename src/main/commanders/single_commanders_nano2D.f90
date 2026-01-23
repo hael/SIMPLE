@@ -1,4 +1,4 @@
-! concrete commander: time-series analysis
+!@descr: 2D analysis commanders used in SINGLE for nanoparticle processing
 module single_commanders_nano2D
 use simple_commander_module_api
 use simple_commanders_cluster2D, only: commander_cluster2D

@@ -1,4 +1,4 @@
-! concrete commander: 3D reconstruction routines
+!@descr: 3D reconstruction and associated things
 module simple_commanders_rec
 use simple_commander_module_api
 use simple_strategy2D3D_common

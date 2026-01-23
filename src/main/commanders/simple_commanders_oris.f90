@@ -1,4 +1,4 @@
-! concrete commander: operations on orientations
+!@descr: for operating on orientations
 module simple_commanders_oris
 use simple_commander_module_api
 implicit none

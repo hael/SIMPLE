@@ -1,3 +1,4 @@
+!@descr: checking image stuff
 submodule (simple_image) simple_image_checks
 implicit none
 #include "simple_local_flags.inc"

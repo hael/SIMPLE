@@ -1,3 +1,4 @@
+!@descr: core fft routines as well as fused optimized operations involving ffts
 submodule (simple_image) simple_image_fft
 implicit none
 #include "simple_local_flags.inc"

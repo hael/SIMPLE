@@ -1,4 +1,4 @@
-! concrete commander: operations on volumes
+!@descr: operations on volumes
 module simple_commanders_volops
 use simple_commander_module_api
 use simple_strategy2D_utils

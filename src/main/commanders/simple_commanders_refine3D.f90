@@ -1,4 +1,4 @@
-! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
+!@descr: supporting 3D orientation search
 module simple_commanders_refine3D
 use simple_commander_module_api
 use simple_commanders_euclid

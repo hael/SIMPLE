@@ -1,4 +1,4 @@
-!@descr: checking routines
+!@descr: checking info about images, project, or checking update calculations
 module simple_commanders_checks
 use simple_commander_module_api
 implicit none

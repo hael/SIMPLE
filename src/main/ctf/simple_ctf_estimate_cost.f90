@@ -1,3 +1,4 @@
+!@descr: cost functions for CTF fitting
 module simple_ctf_estimate_cost
 use simple_core_module_api
 use simple_image,     only: image

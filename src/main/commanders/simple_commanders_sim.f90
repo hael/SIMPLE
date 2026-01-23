@@ -1,4 +1,4 @@
-! concrete commander: simulation routines
+!@descr: for simulating noise, particles, movies, atoms, etc.
 module simple_commanders_sim
 use simple_commander_module_api
 use simple_defs_atoms

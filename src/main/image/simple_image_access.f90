@@ -1,3 +1,4 @@
+!@descr: image class getters, setters, serializers etc.
 submodule (simple_image) simple_image_access
 implicit none
 #include "simple_local_flags.inc"

@@ -1,4 +1,4 @@
-! concrete commander: pre-processing routines
+!@descr: for pre-processing (motion correction, CTF estimation etc.)
 module simple_commanders_preprocess
 use simple_commander_module_api
 use simple_motion_correct_utils, only: flip_gain

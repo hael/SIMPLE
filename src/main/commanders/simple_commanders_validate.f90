@@ -1,5 +1,5 @@
 
-! concrete commander: cluster2D_stream for streaming 2D alignment and clustering of single-particle images
+!@descr: validation of stream functionalities in batch execution mode
 module simple_commanders_validate
 use simple_commander_module_api
 use simple_commanders_abinitio2D,   only: commander_abinitio2D

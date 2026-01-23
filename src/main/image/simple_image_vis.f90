@@ -1,3 +1,4 @@
+!@descr: for supporting visualization of images in various ways
 submodule (simple_image) simple_image_vis
 implicit none
 #include "simple_local_flags.inc"

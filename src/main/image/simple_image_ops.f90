@@ -1,3 +1,4 @@
+!@descr: opreations on images not fitting elewhere: noise, zero, background, CTF division etc.
 submodule (simple_image) simple_image_ops
 implicit none
 #include "simple_local_flags.inc"
