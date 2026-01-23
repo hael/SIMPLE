@@ -1,4 +1,4 @@
-!@descr: miscallenaous routines
+!@descr: stuff that didn't fit elsewhere
 module simple_commanders_misc
 include "starfile_enum.inc"
 use simple_commander_module_api

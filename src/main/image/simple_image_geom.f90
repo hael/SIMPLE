@@ -1,3 +1,4 @@
+!@descr: geometrical image operations: window, shift, pad, clip etc.
 submodule (simple_image) simple_image_geom
 implicit none
 #include "simple_local_flags.inc"

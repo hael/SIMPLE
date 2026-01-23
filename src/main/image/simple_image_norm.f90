@@ -1,3 +1,4 @@
+!@descr: image normalization routines
 submodule (simple_image) simple_image_norm
 implicit none
 #include "simple_local_flags.inc"

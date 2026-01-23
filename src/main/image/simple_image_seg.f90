@@ -1,3 +1,4 @@
+!@descr: image segmentation related stuff to support masking
 submodule (simple_image) simple_image_seg
 implicit none
 #include "simple_local_flags.inc"

@@ -1,3 +1,4 @@
+!@descr: routines for anisotroic (patched) CTF estimation
 module simple_ctf_estimate_fit
 use simple_core_module_api
 use simple_image,             only: image

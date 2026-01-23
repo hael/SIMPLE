@@ -1,3 +1,4 @@
+!@descr: arithmetics on images
 submodule (simple_image) simple_image_arith
 implicit none
 #include "simple_local_flags.inc"

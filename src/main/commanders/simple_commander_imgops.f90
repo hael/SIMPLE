@@ -1,4 +1,4 @@
-!@descr: commanders for standard image operations: binarize, filter, denoise, normalize, scale etc.
+!@descr: standard image operations: binarize, filter, denoise, normalize, scale etc.
 module simple_commanders_imgops
 use simple_commander_module_api
 implicit none

@@ -1,4 +1,4 @@
-! expanded Fourier transform class for improved cache utilisation
+!@descr: expanded Fourier transform class for improved cache utilisation
 module simple_ft_expanded
 use simple_core_module_api
 use simple_image, only: image

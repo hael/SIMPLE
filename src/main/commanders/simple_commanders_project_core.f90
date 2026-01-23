@@ -1,4 +1,4 @@
-! concrete commander: operations on projects (spproject) and associated files
+!@descr: commanders for operating on projects (spproject) and associated files, the core stuff
 module simple_commanders_project_core
 use simple_commander_module_api
 use simple_stream_communicator, only: stream_http_communicator

@@ -1,3 +1,4 @@
+!@descr: square windows and mask edges
 module simple_edges_sqwins
 use simple_defs
 use simple_error, only: simple_exception

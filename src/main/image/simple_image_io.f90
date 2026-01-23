@@ -1,3 +1,4 @@
+!@descr: for reading and writing images from/to disk
 submodule (simple_image) simple_image_io
 implicit none
 #include "simple_local_flags.inc"

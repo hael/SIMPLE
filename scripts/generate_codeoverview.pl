@@ -24,7 +24,7 @@ use Getopt::Long qw(GetOptions);
 #   --exclude-dir build --exclude-dir dist  (repeatable)
 
 my $root               = '..';
-my $out                = '../doc/CodeOverview/CodeBase_Map.md';
+my $out                = '../doc/code_overview/code_base_map.md';
 my $file_scan_lines    = 40;
 my @exts               = ('f90', 'F90');
 my $include_nonfortran = 0;

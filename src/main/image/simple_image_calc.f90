@@ -1,3 +1,4 @@
+!@descr: calculating stuff from images
 submodule (simple_image) simple_image_calc
 implicit none
 #include "simple_local_flags.inc"

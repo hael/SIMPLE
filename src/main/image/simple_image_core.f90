@@ -1,3 +1,4 @@
+!@descr: core image functionality, such as constructors/object lifecycle
 submodule (simple_image) simple_image_core
 implicit none
 #include "simple_local_flags.inc"

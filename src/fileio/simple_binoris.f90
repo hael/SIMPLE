@@ -1,4 +1,4 @@
-!@descr: for manging orientation data using binary files
+!@descr: for managing orientation data using binary files
 module simple_binoris
 !$ use omp_lib
 use, intrinsic :: ISO_C_BINDING

@@ -1,3 +1,4 @@
+!@descr: extension of the image class for binary images
 module simple_image_bin
 use simple_core_module_api
 use simple_image, only: image

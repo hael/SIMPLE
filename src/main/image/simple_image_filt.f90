@@ -1,3 +1,4 @@
+!@descr: image filtering and denoising
 submodule (simple_image) simple_image_filt
 implicit none
 #include "simple_local_flags.inc"
