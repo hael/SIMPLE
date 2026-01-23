@@ -279,7 +279,7 @@ type :: parameters
     integer :: box_extract
     integer :: boxpd=0
     integer :: cc_iters=1          !< number of iterations with objfun=cc before switching to another objective function
-    integer :: class=1             !< cluster identity
+    integer :: class=1             !< 2D class identity
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: clustind=0          !< cluster index
     integer :: cn=8                !< fixed std coord number for atoms in nanos

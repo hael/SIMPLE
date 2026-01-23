@@ -515,9 +515,9 @@ contains
         call orig_stk%kill
     end subroutine split_stk
 
-    module subroutine write_substk( self, fromto, stkout )
+    module subroutine write_substk_1( self, fromp, top, stkout )
         class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: fromto(2)
+        integer,           intent(in)    :: fromp, top
         class(string),     intent(in)    :: stkout
         integer         :: ind_in_stk, iptcl, n_os_stk, nptcls, box, cnt, ffromto(2)
         real            :: smpd
@@ -529,13 +529,14 @@ contains
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            THROW_HARD('No stack(s) to extract from! write_substk')
+            THROW_HARD('No stack(s) to extract from! write_substk_1')
         endif
         ! get original simple_parameters
         call self%os_stk%get_ori(1, orig_stk)
         ! copy prep
-        nptcls  = self%get_nptcls()
-        ffromto = fromto
+        nptcls = self%get_nptcls()
+        ffromto(1) = fromp
+        ffromto(2) = top
         if( ffromto(1) < 1 ) ffromto(1) = 1
         if( ffromto(2) < 1 ) ffromto(2) = nptcls
         ! images copy
@@ -556,7 +557,46 @@ contains
         call dstkio_r%kill
         call img%kill
         call orig_stk%kill
-    end subroutine write_substk
+    end subroutine write_substk_1
+
+    module subroutine write_substk_2( self, pinds, stkout )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: pinds(:)
+        class(string),     intent(in)    :: stkout
+        integer         :: ind_in_stk, iptcl, n_os_stk, nptcls, box, i
+        real            :: smpd
+        type(image)     :: img
+        type(string)    :: stk
+        type(ori)       :: orig_stk
+        type(stack_io)  :: stkio_w
+        type(dstack_io) :: dstkio_r
+        ! check that stk field is not empty
+        n_os_stk = self%os_stk%get_noris()
+        if( n_os_stk == 0 )then
+            THROW_HARD('No stack(s) to extract from! write_substk_2')
+        endif
+        ! get original simple_parameters
+        call self%os_stk%get_ori(1, orig_stk)
+        ! copy prep
+        nptcls  = self%get_nptcls()
+        ! images copy
+        smpd = orig_stk%get('smpd')
+        box  = orig_stk%get_int('box')
+        call img%new([box,box,1], smpd)
+        call dstkio_r%new(smpd, box)
+        call stkio_w%open(stkout, smpd, 'write', box=box, is_ft=.false.)
+        do i = 1,size(pinds)
+            iptcl = pinds(i)
+            if( iptcl < 1 .or. iptcl > nptcls ) THROW_HARD('index '//int2str(iptcl)//' out of range')
+            call self%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
+            call dstkio_r%read(stk, ind_in_stk, img)
+            call stkio_w%write(i, img)
+        end do
+        call stkio_w%close
+        call dstkio_r%kill
+        call img%kill
+        call orig_stk%kill
+    end subroutine write_substk_2
 
     module subroutine add_scale_tag( self, dir )
         class(sp_project),       intent(inout) :: self

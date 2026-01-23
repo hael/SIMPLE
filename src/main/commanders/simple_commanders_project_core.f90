@@ -408,13 +408,22 @@ contains
         if( .not. cline%defined('outstk') )then
             params%outstk = params%subprojname//'.mrcs'
         endif
-        call spproj%write_substk([params%fromp,params%top], params%outstk)
-        ! extract previous oris
-        os_ptcl2D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
-        os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
-        ! extract previous pinds
-        pinds = nint(os_ptcl3D_prev%get_all('pind'))
-        n     = size(pinds) 
+        if( cline%defined('clustind') )then
+            call spproj%os_ptcl2D%get_pinds(params%clustind, 'cluster', pinds)
+            n = size(pinds)
+            call spproj%write_substk(pinds, params%outstk)
+            ! extract previous oris
+            os_ptcl2D_prev = spproj%os_ptcl2D%extract_subset(pinds)
+            os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset(pinds)
+        else
+            call spproj%write_substk(params%fromp, params%top, params%outstk)
+            ! extract previous oris
+            os_ptcl2D_prev = spproj%os_ptcl2D%extract_subset(params%fromp, params%top)
+            os_ptcl3D_prev = spproj%os_ptcl3D%extract_subset(params%fromp, params%top)
+            ! extract previous pinds
+            pinds = nint(os_ptcl3D_prev%get_all('pind'))
+            n     = size(pinds) 
+        endif
         ! get ctf variables
         ctfvars = spproj%get_ctfparams('stk', 1)
         select case(ctfvars%ctfflag)
@@ -422,7 +431,11 @@ contains
                 ctfflag = 'no'
             case DEFAULT
                 ! generate file with defocus values
-                call spproj%write_segment2txt('ptcl2D', string(DEFTAB), [params%fromp,params%top])
+                if( cline%defined('cluster') )then
+                    call spproj%os_ptcl2D%write(string(DEFTAB))
+                else
+                    call spproj%os_ptcl2D%write(string(DEFTAB), [params%fromp,params%top])
+                endif
                 ctfflag = spproj%get_ctfflag('ptcl2D', 1)
         end select
         ! make new project
