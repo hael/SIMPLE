@@ -1497,18 +1497,18 @@ contains
         &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! descr_short
         &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! descr_long
         &'all',&                                                                                                 ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true., gui_advanced=.false.)                                                      ! # entries in each group, requires sp_project
+        &0, 2, 3, 0, 0, 0, 0, .true., gui_advanced=.false.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call extract_subproj%set_input('parm_ios', 1, projfile)
-        call extract_subproj%set_input('parm_ios', 2, 'fromp',       'num', 'From index', 'Start index for extraction', 'start index', .false., 1.0)
-        call extract_subproj%set_input('parm_ios', 3, 'top',         'num', 'To index', 'Stop index for extraction', 'stop index', .false., 1.0)
-        call extract_subproj%set_input('parm_ios', 4, 'subprojname', 'str', 'Subproject name', 'Name of subproject to create ./myproject/myproject.simple',&
+        call extract_subproj%set_input('parm_ios', 2, 'subprojname', 'str', 'Subproject name', 'Name of subproject to create ./myproject/myproject.simple',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
         ! alternative inputs
-        ! <empty>
+        call extract_subproj%set_input('alt_ios', 1, 'fromp',    'num', 'From index', 'Start index for extraction', 'start index', .false., 1.0)
+        call extract_subproj%set_input('alt_ios', 2, 'top',      'num', 'To index', 'Stop index for extraction', 'stop index', .false., 1.0)
+        call extract_subproj%set_input('alt_ios', 3, 'clustind', 'num', 'Cluster index', 'Cluster index', 'e.g. 5', .false., 0.)
         ! search controls
         ! <empty>
         ! filter controls

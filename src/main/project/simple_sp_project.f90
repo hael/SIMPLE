@@ -95,7 +95,8 @@ contains
     procedure, private :: add_stktab_2
     generic            :: add_stktab => add_stktab_1, add_stktab_2
     procedure          :: split_stk
-    procedure          :: write_substk
+    procedure, private :: write_substk_1, write_substk_2
+    generic            :: write_substk => write_substk_1, write_substk_2
     procedure, private :: add_scale_tag
     procedure          :: report_state2stk
     ! STK - getters
@@ -434,11 +435,17 @@ interface
         class(string), optional, intent(in)    :: dir
     end subroutine split_stk
 
-    module subroutine write_substk( self, fromto, stkout )
+    module subroutine write_substk_1( self, fromp, top, stkout )
         class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: fromto(2)
+        integer,           intent(in)    :: fromp, top
         class(string),     intent(in)    :: stkout
-    end subroutine write_substk
+    end subroutine write_substk_1
+
+    module subroutine write_substk_2( self, pinds, stkout )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: pinds(:)
+        class(string),     intent(in)    :: stkout
+    end subroutine write_substk_2
 
     module subroutine add_scale_tag( self, dir )
         class(sp_project),       intent(inout) :: self
