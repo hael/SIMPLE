@@ -28,7 +28,7 @@ my $out                = '../doc/code_overview/code_base_map.md';
 my $file_scan_lines    = 40;
 my @exts               = ('f90', 'F90');
 my $include_nonfortran = 0;
-my @exclude_dirs_user  = ();
+my @exclude_dirs_user  = ('extlibs');
 # Only include these top-level directories (relative to repo root)
 my %ALLOWED_TOP_DIRS = map { $_ => 1 } qw(src production scripts);
 

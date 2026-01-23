@@ -92,128 +92,6 @@
       - `simple_defs_string.f90` — string constants
       - `simple_fftw3.f90` — FFTW3 interface. See www.fftw.org and /usr/include/fftw3.f03
       - `simple_type_defs.f90` — type and enumerator definitions
-    - **extlibs/** — home of external libraries
-      - **CPlot2D/** — home of the CPlot2D library
-        - `simple_CPlot2D_wrapper.f90`
-      - **gnufor/** — home of the gnufor library for plotting with GNU plot
-        - `gnufor2.f90` — GNUplot interface module
-      - **jpg/** — home of the jpg library
-        - `simple_jpg.f90`
-      - **json/** — home of the json library
-        - `json_file_module.f90` — Higher-level [[json_file]] interface for the [[json_value]] type.
-        - `json_kinds.f90` — JSON-Fortran kind definitions
-        - `json_module.f90` — A Fortran 2008 JSON (JavaScript Object Notation) API
-        - `json_parameters.f90` — Other parameters used by JSON-Fortran
-        - `json_string_utilities.f90` — JSON-Fortran support module for string manipulation
-        - `json_value_module.f90` — This module provides a low-level interface for manipulation of JSON data
-      - **netlib/** — home of the netlib library
-        - `ssyevr.f90` — some lapack routines
-      - **starfile/** — home of C++ code for star file i/o
-      - **tiff/** — home of the tiff library
-      - **unix/** — home of the fortran-unix library
-        - **src/**
-          - `unix.f90`
-          - `unix_dirent.F90`
-          - `unix_errno.F90`
-          - `unix_fcntl.F90`
-          - `unix_inet.F90`
-          - `unix_ioctl.F90`
-          - `unix_ipc.F90`
-          - `unix_mqueue.F90`
-          - `unix_msg.F90`
-          - `unix_netdb.F90`
-          - `unix_pthread.F90`
-          - `unix_regex.F90`
-          - `unix_semaphore.F90`
-          - `unix_signal.F90`
-          - `unix_socket.F90`
-          - `unix_stat.F90`
-          - `unix_stdio.F90`
-          - `unix_stdlib.F90`
-          - `unix_string.F90`
-          - `unix_syslog.F90`
-          - `unix_termios.F90`
-          - `unix_time.F90`
-          - `unix_types.F90`
-          - `unix_unistd.F90`
-          - `unix_utsname.F90`
-          - `unix_wait.F90`
-      - **xml/** — home of the xml library
-        - **common/**
-          - `FoX_common.F90`
-          - `m_common_attrs.F90`
-          - `m_common_buffer.F90`
-          - `m_common_charset.F90`
-          - `m_common_content_model.F90`
-          - `m_common_element.F90`
-          - `m_common_elstack.F90`
-          - `m_common_entities.F90`
-          - `m_common_entity_expand.F90`
-          - `m_common_error.F90`
-          - `m_common_io.F90`
-          - `m_common_namecheck.F90`
-          - `m_common_namespaces.F90`
-          - `m_common_notations.F90`
-          - `m_common_struct.F90`
-        - **dom/**
-          - `FoX_dom.f90`
-          - `m_dom_dom.F90`
-          - `m_dom_error.f90`
-          - `m_dom_extras.F90`
-          - `m_dom_parse.f90`
-          - `m_dom_utils.f90`
-        - **fsys/**
-          - `fox_m_fsys_abort_flush.F90`
-          - `fox_m_fsys_array_str.F90`
-          - `fox_m_fsys_count_parse_input.F90`
-          - `fox_m_fsys_format.F90`
-          - `fox_m_fsys_parse_input.F90`
-          - `fox_m_fsys_realtypes.f90`
-          - `fox_m_fsys_string.F90`
-          - `fox_m_fsys_string_list.F90`
-          - `m_ieee.f90`
-        - **sax/**
-          - `FoX_sax.f90`
-          - `m_sax_operate.F90`
-          - `m_sax_parser.F90`
-          - `m_sax_reader.F90`
-          - `m_sax_tokenizer.F90`
-          - `m_sax_types.F90`
-          - `m_sax_xml_source.F90`
-        - **utils/**
-          - `fox_m_utils_mtprng.F90`
-          - `fox_m_utils_uri.F90`
-          - `fox_m_utils_uuid.F90`
-          - `FoX_utils.f90`
-        - **wcml/**
-          - `FoX_wcml.f90`
-          - `m_wcml_coma.F90`
-          - `m_wcml_core.F90`
-          - `m_wcml_geometry.F90`
-          - `m_wcml_lattice.F90`
-          - `m_wcml_lists.F90`
-          - `m_wcml_metadata.F90`
-          - `m_wcml_molecule.F90`
-          - `m_wcml_parameter.F90`
-          - `m_wcml_property.F90`
-          - `m_wcml_stml.F90`
-        - **wkml/**
-          - `FoX_wkml.f90`
-          - `m_contours.F90`
-          - `m_wkml_chart.F90`
-          - `m_wkml_color.F90`
-          - `m_wkml_color_def.F90`
-          - `m_wkml_contours.F90`
-          - `m_wkml_core.F90`
-          - `m_wkml_coverage.F90`
-          - `m_wkml_features.F90`
-          - `m_wkml_lowlevel.F90`
-          - `m_wkml_styling.F90`
-        - **wxml/**
-          - `FoX_wxml.f90`
-          - `m_wxml_core.F90`
-          - `m_wxml_escape.F90`
-          - `m_wxml_overloads.F90`
     - **fileio/** — home of modules for i/o related to project files, mrc files, eer movies, star files etc.
       - `simple_binoris.f90` — for managing orientation data using binary files
       - `simple_binoris_io.f90` — high-level binoris i/o routines
@@ -267,96 +145,96 @@
         - `single_exec_module_api.f90` — Aggregated public API for single_exec
       - **commanders/** — home of the commanders implementing high-level application code
         - `simple_commander_base.f90` — abstract base commander
-        - `simple_commander_imgops.f90` — commanders for standard image operations: binarize, filter, denoise, normalize, scale etc.
-        - `simple_commander_stkops.f90` — commanders for operations on image stacks
-        - `simple_commanders_abinitio.f90` — commanders for abinitio 3D reconstruction in single- and multi-particle mode
-        - `simple_commanders_abinitio2D.f90` — commanders for ab initio 2D analysis
-        - `simple_commanders_atoms.f90` — commanders for operations on atoms, mostly used in SINGLE
-        - `simple_commanders_cavgs.f90` — commanders for analysis of class averages
-        - `simple_commanders_checks.f90` — checking commanders
-        - `simple_commanders_cluster2D.f90` — commanders for simultanous 2D alignment and clustering of single-particle images
-        - `simple_commanders_distr.f90` — routines for managing distributed SIMPLE execution
-        - `simple_commanders_euclid.f90` — commanders for sigma2 calculations in objfun=euclid 2D and 3D refinement
-        - `simple_commanders_imgproc.f90` — standard EM image processing commanders
-        - `simple_commanders_mask.f90` — masking routines
-        - `simple_commanders_misc.f90` — miscallenaous routines
-        - `simple_commanders_mkcavgs.f90` — commanders for producing class averages
-        - `simple_commanders_oris.f90` — operations on orientations
-        - `simple_commanders_pick.f90` — commanders for picking, extraction, and making picking references
-        - `simple_commanders_preprocess.f90` — pre-processing (motion correction, CTF estimation etc.) commanders
+        - `simple_commander_imgops.f90` — standard image operations: binarize, filter, denoise, normalize, scale etc.
+        - `simple_commander_stkops.f90` — operations on image stacks
+        - `simple_commanders_abinitio.f90` — abinitio 3D reconstruction in single- and multi-particle mode
+        - `simple_commanders_abinitio2D.f90` — ab initio 2D analysis
+        - `simple_commanders_atoms.f90` — operations on atoms, mostly used in SINGLE
+        - `simple_commanders_cavgs.f90` — analysis of class averages
+        - `simple_commanders_checks.f90` — checking info about images, project, or checking update calculations
+        - `simple_commanders_cluster2D.f90` — simultanous 2D alignment and clustering of single-particle images
+        - `simple_commanders_distr.f90` — for managing distributed SIMPLE execution
+        - `simple_commanders_euclid.f90` — for sigma2 calculations in objfun=euclid 2D and 3D refinement
+        - `simple_commanders_imgproc.f90` — standard EM image processing
+        - `simple_commanders_mask.f90` — masking and auto-masking
+        - `simple_commanders_misc.f90` — stuff that didn't fit elsewhere
+        - `simple_commanders_mkcavgs.f90` — for producing class averages
+        - `simple_commanders_oris.f90` — for operating on orientations
+        - `simple_commanders_pick.f90` — for picking, extraction, and making picking references
+        - `simple_commanders_preprocess.f90` — for pre-processing (motion correction, CTF estimation etc.)
         - `simple_commanders_project_cls.f90` — project commanders for dealing with 2D class-related things
-        - `simple_commanders_project_core.f90` — operations on projects (spproject) and associated files, the core stuff
+        - `simple_commanders_project_core.f90` — commanders for operating on projects (spproject) and associated files, the core stuff
         - `simple_commanders_project_mov.f90` — project commanders for movie-related things
         - `simple_commanders_project_ptcl.f90` — project commanders for particle-related things
-        - `simple_commanders_rec.f90` — 3D reconstruction commanders
-        - `simple_commanders_refine3D.f90` — commanders supporting 3D orientation search
-        - `simple_commanders_relion.f90` — commanders supporting interoperability with RELION
-        - `simple_commanders_resolest.f90` — commanders for resolution estimation
-        - `simple_commanders_sim.f90`
-        - `simple_commanders_starproject.f90`
-        - `simple_commanders_validate.f90`
-        - `simple_commanders_volops.f90`
-        - `single_commanders_experimental.f90`
-        - `single_commanders_nano2D.f90`
-        - `single_commanders_nano3D.f90`
-        - `single_commanders_trajectory.f90`
-        - `single_commanders_tseries.f90`
+        - `simple_commanders_rec.f90` — 3D reconstruction and associated things
+        - `simple_commanders_refine3D.f90` — supporting 3D orientation search
+        - `simple_commanders_relion.f90` — supporting interoperability with RELION
+        - `simple_commanders_resolest.f90` — for resolution estimation
+        - `simple_commanders_sim.f90` — for simulating noise, particles, movies, atoms, etc.
+        - `simple_commanders_starproject.f90` — starproject import, export, etc.
+        - `simple_commanders_validate.f90` — validation of stream functionalities in batch execution mode
+        - `simple_commanders_volops.f90` — operations on volumes
+        - `single_commanders_experimental.f90` — experimental commanders under development
+        - `single_commanders_nano2D.f90` — 2D analysis commanders used in SINGLE for nanoparticle processing
+        - `single_commanders_nano3D.f90` — 3D refinement and reconstruction commanders used in SINGLE for nanoparticle processing
+        - `single_commanders_trajectory.f90` — commanders operating on extracted time-trajectories, used in SINGLE for nanoparticle processing
+        - `single_commanders_tseries.f90` — commanders operating on the full time-series field of view, used in SINGLE for nanoparticle processing
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
         - `simple_ctf.f90` — defines the Contrast Transfer Function (CTF) of the electron microscope
-        - `simple_ctf_estimate_cost.f90`
-        - `simple_ctf_estimate_fit.f90`
-        - `simple_ctf_estimate_iter.f90`
+        - `simple_ctf_estimate_cost.f90` — cost functions for CTF fitting
+        - `simple_ctf_estimate_fit.f90` — routines for anisotroic (patched) CTF estimation
+        - `simple_ctf_estimate_iter.f90` — does one iteration of CTF estimation
       - **image/** — home of the submodules of the image class, its extensions, and its variants
-        - `simple_fplane.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
-        - `simple_ft_expanded.f90`
+        - `simple_fplane.f90` — re-arranged Fourier transformed image for fast 3D gridding
+        - `simple_ft_expanded.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ft_expanded_dp.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ftexp_shsrch.f90` — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
-        - `simple_ftiter.f90` — Fourier index iterator
-        - `simple_image.f90`
-        - `simple_image_access.f90`
-        - `simple_image_arith.f90`
-        - `simple_image_bin.f90`
-        - `simple_image_calc.f90`
-        - `simple_image_checks.f90`
-        - `simple_image_core.f90`
-        - `simple_image_fft.f90`
-        - `simple_image_filt.f90`
-        - `simple_image_freq_anal.f90`
-        - `simple_image_geom.f90`
-        - `simple_image_io.f90`
-        - `simple_image_msk.f90` — 2D/3D envelope and adaptive masking
-        - `simple_image_norm.f90`
-        - `simple_image_ops.f90`
-        - `simple_image_seg.f90`
-        - `simple_image_vis.f90`
+        - `simple_ftiter.f90` — Fourier index loop range genrator and mapping of logical indexing to physical indexing
+        - `simple_image.f90` — the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class and FTs done in-place to reduce memory usage
+        - `simple_image_access.f90` — image class getters, setters, serializers etc.
+        - `simple_image_arith.f90` — arithmetics on images
+        - `simple_image_bin.f90` — extension of the image class for binary images
+        - `simple_image_calc.f90` — calculating stuff from images
+        - `simple_image_checks.f90` — checking image stuff
+        - `simple_image_core.f90` — core image functionality, such as constructors/object lifecycle
+        - `simple_image_fft.f90` — core fft routines as well as fused optimized operations involving ffts
+        - `simple_image_filt.f90` — image filtering and denoising
+        - `simple_image_freq_anal.f90` — image frequency domain analysis, power spectrum etc.
+        - `simple_image_geom.f90` — geometrical image operations: window, shift, pad, clip etc.
+        - `simple_image_io.f90` — for reading and writing images from/to disk
+        - `simple_image_msk.f90` — extension of the image class to provide 2D/3D envelope and adaptive masking
+        - `simple_image_norm.f90` — image normalization routines
+        - `simple_image_ops.f90` — opreations on images not fitting elewhere: noise, zero, background, CTF division etc.
+        - `simple_image_seg.f90` — image segmentation related stuff to support masking
+        - `simple_image_vis.f90` — for supporting visualization of images in various ways
         - `simple_polarizer.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
         - `simple_projector.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms
       - **interp/** — home of the window functions for Fourier gridding interpolation
-        - `simple_edges_sqwins.f90`
+        - `simple_edges_sqwins.f90` — square windows and mask edges
         - `simple_gridding.f90` — utilities for convolution interpolation (gridding)
         - `simple_kbinterpol.f90` — Kaiser-Bessel interpolation kernel
         - `simple_winfuns.f90` — window functions for Fourier interpolation
       - **motion/** — home of modules for movie motion correction
-        - `simple_motion_align_hybrid.f90`
-        - `simple_motion_align_nano.f90`
-        - `simple_motion_align_poly.f90`
-        - `simple_motion_align_poly2.f90`
+        - `simple_motion_align_hybrid.f90` — discrete/continuous hybrid 2D registration to support motion correction
+        - `simple_motion_align_nano.f90` — motion correction for movies of nanoparticles with aberation-corrected TEM
+        - `simple_motion_align_poly.f90` — fitting of a polynomial deformation model to patch shifts
+        - `simple_motion_align_poly2.f90` — fitting of a polynomial deformation model to patch shifts. Attempt to global refinement with algorithm=poly2. Not used
         - `simple_motion_correct.f90` — motion_correct does motion correction, dose-weighting and frame-weighting of DDD movies
         - `simple_motion_correct_iter.f90` — iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
-        - `simple_motion_correct_utils.f90`
+        - `simple_motion_correct_utils.f90` — utility functions for motion correction
         - `simple_motion_patched.f90` — patched-based anisotropic motion correction
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `simple_atoms.f90` — atomic structures and pdb parser
-        - `simple_nanoparticle.f90`
-        - `simple_nanoparticle_utils.f90`
-        - `simple_tseries_graphene_subtr.f90`
+        - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building on SINGLE
+        - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates
+        - `simple_tseries_graphene_subtr.f90` — graphene background subtraction in SINGLE
         - `simple_tseries_tracker.f90` — time series tracker intended for movies of nanoparticles spinning in solution
       - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function
         - `simple_opt_bfgs.f90` — function minimization by L-BFGS (Limited memory BroydenâFletcherâGoldfarbâShannon optimisation)
         - `simple_opt_bfgs2.f90`
         - `simple_opt_bforce.f90` — brute force function minimisation
         - `simple_opt_de.f90` — continuous function optimisation by differential evolution
-        - `simple_opt_factory.f90`
+        - `simple_opt_factory.f90` — factory pattern class for the SIMPLE optimisers
         - `simple_opt_fr_cg.f90` — function minimization by Fletcher-Reeves conjugate gradient algorithm, translated from gsl 2.4
         - `simple_opt_helpers.f90` — helper routines and definitions for certain optimizer routines (those taken from the gsl library)
         - `simple_opt_image_weights.f90` — numerically find optimal weights for frames
@@ -364,85 +242,85 @@
         - `simple_opt_particle_swarm.f90` — continuous particle swarm optimisation
         - `simple_opt_powell.f90` — continuous function optimisation by Powell's method of conjugate search directions
         - `simple_opt_pr_cg.f90` — function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4
-        - `simple_opt_simplex.f90`
+        - `simple_opt_simplex.f90` — The Nelder-Mead simplex method for continuous function minimisation
         - `simple_opt_spec.f90` — optimiser specification
         - `simple_opt_stde.f90` — function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)
-        - `simple_opt_subs.f90` — generic optimisation subroutines
-        - `simple_optimizer.f90` — abstract optimiser defining an interface for the extending optimisation classes
+        - `simple_opt_subs.f90` — optimisation algorithm utilities, line searches etc.
+        - `simple_optimizer.f90` — abstract optimizer defining an interface for the extending optimization classes
       - **pca/** — home of modules implementing principal component analysis: SVD, probabilistic, and nonlinear kernel variants
         - `simple_kpca_svd.f90` — kPCA using 'Learning to Find Pre-Images', using svd for eigvals/eigvecs
-        - `simple_pca.f90` — abstract strategy3D base class
-        - `simple_pca_svd.f90`
+        - `simple_pca.f90` — abstract pca strategy base class
+        - `simple_pca_svd.f90` — PCA using standard SVD
         - `simple_ppca.f90` — class for probabilistic principal component analysis
         - `simple_ppca_inmem.f90` — class for probabilistic principal component analysis
       - **pftc/** — home of the polar FT calc submodules and modules for operations on polar FTs
         - `simple_pftc_shsrch_grad.f90` — rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
-        - `simple_polarft_access.f90`
-        - `simple_polarft_calc.f90`
-        - `simple_polarft_core.f90`
-        - `simple_polarft_corr.f90`
-        - `simple_polarft_corr_mag.f90`
-        - `simple_polarft_ctf.f90`
-        - `simple_polarft_geom.f90`
-        - `simple_polarft_memo.f90`
-        - `simple_polarft_vis.f90`
-        - `simple_polarops.f90`
-        - `simple_polarops_io.f90`
-        - `simple_polarops_restore.f90`
-        - `simple_polarops_state.f90`
+        - `simple_polarft_access.f90` — polarft class accessors submodule
+        - `simple_polarft_calc.f90` — polarft class complete interface
+        - `simple_polarft_core.f90` — polarft class core submodule: object lifecycle etc.
+        - `simple_polarft_corr.f90` — polarft class submodule for objective function evaluations
+        - `simple_polarft_corr_mag.f90` — polarft class submodule for shift-invariant correlations
+        - `simple_polarft_ctf.f90` — polarft class submodule for dealing with CTF-related things
+        - `simple_polarft_geom.f90` — polarft class submodule for geometry-related things: shift, rotate, mirror etc.
+        - `simple_polarft_memo.f90` — polarft class submodule for memoization for performance
+        - `simple_polarft_vis.f90` — polarft class submodule supporting visualization
+        - `simple_polarops.f90` — operations on polar FTs, to support polar 2D and 3D applications when polar=yes
+        - `simple_polarops_io.f90` — submodule for parallel I/O and polar->Cartesian conversion
+        - `simple_polarops_restore.f90` — submodule for class average restoration in the polar Fourier domain
+        - `simple_polarops_state.f90` — submodule for controlling various state-related things
       - **pick/** — home of modules for particle picking
         - `simple_picker_iter.f90` — particle picker iterator
-        - `simple_picker_utils.f90`
-        - `simple_pickref.f90`
-        - `simple_pickseg.f90`
-        - `simple_picksegdiam.f90`
+        - `simple_picker_utils.f90` — routines for executing reference-based, segmentation-based, and Gaussian picking
+        - `simple_pickref.f90` — the abstract data type implementing particle picking using templates
+        - `simple_pickseg.f90` — the abstract data type implementing the original version of segmentation-based picking
+        - `simple_picksegdiam.f90` — the abstract data type implementing the version of segmentation-based picking used in the stream
       - **project/** — home of the submodules of the single-particle project class for managing project information in memory and on disk
-        - `simple_sp_project.f90`
-        - `simple_sp_project_cls.f90`
-        - `simple_sp_project_core.f90`
-        - `simple_sp_project_io.f90`
-        - `simple_sp_project_mic.f90`
-        - `simple_sp_project_optics.f90`
-        - `simple_sp_project_out.f90`
-        - `simple_sp_project_ptcl.f90`
-        - `simple_sp_project_stk.f90`
+        - `simple_sp_project.f90` — single-particle project, the complete interface and abstract data type
+        - `simple_sp_project_cls.f90` — single-particle project routines for managing 2D class info
+        - `simple_sp_project_core.f90` — single-particle project core routines, lifecycle, accessors, modifiers etc.
+        - `simple_sp_project_io.f90` — single-particle project I/O routines
+        - `simple_sp_project_mic.f90` — single-particle project routines for managing micrograph and move information
+        - `simple_sp_project_optics.f90` — single-particle project routines for managing optics information
+        - `simple_sp_project_out.f90` — single-particle project routines for managing outputs from various processes
+        - `simple_sp_project_ptcl.f90` — single-particle project routines for managing particle-level information
+        - `simple_sp_project_stk.f90` — single-particle project routines for managing stack-level information
       - **star/** — home of modules for star file and star project handling
-        - `simple_relion.f90`
-        - `simple_starfile.f90`
-        - `simple_starfile_wrapper.f90`
-        - `simple_starproject.f90`
-        - `simple_starproject_stream.f90`
-        - `simple_starproject_tester.f90`
-        - `simple_starproject_utils.f90`
+        - `simple_relion.f90` — for interoperability with RELION
+        - `simple_starfile.f90` — the starfile abstract data type
+        - `simple_starfile_wrapper.f90` — maps starfile C code to fortran callable routines
+        - `simple_starproject.f90` — abstract data type implementing starproject
+        - `simple_starproject_stream.f90` — for star project management in streaming applications
+        - `simple_starproject_tester.f90` — unit test routines for starproject
+        - `simple_starproject_utils.f90` — starproject utilities
       - **strategies/** — home of strategies for 2D and 3D orientation search
-        - `simple_strategy2D.f90`
-        - `simple_strategy2D3D_common.f90` — common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
+        - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
+        - `simple_strategy2D3D_common.f90` — common routines used by the high-level strategy 2D and 3D matchers
         - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
-        - `simple_strategy2D_eval.f90`
-        - `simple_strategy2D_greedy.f90`
-        - `simple_strategy2D_greedy_smpl.f90`
-        - `simple_strategy2D_inpl.f90`
-        - `simple_strategy2D_inpl_smpl.f90`
-        - `simple_strategy2D_matcher.f90` — projection-matching based on Hadamard products, high-level search routines for CLUSTER2D
-        - `simple_strategy2D_prob.f90`
-        - `simple_strategy2D_snhc.f90`
-        - `simple_strategy2D_snhc_smpl.f90`
+        - `simple_strategy2D_eval.f90` — 2D strategy for objective function evaluation
+        - `simple_strategy2D_greedy.f90` — 2D strategy for exhaustive projection matching with greedy in-plane search
+        - `simple_strategy2D_greedy_smpl.f90` — 2D strategy for exhaustive projection matching with probabilistic in-plane search
+        - `simple_strategy2D_inpl.f90` — 2D strategy for in-plane refinement
+        - `simple_strategy2D_inpl_smpl.f90` — 2D strategy for in-plane refinement with probabilistic sampling
+        - `simple_strategy2D_matcher.f90` — high-level search routines for the cluster2D and abinitio2D applications
+        - `simple_strategy2D_prob.f90` — 2D strategy for probabilistic projection matching
+        - `simple_strategy2D_snhc.f90` — 2D strategy for stochastic neighborhood hill climbing
+        - `simple_strategy2D_snhc_smpl.f90` — 2D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
         - `simple_strategy2D_srch.f90` — common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
-        - `simple_strategy2D_tseries.f90`
-        - `simple_strategy2D_utils.f90`
-        - `simple_strategy3D.f90` — abstract strategy3D base class
+        - `simple_strategy2D_tseries.f90` — 2D strategy for time-restrained search, used in SINGLE
+        - `simple_strategy2D_utils.f90` — utility routines for 2D class average processing
+        - `simple_strategy3D.f90` — abstract base class defining the common strategy3D interface
         - `simple_strategy3D_alloc.f90` — array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
-        - `simple_strategy3D_eval.f90`
-        - `simple_strategy3D_greedy.f90` — concrete strategy3D: greedy refinement
-        - `simple_strategy3D_greedy_smpl.f90` — concrete strategy3D: refinement
-        - `simple_strategy3D_greedy_sub.f90` — concrete strategy3D: greedy refinement
-        - `simple_strategy3D_matcher.f90`
-        - `simple_strategy3D_prob.f90` — concrete strategy3D: probabilistic refinement
-        - `simple_strategy3D_shc.f90` — concrete strategy3D: refinement
-        - `simple_strategy3D_shc_smpl.f90` — concrete strategy3D: refinement
-        - `simple_strategy3D_snhc_smpl.f90` — concrete strategy3D: refinement
-        - `simple_strategy3D_srch.f90`
-        - `simple_strategy3D_utils.f90`
+        - `simple_strategy3D_eval.f90` — 3D strategy for objective function evaluation
+        - `simple_strategy3D_greedy.f90` — 3D strategy for exhaustive projection matching
+        - `simple_strategy3D_greedy_smpl.f90` — 3D strategy for exhaustive projection matching with probabilistic in-plane search
+        - `simple_strategy3D_greedy_sub.f90` — 3D strategy for neighborhood projection matching with exhaustive subspace initialization
+        - `simple_strategy3D_matcher.f90` — high-level search routines for the refine3D application
+        - `simple_strategy3D_prob.f90` — 3D strategy for probabilistic projection matching
+        - `simple_strategy3D_shc.f90` — 3D strategy for projection matching by stochastic hill climbing
+        - `simple_strategy3D_shc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
+        - `simple_strategy3D_snhc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
+        - `simple_strategy3D_srch.f90` — common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
+        - `simple_strategy3D_utils.f90` — utility routines for 3D strategies
       - **stream/** — home of the stream task commanders in the pipelined stream application and their utilities
         - `simple_mini_stream_utils.f90`
         - `simple_stream2D_state.f90`
@@ -478,6 +356,7 @@
       - `simple_magic_boxes.f90`
       - `simple_map_reduce.f90`
       - `simple_mem_estimator.f90`
+      - `simple_memoize_ft_mapping.f90`
       - `simple_micproc.f90`
       - `simple_opt_mask.f90`
       - `simple_private_prgs.f90`
