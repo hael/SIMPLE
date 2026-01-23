@@ -1,3 +1,4 @@
+!@descr: 2D strategy for in-plane refinement with probabilistic sampling
 module simple_strategy2D_inpl_smpl
 use simple_core_module_api
 use simple_strategy2D_alloc  ! singleton

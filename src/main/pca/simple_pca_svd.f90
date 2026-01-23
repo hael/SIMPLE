@@ -1,4 +1,4 @@
-! PCA using standard SVD
+!@descr: PCA using standard SVD
 module simple_pca_svd
 use simple_core_module_api
 use simple_pca, only: pca

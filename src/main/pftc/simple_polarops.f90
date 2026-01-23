@@ -1,3 +1,5 @@
+
+!@descr: operations on polar FTs, to support polar 2D and 3D applications when polar=yes
 module simple_polarops
 use simple_core_module_api
 use simple_builder,          only: builder, build_glob

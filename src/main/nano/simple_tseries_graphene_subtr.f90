@@ -1,3 +1,5 @@
+
+!@descr: graphene background subtraction in SINGLE
 module simple_tseries_graphene_subtr
 use simple_core_module_api
 use simple_parameters,   only: parameters, params_glob

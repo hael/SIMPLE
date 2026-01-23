@@ -1,3 +1,4 @@
+!@descr: single-particle project, the complete interface and abstract data type
 module simple_sp_project
 use simple_core_module_api
 use simple_defs_ori

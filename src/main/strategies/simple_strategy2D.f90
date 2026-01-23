@@ -1,3 +1,4 @@
+!@descr: abstract base class defining the common strategy2D interface
 module simple_strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 implicit none

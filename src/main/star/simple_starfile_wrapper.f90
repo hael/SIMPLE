@@ -1,3 +1,4 @@
+!@descr: maps starfile C code to fortran callable routines
 module simple_starfile_wrappers
 use simple_core_module_api
 implicit none

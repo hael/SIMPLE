@@ -1,3 +1,5 @@
+
+!@descr: fitting of a polynomial deformation model to patch shifts. Attempt to global refinement with algorithm=poly2. Not used
 module simple_motion_align_poly2
 use simple_core_module_api
 use simple_image,          only: image, image_stack

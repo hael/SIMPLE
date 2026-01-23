@@ -1,3 +1,4 @@
+!@descr: single-particle project core routines, lifecycle, accessors, modifiers etc.
 submodule(simple_sp_project) simple_sp_project_core
 ! use simple_core_module_api
 use simple_defs

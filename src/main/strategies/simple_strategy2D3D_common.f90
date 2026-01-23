@@ -1,4 +1,4 @@
-!@descr: common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
+!@descr: common routines used by the high-level strategy 2D and 3D matchers
 module simple_strategy2D3D_common
 use simple_core_module_api
 use simple_builder,           only: build_glob

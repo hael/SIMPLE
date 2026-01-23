@@ -1,4 +1,4 @@
-!@descr: generic optimisation subroutines
+!@descr: optimisation algorithm utilities, line searches etc.
 module simple_opt_subs
 use simple_core_module_api
 use simple_opt_spec, only:  opt_spec, costfun

@@ -1,3 +1,4 @@
+!@descr: submodule for controlling various state-related things
 submodule (simple_polarops) simple_polarops_state
 implicit none
 #include "simple_local_flags.inc"

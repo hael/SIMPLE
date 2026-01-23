@@ -1,4 +1,4 @@
-! factory pattern class for the SIMPLE optimisers
+!@descr: factory pattern class for the SIMPLE optimisers
 module simple_opt_factory
 use simple_core_module_api
 use simple_optimizer,   only: optimizer

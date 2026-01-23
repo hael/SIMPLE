@@ -1,4 +1,4 @@
-!@descr: abstract strategy3D base class
+!@descr: abstract base class defining the common strategy3D interface
 module simple_strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 implicit none

@@ -1,3 +1,4 @@
+!@descr: utility routines for 2D class average processing
 module simple_strategy2D_utils
 use simple_core_module_api
 use simple_class_frcs,        only: class_frcs

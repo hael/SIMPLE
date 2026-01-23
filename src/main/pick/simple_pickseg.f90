@@ -1,3 +1,4 @@
+!@descr: the abstract data type implementing the original version of segmentation-based picking
 module simple_pickseg
 use simple_core_module_api
 use simple_parameters,   only: params_glob

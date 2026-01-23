@@ -1,4 +1,4 @@
-! The Nelder-Mead simplex method for continuous function minimisation
+!@descr: The Nelder-Mead simplex method for continuous function minimisation
 module simple_opt_simplex
 use simple_core_module_api
 use simple_optimizer, only: optimizer

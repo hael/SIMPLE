@@ -1,4 +1,4 @@
-!@descr: concrete strategy3D: probabilistic refinement
+!@descr: 3D strategy for probabilistic projection matching
 module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_alloc  ! use all in there

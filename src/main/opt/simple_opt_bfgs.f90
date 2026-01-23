@@ -1,5 +1,4 @@
 !@descr: function minimization by L-BFGS (Limited memory Broyden–Fletcher–Goldfarb–Shannon optimisation)
-
 module simple_opt_bfgs
 use simple_core_module_api
 use simple_optimizer, only: optimizer

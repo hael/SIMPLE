@@ -1,3 +1,4 @@
+!@descr: 2D strategy for stochastic neighborhood hill climbing
 module simple_strategy2D_snhc
 use simple_core_module_api
 use simple_strategy2D_alloc  ! singleton

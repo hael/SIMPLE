@@ -1,3 +1,4 @@
+!@descr: single-particle project routines for managing particle-level information
 submodule(simple_sp_project) simple_sp_project_ptcl
 implicit none
 #include "simple_local_flags.inc"

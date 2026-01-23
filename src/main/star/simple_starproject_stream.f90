@@ -1,3 +1,4 @@
+!@descr: for star project management in streaming applications
 module simple_starproject_stream
 use simple_core_module_api
 use simple_sp_project, only: sp_project

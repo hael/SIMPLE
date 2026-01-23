@@ -1,3 +1,4 @@
+!@descr: utility routines for 3D strategies
 module simple_strategy3D_utils
 use simple_core_module_api
 use simple_strategy3D_alloc  ! singleton class s3D

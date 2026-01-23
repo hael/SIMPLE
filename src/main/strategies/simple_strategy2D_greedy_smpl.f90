@@ -1,3 +1,4 @@
+!@descr: 2D strategy for exhaustive projection matching with probabilistic in-plane search
 module simple_strategy2D_greedy_smpl
 use simple_core_module_api
 use simple_strategy2D_alloc

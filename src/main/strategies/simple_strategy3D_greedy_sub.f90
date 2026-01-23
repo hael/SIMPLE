@@ -1,4 +1,4 @@
-!@descr: concrete strategy3D: greedy refinement
+!@descr: 3D strategy for neighborhood projection matching with exhaustive subspace initialization
 module simple_strategy3D_greedy_sub
 use simple_core_module_api
 use simple_strategy3D_alloc
