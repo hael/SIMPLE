@@ -1,3 +1,4 @@
+!@descr: class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
 module simple_dock_vols
 use simple_core_module_api
 use simple_image,            only: image

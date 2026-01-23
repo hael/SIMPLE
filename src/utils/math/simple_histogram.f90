@@ -1,3 +1,4 @@
+!@descr: abstract data type for histogram generation
 module simple_histogram
 use simple_core_module_api
 use simple_image, only: image

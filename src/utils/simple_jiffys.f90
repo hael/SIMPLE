@@ -1,4 +1,4 @@
-! jiffy =  the time it takes light to travel one centimeter in vacuum
+!@descr: jiffy =  the time it takes light to travel one centimeter in vacuum
 module simple_jiffys
 use simple_defs
 use simple_defs_fname, only: TASK_FINISHED

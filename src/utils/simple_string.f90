@@ -1,3 +1,5 @@
+
+!@descr: the string class that replaces intrinsic allocatable strings in SIMPLE
 module simple_string
 use simple_error, only: simple_exception
 use simple_defs_string

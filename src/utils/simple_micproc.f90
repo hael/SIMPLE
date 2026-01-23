@@ -1,4 +1,4 @@
-! operations on micrographs
+!@descr: operations on micrographs
 module simple_micproc
 use simple_core_module_api
 use simple_image,     only: image

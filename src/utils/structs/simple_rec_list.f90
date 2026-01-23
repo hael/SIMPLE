@@ -1,3 +1,4 @@
+!@descr: polymorphic linked list implementation for derived types (specified in the class header)
 module simple_rec_list
 use simple_core_module_api
 use simple_linked_list

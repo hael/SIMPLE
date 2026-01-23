@@ -1,3 +1,4 @@
+!@descr: unit test routines for chash class
 module simple_chash_tester
 use simple_chash
 use simple_string

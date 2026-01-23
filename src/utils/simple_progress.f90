@@ -1,4 +1,4 @@
-! job progress estimation
+!@descr: job progress estimation
 module simple_progress
 use simple_core_module_api
 implicit none

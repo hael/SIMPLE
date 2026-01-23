@@ -1,4 +1,4 @@
-! write stats for gui 
+!@descr: abstract data type for generating various stats for the gui
 module simple_guistats
 use simple_core_module_api
 use simple_image, only: image

@@ -1,5 +1,4 @@
-! Light-weight module to memoize logical to physical address/spatial
-! frequency mapping and avoid re-computing them repeatedly
+!@descr: Light-weight module to memoize logical to physical address/spatial frequency mapping and avoid re-computing them repeatedly
 module simple_memoize_ft_mapping
 use simple_core_module_api
 implicit none

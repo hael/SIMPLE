@@ -1,4 +1,4 @@
-! movie watcher for stream processing
+!@descr: movie watcher for stream processing
 module simple_stream_watcher
 use simple_core_module_api
 use simple_progress

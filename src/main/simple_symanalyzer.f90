@@ -1,4 +1,4 @@
-!@descr: symmetry analyzer
+!@descr: statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
 module simple_symanalyzer
 use simple_core_module_api
 use simple_volpft_symsrch

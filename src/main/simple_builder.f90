@@ -1,4 +1,4 @@
-!@descr: centralised builder (the main object constructor in SIMPLE)
+!@descr: centralized builder (the main object constructor in SIMPLE)
 module simple_builder
 use simple_core_module_api
 use simple_binoris_io

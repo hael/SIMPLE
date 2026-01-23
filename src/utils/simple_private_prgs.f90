@@ -1,3 +1,4 @@
+!@descr: private program interface defintions (those executed by simple_private_exec)
 module simple_private_prgs
 use simple_core_module_api
 implicit none

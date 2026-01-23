@@ -1,3 +1,4 @@
+!@descr: singleton for common state variables across the stream modules
 module simple_stream2D_state
 use simple_core_module_api
 use simple_cmdline,            only: cmdline

@@ -1,4 +1,4 @@
-! batch-processing manager - SLURM
+!@descr: batch-processing manager - SLURM
 module simple_qsys_slurm
 use simple_core_module_api
 use simple_qsys_base, only: qsys_base

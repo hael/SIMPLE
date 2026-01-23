@@ -1,4 +1,4 @@
-! contains various string manipulation subroutines and functions
+!@descr: contains various string manipulation subroutines and functions
 ! adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
 ! modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_string_utils

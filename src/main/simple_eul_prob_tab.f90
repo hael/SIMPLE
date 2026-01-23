@@ -1,4 +1,4 @@
-! orientation eul_prob_tab, used in refine3D
+!@descr: the core probability table routines used for probabilistic 3D search
 module simple_eul_prob_tab
 use simple_core_module_api
 use simple_parameters, only: params_glob

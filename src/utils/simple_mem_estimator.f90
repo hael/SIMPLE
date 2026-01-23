@@ -1,4 +1,4 @@
-! job ram usage estimation
+!@descr: job ram usage estimation
 module simple_mem_estimator
 use simple_core_module_api
 use simple_parameters, only: parameters

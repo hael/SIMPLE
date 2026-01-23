@@ -1,5 +1,5 @@
-! Module for fitting the intensity distributions of 2D particle image arrays
-! with 2D multivariate Gaussians.  There are two implementations.
+!@descr: Module for fitting the intensity distributions of 2D particle image arrays with 2D multivariate Gaussians
+! There are two implementations.
 ! The second implementation includes sorting by correlation
 ! and an output array of 2D images displaying the Gaussian fits.
 module simple_gauss2Dfit

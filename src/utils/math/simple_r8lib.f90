@@ -1,3 +1,4 @@
+!@descr: cholesky decompositions and solvers
 module simple_r8lib
 implicit none
 

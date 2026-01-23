@@ -1,4 +1,4 @@
-! SOURCE https://people.sc.fsu.edu/~jburkardt/f_src/qr_solve/qr_solve.html
+!@descr: SOURCE https://people.sc.fsu.edu/~jburkardt/f_src/qr_solve/qr_solve.html
 module simple_qr_solve
   use simple_r8lib
   implicit none

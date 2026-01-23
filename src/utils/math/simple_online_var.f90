@@ -1,4 +1,4 @@
-! online moments estimation
+!@descr: online moments estimation
 module simple_online_var
 use simple_defs
 implicit none

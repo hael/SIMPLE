@@ -1,3 +1,4 @@
+!@descr: very precise timer for use in OpenMP sections
 module simple_timer_omp
 use simple_defs
 !$ use omp_lib
@@ -16,17 +17,15 @@ contains
    subroutine reset_timer_omp()
       last_time_point_mp = REAL(0., dp)
    end subroutine reset_timer_omp
+
    !< Get the clock tick count per second
    real(dp) function tickrate_omp()
-       tickrate_omp = REAL(1.0, dp)
+      tickrate_omp = REAL(1.0, dp)
    end function tickrate_omp
+
    !< Get system_clock timestamp
    real(dp) function tic_omp()
-#ifdef OPENMP
       tic_omp = OMP_get_wtime()
-#else
-      call cpu_time(tic_omp)
-#endif
       last_time_point_mp = tic_omp
    end function tic_omp
 
@@ -45,11 +44,7 @@ contains
       real(dp), intent(in), optional ::  start_optional
       real(dp) :: end_point_mp = REAL(0.0, dp)
       if (present(start_optional)) last_time_point_mp = start_optional
-#ifdef OPENMP
       end_point_mp = OMP_get_wtime()
-#else
-      call cpu_time(end_point_mp)
-#endif
       toc_omp = tdiff_omp(end_point_mp, last_time_point_mp)
       last_time_point_mp = end_point_mp
    end function toc_omp
@@ -60,11 +55,7 @@ contains
       real(dp), intent(in), optional ::  start_optional
       real(dp) :: end_point = REAL(0.0, dp)
       if (present(start_optional)) last_time_point_mp = start_optional
-#ifdef OPENMP
       end_point = OMP_get_wtime()
-#else
-      call cpu_time(end_point)
-#endif
       tocprint_omp = tdiff_omp(end_point, last_time_point_mp)
       last_time_point_mp = end_point
       write (*, '(A,1d20.10)') " Elapsed time ", tocprint_omp

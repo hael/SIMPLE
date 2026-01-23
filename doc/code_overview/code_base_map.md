@@ -2,13 +2,13 @@
 
 - **SIMPLE/**
   - **production/** — home of executables
-    - `simple_exec.f90`
-    - `simple_private_exec.f90`
-    - `simple_stream.f90`
-    - `single_exec.f90`
+    - `simple_exec.f90` — executes SIMPLE workflows
+    - `simple_private_exec.f90` — executes shared-memory parallelized programs executed by distributed commanders
+    - `simple_stream.f90` — executes SIMPLE stream workflows
+    - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
     - **tests/** — home of executable unit tests
       - `simple_ft_expanded_tester.f90`
-      - `simple_test_angres.f90`
+      - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
       - `simple_test_binoris.f90`
       - `simple_test_binoris_io.f90`
@@ -20,7 +20,7 @@
       - `simple_test_corrs2weights.f90`
       - `simple_test_ctf.f90`
       - `simple_test_eigh.f90`
-      - `simple_test_eo_diff.f90`
+      - `simple_test_eo_diff.f90` — tests randomization of phases below noise power
       - `simple_test_eval_polarftcc.f90`
       - `simple_test_extr_frac.f90`
       - `simple_test_ft_expanded.f90`
@@ -30,7 +30,7 @@
       - `simple_test_imgfile.f90`
       - `simple_test_insert_plane.f90`
       - `simple_test_inside_write.f90`
-      - `simple_test_install.f90`
+      - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
       - `simple_test_io.f90`
       - `simple_test_io_parallel.f90`
       - `simple_test_lbfgsb.f90`
@@ -39,13 +39,13 @@
       - `simple_test_lpstages.f90`
       - `simple_test_mask.f90`
       - `simple_test_maxnloc.f90`
-      - `simple_test_mini_stream.f90`
+      - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
       - `simple_test_mrc2jpeg.f90`
       - `simple_test_mrc_validation.f90`
       - `simple_test_msk_routines.f90`
       - `simple_test_multinomal.f90`
       - `simple_test_nano_mask.f90`
-      - `simple_test_neigh.f90`
+      - `simple_test_neigh.f90` — test for refine=neigh modes
       - `simple_test_nice.f90`
       - `simple_test_openacc.f90`
       - `simple_test_openmp.f90`
@@ -75,7 +75,7 @@
       - `simple_test_tree_srch.f90`
       - `simple_test_uniform_euler.f90`
       - `simple_test_uniform_rot.f90`
-      - `simple_test_units.f90`
+      - `simple_test_units.f90` — runs all implemented unit tests
       - `test_socket_comm_distr.f90`
   - **scripts/** — home of scripts and code generators
   - **src/** — main source code folder
@@ -84,8 +84,8 @@
       - `simple_default_clines.f90` — setting command line defaults
       - `simple_defs.f90` — eclectic mix of definitions
       - `simple_defs_atoms.f90` — covalent atomic radii and lattice parameter definitions
-      - `simple_defs_conv.f90` — parameters controlling convergence 2D and 3D orientation search
-      - `simple_defs_environment.f90` — environment variable flags
+      - `simple_defs_conv.f90` — parameters controlling convergence of 2D and 3D orientation search
+      - `simple_defs_environment.f90` — environment variable flag definitions
       - `simple_defs_fname.f90` — standard file name, body, suffix, and extension definitions
       - `simple_defs_ori.f90` — static orientation record value enumerators and flag conversions
       - `simple_defs_stream.f90` — constants used in streaming
@@ -96,13 +96,13 @@
       - `simple_binoris.f90` — for managing orientation data using binary files
       - `simple_binoris_io.f90` — high-level binoris i/o routines
       - `simple_class_sample_io.f90` — for storing class sampling information on disk
-      - `simple_discrete_stack_io.f90` — this type is for single-threaded non-contiguous reading of image stacks
+      - `simple_discrete_stack_io.f90` — for single-threaded non-contiguous reading of image stacks
       - `simple_eer_factory.f90` — for eer movie format i/o
       - `simple_error.f90` — exception handling
-      - `simple_fileio.f90` — file handling module
+      - `simple_fileio.f90` — system file handling module
       - `simple_fileio_tester.f90` — unit tests for fileio module
       - `simple_imgfile.f90` — class to deal with image files on disks
-      - `simple_imghead.f90` — type and routine definitions to deal with image file headers
+      - `simple_imghead.f90` — type and method definitions to deal with image file headers
       - `simple_nrtxtfile.f90` — deals with text files of numbers
       - `simple_projfile_utils.f90` — project file utilities
       - `simple_sigma2_binfile.f90` — sigma2 file i/o class
@@ -112,30 +112,30 @@
       - `simple_tifflib.f90` — Fortran wrapper for libtiff, edited from Unblur
     - **inc/** — home of *.inc files containing macro definitions and enumerations
     - **main/** — main source code directory
-      - `simple_abinitio_config.f90`
-      - `simple_abinitio_utils.f90` — concrete commander: high-level workflows
-      - `simple_builder.f90` — centralised builder (the main object constructor in SIMPLE)
-      - `simple_class_frcs.f90`
-      - `simple_classaverager.f90`
-      - `simple_cmdline.f90` — command line parsersimple_cmdline
-      - `simple_cmdline_tester.f90`
-      - `simple_convergence.f90` — for checking convergence
-      - `simple_euclid_sigma2.f90`
-      - `simple_eul_prob_tab.f90`
-      - `simple_eul_prob_tab2D.f90` — class probability table eul_prob_tab2D, used in abinitio2D
-      - `simple_micrograph_generator.f90`
-      - `simple_ori.f90` — an orientation
-      - `simple_ori_tester.f90`
+      - `simple_abinitio_config.f90` — singleton for common state variables used in abinitio_utils and commanders_abinitio
+      - `simple_abinitio_utils.f90` — utilities for ab initio 3D reconstruction used by commanders_abinitio
+      - `simple_builder.f90` — centralized builder (the main object constructor in SIMPLE)
+      - `simple_class_frcs.f90` — for Fourier Ring Correlation bookkeeping for class averages in memory and on disk
+      - `simple_classaverager.f90` — for production of Cartesian class averages
+      - `simple_cmdline.f90` — the class implementing command line parsing
+      - `simple_cmdline_tester.f90` — unit test routines for command line class
+      - `simple_convergence.f90` — for checking convergence of 2D and 3D search
+      - `simple_euclid_sigma2.f90` — the abstract data type for sigma2 used when objfun=euclid
+      - `simple_eul_prob_tab.f90` — the core probability table routines used for probabilistic 3D search
+      - `simple_eul_prob_tab2D.f90` — the core probability table routines used for probabilistic 2D search
+      - `simple_micrograph_generator.f90` — used for generating dose fractionated micrographs from movies
+      - `simple_ori.f90` — an orientation (abstract data type for per-particle data)
+      - `simple_ori_tester.f90` — unit test routines for the ori class
       - `simple_oris.f90` — an agglomeration of orientations
-      - `simple_oris_tester.f90`
+      - `simple_oris_tester.f90` — unit test routines for the oris class
       - `simple_parameters.f90` — provides global distribution of constants and derived constants
-      - `simple_particle_extractor.f90`
-      - `simple_pspec_thumb_iter.f90` — iterator for pspec_thumb (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
-      - `simple_pspecs.f90`
+      - `simple_particle_extractor.f90` — core functionality for extracting particles from micrographs
+      - `simple_pspec_thumb_iter.f90` — iterator for pspec_thumb for power spectrum and thumbnails generation
+      - `simple_pspecs.f90` — abstract data type for power spectra
       - `simple_simulator.f90` — simulation of single-particle images
       - `simple_sym.f90` — defines protein point-group symmetries
-      - `simple_symanalyzer.f90` — symmetry analyzer
-      - `simple_user_interface.f90`
+      - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
+      - `simple_user_interface.f90` — the user interface class (it's a beast)
       - **apis/** — application programming interfaces for cleaner use inclusion and faster compilation
         - `simple_commander_module_api.f90` — API for the commanders
         - `simple_core_module_api.f90` — API for the core modules
@@ -152,7 +152,7 @@
         - `simple_commanders_atoms.f90` — operations on atoms, mostly used in SINGLE
         - `simple_commanders_cavgs.f90` — analysis of class averages
         - `simple_commanders_checks.f90` — checking info about images, project, or checking update calculations
-        - `simple_commanders_cluster2D.f90` — simultanous 2D alignment and clustering of single-particle images
+        - `simple_commanders_cluster2D.f90` — simultaneous 2D alignment and clustering of single-particle images
         - `simple_commanders_distr.f90` — for managing distributed SIMPLE execution
         - `simple_commanders_euclid.f90` — for sigma2 calculations in objfun=euclid 2D and 3D refinement
         - `simple_commanders_imgproc.f90` — standard EM image processing
@@ -189,7 +189,7 @@
         - `simple_ft_expanded.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ft_expanded_dp.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ftexp_shsrch.f90` — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
-        - `simple_ftiter.f90` — Fourier index loop range genrator and mapping of logical indexing to physical indexing
+        - `simple_ftiter.f90` — Fourier index loop range generator and mapping of logical indexing to physical indexing
         - `simple_image.f90` — the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class and FTs done in-place to reduce memory usage
         - `simple_image_access.f90` — image class getters, setters, serializers etc.
         - `simple_image_arith.f90` — arithmetics on images
@@ -219,25 +219,25 @@
         - `simple_motion_align_nano.f90` — motion correction for movies of nanoparticles with aberation-corrected TEM
         - `simple_motion_align_poly.f90` — fitting of a polynomial deformation model to patch shifts
         - `simple_motion_align_poly2.f90` — fitting of a polynomial deformation model to patch shifts. Attempt to global refinement with algorithm=poly2. Not used
-        - `simple_motion_correct.f90` — motion_correct does motion correction, dose-weighting and frame-weighting of DDD movies
-        - `simple_motion_correct_iter.f90` — iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
+        - `simple_motion_correct.f90` — motion correction, dose-weighting and frame-weighting of direct electron detector movies
+        - `simple_motion_correct_iter.f90` — iterator for motion_correct
         - `simple_motion_correct_utils.f90` — utility functions for motion correction
         - `simple_motion_patched.f90` — patched-based anisotropic motion correction
+        - `simple_opt_image_weights.f90` — numerically find optimal weights for frames
       - **nano/** — home of modules supporting nanoparticle 3D reconstruction and atomic model building in SINGLE
         - `simple_atoms.f90` — atomic structures and pdb parser
-        - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building on SINGLE
+        - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building in SINGLE
         - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates
         - `simple_tseries_graphene_subtr.f90` — graphene background subtraction in SINGLE
         - `simple_tseries_tracker.f90` — time series tracker intended for movies of nanoparticles spinning in solution
       - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function
-        - `simple_opt_bfgs.f90` — function minimization by L-BFGS (Limited memory BroydenâFletcherâGoldfarbâShannon optimisation)
-        - `simple_opt_bfgs2.f90`
+        - `simple_opt_bfgs.f90` — function minimization by L-BFGS (Limited memory Broyden-Fletcher-Goldfarb-Shannon optimization)
+        - `simple_opt_bfgs2.f90` — function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)
         - `simple_opt_bforce.f90` — brute force function minimisation
         - `simple_opt_de.f90` — continuous function optimisation by differential evolution
         - `simple_opt_factory.f90` — factory pattern class for the SIMPLE optimisers
         - `simple_opt_fr_cg.f90` — function minimization by Fletcher-Reeves conjugate gradient algorithm, translated from gsl 2.4
         - `simple_opt_helpers.f90` — helper routines and definitions for certain optimizer routines (those taken from the gsl library)
-        - `simple_opt_image_weights.f90` — numerically find optimal weights for frames
         - `simple_opt_lbfgsb.f90` — memory limited bound-constained BFGS optimiser
         - `simple_opt_particle_swarm.f90` — continuous particle swarm optimisation
         - `simple_opt_powell.f90` — continuous function optimisation by Powell's method of conjugate search directions
@@ -267,7 +267,7 @@
         - `simple_polarops.f90` — operations on polar FTs, to support polar 2D and 3D applications when polar=yes
         - `simple_polarops_io.f90` — submodule for parallel I/O and polar->Cartesian conversion
         - `simple_polarops_restore.f90` — submodule for class average restoration in the polar Fourier domain
-        - `simple_polarops_state.f90` — submodule for controlling various state-related things
+        - `simple_polarops_state.f90` — submodule for controlling various state-related things in the polarops module
       - **pick/** — home of modules for particle picking
         - `simple_picker_iter.f90` — particle picker iterator
         - `simple_picker_utils.f90` — routines for executing reference-based, segmentation-based, and Gaussian picking
@@ -322,109 +322,108 @@
         - `simple_strategy3D_srch.f90` — common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
         - `simple_strategy3D_utils.f90` — utility routines for 3D strategies
       - **stream/** — home of the stream task commanders in the pipelined stream application and their utilities
-        - `simple_mini_stream_utils.f90`
-        - `simple_stream2D_state.f90`
-        - `simple_stream_chunk.f90`
-        - `simple_stream_chunk2D_utils.f90`
-        - `simple_stream_cluster2D_subsets.f90`
-        - `simple_stream_cluster2D_utils.f90`
-        - `simple_stream_p01_preprocess.f90`
-        - `simple_stream_p02_assign_optics.f90`
-        - `simple_stream_p03_opening2D.f90`
-        - `simple_stream_p04_refpick_extract.f90`
-        - `simple_stream_p05_sieve_cavgs.f90`
-        - `simple_stream_p06_pool2D.f90`
-        - `simple_stream_pool2D_utils.f90`
-        - `simple_stream_utils.f90`
-        - `simple_stream_watcher.f90`
+        - `simple_mini_stream_utils.f90` — utilities for running the mini batch version of the stream
+        - `simple_stream2D_state.f90` — singleton for common state variables across the stream modules
+        - `simple_stream_chunk.f90` — abstract data type for the stream_chunk, defining a chunk of data processed in parallel
+        - `simple_stream_chunk2D_utils.f90` — utilities for chunk-based 2D clustering in stream
+        - `simple_stream_cluster2D_subsets.f90` — high-level batch testing of the sieving logics used in the stream
+        - `simple_stream_cluster2D_utils.f90` — utilities for running 2D clustering in the stream
+        - `simple_stream_p01_preprocess.f90` — task 1 in the stream pipeline: pre-processing (movie registration, CTF estimation, segmentation-based picking)
+        - `simple_stream_p02_assign_optics.f90` — task 2 in the stream pipeline: assigning optics groups for when beam-tilt is used to change the exposure area
+        - `simple_stream_p03_opening2D.f90` — task 3 in the stream pipeline: the first 2D analyis from segmentation picked particles used for initial screening and generation of picking references
+        - `simple_stream_p04_refpick_extract.f90` — task 4 in the stream pipeline: reference-based picking and extraction
+        - `simple_stream_p05_sieve_cavgs.f90` — task 5 in the stream pipeline: chunk-based 2D clustering and automatic selection of high-quality class averages (sieving)
+        - `simple_stream_p06_pool2D.f90` — task 6 in the stream pipeline: global 2D refinement of pooled particles from the sieving
+        - `simple_stream_pool2D_utils.f90` — utilities for running the pool 2D refinement
+        - `simple_stream_utils.f90` — various stream utilities
+        - `simple_stream_watcher.f90` — movie watcher for stream processing
       - **volume/** — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search
-        - `simple_dock_vols.f90`
-        - `simple_reconstructor.f90`
+        - `simple_dock_vols.f90` — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
+        - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_eo.f90` — 3D reconstruction of even-odd pairs for FSC estimation
-        - `simple_volanalyzer.f90`
+        - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
         - `simple_volinterp.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms, high-level routines
         - `simple_volpft_corrcalc.f90` — fast cross-correlation calculation between Fourier volumes using defined sampling space geometries
-        - `simple_volpft_symsrch.f90`
+        - `simple_volpft_symsrch.f90` — symmetry search using polar volume representation
     - **utils/** — utilities source code directory
-      - `simple_corrmat.f90`
-      - `simple_exec_helpers.f90`
-      - `simple_gauss2Dfit.f90`
-      - `simple_imgarr_utils.f90`
-      - `simple_imgproc.f90`
-      - `simple_is_check_assert.f90`
-      - `simple_jiffys.f90`
-      - `simple_magic_boxes.f90`
-      - `simple_map_reduce.f90`
-      - `simple_mem_estimator.f90`
-      - `simple_memoize_ft_mapping.f90`
-      - `simple_micproc.f90`
-      - `simple_opt_mask.f90`
-      - `simple_private_prgs.f90`
-      - `simple_procimgstk.f90`
-      - `simple_progress.f90`
-      - `simple_sauron.f90`
-      - `simple_segmentation.f90`
-      - `simple_stackops.f90`
-      - `simple_string.f90`
-      - `simple_string_tester.f90`
-      - `simple_string_utils.f90`
-      - `simple_test_utils.f90`
-      - `simple_timer.f90`
-      - `simple_timer_omp.f90`
+      - `simple_corrmat.f90` — for calculation of correlation matrices
+      - `simple_exec_helpers.f90` — helpers for restarted execution, asynchronous execution, script-based execution etc.
+      - `simple_gauss2Dfit.f90` — Module for fitting the intensity distributions of 2D particle image arrays with 2D multivariate Gaussians
+      - `simple_imgarr_utils.f90` — utilities for image arrays
+      - `simple_imgproc.f90` — various image processing routines
+      - `simple_is_check_assert.f90` — assertions
+      - `simple_jiffys.f90` — jiffy = the time it takes light to travel one centimeter in vacuum
+      - `simple_magic_boxes.f90` — box sizes optimised for FFTW perfomance
+      - `simple_map_reduce.f90` — routines for distributed SIMPLE execution
+      - `simple_mem_estimator.f90` — job ram usage estimation
+      - `simple_memoize_ft_mapping.f90` — Light-weight module to memoize logical to physical address/spatial frequency mapping and avoid re-computing them repeatedly
+      - `simple_micproc.f90` — operations on micrographs
+      - `simple_opt_mask.f90` — optimization(search)-based masking
+      - `simple_private_prgs.f90` — private program interface defintions (those executed by simple_private_exec)
+      - `simple_procimgstk.f90` — stack image processing routines, applying a subset of image class methods to stacks
+      - `simple_progress.f90` — job progress estimation
+      - `simple_sauron.f90` — SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
+      - `simple_segmentation.f90` — segmentation routines: peak detection, edge detection, otsu's algorithm, Hough transform, Sauvola etc.
+      - `simple_stackops.f90` — stack image processing routines
+      - `simple_string.f90` — the string class that replaces intrinsic allocatable strings in SIMPLE
+      - `simple_string_tester.f90` — unit test subroutines for the string class
+      - `simple_string_utils.f90` — contains various string manipulation subroutines and functions
+      - `simple_test_utils.f90` — utilities for unit testing, assertions etc.
+      - `simple_timer.f90` — Simple timer module: High resolution (nanoseconds) timer in Fortran
+      - `simple_timer_omp.f90` — very precise timer for use in OpenMP sections
       - **clustering/** — algorithms for clustering a distance matrix
-        - `simple_aff_prop.f90`
-        - `simple_cluster_seed.f90`
-        - `simple_clustering_utils.f90`
-        - `simple_hclust.f90`
-        - `simple_kmedoids.f90`
-        - `simple_kmedoids_online.f90`
+        - `simple_aff_prop.f90` — clustering of a similartity matrix using affinity propagation
+        - `simple_cluster_seed.f90` — seeding methods for state labelling
+        - `simple_clustering_utils.f90` — tools and metrics for clustering analysis
+        - `simple_hclust.f90` — agglomerative hierarchical clustering of a distance matrix using nearest-neighbor chain
+        - `simple_kmedoids.f90` — k-medoids clustering of a similarity matrix
       - **comm/** — utilities for interprocess communication with web sockets
-        - `simple_distr_comm.f90`
-        - `simple_socket_comm.f90`
-        - `simple_stream_communicator.f90`
+        - `simple_distr_comm.f90` — for initializing a server for direct socket communication
+        - `simple_socket_comm.f90` — abstract data type for a web socket
+        - `simple_stream_communicator.f90` — the abstract data type for the http communicator used in the stream
       - **filter/** — utilities for filtering and regularization
-        - `simple_butterworth.f90`
-        - `simple_estimate_ssnr.f90`
-        - `simple_fsc.f90`
-        - `simple_opt_filter.f90`
-        - `simple_tvfilter.f90`
+        - `simple_butterworth.f90` — Butterworth low-pass filtering kernel
+        - `simple_estimate_ssnr.f90` — spectral signal-to-noise ratio estimation routines
+        - `simple_fsc.f90` — various Fourier Shell Correlation utilities
+        - `simple_opt_filter.f90` — optimization(search)-based filtering (uniform/nonuniform)
+        - `simple_tvfilter.f90` — filter based on total variation in real space
       - **gui/** — utilities for feeding information to the GUI
-        - `simple_gui_utils.f90`
-        - `simple_guistats.f90`
-        - `simple_nice.f90`
+        - `simple_gui_utils.f90` — various GUI utility functions
+        - `simple_guistats.f90` — abstract data type for generating various stats for the gui
+        - `simple_nice.f90` — the module implementing New Interface for Cryo-Em (NICE)
       - **math/** — home of mathematical and statistical utility routines
-        - `simple_decay_funs.f90`
-        - `simple_histogram.f90`
-        - `simple_linalg.f90`
-        - `simple_math.f90`
-        - `simple_math_ft.f90`
-        - `simple_neighs.f90`
-        - `simple_online_var.f90`
-        - `simple_qr_solve.f90`
-        - `simple_r8lib.f90`
-        - `simple_ran_tabu.f90`
-        - `simple_rnd.f90`
-        - `simple_srch_sort_loc.f90`
-        - `simple_stat.f90`
-        - `simple_testfuns.f90`
+        - `simple_decay_funs.f90` — decay functions for annealing
+        - `simple_histogram.f90` — abstract data type for histogram generation
+        - `simple_linalg.f90` — linear algebra stuff
+        - `simple_math.f90` — various mathematical subroutines and functions
+        - `simple_math_ft.f90` — Fourier transform-related math routines
+        - `simple_neighs.f90` — pixel neighborhood definitions and generation
+        - `simple_online_var.f90` — online moments estimation
+        - `simple_qr_solve.f90` — SOURCE https://people.sc.fsu.edu/~jburkardt/f_src/qr_solve/qr_solve.html
+        - `simple_r8lib.f90` — cholesky decompositions and solvers
+        - `simple_ran_tabu.f90` — routines for generation of directed random numbers
+        - `simple_rnd.f90` — random number generation module
+        - `simple_srch_sort_loc.f90` — searching ordered tables, sorting, locate etc.
+        - `simple_stat.f90` — statistics utility functions
+        - `simple_testfuns.f90` — provides 20 mathematical test functions for evaluating unconstrained optimization procedures
       - **qsys/** — utilities for controlling queue systems in distributed computing environments
-        - `simple_qsys_base.f90`
-        - `simple_qsys_ctrl.f90`
-        - `simple_qsys_env.f90`
-        - `simple_qsys_factory.f90`
-        - `simple_qsys_funs.f90`
-        - `simple_qsys_local.f90`
-        - `simple_qsys_lsf.f90`
-        - `simple_qsys_pbs.f90`
-        - `simple_qsys_sge.f90`
-        - `simple_qsys_slurm.f90`
+        - `simple_qsys_base.f90` — batch-processing manager - abstract interface
+        - `simple_qsys_ctrl.f90` — batch-processing manager - control module
+        - `simple_qsys_env.f90` — batch-processing manager - environment module
+        - `simple_qsys_factory.f90` — batch-processing manager - Factory class
+        - `simple_qsys_funs.f90` — batch-processing manager - functions
+        - `simple_qsys_local.f90` — batch-processing manager - Local system
+        - `simple_qsys_lsf.f90` — batch-processing manager - LSF
+        - `simple_qsys_pbs.f90` — batch-processing manager - PBS
+        - `simple_qsys_sge.f90` — batch-processing manager - SunGrid Engine
+        - `simple_qsys_slurm.f90` — batch-processing manager - SLURM
       - **structs/** — implementation of various standard and non-standard data structures
         - `simple_chash.f90` — Character hash
-        - `simple_chash_tester.f90`
-        - `simple_hash.f90`
-        - `simple_hash_tester.f90`
-        - `simple_linked_list.f90`
-        - `simple_linked_list_tester.f90`
-        - `simple_rec_list.f90`
-        - `simple_rec_list_tester.f90`
-        - `simple_tree.f90`
+        - `simple_chash_tester.f90` — unit test routines for chash class
+        - `simple_hash.f90` — real hash data structure
+        - `simple_hash_tester.f90` — unit test routines for hash class
+        - `simple_linked_list.f90` — polymorphic linked list class
+        - `simple_linked_list_tester.f90` — unit test routines for linked list class
+        - `simple_rec_list.f90` — polymorphic linked list implementation for derived types (specified in the class header)
+        - `simple_rec_list_tester.f90` — unit test routines for class rec_list
+        - `simple_tree.f90` — binary tree data structure

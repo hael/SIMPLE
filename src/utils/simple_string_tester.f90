@@ -1,3 +1,4 @@
+!@descr: unit test subroutines for the string class
 module simple_string_tester
 use simple_test_utils
 use simple_string

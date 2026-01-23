@@ -1,4 +1,4 @@
-! Filter based on total variation in real space
+!@descr: filter based on total variation in real space
 module simple_tvfilter
 use simple_core_module_api
 use simple_image, only: image

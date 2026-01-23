@@ -1,3 +1,4 @@
+!@descr: Simple timer module: High resolution (nanoseconds) timer in Fortran
 !------------------------------------------------------------------------------!
 ! SIMPLE v3.0         Elmlund Lab               https://github.com/hael/SIMPLE !
 !------------------------------------------------------------------------------!

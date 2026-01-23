@@ -1,4 +1,4 @@
-!@descr: simultanous 2D alignment and clustering of single-particle images
+!@descr: simultaneous 2D alignment and clustering of single-particle images
 module simple_commanders_cluster2D
 use simple_commander_module_api
 use simple_classaverager

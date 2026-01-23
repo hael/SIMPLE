@@ -1,3 +1,4 @@
+!@descr: for Fourier Ring Correlation bookkeeping for class averages in memory and on disk
 module simple_class_frcs
 use simple_core_module_api
 use simple_fsc

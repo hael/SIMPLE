@@ -1,4 +1,4 @@
-! shared-memory parallelised programs executed by distributed commanders
+!@descr: executes shared-memory parallelized programs executed by distributed commanders
 program simple_private_exec
 use simple_private_exec_module_api
 implicit none

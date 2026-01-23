@@ -1,4 +1,4 @@
-!@descr: an orientation
+!@descr: an orientation (abstract data type for per-particle data)
 module simple_ori
 use json_kinds
 use json_module

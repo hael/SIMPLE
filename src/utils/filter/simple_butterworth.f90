@@ -1,4 +1,4 @@
-! Butterworth kernel
+!@descr: Butterworth low-pass filtering kernel
 module simple_butterworth
 use simple_core_module_api
 implicit none

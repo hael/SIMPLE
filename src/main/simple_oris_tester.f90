@@ -1,3 +1,4 @@
+!@descr: unit test routines for the oris class
 module simple_oris_tester
 use simple_core_module_api
 use simple_test_utils    ! for assert_* utilities and counters

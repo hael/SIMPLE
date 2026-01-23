@@ -1,4 +1,4 @@
-! batch-processing manager - PBS
+!@descr: batch-processing manager - PBS
 module simple_qsys_pbs
 use simple_core_module_api
 use simple_qsys_base, only: qsys_base

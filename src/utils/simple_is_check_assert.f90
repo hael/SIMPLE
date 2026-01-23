@@ -1,3 +1,4 @@
+!@descr: assertions
 module simple_is_check_assert
 use simple_defs
 use simple_error, only: simple_exception

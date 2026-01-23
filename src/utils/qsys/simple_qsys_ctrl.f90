@@ -1,4 +1,4 @@
-! batch-processing manager - control module
+!@descr: batch-processing manager - control module
 module simple_qsys_ctrl
 use simple_core_module_api
 use simple_qsys_base,  only: qsys_base

@@ -1,3 +1,4 @@
+!@descr: the module implementing New Interface for Cryo-Em (NICE)
 module simple_nice
 use simple_core_module_api
 use simple_sp_project, only: sp_project

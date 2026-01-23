@@ -1,3 +1,5 @@
+
+!@descr: for initializing a server for direct socket communication
 module simple_distr_comm
 use, intrinsic :: iso_c_binding
 use simple_socket_comm

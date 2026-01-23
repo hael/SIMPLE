@@ -1,3 +1,4 @@
+!@descr: the user interface class (it's a beast)
 module simple_user_interface
 use simple_core_module_api
 use simple_ansi_ctrls

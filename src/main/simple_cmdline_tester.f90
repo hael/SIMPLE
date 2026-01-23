@@ -1,3 +1,4 @@
+!@descr: unit test routines for command line class
 module simple_cmdline_tester
 use simple_defs
 use simple_cmdline

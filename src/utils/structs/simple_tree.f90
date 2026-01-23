@@ -1,3 +1,4 @@
+!@descr: binary tree data structure
 module simple_tree  
 use simple_srch_sort_loc
 use simple_hash

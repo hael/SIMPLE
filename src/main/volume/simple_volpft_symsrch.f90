@@ -1,3 +1,4 @@
+!@descr: symmetry search using polar volume representation
 module simple_volpft_symsrch
 use simple_core_module_api
 use simple_opt_spec,        only: opt_spec

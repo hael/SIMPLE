@@ -1,3 +1,4 @@
+!@descr: helpers for restarted execution, asynchronous execution, script-based execution etc.
 module simple_exec_helpers
 use simple_core_module_api
 use simple_qsys_env,   only: qsys_env

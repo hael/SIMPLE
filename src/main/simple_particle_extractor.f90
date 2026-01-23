@@ -1,3 +1,5 @@
+
+!@descr: core functionality for extracting particles from micrographs
 module simple_particle_extractor
 use simple_core_module_api
 use simple_image,                only: image, image_ptr

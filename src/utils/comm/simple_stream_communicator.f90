@@ -1,3 +1,4 @@
+!@descr: the abstract data type for the http communicator used in the stream
 module simple_stream_communicator
 use simple_core_module_api
 use json_kinds

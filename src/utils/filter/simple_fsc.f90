@@ -1,3 +1,4 @@
+!@descr: various Fourier Shell Correlation utilities
 module simple_fsc
 use simple_core_module_api
 use simple_image, only: image

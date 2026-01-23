@@ -1,4 +1,4 @@
-! Tools and metrics for clustering analysis
+!@descr: tools and metrics for clustering analysis
 module simple_clustering_utils
 use simple_kmedoids, only: kmedoids
 use simple_aff_prop, only: aff_prop

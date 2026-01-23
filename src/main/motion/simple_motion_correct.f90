@@ -1,4 +1,4 @@
-!@descr: motion_correct does motion correction, dose-weighting and frame-weighting of DDD movies
+!@descr: motion correction, dose-weighting and frame-weighting of direct electron detector movies
 module simple_motion_correct
 use simple_core_module_api
 use simple_ft_expanded,          only: ftexp_transfmat_init, ftexp_transfmat_kill
