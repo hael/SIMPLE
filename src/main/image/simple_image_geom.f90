@@ -1175,6 +1175,33 @@ contains
         end do
     end subroutine shift2Dserial_1
 
+    module subroutine shift2D_demoivre( self, shvec  )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: shvec(2)
+        complex(dp) :: w1, w2, ph0, ph_h, ph_k
+        real(dp)    :: sh(2)
+        integer     :: h,k, hphys,kphys, lims(3,2)
+        lims = self%fit%loop_lims(2)
+        sh   = real(shvec * self%shconst(1:2),dp)
+        ! phase increments exp(i*sh1), exp(i*sh2)
+        w1 = cmplx(cos(sh(1)), sin(sh(1)), kind=dp)
+        w2 = cmplx(cos(sh(2)), sin(sh(2)), kind=dp)
+        ! starting phase for h: exp(i*hmin*sh1)
+        ph0 = cmplx(cos(real(lims(1,1),dp)*sh(1)), sin(real(lims(1,1),dp)*sh(1)), kind=dp)
+        ! starting phase for k: exp(i*kmin*sh2)
+        ph_k = cmplx(cos(real(lims(2,1),dp)*sh(2)), sin(real(lims(2,1),dp)*sh(2)), kind=dp)
+        do k = lims(2,1), lims(2,2)
+            kphys = k + 1 + merge(self%ldim(2),0,k<0)
+            ph_h  = ph0
+            do h = lims(1,1), lims(1,2)
+                hphys = h + 1
+                self%cmat(hphys,kphys,1) = self%cmat(hphys,kphys,1) * cmplx(ph_k * ph_h,kind=sp)
+                ph_h = ph_h * w1
+            end do
+            ph_k = ph_k * w2
+        end do
+    end subroutine shift2D_demoivre
+
     module subroutine shift2Dserial_2( self, shvec, self_out )
         class(image), intent(inout) :: self, self_out
         real,         intent(in)    :: shvec(2)

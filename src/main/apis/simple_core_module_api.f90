@@ -12,9 +12,8 @@ use simple_binoris,         only: binoris, binoris_seginfo
 use simple_chash,           only: chash
 use simple_class_sample_io, only: print_class_sample, class_samples_same, write_class_samples, read_class_samples, deallocate_class_samples
 use simple_error,           only: simple_exception
-use simple_estimate_ssnr,   only: fsc2optlp, fsc2optlp_sub, gaussian_filter, fsc2boostfilter, get_resolution, mskdiam2lplimits,&
-                                 &get_resolution_at_fsc, lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold,&
-                                 &calc_dose_weights
+use simple_estimate_ssnr,   only: fsc2optlp, fsc2optlp_sub, gaussian_filter, get_resolution, mskdiam2lplimits,get_resolution_at_fsc,&
+                                 &lpstages, lpstages_fast, edit_lpstages4polar, mskdiam2streamresthreshold,calc_dose_weights
 use simple_fileio,          only: add2fbody, append2basename, arr2file, arr2txtfile, basename, del_file, del_files, fclose, file2drarr, file2rarr,&
                                  &file2rmat, file_exists, fileiochk, filepath, fname2ext, fname2format, fname_new_ext, fopen, get_fbody, get_fpath,&
                                  &move_files2dir, nlines, read_filetable, rmat2file, simple_abspath, simple_chdir, simple_chmod, simple_copy_file,&

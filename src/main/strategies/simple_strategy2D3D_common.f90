@@ -12,6 +12,7 @@ implicit none
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
 public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align,  prepimg4align_bench
 public :: prep2Dref, build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec, calc_projdir3Drec
+public :: calc_2Dref_offset
 private
 #include "simple_local_flags.inc"
 
@@ -391,63 +392,54 @@ contains
         rt_prep   = rt_prep   + toc(t_prep)
     end subroutine prepimg4align_bench
 
-    !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
+    !>  \brief  Calculates the centering offset of the input cavg
+    !>          cavg & particles centering is not performed
+    subroutine calc_2Dref_offset( img, icls, centype, xyz )
         use simple_strategy2D_utils, only: calc_cavg_offset
-        class(image),      intent(inout) :: img_in
-        class(image),      intent(inout) :: img_out
-        integer,           intent(in)    :: icls
-        logical, optional, intent(in)    :: center
-        real,    optional, intent(in)    :: xyz_in(3)
-        real,    optional, intent(out)   :: xyz_out(3)
-        integer :: filtsz
-        real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
-        real    :: xy_cavg(2), xyz(3), sharg, crop_factor
-        logical :: do_center
-        filtsz      = img_in%get_filtsz()
+        class(image), intent(inout) :: img
+        integer,      intent(in)    :: icls
+        integer,      intent(in)    :: centype
+        real,         intent(out)   :: xyz(3)
+        real :: xy_cavg(2), crop_factor
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-        ! centering only performed if params_glob%center.eq.'yes'
-        do_center   = (params_glob%center .eq. 'yes')
-        if( present(center) ) do_center = do_center .and. center
-        if( do_center )then
-            if( present(xyz_in) )then
-                sharg = arg(xyz_in)
-                if( sharg > CENTHRESH )then
-                    ! apply shift and do NOT update the corresponding class parameters
-                    call img_in%fft()
-                    call img_in%shift2Dserial(xyz_in(1:2))
-                endif
-            else
-                select case(trim(params_glob%center_type))
-                    case('params')
-                        call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
-                        if( arg(xy_cavg) < CENTHRESH )then
-                            xyz = 0.
-                        else if( arg(xy_cavg) > MAXCENTHRESH2D )then
-                            xyz(1:2) = xy_cavg * crop_factor
-                            xyz(3)   = 0.
-                        else
-                            xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                            if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
-                        endif
-                    case('seg')
-                        call calc_cavg_offset(img_in, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
-                        xyz = [xy_cavg(1), xy_cavg(2), 0.]
-                    case('mass')
-                        xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                end select
-                sharg = arg(xyz)
-                if( sharg > CENTHRESH )then
-                    ! apply shift and update the corresponding class parameters
-                    call img_in%fft()
-                    call img_in%shift2Dserial(xyz(1:2))
-                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2) / crop_factor)
-                else
+        select case(centype)
+            case(PARAMS_CEN)
+                call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
+                if( arg(xy_cavg) < CENTHRESH )then
                     xyz = 0.
+                else if( arg(xy_cavg) > MAXCENTHRESH2D )then
+                    xyz(1:2) = xy_cavg * crop_factor
+                    xyz(3)   = 0.
+                else
+                    xyz = img%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+                    if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
                 endif
-                if( present(xyz_out) ) xyz_out = xyz
-            endif
+            case(SEG_CEN)
+                call calc_cavg_offset(img, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
+                xyz = [xy_cavg(1), xy_cavg(2), 0.]
+            case(MASS_CEN)
+                xyz = img%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
+        end select
+        if( arg(xyz) < CENTHRESH ) xyz = 0.0
+    end subroutine calc_2Dref_offset
+
+    !>  \brief  Prepares one cluster centre image for alignment
+    subroutine prep2Dref( img, icls, xyz, img_instr )
+        use simple_strategy2D_utils, only: calc_cavg_offset
+        class(image), intent(inout) :: img
+        integer,      intent(in)    :: icls
+        real,         intent(in)    :: xyz(3)
+        class(image), intent(in)    :: img_instr
+        integer :: filtsz
+        real    :: frc(img%get_filtsz()), filter(img%get_filtsz()), crop_factor
+        ! Cavg & particles centering
+        if( arg(xyz) > CENTHRESH )then
+            call img%fft()
+            call img%shift2Dserial(xyz(1:2))
+            crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+            call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2) / crop_factor)
         endif
+        ! Filtering
         if( params_glob%l_ml_reg )then
             ! no filtering
         else
@@ -457,26 +449,21 @@ contains
                 ! FRC-based filtering
                 call build_glob%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
+                    filtsz = img%get_filtsz()
                     call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                    call img_in%apply_filter_serial(filter)
+                    call img%fft() ! needs to be here in case the shift was never applied (above)
+                    call img%apply_filter_serial(filter)
                 endif
             endif
         endif
         ! ensure we are in real-space
-        call img_in%ifft()
-        ! clip image if needed
-        call img_in%clip(img_out)
+        call img%ifft()
         ! ICM filter
         if( params_glob%l_lpset.and.params_glob%l_icm )then
-            call img_out%ICM2D( params_glob%lambda, verbose=.false. )
+            call img%ICM2D( params_glob%lambda, verbose=.false. )
         endif
-        ! apply mask
-        call img_out%mask2D_soft(params_glob%msk_crop, backgr=0.0)
-        ! gridding prep
-        call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
-        ! move to Fourier space
-        call img_out%fft()
+        ! mask, grid, fft
+        call img%mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
@@ -757,7 +744,8 @@ contains
 
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds )
-        use simple_fplane, only: fplane
+        use simple_fplane,             only: fplane
+        use simple_memoize_ft_mapping, only: memoize_ft_map, forget_ft_map
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
@@ -767,6 +755,9 @@ contains
         real      :: shift(2), euls(3), euls_mirr(3)
         integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff
         logical   :: l_rec_state
+        logical   :: DEBUG = .false.
+        integer(timer_int_kind) :: t
+        real(timer_int_kind)    :: t_ini, t_2dprep, t_grid
         if( trim(params_glob%recthres).eq.'yes' )then
             euls = [params_glob%e1, params_glob%e2, params_glob%e3]
             call euler_mirror(euls, euls_mirr)
@@ -782,11 +773,23 @@ contains
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocate array
         allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
+        if( DEBUG )then
+            t_ini    = 0.
+            t_2dprep = 0.
+            t_grid   = 0.
+        endif
+        ! logical/physical adress mapping
+        call memoize_ft_map(build_glob%imgbatch(1)%get_ldim(), 3)
         ! gridding batch loop
         nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+            if( DEBUG ) t = tic()
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
+            if( DEBUG )then
+                t_ini = t_ini + toc(t)
+                t = tic()
+            endif
             !$omp parallel do default(shared) private(i,iptcl,ibatch,shift) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)
@@ -798,6 +801,10 @@ contains
                 call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
             end do
             !$omp end parallel do
+            if( DEBUG )then
+                t_2dprep = t_2dprep + toc(t)
+                t = tic()
+            endif
             ! gridding
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)
@@ -811,11 +818,16 @@ contains
                 nptcls_eff = nptcls_eff + 1
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
             end do
+            if( DEBUG )then
+                t_grid = t_grid + toc(t)
+            endif
         end do
+        if( DEBUG ) print *,'timing: ',t_ini, t_2dprep, t_grid
         if( trim(params_glob%recthres).eq.'yes' ) print *, 'nptcls in 3D reconstruction = ', nptcls_eff
         ! normalise structure factors
         call norm_struct_facts( cline )
         ! destruct
+        call forget_ft_map
         call killrecvols()
         do ibatch=1,MAXIMGBATCHSZ
             call fpls(ibatch)%kill
@@ -826,8 +838,9 @@ contains
 
     !> Volumetric 3d reconstruction from summed projection directions
     subroutine calc_projdir3Drec( cline, nptcls2update, pinds )
-        use simple_fplane,   only: fplane
-        use simple_gridding, only: gen_instrfun_img
+        use simple_fplane,             only: fplane
+        use simple_gridding,           only: gen_instrfun_img
+        use simple_memoize_ft_mapping, only: memoize_ft_map, forget_ft_map
         use simple_timer
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
@@ -835,7 +848,7 @@ contains
         type(fplane),      allocatable   :: fpls(:), projdirs(:,:)
         integer,           allocatable   :: eopops(:,:,:), states(:), state_pinds(:)
         type(ctfparams) :: ctfparms
-        type(image)     :: instrimg, numimg, denomimg
+        type(image)     :: instrimg
         type(ori)       :: orientation, o_thres, o_mirr
         real            :: shift(2), e3, w, euls(3), euls_mirr(3)
         integer         :: batchlims(2), iptcl, i,j, i_batch, ibatch, iproj, eo, peo, ithr, pproj
@@ -902,6 +915,8 @@ contains
         else
             call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
         endif
+        ! logical/physical adress mapping
+        call memoize_ft_map(build_glob%imgbatch(1)%get_ldim(), 3)
         if( DEBUG )then
             t_ini = toc(t)
             t_pad = 0.
@@ -993,23 +1008,11 @@ contains
                     call grid_ptcl(projdirs(iproj,2), build_glob%pgrpsyms, orientation)
                 endif
             end do
-            if( DEBUG )then
-                t_rec = t_rec + toc(t)
-                do iproj = 1,params_glob%nspace
-                    if( eopops(iproj,1,s) > 0 )then
-                        call projdirs(iproj,1)%convert2img(numimg, denomimg)
-                        call numimg%ctf_dens_correct(denomimg)
-                        call numimg%ifft
-                        call numimg%clip_inplace([params_glob%box_crop,params_glob%box_crop,1])
-                        call numimg%write(string('projdirs_even_state'//int2str(s)//'.mrc'),iproj)
-                    endif
-                enddo
-                call numimg%kill
-                call denomimg%kill
-            endif
+            if( DEBUG ) t_rec = t_rec + toc(t)
         enddo
         if( DEBUG ) print *,'timing: ',t_ini, t_pad, t_sum, t_rec
         ! some cleanup
+        call forget_ft_map
         !$omp parallel default(shared) private(ibatch,iproj) proc_bind(close)
         !$omp do schedule(static)
         do ibatch = 1,size(fpls)

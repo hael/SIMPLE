@@ -103,9 +103,11 @@ contains
     procedure          :: pad_fft
     procedure          :: norm_noise_fft
     procedure          :: norm_noise_pad_fft
+    procedure          :: norm_noise_pad_fft_clip_shift
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_divwinstrfun_fft
     procedure          :: norm_noise_mask_fft_powspec
+    procedure          :: mask_divwinstrfun_fft
     procedure          :: ifft_mask_divwinstrfun_fft
     procedure          :: expand_ft
     ! I/O
@@ -369,6 +371,7 @@ contains
     procedure          :: shift
     procedure, private :: shift2Dserial_1, shift2Dserial_2
     generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
+    procedure          :: shift2D_demoivre
     procedure          :: masscen
     procedure          :: masscen_adjusted
     ! NORMALIZE, file: simple_image_norm.f90
@@ -800,6 +803,13 @@ interface
         class(image), intent(inout) :: self_out
     end subroutine norm_noise_pad_fft
 
+    module subroutine norm_noise_pad_fft_clip_shift( self, lmsk, self_out, self_out2, shvec )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(inout) :: self_out, self_out2
+        real,         intent(in)    :: shvec(2)
+    end subroutine norm_noise_pad_fft_clip_shift
+
     module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -819,6 +829,12 @@ interface
         real,         intent(in)    :: mskrad
         real,         intent(inout) :: spec(fdim(self%ldim(1)) - 1)
     end subroutine norm_noise_mask_fft_powspec
+
+    module subroutine mask_divwinstrfun_fft( self, mskrad, instrfun )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        class(image), intent(in)    :: instrfun
+    end subroutine mask_divwinstrfun_fft
 
     module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
         class(image), intent(inout) :: self
@@ -2257,6 +2273,11 @@ interface
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(3)
     end subroutine shift
+
+    module subroutine shift2D_demoivre( self, shvec  )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: shvec(2)
+    end subroutine shift2D_demoivre
 
     module subroutine shift2Dserial_1( self, shvec  )
         class(image), intent(inout) :: self

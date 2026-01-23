@@ -33,6 +33,12 @@ enum, bind(c)
     enumerator :: CORRW_ZSCORE_CRIT = 6
 end enum
 
+! specimen centering method enumeration
+enum, bind(c)
+    enumerator :: ENUM_CENTYPE = -1
+    enumerator :: MASS_CEN = 0, SEG_CEN = 1, PARAMS_CEN = 2
+end enum
+
 ! export (to STAR) type enumeration
 ! enum, bind(c)
 !     enumerator :: ENUM_STARTYPE = 0
@@ -106,5 +112,19 @@ type class_sample
     integer, allocatable :: pinds(:)
     real,    allocatable :: ccs(:)
 end type class_sample
+
+contains
+
+    pure integer(kind(ENUM_CENTYPE)) function get_centype( str )
+        character(len=*), intent(in) :: str
+        select case(trim(str))
+        case('mass')
+            get_centype = MASS_CEN
+        case('seg')
+            get_centype = SEG_CEN
+        case('params')
+            get_centype = PARAMS_CEN
+        end select
+    end function get_centype
 
 end module simple_type_defs

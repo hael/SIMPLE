@@ -494,75 +494,31 @@ contains
         endif
     end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
 
-    !>  \brief  prepares one polar cluster centre image for alignment
-    module subroutine polar_prep2Dref( icls, cavg, center, xyz )
-        integer,                intent(in)    :: icls
-        class(image), optional, intent(inout) :: cavg
-        logical,      optional, intent(in)    :: center
-        real,         optional, intent(out)   :: xyz(3)
-        real, allocatable :: frc(:), filter(:), gaufilter(:)
-        real    :: xy_cavg(2), crop_factor
-        integer :: filtsz, k
-        logical :: do_center
-        ! Centering
-        if( present(cavg).and.present(center).and.present(xyz) )then
-            ! The three optional arguments are required
-            do_center = .false.
-            if( present(center) )then
-                xyz       = 0.
-                do_center = center.and.(params_glob%center .eq. 'yes')
-            endif
-            if( do_center )then
-                crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-                select case(trim(params_glob%center_type))
-                case('params')
-                    ! offset from document in original pixel unit
-                    call build_glob%spproj_field%calc_avg_offset2D(icls, xy_cavg)
-                    if( arg(xy_cavg) < CENTHRESH )then
-                        xyz = 0.
-                    else if( arg(xy_cavg) > MAXCENTHRESH2D )then
-                        xyz = [xy_cavg(1), xy_cavg(2), 0.]
-                    else
-                        xyz = cavg%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                        xyz = xyz / crop_factor         ! scaled pixel unit
-                        if( arg(xyz(1:2) - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
-                    endif
-                case('seg')
-                    call calc_cavg_offset(cavg, params_glob%cenlp, params_glob%msk_crop, xy_cavg)
-                    xyz(1:2) = xy_cavg / crop_factor    ! scaled pixel unit
-                case('mass')
-                    xyz = cavg%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
-                    xyz = xyz / crop_factor             ! scaled pixel unit
-                end select
-            endif
-        endif
-        ! Filtering
+    !>  \brief  Filters one polar cluster centre for alignment
+    module subroutine polar_prep2Dref( icls, gaufilt )
+        integer, intent(in) :: icls
+        logical, intent(in) :: gaufilt
+        real    :: frc(build_glob%clsfrcs%get_filtsz())
+        real    :: filter(build_glob%clsfrcs%get_filtsz())
+        real    :: gaufilter(build_glob%clsfrcs%get_filtsz())
+        integer :: k
         if( params_glob%l_ml_reg )then
-            ! no filtering, not supported yet
+            ! no filtering, not supported yet in 2D
         else
             ! FRC-based optimal filter
-            filtsz = build_glob%clsfrcs%get_filtsz()
-            allocate(frc(filtsz),filter(filtsz),source=0.)
             call build_glob%clsfrcs%frc_getter(icls, frc)
             if( any(frc > 0.143) )then
-                if( params_glob%beta > 0.001 )then
-                    call fsc2boostfilter(params_glob%beta, filtsz, frc, filter, merged=params_glob%l_lpset)
-                else
-                    call fsc2optlp_sub(filtsz, frc, filter, merged=params_glob%l_lpset)
-                endif
+                call fsc2optlp_sub(size(frc), frc, filter, merged=params_glob%l_lpset)
             else
                 filter = 1.0
             endif
             ! gaussian filter
-            if(trim(params_glob%gauref).eq.'yes')then
-                allocate(gaufilter(filtsz),source=0.)
+            if( gaufilt )then
                 call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
-                ! take the minimum of FRC-based & gaussian filters
-                forall(k = 1:filtsz) filter(k) = min(filter(k), gaufilter(k))
-                deallocate(gaufilter)
+                ! minimum of FRC-based & gaussian filters
+                forall(k = 1:size(filter)) filter(k) = min(filter(k), gaufilter(k))
             endif
             call polar_filterrefs(icls, filter)
-            deallocate(frc,filter)
         endif
     end subroutine polar_prep2Dref
 
@@ -641,7 +597,7 @@ contains
     module subroutine polar_filterrefs( icls, filter )
         integer, intent(in) :: icls
         real,    intent(in) :: filter(:)
-        integer :: n, k
+        integer :: k
         do k = kfromto(1),kfromto(2)
             pfts_merg(:,k,icls) = filter(k) * pfts_merg(:,k,icls)
             pfts_even(:,k,icls) = filter(k) * pfts_even(:,k,icls)

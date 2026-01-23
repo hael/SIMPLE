@@ -108,11 +108,9 @@ interface
         type(cmdline), intent(in) :: cline
     end subroutine
 
-    module subroutine polar_prep2Dref(icls, cavg, center, xyz)
-        integer,                intent(in)    :: icls
-        class(image), optional, intent(inout) :: cavg
-        logical,      optional, intent(in)    :: center
-        real,         optional, intent(out)   :: xyz(3)
+    module subroutine polar_prep2Dref(icls, gaufilt)
+        integer, intent(in) :: icls
+        logical, intent(in) :: gaufilt
     end subroutine
 
     module subroutine polar_filterrefs( icls, filter )
