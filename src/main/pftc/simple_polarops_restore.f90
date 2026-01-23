@@ -1,3 +1,4 @@
+!@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarops) simple_polarops_restore
 implicit none
 #include "simple_local_flags.inc"

@@ -1,3 +1,5 @@
+
+!@descr: utility functions for motion correction
 module simple_motion_correct_utils
 use simple_core_module_api
 use simple_image,       only: image

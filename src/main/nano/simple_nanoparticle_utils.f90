@@ -1,3 +1,5 @@
+
+!@descr: nanoparticle utilities, mostly operations on atomic coordinates
 ! Ideal Pt lattice:
 ! [100] = 3.9242A
 ! [110] = 2.77

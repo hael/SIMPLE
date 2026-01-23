@@ -1,3 +1,4 @@
+!@descr: polarft class submodule for dealing with CTF-related things
 submodule (simple_polarft_calc) simple_polarft_ctf
 use simple_core_module_api
 #include "simple_local_flags.inc"

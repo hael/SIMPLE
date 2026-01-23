@@ -1,3 +1,4 @@
+!@descr: 2D strategy for time-restrained search, used in SINGLE
 module simple_strategy2D_tseries
 use simple_core_module_api
 use simple_strategy2D_alloc

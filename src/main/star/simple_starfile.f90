@@ -1,3 +1,4 @@
+!@descr: the starfile abstract data type
 module simple_starfile
 use simple_core_module_api
 use simple_starfile_wrappers

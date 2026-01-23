@@ -1,3 +1,4 @@
+!@descr: for interoperability with RELION
 module simple_relion
 use simple_core_module_api
 use simple_sp_project, only: sp_project

@@ -1,3 +1,4 @@
+!@descr: the abstract data type implementing the version of segmentation-based picking used in the stream
 module simple_picksegdiam
 use simple_core_module_api
 use simple_image,     only: image

@@ -1,4 +1,4 @@
-!@descr: abstract optimiser defining an interface for the extending optimisation classes
+!@descr: abstract optimizer defining an interface for the extending optimization classes
 module simple_optimizer
 implicit none
 

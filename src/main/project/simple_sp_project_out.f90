@@ -1,3 +1,4 @@
+!@descr: single-particle project routines for managing outputs from various processes
 submodule(simple_sp_project) simple_sp_project_out
 implicit none
 #include "simple_local_flags.inc"

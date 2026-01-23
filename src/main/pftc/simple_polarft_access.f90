@@ -1,3 +1,4 @@
+!@descr: polarft class accessors submodule
 submodule (simple_polarft_calc) simple_polarft_access
 use simple_core_module_api
 #include "simple_local_flags.inc"

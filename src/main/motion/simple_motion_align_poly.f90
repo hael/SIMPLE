@@ -1,3 +1,6 @@
+
+
+!@descr: fitting of a polynomial deformation model to patch shifts
 module simple_motion_align_poly
 use simple_core_module_api
 use simple_image,           only: image, image_ptr

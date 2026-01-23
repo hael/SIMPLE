@@ -1,4 +1,4 @@
-!@descr: abstract strategy3D base class
+!@descr: abstract pca strategy base class
 module simple_pca
 implicit none
 

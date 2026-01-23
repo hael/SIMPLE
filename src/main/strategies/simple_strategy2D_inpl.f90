@@ -1,3 +1,4 @@
+!@descr: 2D strategy for in-plane refinement
 module simple_strategy2D_inpl
 use simple_core_module_api
 use simple_strategy2D_alloc

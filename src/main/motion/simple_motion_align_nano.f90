@@ -1,3 +1,4 @@
+!@descr: motion correction for movies of nanoparticles with aberation-corrected TEM
 module simple_motion_align_nano
 use simple_core_module_api
 use simple_image,      only: image

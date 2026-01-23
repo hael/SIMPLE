@@ -1,3 +1,4 @@
+!@descr: single-particle project I/O routines
 submodule(simple_sp_project) simple_sp_project_io
 implicit none
 #include "simple_local_flags.inc"

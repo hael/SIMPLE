@@ -1,4 +1,4 @@
-!@descr: concrete strategy3D: refinement
+!@descr: 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
 module simple_strategy3D_snhc_smpl
 use simple_core_module_api
 use simple_strategy3D_alloc

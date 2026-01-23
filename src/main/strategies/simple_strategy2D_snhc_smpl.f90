@@ -1,3 +1,4 @@
+!@descr: 2D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
 module simple_strategy2D_snhc_smpl
 use simple_core_module_api
 use simple_strategy2D_alloc  ! singleton

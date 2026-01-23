@@ -1,3 +1,4 @@
+!@descr: polarft class complete interface
 module simple_polarft_calc
 use simple_core_module_api
 use simple_fftw3

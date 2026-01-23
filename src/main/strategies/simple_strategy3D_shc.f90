@@ -1,4 +1,4 @@
-!@descr: concrete strategy3D: refinement
+!@descr: 3D strategy for projection matching by stochastic hill climbing
 module simple_strategy3D_shc
 use simple_core_module_api
 use simple_strategy3D_alloc

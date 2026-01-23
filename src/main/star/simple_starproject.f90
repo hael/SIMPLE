@@ -1,3 +1,4 @@
+!@descr: abstract data type implementing starproject
 module simple_starproject
 use simple_core_module_api
 use simple_sp_project, only: sp_project

@@ -1,3 +1,5 @@
+
+!@descr: discrete/continuous hybrid 2D registration to support motion correction
 module simple_motion_align_hybrid
 use simple_core_module_api
 use simple_image,        only: image

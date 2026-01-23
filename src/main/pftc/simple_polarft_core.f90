@@ -1,3 +1,4 @@
+!@descr: polarft class core submodule: object lifecycle etc.
 submodule (simple_polarft_calc) simple_polarft_core
 use simple_core_module_api
 #include "simple_local_flags.inc"

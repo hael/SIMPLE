@@ -1,3 +1,4 @@
+!@descr: 2D strategy for probabilistic projection matching
 module simple_strategy2D_prob
 use simple_core_module_api
 use simple_strategy2D_alloc

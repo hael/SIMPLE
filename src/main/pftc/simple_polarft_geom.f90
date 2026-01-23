@@ -1,3 +1,4 @@
+!@descr: polarft class submodule for geometry-related things: shift, rotate, mirror etc.
 submodule (simple_polarft_calc) simple_polarft_geom
 implicit none
 

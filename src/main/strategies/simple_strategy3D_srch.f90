@@ -1,4 +1,4 @@
-! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
+!@descr: common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 use simple_core_module_api
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search

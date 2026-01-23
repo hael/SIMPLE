@@ -1,3 +1,4 @@
+!@descr: submodule for parallel I/O and polar->Cartesian conversion
 submodule (simple_polarops) simple_polarops_io
 implicit none
 #include "simple_local_flags.inc"

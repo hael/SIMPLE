@@ -1,3 +1,4 @@
+!@descr: single-particle project routines for managing 2D class info
 submodule(simple_sp_project) simple_sp_project_cls
 implicit none
 #include "simple_local_flags.inc"

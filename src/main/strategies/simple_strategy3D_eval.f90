@@ -1,3 +1,4 @@
+!@descr: 3D strategy for objective function evaluation
 module simple_strategy3D_eval
 use simple_core_module_api
 use simple_strategy3D_utils

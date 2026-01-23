@@ -1,3 +1,4 @@
+!@descr: unit test routines for starproject
 module simple_starproject_tester
 !=======================================================================
 !   SIMPLE STAR PROJECT INTEGRATION TEST SUITE
