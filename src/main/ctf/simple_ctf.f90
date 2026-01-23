@@ -53,7 +53,7 @@ end interface
 
 type mem_ctf_apply
     real    :: spaFreqSq, ang
-    integer :: ph1, ph2, ph3
+    integer :: ph1, ph2
 end type mem_ctf_apply
 
 type(mem_ctf_apply), allocatable :: mem_ctf_apply_mat(:,:)
@@ -299,7 +299,7 @@ contains
 
     subroutine memoize4ctf_apply( img )
         class(image), intent(inout) :: img   !< image (output)
-        integer :: h,k,phys(3),ldim(3)
+        integer :: h,k,phys(2),ldim(3)
         real    :: rh,hinv,hinvsq,rk,kinv,inv_ldim(3)
         if( OMP_IN_PARALLEL() )then
             THROW_HARD('No memoization inside OpenMP regions')
@@ -319,13 +319,12 @@ contains
             do k=lims_memo(2,1),lims_memo(2,2)
                 rk   = real(k)
                 kinv = rk * inv_ldim(2)
-                phys = img%comp_addr_phys([h,k,0])
+                phys = img%comp_addr_phys(h,k)
                 ! stash
                 mem_ctf_apply_mat(h,k)%spaFreqSq = hinvsq + kinv * kinv
                 mem_ctf_apply_mat(h,k)%ang       = atan2(rk,rh)
                 mem_ctf_apply_mat(h,k)%ph1       = phys(1)
                 mem_ctf_apply_mat(h,k)%ph2       = phys(2)
-                mem_ctf_apply_mat(h,k)%ph3       = phys(3)
             end do
         end do
     end subroutine memoize4ctf_apply

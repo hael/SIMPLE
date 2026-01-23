@@ -372,6 +372,145 @@ contains
         self_out%ft   = .true.
     end subroutine norm_noise_pad_fft
 
+    subroutine norm_noise_pad_fft_clip_shift( self, lmsk, self_out, self_out2, shvec )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(inout) :: self_out, self_out2
+        real,         intent(in)    :: shvec(2)
+        real,         parameter     :: SHTHRESH = 0.001
+        complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
+        real(dp)      :: sh(2)
+        real(dp)      :: mean_dp, var_dp, sum_dp, sum_sq_dp, rnpix
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat, x_sp, ratio
+        integer       :: lims(3,2), starts(3), stops(3)
+        integer       :: n1,n2, n1o,n2o, h1o,h2o, i,j, npix, x0,y0, xo,yo, h,k, kpi,kpo, hp
+        logical       :: do_norm, k_neg
+        ! n3 is always 1 here
+        n1  = self%ldim(1)
+        n2  = self%ldim(2)
+        n1o = self_out%ldim(1)
+        n2o = self_out%ldim(2)
+        h1o = n1o/2
+        h2o = n2o/2
+        ! ============================================================
+        ! NOISE NORMALIZATION: Optimized two-pass with simple sums
+        ! ============================================================
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        ! First pass: accumulate sums (column-major for Fortran)
+        do i = 1, n1
+            do j = 1, n2
+                if (.not. lmsk(i,j,1)) then
+                    npix = npix + 1
+                    x_sp = self%rmat(i,j,1)
+                    sum_dp = sum_dp + real(x_sp, dp)
+                    sum_sq_dp = sum_sq_dp + real(x_sp, dp) * real(x_sp, dp)
+                end if
+            end do
+        end do
+        ! Compute mean and variance
+        var_dp = 0.0_dp
+        mean_dp = 0.0_dp
+        if (npix > 1) then
+            rnpix = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp = (sum_sq_dp - sum_dp * sum_dp / rnpix) / real(npix - 1, dp)
+        end if
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = 1.0_c_float
+        do_norm = .false.
+        if (is_a_number(real(var_dp, kind=kind(1.0))) .and. var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp / sqrt(var_dp), c_float)
+            do_norm = (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float)
+        end if
+        ! ============================================================
+        ! PAD + FFTSHIFT (fused) + apply normalization while copying
+        !
+        ! Instead of:
+        !   (1) center copy into self_out
+        !   (2) fftshift swap whole self_out
+        !
+        ! We write each source pixel directly to its fftshifted output index:
+        !   x0 = starts(1)+i-1;  xo = ((x0-1 + h1o) mod n1o) + 1
+        !   y0 = starts(2)+j-1;  yo = ((y0-1 + h2o) mod n2o) + 1
+        ! ============================================================
+        starts = (self_out%ldim - self%ldim) / 2 + 1
+        stops  = self_out%ldim - starts + 1
+        self_out%ft   = .false.
+        self_out%rmat = 0.0_c_float
+        if (do_norm) then
+            do j = 1, n2
+                y0 = starts(2) + j - 1
+                yo = modulo((y0 - 1) + h2o, n2o) + 1
+                do i = 1, n1
+                    x0 = starts(1) + i - 1
+                    xo = modulo((x0 - 1) + h1o, n1o) + 1
+                    self_out%rmat(xo, yo, 1) = (self%rmat(i,j,1) - mean_sp) * invstd_sp
+                end do
+            end do
+        else
+            do j = 1, n2
+                y0 = starts(2) + j - 1
+                yo = modulo((y0 - 1) + h2o, n2o) + 1
+                do i = 1, n1
+                    x0 = starts(1) + i - 1
+                    xo = modulo((x0 - 1) + h1o, n1o) + 1
+                    self_out%rmat(xo, yo, 1) = self%rmat(i,j,1)
+                end do
+            end do
+        end if
+        ! ============================================================
+        ! FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self_out%plan_fwd, self_out%rmat, self_out%cmat)
+        scale_cmat  = 1.0_c_float / real(n1o*n2o, c_float) ! the scaling occurs below
+        self_out%ft = .true.
+        ! ============================================================
+        ! CLIP & FFTW scaling + optional SHIFT in Fourier space
+        ! ============================================================
+        lims  = self_out2%fit%loop_lims(2)
+        ratio = real(n1o, c_float) / real(self_out2%ldim(1), c_float)
+        if (abs(shvec(1)) > SHTHRESH .or. abs(shvec(2)) > SHTHRESH) then
+            sh = real(shvec * self_out2%shconst(1:2), dp)
+            ! phase increments exp(i*sh1), exp(i*sh2)
+            w1 = cmplx( real(cos(sh(1)), c_float), real(sin(sh(1)), c_float), kind=c_float_complex )
+            w2 = cmplx( real(cos(sh(2)), c_float), real(sin(sh(2)), c_float), kind=c_float_complex )
+            ! starting phase for h: exp(i*hmin*sh1)
+            ph0 = cmplx( real(cos(real(lims(1,1),dp)*sh(1)), c_float), &
+                        real(sin(real(lims(1,1),dp)*sh(1)), c_float), kind=c_float_complex )
+            ! starting phase for k: exp(i*kmin*sh2)
+            ph_k = cmplx( real(cos(real(lims(2,1),dp)*sh(2)), c_float), &
+                        real(sin(real(lims(2,1),dp)*sh(2)), c_float), kind=c_float_complex )
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2o              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out2%ldim(2), k + 1, k_neg)
+                ph_h  = ph0
+                do h = lims(1,1), lims(1,2)
+                    hp = h + 1
+                    phase = ph_k * ph_h
+                    self_out2%cmat(hp, kpo, 1) = scale_cmat * self_out%cmat(hp, kpi, 1) * phase
+                    ph_h = ph_h * w1
+                end do
+                ph_k = ph_k * w2
+            end do
+        else
+            ! CLIP only
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2o              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out2%ldim(2), k + 1, k_neg)
+                do h = lims(1,1), lims(1,2)
+                    hp = h + 1
+                    self_out2%cmat(hp, kpo, 1) = scale_cmat * self_out%cmat(hp, kpi, 1)
+                end do
+            end do
+        endif
+        call self_out2%set_smpd(self%smpd * ratio)
+        self_out2%ft = .true.
+    end subroutine norm_noise_pad_fft_clip_shift
+
     ! The big players in this subroutine are the normalization (17%) and the fft (70%)  
     module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
         class(image), intent(inout) :: self
@@ -490,8 +629,6 @@ contains
                 end do
                 ph_k = ph_k * w2
             end do
-            call self_out%set_smpd(self%smpd * ratio)
-            self_out%ft = .true.
         else
             ! CLIP only
             do k = lims(2,1), lims(2,2)
@@ -503,9 +640,9 @@ contains
                     self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1)
                 end do
             end do
-            call self_out%set_smpd(self%smpd * ratio)
-            self_out%ft = .true.
         endif
+        call self_out%set_smpd(self%smpd * ratio)
+        self_out%ft = .true.
     end subroutine norm_noise_fft_clip_shift
 
     module subroutine norm_noise_divwinstrfun_fft( self, lmsk, instrfun )
@@ -792,6 +929,62 @@ contains
         end where
         spec = real(dspec, kind=sp)
     end subroutine norm_noise_mask_fft_powspec
+
+    module subroutine mask_divwinstrfun_fft( self, mskrad, instrfun )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        class(image), intent(in)    :: instrfun
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, minlen
+        real(c_float) :: temp(self%ldim(1),self%ldim(2)), r2, scale_cmat, cis2, cjs2
+        real(c_float) :: v_val, u_val, invden
+        real(c_float), parameter :: EPS_DEN   = 1.e-6_c_float
+        real(c_float), parameter :: EPS_E     = 1.e-4_c_float
+        real(c_float), parameter :: ONE       = 1.0_c_float
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        h1 = n1/2
+        h2 = n2/2
+        ! ============================================================
+        ! FUSED PASS:
+        !   - apply soft mask
+        !   - divide by instrument function where denom is safe
+        !   - fftshift using temp buffer
+        ! ============================================================
+        ! mask & instrument function
+        minlen = minval(self%ldim(1:2))
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        do j = 1, n2
+            cjs2 = mem_msk_cs2(j)
+            do i = 1, n1
+                v_val = self%rmat(i, j, 1)
+                u_val = instrfun%rmat(i, j, 1)
+                ! soft mask
+                r2    = mem_msk_cs2(i) + cjs2
+                v_val = v_val * cosedge_r2_2d(r2, minlen, mskrad)
+                ! Divide by instrument function if safe
+                if (abs(u_val) > EPS_DEN) then
+                    invden = ONE / u_val
+                    v_val = v_val * invden
+                end if
+                temp(i, j) = v_val
+            end do
+        end do
+        ! fftshift
+        do j = 1, n2
+            jj = mod(j + h2 - 1, n2) + 1
+            do i = 1, n1
+                ii = mod(i + h1 - 1, n1) + 1
+                self%rmat(ii, jj, 1) = temp(i, j)
+            end do
+        end do
+        ! ============================================================
+        ! FFT (FFTW r2c) + scale with reciprocal
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = 1.0_c_float / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+    end subroutine mask_divwinstrfun_fft
 
     module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
         class(image), intent(inout) :: self

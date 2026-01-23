@@ -14,7 +14,7 @@ use simple_fileio
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
-public :: lowpass_from_klim, gaussian_filter, fsc2boostfilter
+public :: lowpass_from_klim, gaussian_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
 public :: lpstages, lpstages_fast, edit_lpstages4polar
@@ -66,34 +66,6 @@ contains
         endif
         where( filt  > 0.99999 ) filt = 0.99999
     end subroutine fsc2optlp_sub
-
-    !> \brief  converts the FSC to an optimal filter form where the SSNR is
-    !> artificially increased not unlike ML regularization
-    subroutine fsc2boostfilter( tau, filtsz, corrs, filt, merged )
-        real,              intent(in)  :: tau
-        integer,           intent(in)  :: filtsz        !< sz of filter
-        real,              intent(in)  :: corrs(filtsz) !< fsc plot (correlations)
-        real,              intent(out) :: filt(filtsz)  !< output filter coefficients
-        logical, optional, intent(in)  :: merged
-        real    :: fsc, ssnr
-        integer :: k
-        logical :: l_merged
-        l_merged = .false.
-        if( present(merged) ) l_merged = merged
-        if( l_merged )then
-            do k = 1,filtsz
-                fsc     = max(0.001, min(corrs(k), 0.999))
-                ssnr    = tau * fsc / (1. - fsc)
-                filt(k) = max(0.00001, min(ssnr / (ssnr + 1.0), 0.99999))
-            end do
-        else
-            do k = 1,filtsz
-                fsc     = max(0.001, min(corrs(k), 0.999))
-                ssnr    = tau * 2.0 * fsc / (1. - fsc)
-                filt(k) = max(0.00001, min(ssnr / (ssnr + 2.0), 0.99999))
-            end do
-        endif
-    end subroutine fsc2boostfilter
 
     !> \brief  converts the SSNR to FSC
     function ssnr2fsc( ssnr ) result( corrs )
