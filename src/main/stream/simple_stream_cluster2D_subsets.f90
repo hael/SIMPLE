@@ -1,4 +1,24 @@
 !@descr: high-level batch testing of the sieving logics used in the stream
+!
+! This module implements a streaming, incremental 2D clustering policy with the following guarantees:
+!
+! (1) Particles are processed in bounded subsets (“chunks”), rather than as a monolithic dataset.
+! (2) Chunks are constructed deterministically from stacks/micrographs, subject to:
+!         * a maximum number of micrographs (nmics)
+!         * a maximum number of particles (maxnptcls)
+! (3) Each chunk is independently 2D-clustered, using identical clustering parameters.
+! (4) Results are merged sequentially:
+!         * the first chunk establishes the initial class averages,
+!         * each subsequent chunk is matched against the previous result.
+! (5) Only one merge frontier exists at any time (no parallel merges).
+! (6) No final global reclustering is performed — the final state is the result of chained matches.
+!
+! In short:
+!
+! “Split → independently cluster → merge in arrival order → stop when all chunks are merged.”
+!
+! This is a stream-like sieving / bootstrapping policy, not a global optimization.
+!
 module simple_stream_cluster2D_subsets
 use simple_stream_module_api
 use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_match_cavgs
@@ -139,7 +159,7 @@ contains
         call qsys_cleanup
         ! graceful end
         call simple_end('**** SIMPLE_CLUSTER2D_SUBSETS NORMAL STOP ****')
-        
+
     contains
 
         subroutine check_completed_chunks
