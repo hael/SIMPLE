@@ -720,7 +720,7 @@ contains
                         phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
                         phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
                     endif
-                    call img%set([1+h,k+c,m+c], abs(self%get_cmat_at(phys)))
+                    call img%set([1+h,k+c,m+c], abs(self%get_cmat_at(phys(1),phys(2),phys(3))))
                 end do
             end do
         end do

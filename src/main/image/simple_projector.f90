@@ -179,12 +179,12 @@ contains
                     phys(1) = h + 1
                     phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
                     phys(3) = 1
-                    call fplane%set_cmat_at(phys, comp)
+                    call fplane%set_cmat_at(phys(1),phys(2),phys(3), comp)
                 else
                     phys(1) = -h + 1
                     phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
                     phys(3) = 1
-                    call fplane%set_cmat_at(phys, conjg(comp))
+                    call fplane%set_cmat_at(phys(1),phys(2),phys(3), conjg(comp))
                 endif
             end do
         end do
@@ -214,12 +214,12 @@ contains
                     phys(1) = h + 1
                     phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
                     phys(3) = 1
-                    call fplane%set_cmat_at(phys, comp)
+                    call fplane%set_cmat_at(phys(1),phys(2),phys(3), comp)
                 else
                     phys(1) = -h + 1
                     phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
                     phys(3) = 1
-                    call fplane%set_cmat_at(phys, conjg(comp))
+                    call fplane%set_cmat_at(phys(1),phys(2),phys(3), conjg(comp))
                 endif
             end do
         end do
