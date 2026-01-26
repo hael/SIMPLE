@@ -1,7 +1,8 @@
 program simple_test_ctf
 use simple_core_module_api
-use simple_image, only: image
-use simple_ctf,   only: ctf, memoize4ctf_apply, unmemoize4ctf_apply
+use simple_image,           only: image
+use simple_ctf,             only: ctf
+use simple_memoize_ft_maps, only: memoize_ft_maps
 implicit none
 #include "simple_local_flags.inc"
 integer, parameter :: LDIM(3) = [256,256,1]
@@ -11,7 +12,7 @@ type(ctf)          :: tfun
 call img%new(LDIM, SMPD)
 call img_spec%new(LDIM, SMPD)
 tfun = ctf(SMPD, KV, CS, AC)
-call memoize4ctf_apply(img)
+call memoize_ft_maps(LDIM)
 call tfun%ctf2img(img, DFX, DFY, ANGAST)
 call img%ft2img('real', img_spec)
 call img_spec%write(string('ctfimg.mrc'))

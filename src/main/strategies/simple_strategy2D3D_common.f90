@@ -1,6 +1,7 @@
 !@descr: common routines used by the high-level strategy 2D and 3D matchers
 module simple_strategy2D3D_common
 use simple_core_module_api
+use simple_memoize_ft_maps,   only: memoize_ft_maps, forget_ft_maps
 use simple_builder,           only: build_glob
 use simple_cmdline,           only: cmdline
 use simple_discrete_stack_io, only: dstack_io
@@ -744,8 +745,7 @@ contains
 
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds )
-        use simple_fplane,             only: fplane
-        use simple_memoize_ft_maps
+        use simple_fplane, only: fplane
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
@@ -840,7 +840,6 @@ contains
     subroutine calc_projdir3Drec( cline, nptcls2update, pinds )
         use simple_fplane,             only: fplane
         use simple_gridding,           only: gen_instrfun_img
-        use simple_memoize_ft_maps
         use simple_timer
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
@@ -1286,7 +1285,6 @@ contains
 
     subroutine build_batch_particles( pftc, nptcls_here, pinds_here, tmp_imgs )
         use simple_polarft_calc, only: polarft_calc
-        use simple_ctf, only: memoize4ctf_apply, unmemoize4ctf_apply
         class(polarft_calc), intent(inout) :: pftc
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds_here(nptcls_here)
@@ -1301,7 +1299,7 @@ contains
         ! get instrument function
         img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
         ! memoize CTF stuff
-        call memoize4ctf_apply(tmp_imgs(1))
+        call memoize_ft_maps(tmp_imgs(1)%get_ldim())
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -1319,7 +1317,7 @@ contains
         call pftc%memoize_ptcls
         ! destruct
         call img_instr%kill
-        call unmemoize4ctf_apply
+        call forget_ft_maps
     end subroutine build_batch_particles
 
 end module simple_strategy2D3D_common

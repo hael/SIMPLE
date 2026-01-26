@@ -13,7 +13,7 @@ use simple_image, only: image
 use simple_memoize_ft_maps
 implicit none
 
-public :: ctf, memoize4ctf_apply, unmemoize4ctf_apply
+public :: ctf
 private
 #include "simple_local_flags.inc"
 
@@ -51,14 +51,6 @@ end type ctf
 interface ctf
     module procedure constructor
 end interface
-
-type mem_ctf_apply
-    real    :: spaFreqSq, ang
-    integer :: ph1, ph2
-end type mem_ctf_apply
-
-type(mem_ctf_apply), allocatable :: mem_ctf_apply_mat(:,:)
-integer                          :: lims_memo(3,2)
 
 contains
 
@@ -298,58 +290,6 @@ contains
         if( present(bfac) ) call img%apply_bfac(bfac)
     end subroutine apply
 
-    subroutine memoize4ctf_apply( img )
-        class(image), intent(inout) :: img   !< image (output)
-        integer :: h,k,phys(2),ldim(3)
-        real    :: rh,hinv,hinvsq,rk,kinv,inv_ldim(3)
-        if( OMP_IN_PARALLEL() )then
-            THROW_HARD('No memoization inside OpenMP regions')
-        endif
-        ! initialize
-        ldim = img%get_ldim()
-        if( any(ldim == 0) .or. ldim(3) /= 1 ) THROW_HARD('Image incompatible with CTF application')
-        lims_memo = img%loop_lims(2)
-        if( allocated(mem_ctf_apply_mat) ) deallocate(mem_ctf_apply_mat)
-        allocate(mem_ctf_apply_mat(lims_memo(1,1):lims_memo(1,2),lims_memo(2,1):lims_memo(2,2)))
-        inv_ldim = 1./real(ldim)
-        ! pre-calulate
-        do h=lims_memo(1,1),lims_memo(1,2)
-            rh     = real(h)
-            hinv   = rh * inv_ldim(1)
-            hinvsq = hinv * hinv
-            do k=lims_memo(2,1),lims_memo(2,2)
-                rk   = real(k)
-                kinv = rk * inv_ldim(2)
-                phys = img%comp_addr_phys(h,k)
-                ! stash
-                mem_ctf_apply_mat(h,k)%spaFreqSq = hinvsq + kinv * kinv
-                mem_ctf_apply_mat(h,k)%ang       = atan2(rk,rh)
-                mem_ctf_apply_mat(h,k)%ph1       = phys(1)
-                mem_ctf_apply_mat(h,k)%ph2       = phys(2)
-            end do
-        end do
-    end subroutine memoize4ctf_apply
-
-    subroutine unmemoize4ctf_apply
-        if( allocated(mem_ctf_apply_mat) ) deallocate(mem_ctf_apply_mat)
-    end subroutine unmemoize4ctf_apply
-
-    ! local fast CTF kernel (numerically equivalent refactor)
-    pure elemental real function fast_ctf_kernel( h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs ) result( tval )
-        integer, intent(in) :: h, k
-        real,    intent(in) :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs
-        real :: df, evalPhSh, sum_df, diff_df, cterm, pi_wl_s2
-        ! Defocus term: exactly the same expression, just factored
-        sum_df  = dfx + dfy
-        diff_df = dfx - dfy
-        cterm   = cos( 2.0 * (mem_ctf_apply_mat(h,k)%ang - angast) )
-        df      = 0.5 * ( sum_df + cterm * diff_df )
-        ! Phase shift term: preserve the same evaluation structure
-        pi_wl_s2 = PI * wl * mem_ctf_apply_mat(h,k)%spaFreqSq
-        evalPhSh = pi_wl_s2 * (df - half_wl2_cs * mem_ctf_apply_mat(h,k)%spaFreqSq)
-        tval     = sin( evalPhSh + amp_contr_const )
-    end function fast_ctf_kernel
-
     ! local fast CTF kernel (numerically equivalent refactor)
     pure elemental real function ft_map_ctf_kernel( h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs ) result( tval )
         integer, intent(in) :: h, k
@@ -370,24 +310,26 @@ contains
         class(ctf),       intent(inout) :: self
         class(image),     intent(inout) :: img
         real,             intent(in)    :: dfx_in, dfy_in, angast_in
-        integer :: h,k
-        real    :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval
+        integer :: h,k,physh,physk
+        real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
         ! flag image as FT
         call img%set_ft(.true.)
         ! init
         call self%init(dfx_in, dfy_in, angast_in) ! conversions
         wl              = self%wl
         half_wl2_cs     = 0.5 * wl * wl * self%cs
-        dfx             = self%dfx
-        dfy             = self%dfy
+        sum_df          = self%dfx + self%dfy
+        diff_df         = self%dfx - self%dfy
         angast          = self%angast
         amp_contr_const = self%amp_contr_const
-        do h=lims_memo(1,1),lims_memo(1,2)
-            do k=lims_memo(2,1),lims_memo(2,2)
+        do h = ft_map_lims(1,1), ft_map_lims(1,2)
+            do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
-                tval = fast_ctf_kernel(h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs)
+                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
                 ! set cmat
-                call img%set_cmat_at(mem_ctf_apply_mat(h,k)%ph1,mem_ctf_apply_mat(h,k)%ph2,1, cmplx(tval,0.))
+                physh = ft_map_phys_addrh(h,k)
+                physk = ft_map_phys_addrk(h,k)
+                call img%set_cmat_at(physh,physk,1, cmplx(tval,0.))
             end do
         end do
     end subroutine ctf2img
@@ -400,8 +342,8 @@ contains
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
         real, parameter :: ZERO = 0., ONE = 1.0, MIN_SQUARE = 0.001
-        integer :: h,k
-        real    :: dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval, t
+        integer :: h,k,physh,physk
+        real    :: sum_df, diff_df, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval, t
         logical :: is_abs,is_ctf,is_flip,is_flipneg,is_neg,is_square
         ! Convert mode string to logical flags (SIMD-compatible)
         is_abs     = (mode == 'abs')
@@ -414,14 +356,14 @@ contains
         call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast) ! conversions
         wl              = self%wl
         half_wl2_cs     = 0.5 * wl * wl * self%cs
-        dfx             = self%dfx
-        dfy             = self%dfy
+        sum_df          = self%dfx + self%dfy
+        diff_df         = self%dfx - self%dfy
         angast          = self%angast
         amp_contr_const = self%amp_contr_const
-        do h = lims_memo(1,1), lims_memo(1,2)
-            do k = lims_memo(2,1), lims_memo(2,2)
+        do h = ft_map_lims(1,1), ft_map_lims(1,2)
+            do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
-                tval = fast_ctf_kernel(h, k, dfx, dfy, angast, amp_contr_const, wl, half_wl2_cs)
+                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
                 ! SIMD-compatible mode handling using masked operations
                 t = merge(       abs(tval),                     ZERO, is_abs)     + &
                     merge(           tval,                      ZERO, is_ctf)     + &
@@ -430,7 +372,9 @@ contains
                     merge(          -tval,                      ZERO, is_neg)     + &
                     merge(min(ONE, max(tval*tval, MIN_SQUARE)), ZERO, is_square)
                 ! Multiply (this is the key operation)
-                call img%mul_cmat_at(mem_ctf_apply_mat(h,k)%ph1,mem_ctf_apply_mat(h,k)%ph2,1, t)
+                physh = ft_map_phys_addrh(h,k)
+                physk = ft_map_phys_addrk(h,k)
+                 call img%mul_cmat_at(physh,physk,1, t)
             end do
         end do
     end subroutine apply_serial
@@ -446,7 +390,6 @@ contains
         real,           intent(in)    :: dfx_in       !< defocus x-axis
         real,           intent(in)    :: dfy_in       !< defocus y-axis
         real,           intent(in)    :: angast_in    !< angle of astigmatism
-        complex(kind=c_float_complex), pointer :: pcmat(:,:,:)
         real    :: angast, amp_contr_const, wl, half_wl2_cs
         real    :: sum_df, diff_df,tval
         integer :: h,k, physh,physk
@@ -464,7 +407,6 @@ contains
         l_flip          = imode == CTFFLAG_FLIP
         sum_df          = self%dfx + self%dfy
         diff_df         = self%dfx - self%dfy
-        call img%get_cmat_ptr(pcmat)
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
@@ -474,10 +416,9 @@ contains
                 physh = ft_map_phys_addrh(h,k)
                 physk = ft_map_phys_addrk(h,k)
                 tvals(physh, physk)    = tval
-                pcmat(physh, physk, 1) = tval * pcmat(physh, physk, 1)
+                call img%mul_cmat_at(physh,physk,1, tval)
             end do
         end do
-        nullify(pcmat)
     end subroutine eval_and_apply
 
     elemental real function kV2wl( self ) result( wavelength )
