@@ -1213,7 +1213,7 @@ contains
     subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, just_transf)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
-        use simple_ctf,                 only: memoize4ctf_apply, unmemoize4ctf_apply
+        use simple_memoize_ft_maps
         class(sp_project),                  intent(inout) :: spproj
         character(len=*),                   intent(in)    :: oritype
         integer,                            intent(in)    :: icls
@@ -1303,7 +1303,7 @@ contains
             call  img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
             call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
         end do
-        call memoize4ctf_apply(img(1))
+        call memoize_ft_maps(img(1)%get_ldim())
         logi_lims      = img(1)%loop_lims(2)
         cyc_lims       = img(1)%loop_lims(3)
         cyc_limsR(:,1) = cyc_lims(1,:)
@@ -1384,7 +1384,7 @@ contains
             enddo
             call cavg%div(real(pop))
         endif
-        call unmemoize4ctf_apply
+        call forget_ft_maps
         do ithr = 1, nthr_glob
             call img(ithr)%kill
             call timg(ithr)%kill

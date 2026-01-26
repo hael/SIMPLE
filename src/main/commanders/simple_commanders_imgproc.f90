@@ -61,9 +61,10 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_ctf_phaseflip( self, cline )
-        use simple_ctf,                 only: ctf, memoize4ctf_apply, unmemoize4ctf_apply
         use simple_strategy2D3D_common, only: read_imgbatch
         use simple_ori,                 only: ori
+        use simple_ctf,                 only: ctf
+        use simple_memoize_ft_maps,     only: memoize_ft_maps, forget_ft_maps
         class(commander_ctf_phaseflip), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(image), allocatable :: imgs(:)
@@ -83,7 +84,7 @@ contains
                 call imgs(iptcl)%new([ldim(1),ldim(2),1],params%smpd)
                 call imgs(iptcl)%read(params%stk, iptcl)
             enddo
-            call memoize4ctf_apply(imgs(1))
+            call memoize_ft_maps(imgs(1)%get_ldim())
             print *, 'FINISHED READING...'
             !$omp parallel do private(iptcl,ctfparms,tfun) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, nptcls
@@ -99,11 +100,11 @@ contains
                 call imgs(iptcl)%write(params%outstk, iptcl)
                 call imgs(iptcl)%kill
             enddo
-            call unmemoize4ctf_apply
+            call forget_ft_maps
         else
             nptcls = build%spproj%get_nptcls()
             ldim   = build%img%get_ldim()
-            call memoize4ctf_apply(build%img)
+            call memoize_ft_maps(build%img%get_ldim())
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
             do iptcl = 1, nptcls
                 call read_imgbatch(iptcl, build%img)
@@ -115,7 +116,7 @@ contains
                 call stkio_w%write(iptcl, build%img)
             end do
             call stkio_w%close
-            call unmemoize4ctf_apply
+            call forget_ft_maps
         endif
         ! cleanup
         call build%kill_general_tbox
