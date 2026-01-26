@@ -1,7 +1,7 @@
 !@descr: re-arranged Fourier transformed image for fast 3D gridding
 module simple_fplane
 use simple_core_module_api
-use simple_memoize_ft_mapping
+use simple_memoize_ft_maps
 use simple_image,              only: image
 use simple_parameters,         only: params_glob
 use simple_euclid_sigma2,      only: eucl_sigma2_glob
@@ -115,7 +115,7 @@ contains
         complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
         real(dp) :: pshift(2)
         real     :: tval, tvalsq, add_phshift
-        integer  :: phys(2), sigma2_kfromto(2), h,k,shell
+        integer  :: physh, physk, sigma2_kfromto(2), h,k,shell
         logical  :: l_ctf, l_flip
         ! CTF
         l_ctf = ctfvars%ctfflag /= CTFFLAG_NO
@@ -150,12 +150,13 @@ contains
                     tvalsq = 0.
                 else
                     ! Retrieve component & shift
-                    phys = get_phys_addr(h,k)
-                    c    = merge(conjg(img%get_cmat_at(phys(1),phys(2),1)), img%get_cmat_at(phys(1),phys(2),1), h<0)&
+                    physh = ft_map_phys_addrh(h,k)
+                    physk = ft_map_phys_addrk(h,k)
+                    c    = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0)&
                             & * (ph_k * ph_h)
                     ! CTF
                     if( l_ctf )then
-                        tval   = tfun%eval(get_spaFreqSq(h,k), get_astigang(h,k), add_phshift)
+                        tval   = tfun%eval(ft_map_spafreqsq(h,k), ft_map_astigang(h,k), add_phshift)
                         tvalsq = tval * tval
                         c      = merge(abs(tval)*c, tval*c, l_flip)
                     else
@@ -206,7 +207,7 @@ contains
         real(dp) :: pshift(2)
         real     :: kbw(self%wdim,self%wdim), w(2,2),rmat(2,2),loc(2),d(2)
         real     :: tval,tvalsq,add_phshift, dh,dk
-        integer  :: win(2,2),sigma2_kfromto(2), phys(2), i,j,h,k,hh,kk,shell, iwinsz, fh,fk, hlim
+        integer  :: win(2,2),sigma2_kfromto(2), physh, physk, i,j,h,k,hh,kk,shell, iwinsz, fh,fk, hlim
         logical  :: l_ctf, l_flip
         if( .not.self%padded ) THROW_HARD('gen_planes_pad only for use with padding!')
         ! CTF
@@ -252,12 +253,13 @@ contains
                     shell = nint(sqrt(real(h*h + k*k)))
                     if( shell <= self%nyq_crop )then
                         ! Retrieve component & shift
-                        phys = get_phys_addr(h,k)
-                        c    = merge(conjg(img%get_cmat_at(phys(1),phys(2),1)), img%get_cmat_at(phys(1),phys(2),1), h<0)&
+                        physh = ft_map_phys_addrh(h,k)
+                        physk = ft_map_phys_addrk(h,k)
+                        c     = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0)&
                                 & * (ph_k * ph_h)
                         ! CTF
                         if( l_ctf )then
-                            tval   = tfun%eval(get_spaFreqSq(h,k), get_astigang(h,k), add_phshift)
+                            tval   = tfun%eval(ft_map_spaFreqSq(h,k), ft_map_astigang(h,k), add_phshift)
                             tvalsq = tval * tval
                             c      = merge(abs(tval)*c, tval*c, l_flip)
                         else
@@ -324,12 +326,13 @@ contains
                     shell = nint(sqrt(real(h*h + k*k)))
                     if( shell > self%nyq_crop ) cycle
                         ! Retrieve component & shift
-                        phys = get_phys_addr(h,k)
-                        c    = merge(conjg(img%get_cmat_at(phys(1),phys(2),1)), img%get_cmat_at(phys(1),phys(2),1), h<0)&
+                        physh = ft_map_phys_addrh(h,k)
+                        physk = ft_map_phys_addrk(h,k)
+                        c     = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0)&
                                 & * (ph_k * ph_h)
                         ! CTF
                         if( l_ctf )then
-                            tval   = tfun%eval(get_spaFreqSq(h,k), get_astigang(h,k), add_phshift)
+                            tval   = tfun%eval(ft_map_spaFreqSq(h,k), ft_map_astigang(h,k), add_phshift)
                             tvalsq = tval * tval
                             c      = merge(abs(tval)*c, tval*c, l_flip)
                         else

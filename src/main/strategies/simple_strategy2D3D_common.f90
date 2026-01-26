@@ -745,7 +745,7 @@ contains
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds )
         use simple_fplane,             only: fplane
-        use simple_memoize_ft_mapping, only: memoize_ft_map, forget_ft_map
+        use simple_memoize_ft_maps
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
@@ -779,7 +779,7 @@ contains
             t_grid   = 0.
         endif
         ! logical/physical adress mapping
-        call memoize_ft_map(build_glob%imgbatch(1)%get_ldim(), 3)
+        call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), 3)
         ! gridding batch loop
         nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
@@ -827,7 +827,7 @@ contains
         ! normalise structure factors
         call norm_struct_facts( cline )
         ! destruct
-        call forget_ft_map
+        call forget_ft_maps
         call killrecvols()
         do ibatch=1,MAXIMGBATCHSZ
             call fpls(ibatch)%kill
@@ -840,7 +840,7 @@ contains
     subroutine calc_projdir3Drec( cline, nptcls2update, pinds )
         use simple_fplane,             only: fplane
         use simple_gridding,           only: gen_instrfun_img
-        use simple_memoize_ft_mapping, only: memoize_ft_map, forget_ft_map
+        use simple_memoize_ft_maps
         use simple_timer
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
@@ -916,7 +916,7 @@ contains
             call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
         endif
         ! logical/physical adress mapping
-        call memoize_ft_map(build_glob%imgbatch(1)%get_ldim(), 3)
+        call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), 3)
         if( DEBUG )then
             t_ini = toc(t)
             t_pad = 0.
@@ -1012,7 +1012,7 @@ contains
         enddo
         if( DEBUG ) print *,'timing: ',t_ini, t_pad, t_sum, t_rec
         ! some cleanup
-        call forget_ft_map
+        call forget_ft_maps
         !$omp parallel default(shared) private(ibatch,iproj) proc_bind(close)
         !$omp do schedule(static)
         do ibatch = 1,size(fpls)

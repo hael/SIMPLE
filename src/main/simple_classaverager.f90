@@ -2,7 +2,7 @@
 module simple_classaverager
 use simple_core_module_api
 use simple_builder,           only: build_glob
-use simple_ctf,               only: ctf, memoize4ctf_apply, unmemoize4ctf_apply
+use simple_ctf,               only: ctf
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
 use simple_image,             only: image, image_ptr
@@ -281,7 +281,7 @@ contains
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !           using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
-        use simple_memoize_ft_mapping
+        use simple_memoize_ft_maps
         logical, intent(in)        :: do_frac_update
         integer, parameter         :: READBUFFSZ = 1024
         complex, parameter         :: zero = cmplx(0.,0.)
@@ -295,9 +295,9 @@ contains
         complex :: fcompl, fcompll
         real    :: loc(2), mat(2,2), dist(2), tval, kw, maxspafreqsq, reg_scale, crop_scale
         integer :: batch_iprecs(READBUFFSZ), fdims_crop(3), logi_lims_crop(3,2)
-        integer :: phys(2), win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
+        integer :: win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
         integer :: iprec, i, sh, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
-        integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
+        integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind, physh, physk
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
@@ -355,8 +355,7 @@ contains
         &rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
         interp_shlim = nyq_crop + 1
         call dstkio_r%new(smpd, ldim(1))
-        call memoize4ctf_apply(cgrid_imgs_crop(1))
-        call memoize_ft_map(ldim_croppd(1:2), 3)
+        call memoize_ft_maps(ldim_croppd(1:2), 3)
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -388,7 +387,7 @@ contains
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
                 !$omp parallel default(shared) proc_bind(close)&
-                !$omp private(i,ithr,icls,iprec,win_corner,mat,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
+                !$omp private(i,ithr,icls,iprec,win_corner,mat,h,k,l,m,ll,mm,dist,loc,sh,physh,physk,kw,tval,fcompl,fcompll)
                 !$omp do schedule(static)
                 do i = 1,nptcls_in_batch
                     iprec = batch_iprecs(i)
@@ -410,13 +409,14 @@ contains
                                 if( sh > interp_shlim )cycle
                                 sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))  ! shell at original scale
                                 if( sh > sigma2_kfromto(2) ) cycle
-                                phys = get_phys_addr(h,k)
+                                physh = ft_map_phys_addrh(h,k)
+                                physk = ft_map_phys_addrk(h,k)
                                 if( sh >= sigma2_kfromto(1) )then
-                                    call cgrid_imgs_crop(i)%mul_cmat_at( phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
-                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
+                                    call cgrid_imgs_crop(i)%mul_cmat_at( physh,physk,1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
+                                    tvals(physh,physk,i) = tvals(physh,physk,i) / sqrt(eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
                                 else
-                                    call cgrid_imgs_crop(i)%mul_cmat_at( phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
-                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
+                                    call cgrid_imgs_crop(i)%mul_cmat_at(physh,physk,1, 1./eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
+                                    tvals(physh,physk,i) = tvals(physh,physk,i) / sqrt(eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
                                 endif
                             enddo
                         enddo
@@ -440,31 +440,36 @@ contains
                             m     = cyci_1d(cyc_lims_cropR(:,2), win_corner(2))
                             mm    = cyci_1d(cyc_lims_cropR(:,2), win_corner(2)+1)
                             ! l, bottom left corner
-                            phys   = get_phys_addr(l,m)
+                            physh = ft_map_phys_addrh(l,m)
+                            physk = ft_map_phys_addrk(l,m)
                             kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                            fcompl = kw * pcmat(ithr)%cmat(phys(1), phys(2), 1)
-                            tval   = kw * tvals(phys(1),phys(2),i)
+                            fcompl = kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            tval   = kw * tvals(physh, physk, i)
                             ! l, bottom right corner
-                            phys   = get_phys_addr(l,mm)
+                            physh  = ft_map_phys_addrh(l,mm)
+                            physk  = ft_map_phys_addrk(l,mm)
                             kw     = (1.-dist(1))*dist(2)
-                            fcompl = fcompl + kw * pcmat(ithr)%cmat(phys(1), phys(2), 1)
-                            tval   = tval   + kw * tvals(phys(1),phys(2),i)
+                            fcompl = fcompl + kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            tval   = tval   + kw * tvals(physh, physk, i)
                             if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
                             ! ll, upper left corner
-                            phys    = get_phys_addr(ll,m)
+                            physh   = ft_map_phys_addrh(ll,m)
+                            physk   = ft_map_phys_addrk(ll,m)
                             kw      = dist(1)*(1.-dist(2))
-                            fcompll =         kw * pcmat(ithr)%cmat(phys(1), phys(2), 1)
-                            tval    = tval  + kw * tvals(phys(1),phys(2),i)
+                            fcompll =         kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            tval    = tval  + kw * tvals(physh, physk, i)
                             ! ll, upper right corner
-                            phys    = get_phys_addr(ll,mm)
+                            physh   = ft_map_phys_addrh(ll,mm)
+                            physk   = ft_map_phys_addrk(ll,mm)
                             kw      = dist(1)*dist(2)
-                            fcompll = fcompll + kw * pcmat(ithr)%cmat(phys(1), phys(2), 1)
-                            tval    = tval    + kw * tvals(phys(1),phys(2),i)
+                            fcompll = fcompll + kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            tval    = tval    + kw * tvals(physh, physk, i)
                             if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
                             ! update with interpolated values
-                            phys    = get_phys_addr(h,k)
-                            cmats(phys(1),phys(2),i) = fcompl + fcompll
-                            rhos(phys(1),phys(2),i)  = tval*tval
+                            physh = ft_map_phys_addrh(h,k)
+                            physk = ft_map_phys_addrk(h,k)
+                            cmats(physh, physk,i) = fcompl + fcompll
+                            rhos(physh, physk, i)  = tval*tval
                         end do
                     end do
                 enddo
@@ -504,8 +509,7 @@ contains
         !$omp end parallel do
         ! Cleanup
         call dstkio_r%kill
-        call unmemoize4ctf_apply
-        call forget_ft_map
+        call forget_ft_maps
         do i = 1,READBUFFSZ
             call read_imgs(i)%kill
             call cgrid_imgs(i)%kill
@@ -528,9 +532,9 @@ contains
             eo_pop = eo_class_pop(icls)
             pop    = sum(eo_pop)
             if(pop == 0)then
-                call cavgs_merged(icls)%zero_and_unflag_ft
-                call cavgs_even(icls)%zero_and_unflag_ft
-                call cavgs_odd(icls)%zero_and_unflag_ft
+                call cavgs_even(icls)%new(ldim_crop, smpd_crop, wthreads=.false.)
+                call cavgs_odd(icls)%new(ldim_crop, smpd_crop, wthreads=.false.)
+                call cavgs_merged(icls)%new(ldim_crop, smpd_crop, wthreads=.false.)
                 call ctfsqsums_merged(icls)%zero_and_flag_ft
             else
                 call cavgs_merged(icls)%zero_and_flag_ft
@@ -556,14 +560,14 @@ contains
                 call cavgs_even(icls)%ifft()
                 call cavgs_odd(icls)%ifft()
                 call cavgs_merged(icls)%ifft()
+                call cavgs_even(icls)%clip_inplace(ldim_crop)
+                call cavgs_odd(icls)%clip_inplace(ldim_crop)
+                call cavgs_merged(icls)%clip_inplace(ldim_crop)
+                ! gridding correction
+                call cavgs_even(icls)%div(gridcorrection_img)
+                call cavgs_odd(icls)%div(gridcorrection_img)
+                call cavgs_merged(icls)%div(gridcorrection_img)
             endif
-            call cavgs_even(icls)%clip_inplace(ldim_crop)
-            call cavgs_odd(icls)%clip_inplace(ldim_crop)
-            call cavgs_merged(icls)%clip_inplace(ldim_crop)
-            ! gridding correction
-            call cavgs_even(icls)%div(gridcorrection_img)
-            call cavgs_odd(icls)%div(gridcorrection_img)
-            call cavgs_merged(icls)%div(gridcorrection_img)
         end do
         !$omp end parallel do
         call gridcorrection_img%kill
@@ -1209,6 +1213,7 @@ contains
     subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, just_transf)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
+        use simple_ctf,                 only: memoize4ctf_apply, unmemoize4ctf_apply
         class(sp_project),                  intent(inout) :: spproj
         character(len=*),                   intent(in)    :: oritype
         integer,                            intent(in)    :: icls
@@ -1271,16 +1276,16 @@ contains
         if( present(phflip) ) l_phflip = phflip
         if( l_phflip )then
             select case( spproj%get_ctfflag_type(oritype, pinds(1)) )
-                case(CTFFLAG_NO)
-                    THROW_HARD('NO CTF INFORMATION COULD BE FOUND')
-                case(CTFFLAG_FLIP)
-                    THROW_WARN('Images have already been phase-flipped, phase flipping is deactivated')
-                    l_phflip = .false.
-                case(CTFFLAG_YES)
-                    ! all good
-                case DEFAULT
-                    THROW_HARD('UNSUPPORTED CTF FLAG')
-                end select
+            case(CTFFLAG_NO)
+                THROW_HARD('NO CTF INFORMATION COULD BE FOUND')
+            case(CTFFLAG_FLIP)
+                THROW_WARN('Images have already been phase-flipped, phase flipping is deactivated')
+                l_phflip = .false.
+            case(CTFFLAG_YES)
+                ! all good
+            case DEFAULT
+                THROW_HARD('UNSUPPORTED CTF FLAG')
+            end select
         endif
         allocate(timgs(pop))
         do i = 1,size(timgs)

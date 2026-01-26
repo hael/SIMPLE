@@ -60,8 +60,6 @@ type, extends(image) :: reconstructor
     procedure          :: dealloc_rho
 end type reconstructor
 
-integer(timer_int_kind) :: trec
-
 contains
 
     ! CONSTRUCTORS
@@ -116,64 +114,40 @@ contains
     ! SETTERS
 
     ! Resets the reconstructor object before reconstruction.
-    ! The shared memory used in a parallel section should be initialised
-    ! with a (redundant) parallel section, because of how pages are organised.
-    ! Memory otherwise becomes associated with the single thread used for
-    ! allocation, causing load imbalance. This will reduce cache misses.
+    ! the workshare pragma is faster than a parallel do
     subroutine reset( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        integer :: i, j, k
+        complex(kind=c_float_complex), pointer :: pcmat(:,:,:)
         call self%set_ft(.true.)
-        !$omp parallel do collapse(3) default(shared) schedule(static) private(i,j,k) proc_bind(close)
-        do i=1,self%rho_shape(1)
-            do j=1,self%rho_shape(2)
-                do k=1,self%rho_shape(3)
-                    call self%set_cmat_at([i,j,k], cmplx(0.,0.))
-                    self%rho(i,j,k) = 0.
-                end do
-            end do
-        end do
-        !$omp end parallel do
+        call self%get_cmat_ptr(pcmat)
+        !$omp parallel workshare default(shared) proc_bind(close)
+        pcmat    = cmplx(0.0, 0.0, kind=c_float_complex)
+        self%rho = real(0., kind=c_float)
+        !$omp end parallel workshare
+        nullify(pcmat)
     end subroutine reset
 
     ! resets the reconstructor expanded matrices before reconstruction
-    ! The shared memory used in a parallel section should be initialised
-    ! with a (redundant) parallel section, because of how pages are organised.
-    ! Memory otherwise becomes associated with the single thread used for
-    ! allocation, causing load imbalance. This will reduce cache misses.
     subroutine reset_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        integer :: h, k, l
         if(allocated(self%cmat_exp) .and. allocated(self%rho_exp) )then
-            !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) proc_bind(close)
-            do h=self%ldim_exp(1,1),self%ldim_exp(1,2)
-                do k=self%ldim_exp(2,1),self%ldim_exp(2,2)
-                    do l=self%ldim_exp(3,1),self%ldim_exp(3,2)
-                        self%cmat_exp(h,k,l) = cmplx(0.,0.)
-                        self%rho_exp(h,k,l)  = 0.
-                    end do
-                end do
-            end do
-            !$omp end parallel do
+            !$omp parallel workshare default(shared) proc_bind(close)
+            self%cmat_exp = CMPLX_ZERO
+            self%rho_exp  = 0.0
+            !$omp end parallel workshare
         endif
     end subroutine reset_exp
 
-    ! the same trick is applied here (see above) since this is after (single-threaded) read
+    ! Multiply matrices by a scalar
+    ! the workshare pragma is faster than a parallel do
     subroutine apply_weight( self, w )
         class(reconstructor), intent(inout) :: self
         real,                 intent(in)    :: w
-        integer :: h, k
         if(allocated(self%cmat_exp) .and. allocated(self%rho_exp) )then
-            !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k) proc_bind(close)
-            do h=self%ldim_exp(1,1),self%ldim_exp(1,2)
-                do k=self%ldim_exp(2,1),self%ldim_exp(2,2)
-                    self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2)) = &
-                        w * self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
-                    self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))  = &
-                        w * self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
-                end do
-            end do
-            !$omp end parallel do
+            !$omp parallel workshare default(shared) proc_bind(close)
+            self%cmat_exp = w * self%cmat_exp
+            self%rho_exp  = w * self%rho_exp
+            !$omp end parallel workshare
         endif
     end subroutine apply_weight
 
