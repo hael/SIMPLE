@@ -65,18 +65,6 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real :: val
-        if( logi(1) > self%ldim(1) .or. logi(1) < 1 )then
-            val = 0.
-            return
-        endif
-        if( logi(2) > self%ldim(2) .or. logi(2) < 1 )then
-            val = 0.
-            return
-        endif
-        if( logi(3) > self%ldim(3) .or. logi(3) < 1 )then
-            val = 0.
-            return
-        endif
         val = self%rmat(logi(1),logi(2),logi(3))
     end function get
 
@@ -107,19 +95,12 @@ contains
         rmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
     end subroutine get_rmat_sub
 
-    module pure function get_rmat_at_1( self, logi ) result( val )
-        class(image), intent(in)  :: self
-        integer,      intent(in)  :: logi(3)
-        real :: val
-        val = self%rmat(logi(1),logi(2),logi(3))
-    end function get_rmat_at_1
-
-    module pure function get_rmat_at_2( self, i,j,k ) result( val )
+    module pure function get_rmat_at( self, i,j,k ) result( val )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: i,j,k
         real :: val
         val = self%rmat(i,j,k)
-    end function get_rmat_at_2
+    end function get_rmat_at
 
     module pure function get_cmat( self ) result( cmat )
         class(image), intent(in) :: self
@@ -139,19 +120,12 @@ contains
         cmat=self%cmat
     end subroutine get_cmat_sub
 
-    module pure function get_cmat_at_1( self, phys ) result( comp )
-        class(image), intent(in)  :: self
-        integer,      intent(in)  :: phys(3)
-        complex :: comp
-        comp = self%cmat(phys(1),phys(2),phys(3))
-    end function get_cmat_at_1
-
-    module pure function get_cmat_at_2( self, h,k,l ) result( comp )
+    module pure function get_cmat_at( self, h,k,l ) result( comp )
         class(image), intent(in) :: self
         integer,      intent(in) :: h,k,l
         complex :: comp
         comp = self%cmat(h,k,l)
-    end function get_cmat_at_2
+    end function get_cmat_at
 
     module pure function get_fcomp( self, logi, phys ) result( comp )
         class(image), intent(in)  :: self
@@ -260,19 +234,12 @@ contains
         self%cmat(:,:,1) = cmat
     end subroutine set_cmat_4
 
-    module pure subroutine set_cmat_at_1( self, phys ,comp)
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
-        complex,      intent(in)    :: comp
-        self%cmat(phys(1),phys(2),phys(3)) = comp
-    end subroutine set_cmat_at_1
-
-    module pure subroutine set_cmat_at_2( self, h, k, l, comp)
+    module pure subroutine set_cmat_at( self, h, k, l, comp)
         class(image), intent(inout) :: self
         integer, intent(in) :: h,k,l
         complex, intent(in) :: comp
         self%cmat(h,k,l) =  comp
-    end subroutine set_cmat_at_2
+    end subroutine set_cmat_at
 
     module subroutine set_fcomp( self, logi, phys, comp )
         class(image), intent(inout) :: self
@@ -311,31 +278,6 @@ contains
             end do
       end do
     end subroutine set_within
-
-    module subroutine set_cmats_from_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
-        class(image), intent(in)    :: self1, self2,self3,self4
-        class(image), intent(inout) :: self2set1, self2set2
-        integer,      intent(in)    :: lims(3,2)
-        real,         intent(inout) :: expcmat3(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,         intent(inout) :: expcmat4(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        integer :: h, k, logi(3), phys(3)
-        !$omp parallel default(shared) private(h,k,logi,phys) proc_bind(close)
-        !$omp workshare
-        self1%cmat = self2set1%cmat
-        self2%cmat = self2set2%cmat
-        !$omp end workshare
-        !$omp do collapse(2) schedule(static)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                logi = [h,k,0]
-                phys = self1%comp_addr_phys(logi)
-                self3%cmat(phys(1),phys(2),phys(3)) = cmplx(expcmat3(h,k),0.)
-                self4%cmat(phys(1),phys(2),phys(3)) = cmplx(expcmat4(h,k),0.)
-            enddo
-        enddo
-        !$omp end do
-        !$omp end parallel
-    end subroutine set_cmats_from_cmats
 
     !===========================
     ! Slices, sub-images, freq info
