@@ -53,11 +53,13 @@ type ctfparams
     real    :: smpd    = 0.
     real    :: kv      = 0.
     real    :: cs      = 0.
+    real    :: wl      = 0.
     real    :: fraca   = 0.
     real    :: dfx     = 0.
     real    :: dfy     = 0.
     real    :: angast  = 0.
     real    :: phshift = 0.
+    real    :: amp_contr_const = 0.
     logical :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfparams
 

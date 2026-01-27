@@ -345,7 +345,7 @@ contains
             case(CTFFLAG_YES)
                 ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
                 tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(img_out, 'flip', ctfparms)
+                call img_out%apply_ctf(tfun, 'flip', ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
@@ -381,7 +381,7 @@ contains
             case(CTFFLAG_YES)
                 ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
                 tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(img_out, 'flip', ctfparms)
+                call img_out%apply_ctf(tfun, 'flip', ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select

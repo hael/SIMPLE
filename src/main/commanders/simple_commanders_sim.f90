@@ -320,9 +320,9 @@ contains
             ! multiply with CTF
             call shifted_base_image%fft()
             if( params%neg .eq. 'yes' )then
-                call tfun%apply(shifted_base_image, dfx, 'neg', dfy, angast, params%bfac)
+                call shifted_base_image%apply_ctf_wpad(tfun, dfx, 'neg', dfy, angast, params%bfac)
             else
-                call tfun%apply(shifted_base_image, dfx, 'ctf', dfy, angast, params%bfac)
+                call shifted_base_image%apply_ctf_wpad(tfun, dfx, 'ctf', dfy, angast, params%bfac)
             endif
             call shifted_base_image%ifft()
             ! add the detector noise

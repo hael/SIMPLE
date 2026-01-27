@@ -13,7 +13,7 @@ call img%new(LDIM, SMPD)
 call img_spec%new(LDIM, SMPD)
 tfun = ctf(SMPD, KV, CS, AC)
 call memoize_ft_maps(LDIM)
-call tfun%ctf2img(img, DFX, DFY, ANGAST)
+call img%ctf2img(tfun, DFX, DFY, ANGAST)
 call img%ft2img('real', img_spec)
 call img_spec%write(string('ctfimg.mrc'))
 end program simple_test_ctf
