@@ -155,25 +155,26 @@ contains
         integer, intent(in)  :: N, k
         integer, intent(in)  :: merge_mat(2,N-1)
         integer, intent(out) :: labels(N)
-        integer :: parent(2*N), labels_p(2*N)
+        integer :: parent(2*N), node_label(2*N - 1)
         integer :: i, s, c, lab
         parent = [(i,i=1,2*N)]
+        node_label = 0
         do s = 1, N-k
             parent(merge_mat(1,s)) = N + s
             parent(merge_mat(2,s)) = N + s
         end do 
-        labels = 0 ; labels_p = 0
+        labels = 0
         lab = 0
         do i = 1, N
             c = i
             do while (parent(c) /= c)
                 c = parent(c)
             end do
-            if (labels_p(c) == 0) then
+            if (node_label(c) == 0) then
                 lab = lab + 1
-                labels_p(c) = lab
-            endif
-            labels(i) = labels_p(c)
+                node_label(c) = lab
+            end if
+            labels(i) = node_label(c)
         end do
     end subroutine cut_tree
 
