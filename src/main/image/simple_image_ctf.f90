@@ -12,20 +12,20 @@ contains
         class(image), intent(inout) :: self
         class(ctf),   intent(inout) :: tfun
         real,         intent(in)    :: dfx_in, dfy_in, angast_in
-        type(ctfparams) :: ctfvars
+        type(ctfvars) :: ctfvals ! CTF derived variables
         integer :: h,k,physh,physk
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
         ! flag image as FT
         call self%set_ft(.true.)
         ! init
         call tfun%init(dfx_in, dfy_in, angast_in) ! conversions
-        ctfvars = tfun%get_ctfvars()
-        wl              = ctfvars%wl
-        half_wl2_cs     = 0.5 * wl * wl * ctfvars%cs
-        sum_df          = ctfvars%dfx + ctfvars%dfy
-        diff_df         = ctfvars%dfx - ctfvars%dfy
-        angast          = ctfvars%angast
-        amp_contr_const = ctfvars%amp_contr_const
+        ctfvals         = tfun%get_ctfvars()
+        wl              = ctfvals%wl
+        half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
+        sum_df          = ctfvals%dfx + ctfvals%dfy
+        diff_df         = ctfvals%dfx - ctfvals%dfy
+        angast          = ctfvals%angast
+        amp_contr_const = ctfvals%amp_contr_const
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
@@ -48,30 +48,30 @@ contains
         real, optional,   intent(in)    :: angast !< angle of astigmatism
         real, optional,   intent(in)    :: bfac   !< bfactor
         integer         :: ldim(3), ldim_pd(3)
-        type(ctfparams) :: ctfvars
+        type(ctfparams) :: ctfparms 
         type(image)     :: img_pd
         ldim = self%get_ldim()
         if( self%is_3d() )then
             write(logfhandle,*) 'ldim: ', ldim
             THROW_HARD('Only 4 2D images; apply_ctf_wpad')
         endif
-        ctfvars%smpd   = self%smpd
-        ctfvars%dfx    = dfx
+        ctfparms%smpd   = self%smpd
+        ctfparms%dfx    = dfx
         ! defaults
-        ctfvars%dfy    = ctfvars%dfx
-        ctfvars%angast = 0.
+        ctfparms%dfy    = ctfparms%dfx
+        ctfparms%angast = 0.
         ! optionals
-        if(present(dfy))    ctfvars%dfy    = dfy
-        if(present(angast)) ctfvars%angast = angast
+        if(present(dfy))    ctfparms%dfy    = dfy
+        if(present(angast)) ctfparms%angast = angast
         if( self%is_ft() )then
-            call self%apply_ctf(tfun, mode, ctfvars)
+            call self%apply_ctf(tfun, mode, ctfparms)
         else
             ldim_pd(1:2) = 2*ldim(1:2)
             ldim_pd(3)   = 1
             call img_pd%new(ldim_pd, self%smpd)
             call self%pad_mirr(img_pd)
             call img_pd%fft()
-            call img_pd%apply_ctf(tfun, mode, ctfvars)
+            call img_pd%apply_ctf(tfun, mode, ctfparms)
             call img_pd%ifft()
             call img_pd%clip(self)
             call img_pd%kill()
@@ -86,10 +86,10 @@ contains
         class(ctf),       intent(inout) :: tfun     !< CTF object
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
-        type(ctfparams) :: ctfvars
+        type(ctfvars) :: ctfvals
         real, parameter :: ZERO = 0., ONE = 1.0, MIN_SQUARE = 0.001
         integer :: h,k,physh,physk
-        real    :: sum_df, diff_df, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval, t
+        real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval, t
         logical :: is_abs,is_ctf,is_flip,is_flipneg,is_neg,is_square
         ! Convert mode string to logical flags (SIMD-compatible)
         is_abs     = (mode == 'abs')
@@ -100,13 +100,13 @@ contains
         is_square  = (mode == 'square')
         ! initialize
         call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast) ! conversions
-        ctfvars = tfun%get_ctfvars()
-        wl              = ctfvars%wl
-        half_wl2_cs     = 0.5 * wl * wl * ctfvars%cs
-        sum_df          = ctfvars%dfx + ctfvars%dfy
-        diff_df         = ctfvars%dfx - ctfvars%dfy
-        angast          = ctfvars%angast
-        amp_contr_const = ctfvars%amp_contr_const
+        ctfvals         = tfun%get_ctfvars()
+        wl              = ctfvals%wl
+        half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
+        sum_df          = ctfvals%dfx + ctfvals%dfy
+        diff_df         = ctfvals%dfx - ctfvals%dfy
+        angast          = ctfvals%angast
+        amp_contr_const = ctfvals%amp_contr_const
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
@@ -136,7 +136,7 @@ contains
         real,         intent(in)    :: dfx_in       !< defocus x-axis
         real,         intent(in)    :: dfy_in       !< defocus y-axis
         real,         intent(in)    :: angast_in    !< angle of astigmatism
-        type(ctfparams) :: ctfvars !< CTF parameters
+        type(ctfvars) :: ctfvals !< CTF derived variables
         real    :: angast, amp_contr_const, wl, half_wl2_cs
         real    :: sum_df, diff_df,tval,t
         integer :: h,k, physh,physk
@@ -147,14 +147,14 @@ contains
         endif
         ! initialize
         call tfun%init(dfx_in, dfy_in, angast_in) ! conversions
-        ctfvars         = tfun%get_ctfvars()
-        wl              = ctfvars%wl
-        half_wl2_cs     = 0.5 * wl * wl * ctfvars%cs
-        angast          = ctfvars%angast
-        amp_contr_const = ctfvars%amp_contr_const    
+        ctfvals         = tfun%get_ctfvars()
+        wl              = ctfvals%wl
+        half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
+        angast          = ctfvals%angast
+        amp_contr_const = ctfvals%amp_contr_const    
         l_flip          = imode == CTFFLAG_FLIP
-        sum_df          = ctfvars%dfx + ctfvars%dfy
-        diff_df         = ctfvars%dfx - ctfvars%dfy
+        sum_df          = ctfvals%dfx + ctfvals%dfy
+        diff_df         = ctfvals%dfx - ctfvals%dfy
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
