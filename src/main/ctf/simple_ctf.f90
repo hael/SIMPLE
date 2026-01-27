@@ -341,6 +341,7 @@ contains
         class(image),     intent(inout) :: img      !< image (output)
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
+        complex(kind=c_float_complex), pointer :: pcmat(:,:,:)
         real, parameter :: ZERO = 0., ONE = 1.0, MIN_SQUARE = 0.001
         integer :: h,k,physh,physk
         real    :: sum_df, diff_df, dfy, angast, amp_contr_const, wl, half_wl2_cs, tval, t
@@ -360,6 +361,7 @@ contains
         diff_df         = self%dfx - self%dfy
         angast          = self%angast
         amp_contr_const = self%amp_contr_const
+        call img%get_cmat_ptr(pcmat)
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
@@ -374,7 +376,8 @@ contains
                 ! Multiply (this is the key operation)
                 physh = ft_map_phys_addrh(h,k)
                 physk = ft_map_phys_addrk(h,k)
-                 call img%mul_cmat_at(physh,physk,1, t)
+                pcmat(physh, physk, 1) = t * pcmat(physh, physk, 1)
+                ! call img%mul_cmat_at(physh,physk,1, t)
             end do
         end do
     end subroutine apply_serial
