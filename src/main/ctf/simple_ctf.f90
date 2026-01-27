@@ -390,6 +390,7 @@ contains
         real,           intent(in)    :: dfx_in       !< defocus x-axis
         real,           intent(in)    :: dfy_in       !< defocus y-axis
         real,           intent(in)    :: angast_in    !< angle of astigmatism
+        complex(kind=c_float_complex), pointer :: pcmat(:,:,:)
         real    :: angast, amp_contr_const, wl, half_wl2_cs
         real    :: sum_df, diff_df,tval
         integer :: h,k, physh,physk
@@ -407,6 +408,7 @@ contains
         l_flip          = imode == CTFFLAG_FLIP
         sum_df          = self%dfx + self%dfy
         diff_df         = self%dfx - self%dfy
+        call img%get_cmat_ptr(pcmat)
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
@@ -416,7 +418,8 @@ contains
                 physh = ft_map_phys_addrh(h,k)
                 physk = ft_map_phys_addrk(h,k)
                 tvals(physh, physk)    = tval
-                call img%mul_cmat_at(physh,physk,1, tval)
+                pcmat(physh, physk, 1) = tval * pcmat(physh, physk, 1)
+                ! call img%mul_cmat_at(physh,physk,1, tval)
             end do
         end do
     end subroutine eval_and_apply
