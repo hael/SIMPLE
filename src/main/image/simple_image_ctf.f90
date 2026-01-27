@@ -138,7 +138,7 @@ contains
         real,         intent(in)    :: angast_in    !< angle of astigmatism
         type(ctfparams) :: ctfvars !< CTF parameters
         real    :: angast, amp_contr_const, wl, half_wl2_cs
-        real    :: sum_df, diff_df,tval
+        real    :: sum_df, diff_df,tval,t
         integer :: h,k, physh,physk
         logical :: l_flip
         if( imode == CTFFLAG_NO )then
@@ -158,13 +158,13 @@ contains
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
-                tval = merge(abs(ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)),&
-                                &ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs), l_flip)
+                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
+                t    = merge(abs(tval), tval, l_flip)
                 ! store tval and multiply image with tval
                 physh = ft_map_phys_addrh(h,k)
                 physk = ft_map_phys_addrk(h,k)
-                tvals(physh, physk)      = tval
-                self%cmat(physh,physk,1) = tval * self%cmat(physh,physk,1)
+                tvals(physh, physk)      = t
+                self%cmat(physh,physk,1) = t * self%cmat(physh,physk,1)
             end do
         end do
     end subroutine eval_and_apply_ctf
