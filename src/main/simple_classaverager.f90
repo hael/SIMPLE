@@ -399,7 +399,7 @@ contains
                     ! prep image
                     call read_imgs(i)%norm_noise_pad_fft_clip_shift(build_glob%lmsk, cgrid_imgs(i), cgrid_imgs_crop(i), -precs(iprec)%shift*crop_scale)
                     ! apply CTF to image, stores CTF values
-                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs_crop(i), ctfflag, fdims_crop(1:2), tvals(:,:,i), &
+                    call cgrid_imgs_crop(i)%eval_and_apply_ctf(precs(iprec)%tfun, ctfflag, fdims_crop(1:2), tvals(:,:,i), &
                         & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast)
                     ! ML-regularization
                     if( l_ml_reg )then
@@ -1333,7 +1333,7 @@ contains
             if( l_phflip )then
                 ctfparms = spproj%get_ctfparams(oritype, iptcl)
                 tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(img(ithr), 'flip', ctfparms)
+                call img(ithr)%apply_ctf(tfun, 'flip', ctfparms)
             endif
             ! shift
             call img(ithr)%shift2Dserial(-shift)

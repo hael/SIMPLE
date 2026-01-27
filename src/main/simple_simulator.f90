@@ -27,12 +27,12 @@ contains
             dfx = orientation%get_dfx()
             dfy = orientation%get_dfy()
             angast = orientation%get('angast')
-            call tfun%apply(img, dfx, 'ctf', dfy, angast, bfac=bfac)
+            call img%apply_ctf_wpad(tfun, dfx, 'ctf', dfy, angast, bfac=bfac)
         else if( orientation%isthere('dfx') .and. aapply_ctf )then
             dfx = orientation%get_dfx()
             dfy = dfx
             angast = 0.
-            call tfun%apply(img, orientation%get_dfx(), 'ctf', bfac=bfac)
+            call img%apply_ctf_wpad(tfun, orientation%get_dfx(), 'ctf', bfac=bfac)
         else
             if( present(bfac) ) call img%apply_bfac(bfac)
         endif
@@ -45,12 +45,12 @@ contains
         if( ctfflag .eq. 'flip' )then
             ! simulate phase-flipped images
             call img%fft()
-            call tfun%apply(img, dfx, 'flip', dfy, angast)
+            call img%apply_ctf_wpad(tfun, dfx, 'flip', dfy, angast)
             call img%ifft()
         else if( ctfflag .eq. 'mul' )then
             ! simulate CTF multiplied images
             call img%fft()
-            call tfun%apply(img, dfx, 'ctf', dfy, angast)
+            call img%apply_ctf_wpad(tfun, dfx, 'ctf', dfy, angast)
             call img%ifft()
         endif
     end subroutine simimg

@@ -5,6 +5,7 @@ use simple_fftw3
 use simple_ftiter,  only: ftiter
 use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
+use simple_ctf,     only: ctf
 use simple_neighs
 use gnufor2
 implicit none
@@ -292,10 +293,15 @@ contains
     procedure          :: mask3D_softavg
     procedure          :: mask3D_hard
     procedure          :: taper_edges, taper_edges_hann
-    ! OPERATIONS, file: simple_image_ops.f90
-    ! ctf
+    ! CTF, file: simple_image_ctf.f90
+    procedure          :: ctf2img
+    procedure          :: apply_ctf_wpad
+    procedure          :: apply_ctf
+    procedure          :: eval_and_apply_ctf
+    procedure          :: calc_ice_frac
     procedure          :: ctf_dens_correct
     procedure          :: ctf_dens_correct_wiener
+    ! OPERATIONS, file: simple_image_ops.f90
     ! insertions
     procedure          :: insert
     procedure          :: insert_lowres
@@ -1862,10 +1868,49 @@ interface
         integer,      intent(in)    :: borders(2)
     end subroutine taper_edges_hann
 
-    ! ===== image operations procedure interfaces =====
+    ! ===== image CTF procedure interfaces =====
 
-    !--- CTF ---!
+    module subroutine ctf2img( self, tfun, dfx_in, dfy_in, angast_in )
+        class(image), intent(inout) :: self
+        class(ctf),   intent(inout) :: tfun
+        real,         intent(in)    :: dfx_in, dfy_in, angast_in
+    end subroutine ctf2img
 
+    module subroutine apply_ctf_wpad( self, tfun, dfx, mode, dfy, angast, bfac )
+        class(image),     intent(inout) :: self   !< instance
+        class(ctf),       intent(inout) :: tfun   !< CTF object
+        real,             intent(in)    :: dfx    !< defocus x-axis
+        character(len=*), intent(in)    :: mode   !< abs, ctf, flip, flipneg, neg, square
+        real, optional,   intent(in)    :: dfy    !< defocus y-axis
+        real, optional,   intent(in)    :: angast !< angle of astigmatism
+        real, optional,   intent(in)    :: bfac   !< bfactor
+    end subroutine apply_ctf_wpad
+
+    module subroutine apply_ctf( self, tfun, mode, ctfparms )
+        class(image),     intent(inout) :: self     !< instance
+        class(ctf),       intent(inout) :: tfun     !< CTF object
+        character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
+        type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
+    end subroutine apply_ctf
+
+    module subroutine eval_and_apply_ctf( self, tfun, imode, tvalsdims, tvals, dfx_in, dfy_in, angast_in )
+        class(image), intent(inout) :: self         !< instance
+        class(ctf),   intent(inout) :: tfun         !< CTF object
+        integer,      intent(in)    :: imode        !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
+        integer,      intent(in)    :: tvalsdims(2) !< tvals dimensions
+        real,         intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
+        real,         intent(in)    :: dfx_in       !< defocus x-axis
+        real,         intent(in)    :: dfy_in       !< defocus y-axis
+        real,         intent(in)    :: angast_in    !< angle of astigmatism
+    end subroutine eval_and_apply_ctf
+
+    module subroutine calc_ice_frac( self, tfun, ctfparms, score )
+        class(image),     intent(in)    :: self
+        class(ctf),       intent(inout) :: tfun
+        class(ctfparams), intent(in)    :: ctfparms
+        real,             intent(out)   :: score
+    end subroutine calc_ice_frac
+    
     module subroutine ctf_dens_correct( self_sum, self_rho )
         class(image), intent(inout) :: self_sum
         class(image), intent(inout) :: self_rho
@@ -1876,6 +1921,8 @@ interface
         class(image), intent(in)    :: self_rho
         real,         intent(in)    :: ssnr(:)
     end subroutine ctf_dens_correct_wiener
+
+    ! ===== image operations procedure interfaces =====
 
     !--- Insertions ---!
 

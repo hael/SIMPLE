@@ -91,7 +91,7 @@ contains
                 call imgs(iptcl)%fft
                 ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
                 tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(imgs(iptcl), 'flip', ctfparms)
+                call imgs(iptcl)%apply_ctf(tfun, 'flip', ctfparms)
                 call imgs(iptcl)%ifft
             end do
             !$omp end parallel do
@@ -111,7 +111,7 @@ contains
                 call build%img%fft
                 ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
                 tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(imgs(iptcl), 'flip', ctfparms)
+                call imgs(iptcl)%apply_ctf(tfun, 'flip', ctfparms)
                 call build%img%ifft
                 call stkio_w%write(iptcl, build%img)
             end do
