@@ -77,17 +77,17 @@ contains
         self%angast = deg2rad(angast)
     end subroutine init
 
-    pure function get_ctfvars( self ) result(ctfvars)
+    pure function get_ctfvars( self ) result(ctfvals)
         class(ctf), intent(in) :: self
-        type(ctfparams) :: ctfvars
-        ctfvars%smpd            = self%smpd
-        ctfvars%kv              = self%kv
-        ctfvars%cs              = self%cs
-        ctfvars%wl              = self%wl
-        ctfvars%amp_contr_const = self%amp_contr_const
-        ctfvars%dfx             = self%dfx
-        ctfvars%dfy             = self%dfy
-        ctfvars%angast          = self%angast
+        type(ctfvars) :: ctfvals
+        ctfvals%smpd            = self%smpd
+        ctfvals%kv              = self%kv
+        ctfvals%cs              = self%cs
+        ctfvals%wl              = self%wl
+        ctfvals%amp_contr_const = self%amp_contr_const
+        ctfvals%dfx             = self%dfx
+        ctfvals%dfy             = self%dfy
+        ctfvals%angast          = self%angast
     end function get_ctfvars
 
     !>  \brief returns the argument (radians) to the ctf
