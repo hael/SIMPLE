@@ -607,7 +607,7 @@ contains
                             ! outside Nyqvist, zero
                             call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
                         else
-                            call self%div_cmat_at(phys, self%rho(phys(1),phys(2),phys(3)))
+                            call self%div_cmat_at(phys(1),phys(2),phys(3), self%rho(phys(1),phys(2),phys(3)))
                         endif
                     end do
                 end do

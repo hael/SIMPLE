@@ -22,7 +22,7 @@ contains
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     sh    = nint(hyp(h,k,l))
-                    phys  = self_sum%comp_addr_phys([h,k,l])
+                    phys  = self_sum%comp_addr_phys(h,k,l)
                     denom = real(self_rho%cmat(phys(1),phys(2),phys(3)))
                     if(sh <= nyq .and. abs(denom) > 1.e-10 )then
                         self_sum%cmat(phys(1),phys(2),phys(3)) = self_sum%cmat(phys(1),phys(2),phys(3)) / denom
@@ -47,7 +47,7 @@ contains
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     sh   = nint(hyp(h,k,l))
-                    phys = self_sum%comp_addr_phys([h,k,l])
+                    phys = self_sum%comp_addr_phys(h,k,l)
                     if(sh > nyq )then
                         self_sum%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                     else
@@ -119,7 +119,7 @@ contains
                     sh = nint(hyp(h,k,l))
                     if( sh <= find )then
                         ! insert component
-                        phys = self%comp_addr_phys([h,k,l])
+                        phys = self%comp_addr_phys(h,k,l)
                         comp = self2insert%get_fcomp([h,k,l],phys)
                         call self%set_fcomp([h,k,l],phys,comp)
                     endif
@@ -146,7 +146,7 @@ contains
                     sh = nint(hyp(h,k,l))
                     if( sh <= find )then
                         ! insert component
-                        phys = self%comp_addr_phys([h,k,l])
+                        phys = self%comp_addr_phys(h,k,l)
                         comp = self2insert%get_fcomp([h,k,l],phys)
                         call self%set_fcomp([h,k,l],phys,comp)
                     endif

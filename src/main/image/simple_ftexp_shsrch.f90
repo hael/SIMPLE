@@ -37,13 +37,13 @@ contains
     procedure          :: minimize       => ftexp_shsrch_minimize
     procedure          :: corr_shifted_8 => ftexp_shsrch_corr_shifted_8
     procedure          :: kill           => ftexp_shsrch_kill
-    procedure          :: set_dims_and_alloc                 !< set dimensions from images and allocate tmp matrices
+    procedure, private :: set_dims_and_alloc                 !< set dimensions from images and allocate tmp matrices
     procedure          :: set_shsrch_tol
     procedure          :: set_factr_pgtol
-    procedure          :: corr_shifted_cost_8                !< cost function for minimizer, f only
-    procedure          :: corr_gshifted_cost_8               !< cost function for minimizer, gradient only
-    procedure          :: corr_fdfshifted_cost_8             !< cost function for minimizer, f and gradient
-    procedure          :: calc_tmp_cmat12                    !< calculate tmp matrix for cost function
+    procedure, private :: corr_shifted_cost_8                !< cost function for minimizer, f only
+    procedure, private :: corr_gshifted_cost_8               !< cost function for minimizer, gradient only
+    procedure, private :: corr_fdfshifted_cost_8             !< cost function for minimizer, f and gradient
+    procedure, private :: calc_tmp_cmat12                    !< calculate tmp matrix for cost function
 end type ftexp_shsrch
 
 contains
@@ -208,11 +208,9 @@ contains
     function corr_shifted_cost_8( self, shvec ) result( r )
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
-        logical, pointer :: msk(:,:)
         real(dp) :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         real(dp) :: r, r1, r2, ck,sk, argh,argk
         integer  :: hind,kind,kkind
-        call self%reference%get_bandmsk_ptr(msk)
         do hind=self%flims(1,1),self%flims(1,2)
             argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
             ch(hind) = cos(argh)
@@ -226,7 +224,7 @@ contains
             ck    = cos(argk)
             sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
-                if( msk(hind,kind) )then
+                if( self%reference%get_bandmsk_at(hind,kind) )then
                     if( hind == 1 )then
                         ! h = 0
                         r1  = r1 + real(self%ftexp_tmp_cmat12(1,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))),kind=dp)
@@ -246,11 +244,9 @@ contains
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2)
-        logical, pointer :: msk(:,:)
         real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         real(dp)    :: g1(2),g2(2),transf_vec(2), ck,sk, argh,argk
         integer     :: hind,kind,kkind
-        call self%reference%get_bandmsk_ptr(msk)
         do hind=self%flims(1,1),self%flims(1,2)
             argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
             ch(hind) = cos(argh)
@@ -264,7 +260,7 @@ contains
             ck    = cos(argk)
             sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
-                if( msk(hind,kind) )then
+                if( self%reference%get_bandmsk_at(hind,kind) )then
                     transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
                     if( hind == 1 )then ! h = 0
                         g1(:) = g1(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))))*transf_vec
@@ -284,12 +280,10 @@ contains
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2), f
-        logical, pointer :: msk(:,:)
         complex(dp) :: tmp
         real(dp)    :: f1,f2,g1(2),g2(2), transf_vec(2), argh,argk, ck,sk
         real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         integer     :: hind,kind,kkind
-        call self%reference%get_bandmsk_ptr(msk)
         f1 = 0.d0
         f2 = 0.d0
         g1 = 0.d0
@@ -305,7 +299,7 @@ contains
             ck    = cos(argk)
             sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
-                if( msk(hind,kind) )then
+                if( self%reference%get_bandmsk_at(hind,kind) )then
                     transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
                     tmp        = self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind)))
                     if( hind == 1 )then ! h = 0

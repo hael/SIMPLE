@@ -79,18 +79,15 @@ contains
     generic            :: mul => mul_1, mul_2, mul_3, mul_4, mul_5
     procedure, private :: conjugate
     generic            :: conjg => conjugate
-    procedure, private :: mul_rmat_at_1, mul_rmat_at_2
-    generic            :: mul_rmat_at => mul_rmat_at_1, mul_rmat_at_2
-    procedure, private :: div_rmat_at_1, div_rmat_at_2
-    generic            :: div_rmat_at => div_rmat_at_1, div_rmat_at_2
-    procedure, private :: add_cmat_at_1, add_cmat_at_2
-    generic            :: add_cmat_at => add_cmat_at_1, add_cmat_at_2
-    procedure, private :: mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
-    generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
+    procedure          :: mul_rmat_at
+    procedure          :: div_rmat_at
+    procedure          :: add_cmat_at
+    procedure, private :: mul_cmat_at_1, mul_cmat_at_2
+    generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2
     procedure, private :: mul_cmat_1, mul_cmat_2
     generic            :: mul_cmat => mul_cmat_1, mul_cmat_2
-    procedure, private :: div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
-    generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
+    procedure, private :: div_cmat_at_1, div_cmat_at_2
+    generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2
     procedure          :: sq_rt
     procedure          :: add_cmats_to_cmats
     ! FFT, file: simple_image_fft.f90
@@ -538,9 +535,9 @@ interface
         integer, optional, intent(out)   :: phys_out(3)
     end subroutine add_2
 
-    module subroutine add_3( self, rcomp, i, j, k )
+    module subroutine add_3( self, rval, i, j, k )
         class(image), intent(inout) :: self
-        real,         intent(in)    :: rcomp
+        real,         intent(in)    :: rval
         integer,      intent(in)    :: i, j, k
     end subroutine add_3
 
@@ -594,11 +591,10 @@ interface
         real,         intent(in)    :: c
     end subroutine div_1
 
-    module subroutine div_2( self, logi, k, square )
+    module subroutine div_2( self, logi, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: k(:,:,:)
-        logical,      intent(in)    :: square
     end subroutine div_2
 
     module subroutine div_3( self, logi, k, phys_in )
@@ -650,65 +646,36 @@ interface
     end function conjugate
 
     !--- index-based per-element ops ---!
-    module subroutine mul_rmat_at_1( self, logi, rval )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3)
-        real,         intent(in)    :: rval
-    end subroutine mul_rmat_at_1
 
-    module elemental pure subroutine mul_rmat_at_2( self,i, j, k, rval )
+    module elemental pure subroutine mul_rmat_at( self,i, j, k, rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i,j,k
         real,         intent(in)    :: rval
-    end subroutine mul_rmat_at_2
+    end subroutine mul_rmat_at
 
-    module subroutine div_rmat_at_1( self, logi, rval )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3)
-        real,         intent(in)    :: rval
-    end subroutine div_rmat_at_1
-
-    module subroutine div_rmat_at_2( self, i, j, k, rval )
+    module subroutine div_rmat_at( self, i, j, k, rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i,j,k
         real,         intent(in)    :: rval
-    end subroutine div_rmat_at_2
+    end subroutine div_rmat_at
 
-    module pure subroutine add_cmat_at_1( self , phys , comp)
+    module pure subroutine add_cmat_at( self, h, k, l, comp)
         class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
+        integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: comp
-    end subroutine add_cmat_at_1
+    end subroutine add_cmat_at
 
-    module pure subroutine add_cmat_at_2( self, h, k, l, comp)
+    module pure subroutine mul_cmat_at_1( self, h,k,l,rval )
         class(image), intent(inout) :: self
-        integer,      intent(in) :: h,k,l
-        complex,      intent(in) :: comp
-    end subroutine add_cmat_at_2
-
-    module pure subroutine mul_cmat_at_1( self, phys, rval)
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
+        integer,      intent(in)    :: h,k,l
         real,         intent(in)    :: rval
     end subroutine mul_cmat_at_1
 
-    module pure subroutine mul_cmat_at_2( self, phys, cval )
+    module pure subroutine mul_cmat_at_2( self, h,k,l, cval )
         class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
+        integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
     end subroutine mul_cmat_at_2
-
-    module pure subroutine mul_cmat_at_3( self, h,k,l,rval )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: h,k,l
-        real,         intent(in)    :: rval
-    end subroutine mul_cmat_at_3
-
-    module pure subroutine mul_cmat_at_4( self, h,k,l, cval )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: h,k,l
-        complex,      intent(in)    :: cval
-    end subroutine mul_cmat_at_4
 
     module subroutine mul_cmat_1( self, rmat )
         class(image), intent(inout) :: self
@@ -721,29 +688,17 @@ interface
         logical,      intent(in)    :: resmsk(self%array_shape(1),self%array_shape(2),self%array_shape(3))
     end subroutine mul_cmat_2
 
-    module pure subroutine div_cmat_at_1( self, phys, rval )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: phys(3)
-        real,              intent(in)    :: rval
+    module pure subroutine div_cmat_at_1( self,h,k,l, rval)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: h,k,l
+        real,         intent(in)    :: rval
     end subroutine div_cmat_at_1
 
-    module pure subroutine div_cmat_at_2( self,h,k,l, rval)
-        class(image), intent(inout) :: self
-        integer,      intent(in) :: h,k,l
-        real,         intent(in) :: rval
-    end subroutine div_cmat_at_2
-
-    module pure subroutine div_cmat_at_3( self, phys, cval )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: phys(3)
-        complex,           intent(in)    :: cval
-    end subroutine div_cmat_at_3
-
-    module pure subroutine div_cmat_at_4( self,h,k,l, cval)
+    module pure subroutine div_cmat_at_2( self,h,k,l, cval)
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
-    end subroutine div_cmat_at_4
+    end subroutine div_cmat_at_2
 
     module subroutine sq_rt( self )
         class(image), intent(inout) :: self

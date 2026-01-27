@@ -36,7 +36,6 @@ type :: fplane
     procedure :: new
     ! GETTERS
     procedure :: does_exist
-    procedure :: convert2img
     ! SETTERS
     procedure :: gen_planes
     procedure :: gen_planes_pad
@@ -401,40 +400,6 @@ contains
         self%cmplx_plane(0,0) = c
         self%ctfsq_plane(0,0) = tvalsq
     end subroutine gen_planes_pad
-
-    subroutine convert2img( self, fcimg, ctfsqimg )
-        class(fplane), intent(in)    :: self
-        class(image),  intent(inout) :: fcimg, ctfsqimg
-        complex, pointer :: pcmat(:,:,:)
-        integer :: c
-        if( self%padded )then
-            call fcimg%new([params_glob%box_croppd,params_glob%box_croppd,1], params_glob%smpd_crop)
-            call ctfsqimg%new([params_glob%box_croppd,params_glob%box_croppd,1], params_glob%smpd_crop)
-            c = params_glob%box_croppd/2+1
-            call fcimg%set_ft(.true.)
-            call fcimg%get_cmat_ptr(pcmat)
-            pcmat(1:self%frlims_croppd(1,2),c+self%frlims_croppd(2,1):c+self%frlims_croppd(2,2),1) =&
-                &self%cmplx_plane(0:self%frlims_croppd(1,2)-1,:)
-            call fcimg%shift_phorig
-            call ctfsqimg%set_ft(.true.)
-            call ctfsqimg%get_cmat_ptr(pcmat)
-            pcmat(1:self%frlims_croppd(1,2),c+self%frlims_croppd(2,1):c+self%frlims_croppd(2,2),1) =&
-                &cmplx(self%ctfsq_plane(0:self%frlims_croppd(1,2)-1,:),0.)
-        else
-            call fcimg%new(self%ldim, params_glob%smpd)
-            call ctfsqimg%new(self%ldim, params_glob%smpd)
-            c = self%ldim(1)/2+1
-            call fcimg%set_ft(.true.)
-            call fcimg%get_cmat_ptr(pcmat)
-            pcmat(1:self%frlims_crop(1,2),c+self%frlims_crop(2,1):c+self%frlims_crop(2,2),1) = self%cmplx_plane(0:self%frlims_crop(1,2)-1,:)
-            call fcimg%shift_phorig
-            call ctfsqimg%set_ft(.true.)
-            call ctfsqimg%get_cmat_ptr(pcmat)
-            pcmat(1:self%frlims_crop(1,2),c+self%frlims_crop(2,1):c+self%frlims_crop(2,2),1) = cmplx(self%ctfsq_plane(0:self%frlims_crop(1,2)-1,:),0.)
-        endif
-        call ctfsqimg%shift_phorig
-        nullify(pcmat)
-    end subroutine convert2img
 
     elemental subroutine zero( self )
         class(fplane), intent(inout) :: self

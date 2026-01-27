@@ -1139,7 +1139,7 @@ contains
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
-                    phys = self%fit%comp_addr_phys([h,k,l])
+                    phys = self%fit%comp_addr_phys(h,k,l)
                     self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
                     self%oshift([h,k,l], shvec_here)
                 end do

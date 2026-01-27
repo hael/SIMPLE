@@ -268,7 +268,7 @@ contains
                 if( shsq >= hplimsq .and. shsq <= lplimsq )then
                     spafreqh  = real(h) / real(self%tilesz) / self%smpd
                     spafreqsq = spafreqh*spafreqh + spafreqk*spafreqk
-                    phys      = self%tiles(1,1,1)%comp_addr_phys([h,k,0])
+                    phys      = self%tiles(1,1,1)%comp_addr_phys(h,k,0)
                     bfac_weights(phys(1),phys(2)) = max(0.,exp(-spafreqsq*self%bfactor/4.))
                     self%resolution_mask(phys(1),phys(2),1) = .true.
                 endif

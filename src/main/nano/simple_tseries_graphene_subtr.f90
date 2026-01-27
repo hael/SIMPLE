@@ -87,8 +87,8 @@ contains
         lims = img%loop_lims(2)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
-                phys2d = img%comp_addr_phys([h,k,0])
-                phys3d = vol%comp_addr_phys([h,k,0])
+                phys2d = img%comp_addr_phys(h,k,0)
+                phys3d = vol%comp_addr_phys(h,k,0)
                 call img%set_fcomp([h,k,0], phys2d, vol%get_fcomp([h,k,0],phys3d))
             enddo
         enddo
@@ -301,7 +301,7 @@ contains
                         phys = img%comp_addr_phys(h,k,0)
                         ! quartic kernel (Epanechnikov squared)
                         w = 1.-(1.-dist**2.)**2.
-                        call img%mul_cmat_at(phys, w)
+                        call img%mul_cmat_at(phys(1), phys(2), phys(3), w)
                     enddo
                 enddo
             end subroutine obscure_peak

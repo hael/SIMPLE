@@ -631,7 +631,7 @@ contains
                 qs = exp(-acc_doses/twoNe)
                 qs = qs / sqrt(sum(qs*qs))
                 do iframe = 1,self%nframes
-                    call self%frames(iframe)%mul_cmat_at([hphys,kphys,1], qs(iframe))
+                    call self%frames(iframe)%mul_cmat_at(hphys, kphys, 1, qs(iframe))
                 enddo
             enddo
         enddo
