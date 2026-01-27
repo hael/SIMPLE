@@ -870,7 +870,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sqarg = h*h + k*k + l*l
                         if( sqarg <= sqlp .and. sqarg >= sqhp  )then
-                            phys = self1%fit%comp_addr_phys([h,k,l])
+                            phys = self1%fit%comp_addr_phys(h,k,l)
                             ! real part of the complex mult btw 1 and 2*
                             r = r + real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
                             sumasq = sumasq + csq(self2%cmat(phys(1),phys(2),phys(3)))

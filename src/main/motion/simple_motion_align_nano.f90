@@ -266,7 +266,7 @@ contains
                 if( shsq < hplimsq ) cycle
                 if( shsq > lplimsq ) cycle
                 if( shsq == 0 )      cycle
-                phys = self%reference%comp_addr_phys([h,k,0])
+                phys = self%reference%comp_addr_phys(h,k,0)
                 ! B-factor weight
                 spafreqh  = real(h) / real(self%ldim(1)) / self%smpd
                 spafreqk  = real(k) / real(self%ldim(2)) / self%smpd

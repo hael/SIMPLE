@@ -68,7 +68,7 @@ contains
                     zcnt = zcnt + 1
                     if( zcnt > self%ldim(3) ) cycle
                     logi = [h,k,l]
-                    phys = self%comp_addr_phys(logi)
+                    phys = self%comp_addr_phys(h,k,l)
                     call img%set_fcomp(logi, phys, cmplx(self%rmat(xcnt,ycnt,zcnt),0.))
                 end do
             end do
@@ -138,7 +138,7 @@ contains
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
-                        phys = self%comp_addr_phys([h,k,l])
+                        phys = self%comp_addr_phys(h,k,l)
                         comp = self%get_fcomp([h,k,l],phys)
                         inds(1) = min(max(1,h+mh+1),self%ldim(1))
                         inds(2) = min(max(1,k+mk+1),self%ldim(2))
@@ -1102,7 +1102,7 @@ contains
         fplane = cmplx(0.,0.)
         do h=-xdim,xdim
             do k=-ydim,ydim
-                phys = self%comp_addr_phys([h,k,0])
+                phys        = self%comp_addr_phys(h,k,0)
                 fplane(h,k) = self%get_fcomp([h,k,0],phys)
             end do
         end do

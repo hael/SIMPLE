@@ -169,25 +169,24 @@ contains
         complex(kind=c_float_complex) :: acc, fcomp
         complex, pointer :: pft(:,:)
         logical :: h_negative
-        integer :: i, k, l, m, addr_m, ind, ldim(3), h_val, k_val, phys1, phys2
+        integer :: i, k, l, m, ind, ldim(3), h_val, k_val, phys1, phys2
         ! get temporary pft matrix
         call pftc%get_work_pft_ptr(pft)
         ! get temporary pointer to complex image matrix to avoid overheads due to dynamic dispatch
         call img%get_cmat_ptr(cmat_ptr)
         ldim = img%get_ldim()
         ! interpolate
-        !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,addr_m,h_val,k_val,phys1,phys2,h_negative,fcomp)
+        !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val,k_val,phys1,phys2,h_negative,fcomp)
         do k=self%pdim(2),self%pdim(3)
             do i=1,self%pdim(1)
                 acc = CMPLX_ZERO
                 ind = 0
                 do m = 1, self%wdim
-                    addr_m = self%polcyc2_mat(m,i,k)
+                    k_val = self%polcyc2_mat(m,i,k)
                     do l = 1, self%wdim
                         ind         = ind + 1
                         ! Get h and k values
                         h_val       = self%polcyc1_mat(l,i,k)
-                        k_val       = addr_m
                         ! Branch-free indexing computation
                         h_negative  = (h_val < 0)
                         phys1       = merge(-h_val, h_val, h_negative) + 1

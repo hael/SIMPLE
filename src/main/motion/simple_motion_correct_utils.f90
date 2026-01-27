@@ -133,7 +133,7 @@ contains
                 qs = exp(-acc_doses(frange(1):frange(2))/twoNe)
                 qs = qs / sqrt(sum(qs*qs))
                 do i = frange(1),frange(2)
-                    call frames(i)%mul_cmat_at([hphys,kphys,1], qs(i))
+                    call frames(i)%mul_cmat_at(hphys, kphys, 1, qs(i))
                 enddo
             enddo
         enddo

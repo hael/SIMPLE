@@ -31,7 +31,7 @@ contains
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
                         freq = hyp(h,k,l)
-                        phys = self%comp_addr_phys([h,k,l])
+                        phys = self%comp_addr_phys(h,k,l)
                         if( dohp )then
                             if(freq .lt. hplim_freq) then
                                 self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
@@ -59,7 +59,7 @@ contains
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
                         freq = hyp(h,k,l)
-                        phys = self%comp_addr_phys([h,k,l])
+                        phys = self%comp_addr_phys(h,k,l)
                         if( dohp )then
                             if(freq .lt. hplim_freq) then
                                 self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
@@ -100,7 +100,7 @@ contains
             do k=lims(2,1),lims(2,2)
                 do h=lims(1,1),lims(1,2)
                     freq = hyp(h,k,l)
-                    phys = self%comp_addr_phys([h,k,l])
+                    phys = self%comp_addr_phys(h,k,l)
                     if(freq .gt. find)then
                         self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                     else if(freq .ge. find - wwidth)then
@@ -264,7 +264,7 @@ contains
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
                         freq = hyp(h,k,l)
-                        phys = self%comp_addr_phys([h,k,l])
+                        phys = self%comp_addr_phys(h,k,l)
                         if(freq .lt. hplim_freq) then
                             self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                         else if(freq .gt. lplim_freq) then
@@ -298,7 +298,7 @@ contains
                 do l=lims(3,1),lims(3,2)
                     freq = hyp(h,k,l)
                     if(freq .gt. lp_freq)then
-                        phys  = self%fit%comp_addr_phys([h,k,l])
+                        phys  = self%fit%comp_addr_phys(h,k,l)
                         amp   = mycabs(self%cmat(phys(1),phys(2),phys(3)))
                         phase = ran3() * TWOPI
                         self%cmat(phys(1),phys(2),phys(3)) = amp * cmplx(cos(phase), sin(phase))
@@ -323,7 +323,7 @@ contains
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
-                    phys      = self_even%comp_addr_phys([h,k,l])
+                    phys      = self_even%comp_addr_phys(h,k,l)
                     diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
                                &self_odd%cmat(phys(1),phys(2),phys(3))
                     noise_pow = csq_fast(diff)
@@ -355,7 +355,7 @@ contains
         do l = lims(3,1),lims(3,2)
             do k = lims(2,1),lims(2,2)
                 do h = lims(1,1),lims(1,2)
-                    phys = self_even%fit%comp_addr_phys([h,k,l])
+                    phys = self_even%fit%comp_addr_phys(h,k,l)
                     sh   = nint(hyp(h,k,l))
                     if( sh == 0 .or. sh > filtsz ) cycle
                     diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
@@ -373,7 +373,7 @@ contains
         do l = lims(3,1),lims(3,2)
             do k = lims(2,1),lims(2,2)
                 do h = lims(1,1),lims(1,2)
-                    phys = self_even%fit%comp_addr_phys([h,k,l])
+                    phys = self_even%fit%comp_addr_phys(h,k,l)
                     sh   = nint(hyp(h,k,l))
                     if( sh == 0 .or. sh > filtsz ) cycle
                     if( dspec(sh) > DTINY )then
@@ -592,7 +592,7 @@ contains
                 do j=lims(2,1),lims(2,2)
                     do i=lims(1,1),lims(1,2)
                         res = sqrt(real(k*k+j*j+i*i))/(real(self%ldim(1))*self%smpd) ! assuming square dimensions
-                        phys = self%fit%comp_addr_phys([i,j,k])
+                        phys = self%fit%comp_addr_phys(i,j,k)
                         wght = max(0.,exp(-(b/4.)*res*res))
                         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*wght
                     end do
@@ -604,7 +604,7 @@ contains
                 do j=lims(2,1),lims(2,2)
                     do i=lims(1,1),lims(1,2)
                         res = sqrt(real(k*k+j*j+i*i))/(real(self%ldim(1))*self%smpd) ! assuming square dimensions
-                        phys = self%fit%comp_addr_phys([i,j,k])
+                        phys = self%fit%comp_addr_phys(i,j,k)
                         wght = max(0.,exp(-(b/4.)*res*res))
                         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*wght
                     end do

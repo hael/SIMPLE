@@ -59,7 +59,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -71,7 +71,7 @@ contains
                     do h=lims(1,1),lims(1,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -83,7 +83,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + sqrt(csq(self%cmat(phys(1),phys(2),phys(3))))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -95,7 +95,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + log(csq(self%cmat(phys(1),phys(2),phys(3))))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -107,7 +107,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -119,7 +119,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + abs(aimag(self%cmat(phys(1),phys(2),phys(3))))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -131,7 +131,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + cabs(self%cmat(phys(1),phys(2),phys(3)))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -143,7 +143,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + phase_angle(self%cmat(phys(1),phys(2),phys(3)))
                         counts(sh) = counts(sh) + 1.
                     end do
@@ -155,7 +155,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > lfny ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         spec(sh)   = spec(sh) + 1.
                         counts(sh) = counts(sh)+1.
                     end do
@@ -200,7 +200,7 @@ contains
                     do h=lims(1,1),lims(1,2)
                         sh = nint(hyp(h,k,l))
                         if( sh == 0 .or. sh > filtsz ) cycle
-                        phys       = self%fit%comp_addr_phys([h,k,l])
+                        phys       = self%fit%comp_addr_phys(h,k,l)
                         dspec(sh)  = dspec(sh)  + real(csq_fast(self%cmat(phys(1),phys(2),phys(3))),dp)
                         counts(sh) = counts(sh) + 1
                     end do
@@ -378,7 +378,7 @@ contains
                 do l=lims(3,1),lims(3,2)
                     sh             = nint(hyp(h,k,l))
                     if( sh == 0 ) cycle
-                    phys           = self%comp_addr_phys([h,k,l])
+                    phys           = self%comp_addr_phys(h,k,l)
                     sig_pow        = csq(self%cmat(phys(1),phys(2),phys(3)))
                     noise_pow      = csq(noise_vol%cmat(phys(1),phys(2),phys(3)))
                     if( sh <= filtsz ) counts_all(sh) = counts_all(sh) + 1
@@ -523,7 +523,7 @@ contains
                 do l=lims(3,1),lims(3,2)
                     sh = nint(hyp(h,k,l))
                     if( sh == 0 .or. sh > lfny ) cycle
-                    phys = self%fit%comp_addr_phys([h,k,l])
+                    phys = self%fit%comp_addr_phys(h,k,l)
                     if( graphene_mask(sh) )then
                         self%cmat(phys(1),phys(2),phys(3)) = cmplx(1.,0.)
                     else

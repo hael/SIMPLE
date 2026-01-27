@@ -36,6 +36,7 @@ type :: ft_expanded
     procedure          :: get_ldim
     procedure          :: get_cmat
     procedure          :: get_cmat_ptr
+    procedure          :: get_bandmsk_at
     procedure          :: get_bandmsk_ptr
     procedure          :: get_sumsq
     procedure          :: get_kind_shift
@@ -196,6 +197,12 @@ contains
         logical,            pointer, intent(out)   :: bandmsk_ptr(:,:)
         bandmsk_ptr => self%bandmsk
     end subroutine get_bandmsk_ptr
+
+    pure logical function get_bandmsk_at( self, i,j )
+        class(ft_expanded), intent(in) :: self
+        integer ,           intent(in) :: i,j
+        get_bandmsk_at = self%bandmsk(i,j)
+    end function get_bandmsk_at
 
     pure real function get_sumsq( self )
         class(ft_expanded), intent(in) :: self

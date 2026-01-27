@@ -170,7 +170,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
         complex,           intent(in)    :: comp
-        integer, optional, intent(in)   :: phys_in(3)
+        integer, optional, intent(in)    :: phys_in(3)
         integer, optional, intent(out)   :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
@@ -189,12 +189,12 @@ contains
         if( present(phys_out) ) phys_out = phys
     end subroutine add_2
 
-    module subroutine add_3( self, rcomp, i, j, k )
+    module subroutine add_3( self, rval, i, j, k )
         class(image), intent(inout) :: self
-        real,         intent(in)    :: rcomp
+        real,         intent(in)    :: rval
         integer,      intent(in)    :: i, j, k
-        if(  self%ft ) THROW_HARD('cannot add real number to transform; add_3')
-        self%rmat(i,j,k) = self%rmat(i,j,k)+rcomp
+        if( self%ft ) THROW_HARD('cannot add real number to transform; add_3')
+        self%rmat(i,j,k) = self%rmat(i,j,k) + rval
     end subroutine add_3
 
     module subroutine add_4( self, logi, comp, w, k )
@@ -323,11 +323,10 @@ contains
         endif
     end subroutine div_1
 
-    module subroutine div_2( self, logi, k, square )
+    module subroutine div_2( self, logi, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: k(:,:,:)
-        logical,      intent(in)    :: square
         integer :: phys(3)
         if( self%ft )then
             phys = self%fit%comp_addr_phys(logi)
@@ -452,7 +451,7 @@ contains
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
                         if( h * h + k * k + l * l <= sqlim )then
-                            phys = self%fit%comp_addr_phys([h,k,l])
+                            phys = self%fit%comp_addr_phys(h,k,l)
                             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
                                 self2mul%cmat(phys(1),phys(2),phys(3))
                         endif
@@ -487,79 +486,43 @@ contains
     !===============================
     ! index-based per-element ops
     !===============================
-    module subroutine mul_rmat_at_1( self, logi, rval )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3)
-        real,         intent(in)    :: rval
-        self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rval
-    end subroutine mul_rmat_at_1
 
-    module elemental pure subroutine mul_rmat_at_2( self,i, j, k, rval )
+    module elemental pure subroutine mul_rmat_at( self, i, j, k, rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i,j,k
         real,         intent(in)    :: rval
         self%rmat(i,j,k) = self%rmat(i,j,k)*rval
-    end subroutine mul_rmat_at_2
+    end subroutine mul_rmat_at
 
-    module subroutine div_rmat_at_1( self, logi, rval )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3)
-        real,         intent(in)    :: rval
-        if( abs(rval) > 1e-6 )then
-            self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))/rval
-        endif
-    end subroutine div_rmat_at_1
-
-    module subroutine div_rmat_at_2( self, i, j, k, rval )
+    module subroutine div_rmat_at( self, i, j, k, rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i,j,k
         real,         intent(in)    :: rval
         if( abs(rval) > 1e-6 )then
             self%rmat(i,j,k) = self%rmat(i,j,k)/rval
         endif
-    end subroutine div_rmat_at_2
+    end subroutine div_rmat_at
 
-    module pure subroutine add_cmat_at_1( self , phys , comp)
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
-        complex,      intent(in)    :: comp
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
-    end subroutine add_cmat_at_1
-
-    module pure subroutine add_cmat_at_2( self, h, k, l, comp)
+    module pure subroutine add_cmat_at( self, h, k, l, comp)
         class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         complex,      intent(in) :: comp
         self%cmat(h,k,l) = self%cmat(h,k,l) + comp
-    end subroutine add_cmat_at_2
+    end subroutine add_cmat_at
 
-    module pure subroutine mul_cmat_at_1( self, phys, rval)
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
-        real,         intent(in)    :: rval
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * rval
-    end subroutine mul_cmat_at_1
-
-    module pure subroutine mul_cmat_at_2( self, phys, cval )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
-        complex,      intent(in)    :: cval
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cval
-    end subroutine mul_cmat_at_2
-
-    module pure subroutine mul_cmat_at_3( self, h,k,l,rval )
+    module pure subroutine mul_cmat_at_1( self, h,k,l,rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         real,         intent(in)    :: rval
         self%cmat(h,k,l) = self%cmat(h,k,l) * rval
-    end subroutine mul_cmat_at_3
+    end subroutine mul_cmat_at_1
 
-    module pure subroutine mul_cmat_at_4( self, h,k,l, cval )
+    module pure subroutine mul_cmat_at_2( self, h,k,l, cval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
         self%cmat(h,k,l) = self%cmat(h,k,l) * cval
-    end subroutine mul_cmat_at_4
+    end subroutine mul_cmat_at_2
 
     module subroutine mul_cmat_1( self, rmat )
         class(image), intent(inout) :: self
@@ -576,18 +539,7 @@ contains
         end where
     end subroutine mul_cmat_2
 
-    module pure subroutine div_cmat_at_1( self, phys, rval )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: phys(3)
-        real,              intent(in)    :: rval
-        if( abs(rval) > 1.e-6 )then
-            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) / rval
-        else
-            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
-        endif
-    end subroutine div_cmat_at_1
-
-    module pure subroutine div_cmat_at_2( self,h,k,l, rval)
+    module pure subroutine div_cmat_at_1( self,h,k,l, rval)
         class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         real,         intent(in) :: rval
@@ -596,20 +548,9 @@ contains
         else
             self%cmat(h,k,l) =cmplx(0.,0.)
         end if
-    end subroutine div_cmat_at_2
+    end subroutine div_cmat_at_1
 
-    module pure subroutine div_cmat_at_3( self, phys, cval )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: phys(3)
-        complex,           intent(in)    :: cval
-        if( abs(cval) > 1.e-6 )then
-            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) / cval
-        else
-            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
-        endif
-    end subroutine div_cmat_at_3
-
-    module pure subroutine div_cmat_at_4( self,h,k,l, cval)
+    module pure subroutine div_cmat_at_2( self,h,k,l, cval)
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
@@ -618,7 +559,7 @@ contains
         else
             self%cmat(h,k,l) = cmplx(0.,0.)
         end if
-    end subroutine div_cmat_at_4
+    end subroutine div_cmat_at_2
 
     !===============================
     ! sq_rt
@@ -640,8 +581,8 @@ contains
         integer,      intent(in)    :: lims(3,2)
         real,         intent(inout) :: expcmat3(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real,         intent(inout) :: expcmat4(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        integer :: h, k, logi(3), phys(3)
-        !$omp parallel default(shared) private(h,k,logi,phys) proc_bind(close)
+        integer :: h, k, phys(3)
+        !$omp parallel default(shared) private(h,k,phys) proc_bind(close)
         !$omp workshare
         self1%cmat = self1%cmat + self2set1%cmat
         self2%cmat = self2%cmat + self2set2%cmat
@@ -649,8 +590,7 @@ contains
         !$omp do collapse(2) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
-                logi = [h,k,0]
-                phys = self1%comp_addr_phys(logi)
+                phys = self1%comp_addr_phys(h,k,0)
                 self3%cmat(phys(1),phys(2),phys(3)) = self3%cmat(phys(1),phys(2),phys(3)) + cmplx(expcmat3(h,k),0.)
                 self4%cmat(phys(1),phys(2),phys(3)) = self4%cmat(phys(1),phys(2),phys(3)) + cmplx(expcmat4(h,k),0.)
             enddo

@@ -41,8 +41,7 @@ type :: ftiter
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
-    procedure, private :: comp_addr_logi_1, comp_addr_logi_2
-    generic            :: comp_addr_logi => comp_addr_logi_1, comp_addr_logi_2
+    procedure          :: comp_addr_logi
     procedure, private :: comp_addr_phys_orig
     ! TESTS
     procedure, private :: test_addr
@@ -294,7 +293,6 @@ contains
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: h,k   !<  Logical address
         integer :: phys(2)                 !<  Physical address
-        integer :: k_off
         if (h .ge. 0) then
             phys(1) = h + 1
             phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
@@ -306,22 +304,7 @@ contains
 
     !> \brief Convert physical address to logical address. Complex image.
     ! this is erroneous when h<0, completely unused
-    function comp_addr_logi_1(self,phys) result(logi)
-        class(ftiter), intent(in) :: self
-        integer,       intent(in) :: phys(3) !<  Physical address
-        integer :: logi(3)                   !<  Logical address
-        integer :: i
-        logi = phys - 1
-        ! The above is true except when in negative frequencies of
-        ! 2nd or 3rd dimension
-        do i=2,3
-            if (phys(i) .gt. self%clogi_ubounds(i)+1) logi(i) = phys(i) - self%ldim(i) - 1
-        enddo
-    end function comp_addr_logi_1
-
-    !> \brief Convert physical address to logical address. Complex image.
-    ! this is erroneous when h<0, completely unused
-    pure function comp_addr_logi_2(self,i,j,k) result(logi)
+    pure function comp_addr_logi(self,i,j,k) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: i,j,k   !<  Physical address
         integer :: logi(3)                   !<  Logical address
@@ -330,7 +313,7 @@ contains
         ! 2nd or 3rd dimension
         logi(2) = merge( j - self%ldim(2) - 1, j - 1 , j .gt. self%clogi_ubounds(2)+1)
         logi(3) = merge( k - self%ldim(3) - 1, k - 1 , k .gt. self%clogi_ubounds(3)+1)
-    end function comp_addr_logi_2
+    end function comp_addr_logi
 
     ! PRIVATE STUFF
 
@@ -372,8 +355,8 @@ contains
         do k=1,self%ldim(3)
             do j=1,self%ldim(2) ! this could be: do j=1,self%cphys_ubounds(2)
                 do i=1,self%cphys_ubounds(1)
-                    logi = self%comp_addr_logi([i,j,k])
-                    phys = self%comp_addr_phys(logi)
+                    logi = self%comp_addr_logi(i,j,k)
+                    phys = self%comp_addr_phys(phys(1),phys(2),phys(3))
                     if (any([i,j,k] .ne. phys)) then
                         THROW_HARD('failed complex phys->logi->phys address conversion test')
                     endif
@@ -396,8 +379,8 @@ contains
         do k=self%clogi_lbounds(3),self%clogi_ubounds(3)
             do j=self%clogi_lbounds(2),self%clogi_ubounds(2)
                 do i=self%clogi_lbounds(1),self%clogi_ubounds(1)
-                    phys = self%comp_addr_phys([i,j,k])
-                    logi = self%comp_addr_logi(phys)
+                    phys = self%comp_addr_phys(i,j,k)
+                    logi = self%comp_addr_logi(phys(1),phys(2),phys(3))
                     if (any([i,j,k] .ne. logi)) then
                         THROW_HARD('failed complex logi->phys->logi address conversion test')
                     endif
