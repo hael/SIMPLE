@@ -248,6 +248,12 @@ contains
         endif
     end subroutine add_mat2cmat_2
 
+    module subroutine add_dble_cmat2mat( self, M )
+        class(image), intent(in)    :: self
+        complex(dp),  intent(inout) :: M(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        M = M + cmplx(self%cmat(:,:,:),kind=dp)
+    end subroutine add_dble_cmat2mat
+
     module subroutine add_workshare_1( self, self_to_add )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
@@ -509,16 +515,15 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * c
     end subroutine mul_5
 
-    module function conjugate( self ) result ( self_out )
-        class(image), intent(in) :: self
+    module subroutine conjugate( self )
+        class(image), intent(inout) :: self
         type(image) :: self_out
         if( self%ft )then
-            call self_out%copy(self)
-            self_out%cmat = conjg(self%cmat)
+            self%cmat = conjg(self%cmat)
         else
             THROW_WARN('cannot conjugate real image')
         endif
-    end function conjugate
+    end subroutine conjugate
 
     !===============================
     ! index-based per-element ops
