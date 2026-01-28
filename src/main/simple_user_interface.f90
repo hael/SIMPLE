@@ -95,6 +95,7 @@ type(simple_program), target :: cavgsproc_nano
 type(simple_program), target :: center
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_refpick
+type(simple_program), target :: cleanup2D
 type(simple_program), target :: clin_fsc
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
@@ -552,6 +553,7 @@ contains
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(check_refpick)
+        call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(clin_fsc)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
@@ -702,6 +704,7 @@ contains
             case('center2D_nano');               ptr2prg => center2D_nano
             case('check_refpick');               ptr2prg => check_refpick
             case('clin_fsc');                    ptr2prg => clin_fsc
+            case('cleanup2D');                   ptr2prg => cleanup2D       
             case('cluster2D');                   ptr2prg => cluster2D
             case('cluster2D_nano');              ptr2prg => cluster2D_nano
             case('cluster2D_stream');            ptr2prg => cluster2D_stream
@@ -1934,6 +1937,11 @@ contains
         call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_cluster2D_stream
+
+    subroutine new_cleanup2D
+
+
+    end subroutine new_cleanup2D
 
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION
