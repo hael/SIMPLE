@@ -780,7 +780,7 @@ contains
             t_grid   = 0.
         endif
         ! logical/physical adress mapping
-        call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), 3)
+        call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), build_glob%imgbatch(1)%get_smpd())
         ! gridding batch loop
         nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
@@ -916,7 +916,7 @@ contains
             call gen_instrfun_img(instrimg, 'kb', fpls(1)%kbwin, padded_dim=params_glob%boxpd, norm=.true.)
         endif
         ! logical/physical adress mapping
-        call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), 3)
+        call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), build_glob%imgbatch(1)%get_smpd())
         if( DEBUG )then
             t_ini = toc(t)
             t_pad = 0.
@@ -1300,7 +1300,7 @@ contains
         ! get instrument function
         img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
         ! memoize CTF stuff
-        call memoize_ft_maps(tmp_imgs(1)%get_ldim())
+        call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1

@@ -71,7 +71,10 @@ contains
     generic :: operator(/) => division
     procedure, private :: add_1, add_2, add_3, add_4, add_5
     generic            :: add => add_1, add_2, add_3, add_4, add_5
-    procedure          :: add_workshare
+    procedure, private :: add_mat2cmat_1, add_mat2cmat_2
+    generic            :: add_mat2cmat => add_mat2cmat_1, add_mat2cmat_2
+    procedure, private :: add_workshare_1, add_workshare_2
+    generic            :: add_workshare => add_workshare_1, add_workshare_2
     procedure, private :: subtr_1, subtr_2, subtr_3, subtr_4
     generic            :: subtr => subtr_1, subtr_2, subtr_3, subtr_4
     procedure, private :: div_1, div_2, div_3, div_4
@@ -90,7 +93,7 @@ contains
     procedure, private :: div_cmat_at_1, div_cmat_at_2
     generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2
     procedure          :: sq_rt
-    procedure          :: add_cmats_to_cmats
+    procedure          :: add_cmats_to_cmat
     ! FFT, file: simple_image_fft.f90
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -101,6 +104,7 @@ contains
     procedure          :: norm_noise_fft
     procedure          :: norm_noise_pad_fft
     procedure          :: norm_noise_pad_fft_clip_shift
+    procedure          :: norm_noise_pad_fft_shift_2mat
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_fft_clip_shift_ctf_flip
     procedure          :: norm_noise_divwinstrfun_fft
@@ -560,10 +564,28 @@ interface
         real,         intent(in)    :: c
     end subroutine add_5
 
-    module subroutine add_workshare( self, self_to_add )
+    module subroutine add_mat2cmat_1( self, M, w )
+        class(image),                  intent(inout) :: self
+        complex(kind=c_float_complex), intent(in)    :: M(:,:)
+        real,                          intent(in)    :: w
+    end subroutine add_mat2cmat_1
+
+    module subroutine add_mat2cmat_2( self, M, w )
+        class(image),               intent(inout) :: self
+        real(kind=c_float_complex), intent(in)    :: M(:,:)
+        real,                       intent(in)    :: w
+    end subroutine add_mat2cmat_2
+
+    module subroutine add_workshare_1( self, self_to_add )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
-    end subroutine add_workshare
+    end subroutine add_workshare_1
+
+        module subroutine add_workshare_2( self, self_to_add, w )
+        class(image),   intent(inout) :: self
+        class(image),   intent(in)    :: self_to_add
+        real,           intent(in)    :: w
+    end subroutine add_workshare_2
 
     !--- subtr_* ---!
     module subroutine subtr_1( self, self_to_subtr, w )
@@ -711,13 +733,12 @@ interface
         class(image), intent(inout) :: self
     end subroutine sq_rt
 
-    module subroutine add_cmats_to_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
-        class(image), intent(in)    :: self1, self2,self3,self4
-        class(image), intent(inout) :: self2set1, self2set2
-        integer,      intent(in)    :: lims(3,2)
-        real,         intent(inout) :: expcmat3(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,         intent(inout) :: expcmat4(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-    end subroutine add_cmats_to_cmats
+    module subroutine add_cmats_to_cmat( self1 , self2 , self3, self4, cmat_sums )
+        class(image),                  intent(in)    :: self1, self2,self3,self4
+        complex(kind=c_float_complex), intent(inout) :: cmat_sums(self1%array_shape(1),&
+                                            &self1%array_shape(2),self1%array_shape(3),4)
+    end subroutine add_cmats_to_cmat
+
 
     ! ===== FFT procedure interfaces =====
     
@@ -775,6 +796,15 @@ interface
         class(ctf),      intent(inout) :: tfun     !< CTF object
         type(ctfparams), intent(in)    :: ctfparms !< CTF parameters
     end subroutine norm_noise_fft_clip_shift_ctf_flip
+
+    module subroutine norm_noise_pad_fft_shift_2mat( self, lmsk, self_out, shvec, ldim_out, flim_out, cmat_out )
+        class(image),                  intent(inout) :: self
+        logical,                       intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image),                  intent(inout) :: self_out
+        real,                          intent(in)    :: shvec(2)
+        integer,                       intent(in)    :: ldim_out(3), flim_out(3,2)
+        complex(kind=c_float_complex), intent(out)   :: cmat_out(:,:)
+    end subroutine norm_noise_pad_fft_shift_2mat
 
     module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
         class(image), intent(inout) :: self

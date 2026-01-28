@@ -282,21 +282,20 @@ contains
     !           using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
         use simple_memoize_ft_maps
-        logical, intent(in)        :: do_frac_update
-        integer, parameter         :: READBUFFSZ = 1024
-        complex, parameter         :: zero = cmplx(0.,0.)
-        type(kbinterpol)           :: kbwin
-        type(dstack_io)            :: dstkio_r
-        type(image_ptr)            :: pcmat(nthr_glob), prhomat(nthr_glob)
-        type(image), allocatable   :: cgrid_imgs(:), read_imgs(:), cgrid_imgs_crop(:)
-        complex,     allocatable   :: cmats(:,:,:)
-        real,        allocatable   :: rhos(:,:,:), tvals(:,:,:)
-        type(string) :: stk_fname
+        logical, intent(in)      :: do_frac_update
+        integer, parameter       :: READBUFFSZ = 1024
+        complex, parameter       :: c_zero = cmplx(0.,0.,kind=c_float_complex)
+        type(image), allocatable :: cgrid_imgs(:), read_imgs(:)
+        type(kbinterpol)         :: kbwin
+        type(dstack_io)          :: dstkio_r
+        type(string)             :: stk_fname
+        complex(kind=c_float_complex), allocatable :: cmats(:,:,:), thr_cmats(:,:,:)
+        real,                          allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), tval, kw, maxspafreqsq, reg_scale, crop_scale
+        real    :: loc(2), mat(2,2), dist(2), tval, kw, reg_scale, crop_scale
         integer :: batch_iprecs(READBUFFSZ), fdims_crop(3), logi_lims_crop(3,2)
         integer :: win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
-        integer :: iprec, i, sh, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
+        integer :: iprec, i, sh, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff
         integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind, physh, physk
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
@@ -315,8 +314,8 @@ contains
                 call init_cavgs_sums
             endif
         endif
-        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
-        wdim   = kbwin%get_wdim()
+        kbwin = kbinterpol(KBWINSZ, params_glob%alpha)
+        wdim  = kbwin%get_wdim()
         ! Number stacks
         first_pind = params_glob%fromp
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
@@ -329,6 +328,7 @@ contains
         enddo
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks     = last_stkind - first_stkind + 1
+        ! scaling/croping
         reg_scale = 1.0
         if( l_ml_reg )then
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
@@ -336,26 +336,25 @@ contains
             reg_scale         = real(ldim(1)) / real(ldim_pd(1))
         endif
         crop_scale = real(ldim_croppd(1)) / real(ldim_pd(1))
-        ! Objects allocations
-        allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ), cgrid_imgs_crop(READBUFFSZ))
-        !$omp parallel do schedule(static) default(shared) proc_bind(close) private(i)
-        do i = 1,READBUFFSZ
-            call read_imgs(i)%new(ldim, params_glob%smpd, wthreads=.false.)
-            call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
-            call cgrid_imgs_crop(i)%new(ldim_croppd, params_glob%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        logi_lims_crop = cgrid_imgs_crop(1)%loop_lims(2)
-        cyc_lims_crop  = cgrid_imgs_crop(1)%loop_lims(3)
-        nyq_crop       = cgrid_imgs_crop(1)%get_lfny(1)
-        fdims_crop     = cgrid_imgs_crop(1)%get_array_shape()
+        call memoize_ft_maps(ldim_croppd(1:2), params_glob%smpd_crop)
+        logi_lims_crop = ft_map_lims
+        cyc_lims_crop  = ft_map_lims_nr
+        nyq_crop       = ft_map_get_lfny()
+        interp_shlim   = nyq_crop + 1
+        fdims_crop     = ft_map_get_farray_shape()
         cyc_lims_cropR(:,1) = cyc_lims_crop(1,:)
         cyc_lims_cropR(:,2) = cyc_lims_crop(2,:)
+        ! Objects allocations
+        allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ))
+        !$omp parallel do schedule(static) default(shared) proc_bind(close) private(i)
+        do i = 1,READBUFFSZ
+            call read_imgs(i)%new( ldim,    params_glob%smpd, wthreads=.false.)
+            call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
+        enddo
+        !$omp end parallel do
         allocate(tvals(fdims_crop(1),fdims_crop(2),READBUFFSZ),cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ),&
-        &rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
-        interp_shlim = nyq_crop + 1
+        &rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ),thr_cmats(fdims_crop(1),fdims_crop(2),nthr_glob))
         call dstkio_r%new(smpd, ldim(1))
-        call memoize_ft_maps(ldim_croppd(1:2), 3)
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -373,6 +372,7 @@ contains
                 nptcls_in_batch = iend-istart+1
                 batchind   = 0
                 nptcls_eff = 0                                       ! # particles to process in batch
+                ! Read
                 do i = istart,iend
                     iptcl    = fromp + i - 1                         ! global particle index
                     batchind = batchind + 1                          ! index in batch
@@ -382,7 +382,7 @@ contains
                     batch_iprecs(batchind) = iprec_glob              ! particle record in batch
                     if( precs(iprec_glob)%pind == 0 ) cycle
                     nptcls_eff = nptcls_eff + 1
-                    call dstkio_r%read(stk_fname, precs(iprec_glob)%ind_in_stk, read_imgs(batchind)) ! read
+                    call dstkio_r%read(stk_fname, precs(iprec_glob)%ind_in_stk, read_imgs(batchind))
                 enddo
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
@@ -393,39 +393,36 @@ contains
                     iprec = batch_iprecs(i)
                     if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
-                    cmats(:,:,i) = zero
+                    ithr         = omp_get_thread_num() + 1
+                    cmats(:,:,i) = c_zero
                     rhos(:,:,i)  = 0.0
                     tvals(:,:,i) = 0.0
                     ! prep image
-                    call read_imgs(i)%norm_noise_pad_fft_clip_shift(build_glob%lmsk, cgrid_imgs(i), cgrid_imgs_crop(i), -precs(iprec)%shift*crop_scale)
+                    call read_imgs(i)%norm_noise_pad_fft_shift_2mat(build_glob%lmsk, cgrid_imgs(i), -precs(iprec)%shift*crop_scale,&
+                                                                    &ldim_croppd, logi_lims_crop, cmats(:,:,i))
                     ! apply CTF to image, stores CTF values
-                    call cgrid_imgs_crop(i)%eval_and_apply_ctf(precs(iprec)%tfun, ctfflag, fdims_crop(1:2), tvals(:,:,i), &
-                        & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast)
+                    call precs(iprec)%tfun%eval_and_apply(ctfflag, precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast,&
+                                                        &fdims_crop(1:2), tvals(:,:,i), cmats(:,:,i))
                     ! ML-regularization
                     if( l_ml_reg )then
-                        do h=logi_lims_crop(1,1),logi_lims_crop(1,2)
-                            do k=logi_lims_crop(2,1),logi_lims_crop(2,2)
+                        do h = logi_lims_crop(1,1),logi_lims_crop(1,2)
+                            do k = logi_lims_crop(2,1),logi_lims_crop(2,2)
                                 sh = nint(hyp(h,k))                             ! shell in padded image
                                 if( sh > interp_shlim )cycle
                                 sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))  ! shell at original scale
                                 if( sh > sigma2_kfromto(2) ) cycle
+                                if( sh < sigma2_kfromto(1) ) sh = 1
                                 physh = ft_map_phys_addrh(h,k)
                                 physk = ft_map_phys_addrk(h,k)
-                                if( sh >= sigma2_kfromto(1) )then
-                                    call cgrid_imgs_crop(i)%mul_cmat_at( physh,physk,1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
-                                    tvals(physh,physk,i) = tvals(physh,physk,i) / sqrt(eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
-                                else
-                                    call cgrid_imgs_crop(i)%mul_cmat_at(physh,physk,1, 1./eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
-                                    tvals(physh,physk,i) = tvals(physh,physk,i) / sqrt(eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
-                                endif
+                                cmats(physh,physk,i) = cmats(physh,physk,i) /      eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind)
+                                tvals(physh,physk,i) = tvals(physh,physk,i) / sqrt(eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
                             enddo
                         enddo
                     endif
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
                     ! Interpolation
-                    ithr = omp_get_thread_num() + 1
-                    call cgrid_imgs_crop(i)%get_cmat_ptr(pcmat(ithr)%cmat)
+                    thr_cmats(:,:,ithr) = c_zero
                     do h = logi_lims_crop(1,1),logi_lims_crop(1,2)
                         do k = logi_lims_crop(2,1),logi_lims_crop(2,2)
                             sh = nint(hyp(h,k))
@@ -443,56 +440,54 @@ contains
                             physh = ft_map_phys_addrh(l,m)
                             physk = ft_map_phys_addrk(l,m)
                             kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                            fcompl = kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            fcompl = kw * cmats(physh, physk, i)
                             tval   = kw * tvals(physh, physk, i)
                             ! l, bottom right corner
                             physh  = ft_map_phys_addrh(l,mm)
                             physk  = ft_map_phys_addrk(l,mm)
                             kw     = (1.-dist(1))*dist(2)
-                            fcompl = fcompl + kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            fcompl = fcompl + kw * cmats(physh, physk, i)
                             tval   = tval   + kw * tvals(physh, physk, i)
                             if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
                             ! ll, upper left corner
                             physh   = ft_map_phys_addrh(ll,m)
                             physk   = ft_map_phys_addrk(ll,m)
                             kw      = dist(1)*(1.-dist(2))
-                            fcompll =         kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            fcompll =         kw * cmats(physh, physk, i)
                             tval    = tval  + kw * tvals(physh, physk, i)
                             ! ll, upper right corner
                             physh   = ft_map_phys_addrh(ll,mm)
                             physk   = ft_map_phys_addrk(ll,mm)
                             kw      = dist(1)*dist(2)
-                            fcompll = fcompll + kw * pcmat(ithr)%cmat(physh, physk, 1)
+                            fcompll = fcompll + kw * cmats(physh, physk, i)
                             tval    = tval    + kw * tvals(physh, physk, i)
                             if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
                             ! update with interpolated values
                             physh = ft_map_phys_addrh(h,k)
                             physk = ft_map_phys_addrk(h,k)
-                            cmats(physh, physk,i) = fcompl + fcompll
-                            rhos(physh, physk, i)  = tval*tval
+                            thr_cmats(physh, physk, ithr) = fcompl + fcompll
+                            rhos(physh, physk, i)         = tval*tval
                         end do
                     end do
+                    cmats(:,:,i) = thr_cmats(:,:,ithr)
                 enddo
                 !$omp end do
                 ! Sum over classes
                 !$omp do schedule(static)
                 do icls = 1,ncls
-                    ithr = omp_get_thread_num() + 1
                     do i = 1,nptcls_in_batch
                         iprec = batch_iprecs(i)
                         if( iprec == 0 ) cycle
                         if( precs(iprec)%pind == 0 ) cycle
                         if( precs(iprec)%class == icls )then
                             select case(precs(iprec)%eo)
-                                case(0,-1)
-                                    call cavgs_even(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
-                                    call ctfsqsums_even(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-                                case(1)
-                                    call cavgs_odd(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
-                                    call ctfsqsums_odd(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
+                            case(0,-1)
+                                call cavgs_even(icls)%add_mat2cmat(    cmats(:,:,i), precs(iprec)%pw)
+                                call ctfsqsums_even(icls)%add_mat2cmat(rhos(:,:,i),  precs(iprec)%pw)
+                            case(1)
+                                call cavgs_odd(icls)%add_mat2cmat(    cmats(:,:,i), precs(iprec)%pw)
+                                call ctfsqsums_odd(icls)%add_mat2cmat(rhos(:,:,i),  precs(iprec)%pw)
                             end select
-                            pcmat(ithr)%cmat(:,:,1)   = pcmat(ithr)%cmat(:,:,1)   + precs(iprec)%pw * cmats(:,:,i)
-                            prhomat(ithr)%cmat(:,:,1) = prhomat(ithr)%cmat(:,:,1) + precs(iprec)%pw * cmplx(rhos(:,:,i),0.0)
                         endif
                     enddo
                 enddo
@@ -513,9 +508,8 @@ contains
         do i = 1,READBUFFSZ
             call read_imgs(i)%kill
             call cgrid_imgs(i)%kill
-            call cgrid_imgs_crop(i)%kill
         enddo
-        deallocate(read_imgs,cgrid_imgs,cgrid_imgs_crop)
+        deallocate(read_imgs,cgrid_imgs)
     end subroutine cavger_assemble_sums
 
     !>  \brief  merges the even/odd pairs and normalises the sums
@@ -679,13 +673,12 @@ contains
         real,     allocatable :: sig2(:), tau2(:), ssnr(:)
         integer,  allocatable :: cnt(:)
         real(dp), allocatable :: rsum(:)
-        complex,      pointer :: pctfsqsum(:,:,:)
+        complex :: fcomp
         real    :: cc, scale, pad_factor, invtau2, fudge
         integer :: flims(3,2), phys(2), h, k, sh, sz, reslim_ind
         fudge = params_glob%tau
-        call ctfsqsum%get_cmat_ptr(pctfsqsum)
         flims = ctfsqsum%loop_lims(3)
-        sz = size(frc)
+        sz    = size(frc)
         allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
         rsum = 0.d0
         cnt  = 0
@@ -709,7 +702,7 @@ contains
                 if( sh > sz ) cycle
                 phys     = ctfsqsum%comp_addr_phys(h,k)
                 cnt(sh)  = cnt(sh) + 1
-                rsum(sh) = rsum(sh) + real(pctfsqsum(phys(1),phys(2),1),dp)
+                rsum(sh) = rsum(sh) + real(ctfsqsum%get_fcomp2D(phys(1),phys(2)),dp)
             enddo
         enddo
         !$omp end parallel do
@@ -725,18 +718,20 @@ contains
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,phys,sh,invtau2) proc_bind(close)
+        !$omp private(h,k,phys,sh,invtau2,fcomp) proc_bind(close)
         do h = flims(1,1),flims(1,2)
             do k = flims(2,1),flims(2,2)
                 sh = nint(scale*sqrt(real(h*h + k*k)))
                 if( (sh < reslim_ind) .or. (sh > sz) ) cycle
-                phys = ctfsqsum%comp_addr_phys(h, k)
+                phys  = ctfsqsum%comp_addr_phys(h, k)
+                fcomp = ctfsqsum%get_fcomp2D(phys(1),phys(2))
                 if( tau2(sh) > TINY)then
                     invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
                 else
-                    invtau2 = min(1.e3, 1.e3 * real(pctfsqsum(phys(1),phys(2),1)))
+                    invtau2 = min(1.e3, 1.e3 * real(fcomp))
                 endif
-                pctfsqsum(phys(1),phys(2),1) = pctfsqsum(phys(1),phys(2),1) + cmplx(invtau2,0.)
+                fcomp = fcomp + cmplx(invtau2,0.)
+                call ctfsqsum%set_cmat_at( phys(1),phys(2), 1, fcomp)
             enddo
         enddo
         !$omp end parallel do
@@ -1012,18 +1007,14 @@ contains
     !>  \brief  re-generates the object after distributed execution
     subroutine cavger_assemble_sums_from_parts
         use simple_imgfile, only: imgfile
-        complex(kind=c_float_complex), pointer :: cmat_ptr1(:,:,:) => null()
-        complex(kind=c_float_complex), pointer :: cmat_ptr2(:,:,:) => null()
-        complex(kind=c_float_complex), pointer :: cmat_ptr3(:,:,:) => null()
-        complex(kind=c_float_complex), pointer :: cmat_ptr4(:,:,:) => null()
-        real(kind=c_float),            pointer :: rmat_ptr(:,:,:)  => null()  !< image pixels/voxels (in data)
-        integer(timer_int_kind)       ::  t_init,  t_io,  t_workshare_sum,  t_set_sums,  t_merge_eos_and_norm,  t_tot
-        real(timer_int_kind)          :: rt_init, rt_io, rt_workshare_sum, rt_set_sums, rt_merge_eos_and_norm, rt_tot
-        complex, allocatable :: csums(:,:,:,:)
+        real(kind=c_float),                pointer :: rmat_ptr(:,:,:)  => null()  !< image pixels/voxels (in data)
+        complex(kind=c_float_complex), allocatable :: csums(:,:,:,:)
+        integer(timer_int_kind)     ::  t_init,  t_io,  t_workshare_sum,  t_set_sums,  t_merge_eos_and_norm,  t_tot
+        real(timer_int_kind)        :: rt_init, rt_io, rt_workshare_sum, rt_set_sums, rt_merge_eos_and_norm, rt_tot
         type(string)  :: cae, cao, cte, cto, benchfname
         type(image)   :: imgs4read(4)
         type(imgfile) :: ioimg(4)
-        integer       :: ipart, icls, array_shape(3), ldim_here(3), fnr, i
+        integer       :: ldim_sum(4), ipart, icls, array_shape(3), ldim_here(3), fnr, i
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -1040,10 +1031,6 @@ contains
         call imgs4read(2)%set_ft(.true.)
         call imgs4read(3)%set_ft(.true.)
         call imgs4read(4)%set_ft(.true.)
-        call imgs4read(1)%get_cmat_ptr(cmat_ptr1)
-        call imgs4read(2)%get_cmat_ptr(cmat_ptr2)
-        call imgs4read(3)%get_cmat_ptr(cmat_ptr3)
-        call imgs4read(4)%get_cmat_ptr(cmat_ptr4)
         ! construct complex matrices for parallel summation
         array_shape = imgs4read(1)%get_array_shape()
         allocate(csums(array_shape(1),array_shape(2),array_shape(3),4), source=cmplx(0.,0.))
@@ -1084,12 +1071,7 @@ contains
                 t_workshare_sum = tic()
             endif
             ! parallel summation
-            !$omp parallel workshare proc_bind(close)
-            csums(:,:,:,1) = csums(:,:,:,1) + cmat_ptr1(:,:,:)
-            csums(:,:,:,2) = csums(:,:,:,2) + cmat_ptr2(:,:,:)
-            csums(:,:,:,3) = csums(:,:,:,3) + cmat_ptr3(:,:,:)
-            csums(:,:,:,4) = csums(:,:,:,4) + cmat_ptr4(:,:,:)
-            !$omp end parallel workshare
+            call imgs4read(1)%add_cmats_to_cmat(imgs4read(2), imgs4read(3), imgs4read(4), csums)
             if( L_BENCH_GLOB ) rt_workshare_sum = rt_workshare_sum + toc(t_workshare_sum)
         end do
         if( L_BENCH_GLOB ) t_set_sums = tic()
@@ -1303,7 +1285,7 @@ contains
             call  img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
             call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
         end do
-        call memoize_ft_maps(img(1)%get_ldim())
+        call memoize_ft_maps(img(1)%get_ldim(), img(1)%get_smpd())
         logi_lims      = img(1)%loop_lims(2)
         cyc_lims       = img(1)%loop_lims(3)
         cyc_limsR(:,1) = cyc_lims(1,:)

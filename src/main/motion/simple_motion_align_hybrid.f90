@@ -328,8 +328,6 @@ contains
     subroutine align_dcorr( self, ini_shifts, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
         real,             optional, intent(in)    :: ini_shifts(self%nframes,2), frameweights(self%nframes)
-        complex, allocatable :: cmat_sum(:,:,:)
-        complex,     pointer :: pcmat(:,:,:)
         real    :: opt_shifts_prev(self%nframes, 2), rmsd
         integer :: iter, iframe
         logical :: l_calc_frameweights
@@ -344,9 +342,6 @@ contains
         ! resolution limit
         self%lp         = self%lpstart
         self%lp_updates = 1
-        ! convenience matrix
-        cmat_sum = self%reference%get_cmat()
-        cmat_sum = cmplx(0.,0.)
         ! init shifts
         self%opt_shifts = 0.
         if( present(ini_shifts) ) self%opt_shifts = ini_shifts
@@ -385,14 +380,10 @@ contains
             !$omp end parallel do
             if( self%L_BENCH ) self%rt_shift = self%rt_shift + toc(self%t)
             if( self%L_BENCH ) self%t = tic()
-            cmat_sum = cmplx(0.,0.)
+            call self%reference%zero_and_flag_ft
             do iframe = 1,self%nframes
-                call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
-                !$omp parallel workshare proc_bind(close)
-                cmat_sum(:,:,1) = cmat_sum(:,:,1) + self%frameweights(iframe)*pcmat(:,:,1)
-                !$omp end parallel workshare
+                call self%reference%add_workshare(self%frames_sh(iframe), self%frameweights(iframe))
             enddo
-            call self%reference%set_cmat(cmat_sum)
             if( self%L_BENCH ) self%rt_genref = self%rt_genref + toc(self%t)
             ! Shifts optimization & correlation calculation
             if( self%L_BENCH ) self%t = tic()

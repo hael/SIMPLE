@@ -29,8 +29,6 @@ private
 type(image), target, allocatable :: movie_frames_scaled(:) !< scaled movie frames
 real,                allocatable :: opt_shifts(:,:)        !< optimal shifts identified
 real                             :: TOL_ISO = 1.e-6        !< LBFGSB tolerance for isotropic search
-integer                          :: updateres
-logical                          :: didupdateres
 
 ! data structures for patch-based motion correction
 type(motion_patched)     :: motion_patch
@@ -43,7 +41,6 @@ type(eer_decoder)        :: eer                           !< eer object
 type(image)              :: gain_img                      !< gain reference image
 real,        allocatable :: shifts_toplot(:,:)            !< shifts for plotting & parsing
 real,        allocatable :: frameweights(:)               !< array of frameweights
-complex,     allocatable :: cmat_sum(:,:,:)               !< complex matrice
 
 ! module global variables
 type(string)         :: patched_shift_fname               !< file name for shift plot for patched-based alignment
@@ -87,7 +84,6 @@ contains
         type(image),             intent(inout) :: movie_sum
         class(string), optional, intent(in)    :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
-        complex,     pointer     :: pcmat(:,:,:)
         real     :: dimo4, dose_per_frame
         integer  :: shp(3), iframe, n_eer_frames
         smpd       = ctfvars%smpd ! un-scaled pixel size
@@ -248,14 +244,10 @@ contains
         enddo
         !$omp end parallel do
         ! generate sum for display
-        allocate(cmat_sum(shp(1),shp(2),shp(3)), source=cmplx(0.,0.))
+        call movie_sum%zero_and_flag_ft
         do iframe = 1,nframes
-            call movie_frames_scaled(iframe)%get_cmat_ptr(pcmat)
-            !$omp parallel workshare proc_bind(close)
-            cmat_sum(:,:,:) = cmat_sum(:,:,:) + pcmat(:,:,:)
-            !$omp end parallel workshare
+            call movie_sum%add_workshare(movie_frames_scaled(iframe))
         enddo
-        call movie_sum%set_cmat(cmat_sum)
         call movie_sum%ifft
         if( l_BENCH ) rt_fft_clip = toc(t_fft_clip)
         deallocate(movie_frames)
@@ -370,14 +362,10 @@ contains
         enddo
         !$omp end parallel do
         ! Sum for CTF estimation
-        cmat_sum = cmplx(0.,0.)
+        call movie_sum_ctf%zero_and_flag_ft
         do iframe=1,nframes
-            call movie_frames_scaled(iframe)%get_cmat_ptr(pcmat)
-            !$omp parallel workshare proc_bind(close)
-            cmat_sum(:,:,:) = cmat_sum(:,:,:) + scalar_weight*pcmat(:,:,:)
-            !$omp end parallel workshare
+            call movie_sum_ctf%add_workshare(movie_frames_scaled(iframe), scalar_weight)
         end do
-        call movie_sum_ctf%set_cmat(cmat_sum)
         call movie_sum_ctf%ifft
         if( l_BENCH ) rt_forctf = toc(t_forctf)
         ! dose-weighting
@@ -389,14 +377,10 @@ contains
         ! Micrograph
         if( l_BENCH ) t_mic = tic()
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
-        cmat_sum = cmplx(0.,0.)
+        call movie_sum_corrected%zero_and_flag_ft
         do iframe=1,nframes
-            call movie_frames_scaled(iframe)%get_cmat_ptr(pcmat)
-            !$omp parallel workshare proc_bind(close)
-            cmat_sum(:,:,:) = cmat_sum(:,:,:) + frameweights(iframe)*pcmat(:,:,:)
-            !$omp end parallel workshare
+            call movie_sum_corrected%add_workshare(movie_frames_scaled(iframe))
         end do
-        call movie_sum_corrected%set_cmat(cmat_sum)
         call movie_sum_corrected%ifft
         nullify(pcmat)
         if( l_BENCH ) rt_mic = toc(t_mic)
@@ -798,7 +782,6 @@ contains
         integer :: iframe
         if( allocated(shifts_toplot)      ) deallocate(shifts_toplot)
         if( allocated(frameweights)       ) deallocate(frameweights)
-        if( allocated(cmat_sum)           ) deallocate(cmat_sum)
         if( allocated(pos_outliers)       ) deallocate(pos_outliers)
         call gain_img%kill
         if( allocated(movie_frames_scaled) )then

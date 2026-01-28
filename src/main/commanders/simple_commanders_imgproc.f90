@@ -84,7 +84,7 @@ contains
                 call imgs(iptcl)%new([ldim(1),ldim(2),1],params%smpd)
                 call imgs(iptcl)%read(params%stk, iptcl)
             enddo
-            call memoize_ft_maps(imgs(1)%get_ldim())
+            call memoize_ft_maps(imgs(1)%get_ldim(), imgs(1)%get_smpd())
             print *, 'FINISHED READING...'
             !$omp parallel do private(iptcl,ctfparms,tfun) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, nptcls
@@ -104,7 +104,7 @@ contains
         else
             nptcls = build%spproj%get_nptcls()
             ldim   = build%img%get_ldim()
-            call memoize_ft_maps(build%img%get_ldim())
+            call memoize_ft_maps(build%img%get_ldim(), build%img%get_smpd())
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
             do iptcl = 1, nptcls
                 call read_imgbatch(iptcl, build%img)
