@@ -120,6 +120,13 @@ contains
         cmat=self%cmat
     end subroutine get_cmat_sub
 
+    module function allocate_cmat( self ) result( cmat )
+        class(image), intent(in)  :: self
+        complex,      allocatable :: cmat(:,:,:)
+        if( allocated(cmat) ) deallocate(cmat)
+        allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=cmplx(0.,0.))
+    end function allocate_cmat
+
     module pure function get_cmat_at( self, h,k,l ) result( comp )
         class(image), intent(in) :: self
         integer,      intent(in) :: h,k,l

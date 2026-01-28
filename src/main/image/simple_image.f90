@@ -73,6 +73,7 @@ contains
     generic            :: add => add_1, add_2, add_3, add_4, add_5
     procedure, private :: add_mat2cmat_1, add_mat2cmat_2
     generic            :: add_mat2cmat => add_mat2cmat_1, add_mat2cmat_2
+    procedure          :: add_dble_cmat2mat
     procedure, private :: add_workshare_1, add_workshare_2
     generic            :: add_workshare => add_workshare_1, add_workshare_2
     procedure, private :: subtr_1, subtr_2, subtr_3, subtr_4
@@ -137,6 +138,7 @@ contains
     procedure          :: get_cmat
     procedure          :: get_cmat_ptr
     procedure          :: get_cmat_sub
+    procedure          :: allocate_cmat
     procedure          :: get_cmat_at
     procedure          :: get_fcomp
     procedure          :: get_fcomp2D
@@ -576,6 +578,11 @@ interface
         real,                       intent(in)    :: w
     end subroutine add_mat2cmat_2
 
+    module subroutine add_dble_cmat2mat( self, M )
+        class(image), intent(in)    :: self
+        complex(dp),  intent(inout) :: M(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+    end subroutine add_dble_cmat2mat
+
     module subroutine add_workshare_1( self, self_to_add )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
@@ -669,10 +676,10 @@ interface
         complex,      intent(in)    :: c
     end subroutine mul_5
 
-    module function conjugate( self ) result ( self_out )
-        class(image), intent(in) :: self
+    module subroutine conjugate( self )
+        class(image), intent(inout) :: self
         type(image) :: self_out
-    end function conjugate
+    end subroutine conjugate
 
     !--- index-based per-element ops ---!
 
@@ -973,6 +980,11 @@ interface
         class(image), intent(in)  :: self
         complex,      intent(out) :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
     end subroutine get_cmat_sub
+
+    module function allocate_cmat( self ) result( cmat )
+        class(image), intent(in)  :: self
+        complex,      allocatable :: cmat(:,:,:)
+    end function allocate_cmat
 
     module pure function get_cmat_at( self, h,k,l ) result( comp )
         class(image), intent(in) :: self

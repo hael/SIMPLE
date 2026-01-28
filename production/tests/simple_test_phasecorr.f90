@@ -35,7 +35,6 @@ contains
 
     subroutine run( self )
         class(t_phasecorr), intent(inout) :: self
-        complex, pointer :: cmat_A(:,:,:), cmat_B(:,:,:), cmat_C(:,:,:)
         real,    pointer :: rmat_C(:,:,:)
         integer :: ix, iy, ix_max, iy_max
         real    :: max_val
@@ -43,10 +42,8 @@ contains
         call self%imgA%fft
         call self%imgB%fft
         call self%imgC%fft
-        call self%imgA%get_cmat_ptr(cmat_A)
-        call self%imgB%get_cmat_ptr(cmat_B)
-        call self%imgC%get_cmat_ptr(cmat_C)
-        cmat_C = cmat_A * conjg(cmat_B)
+        call self%imgB%conjg
+        self%imgC = self%imgA * self%imgB
         call self%imgC%ifft
         call self%imgC%vis
         call self%imgC%get_rmat_ptr(rmat_C)

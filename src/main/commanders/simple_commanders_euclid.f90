@@ -107,10 +107,10 @@ contains
         type(builder)            :: build
         type(sigma2_binfile)     :: binfile
         type(string)             :: binfname
-        complex,     pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
+        complex(dp), allocatable :: cmat_thr_sum(:,:,:)
+        complex,     allocatable :: cmat_sum(:,:,:)
         integer,     allocatable :: pinds(:)
         real,        allocatable :: pspec(:), sigma2(:,:)
-        complex(dp), allocatable :: cmat_thr_sum(:,:,:)
         integer :: batchlims(2),kfromto(2)
         integer :: i,iptcl,imatch,nyq,nptcls_part_sel,batchsz_max,nbatch
         logical :: l_scale_update_frac
@@ -136,7 +136,7 @@ contains
         call prepimgbatch(batchsz_max)
         call sum_img%new([params%box,params%box,1],params%smpd)
         call sum_img%zero_and_flag_ft
-        call sum_img%get_cmat_ptr(cmat_sum)
+        cmat_sum = sum_img%allocate_cmat()
         allocate(cmat_thr_sum(size(cmat_sum,dim=1),size(cmat_sum,dim=2),1))
         ! mask memoization
         call build%imgbatch(1)%memoize_mask_coords
@@ -145,7 +145,7 @@ contains
             nbatch    = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
             cmat_thr_sum = dcmplx(0.d0,0.d0)
-            !$omp parallel do default(shared) private(iptcl,imatch,pspec,cmat)&
+            !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
             do imatch = 1,nbatch
                 iptcl = pinds(batchlims(1)+imatch-1)
@@ -157,13 +157,13 @@ contains
                     sigma2(:,iptcl) = pspec / 2.0
                 endif
                 ! thread average
-                call build%imgbatch(imatch)%get_cmat_ptr(cmat)
-                cmat_thr_sum(:,:,:) = cmat_thr_sum(:,:,:) + cmplx(cmat(:,:,:),kind=dp)
+                call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:))
             end do
             !$omp end parallel do
             ! global average
             cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:),kind=sp)
         end do
+        call sum_img%set_cmat(cmat_sum)
         call sum_img%write(string('sum_img_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char())
         ! write to disk
         kfromto  = [1, nyq]
