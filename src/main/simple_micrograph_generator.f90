@@ -290,7 +290,6 @@ contains
         type(image),           intent(inout) :: micrograph_dw, micrograph_nodw
         type(image), optional, intent(inout) :: background
         real,        pointer     :: rmat(:,:,:), rmatin(:,:,:), rmatout(:,:,:)
-        complex,     pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
         type(image), allocatable :: local_frames(:)
         type(image)              :: backgr
         integer                  :: ldim(3), iframe, n
@@ -402,24 +401,16 @@ contains
                 !$omp end parallel do
                 call micrograph_nodw%new(ldim, self%smpd_out)
                 call micrograph_nodw%zero_and_flag_ft
-                call micrograph_nodw%get_cmat_ptr(cmat_sum)
                 do iframe = self%fromtof(1),self%fromtof(2)
-                    call self%frames(iframe)%get_cmat_ptr(cmat)
-                    !$omp parallel workshare proc_bind(close)
-                    cmat_sum(:,:,:) = cmat_sum(:,:,:) + self%weights(iframe) * cmat(:,:,:)
-                    !$omp end parallel workshare
+                    call micrograph_nodw%add_workshare(self%frames(iframe), self%weights(iframe))
                 end do
                 call micrograph_nodw%ifft
                 if( self%l_doseweighing )then
                     call apply_dose_weighing(self%nframes, self%frames, self%fromtof, self%total_dose, self%kv)
                     call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%zero_and_flag_ft
-                    call micrograph_dw%get_cmat_ptr(cmat_sum)
                     do iframe = self%fromtof(1),self%fromtof(2)
-                        call self%frames(iframe)%get_cmat_ptr(cmat)
-                        !$omp parallel workshare proc_bind(close)
-                        cmat_sum(:,:,:) = cmat_sum(:,:,:) + self%weights(iframe) * cmat(:,:,:)
-                        !$omp end parallel workshare
+                        call micrograph_dw%add_workshare(self%frames(iframe), self%weights(iframe))
                     end do
                     call micrograph_dw%ifft
                 else

@@ -226,7 +226,29 @@ contains
         endif
     end subroutine add_5
 
-    module subroutine add_workshare( self, self_to_add )
+    module subroutine add_mat2cmat_1( self, M, w )
+        class(image),                  intent(inout) :: self
+        complex(kind=c_float_complex), intent(in)    :: M(:,:)
+        real,                          intent(in)    :: w
+        if( self%ft )then
+            self%cmat(:,:,1) = self%cmat(:,:,1) + real(w,kind=c_float) * M
+        else
+            THROW_HARD('Image must be in the reciprocal domain! add_mat2cmat_1')
+        endif
+    end subroutine add_mat2cmat_1
+
+    module subroutine add_mat2cmat_2( self, M, w )
+        class(image),               intent(inout) :: self
+        real(kind=c_float_complex), intent(in)    :: M(:,:)
+        real,                       intent(in)    :: w
+        if( self%ft )then
+            self%cmat(:,:,1) = self%cmat(:,:,1) + real(w,kind=c_float) * cmplx(M, 0., kind=c_float_complex)
+        else
+            THROW_HARD('Image must be in the reciprocal domain! add_mat2cmat_2')
+        endif
+    end subroutine add_mat2cmat_2
+
+    module subroutine add_workshare_1( self, self_to_add )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
         if( self%ft )then
@@ -238,7 +260,22 @@ contains
             self%rmat = self%rmat + self_to_add%rmat
             !$omp end parallel workshare
         endif
-    end subroutine add_workshare
+    end subroutine add_workshare_1
+
+    module subroutine add_workshare_2( self, self_to_add, w )
+        class(image),   intent(inout) :: self
+        class(image),   intent(in)    :: self_to_add
+        real,           intent(in)    :: w
+        if( self%ft )then
+            !$omp parallel workshare proc_bind(close)
+            self%cmat = self%cmat + w * self_to_add%cmat
+            !$omp end parallel workshare
+        else
+            !$omp parallel workshare proc_bind(close)
+            self%rmat = self%rmat + w * self_to_add%rmat
+            !$omp end parallel workshare
+        endif
+    end subroutine add_workshare_2
 
     !===============================
     ! subtr_* family
@@ -575,28 +612,16 @@ contains
     end subroutine sq_rt
 
     !>  adds complex matrices from images & arrays. Specialized routine for simple_classaverager
-    module subroutine add_cmats_to_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
-        class(image), intent(in)    :: self1, self2,self3,self4
-        class(image), intent(inout) :: self2set1, self2set2
-        integer,      intent(in)    :: lims(3,2)
-        real,         intent(inout) :: expcmat3(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,         intent(inout) :: expcmat4(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        integer :: h, k, phys(3)
-        !$omp parallel default(shared) private(h,k,phys) proc_bind(close)
-        !$omp workshare
-        self1%cmat = self1%cmat + self2set1%cmat
-        self2%cmat = self2%cmat + self2set2%cmat
-        !$omp end workshare
-        !$omp do collapse(2) schedule(static)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                phys = self1%comp_addr_phys(h,k,0)
-                self3%cmat(phys(1),phys(2),phys(3)) = self3%cmat(phys(1),phys(2),phys(3)) + cmplx(expcmat3(h,k),0.)
-                self4%cmat(phys(1),phys(2),phys(3)) = self4%cmat(phys(1),phys(2),phys(3)) + cmplx(expcmat4(h,k),0.)
-            enddo
-        enddo
-        !$omp end do nowait
-        !$omp end parallel
-    end subroutine add_cmats_to_cmats
+    module subroutine add_cmats_to_cmat( self1 , self2 , self3, self4, cmat_sums )
+        class(image),                  intent(in)    :: self1, self2,self3,self4
+        complex(kind=c_float_complex), intent(inout) :: cmat_sums(self1%array_shape(1),&
+                                            &self1%array_shape(2),self1%array_shape(3),4)
+        !$omp parallel workshare proc_bind(close)
+        cmat_sums(:,:,:,1) = cmat_sums(:,:,:,1) + self1%cmat(:,:,:)
+        cmat_sums(:,:,:,2) = cmat_sums(:,:,:,2) + self2%cmat(:,:,:)
+        cmat_sums(:,:,:,3) = cmat_sums(:,:,:,3) + self3%cmat(:,:,:)
+        cmat_sums(:,:,:,4) = cmat_sums(:,:,:,4) + self4%cmat(:,:,:)
+        !$omp end parallel workshare
+    end subroutine add_cmats_to_cmat
 
 end submodule simple_image_arith

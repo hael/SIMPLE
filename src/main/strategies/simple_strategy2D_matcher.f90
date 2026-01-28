@@ -517,7 +517,7 @@ contains
         ! get instrument function
         img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
         ! memoize CTF stuff
-        call memoize_ft_maps(ptcl_match_imgs(1)%get_ldim())
+        call memoize_ft_maps(ptcl_match_imgs(1)%get_ldim(), ptcl_match_imgs(1)%get_smpd())
         ! rt_prep1    = 0.
         ! rt_ctf      = 0.
         ! rt_prep2    = 0.

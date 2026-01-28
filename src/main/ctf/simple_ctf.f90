@@ -36,6 +36,7 @@ type ctf
     generic            :: eval => eval_1, eval_2, eval_3, eval_4
     procedure, private :: eval_sign
     procedure, private :: eval_df
+    procedure          :: eval_and_apply
     procedure          :: nextrema
     procedure          :: spafreqsqatnthzero
     procedure, private :: kV2wl
@@ -197,6 +198,44 @@ contains
         real,       intent(in) :: ang  !< angle at which to compute the defocus (radians)
         eval_df = 0.5 * (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
     end function eval_df
+
+    ! apply CTF to image, CTF values are also returned
+    module subroutine eval_and_apply( self, imode, dfx, dfy, angast, dims_out, tvals, cmat )
+        use simple_memoize_ft_maps
+        use simple_math_ctf, only: ft_map_ctf_kernel
+        class(ctf),               intent(inout) :: self         !< instance
+        integer,                  intent(in)    :: imode        !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
+        real,                     intent(in)    :: dfx, dfy     !< defocus x/y-axis
+        real,                     intent(in)    :: angast       !< angle of astigmatism
+        integer,                  intent(in)    :: dims_out(2)  !< output dimensions
+        real,                     intent(out)   :: tvals(1:dims_out(1), 1:dims_out(2))  ! CTF values
+        complex(c_float_complex), intent(out)   :: cmat(:,:)    !< FT(image) x CTF
+        real    :: half_wl2_cs, sum_df, diff_df,tval,t
+        integer :: h,k, physh,physk
+        logical :: l_flip
+        if( imode == CTFFLAG_NO )then
+            tvals = 1.0
+            return
+        endif
+        ! initialize
+        call self%init(dfx, dfy, angast)
+        half_wl2_cs = 0.5 * self%wl * self%wl * self%cs
+        l_flip      = imode == CTFFLAG_FLIP
+        sum_df      = self%dfx + self%dfy
+        diff_df     = self%dfx - self%dfy
+        do h = ft_map_lims(1,1), ft_map_lims(1,2)
+            do k = ft_map_lims(2,1), ft_map_lims(2,2)
+                ! calculate CTF
+                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, self%angast, self%amp_contr_const, self%wl, half_wl2_cs)
+                t    = merge(abs(tval), tval, l_flip)
+                ! store tval and multiply image with tval
+                physh               = ft_map_phys_addrh(h,k)
+                physk               = ft_map_phys_addrk(h,k)
+                tvals(physh, physk) = t
+                cmat(physh, physk)  = t * cmat(physh,physk)
+            end do
+        end do
+    end subroutine eval_and_apply
 
     !>  \brief  Edited Eq 11 of Rohou & Grigorieff (2015)
     integer function nextrema( self, spaFreqSq, ang, phshift )

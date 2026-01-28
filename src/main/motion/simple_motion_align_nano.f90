@@ -176,14 +176,11 @@ contains
         enddo
     end subroutine align_dcorr
 
-    ! shifts frames, generate reference and calculates correlations
+    ! shifts frames, generate reference
     subroutine shift_frames_gen_ref( self )
         class(motion_align_nano), intent(inout) :: self
-        complex, allocatable :: cmat_sum(:,:,:)
-        complex,     pointer :: pcmat(:,:,:)
         integer :: iframe
-        cmat_sum = self%reference%get_cmat()
-        cmat_sum = cmplx(0.,0.)
+        call self%reference%zero_and_flag_ft
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,self%nframes
             call self%frames_sh(iframe)%set_cmat(self%frames(iframe))
@@ -191,12 +188,8 @@ contains
         enddo
         !$omp end parallel do
         do iframe=1,self%nframes
-            call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
-            !$omp parallel workshare
-            cmat_sum = cmat_sum + pcmat * self%frameweights(iframe)
-            !$omp end parallel workshare
+            call self%reference%add_workshare(self%frames_sh(iframe), self%frameweights(iframe))
         enddo
-        call self%reference%set_cmat(cmat_sum)
     end subroutine shift_frames_gen_ref
 
     subroutine calc_shifts( self, iframe )
