@@ -35,6 +35,7 @@ type(commander_reextract_distr)             :: xreextract_distr
 
 ! CLUSTER2D WORKFLOWS
 type(commander_abinitio2D)                  :: xabinitio2D
+type(commander_cleanup2D)                   :: xcleanup2D 
 type(commander_cluster2D_autoscale)         :: xcluster2D
 type(commander_cluster_cavgs)               :: xcluster_cavgs
 type(commander_cluster_cavgs_selection)     :: xcluster_cavgs_selection
@@ -235,6 +236,8 @@ select case(trim(prg))
         else
             call xabinitio2D%execute(cline)
         endif
+    case( 'cleanup2D')
+        call xcleanup2D%execute(cline)
     case( 'cluster2D' )
         call xcluster2D%execute(cline)
     case( 'cluster2D_subsets' )
@@ -466,7 +469,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('f0cb2fa6')
+    call simple_print_git_version('251ba63b')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

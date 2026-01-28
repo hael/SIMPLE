@@ -11,6 +11,11 @@ type, extends(commander_base) :: commander_rank_cavgs
         procedure :: execute      => exec_rank_cavgs
 end type commander_rank_cavgs
 
+type, extends(commander_base) :: commander_cleanup2D
+    contains
+        procedure :: execute      => exec_cleanup2D
+end type commander_cleanup2D
+
 type, extends(commander_base) :: commander_cluster_cavgs
     contains
         procedure :: execute      => exec_cluster_cavgs
@@ -138,6 +143,45 @@ contains
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
 
+    subroutine exec_cleanup2D( self, cline )
+        use simple_commanders_abinitio2D,   only: commander_abinitio2D
+        use simple_commanders_project_core, only: commander_extract_subproj
+        class(commander_cleanup2D), intent(inout)  :: self
+        class(cmdline),              intent(inout) :: cline
+        type(commander_abinitio2D)      :: xabinitio2D
+        type(commander_cluster_cavgs)   :: xcluster_cavgs
+        type(commander_extract_subproj) :: xextract_subproj
+        type(sp_project), target  :: spproj
+        type(parameters)     :: params
+        integer, allocatable    :: inds(:)
+        logical, allocatable    :: inds_msk(:)
+        real,    allocatable    :: joint_scores(:)
+        integer :: icls, ncls
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls2D')
+        call cline%set('polar', 'yes')
+        call cline%set('ncls', 300)
+        call spproj%read_segment(params%oritype, params%projfile)
+        call xabinitio2D%execute_safe(cline)
+        call cline%set('prune', 'no')
+        call xcluster_cavgs%execute_safe(cline)
+        ncls = spproj%os_cls2D%get_noris()
+        allocate(joint_scores(ncls))
+        allocate(inds(ncls))
+        do icls = 1, ncls 
+            joint_scores(icls) = spproj%os_cls2D%get(icls, 'jointscore')
+            inds(ncls)         = spproj%os_cls2D%get_int(icls, 'cluster')
+        end do 
+        allocate(inds_msk(ncls), source = .false.)
+        where(joint_scores >= 0.4) inds_msk = .true. 
+        do icls = 1, size(inds_msk) 
+            if(inds_msk(icls)) continue
+            call cline%set('clustind', inds(icls))
+            call xextract_subproj%execute_safe(cline)
+        end do 
+        deallocate(joint_scores, inds, inds_msk)
+        call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****', print_simple = .false.)
+    end subroutine exec_cleanup2D
+
     subroutine exec_cluster_cavgs( self, cline )
         use simple_clustering_utils, only: cluster_dmat
         class(commander_cluster_cavgs), intent(inout) :: self
@@ -226,12 +270,13 @@ contains
         do iclust = 1, nclust
             do icls = 1, ncls_sel 
                 if( labels(icls) == iclust )then
-                    call spproj%os_cls2D%set(clsinds(icls),'cluster',iclust)                          ! 2D class field
-                    call spproj%os_cls3D%set(clsinds(icls),'cluster',iclust)                          ! 3D class field
-                    call spproj%os_cls2D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad) ! 2D class accepted field
-                    call spproj%os_cls3D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad) ! 3D class accepted field
-                    call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 2D particle field
-                    call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust) ! 3D particle field
+                    call spproj%os_cls2D%set(clsinds(icls),'cluster', iclust)                            ! 2D class field
+                    call spproj%os_cls3D%set(clsinds(icls),'cluster', iclust)                            ! 3D class field
+                    call spproj%os_cls2D%set(clsinds(icls),'jointscore', clust_info_arr(icls)%jointscore)! 2D joint score field  
+                    call spproj%os_cls2D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad)    ! 2D class accepted field
+                    call spproj%os_cls3D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad)    ! 3D class accepted field
+                    call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust)    ! 2D particle field
+                    call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust)    ! 3D particle field
                 endif
             enddo
         enddo
