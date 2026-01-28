@@ -335,17 +335,18 @@ contains
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
         shvec(1)    = -build_glob%spproj_field%get(iptcl, 'x') * crop_factor
         shvec(2)    = -build_glob%spproj_field%get(iptcl, 'y') * crop_factor
-        ! fused noise normalization, FFT, clip & shift
-        call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
+        
         ! Phase-flipping
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
-                ! nothing to do
+                ! fused noise normalization, FFT, clip & shift
+                call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
             case(CTFFLAG_YES)
                 ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
                 tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call img_out%apply_ctf(tfun, 'flip', ctfparms)
+                ! fused noise normalization, FFT, clip, shift & CTF flip
+                call img%norm_noise_fft_clip_shift_ctf_flip(build_glob%lmsk, img_out, shvec, tfun, ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
