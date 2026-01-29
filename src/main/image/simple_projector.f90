@@ -112,7 +112,7 @@ contains
             do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
                 do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
                     logi = [cych(h),cyck(k),cycm(m)]
-                    phys = self%comp_addr_phys(logi)
+                    phys = self%comp_addr_phys(logi(1),logi(2),logi(3))
                     self%cmat_exp(h,k,m) = factor * self%get_fcomp(logi, phys)
                 enddo
             enddo

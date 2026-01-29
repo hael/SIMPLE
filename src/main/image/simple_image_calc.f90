@@ -810,7 +810,7 @@ contains
         class(image), intent(in) :: self
         integer,      intent(in) :: logi(3) !<  Logical address
         integer                  :: phys(3) !<  Physical address
-        phys = self%fit%comp_addr_phys(logi)
+        phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
     end function comp_addr_phys1
 
     module pure function comp_addr_phys2(self,h,k,m) result(phys)

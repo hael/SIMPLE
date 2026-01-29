@@ -129,7 +129,7 @@ contains
                 do h=lims(1,1),lims(1,2)
                     if(h*h+k*k+l*l > lim_sq) cycle
                     logi = [h,k,l]
-                    phys = rovol_pad%comp_addr_phys(logi)
+                    phys = rovol_pad%comp_addr_phys(logi(1),logi(2),logi(3))
                     loc  = matmul(real(logi), rmat)
                     if( l_shvec_present )then
                         call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp(loc) * rovol_pad%oshift(loc, shvec))
