@@ -248,6 +248,7 @@ contains
     subroutine test_polarops
         use simple_cmdline,    only: cmdline
         use simple_parameters, only: parameters
+        complex,   allocatable :: pft(:,:)
         integer,     parameter :: N=128
         integer,     parameter :: NIMGS=200
         integer,     parameter :: NCLS=5
@@ -291,7 +292,8 @@ contains
         call b%init_params_and_build_strategy2D_tbox(cline, p)
         call pftc%new(NCLS, [1,NIMGS], p%kfromto)
         pinds = (/(i,i=1,NIMGS)/)
-        call b%img_crop_polarizer%init_polarizer(pftc, p%alpha)
+        call b%img_crop%memoize4polarize(pftc%get_pdim(), p%alpha)
+        pft = pftc%allocate_pft()
         do i = 1,NIMGS
             shift = 10.*[ran3(), ran3()] - 5.
             ! ang   = 360. * ran3()
@@ -314,7 +316,8 @@ contains
             call b%spproj_field%set(i,'class', icls)
             call b%spproj_field%set(i,'eo',eo)
             shifts(:,i) = -shift
-            call b%img_crop_polarizer%polarize(pftc, img, i, isptcl=.true., iseven=eo==0, mask=b%l_resmsk)
+            call img%polarize(pft, mask=b%l_resmsk)
+            call pftc%set_ptcl_pft(i, pft)
         enddo
         call polar_cavger_new(pftc,.false.)
         call polar_cavger_update_sums(NIMGS, pinds, b%spproj, pftc, shifts)
@@ -343,6 +346,7 @@ contains
         call polar_cavger_refs2cartesian(pftc, cavgs, 'merged')
         call write_imgarr(cavgs, string('cavgs2_merged.mrc'))
         call polar_cavger_kill
+        if( allocated(pft) ) deallocate(pft)
     end subroutine test_polarops
 
 end module simple_polarops

@@ -23,6 +23,14 @@ end type image_ptr
 integer           :: mem_msk_box = 0
 real, allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
 
+! polarization memoization
+real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
+integer, allocatable :: mem_polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
+integer, allocatable :: mem_polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
+integer              :: mem_polwdim   = 0         !< dimension of K-B window
+integer              :: mem_polwlen   = 0         !< dimension squared of K-B window
+integer              :: mem_poldim(3) = 0         !< Polar-FT matrix dimensions
+
 type :: image
     private
     logical                                :: ft=.false.           !< Fourier transformed or not
@@ -339,6 +347,9 @@ contains
     procedure          :: zero_edgeavg
     procedure          :: zero_env_background
     procedure          :: zero_neg
+    ! POLARIZATION, file: simple_image_polar.f90
+    procedure          :: memoize4polarize
+    procedure          :: polarize
     ! GEOMETRICAL, file: simple_image_geom.f90
     ! windowing
     procedure          :: window
@@ -2108,6 +2119,21 @@ interface
     module subroutine zero_neg( self )
         class(image), intent(inout) :: self
     end subroutine zero_neg
+
+    ! ===== polarization procedure interfaces =====
+
+    module subroutine memoize4polarize( self, pdim, alpha, instrfun_img )
+        class(image),           intent(in)    :: self         !< instance
+        integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
+        real,                   intent(in)    :: alpha        !< oversampling factor
+        class(image), optional, intent(inout) :: instrfun_img !< instrument function
+    end subroutine memoize4polarize
+
+    module subroutine polarize( self, pft, mask )
+        class(image),      intent(in)    :: self     !< image instance to polarize
+        complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft to be filled
+        logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
+    end subroutine polarize
 
     ! ===== geometric procedure interfaces =====
 

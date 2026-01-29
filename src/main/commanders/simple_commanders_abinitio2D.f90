@@ -5,7 +5,7 @@ use simple_commanders_cavgs
 use simple_commanders_cluster2D
 implicit none
 
-public :: commander_abinitio2D, autosample2D
+public :: commander_abinitio2D
 private
 #include "simple_local_flags.inc"
 
@@ -705,6 +705,8 @@ contains
         end subroutine mskdiam2lplimits_here
 
     end subroutine exec_abinitio2D
+
+    ! pruvate helper
 
     subroutine autosample2D( cline, nptcls, ncls, max_pop, max_nptcls, popfac )
         class(cmdline), intent(in)  :: cline

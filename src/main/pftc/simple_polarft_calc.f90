@@ -143,6 +143,7 @@ type :: polarft_calc
     procedure          :: get_pinds
     procedure          :: get_npix
     procedure          :: is_with_ctf
+    procedure          :: allocate_pft
     procedure          :: get_work_pft_ptr   ! violation of encapsulation for performance in polarops
     procedure          :: get_work_rpft_ptr  ! violation of encapsulation for performance in polarops
     procedure          :: get_work_rpft8_ptr ! violation of encapsulation for performance in polarops
@@ -376,6 +377,11 @@ interface
     module pure logical function is_with_ctf( self )
         class(polarft_calc), intent(in) :: self
     end function is_with_ctf
+
+    module function allocate_pft( self ) result( pft )
+        class(polarft_calc),  intent(in)  :: self
+        complex(sp), allocatable :: pft(:,:)
+    end function allocate_pft
 
     module subroutine get_work_pft_ptr( self, ptr )
         class(polarft_calc),  intent(in)  :: self

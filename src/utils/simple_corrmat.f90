@@ -5,7 +5,6 @@ use simple_defs
 use simple_image,            only: image
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_polarft_calc,     only: polarft_calc
-use simple_polarizer,        only: polarizer
 implicit none
 
 public :: calc_cartesian_corrmat, calc_inpl_invariant_cc_nomirr
@@ -138,9 +137,9 @@ contains
         integer,      parameter     :: MAXITS_SH = 60
         real,         allocatable   :: inpl_corrs(:)
         type(pftc_shsrch_grad)      :: grad_shsrch_obj(nthr_glob)
-        type(polarizer)             :: polartransform
         type(polarft_calc)          :: pftc
         real,         allocatable   :: ccmat(:,:)
+        complex,      allocatable   :: pft(:,:)
         integer :: ldim(3), box, kfromto(2), ithr, i, j, k, loc, nrots, irot, nimgs
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
         nimgs      = size(imgs)
@@ -151,8 +150,7 @@ contains
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! initialize
         call pftc%new(nimgs, [1,nimgs], kfromto)
-        call polartransform%new([box,box,1], smpd)
-        call polartransform%init_polarizer(pftc, KBALPHA)
+        call imgs(1)%memoize4polarize(pftc%get_pdim(), KBALPHA)
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs
@@ -162,10 +160,12 @@ contains
             call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
-        !$omp parallel do default(shared)  private(i) proc_bind(close) schedule(static)
+        pft = pftc%allocate_pft()
+        !$omp parallel do default(shared)  private(i,pft) proc_bind(close) schedule(static)
         do i = 1, nimgs
             call imgs(i)%fft()
-            call polartransform%polarize(pftc, imgs(i), i, isptcl=.false., iseven=.true.)
+            call imgs(i)%polarize(pft)
+            call pftc%set_ref_pft(i, pft, iseven=.true.)
             call pftc%cp_even_ref2ptcl(i, i)
             call imgs(i)%ifft
         end do
@@ -202,7 +202,7 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call pftc%kill
-        call polartransform%kill
+        if( allocated(pft) ) deallocate(pft)
     end function calc_inpl_invariant_cc_nomirr
 
 end module simple_corrmat

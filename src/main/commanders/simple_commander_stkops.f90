@@ -230,13 +230,15 @@ contains
         ! POLAR REPRESENTATION
         ! ------------------------------------------------------------------
         subroutine handle_polar_representation()
+            complex, allocatable :: pft(:,:)
             call pftc%new(params%nptcls, [1,params%nptcls], params%kfromto)
-            call build%img_crop_polarizer%init_polarizer(pftc, params%alpha)
+            call build%img_crop%memoize4polarize(pftc%get_pdim(), params%alpha)
+            pft = pftc%allocate_pft()
             do i = 1, params%nptcls
-                call build%img%read(params%stk, i)
-                call build%img%fft
-                call build%img_crop_polarizer%polarize( &
-                    pftc, build%img, i, isptcl=.false., iseven=.true., mask=build%l_resmsk)
+                call build%img_crop%read(params%stk, i)
+                call build%img_crop%fft
+                call build%img_crop%polarize(pft, mask=build%l_resmsk)
+                call pftc%set_ref_pft(i, pft, iseven=.true.)
             end do
             call pftc%get_refs_ptr( ptre, ptro )
             call img%new([pftc%get_pftsz(), params%kfromto(2), 1], 1.0)
@@ -250,6 +252,7 @@ contains
                 call img%write(params%outstk, i)
             end do
             call img%kill
+            if( allocated(pft) ) deallocate(pft)
         end subroutine handle_polar_representation
 
         ! ------------------------------------------------------------------

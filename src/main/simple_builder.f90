@@ -7,7 +7,6 @@ use simple_image,            only: image
 use simple_sp_project,       only: sp_project
 use simple_reconstructor_eo, only: reconstructor_eo
 use simple_projector,        only: projector
-use simple_polarizer,        only: polarizer
 use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
 implicit none
@@ -23,7 +22,8 @@ type :: builder
     type(oris)                          :: eulspace               !< discrete projection direction search space
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
-    type(polarizer)                     :: img_crop_polarizer     !< polarizer for cropped image
+    type(image)                         :: img_crop               !< for cropped image
+    type(image)                         :: img_instr              !< for instrument function for gridding correction
     type(image)                         :: img_pad                !< -"-
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
@@ -286,7 +286,7 @@ contains
         endif
         if( params%box_crop > 0 )then
             ! build image objects
-            call self%img_crop_polarizer%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
+            call self%img_crop%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
             if( ddo3d )then
                 call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
@@ -295,10 +295,10 @@ contains
             call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
             call mskimg%kill
             ! build arrays
-            lfny = self%img_crop_polarizer%get_lfny(1)
+            lfny = self%img_crop%get_lfny(1)
             allocate( self%fsc(params%nstates,lfny), source = 0.0 )
             ! mask memoization
-            call self%img_crop_polarizer%memoize_mask_coords
+            call self%img_crop%memoize_mask_coords
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
@@ -320,8 +320,7 @@ contains
             call self%spproj%kill
             call self%eulspace%kill
             call self%img%kill
-            call self%img_crop_polarizer%kill_polarizer
-            call self%img_crop_polarizer%kill
+            call self%img_crop%kill
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill

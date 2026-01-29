@@ -123,6 +123,12 @@ contains
         is_with_ctf = self%with_ctf
     end function is_with_ctf
 
+    module function allocate_pft( self ) result( pft )
+        class(polarft_calc),  intent(in)  :: self
+        complex(sp), allocatable :: pft(:,:)
+        allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)), source=CMPLX_ZERO)
+    end function allocate_pft
+
     module subroutine get_work_pft_ptr( self, ptr )
         class(polarft_calc),  intent(in)  :: self
         complex(sp), pointer, intent(out) :: ptr(:,:)

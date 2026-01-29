@@ -839,8 +839,8 @@ contains
 
     !> Volumetric 3d reconstruction from summed projection directions
     subroutine calc_projdir3Drec( cline, nptcls2update, pinds )
-        use simple_fplane,             only: fplane
-        use simple_gridding,           only: gen_instrfun_img
+        use simple_fplane,   only: fplane
+        use simple_gridding, only: gen_instrfun_img
         use simple_timer
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
@@ -1177,7 +1177,7 @@ contains
             ! PREPARATION OF pftc AND REFERENCES
             nrefs = params_glob%nspace * params_glob%nstates
             call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-            call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
+            call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
             ! Read polar references
             call polar_cavger_new(pftc, .true.)
             call polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -1257,7 +1257,7 @@ contains
         ! pftc
         nrefs = params_glob%nspace * params_glob%nstates
         call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-        call build_glob%img_crop_polarizer%init_polarizer(pftc, params_glob%alpha)
+        call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             if( str_has_substr(params_glob%refine, 'prob') )then
@@ -1290,25 +1290,26 @@ contains
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds_here(nptcls_here)
         type(image),         intent(inout) :: tmp_imgs(params_glob%nthr)
-        type(image) :: img_instr
+        complex, allocatable :: pft(:,:)
         integer     :: iptcl_batch, iptcl, ithr
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here])
         ! mask memoization for prepimg4align
         call tmp_imgs(1)%memoize_mask_coords
-        ! get instrument function
-        img_instr = build_glob%img_crop_polarizer%get_instrfun_img()
         ! memoize CTF stuff
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+        ! allocate a pft
+        pft = pftc%allocate_pft()
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), img_instr, tmp_imgs(ithr))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), build_glob%img_instr, tmp_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_crop_polarizer%polarize(pftc, tmp_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call tmp_imgs(ithr)%polarize(pft, mask=build_glob%l_resmsk)
+            call pftc%set_ptcl_pft(iptcl, pft)
             ! e/o flags
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
@@ -1317,7 +1318,6 @@ contains
         ! Memoize particles FFT parameters
         call pftc%memoize_ptcls
         ! destruct
-        call img_instr%kill
         call forget_ft_maps
     end subroutine build_batch_particles
 

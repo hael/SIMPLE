@@ -12,7 +12,7 @@ type(ctf)          :: tfun
 call img%new(LDIM, SMPD)
 call img_spec%new(LDIM, SMPD)
 tfun = ctf(SMPD, KV, CS, AC)
-call memoize_ft_maps(LDIM,SMPD)
+call memoize_ft_maps(LDIM, SMPD)
 call img%ctf2img(tfun, DFX, DFY, ANGAST)
 call img%ft2img('real', img_spec)
 call img_spec%write(string('ctfimg.mrc'))

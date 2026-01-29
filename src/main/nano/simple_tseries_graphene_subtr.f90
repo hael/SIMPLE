@@ -4,7 +4,6 @@ module simple_tseries_graphene_subtr
 use simple_core_module_api
 use simple_parameters,   only: parameters, params_glob
 use simple_cmdline,      only: cmdline
-use simple_polarizer,    only: polarizer
 use simple_image,        only: image
 use simple_atoms,        only: atoms
 use simple_polarft_calc, only: polarft_calc
@@ -20,8 +19,7 @@ real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.) ! obscuring half-width 2
 real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.) ! obscuring half-width 3
 
 type(polarft_calc) :: pftc
-type(polarizer)    :: pspec_img
-type(image)        :: filter_img
+type(image)        :: pspec_img, filter_img
 type(parameters)   :: params
 real               :: angstep
 integer            :: nrots
@@ -39,6 +37,7 @@ contains
         type(cmdline)        :: cline
         real,    allocatable :: x(:)
         logical, allocatable :: resmask(:)
+        complex, allocatable :: pft(:,:)
         real    :: l, cen, offset,y
         integer :: phys2d(3),phys3d(3),lims(3,2),h,k,i,j,nx,ny,cnt,natoms,imgcen,sh,nyq
         call kill_graphene_subtr
@@ -129,19 +128,23 @@ contains
         angstep = abs(pftc%get_rot(2)-pftc%get_rot(1))
         nrots   = pftc%get_nrots()
         ! reference polar coordinates
-        call pspec_img%init_polarizer(pftc, KBALPHA)
+        call  pspec_img%memoize4polarize(pftc%get_pdim(), KBALPHA)
         call pspec_img%fft
-        call pspec_img%polarize(pftc,1, .false., .true.)
+        pft = pftc%allocate_pft()
+        call pspec_img%polarize(pft)
+        call pftc%set_ref_pft(1, pft, iseven=.true.)
         call pftc%memoize_refs
         ! cleanup
         call sheet%kill
         call cline%kill
         call img%kill
+        if( allocated(pft) ) deallocate(pft)
     end subroutine init_graphene_subtr
 
     subroutine calc_peaks( img_in, ang1, ang2 )
         class(image), intent(inout) :: img_in
         real,         intent(out)   :: ang1, ang2
+        complex, allocatable :: pft(:,:)
         real    :: corrs(nrots), ang, corr, rot, diffang
         logical :: corrs_mask(nrots)
         integer :: i,j,il,ir
@@ -151,7 +154,9 @@ contains
         call pspec_img%mul(filter_img)
         ! polar coordinates
         call pspec_img%fft()
-        call pspec_img%polarize(pftc,1,.true.,.true.)
+        pft = pftc%allocate_pft()
+        call pspec_img%polarize(pft)
+        call pftc%set_ref_pft(1, pft, iseven=.true.)
         ! rotational correlations
         call pftc%memoize_ptcls
         call pftc%gen_objfun_vals(1,1,[0.,0.],corrs)
@@ -199,6 +204,7 @@ contains
             ang1 = ang2
             ang2 = ang
         endif
+        if( allocated(pft) ) deallocate(pft)
         contains
 
             subroutine range_convention( ang )
