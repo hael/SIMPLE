@@ -702,7 +702,7 @@ contains
                 if( sh > sz ) cycle
                 phys     = ctfsqsum%comp_addr_phys(h,k)
                 cnt(sh)  = cnt(sh) + 1
-                rsum(sh) = rsum(sh) + real(ctfsqsum%get_fcomp2D(phys(1),phys(2)),dp)
+                rsum(sh) = rsum(sh) + real(ctfsqsum%get_fcomp2D(h,h),dp)
             enddo
         enddo
         !$omp end parallel do
@@ -724,14 +724,14 @@ contains
                 sh = nint(scale*sqrt(real(h*h + k*k)))
                 if( (sh < reslim_ind) .or. (sh > sz) ) cycle
                 phys  = ctfsqsum%comp_addr_phys(h, k)
-                fcomp = ctfsqsum%get_fcomp2D(phys(1),phys(2))
+                fcomp = ctfsqsum%get_fcomp2D(h,k)
                 if( tau2(sh) > TINY)then
                     invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
                 else
                     invtau2 = min(1.e3, 1.e3 * real(fcomp))
                 endif
                 fcomp = fcomp + cmplx(invtau2,0.)
-                call ctfsqsum%set_cmat_at( phys(1),phys(2), 1, fcomp)
+                call ctfsqsum%set_cmat_at(phys(1),phys(2), 1, fcomp)
             enddo
         enddo
         !$omp end parallel do
