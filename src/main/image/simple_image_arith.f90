@@ -178,7 +178,7 @@ contains
         if( present(phys_in) )then
             phys = phys_in
         else
-            phys = self%fit%comp_addr_phys(logi)
+            phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         endif
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
@@ -205,7 +205,7 @@ contains
         integer :: phys(3)
         complex :: comp_here
         if( .not. self%ft ) THROW_HARD('cannot add complex number to real image; add_2')
-        phys = self%fit%comp_addr_phys(logi)
+        phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
@@ -312,7 +312,7 @@ contains
         if( present(phys_in) )then
             phys = phys_in
         else
-            phys = self%fit%comp_addr_phys(logi)
+            phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         endif
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
@@ -331,7 +331,7 @@ contains
         integer :: phys(3)
         complex :: comp_here
         if( .not. self%ft ) THROW_HARD('cannot subtract complex number from real image; subtr_3')
-        phys = self%fit%comp_addr_phys(logi)
+        phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
@@ -372,7 +372,7 @@ contains
         real,         intent(in)    :: k(:,:,:)
         integer :: phys(3)
         if( self%ft )then
-            phys = self%fit%comp_addr_phys(logi)
+            phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
             if( abs(k(phys(1),phys(2),phys(3))) > 1e-6 )then
                 self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k(phys(1),phys(2),phys(3))
             else
@@ -393,7 +393,7 @@ contains
             if( present(phys_in) )then
                 phys = phys_in
             else
-                phys = self%fit%comp_addr_phys(logi)
+                phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
             endif
             if( abs(k) > 1e-6 )then
                 self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k
@@ -441,7 +441,7 @@ contains
             if( present(phys_in) )then
                 phys = phys_in
             else
-                phys = self%fit%comp_addr_phys(logi)
+                phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
             endif
             if( present(phys_out) ) phys_out = phys
             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*rc
@@ -511,7 +511,7 @@ contains
         integer,      intent(in)    :: logi(3)
         complex,      intent(in)    :: c
         integer :: phys(3)
-        phys = self%fit%comp_addr_phys(logi)
+        phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * c
     end subroutine mul_5
 
