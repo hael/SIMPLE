@@ -702,7 +702,7 @@ contains
                 if( sh > sz ) cycle
                 phys     = ctfsqsum%comp_addr_phys(h,k)
                 cnt(sh)  = cnt(sh) + 1
-                rsum(sh) = rsum(sh) + real(ctfsqsum%get_fcomp2D(h,h),dp)
+                rsum(sh) = rsum(sh) + real(ctfsqsum%get_fcomp2D(h,k),dp)
             enddo
         enddo
         !$omp end parallel do
