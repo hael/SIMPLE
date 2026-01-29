@@ -512,9 +512,6 @@ contains
         call ptcl_match_imgs(1)%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
         ! mask memoization for prepimg4align
         call ptcl_match_imgs(1)%memoize_mask_coords
-
-        
-
         ! memoize FT mapping stuff
         call memoize_ft_maps(ptcl_match_imgs(1)%get_ldim(), ptcl_match_imgs(1)%get_smpd())
         ! allocate pft
