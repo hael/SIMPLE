@@ -303,7 +303,7 @@ contains
     end function comp_addr_phys3
 
     !> \brief Convert physical address to logical address. Complex image.
-    ! this is erroneous when h<0, completely unused
+    ! this is erroneous when h<0, cused in the unit test but only there
     pure function comp_addr_logi(self,i,j,k) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: i,j,k   !<  Physical address
