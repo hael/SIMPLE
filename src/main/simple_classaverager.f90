@@ -677,7 +677,7 @@ contains
         real    :: cc, scale, pad_factor, invtau2, fudge
         integer :: flims(3,2), phys(2), h, k, sh, sz, reslim_ind
         fudge = params_glob%tau
-        flims = ctfsqsum%loop_lims(3)
+        flims = ctfsqsum%loop_lims(2)
         sz    = size(frc)
         allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
         rsum = 0.d0
@@ -695,12 +695,11 @@ contains
         enddo
         ! Noise
         !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,phys,sh) proc_bind(close) reduction(+:cnt,rsum)
+        !$omp private(h,k,sh) proc_bind(close) reduction(+:cnt,rsum)
         do h = flims(1,1),flims(1,2)
             do k = flims(2,1),flims(2,2)
                 sh = nint(scale * sqrt(real(h*h + k*k)))
                 if( sh > sz ) cycle
-                phys     = ctfsqsum%comp_addr_phys(h,k)
                 cnt(sh)  = cnt(sh) + 1
                 rsum(sh) = rsum(sh) + real(ctfsqsum%get_fcomp2D(h,k),dp)
             enddo
@@ -724,7 +723,7 @@ contains
                 sh = nint(scale*sqrt(real(h*h + k*k)))
                 if( (sh < reslim_ind) .or. (sh > sz) ) cycle
                 phys  = ctfsqsum%comp_addr_phys(h, k)
-                fcomp = ctfsqsum%get_fcomp2D(h,k)
+                fcomp = ctfsqsum%get_cmat_at(phys(1),phys(2), 1)
                 if( tau2(sh) > TINY)then
                     invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
                 else
