@@ -64,6 +64,7 @@ contains
         integer,       intent(in),  optional :: n_clusters
         integer :: i, j, k, x, y, nn, na, nb, nc, clen
         real    :: dmin, dnew, val
+        logical :: l_msk(self%N)
         if (.not. self%exists) THROW_HARD("hclust not initialized")
         do while (count(self%active == 1) > 1)
             !-----------------------------------------------------------
@@ -83,23 +84,10 @@ contains
                 x    = self%chain(clen)
                 nn   = -1
                 dmin = huge(dmin)
-                !$omp parallel default(shared) private(j,val)
-                !$omp do reduction(min:dmin)
-                do j = 1, self%N
-                    if (self%active(j) == 1 .and. j /= x) then
-                        val = self%dmat(x,j)
-                        if (val < dmin) dmin = val
-                    endif
-                end do
-                !$omp end do
-                !$omp do
-                do j = 1, self%N
-                    if (self%active(j) == 1 .and. j /= x) then
-                        if (self%dmat(x,j) == dmin) nn = j
-                    endif
-                end do
-                !$omp end do
-                !$omp end parallel
+                l_msk = (self%active == 1)
+                l_msk(x) = .false. 
+                l_msk = l_msk(self%N:1:-1)
+                nn = self%N - minloc(self%dmat(x,self%N:1:-1), dim = 1, mask = l_msk) + 1
                 if (clen > 1) then
                     y = self%chain(clen-1)
                     if (nn == y) exit
