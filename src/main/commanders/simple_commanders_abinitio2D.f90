@@ -66,6 +66,7 @@ contains
         if( .not. cline%defined('icm')        ) call cline%set('icm',        'yes')
         if( .not. cline%defined('gauref')     ) call cline%set('gauref',     'yes')
         if( .not. cline%defined('polar')      ) call cline%set('polar',      'no')
+        if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',     'no')
         if( .not. cline%defined('lambda')     ) call cline%set('lambda',     ICM_LAMBDA)
         if( .not. cline%defined('extr_lim')   ) call cline%set('extr_lim',   EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs') ) call cline%set('rank_cavgs', 'yes')
