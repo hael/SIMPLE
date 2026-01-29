@@ -29,7 +29,7 @@ contains
         center = ldim/2+1
         dim    = ldim(1)
         if( present(padded_dim) ) dim = padded_dim
-        l_norm = .false.
+        l_norm = .true.
         if( present(norm) ) l_norm = norm
         select case(trim(interpfun))
         case('kb')
