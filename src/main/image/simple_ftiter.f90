@@ -39,8 +39,8 @@ type :: ftiter
     ! LOOPING LIMITS
     procedure :: loop_lims
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
-    procedure, private :: comp_addr_phys1, comp_addr_phys2
-    generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
+    procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
+    generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure          :: comp_addr_logi
     procedure, private :: comp_addr_phys_orig
     ! TESTS
@@ -233,7 +233,6 @@ contains
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
 
     !>  \brief  Convert logical address to physical address. Complex image.
-    !! Do NOT remove. Original routine for reference
     function comp_addr_phys_orig(self,logi) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: logi(3) !<  Logical address
@@ -260,7 +259,22 @@ contains
         endif
     end function comp_addr_phys_orig
 
-    pure function comp_addr_phys1(self, h, k, m) result(phys)
+    pure function comp_addr_phys1(self, logi) result(phys)
+        class(ftiter), intent(in) :: self
+        integer,       intent(in) :: logi(3)   !< Logical address
+        integer                   :: phys(3)   !< Physical address
+        if (logi(1) .ge. 0) then
+            phys(1) = logi(1) + 1
+            phys(2) = logi(2) + 1 + MERGE(self%ldim(2),0, logi(2) < 0)
+            phys(3) = logi(3) + 1 + MERGE(self%ldim(3),0, logi(3) < 0)
+        else
+            phys(1) = -logi(1) + 1
+            phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
+            phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
+        endif
+    end function comp_addr_phys1
+
+    pure function comp_addr_phys2(self, h, k, m) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: h, k, m
         integer                   :: phys(3)
@@ -273,13 +287,12 @@ contains
             phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
             phys(3) = -m + 1 + MERGE(self%ldim(3),0, -m < 0)
         endif
-    end function comp_addr_phys1
+    end function comp_addr_phys2
 
-    pure function comp_addr_phys2(self,h,k) result(phys)
+    pure function comp_addr_phys3(self,h,k) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: h,k   !<  Logical address
         integer :: phys(2)                 !<  Physical address
-        integer :: k_off
         if (h .ge. 0) then
             phys(1) = h + 1
             phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
@@ -287,10 +300,10 @@ contains
             phys(1) = -h + 1
             phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
         endif
-    end function comp_addr_phys2
+    end function comp_addr_phys3
 
     !> \brief Convert physical address to logical address. Complex image.
-    ! this is erroneous when h<0, used in unit test
+    ! this is erroneous when h<0, completely unused
     pure function comp_addr_logi(self,i,j,k) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: i,j,k   !<  Physical address
@@ -338,7 +351,7 @@ contains
     subroutine test_addr(self)
         class(ftiter), intent(in) :: self
         integer ::  i, j, k, logi(3), phys(3)
-        write(logfhandle,'(a)') '**info(test_addr): testing phys->logi->phys address conversion'
+        write(logfhandle,'(a)') '**info(test_addr): testing phys->logi->phys address conversion (scalar)'
         do k=1,self%ldim(3)
             do j=1,self%ldim(2) ! this could be: do j=1,self%cphys_ubounds(2)
                 do i=1,self%cphys_ubounds(1)
@@ -350,7 +363,19 @@ contains
                 enddo
             enddo
         enddo
-        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy'
+        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy)'
+        do k=self%clogi_lbounds(3),self%clogi_ubounds(3)
+            do j=self%clogi_lbounds(2),self%clogi_ubounds(2)
+                do i=self%clogi_lbounds(1),self%clogi_ubounds(1)
+                    phys = self%comp_addr_phys(i,j,k)
+                    logi = self%comp_addr_logi(phys(1),phys(2),phys(3))
+                    if (any([i,j,k] .ne. logi)) then
+                        THROW_HARD('failed complex logi->phys->logi address conversion test')
+                    endif
+                enddo
+            enddo
+        enddo
+        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy, scalar)'
         do k=self%clogi_lbounds(3),self%clogi_ubounds(3)
             do j=self%clogi_lbounds(2),self%clogi_ubounds(2)
                 do i=self%clogi_lbounds(1),self%clogi_ubounds(1)
