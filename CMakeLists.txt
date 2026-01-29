@@ -30,6 +30,7 @@ option(USE_COARRAYS "Use Fortran coarrays for parallelization (experimental)" OF
 option(USE_MPI      "Use MPI for parallelization" OFF)
 
 option(USE_LIBTIFF  "Use libtiff library" ON)
+option(USE_ARCHOPT  "Use architecture optimization" ON)
 
 option(BUILD_TESTS  "Build test executables" ON)
 option(BUILD_DOCS   "Build documentation" OFF)
@@ -166,6 +167,7 @@ message(STATUS "OpenACC:              ${USE_OPENACC}")
 message(STATUS "Coarrays:             ${USE_COARRAYS}")
 message(STATUS "MPI:                  ${USE_MPI}")
 message(STATUS "LIBTIFF:              ${USE_LIBTIFF}")
+message(STATUS "ARCHOPT:              ${USE_ARCHOPT}")
 message(STATUS "Build tests:          ${BUILD_TESTS}")
 message(STATUS "========================================")
 

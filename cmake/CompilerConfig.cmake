@@ -43,19 +43,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ------------------------------------------------------------------------------
 # Platform-specific tuning
 # ------------------------------------------------------------------------------
-if(APPLE)
-    execute_process(
-        COMMAND sysctl -n machdep.cpu.brand_string
-        OUTPUT_VARIABLE APPLE_CPU
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    if(APPLE_CPU MATCHES "Apple M")
-        set(ARCH_FLAG "-mtune=generic")
+if( USE_ARCHOPT )
+    if(APPLE)
+        execute_process(
+            COMMAND sysctl -n machdep.cpu.brand_string
+            OUTPUT_VARIABLE APPLE_CPU
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(APPLE_CPU MATCHES "Apple M")
+            set(ARCH_FLAG "-mtune=generic")
+        else()
+            set(ARCH_FLAG "-mtune=native")
+        endif()
     else()
-        set(ARCH_FLAG "-mtune=native")
+        set(ARCH_FLAG "-march=native")
     endif()
 else()
-    set(ARCH_FLAG "-march=native")
+    set(ARCH_FLAG "")
 endif()
 
 # ------------------------------------------------------------------------------
