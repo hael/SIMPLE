@@ -10,7 +10,8 @@ type(parameters)        :: p
 type(polarft_calc)      :: pftc
 type(cmdline)           :: cline
 type(builder)           :: b
-real, allocatable       :: cc(:), cc_fft(:)
+real,    allocatable    :: cc(:), cc_fft(:)
+complex, allocatable    :: pft(:,:)
 integer                 :: iptcl, jptcl
 integer(timer_int_kind) :: tfft
 if( command_argument_count() < 3 )then
@@ -28,13 +29,16 @@ p%kfromto(1) = 2
 p%kfromto(2) = 100
 call b%build_general_tbox(p, cline)
 call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
-call b%img_crop_polarizer%init_polarizer(pftc, p%alpha)
+call b%img_crop%memoize4polarize(pftc%get_pdim(), p%alpha)
+pft = pftc%allocate_pft()
 do iptcl=1,p%nptcls
-    call b%img_crop_polarizer%read(p%stk, iptcl)
-    call b%img_crop_polarizer%fft()
+    call b%img_crop%read(p%stk, iptcl)
+    call b%img_crop%fft()
     ! transfer to polar coordinates
-    call b%img_crop_polarizer%polarize(pftc, iptcl, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-    call b%img_crop_polarizer%polarize(pftc, iptcl, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+    call b%img_crop%polarize(pft, mask=b%l_resmsk)
+    call pftc%set_ref_pft(iptcl, pft, iseven=.true.)
+    call b%img_crop%polarize(pft, mask=b%l_resmsk)
+    call pftc%set_ptcl_pft(iptcl, pft)
 end do
 allocate(cc(pftc%get_nrots()), cc_fft(pftc%get_nrots()))
 

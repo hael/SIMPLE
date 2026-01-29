@@ -58,7 +58,7 @@ use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_stream_cluster2D_subsets, only: stream_cluster2D_subsets
 
 ! cavgs commanders, for operations on class averages
-use simple_commanders_cavgs, only: commander_cleanup2D, commander_cluster_cavgs, commander_cluster_cavgs_selection,&
+use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_cluster_cavgs_selection,&
 commander_select_clusters, commander_match_cavgs, commander_map_cavgs_selection
 
 ! imgproc commanders, standard image processing routines

@@ -22,7 +22,7 @@ real,     allocatable :: ft_map_astigang(:,:)        ! Angle of astigmatism
 contains
 
     subroutine memoize_ft_maps( ldim, smpd )
-        integer, intent(in) :: ldim(2)
+        integer, intent(in) :: ldim(:)
         real,    intent(in) :: smpd
         real         :: spafreqh, spafreqk, spafreqsqk
         integer      :: phys(2), h,k
