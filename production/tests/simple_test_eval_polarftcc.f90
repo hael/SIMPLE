@@ -1,11 +1,8 @@
 program simple_test_eval_polarftcc
-use simple_core_module_api
-use simple_cmdline,             only: cmdline
-use simple_polarft_calc,        only: polarft_calc
-use simple_builder,             only: builder
-use simple_parameters,          only: parameters
-use simple_pftc_shsrch_grad,    only: pftc_shsrch_grad
+use simple_pftc_srch_api
 use simple_strategy2D3D_common, only: set_bp_range
+use simple_builder,             only: builder
+use simple_pftc_shsrch_grad,    only: pftc_shsrch_grad
 implicit none
 type(parameters)         :: p
 type(polarft_calc)       :: pftc

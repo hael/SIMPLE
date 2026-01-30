@@ -1,11 +1,10 @@
 !@descr: 2D strategy for time-restrained search, used in SINGLE
 module simple_strategy2D_tseries
-use simple_core_module_api
+use simple_pftc_srch_api
 use simple_strategy2D_alloc
+use simple_builder,          only: build_glob
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
-use simple_builder,          only: build_glob
-use simple_polarft_calc, only: pftc_glob
 implicit none
 
 public :: strategy2D_tseries

@@ -1,9 +1,9 @@
 !@descr: the abstract data type for sigma2 used when objfun=euclid
 module simple_euclid_sigma2
 use simple_core_module_api
-use simple_parameters,       only: params_glob
-use simple_polarft_calc,     only: polarft_calc, pftc_glob
-use simple_sigma2_binfile,   only: sigma2_binfile
+use simple_polarft_calc,   only: polarft_calc, pftc_glob
+use simple_parameters,     only: params_glob
+use simple_sigma2_binfile, only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
 
@@ -200,11 +200,11 @@ contains
 
     !>  Calculates and updates sigma2 within search resolution range
     subroutine calc_sigma2( self, pftc, iptcl, o, refkind )
-        class(euclid_sigma2),    intent(inout) :: self
-        class(polarft_calc), intent(inout) :: pftc
-        integer,                 intent(in)    :: iptcl
-        class(ori),              intent(in)    :: o
-        character(len=*),        intent(in)    :: refkind ! 'proj' or 'class'
+        class(euclid_sigma2), intent(inout) :: self
+        class(polarft_calc),  intent(inout) :: pftc
+        integer,              intent(in)    :: iptcl
+        class(ori),           intent(in)    :: o
+        character(len=*),     intent(in)    :: refkind ! 'proj' or 'class'
         integer :: iref, irot
         real    :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
         real    :: shvec(2)

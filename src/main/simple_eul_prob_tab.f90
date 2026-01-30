@@ -1,8 +1,8 @@
 !@descr: the core probability table routines used for probabilistic 3D search
 module simple_eul_prob_tab
-use simple_core_module_api
-use simple_parameters, only: params_glob
-use simple_builder,    only: build_glob
+use simple_pftc_srch_api
+use simple_builder,          only: build_glob
+use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 implicit none
 
 public :: eul_prob_tab
@@ -181,8 +181,6 @@ contains
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self, pftc )
-        use simple_polarft_calc,     only: polarft_calc
-        use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab), intent(inout) :: self
         class(polarft_calc), intent(inout) :: pftc
         integer, allocatable   :: locn(:,:)
@@ -345,8 +343,6 @@ contains
     end subroutine fill_tab
 
     subroutine fill_tab_state_only( self, pftc )
-        use simple_polarft_calc,     only: polarft_calc
-        use simple_pftc_shsrch_grad, only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_calc), intent(inout) :: pftc
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< origin shift search object, L-BFGS with gradient

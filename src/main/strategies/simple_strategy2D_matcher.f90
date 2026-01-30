@@ -1,12 +1,11 @@
 !@descr: high-level search routines for the cluster2D and abinitio2D applications
 module simple_strategy2D_matcher
-use simple_core_module_api
+use simple_pftc_srch_api
+use simple_binoris_io
+use simple_classaverager
+use simple_progress
+use simple_strategy2D_alloc
 use simple_builder,                only: build_glob
-use simple_cmdline,                only: cmdline
-use simple_euclid_sigma2,          only: euclid_sigma2
-use simple_image,                  only: image
-use simple_parameters,             only: params_glob
-use simple_polarft_calc,           only: polarft_calc
 use simple_qsys_funs,              only: qsys_job_finished
 use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
@@ -19,11 +18,6 @@ use simple_strategy2D_snhc,        only: strategy2D_snhc
 use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
 use simple_strategy2D_srch,        only: strategy2D_spec
 use simple_strategy2D_tseries,     only: strategy2D_tseries
-use simple_binoris_io
-use simple_classaverager
-use simple_polarops
-use simple_progress
-use simple_strategy2D_alloc
 implicit none
 
 public :: cluster2D_exec
@@ -185,8 +179,8 @@ contains
         endif
         if( l_polar )then
             ! for restoration
-            if( which_iter == 1 ) call polar_cavger_new(pftc, l_clin)
-            call polar_cavger_zero_pft_refs
+            if( which_iter == 1 ) call pftc%polar_cavger_new(l_clin)
+            call pftc%polar_cavger_zero_pft_refs
         endif
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftc initialization
@@ -313,8 +307,8 @@ contains
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
             ! restore polar cavgs
             if( l_polar )then
-                call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build_glob%spproj, pftc, incr_shifts(:,1:batchsz))
+                call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
+                    &build_glob%spproj, incr_shifts(:,1:batchsz))
             endif
         enddo ! Batch loop
 
@@ -360,7 +354,7 @@ contains
         if( l_distr_exec_glob )then
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
                 if( l_polar )then
-                    call polar_cavger_readwrite_partial_sums('write')
+                    call pftc%polar_cavger_readwrite_partial_sums('write')
                 else
                     call cavger_transf_oridat( build_glob%spproj )
                     call cavger_assemble_sums( l_partial_sums )
@@ -368,7 +362,7 @@ contains
                 endif
             endif
             call cavger_kill
-            call polar_cavger_kill
+            call pftc%polar_cavger_kill
         else
             ! check convergence
             converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
@@ -389,14 +383,14 @@ contains
                     ! polar restoration
                     if( l_clin )then
                         clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
-                        call polar_cavger_merge_eos_and_norm(build_glob%eulspace, clinw)
+                        call pftc%polar_cavger_merge_eos_and_norm(build_glob%eulspace, clinw)
                     else
-                        call polar_cavger_merge_eos_and_norm2D
+                        call pftc%polar_cavger_merge_eos_and_norm2D
                     endif
-                    call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
-                    call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                    call polar_cavger_gen2Dclassdoc(build_glob%spproj)
-                    call polar_cavger_kill
+                    call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+                    call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+                    call pftc%polar_cavger_gen2Dclassdoc(build_glob%spproj)
+                    call pftc%polar_cavger_kill
                 else
                     ! cartesian restoration
                     call cavger_transf_oridat( build_glob%spproj )
@@ -497,7 +491,6 @@ contains
     !>  \brief  fills batch particle images for polar alignment
     subroutine build_batch_particles2D( pftc, nptcls_here, pinds, l_ctf_here )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align!, prepimg4align_bench
-        use simple_memoize_ft_maps,     only: memoize_ft_maps, forget_ft_maps
         class(polarft_calc), intent(inout) :: pftc
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds(nptcls_here)
@@ -700,15 +693,15 @@ contains
             endif
         endif
         ! Read polar references
-        call polar_cavger_new(pftc, trim(params_glob%ref_type)=='comlin_hybrid')
-        call polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
+        call pftc%polar_cavger_new(trim(params_glob%ref_type)=='comlin_hybrid')
+        call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! Centering-related objects
         do_center = (params_glob%center .eq. 'yes') .and. has_been_searched&
              &.and. (which_iter > 2) .and. (.not.params_glob%l_update_frac)
         if( do_center )then
             allocate(tmp_imgs(params_glob%ncls))
-            call polar_cavger_refs2cartesian(pftc, tmp_imgs, 'merged')
+            call pftc%polar_cavger_refs2cartesian(tmp_imgs, 'merged')
             call tmp_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
             ! mask memoization
             call tmp_imgs(1)%memoize_mask_coords
@@ -736,20 +729,20 @@ contains
                 xyz      = 0.
                 if( l_center ) call calc_2Dref_offset(tmp_imgs(icls), icls, centype, xyz)
                 ! Prep for alignment
-                call polar_prep2Dref(icls, l_gaufilt)
+                call pftc%polar_prep2Dref(icls, l_gaufilt)
                 ! transfer to pftc
                 if( params_glob%l_lpset )then
                     ! merged class average in both even and odd positions
-                    call polar_cavger_set_ref_pftc(icls, 'merged', pftc)
+                    call pftc%polar_cavger_set_ref_pft(icls, 'merged')
                     call pftc%cp_even2odd_ref(icls)
                 else
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! transfer e/o refs to pftc
-                        call polar_cavger_set_ref_pftc(icls, 'even', pftc)
-                        call polar_cavger_set_ref_pftc(icls, 'odd',  pftc)
+                        call pftc%polar_cavger_set_ref_pft(icls, 'even')
+                        call pftc%polar_cavger_set_ref_pft(icls, 'odd')
                     else
                         ! merged class average in both even and odd positions
-                        call polar_cavger_set_ref_pftc(icls, 'merged', pftc)
+                        call pftc%polar_cavger_set_ref_pft(icls, 'merged')
                         call pftc%cp_even2odd_ref(icls)
                     endif
                 endif

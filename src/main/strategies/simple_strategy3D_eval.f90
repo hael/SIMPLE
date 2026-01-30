@@ -2,10 +2,10 @@
 module simple_strategy3D_eval
 use simple_core_module_api
 use simple_strategy3D_utils
-use simple_strategy3D_alloc  ! singleton
-use simple_strategy3D,       only: strategy3D
-use simple_strategy3D_srch,  only: strategy3D_spec
-use simple_builder,          only: build_glob
+use simple_strategy3D_alloc
+use simple_builder,         only: build_glob
+use simple_strategy3D,      only: strategy3D
+use simple_strategy3D_srch, only: strategy3D_spec
 implicit none
 
 public :: strategy3D_eval

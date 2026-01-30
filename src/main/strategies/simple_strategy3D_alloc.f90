@@ -1,9 +1,7 @@
 !@descr: array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
 module simple_strategy3D_alloc
-use simple_core_module_api
-use simple_parameters,   only: params_glob
-use simple_builder,      only: build_glob
-use simple_polarft_calc, only: pftc_glob
+use simple_pftc_srch_api
+use simple_builder, only: build_glob
 implicit none
 
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread

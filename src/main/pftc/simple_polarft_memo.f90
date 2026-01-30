@@ -1,6 +1,5 @@
 !@descr: polarft class submodule for memoization for performance
 submodule (simple_polarft_calc) simple_polarft_memo
-use simple_core_module_api
 #include "simple_local_flags.inc"
 implicit none
 

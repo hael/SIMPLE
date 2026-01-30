@@ -1,11 +1,11 @@
 !@descr: utility routines for 3D strategies
 module simple_strategy3D_utils
 use simple_core_module_api
-use simple_strategy3D_alloc  ! singleton class s3D
-use simple_strategy3D_srch,  only: strategy3D_srch
-use simple_builder,          only: build_glob
-use simple_parameters,       only: params_glob
-use simple_polarft_calc,     only: pftc_glob
+use simple_strategy3D_alloc
+use simple_builder,         only: build_glob
+use simple_parameters,      only: params_glob
+use simple_polarft_calc,    only: pftc_glob
+use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 
 public :: extract_peak_ori, extract_peak_oris, assign_ori

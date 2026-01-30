@@ -1,8 +1,8 @@
 !@descr: for producing class averages
 module simple_commanders_mkcavgs
 use simple_commander_module_api
+use simple_pftc_srch_api
 use simple_classaverager
-use simple_starproject, only: starproject
 implicit none
 #include "simple_local_flags.inc"
 
@@ -101,7 +101,6 @@ contains
     end subroutine exec_make_cavgs_distr
 
     subroutine exec_make_cavgs( self, cline )
-        use simple_polarops
         class(commander_make_cavgs), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
@@ -215,8 +214,6 @@ contains
     end subroutine exec_make_cavgs
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_polarft_calc, only: polarft_calc
-        use simple_polarops
         class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
@@ -248,30 +245,30 @@ contains
         endif
         if( params%l_polar )then
             fname = 'cavgs_even_part'//int2str_pad(1,params%numlen)//BIN_EXT
-            call polar_cavger_dims_from_header(fname, pftsz, kfromto, ncls)
+            call polaft_dims_from_file_header(fname, pftsz, kfromto, ncls)
             call fname%kill
             call pftc%new(1, [1,1], kfromto)
             if( trim(params%ref_type)=='comlin_hybrid' )then
-                call polar_cavger_new(pftc, .true., nrefs=params%ncls)
-                call polar_cavger_calc_pops(build%spproj)
+                call pftc%polar_cavger_new(.true., nrefs=params%ncls)
+                call pftc%polar_cavger_calc_pops(build%spproj)
                 call build%pgrpsyms%new('c1')
                 params%nsym    = build%pgrpsyms%get_nsym()
                 params%eullims = build%pgrpsyms%get_eullims()
                 call build%eulspace%new(params%ncls, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(build%eulspace)
                 clw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
-                call polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, clin_anneal=clw)
+                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, clin_anneal=clw)
             else
-                call polar_cavger_new(pftc, .false., nrefs=params%ncls)
-                call polar_cavger_calc_pops(build%spproj)
-                call polar_cavger_assemble_sums_from_parts
+                call pftc%polar_cavger_new(.false., nrefs=params%ncls)
+                call pftc%polar_cavger_calc_pops(build%spproj)
+                call pftc%polar_cavger_assemble_sums_from_parts
             endif
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
-            call polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
-            call polar_cavger_writeall(string(POLAR_REFS_FBODY))
+            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
+            call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+            call pftc%polar_cavger_gen2Dclassdoc(build_glob%spproj)
             call pftc%kill
-            call polar_cavger_gen2Dclassdoc(build_glob%spproj)
-            call polar_cavger_kill
+            call pftc%polar_cavger_kill
         else
             call cavger_new
             call cavger_transf_oridat( build%spproj )

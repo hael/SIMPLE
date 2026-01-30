@@ -1,9 +1,7 @@
 !@descr: the core probability table routines used for probabilistic 2D search
 module simple_eul_prob_tab2D
-use simple_core_module_api
-use simple_parameters,       only: params_glob
+use simple_pftc_srch_api
 use simple_builder,          only: build_glob
-use simple_polarft_calc,     only: pftc_glob
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_eul_prob_tab,     only: eulprob_dist_switch, eulprob_corr_switch
 use simple_decay_funs,       only: extremal_decay2D

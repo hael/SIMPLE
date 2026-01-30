@@ -1,12 +1,10 @@
 !@descr: 2D strategy for exhaustive projection matching with greedy in-plane search
 module simple_strategy2D_greedy
-use simple_core_module_api
+use simple_pftc_srch_api
 use simple_strategy2D_alloc
+use simple_builder,          only: build_glob
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
-use simple_builder,          only: build_glob
-use simple_polarft_calc,     only: pftc_glob
-use simple_parameters,       only: params_glob
 implicit none
 
 public :: strategy2D_greedy

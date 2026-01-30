@@ -2,10 +2,10 @@
 module simple_fplane
 use simple_core_module_api
 use simple_memoize_ft_maps
-use simple_image,              only: image
-use simple_parameters,         only: params_glob
-use simple_euclid_sigma2,      only: eucl_sigma2_glob
-use simple_ctf,                only: ctf
+use simple_image,         only: image
+use simple_parameters,    only: params_glob
+use simple_euclid_sigma2, only: eucl_sigma2_glob
+use simple_ctf,           only: ctf
 implicit none
 
 public :: fplane

@@ -1,10 +1,8 @@
 !@descr: array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
 module simple_strategy2D_alloc
-use simple_core_module_api
-use simple_builder,          only: build_glob
-use simple_parameters,       only: params_glob
-use simple_polarft_calc,     only: pftc_glob
-use simple_eul_prob_tab2D,   only: eul_prob_tab2D, neighfrac2nsmpl
+use simple_pftc_srch_api
+use simple_builder,        only: build_glob
+use simple_eul_prob_tab2D, only: eul_prob_tab2D, neighfrac2nsmpl
 implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
@@ -99,7 +97,6 @@ contains
 
     !>  prep batch related parameters (particles level)
     subroutine prep_strategy2D_batch( pftc, which_iter, nptcls, pinds )
-        use simple_polarft_calc, only: polarft_calc
         type(polarft_calc), intent(in) :: pftc
         integer,            intent(in) :: which_iter
         integer,            intent(in) :: nptcls        ! # of particles in batch

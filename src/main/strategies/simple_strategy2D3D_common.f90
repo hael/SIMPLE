@@ -1,13 +1,16 @@
 !@descr: common routines used by the high-level strategy 2D and 3D matchers
 module simple_strategy2D3D_common
-use simple_core_module_api
-use simple_memoize_ft_maps,   only: memoize_ft_maps, forget_ft_maps
-use simple_builder,           only: build_glob
-use simple_cmdline,           only: cmdline
-use simple_discrete_stack_io, only: dstack_io
-use simple_image,             only: image
-use simple_parameters,        only: params_glob
-use simple_stack_io,          only: stack_io
+use simple_pftc_srch_api
+use simple_timer
+use simple_builder,            only: build_glob
+use simple_butterworth,        only: butterworth_filter
+use simple_discrete_stack_io,  only: dstack_io
+use simple_fplane,             only: fplane
+use simple_gridding,           only: gen_instrfun_img
+use simple_nanoparticle_utils, only: phasecorr_one_atom
+use simple_opt_filter,         only: estimate_lplim
+use simple_projector,          only: projector
+use simple_strategy2D_utils,   only: calc_cavg_offset
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
@@ -324,7 +327,6 @@ contains
     !>  \brief  prepares one particle image for alignment
     !          serial routine
     subroutine prepimg4align( iptcl, img, img_instr, img_out )
-        use simple_ctf, only: ctf
         integer,      intent(in)    :: iptcl
         class(image), intent(inout) :: img
         class(image), intent(in)    :: img_instr
@@ -355,7 +357,6 @@ contains
     end subroutine prepimg4align
 
     subroutine prepimg4align_bench( iptcl, img, img_instr, img_out, rt_prep1, rt_ctf, rt_prep2, rt_prep )
-        use simple_ctf, only: ctf
         integer,              intent(in)    :: iptcl
         class(image),         intent(inout) :: img
         class(image),         intent(in)    :: img_instr
@@ -397,7 +398,6 @@ contains
     !>  \brief  Calculates the centering offset of the input cavg
     !>          cavg & particles centering is not performed
     subroutine calc_2Dref_offset( img, icls, centype, xyz )
-        use simple_strategy2D_utils, only: calc_cavg_offset
         class(image), intent(inout) :: img
         integer,      intent(in)    :: icls
         integer,      intent(in)    :: centype
@@ -427,7 +427,6 @@ contains
 
     !>  \brief  Prepares one cluster centre image for alignment
     subroutine prep2Dref( img, icls, xyz, img_instr )
-        use simple_strategy2D_utils, only: calc_cavg_offset
         class(image), intent(inout) :: img
         integer,      intent(in)    :: icls
         real,         intent(in)    :: xyz(3)
@@ -531,7 +530,6 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine estimate_lp_refvols( lpfromto )
-        use simple_opt_filter, only: estimate_lplim
         real, optional, intent(in)    :: lpfromto(2)
         type(string)       :: vol_even, vol_odd, tmp
         real, allocatable  :: res(:)
@@ -695,9 +693,6 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
-        use simple_projector,          only: projector
-        use simple_butterworth,        only: butterworth_filter
-        use simple_nanoparticle_utils, only: phasecorr_one_atom
         class(cmdline), intent(in) :: cline
         integer,        intent(in) :: s
         logical,        intent(in) :: do_center
@@ -727,7 +722,6 @@ contains
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( fpl, se, o )
-        use simple_fplane,      only   : fplane
         class(fplane),   intent(in)    :: fpl
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
@@ -746,7 +740,6 @@ contains
 
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds )
-        use simple_fplane, only: fplane
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
@@ -839,9 +832,6 @@ contains
 
     !> Volumetric 3d reconstruction from summed projection directions
     subroutine calc_projdir3Drec( cline, nptcls2update, pinds )
-        use simple_fplane,   only: fplane
-        use simple_gridding, only: gen_instrfun_img
-        use simple_timer
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
@@ -1037,7 +1027,6 @@ contains
     end subroutine calc_projdir3Drec
 
     subroutine norm_struct_facts( cline )
-        use simple_image,  only: image
         class(cmdline),    intent(inout) :: cline
         type(string) :: recname, volname, volname_prev, volname_prev_even
         type(string) :: volname_prev_odd, str_state, str_iter, fsc_txt_file, eonames(2)
@@ -1156,9 +1145,6 @@ contains
     end subroutine norm_struct_facts
 
     subroutine prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter, do_polar )
-        use simple_polarops
-        use simple_polarft_calc,  only: polarft_calc
-        use simple_euclid_sigma2, only: euclid_sigma2
         class(polarft_calc),      intent(inout) :: pftc
         class(cmdline),           intent(in)    :: cline !< command line
         class(euclid_sigma2),     intent(inout) :: eucl_sigma
@@ -1179,8 +1165,8 @@ contains
             call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
             call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
             ! Read polar references
-            call polar_cavger_new(pftc, .true.)
-            call polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
+            call pftc%polar_cavger_new(.true.)
+            call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
             call build_glob%clsfrcs%read(string(FRCS_FILE))
             ! prepare filter
             l_filtrefs = .false.
@@ -1194,16 +1180,16 @@ contains
             !$omp parallel do default(shared) private(iproj)&
             !$omp schedule(static) proc_bind(close)
             do iproj = 1,params_glob%nspace
-                if( l_filtrefs ) call polar_filterrefs(iproj, gaufilter)
+                if( l_filtrefs ) call pftc%polar_filterrefs(iproj, gaufilter)
                 ! transfer to pftc
                 if( params_glob%l_lpset )then
                     ! put the merged class average in both even and odd positions
-                    call polar_cavger_set_ref_pftc(iproj, 'merged', pftc)
+                    call pftc%polar_cavger_set_ref_pft(iproj, 'merged')
                     call pftc%cp_even2odd_ref(iproj)
                 else
                     ! transfer e/o refs to pftc
-                    call polar_cavger_set_ref_pftc(iproj, 'even', pftc)
-                    call polar_cavger_set_ref_pftc(iproj, 'odd',  pftc)
+                    call pftc%polar_cavger_set_ref_pft(iproj, 'even')
+                    call pftc%polar_cavger_set_ref_pft(iproj, 'odd')
                 endif
             end do
             !$omp end parallel do
@@ -1211,7 +1197,7 @@ contains
             if( (trim(params_glob%center)=='yes') .and. (trim(params_glob%center_type)=='params') .and.&
                 &(params_glob%pgrp(:1)=='c1') .and. (.not.params_glob%l_update_frac) .and.&
                 &(params_glob%nstates==1) .and. params_glob%l_doshift )then
-                call center_3Dpolar_refs(pftc, build_glob%spproj_field, build_glob%eulspace)
+                call pftc%center_3Dpolar_refs(build_glob%spproj_field, build_glob%eulspace)
             endif
             ! Memoize
             call pftc%memoize_refs
@@ -1241,7 +1227,6 @@ contains
     end subroutine prepare_refs_sigmas_ptcls
 
     subroutine prepare_polar_references( pftc, cline, batchsz )
-        use simple_polarft_calc, only:  polarft_calc
         class(polarft_calc), intent(inout) :: pftc
         class(cmdline),      intent(in)    :: cline !< command line
         integer,             intent(in)    :: batchsz
@@ -1285,7 +1270,6 @@ contains
     end subroutine prepare_polar_references
 
     subroutine build_batch_particles( pftc, nptcls_here, pinds_here, tmp_imgs )
-        use simple_polarft_calc, only: polarft_calc
         class(polarft_calc), intent(inout) :: pftc
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds_here(nptcls_here)
