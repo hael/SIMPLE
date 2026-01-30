@@ -15,8 +15,9 @@
 !------------------------------------------------------------------------------
 program simple_test_ft_expanded
 use simple_core_module_api
-use simple_ft_expanded_tester
+use simple_ftexp_shsrch
 implicit none
 call seed_rnd
-call exec_ft_expanded_test
+call test_ftexp_shsrch
+call test_ftexp_shsrch2
 end program simple_test_ft_expanded

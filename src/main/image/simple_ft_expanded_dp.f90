@@ -24,7 +24,6 @@ type :: ft_expanded_dp
     ! constructors
     procedure          :: new
     ! getters
-    procedure          :: get_flims
     procedure          :: get_ldim
     procedure          :: get_cmat
     ! setters
@@ -138,12 +137,6 @@ contains
     end subroutine new
 
     ! GETTERS
-
-    pure function get_flims( self ) result( flims )
-        class(ft_expanded_dp), intent(in) :: self
-        integer :: flims(3,2)
-        flims = self%flims
-    end function get_flims
 
     pure function get_ldim( self ) result( ldim )
         class(ft_expanded_dp), intent(in) :: self

@@ -28,7 +28,6 @@ private
 ! data structures for isotropic correction
 type(image), target, allocatable :: movie_frames_scaled(:) !< scaled movie frames
 real,                allocatable :: opt_shifts(:,:)        !< optimal shifts identified
-real                             :: TOL_ISO = 1.e-6        !< LBFGSB tolerance for isotropic search
 
 ! data structures for patch-based motion correction
 type(motion_patched)     :: motion_patch

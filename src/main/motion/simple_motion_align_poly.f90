@@ -285,9 +285,8 @@ contains
                     call self%tiles(t,i,j)%get_cmat_ptr(ptiles(ithr)%cmat)
                     ptiles(ithr)%cmat(:,:,1) = ptiles(ithr)%cmat(:,:,1) * bfac_weights
                     ! normalize within resolution range
-                    sumsq = sum(csq_fast(ptiles(ithr)%cmat(1,:,1)), mask=self%resolution_mask(1,:,1))
-                    sumsq = sumsq + 2.*sum(csq_fast(ptiles(ithr)%cmat(2:,:,1)), mask=self%resolution_mask(2:,:,1))
-                    if( sumsq > TINY ) ptiles(ithr)%cmat = ptiles(ithr)%cmat / sqrt(sumsq)
+                    sumsq = self%tiles(t,i,j)%masked_sqsum(self%resolution_mask)
+                    if( sumsq > TINY ) call self%tiles(t,i,j)%mul(1.0 / sqrt(sumsq))
                     ! shifted tiles & correlations images
                     call self%tiles_sh(t,i,j)%new(self%ldim_tile,self%smpd,wthreads=.false.)
                 enddo
@@ -378,8 +377,7 @@ contains
     ! Calculate all correlations images
     subroutine calc_correlations( self, shifts )
         class(motion_align_poly), intent(inout) :: self
-        real,                    intent(in)    :: shifts(self%nxpatch,self%nypatch,self%nframes,2)
-        type(image_ptr) :: ptiles(self%nthr), prefs(self%nthr)
+        real,                     intent(in)    :: shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real            :: sumsq
         integer         :: i,j,t,ithr
         !$omp parallel do private(i,j,t,ithr,sumsq) default(shared) proc_bind(close) schedule(static) collapse(2)
@@ -394,16 +392,9 @@ contains
                     call self%tmp_imgs(ithr)%add(self%tiles_sh(t,i,j))
                 enddo
                 ! correlations matrices
-                call self%tmp_imgs(ithr)%get_cmat_ptr(prefs(ithr)%cmat)
                 do t = 1,self%nframes
-                    call self%tiles_sh(t,i,j)%get_cmat_ptr(ptiles(ithr)%cmat)
-                    sumsq =             sum(csq_fast(prefs(ithr)%cmat(1,:,1)  - ptiles(ithr)%cmat(1,:,1)),  mask=self%resolution_mask(1,:,1) )
-                    sumsq =  sumsq + 2.*sum(csq_fast(prefs(ithr)%cmat(2:,:,1) - ptiles(ithr)%cmat(2:,:,1)), mask=self%resolution_mask(2:,:,1))
-                    where( self%resolution_mask )
-                        ptiles(ithr)%cmat = (prefs(ithr)%cmat - ptiles(ithr)%cmat) * conjg(ptiles(ithr)%cmat)
-                    else where
-                        ptiles(ithr)%cmat = cmplx(0.,0.)
-                    end where
+                    sumsq = self%tiles_sh(t,i,j)%masked_subtr_sqsum(self%tmp_imgs(ithr), self%resolution_mask)
+                    call self%tiles_sh(t,i,j)%masked_subtr_corr(self%tmp_imgs(ithr), self%resolution_mask)
                     call self%tiles_sh(t,i,j)%ifft ! now tiles_sh holds the correlations
                     if( sumsq > TINY ) call self%tiles_sh(t,i,j)%mul(1./sqrt(sumsq))
                 enddo

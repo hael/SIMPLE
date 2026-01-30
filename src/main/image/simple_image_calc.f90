@@ -1390,11 +1390,68 @@ contains
     end subroutine sqeuclid_matrix_2
 
     module function euclid_norm( self1, self2 ) result( r )
-        class(image), intent(inout) :: self1, self2
+        class(image), intent(in) :: self1, self2
         real :: r
         r = sqrt(sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
         &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0)) / real(product(self1%ldim))
     end function euclid_norm
+
+    ! Weighted frame variance 2D
+    module real function weighted_sqsum( self, weights )
+        class(image), intent(in) :: self
+        real,         intent(in) :: weights(self%array_shape(1), self%array_shape(2))
+        weighted_sqsum = sum( weights(1,:) * csq_fast(self%cmat(1,:,1)) )
+        weighted_sqsum = weighted_sqsum + 2.0 * sum( weights(2:,:) * csq_fast(self%cmat(2:,:,1)))
+    end function weighted_sqsum
+
+    ! Masked frame variance 2D
+    module real function masked_sqsum( self, mask )
+        class(image), intent(in) :: self
+        logical,      intent(in) :: mask(self%array_shape(1), self%array_shape(2), self%array_shape(3))
+        masked_sqsum = sum(csq_fast(self%cmat(1,:,1)), mask=mask(1,:,1))
+        masked_sqsum = masked_sqsum + 2.*sum(csq_fast(self%cmat(2:,:,1)), mask=mask(2:,:,1))
+    end function masked_sqsum
+
+    ! Weighted variance of the frame subtracted reference
+    module real function weighted_subtr_sqsum( self_ref, self_frame, weights, frame_weight )
+        class(image), intent(in) :: self_ref, self_frame
+        real,         intent(in) :: weights(self_ref%array_shape(1), self_ref%array_shape(2))
+        real,         intent(in) :: frame_weight
+        weighted_subtr_sqsum = sum(weights(1,:) * csq_fast(self_ref%cmat(1,:,1)  - frame_weight * self_frame%cmat(1,:,1)))
+        weighted_subtr_sqsum = weighted_subtr_sqsum + 2.0 *&
+                             &sum(weights(2:,:) * csq_fast(self_ref%cmat(2:,:,1) - frame_weight * self_frame%cmat(2:,:,1)))
+    end function weighted_subtr_sqsum
+
+    ! Masked variance of the frame subtracted reference
+    module real function masked_subtr_sqsum( self_ref, self_frame, mask)
+        class(image), intent(in) :: self_ref, self_frame
+        logical,      intent(in) :: mask(self_ref%array_shape(1), self_ref%array_shape(2), self_ref%array_shape(3))
+        masked_subtr_sqsum = sum(csq_fast(self_ref%cmat(1,:,1)  - self_frame%cmat(1,:,1)), mask=mask(1,:,1))
+        masked_subtr_sqsum = masked_subtr_sqsum + 2.0 *&
+                             &sum(csq_fast(self_ref%cmat(2:,:,1) - self_frame%cmat(2:,:,1)), mask=mask(2:,:,1))
+    end function masked_subtr_sqsum
+
+    ! Unnormalized weighted correlation of the frame vs. frame subtracted reference
+    module subroutine weighted_subtr_corr( self_frame, self_ref, weights, frame_weight )
+        class(image), intent(inout) :: self_frame
+        class(image), intent(in)    :: self_ref
+        real,         intent(in)    :: weights(self_frame%array_shape(1), self_frame%array_shape(2))
+        real,         intent(in)    :: frame_weight
+        self_frame%cmat(:,:,1) = weights * (self_ref%cmat(:,:,1) - frame_weight * self_frame%cmat(:,:,1)) *&
+                                &conjg(self_frame%cmat(:,:,1))
+    end subroutine weighted_subtr_corr
+
+    ! Unnormalized masked correlation of the frame vs. frame subtracted reference
+    module subroutine masked_subtr_corr( self_frame, self_ref, mask )
+        class(image), intent(inout) :: self_frame
+        class(image), intent(in)    :: self_ref
+        logical,      intent(in)    :: mask(self_ref%array_shape(1), self_ref%array_shape(2), self_ref%array_shape(3))
+        where( mask )
+            self_frame%cmat = (self_ref%cmat - self_frame%cmat) * conjg(self_frame%cmat)
+        else where
+            self_frame%cmat = cmplx(0.,0.)
+        end where
+    end subroutine masked_subtr_corr
 
     !===========================
     ! cost / shift

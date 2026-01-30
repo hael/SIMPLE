@@ -270,6 +270,9 @@ contains
     procedure, private :: sqeuclid_matrix_1, sqeuclid_matrix_2
     generic            :: sqeuclid_matrix => sqeuclid_matrix_1, sqeuclid_matrix_2
     procedure          :: euclid_norm
+    procedure          :: weighted_sqsum, masked_sqsum
+    procedure          :: weighted_subtr_sqsum, masked_subtr_sqsum
+    procedure          :: weighted_subtr_corr, masked_subtr_corr
     ! cost / shift
     procedure          :: opt_filter_costfun
     procedure          :: opt_filter_costfun_workshare
@@ -1733,9 +1736,43 @@ interface
     end subroutine sqeuclid_matrix_2
 
     module function euclid_norm( self1, self2 ) result( r )
-        class(image), intent(inout) :: self1, self2
+        class(image), intent(in) :: self1, self2
         real :: r 
     end function euclid_norm
+
+    module real function weighted_sqsum( self, weights )
+        class(image), intent(in) :: self
+        real,         intent(in) :: weights(self%array_shape(1), self%array_shape(2))
+    end function weighted_sqsum
+
+    module real function masked_sqsum( self, mask )
+        class(image), intent(in) :: self
+        logical,      intent(in) :: mask(self%array_shape(1), self%array_shape(2), self%array_shape(3))
+    end function masked_sqsum
+
+    module real function weighted_subtr_sqsum( self_ref, self_frame, weights, frame_weight )
+        class(image), intent(in) :: self_ref, self_frame
+        real,         intent(in) :: weights(self_ref%array_shape(1), self_ref%array_shape(2))
+        real,         intent(in) :: frame_weight
+    end function weighted_subtr_sqsum
+
+    module real function masked_subtr_sqsum( self_ref, self_frame, mask )
+        class(image), intent(in) :: self_ref, self_frame
+        logical,      intent(in) :: mask(self_ref%array_shape(1), self_ref%array_shape(2), self_ref%array_shape(3))
+    end function masked_subtr_sqsum
+
+    module subroutine weighted_subtr_corr( self_frame, self_ref, weights, frame_weight )
+        class(image), intent(inout) :: self_frame
+        class(image), intent(in)    :: self_ref
+        real,         intent(in)    :: weights(self_frame%array_shape(1), self_frame%array_shape(2))
+        real,         intent(in)    :: frame_weight
+    end subroutine weighted_subtr_corr
+
+    module subroutine masked_subtr_corr( self_frame, self_ref, mask )
+        class(image), intent(inout) :: self_frame
+        class(image), intent(in)    :: self_ref
+        logical,      intent(in)    :: mask(self_ref%array_shape(1), self_ref%array_shape(2), self_ref%array_shape(3))
+    end subroutine masked_subtr_corr
 
     !--- cost / shift ---!
 

@@ -8,45 +8,40 @@ public :: ft_expanded
 public :: ftexp_transfmat, ftexp_transfmat_init, ftexp_transfmat_kill
 #include "simple_local_flags.inc"
 
-real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
-complex,          parameter   :: JJ    = complex(0., 1.)
+real(dp), parameter :: num   = 1.0d8            ! numerator for rescaling of cost function
+complex,  parameter :: JJ    = complex(0., 1.)
 
-real, allocatable :: ftexp_transfmat(:,:,:)     ! transfer matrix
-integer           :: ftexp_transf_kzero         ! index shift for transfer & b-factor matrix
+real,   allocatable :: ftexp_transfmat(:,:,:)   ! transfer matrix
+integer             :: ftexp_transf_kzero       ! index shift for transfer & b-factor matrix
 
 type :: ft_expanded
     private
-    complex, allocatable :: cmat(:,:)          !< Fourier components
-    logical, allocatable :: bandmsk(:,:)       !< for band-passed correlation
-    real                 :: hp                 !< high-pass limit
-    real                 :: lp                 !< low-pass limit
-    real                 :: smpd  = 0.         !< sampling distance of originating image
-    real                 :: sumsq = 0.         !< sum of squares
-    integer              :: lims(3,2)          !< physical limits for the Fourier transform
-    integer              :: flims(3,2)         !< shifted limits
-    integer              :: ldim(3)=[1,1,1]    !< logical dimension of originating image
-    integer              :: kzero              !< to determine shift index to be applied to access the transfer matrix
-    logical              :: existence=.false.  !< existence
+    complex,     allocatable :: cmat(:,:)       !< Fourier components
+    logical,     allocatable :: bandmsk(:,:)    !< for band-passed correlation
+    complex(dp), allocatable :: tmp_cmat12(:,:) !< temporary matrix for shift search
+    real                 :: hp                  !< high-pass limit
+    real                 :: lp                  !< low-pass limit
+    real                 :: smpd  = 0.          !< sampling distance of originating image
+    real                 :: sumsq = 0.          !< sum of squares
+    integer              :: lims(3,2)           !< physical limits for the Fourier transform
+    integer              :: flims(3,2)          !< shifted limits
+    integer              :: ldim(3)=[1,1,1]     !< logical dimension of originating image
+    integer              :: kzero               !< to determine shift index to be applied to access the transfer matrix
+    logical              :: existence=.false.   !< existence
   contains
     ! constructors
     procedure          :: new
     ! getters
     procedure          :: get_flims
-    procedure          :: get_lims
-    procedure          :: get_ldim
-    procedure          :: get_cmat
-    procedure          :: get_cmat_ptr
-    procedure          :: get_bandmsk_at
-    procedure          :: get_bandmsk_ptr
     procedure          :: get_sumsq
-    procedure          :: get_kind_shift
     ! setters
     procedure          :: set_cmat
     procedure          :: zero
     procedure          :: copy
     ! arithmetics
     procedure          :: add
-    procedure          :: add_uncond           !< add "unconditionally", i.e. w<0 is allowed; also, don't calculate sumsq
+    procedure          :: add_uncond
+    procedure          :: add2cmat
     procedure          :: subtr
     procedure          :: div
     ! modifiers
@@ -61,6 +56,9 @@ type :: ft_expanded
     procedure, private :: corr_normalize_dp
     generic            :: corr_normalize => corr_normalize_sp, corr_normalize_dp
     procedure          :: get_hp_lp
+    ! shift optimization
+    procedure          :: alloc_and_calc_tmp_cmat12, dealloc_tmp_cmat12
+    procedure          :: corr_shifted_cost_8, corr_gshifted_cost_8, corr_fdfshifted_cost_8
     ! destructor
     procedure          :: kill
 end type ft_expanded
@@ -168,51 +166,10 @@ contains
         flims = self%flims
     end function get_flims
 
-    pure function get_lims( self ) result( lims )
-        class(ft_expanded), intent(in) :: self
-        integer :: lims(3,2)
-        lims = self%lims
-    end function get_lims
-
-    pure function get_ldim( self ) result( ldim )
-        class(ft_expanded), intent(in) :: self
-        integer :: ldim(3)
-        ldim = self%ldim
-    end function get_ldim
-
-    pure subroutine get_cmat( self, cmat )
-        class(ft_expanded), intent(in) :: self
-        complex,            intent(out) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
-        cmat = self%cmat
-    end subroutine get_cmat
-
-    pure subroutine get_cmat_ptr( self, cmat_ptr )
-        class(ft_expanded), target,  intent(inout) :: self
-        complex,            pointer, intent(out)   :: cmat_ptr(:,:)
-        cmat_ptr => self%cmat
-    end subroutine get_cmat_ptr
-
-    pure subroutine get_bandmsk_ptr( self, bandmsk_ptr )
-        class(ft_expanded), target,  intent(inout) :: self
-        logical,            pointer, intent(out)   :: bandmsk_ptr(:,:)
-        bandmsk_ptr => self%bandmsk
-    end subroutine get_bandmsk_ptr
-
-    pure logical function get_bandmsk_at( self, i,j )
-        class(ft_expanded), intent(in) :: self
-        integer ,           intent(in) :: i,j
-        get_bandmsk_at = self%bandmsk(i,j)
-    end function get_bandmsk_at
-
     pure real function get_sumsq( self )
         class(ft_expanded), intent(in) :: self
         get_sumsq = self%sumsq
     end function get_sumsq
-
-    pure integer function get_kind_shift( self )
-        class(ft_expanded), intent(in) :: self
-        get_kind_shift = ftexp_transf_kzero - self%kzero
-    end function
 
     ! SETTERS
 
@@ -273,6 +230,15 @@ contains
         endif
     end subroutine add_uncond
 
+    subroutine add2cmat( self, cmat, w )
+        class(ft_expanded), intent(in)    :: self
+        complex,            intent(inout) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
+        real,               intent(in)    :: w
+        !$omp parallel workshare proc_bind(close)
+        cmat = cmat + w * self%cmat
+        !$omp end parallel workshare
+    end subroutine add2cmat
+
     subroutine subtr( self, self2subtr, w )
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2subtr
@@ -302,7 +268,7 @@ contains
         integer  :: hind,kind,kind_shift,kkind
         real(dp) :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         real(dp) :: argh,argk,ck,sk
-        kind_shift = self%get_kind_shift()
+        kind_shift = ftexp_transf_kzero - self%kzero
         do hind=self%flims(1,1),self%flims(1,2)
             argh     = real(ftexp_transfmat(hind,1,1) * shvec(1),dp)
             ch(hind) = cos(argh)
@@ -347,7 +313,7 @@ contains
         integer :: hind,kind,kind_shift,kkind
         real    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         real    :: argh,argk,ck,sk
-        kind_shift = self%get_kind_shift()
+        kind_shift = ftexp_transf_kzero - self%kzero
         do hind=self%flims(1,1),self%flims(1,2)
             argh     = ftexp_transfmat(hind,1,1) * shvec(1)
             ch(hind) = cos(argh)
@@ -439,6 +405,148 @@ contains
         lp = self%lp
     end subroutine get_hp_lp
 
+    ! FOR SHIFT OPTIMIZATION
+
+    !< allocate & calculate tmp matrix for cost function
+    subroutine alloc_and_calc_tmp_cmat12( self, self_reference, denominator )
+        class(ft_expanded), intent(inout) :: self           !< is the particle instance
+        class(ft_expanded), intent(in)    :: self_reference
+        real(dp),           intent(out)   :: denominator
+        logical :: do_alloc
+        do_alloc = .true.
+        if ( allocated( self%tmp_cmat12 ) ) then
+            if ( (ubound(self%tmp_cmat12, 1) == self%flims(1,2)) .and. &
+                 (ubound(self%tmp_cmat12, 2) == self%flims(2,2)) ) then
+                do_alloc = .false.
+            else
+                deallocate( self%tmp_cmat12 )
+            end if
+        end if
+        if( do_alloc ) allocate(self%tmp_cmat12(1:self%flims(1,2),1:self%flims(2,2)))
+        ! fill matrix
+        denominator = dsqrt(real(self_reference%get_sumsq(),dp) * real(self%get_sumsq(),dp))
+        self%tmp_cmat12 = merge(self_reference%cmat * conjg(self%cmat(:,:)), cmplx(0.,0.), self%bandmsk)
+    end subroutine alloc_and_calc_tmp_cmat12
+
+    subroutine dealloc_tmp_cmat12( self )
+        class(ft_expanded), intent(inout) :: self
+        if(allocated(self%tmp_cmat12)) deallocate(self%tmp_cmat12)
+    end subroutine dealloc_tmp_cmat12
+
+    !< cost function for minimizer, cost only
+    pure function corr_shifted_cost_8( self, shvec, denominator )result( r )
+        class(ft_expanded), intent(in) :: self
+        real(dp),           intent(in) :: shvec(2), denominator
+        real(dp) :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
+        real(dp) :: r, r1, r2, ck,sk, argh,argk
+        integer  :: hind,kind,kkind,kind_shift
+        do hind=self%flims(1,1),self%flims(1,2)
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
+        r1 = 0.d0
+        r2 = 0.d0
+        kind_shift = ftexp_transf_kzero - self%kzero
+        do kind=self%flims(2,1),self%flims(2,2)
+            kkind = kind+kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) )then
+                    if( hind == 1 )then
+                        ! h = 0
+                        r1  = r1 + real(self%tmp_cmat12(1,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))),kind=dp)
+                    else
+                        ! h > 0
+                        r2  = r2 + real(self%tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))),kind=dp)
+                    endif
+                endif
+            end do
+        enddo
+        r = (r1 + 2.d0*r2) * num / denominator
+    end function corr_shifted_cost_8
+
+    !< cost function for minimizer, gradient only
+    subroutine corr_gshifted_cost_8( self, shvec, denominator, grad )
+        class(ft_expanded), intent(inout) :: self
+        real(dp),           intent(in)    :: shvec(2), denominator
+        real(dp),           intent(out)   :: grad(2)
+        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
+        real(dp)    :: g1(2),g2(2),transf_vec(2), ck,sk, argh,argk
+        integer     :: hind,kind,kkind,kind_shift
+        do hind = self%flims(1,1),self%flims(1,2)
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
+        g1 = 0.d0
+        g2 = 0.d0
+        kind_shift = ftexp_transf_kzero - self%kzero
+        do kind = self%flims(2,1),self%flims(2,2)
+            kkind = kind + kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
+            do hind = self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) )then
+                    transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
+                    if( hind == 1 )then ! h = 0
+                        g1(:) = g1(:) + dimag(self%tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))))*transf_vec
+                    else ! h > 0
+                        g2(:) = g2(:) + dimag(self%tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))))*transf_vec
+                    endif
+                endif
+            end do
+        enddo
+        grad(1) = (g1(1)+ 2.d0*g2(1)) * num / denominator
+        grad(2) = (g1(2)+ 2.d0*g2(2)) * num / denominator
+    end subroutine corr_gshifted_cost_8
+
+    !< cost function for minimizer, f and gradient
+    subroutine corr_fdfshifted_cost_8( self, shvec, denominator, f, grad )
+        class(ft_expanded), intent(inout) :: self
+        real(dp),            intent(in)    :: shvec(2), denominator
+        real(dp),            intent(out)   :: grad(2), f
+        complex(dp) :: tmp
+        real(dp)    :: f1,f2,g1(2),g2(2), transf_vec(2), argh,argk, ck,sk
+        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
+        integer     :: hind,kind,kkind,kind_shift
+        f1 = 0.d0
+        f2 = 0.d0
+        g1 = 0.d0
+        g2 = 0.d0
+        kind_shift = ftexp_transf_kzero - self%kzero
+        do hind = self%flims(1,1),self%flims(1,2)
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
+        do kind = self%flims(2,1),self%flims(2,2)
+            kkind = kind + kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) )then
+                    transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
+                    tmp        = self%tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind)))
+                    if( hind == 1 )then ! h = 0
+                        f1    = f1    + real(tmp,dp)
+                        g1(:) = g1(:) + dimag(tmp) * transf_vec
+                    else ! h > 0
+                        f2    = f2    + real(tmp,dp)
+                        g2(:) = g2(:) + dimag(tmp) * transf_vec
+                    endif
+                endif
+            end do
+        enddo
+        f       = (f1   + 2.d0*f2)    * num / denominator
+        grad(1) = (g1(1)+ 2.d0*g2(1)) * num / denominator
+        grad(2) = (g1(2)+ 2.d0*g2(2)) * num / denominator
+    end subroutine corr_fdfshifted_cost_8
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
@@ -446,10 +554,10 @@ contains
         class(ft_expanded), intent(inout) :: self
         if( self%existence )then
             deallocate(self%cmat,self%bandmsk)
+            call self%dealloc_tmp_cmat12
             self%existence = .false.
         endif
     end subroutine kill
-
 
     ! TRANSFER MATRIX ROUTINES
 
