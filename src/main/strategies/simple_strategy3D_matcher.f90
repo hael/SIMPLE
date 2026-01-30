@@ -1,29 +1,24 @@
 !@descr: high-level search routines for the refine3D application
 module simple_strategy3D_matcher
-use simple_core_module_api
-use simple_strategy3D_alloc ! singleton s3D
+use simple_pftc_srch_api
+use simple_strategy3D_alloc
+use simple_strategy2D3D_common
 use simple_binoris_io
-use simple_qsys_funs,               only: qsys_job_finished
-use simple_image,                   only: image
-use simple_cmdline,                 only: cmdline
-use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
+use simple_convergence,             only: convergence
+use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
-use simple_polarft_calc,            only: polarft_calc
-use simple_strategy3D_shc,          only: strategy3D_shc
-use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
-use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl
+use simple_qsys_funs,               only: qsys_job_finished
+use simple_strategy3D,              only: strategy3D
+use simple_strategy3D_eval,         only: strategy3D_eval
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_prob,         only: strategy3D_prob
-use simple_strategy3D_eval,         only: strategy3D_eval
-use simple_strategy3D,              only: strategy3D
+use simple_strategy3D_shc,          only: strategy3D_shc
+use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
+use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl
 use simple_strategy3D_srch,         only: strategy3D_spec
-use simple_convergence,             only: convergence
-use simple_euclid_sigma2,           only: euclid_sigma2
-use simple_strategy2D3D_common
-use simple_polarops
 implicit none
 
 public :: refine3D_exec
@@ -129,13 +124,13 @@ contains
         if( l_polar .and. l_restore )then
             ! for restoration
             if( cline%defined('vol1') )then
-                call polar_cavger_new(pftc, .true.)
+                call pftc%polar_cavger_new(.true.)
                 if( params_glob%l_trail_rec )then
                     ! In the first iteration the polarized cartesian references are written down
-                    call polar_cavger_writeall_pftcrefs(string(POLAR_REFS_FBODY))
+                    call pftc%polar_cavger_writeall_pftcrefs(string(POLAR_REFS_FBODY))
                 endif
             endif
-            call polar_cavger_zero_pft_refs
+            call pftc%polar_cavger_zero_pft_refs
             if( file_exists(params_glob%frcs) )then
                 call build_glob%clsfrcs%read(params_glob%frcs)
             else
@@ -254,8 +249,8 @@ contains
             ! restore polar cavgs
             if( l_polar .and. l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
-                call polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build_glob%spproj, pftc, incr_shifts(:,1:batchsz), is3D=.true.)
+                call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
+                    &build_glob%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo
@@ -326,7 +321,7 @@ contains
                 call killimgbatch
                 call eucl_sigma%kill
                 if( l_distr_exec_glob )then
-                    call polar_cavger_readwrite_partial_sums('write')
+                    call pftc%polar_cavger_readwrite_partial_sums('write')
                 else
                     call polar_restoration
                 endif
@@ -394,10 +389,10 @@ contains
 
         subroutine polar_restoration()
             params_glob%refs = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
-            call polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
-            call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
-            call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call polar_cavger_kill
+            call pftc%polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
+            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+            call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+            call pftc%polar_cavger_kill
         end subroutine polar_restoration
 
     end subroutine refine3D_exec

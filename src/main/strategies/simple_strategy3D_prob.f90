@@ -1,12 +1,12 @@
 !@descr: 3D strategy for probabilistic projection matching
 module simple_strategy3D_prob
 use simple_core_module_api
-use simple_strategy3D_alloc  ! use all in there
-use simple_strategy3D_utils  ! use all in there
+use simple_strategy3D_alloc
+use simple_strategy3D_utils
+use simple_builder,          only: build_glob
+use simple_parameters,       only: params_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
-use simple_parameters,       only: params_glob
-use simple_builder,          only: build_glob
 implicit none
 
 public :: strategy3D_prob

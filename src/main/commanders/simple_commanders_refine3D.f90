@@ -1,8 +1,8 @@
 !@descr: supporting 3D orientation search
 module simple_commanders_refine3D
 use simple_commander_module_api
+use simple_pftc_srch_api
 use simple_commanders_euclid
-use simple_sigma2_binfile,    only: sigma2_binfile
 use simple_cluster_seed,      only: gen_labelling
 use simple_commanders_volops, only: commander_postprocess
 use simple_commanders_mask,   only: commander_automask
@@ -201,10 +201,8 @@ contains
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
-        use simple_commanders_rec,    only: commander_reconstruct3D_distr, commander_volassemble
-        use simple_fsc,               only: plot_fsc
-        use simple_polarft_calc,      only: polarft_calc
-        use simple_polarops
+        use simple_commanders_rec, only: commander_reconstruct3D_distr, commander_volassemble
+        use simple_fsc,            only: plot_fsc
         class(commander_refine3D_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
@@ -649,13 +647,13 @@ contains
             if( params%l_polar )then
                 ! Assemble polar references
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
-                call polar_cavger_new(pftc, .true., nrefs=params%nspace)
-                call polar_cavger_calc_pops(build%spproj)
-                call polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
+                call pftc%polar_cavger_new(.true., nrefs=params%nspace)
+                call pftc%polar_cavger_calc_pops(build%spproj)
+                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
-                call polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
-                call polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                call polar_cavger_kill
+                call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+                call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+                call pftc%polar_cavger_kill
                 call job_descr%delete('vol1')
                 call cline%delete('vol1')
                 if( iter > 1 .and. params%keepvol.eq.'no' )then
@@ -992,7 +990,6 @@ contains
 
     subroutine exec_prob_tab( self, cline )
         use simple_strategy2D3D_common
-        use simple_polarft_calc,  only: polarft_calc
         use simple_eul_prob_tab,  only: eul_prob_tab
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline

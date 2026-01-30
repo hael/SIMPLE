@@ -1,10 +1,8 @@
 !@descr: for calculation of correlation matrices
 module simple_corrmat
-use simple_core_module_api
+use simple_pftc_srch_api
 use simple_defs
-use simple_image,            only: image
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
-use simple_polarft_calc,     only: polarft_calc
 implicit none
 
 public :: calc_cartesian_corrmat, calc_inpl_invariant_cc_nomirr

@@ -1,14 +1,11 @@
 !@descr: 2D strategy for exhaustive projection matching with probabilistic in-plane search
 module simple_strategy2D_greedy_smpl
-use simple_core_module_api
+use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_spec
-use simple_builder,          only: build_glob
-use simple_polarft_calc,     only: pftc_glob
-use simple_parameters,       only: params_glob
-use simple_eul_prob_tab2D,   only: squared_sampling
-
+use simple_builder,         only: build_glob
+use simple_eul_prob_tab2D,  only: squared_sampling
+use simple_strategy2D,      only: strategy2D
+use simple_strategy2D_srch, only: strategy2D_spec
 implicit none
 
 public :: strategy2D_greedy_smpl

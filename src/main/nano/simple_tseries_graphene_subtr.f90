@@ -1,12 +1,8 @@
 
 !@descr: graphene background subtraction in SINGLE
 module simple_tseries_graphene_subtr
-use simple_core_module_api
-use simple_parameters,   only: parameters, params_glob
-use simple_cmdline,      only: cmdline
-use simple_image,        only: image
-use simple_atoms,        only: atoms
-use simple_polarft_calc, only: polarft_calc
+use simple_pftc_srch_api
+use simple_atoms, only: atoms
 implicit none
 
 public :: init_graphene_subtr, calc_peaks, remove_lattices, kill_graphene_subtr

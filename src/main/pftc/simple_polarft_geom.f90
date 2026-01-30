@@ -40,7 +40,7 @@ contains
     end subroutine gen_shmat_8
 
     module subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
-        class(polarft_calc), intent(inout) :: self
+        class(polarft_calc), intent(in)    :: self
         real,                intent(in)    :: psi
         integer,             intent(inout) :: lrot
         integer,             intent(inout) :: rrot

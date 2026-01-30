@@ -1,21 +1,15 @@
 !@descr: utility routines for 2D class average processing
 module simple_strategy2D_utils
-use simple_core_module_api
-use simple_class_frcs,        only: class_frcs
+use simple_pftc_srch_api
 use simple_clustering_utils,  only: cluster_dmat
 use simple_cmdline,           only: cmdline
 use simple_histogram,         only: histogram
-use simple_image,             only: image
 use simple_image_bin,         only: image_bin
 use simple_image_msk,         only: density_inoutside_mask
-use simple_parameters,        only: parameters, params_glob
-use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_polarft_calc,      only: polarft_calc
+use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad
 use simple_pspecs,            only: pspecs
 use simple_segmentation,      only: otsu_img
 use simple_sp_project,        only: sp_project
-use simple_stack_io,          only: stack_io
-use simple_imgarr_utils,      only: read_cavgs_into_imgarr, dealloc_imgarr, alloc_imgarr, pack_imgarr, write_imgarr
 implicit none
 
 public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, flag_non_junk_cavgs, calc_cluster_cavgs_dmat

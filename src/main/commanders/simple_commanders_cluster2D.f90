@@ -1,6 +1,7 @@
 !@descr: simultaneous 2D alignment and clustering of single-particle images
 module simple_commanders_cluster2D
 use simple_commander_module_api
+use simple_pftc_srch_api
 use simple_classaverager
 use simple_commanders_cavgs,   only: commander_rank_cavgs
 use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr, commander_cavgassemble
@@ -9,7 +10,6 @@ use simple_gui_utils,          only: mrc2jpeg_tiled
 use simple_procimgstk,         only: selection_from_tseries_imgfile, random_selection_from_imgfile, copy_imgfile, noise_imgfile
 use simple_progress,           only: progressfile_init, progressfile_update
 use simple_commanders_imgops,  only: commander_scale
-use simple_starproject,        only: starproject
 implicit none
 #include "simple_local_flags.inc"
 
@@ -1058,7 +1058,6 @@ contains
     subroutine exec_prob_tab2D( self, cline )
         use simple_strategy2D_matcher
         use simple_strategy2D3D_common, only: set_bp_range2D
-        use simple_polarft_calc,        only: polarft_calc
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline

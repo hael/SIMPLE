@@ -1,10 +1,7 @@
 program simple_test_gen_corrs_fft
-use simple_core_module_api
-use simple_polarft_calc, only: polarft_calc
-use simple_cmdline,      only: cmdline
-use simple_builder,      only: builder
-use simple_parameters,   only: parameters
+use simple_pftc_srch_api
 use simple_timer
+use simple_builder, only: builder
 implicit none
 type(parameters)        :: p
 type(polarft_calc)      :: pftc

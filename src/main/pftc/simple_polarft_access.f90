@@ -1,6 +1,5 @@
 !@descr: polarft class accessors submodule
 submodule (simple_polarft_calc) simple_polarft_access
-use simple_core_module_api
 #include "simple_local_flags.inc"
 implicit none
 
@@ -152,24 +151,5 @@ contains
         ithr = omp_get_thread_num()+1
         ptr => self%heap_vars(ithr)%pft_r1_8
     end subroutine get_work_rpft8_ptr
-
-    module subroutine get_ptcls_ptr( self, ptr )
-        class(polarft_calc), target,  intent(in)  :: self
-        complex(sp),         pointer, intent(out) :: ptr(:,:,:)
-        ptr => self%pfts_ptcls
-    end subroutine get_ptcls_ptr
-
-    module subroutine get_ctfmats_ptr( self, ptr )
-        class(polarft_calc), target,  intent(in)  :: self
-        real(sp),            pointer, intent(out) :: ptr(:,:,:)
-        ptr => self%ctfmats
-    end subroutine get_ctfmats_ptr
-
-    module subroutine get_refs_ptr( self, ptre, ptro )
-        class(polarft_calc), target,  intent(in)  :: self
-        complex(sp),         pointer, intent(out) :: ptre(:,:,:), ptro(:,:,:)
-        ptre => self%pfts_refs_even
-        ptro => self%pfts_refs_odd
-    end subroutine get_refs_ptr
 
 end submodule simple_polarft_access

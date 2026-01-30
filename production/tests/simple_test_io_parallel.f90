@@ -3,7 +3,6 @@ use simple_core_module_api
 use simple_image,    only: image
 use simple_stack_io, only: stack_io
 use simple_imgfile,  only: imgfile
-use  iso_c_binding,  only: c_float
 implicit none
 type(string)                 :: benchfname
 integer,          parameter  :: NVOLRWS   = 10

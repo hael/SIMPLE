@@ -1,7 +1,7 @@
 !@descr: operations on image stacks
 module simple_commanders_stkops
 use simple_commander_module_api
-use simple_imgarr_utils,     only: read_stk_into_imgarr, write_imgarr, dealloc_imgarr
+use simple_pftc_srch_api
 use simple_strategy2D_utils, only: calc_cluster_cavgs_dmat, calc_match_cavgs_dmat
 implicit none
 #include "simple_local_flags.inc"
@@ -147,7 +147,6 @@ contains
     subroutine exec_stackops( self, cline )
         use simple_stackops
         use simple_procimgstk
-        use simple_polarft_calc, only: polarft_calc
         class(commander_stackops), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters)          :: params
@@ -232,7 +231,7 @@ contains
         subroutine handle_polar_representation()
             complex, allocatable :: pft(:,:)
             call pftc%new(params%nptcls, [1,params%nptcls], params%kfromto)
-            call build%img_crop%memoize4polarize(pftc%get_pdim(), params%alpha)
+            call  build%img_crop%memoize4polarize(pftc%get_pdim(), params%alpha)
             pft = pftc%allocate_pft()
             do i = 1, params%nptcls
                 call build%img_crop%read(params%stk, i)
@@ -240,13 +239,13 @@ contains
                 call build%img_crop%polarize(pft, mask=build%l_resmsk)
                 call pftc%set_ref_pft(i, pft, iseven=.true.)
             end do
-            call pftc%get_refs_ptr( ptre, ptro )
             call img%new([pftc%get_pftsz(), params%kfromto(2), 1], 1.0)
             do i = 1, params%nptcls
+                call pftc%get_ref_pft(i, .true.,  pft)
                 img = 0.
                 do j = 1, pftc%get_pftsz()
                     do k = params%kfromto(1), params%kfromto(2)
-                        call img%set([j,k,1], real(abs(ptre(j,k,i))))
+                        call img%set([j,k,1], real(abs(pft(j,k))))
                     end do
                 end do
                 call img%write(params%outstk, i)

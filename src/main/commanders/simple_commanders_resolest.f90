@@ -1,6 +1,7 @@
 !@descr: for resolution estimation
 module simple_commanders_resolest
 use simple_commander_module_api
+use simple_pftc_srch_api
 use simple_fsc
 use simple_commanders_euclid, only: commander_calc_pspec_distr
 implicit none
@@ -104,9 +105,6 @@ contains
 
     subroutine exec_clin_fsc( self, cline )
         use simple_strategy2D3D_common
-        use simple_polarops
-        use simple_polarft_calc, only: polarft_calc
-        use simple_imgarr_utils, only: write_imgarr
         class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
@@ -132,21 +130,21 @@ contains
         call pftc%allocate_refs_memoization
         call build_batch_particles(pftc, nptcls, pinds, tmp_imgs)
         ! Dealing with polar cavgs
-        call polar_cavger_new(pftc, .true.)
-        call polar_cavger_update_sums(nptcls, pinds, build%spproj, pftc, is3D=.true.)
-        call polar_cavger_merge_eos_and_norm(reforis=build%eulspace)
+        call pftc%polar_cavger_new(.true.)
+        call pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)
+        call pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace)
         ! write
         allocate(cavgs(params%nspace))
-        call polar_cavger_write(string('cavgs_even.bin'), 'even')
-        call polar_cavger_write(string('cavgs_odd.bin'),   'odd')
-        call polar_cavger_write(string('cavgs.bin'),    'merged')
-        call polar_cavger_refs2cartesian(pftc, cavgs,   'even')
+        call pftc%polar_cavger_write(string('cavgs_even.bin'), 'even')
+        call pftc%polar_cavger_write(string('cavgs_odd.bin'),   'odd')
+        call pftc%polar_cavger_write(string('cavgs.bin'),    'merged')
+        call pftc%polar_cavger_refs2cartesian(cavgs, 'even')
         call write_imgarr(cavgs, string('cavgs_even.mrc'))
-        call polar_cavger_refs2cartesian(pftc, cavgs,    'odd')
+        call pftc%polar_cavger_refs2cartesian(cavgs, 'odd')
         call write_imgarr(cavgs, string('cavgs_odd.mrc'))
-        call polar_cavger_refs2cartesian(pftc, cavgs, 'merged')
+        call pftc%polar_cavger_refs2cartesian(cavgs, 'merged')
         call write_imgarr(cavgs, string('cavgs_merged.mrc'))
-        call polar_cavger_kill
+        call pftc%polar_cavger_kill
         call killimgbatch
         call pftc%kill
         call build%kill_general_tbox
