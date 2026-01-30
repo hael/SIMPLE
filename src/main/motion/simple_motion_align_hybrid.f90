@@ -419,7 +419,6 @@ contains
         real, optional,             intent(in)    :: frameweights(self%nframes)
         type(ftexp_shsrch), allocatable :: ftexp_srch(:)
         complex, allocatable :: cmat_sum(:,:)
-        complex,     pointer :: pcmat(:,:)
         real    :: opt_shifts_saved(self%nframes,2), opt_shifts_prev(self%nframes, 2), corrfrac
         real    :: frameweights_saved(self%nframes), cxy(3), rmsd, corr_prev, corr_saved, trs
         integer :: flims(3,2), iter, iframe
@@ -450,10 +449,7 @@ contains
         end do
         !$omp end parallel do
         do iframe=1,self%nframes
-            call self%frames_ftexp_sh(iframe)%get_cmat_ptr(pcmat)
-            !$omp parallel workshare
-            cmat_sum = cmat_sum + pcmat * self%frameweights(iframe)
-            !$omp end parallel workshare
+            call self%frames_ftexp_sh(iframe)%add2cmat(cmat_sum, self%frameweights(iframe))
         enddo
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,self%nframes
@@ -482,11 +478,8 @@ contains
                 enddo
                 !$omp end parallel do
                 do iframe=1,self%nframes
-                    call self%frames_ftexp_sh(iframe)%get_cmat_ptr(pcmat)
-                    !$omp parallel workshare
-                    cmat_sum = cmat_sum + pcmat * self%frameweights(iframe)
-                    !$omp end parallel workshare
-                end do
+                    call self%frames_ftexp_sh(iframe)%add2cmat(cmat_sum, self%frameweights(iframe))
+                enddo
             endif
             !$omp parallel do default(shared) private(iframe,cxy) proc_bind(close) schedule(static)
             do iframe=1,self%nframes
@@ -532,26 +525,21 @@ contains
     subroutine calc_shifts( self, iframe )
         class(motion_align_hybrid), intent(inout) :: self
         integer,                    intent(in)    :: iframe
-        real,    pointer :: pcorrs(:,:,:)
-        complex, pointer :: pcmat(:,:,:), pcref(:,:,:)
+        real, pointer :: pcorrs(:,:,:)
         real     :: sqsum_ref,sqsum_frame
         real     :: dshift(2),alpha,beta,gamma,weight
         integer  :: pos(2),center(2),trs
         weight = self%frameweights(iframe)
         trs    = max(1, min(floor(self%trs),minval(self%ldim_sc(1:2)/2)))
         ! correlations
-        call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
-        sqsum_frame  = sum(self%weights(1,:)*csq_fast(pcmat(1,:,1)))
-        sqsum_frame  = sqsum_frame + 2.*sum(self%weights(2:,:)*csq_fast(pcmat(2:,:,1)))
+        sqsum_frame = self%frames_sh(iframe)%weighted_sqsum(self%weights)
         if( sqsum_frame < TINY )then
             self%fitshifts = .false.
             call self%frames_sh(iframe)%zero_and_flag_ft
             return
         endif
-        call self%reference%get_cmat_ptr(pcref)
-        sqsum_ref    = sum(self%weights(1,:)*csq_fast(pcref(1,:,1)- weight*pcmat(1,:,1)))
-        sqsum_ref    = sqsum_ref + 2.*sum(self%weights(2:,:)*csq_fast(pcref(2:,:,1)- weight*pcmat(2:,:,1)))
-        pcmat(:,:,1) = self%weights(:,:) * (pcref(:,:,1)- weight*pcmat(:,:,1)) * conjg(pcmat(:,:,1))
+        sqsum_ref = self%reference%weighted_subtr_sqsum(self%frames_sh(iframe), self%weights, weight)
+        call self%frames_sh(iframe)%weighted_subtr_corr(self%reference,         self%weights, weight)
         call self%frames_sh(iframe)%ifft
         ! find peak
         call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)
@@ -560,12 +548,12 @@ contains
         self%corrs(iframe) = maxval(pcorrs(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1)) / sqrt(sqsum_frame*sqsum_ref)
         dshift = real(pos)
         ! interpolate
-        beta  = pcorrs(pos(1)+center(1), pos(2)+center(2), 1)
-        alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
-        gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
+        beta  = self%frames_sh(iframe)%get([pos(1)+center(1), pos(2)+center(2), 1])
+        alpha = self%frames_sh(iframe)%get([pos(1)+center(1)-1,pos(2)+center(2),1])
+        gamma = self%frames_sh(iframe)%get([pos(1)+center(1)+1,pos(2)+center(2),1])
         if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
-        alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
-        gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
+        alpha = self%frames_sh(iframe)%get([pos(1)+center(1),pos(2)+center(2)-1,1])
+        gamma = self%frames_sh(iframe)%get([pos(1)+center(1),pos(2)+center(2)+1,1])
         if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + interp_peak()
         ! update shift
         self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift

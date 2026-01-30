@@ -196,15 +196,12 @@ contains
         class(motion_align_nano), intent(inout) :: self
         integer,                  intent(in)    :: iframe
         real,    pointer :: pcorrs(:,:,:)
-        complex, pointer :: pcmat(:,:,:), pcref(:,:,:)
         real     :: dshift(2),alpha,beta,gamma,weight
         integer  :: pos(2),center(2),trs
         weight = self%frameweights(iframe)
         trs    = max(1, min(floor(self%trs),minval(self%ldim(1:2)/2)))
         ! correlations
-        call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
-        call self%reference%get_cmat_ptr(pcref)
-        pcmat(:,:,1) = self%weights(:,:) * (pcref(:,:,1)- weight*pcmat(:,:,1)) * conjg(pcmat(:,:,1))
+        call self%frames_sh(iframe)%weighted_subtr_corr(self%reference, self%weights, weight)
         call self%frames_sh(iframe)%ifft
         ! find peak
         call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)

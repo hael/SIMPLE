@@ -3,17 +3,15 @@ module simple_ftexp_shsrch
 use simple_core_module_api
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
-use simple_ft_expanded, only: ft_expanded, ftexp_transfmat, ftexp_transfmat_init
+use simple_ft_expanded, only: ft_expanded
 implicit none
 
-public :: ftexp_shsrch, test_ftexp_shsrch
+public :: ftexp_shsrch, test_ftexp_shsrch, test_ftexp_shsrch2
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: TOL    = 1e-4 !< tolerance parameter
-integer, parameter :: MAXITS = 30   !< maximum number of iterations
-
-real(dp),    parameter   :: num   = 1.0d8      ! numerator for rescaling of cost function
+real,     parameter :: TOL    = 1e-4    !< tolerance parameter
+integer,  parameter :: MAXITS = 30      !< maximum number of iterations
 
 type :: ftexp_shsrch
     private
@@ -21,29 +19,19 @@ type :: ftexp_shsrch
     class(optimizer),   pointer :: opt_obj      => null()    !< pointer to nonlinear optimizer
     class(ft_expanded), pointer :: reference    => null()    !< reference ft_exp
     class(ft_expanded), pointer :: particle     => null()    !< particle ft_exp
-    complex(dp), allocatable    :: ftexp_tmp_cmat12(:,:)     !< temporary matrix for shift search
     real(dp)                    :: denominator        = 0.d0
     real                        :: maxHWshift         = 0.   !< maximum half-width of shift
     real                        :: motion_correctftol = 1e-4 !< function error tolerance
     real                        :: motion_correctgtol = 1e-4 !< gradient error tolerance
     real                        :: shsrch_tol         = TOL
-    integer                     :: lims(3,2)                 !< physical limits for the Fourier transform
-    integer                     :: flims(3,2)                !< shifted limits
-    integer                     :: ldim(3)                   !< logical dimension
-    integer                     :: kind_shift                !< transfer matrix index shift
     logical                     :: existence = .false.
-contains
+  contains
     procedure          :: new            => ftexp_shsrch_new
     procedure          :: minimize       => ftexp_shsrch_minimize
     procedure          :: corr_shifted_8 => ftexp_shsrch_corr_shifted_8
     procedure          :: kill           => ftexp_shsrch_kill
-    procedure, private :: set_dims_and_alloc                 !< set dimensions from images and allocate tmp matrices
     procedure          :: set_shsrch_tol
     procedure          :: set_factr_pgtol
-    procedure, private :: corr_shifted_cost_8                !< cost function for minimizer, f only
-    procedure, private :: corr_gshifted_cost_8               !< cost function for minimizer, gradient only
-    procedure, private :: corr_fdfshifted_cost_8             !< cost function for minimizer, f and gradient
-    procedure, private :: calc_tmp_cmat12                    !< calculate tmp matrix for cost function
 end type ftexp_shsrch
 
 contains
@@ -61,7 +49,6 @@ contains
         self%reference  => ref
         self%particle   => ptcl
         self%maxHWshift =  trs
-        self%kind_shift = self%reference%get_kind_shift()
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
         else
@@ -109,9 +96,11 @@ contains
             self%ospec%x   = 0.
         end if
         self%ospec%x_8 = real(self%ospec%x,dp)
-        self%kind_shift = self%reference%get_kind_shift()
-        call self%set_dims_and_alloc()
-        call self%calc_tmp_cmat12()
+        ! self%kind_shift = self%reference%get_kind_shift()
+        ! call self%set_dims_and_alloc()
+        ! call self%calc_tmp_cmat12()
+        ! the temp matrix is built on the particle only!
+        call self%particle%alloc_and_calc_tmp_cmat12(self%reference, self%denominator )
         ! set initial solution to previous shift
         call self%opt_obj%minimize(self%ospec, self, cxy(1))
         call self%reference%corr_normalize(self%particle, cxy(1))
@@ -134,61 +123,36 @@ contains
                 deallocate(self%opt_obj)
                 nullify(self%opt_obj)
             end if
-            if ( associated( self%reference ) ) self%reference => null()
-            if ( associated( self%particle )  ) self%particle  => null()
-            if ( allocated( self%ftexp_tmp_cmat12   ) ) deallocate( self%ftexp_tmp_cmat12   )
+            if( associated(self%reference) ) self%reference => null()
+            if( associated(self%particle)  )then
+                call self%particle%dealloc_tmp_cmat12
+                self%particle  => null()
+            endif
             self%existence = .false.
         end if
     end subroutine ftexp_shsrch_kill
 
-    !< set dimensions from images and allocate tmp matrices
-    subroutine set_dims_and_alloc( self )
-        class(ftexp_shsrch), intent(inout) :: self
-        integer :: ref_flims (3,2), ref_ldim (3), ref_lims (3,2)!, ref_flims_nyq (3,2)
-        integer :: ptcl_flims(3,2), ptcl_ldim(3), ptcl_lims(3,2)!, ptcl_flims_nyq(3,2)
-        logical :: do_alloc
-        ref_flims  = self%reference%get_flims()
-        ptcl_flims = self%particle %get_flims()
-        if (any( ref_flims /= ptcl_flims ) ) then
-            THROW_HARD('set_dims_and_alloc: ptcl and ref have inconsistens flims; simple_ftexp_shsrch')
-        end if
-        ref_ldim  = self%reference%get_ldim()
-        ptcl_ldim = self%particle %get_ldim()
-        if ( any( ref_ldim /= ptcl_ldim ) ) then
-            THROW_HARD('set_dims_and_alloc: ptcl and ref have inconsistens ldim; simple_ftexp_shsrch')
-        end if
-        ref_lims  = self%reference%get_lims()
-        ptcl_lims = self%particle %get_lims()
-        if ( any( ref_lims /= ptcl_lims ) ) then
-            THROW_HARD('set_dims_and_alloc: ptcl and ref have inconsistens lims; simple_ftexp_shsrch')
-        end if
-        self%flims     = ref_flims
-        self%ldim      = ref_ldim
-        self%lims      = ref_lims
-        do_alloc = .true.
-        if ( allocated( self%ftexp_tmp_cmat12 ) ) then
-            if ( ( ubound( self%ftexp_tmp_cmat12, 1 ) == ref_flims(1,2) ) .and. &
-                 ( ubound( self%ftexp_tmp_cmat12, 2 ) == ref_flims(2,2) ) ) then
-                do_alloc = .false.
-            else
-                deallocate( self%ftexp_tmp_cmat12 )
-            end if
-        end if
-        if( do_alloc ) allocate(self%ftexp_tmp_cmat12(1:ref_flims(1,2),1:ref_flims(2,2)))
-    end subroutine set_dims_and_alloc
-
-    subroutine set_shsrch_tol( self, shsrch_tol )
+    pure subroutine set_shsrch_tol( self, shsrch_tol )
         class(ftexp_shsrch), intent(inout) :: self
         real,                intent(in)    :: shsrch_tol
         self%shsrch_tol = shsrch_tol
     end subroutine set_shsrch_tol
 
-    subroutine set_factr_pgtol( self, factr, pgtol )
+    pure subroutine set_factr_pgtol( self, factr, pgtol )
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: factr, pgtol
         self%ospec%factr = factr
         self%ospec%pgtol = pgtol
     end subroutine set_factr_pgtol
+
+    ! Correlation
+    real(dp) function ftexp_shsrch_corr_shifted_8( self, shvec )
+        class(ftexp_shsrch), intent(inout) :: self
+        real(dp),            intent(in)    :: shvec(2)
+        call self%particle%alloc_and_calc_tmp_cmat12(self%reference, self%denominator)
+        ftexp_shsrch_corr_shifted_8 = self%particle%corr_shifted_cost_8(shvec, self%denominator)
+        call self%particle%corr_normalize(self%reference, ftexp_shsrch_corr_shifted_8)
+    end function ftexp_shsrch_corr_shifted_8
 
     !> Cost function, double precision
     function ftexp_shsrch_cost_8( self, vec, D ) result( cost )
@@ -198,147 +162,11 @@ contains
         real(kind=8) :: cost
         select type(self)
             class is (ftexp_shsrch)
-                cost = -self%corr_shifted_cost_8( -vec )
+                cost = -ftexp_shsrch_corr_shifted_8(self, -vec)
             class DEFAULT
                 THROW_HARD('unknown type; ftexp_shsrch_cost_8')
         end select
     end function ftexp_shsrch_cost_8
-
-    !< cost function for minimizer, f only
-    function corr_shifted_cost_8( self, shvec ) result( r )
-        class(ftexp_shsrch), intent(inout) :: self
-        real(dp),            intent(in)    :: shvec(2)
-        real(dp) :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
-        real(dp) :: r, r1, r2, ck,sk, argh,argk
-        integer  :: hind,kind,kkind
-        do hind=self%flims(1,1),self%flims(1,2)
-            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
-            ch(hind) = cos(argh)
-            sh(hind) = sin(argh)
-        enddo
-        r1 = 0.d0
-        r2 = 0.d0
-        do kind=self%flims(2,1),self%flims(2,2)
-            kkind = kind+self%kind_shift
-            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
-            ck    = cos(argk)
-            sk    = sin(argk)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( self%reference%get_bandmsk_at(hind,kind) )then
-                    if( hind == 1 )then
-                        ! h = 0
-                        r1  = r1 + real(self%ftexp_tmp_cmat12(1,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))),kind=dp)
-                    else
-                        ! h > 0
-                        r2  = r2 + real(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))),kind=dp)
-                    endif
-                endif
-            end do
-        enddo
-        ! finalize
-        r = (r1 + 2.d0*r2) * num / self%denominator
-    end function corr_shifted_cost_8
-
-    !< cost function for minimizer, gradient only
-    subroutine corr_gshifted_cost_8( self, shvec, grad )
-        class(ftexp_shsrch), intent(inout) :: self
-        real(dp),            intent(in)    :: shvec(2)
-        real(dp),            intent(out)   :: grad(2)
-        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
-        real(dp)    :: g1(2),g2(2),transf_vec(2), ck,sk, argh,argk
-        integer     :: hind,kind,kkind
-        do hind=self%flims(1,1),self%flims(1,2)
-            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
-            ch(hind) = cos(argh)
-            sh(hind) = sin(argh)
-        enddo
-        g1 = 0.d0
-        g2 = 0.d0
-        do kind=self%flims(2,1),self%flims(2,2)
-            kkind = kind+self%kind_shift
-            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
-            ck    = cos(argk)
-            sk    = sin(argk)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( self%reference%get_bandmsk_at(hind,kind) )then
-                    transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
-                    if( hind == 1 )then ! h = 0
-                        g1(:) = g1(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))))*transf_vec
-                    else ! h > 0
-                        g2(:) = g2(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))))*transf_vec
-                    endif
-                endif
-            end do
-        enddo
-        ! finalize
-        grad(1) = (g1(1)+ 2.d0*g2(1)) * num / self%denominator
-        grad(2) = (g1(2)+ 2.d0*g2(2)) * num / self%denominator
-    end subroutine corr_gshifted_cost_8
-
-    !< cost function for minimizer, f and gradient
-    subroutine corr_fdfshifted_cost_8( self, shvec, f, grad )
-        class(ftexp_shsrch), intent(inout) :: self
-        real(dp),            intent(in)    :: shvec(2)
-        real(dp),            intent(out)   :: grad(2), f
-        complex(dp) :: tmp
-        real(dp)    :: f1,f2,g1(2),g2(2), transf_vec(2), argh,argk, ck,sk
-        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
-        integer     :: hind,kind,kkind
-        f1 = 0.d0
-        f2 = 0.d0
-        g1 = 0.d0
-        g2 = 0.d0
-        do hind=self%flims(1,1),self%flims(1,2)
-            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
-            ch(hind) = cos(argh)
-            sh(hind) = sin(argh)
-        enddo
-        do kind=self%flims(2,1),self%flims(2,2)
-            kkind = kind+self%kind_shift
-            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
-            ck    = cos(argk)
-            sk    = sin(argk)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( self%reference%get_bandmsk_at(hind,kind) )then
-                    transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
-                    tmp        = self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind)))
-                    if( hind == 1 )then ! h = 0
-                        f1    = f1    + real(tmp,dp)
-                        g1(:) = g1(:) + dimag(tmp) * transf_vec
-                    else ! h > 0
-                        f2    = f2    + real(tmp,dp)
-                        g2(:) = g2(:) + dimag(tmp) * transf_vec
-                    endif
-                endif
-            end do
-        enddo
-        ! finalize
-        f       = (f1   + 2.d0*f2)    * num / self%denominator
-        grad(1) = (g1(1)+ 2.d0*g2(1)) * num / self%denominator
-        grad(2) = (g1(2)+ 2.d0*g2(2)) * num / self%denominator
-    end subroutine corr_fdfshifted_cost_8
-
-    !< calculate tmp matrix for cost function
-    subroutine calc_tmp_cmat12( self )
-        class(ftexp_shsrch), intent(inout) :: self
-        complex, pointer :: cmat1_ptr(:,:), cmat2_ptr(:,:)
-        logical, pointer :: msk(:,:)
-        call self%reference%get_bandmsk_ptr(msk)
-        call self%reference%get_cmat_ptr(cmat1_ptr)
-        call self%particle %get_cmat_ptr(cmat2_ptr)
-        self%denominator = dsqrt(real(self%reference%get_sumsq(),dp) * real(self%particle%get_sumsq(),dp))
-        self%ftexp_tmp_cmat12 = merge(cmat1_ptr(:,:)*conjg(cmat2_ptr(:,:)), cmplx(0.,0.), msk)
-    end subroutine calc_tmp_cmat12
-
-    function ftexp_shsrch_corr_shifted_8( self, shvec ) result( r )
-        class(ftexp_shsrch), intent(inout) :: self
-        real(dp),            intent(in)    :: shvec(2)
-        real(dp) :: r
-        call self%set_dims_and_alloc()
-        call self%calc_tmp_cmat12()
-        r = self%corr_shifted_cost_8( shvec )
-        call self%particle%corr_normalize( self%reference, r )
-    end function ftexp_shsrch_corr_shifted_8
 
     !> Gradient function, double precision
     subroutine ftexp_shsrch_gcost_8( self, vec, grad, D )
@@ -349,7 +177,7 @@ contains
         grad = 0.d0
         select type(self)
             class is (ftexp_shsrch)
-                call self%corr_gshifted_cost_8( -vec, grad )
+                call self%particle%corr_gshifted_cost_8( -vec, self%denominator, grad )
             class DEFAULT
                 THROW_HARD('unknown type; ftexp_shsrch_gcost_8')
         end select
@@ -365,21 +193,180 @@ contains
         grad = 0.d0
         select type(self)
             class is (ftexp_shsrch)
-                call self%corr_fdfshifted_cost_8( -vec, f, grad )
+                call self%particle%corr_fdfshifted_cost_8( -vec, self%denominator, f, grad )
                 f = f * (-1.0_dp)
             class DEFAULT
                 THROW_HARD('unknown type; ftexp_shsrch_fdfcost_8')
         end select
     end subroutine ftexp_shsrch_fdfcost_8
 
+    ! TEST ROUTINES
+
+    ! Tests correlations/gradients routines & ft_expand interface
     subroutine test_ftexp_shsrch
-        use simple_image, only: image
+        use simple_ft_expanded, only: ftexp_transfmat_init
+        use simple_image,       only: image
+        ! global constants
+        integer, parameter :: LDIM(3)=[240,240,1], SQRAD=60, NTST=50, NNOISY=20
+        real,    parameter :: SMPD=1.77, TRS=10., HP=100.0, LP=8., SNR=0.2
+        ! global variables
+        type(ft_expanded)        :: ftexp_img
+        type(image)              :: img, img_shifted
+        type(image), allocatable :: noisy_imgs(:)
+        integer                  :: x, y
+        integer :: i
+        ! reference images
+        call img%new(LDIM, SMPD)
+        call img%square(SQRAD)
+        call ftexp_img%new(img, HP, LP, .true.)
+        call img_shifted%new(LDIM, SMPD)
+        ! seed the random number generator
+        call seed_rnd
+        ! generate noisy images
+        if( allocated(noisy_imgs) )then
+            do i=1,NNOISY
+                call noisy_imgs(i)%kill
+            end do
+            deallocate(noisy_imgs)
+        else
+            allocate(noisy_imgs(NNOISY))
+            do i=1,NNOISY
+                noisy_imgs(i) = img
+                call noisy_imgs(i)%add_gauran(SNR)
+            end do
+        endif
+        call test_shifted_correlator
+        call profile_corrs
+        contains
+
+            subroutine test_shifted_correlator
+                type(ft_expanded)  :: ftexp_trial
+                type(ftexp_shsrch) :: ftexp_shsrch_trial
+                real(dp) :: dbl_corr, grad(2), grad_best(2), vec(2)
+                real     :: dist, corr_best, corravg, distavg, diff_corr
+                real     :: corr, diff, mag, diff_corr_avg, grad_mag_avg
+                integer  :: ysh_best, xsh_best, xsh, ysh, itst
+                write(logfhandle,*) 'testing ft_expanded/ftexp_shsrch :: shifted correlator'
+                call ftexp_transfmat_init(img, LP)
+                corravg       = 0.
+                distavg       = 0.
+                diff_corr_avg = 0.
+                grad_mag_avg  = 0.
+                do itst=1,NTST
+                    x = nint(ran3()*2*TRS-TRS)
+                    y = nint(ran3()*2*TRS-TRS)
+                    img_shifted = img
+                    call img_shifted%shift([real(x),real(y),0.])
+                    ! single search ----
+                    call ftexp_trial%new(img_shifted, HP, LP, .true.)
+                    call ftexp_shsrch_trial%new(ftexp_img, ftexp_trial, TRS)
+                    corr_best = -huge(corr)
+                    grad_best = huge(dbl_corr)
+                    do xsh=nint(-TRS),nint(TRS)
+                        do ysh=nint(-TRS),nint(TRS)
+                            vec  = dble([xsh, ysh])
+                            corr = -real(ftexp_shsrch_cost_8(ftexp_shsrch_trial, vec, 2))
+                            if( corr > corr_best )then
+                                corr_best = corr
+                                xsh_best  = xsh
+                                ysh_best  = ysh
+                            endif
+                        end do
+                    end do
+                    dist = euclid(real([xsh_best,ysh_best]), real([-x,-y]))
+                    vec  = dble([xsh_best,ysh_best])
+                    call ftexp_shsrch_fdfcost_8(ftexp_shsrch_trial, vec, dbl_corr, grad, 2)
+                    call ftexp_img%corr_normalize(ftexp_trial, dbl_corr)
+                    dbl_corr = -dbl_corr
+                    diff = abs(real(dbl_corr)-corr_best)
+                    call ftexp_img%corr_normalize(ftexp_trial, grad(1))
+                    call ftexp_img%corr_normalize(ftexp_trial, grad(2))
+                    print *, x,y, xsh_best,ysh_best, corr_best, dbl_corr, grad
+                    mag  = real(sqrt(sum(grad**2)))
+                    call ftexp_trial%kill
+                    call ftexp_shsrch_trial%kill
+                    ! end single search ----
+                    corravg       = corravg       + corr_best
+                    distavg       = distavg       + dist
+                    diff_corr_avg = diff_corr_avg + diff
+                    grad_mag_avg  = grad_mag_avg  + mag
+                end do
+                corravg       = corravg/real(NTST)
+                distavg       = distavg/real(NTST)
+                diff_corr_avg = diff_corr_avg/real(NTST)
+                grad_mag_avg  = grad_mag_avg/real(NTST)
+                if( corravg > 0.999 .and. distavg < 0.0001 .and. diff_corr<0.0001 )then
+                    write(logfhandle,'(a)')'>>> CORRELATIONS TEST PASSED'
+                else
+                    THROW_HARD('****ft_expanded_tester FAILURE 1 :: test_shifted_correlator')
+                endif
+                if( grad_mag_avg < 0.000001 )then
+                    write(logfhandle,'(a)')'>>> CORRELATIONS GRADIENTS TEST PASSED'
+                else
+                    THROW_HARD('****ft_expanded_tester FAILURE 2 :: test_shifted_correlator')
+                endif
+            end subroutine test_shifted_correlator
+
+            subroutine profile_corrs
+                integer, parameter   :: NTSTS=1000, NTHR=8
+                integer              :: itst
+                type(image)          :: img_ref, img_ptcl
+                type(ft_expanded)    :: ftexp_ref, ftexp_ptcl
+                type(ftexp_shsrch)   :: ftexp_shsrch1
+                real, allocatable    :: shvecs(:,:)
+                real(4)    :: corr, actual, delta, tarray(2)
+                call img_ref%new([4096,4096,1],SMPD)
+                call img_ref%ran
+                call img_ref%fft()
+                call ftexp_transfmat_init(img_ref, LP)
+                call ftexp_ref%new(img_ref, HP, LP, .true.)
+                call img_ptcl%new([4096,4096,1],SMPD)
+                call img_ptcl%ran
+                call img_ptcl%fft()
+                call ftexp_ptcl%new(img_ptcl, HP, LP, .true.)
+                call ftexp_shsrch1%new(ftexp_ref, ftexp_ptcl, TRS)
+                allocate(shvecs(NTSTS,3))
+                do itst=1,NTSTS
+                    shvecs(itst,1) = ran3()*2*TRS-TRS
+                    shvecs(itst,2) = ran3()*2*TRS-TRS
+                    shvecs(itst,3) = 0.
+                end do
+                actual = etime( tarray )
+                write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+                delta = dtime( tarray )
+                write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
+
+                write(logfhandle,'(a)') '>>> PROFILING STANDARD CORRELATOR'
+                do itst=1,NTST
+                    corr = img_ref%corr_shifted(img_ptcl, shvecs(itst,:), lp_dyn=LP)
+                end do
+                actual = etime( tarray )
+                write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+                delta = dtime( tarray )
+                write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
+                write(logfhandle,'(a)') '>>> PROFILING FTEXP CORRELATOR'
+                do itst=1,NTST
+                    corr = real(ftexp_shsrch1%corr_shifted_8(dble(shvecs(itst,:))))
+                end do
+                actual = etime( tarray )
+                write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+                delta = dtime( tarray )
+                write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
+            end subroutine profile_corrs
+
+    end subroutine test_ftexp_shsrch
+
+    ! test optmization
+    subroutine test_ftexp_shsrch2
+        use simple_ft_expanded, only: ftexp_transfmat_init
+        use simple_image,       only: image
         type(image)       :: img_ref, img_ptcl
         type(ft_expanded) :: ftexp_ref, ftexp_ptcl
         type(ftexp_shsrch)  :: ftexp_srch
         real, parameter   :: TRS=5.0, lp=6., hp=100.
         real              :: cxy(3), x, y, lims(2,2)
         integer           :: i
+        write(logfhandle,*) 'testing ft_expanded :: optimization'
         lims(:,1) = -TRS
         lims(:,2) = TRS
         call img_ref%new([32,32,1], 2.)
@@ -400,11 +387,11 @@ contains
             call ftexp_ptcl%new(img_ptcl, hp, lp, .true.)
             cxy = ftexp_srch%minimize()
             print *,i,x,y,cxy
-            if( cxy(1) < 0.995 )then
+            if( cxy(1) < 0.999 )then
                 THROW_HARD('shift alignment failed; test_ftexp_shsrch')
             endif
         end do
         write(logfhandle,'(a)') 'SIMPLE_ftexp_shsrch_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine test_ftexp_shsrch
+    end subroutine test_ftexp_shsrch2
 
 end module simple_ftexp_shsrch
