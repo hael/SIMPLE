@@ -7,7 +7,6 @@
     - `simple_stream.f90` — executes SIMPLE stream workflows
     - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
     - **tests/** — home of executable unit tests
-      - `simple_ft_expanded_tester.f90`
       - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
       - `simple_test_binoris.f90`
@@ -33,6 +32,7 @@
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
       - `simple_test_io.f90`
       - `simple_test_io_parallel.f90`
+      - `simple_test_kbinterpol_fast.f90`
       - `simple_test_lbfgsb.f90`
       - `simple_test_lbfgsb_cosine.f90`
       - `simple_test_lplims.f90`
@@ -57,6 +57,7 @@
       - `simple_test_pca_all.f90`
       - `simple_test_pca_imgvar.f90`
       - `simple_test_phasecorr.f90`
+      - `simple_test_polarops.f90`
       - `simple_test_ptcl_center.f90`
       - `simple_test_rank_weights.f90`
       - `simple_test_rotate_ref.f90`
@@ -140,6 +141,7 @@
         - `simple_commander_module_api.f90` — API for the commanders
         - `simple_core_module_api.f90` — API for the core modules
         - `simple_exec_module_api.f90` — Aggregated public API for simple_exec
+        - `simple_pftc_srch_api.f90` — Facade pattern API to avoid circular dependencies involving polarft_calc
         - `simple_private_exec_module_api.f90` — Aggregated public API for simple_private_exec.
         - `simple_stream_module_api.f90` — Aggregated public API for stream_exec.
         - `single_exec_module_api.f90` — Aggregated public API for single_exec
@@ -197,6 +199,7 @@
         - `simple_image_calc.f90` — calculating stuff from images
         - `simple_image_checks.f90` — checking image stuff
         - `simple_image_core.f90` — core image functionality, such as constructors/object lifecycle
+        - `simple_image_ctf.f90` — for applying CTF to images
         - `simple_image_fft.f90` — core fft routines as well as fused optimized operations involving ffts
         - `simple_image_filt.f90` — image filtering and denoising
         - `simple_image_freq_anal.f90` — image frequency domain analysis, power spectrum etc.
@@ -205,9 +208,9 @@
         - `simple_image_msk.f90` — extension of the image class to provide 2D/3D envelope and adaptive masking
         - `simple_image_norm.f90` — image normalization routines
         - `simple_image_ops.f90` — opreations on images not fitting elewhere: noise, zero, background, CTF division etc.
+        - `simple_image_polar.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
         - `simple_image_seg.f90` — image segmentation related stuff to support masking
         - `simple_image_vis.f90` — for supporting visualization of images in various ways
-        - `simple_polarizer.f90` — polar 2D Fourier transform generation by convolution interpolation (gridding)
         - `simple_projector.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms
       - **interp/** — home of the window functions for Fourier gridding interpolation
         - `simple_edges_sqwins.f90` — square windows and mask edges
@@ -263,11 +266,10 @@
         - `simple_polarft_ctf.f90` — polarft class submodule for dealing with CTF-related things
         - `simple_polarft_geom.f90` — polarft class submodule for geometry-related things: shift, rotate, mirror etc.
         - `simple_polarft_memo.f90` — polarft class submodule for memoization for performance
+        - `simple_polarft_ops_io.f90` — submodule for parallel I/O and polar->Cartesian conversion
+        - `simple_polarft_ops_restore.f90` — submodule for class average restoration in the polar Fourier domain
+        - `simple_polarft_ops_state.f90` — submodule for controlling various state-related things in the polarops module
         - `simple_polarft_vis.f90` — polarft class submodule supporting visualization
-        - `simple_polarops.f90` — operations on polar FTs, to support polar 2D and 3D applications when polar=yes
-        - `simple_polarops_io.f90` — submodule for parallel I/O and polar->Cartesian conversion
-        - `simple_polarops_restore.f90` — submodule for class average restoration in the polar Fourier domain
-        - `simple_polarops_state.f90` — submodule for controlling various state-related things in the polarops module
       - **pick/** — home of modules for particle picking
         - `simple_picker_iter.f90` — particle picker iterator
         - `simple_picker_utils.f90` — routines for executing reference-based, segmentation-based, and Gaussian picking
@@ -356,7 +358,7 @@
       - `simple_magic_boxes.f90` — box sizes optimised for FFTW perfomance
       - `simple_map_reduce.f90` — routines for distributed SIMPLE execution
       - `simple_mem_estimator.f90` — job ram usage estimation
-      - `simple_memoize_ft_mapping.f90` — Light-weight module to memoize logical to physical address/spatial frequency mapping and avoid re-computing them repeatedly
+      - `simple_memoize_ft_maps.f90` — Light-weight module to memoize logical to physical address/spatial frequency mapping and avoid re-computing them repeatedly
       - `simple_micproc.f90` — operations on micrographs
       - `simple_opt_mask.f90` — optimization(search)-based masking
       - `simple_private_prgs.f90` — private program interface defintions (those executed by simple_private_exec)
@@ -396,6 +398,7 @@
         - `simple_histogram.f90` — abstract data type for histogram generation
         - `simple_linalg.f90` — linear algebra stuff
         - `simple_math.f90` — various mathematical subroutines and functions
+        - `simple_math_ctf.f90` — CTF-related math routines
         - `simple_math_ft.f90` — Fourier transform-related math routines
         - `simple_neighs.f90` — pixel neighborhood definitions and generation
         - `simple_online_var.f90` — online moments estimation

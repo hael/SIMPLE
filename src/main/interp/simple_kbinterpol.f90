@@ -17,8 +17,8 @@ type :: kbinterpol
     procedure :: get_alpha
     procedure :: get_wdim
     procedure :: apod
-    procedure :: apod_dp
-    procedure :: dapod
+    procedure :: apod_mat_2d
+    procedure :: apod_mat_3d
     procedure :: instr
 end type kbinterpol
 
@@ -84,39 +84,61 @@ contains
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
-    !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
-    pure function apod_dp( self, x ) result( r )
-        class(kbinterpol), intent(in) :: self
-        real(dp),          intent(in) :: x
-        real(dp) :: r, arg
-        if( abs(x) > self%Whalf )then
-            r = 0._dp
-            return ! for insignificant values return as soon as possible
-        endif
-        arg = self%twooW * x
-        arg = 1._dp - arg * arg
-        if( arg < 0._dp )then  ! need to double-check to prevent spurious occurence of NaN's
-            r = 0._dp
-            return
-        end if
-        r = self%oneoW * bessi0_dp(self%beta * sqrt(arg))
-    end function apod_dp
+     pure subroutine apod_mat_2d( self, loc, win_lo1, win_lo2, wdim, kbw )
+        class(kbinterpol), intent(in)  :: self
+        real(sp),          intent(in)  :: loc(2)
+        integer,           intent(in)  :: win_lo1, win_lo2, wdim
+        real,              intent(out) :: kbw(wdim,wdim)
+        real(sp):: wx(wdim), wy(wdim), s, x, y, recip
+        integer :: i, j
+        do i = 1, wdim
+            x     = real(win_lo1 + i - 1, sp) - loc(1)
+            y     = real(win_lo2 + i - 1, sp) - loc(2)
+            wx(i) = self%apod(x)
+            wy(i) = self%apod(y)
+        end do
+        ! Fill as outer product (no temporaries)
+        s = 0.
+        do j = 1, wdim
+            do i = 1, wdim
+                kbw(i,j) = wx(i) * wy(j)
+                s = s + kbw(i,j)
+            end do
+        end do
+        ! always normalize
+        recip = 1.0_sp / s
+        kbw   = kbw * recip
+    end subroutine apod_mat_2d
 
-    !>  \brief  is the derivative of the Kaiser-Bessel apodization function, abs(x) <= Whalf
-    pure function dapod( self, x ) result(r)
-        class(kbinterpol), intent(in) :: self
-        real(dp),          intent(in) :: x
-        real(dp) :: r, arg, sqrtarg
-        arg  = self%twooW * x
-        arg  = 1._dp - arg * arg
-        if (arg <= 0._dp) then
-            r = 0._dp
-            return
-        end if
-        sqrtarg = sqrt(arg)
-        r    = - 4._dp * self%beta * x * bessi1(self%beta * sqrtarg) / &
-                sqrtarg / self%W**3
-    end function dapod
+    pure subroutine apod_mat_3d( self, loc, win_lo1, win_lo2, win_lo3, wdim, kbw )
+        class(kbinterpol), intent(in)  :: self
+        real(sp),          intent(in)  :: loc(3)
+        integer,           intent(in)  :: win_lo1, win_lo2, win_lo3, wdim
+        real,              intent(out) :: kbw(3,3,3)
+        integer :: i, j, k
+        real(sp):: wx(wdim), wy(wdim), wz(wdim), wyz, sx, sy, sz, s, x, y, z, recip
+        do i = 1, wdim
+            x     = real(win_lo1 + i - 1, sp) - loc(1)
+            y     = real(win_lo2 + i - 1, sp) - loc(2)
+            z     = real(win_lo3 + i - 1, sp) - loc(3)
+            wx(i) = self%apod(x)
+            wy(i) = self%apod(y)
+            wz(i) = self%apod(z)
+        end do
+        s = 0.
+        do k = 1, wdim
+            do j = 1, wdim
+                wyz = wy(j) * wz(k)
+                do i = 1, wdim
+                    kbw(i,j,k) = wx(i) * wyz
+                    s = s + kbw(i,j,k)
+                end do
+            end do
+        end do
+         ! always normalize
+        recip = 1.0_sp / s
+        kbw   = kbw * recip
+    end subroutine apod_mat_3d
 
     !>  \brief  is the Kaiser-Bessel instrument function
     elemental function instr( self, x ) result( r )
