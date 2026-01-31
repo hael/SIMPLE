@@ -9,8 +9,7 @@ private
 
 type, extends(image) :: projector
     private
-    procedure(interp_fcomp_fun),     pointer, public :: interp_fcomp     !< pointer to interpolation function
-    procedure(fdf_interp_fcomp_fun), pointer, public :: fdf_interp_fcomp !< pointer to interpolation function for derivatives
+    procedure(interp_fcomp_fun), pointer, public :: interp_fcomp !< pointer to interpolation function
     type(kbinterpol)      :: kbwin                   !< window function object
     integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
     complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
@@ -26,15 +25,11 @@ type, extends(image) :: projector
     procedure          :: is_expanded
     ! FOURIER PROJECTORS
     procedure          :: fproject
-    procedure, private :: fproject_serial_1
-    procedure, private :: fproject_serial_2
-    generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
+    procedure          :: fproject_serial
     procedure          :: fproject_polar
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
     procedure          :: interp_fcomp_trilinear
-    procedure          :: fdf_interp_fcomp_norm
-    procedure          :: fdf_interp_fcomp_grid
     ! DESTRUCTOR
     procedure          :: kill_expanded
 end type projector
@@ -45,13 +40,6 @@ interface
         class(projector), intent(in) :: self
         real,             intent(in) :: loc(3)
     end function
-
-    pure subroutine fdf_interp_fcomp_fun( self, drotmat, loc, q, fcomp, dfcomp )
-        import :: projector
-        class(projector), intent(in)  :: self
-        real(8),          intent(in)  :: drotmat(3,3,3), loc(3), q(3)
-        complex,          intent(out) :: fcomp, dfcomp(3)
-    end subroutine
 end interface
 
 contains
@@ -124,10 +112,8 @@ contains
             case DEFAULT
                 ! defaults to Kaiser-Bessel
                 self%interp_fcomp     => interp_fcomp_norm
-                self%fdf_interp_fcomp => fdf_interp_fcomp_norm
                 if( params_glob%gridding.eq.'yes')then
                     self%interp_fcomp     => interp_fcomp_grid
-                    self%fdf_interp_fcomp => fdf_interp_fcomp_grid
                 endif
         end select
         self%expanded_exists = .true.
@@ -190,7 +176,7 @@ contains
     end subroutine fproject
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_serial_1( self, e, fplane )
+    subroutine fproject_serial( self, e, fplane )
         class(projector),  intent(inout) :: self
         class(ori),        intent(in)    :: e
         class(image),      intent(inout) :: fplane
@@ -221,33 +207,7 @@ contains
                 endif
             end do
         end do
-    end subroutine fproject_serial_1
-
-    !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_serial_2( self, e, lims, cmat, resmsk )
-        class(projector),              intent(inout) :: self
-        class(ori),                    intent(in)    :: e
-        integer,                       intent(in)    :: lims(2,2)
-        complex(kind=c_float_complex), intent(inout) :: cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real        :: loc(3), e_rotmat(3,3)
-        integer     :: h, k
-        e_rotmat = e%get_mat()
-        do k = lims(2,1),lims(2,2)
-            do h = lims(1,1),lims(1,2)
-                if( resmsk(h,k) )then
-                    loc = matmul(real([h,k,0]), e_rotmat)
-                    if( h .ge. 0 )then
-                        cmat(h,k) = self%interp_fcomp(loc)
-                    else
-                        cmat(h,k) = conjg(self%interp_fcomp(loc))
-                    endif
-                else
-                    cmat(h,k) = CMPLX_ZERO
-                endif
-            end do
-        end do
-    end subroutine fproject_serial_2
+    end subroutine fproject_serial
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
@@ -338,86 +298,6 @@ contains
         w(2,2,2) = product(d)
         comp = sum(w * self%cmat_exp(lb(1):lb(1)+1,lb(2):lb(2)+1,lb(3):lb(3)+1))
     end function interp_fcomp_trilinear
-
-    !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
-    !! \param loc 3-dimensional location in the volume
-    !! \param q 2-dimensional location on the plane (h,k,0)
-    pure subroutine fdf_interp_fcomp_norm( self, drotmat, loc, q, fcomp, dfcomps )
-        class(projector), intent(in)                             :: self
-        real(dp),         intent(in)                             :: drotmat(3,3,3), loc(3), q(3)
-        complex(sp),      intent(out)                            :: fcomp, dfcomps(3)
-        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1,   w2,  w3, w
-        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1, dw2, dw3
-        real(dp)                                                 :: dRdangle(3), dapod_tmp(3,3)
-        complex(dp)                                              :: N     !numerator
-        real(dp)                                                 :: D, D2 !denominator
-        integer                                                  :: i, j, win(2,3) ! window boundary array in fortran contiguous format
-        win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + self%iwinsz
-        win(1,:) = win(1,:) - self%iwinsz
-        w1 = 1.0_dp ; w2 = 1.0_dp ; w3 = 1.0_dp
-        do i = 1,self%wdim
-            w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
-            w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
-            w3(:,:,i) = self%kbwin%apod_dp( real( win(1,3)+i-1,kind=dp) - loc(3) )
-            dapod_tmp(1,i) = self%kbwin%dapod( real( win(1,1)+i-1,kind=dp) - loc(1) )
-            dapod_tmp(2,i) = self%kbwin%dapod( real( win(1,2)+i-1,kind=dp) - loc(2) )
-            dapod_tmp(3,i) = self%kbwin%dapod( real( win(1,3)+i-1,kind=dp) - loc(3) )
-        end do
-        w  = w1 * w2 * w3
-        N  = sum(w * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)))
-        D  = sum(w)
-        D2 = D*D
-        fcomp = cmplx( N / D )
-        do j = 1,3 ! theta, phi, psi
-            dRdangle = matmul(q, drotmat(:,:,j))
-            do i = 1,self%wdim
-                dw1(i,:,:) = - dapod_tmp(1,i) * dRdangle(1)
-                dw2(:,i,:) = - dapod_tmp(2,i) * dRdangle(2)
-                dw3(:,:,i) = - dapod_tmp(3,i) * dRdangle(3)
-            end do
-            w = dw1  * w2 * w3  + w1 * (dw2  * w3  + w2 * dw3)
-            dfcomps(j) = cmplx((sum(w * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3))) * D - N * sum(w)) / D2)
-        enddo
-    end subroutine fdf_interp_fcomp_norm
-
-    !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
-    !>  \brief no normalization by interpolation weight occurs
-    !! \param loc 3-dimensional location in the volume
-    !! \param q 2-dimensional location on the plane (h,k,0)
-    pure subroutine fdf_interp_fcomp_grid( self, drotmat, loc, q, fcomp, dfcomps )
-        class(projector), intent(in)                             :: self
-        real(dp),         intent(in)                             :: drotmat(3,3,3), loc(3), q(3)
-        complex(sp),      intent(out)                            :: fcomp, dfcomps(3)
-        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1,   w2,  w3, w
-        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1, dw2, dw3
-        real(dp)                                                 :: dRdangle(3), dapod_tmp(3,3)
-        integer                                                  :: i, j, win(2,3) ! window boundary array in fortran contiguous format
-        win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + self%iwinsz
-        win(1,:) = win(1,:) - self%iwinsz
-        w1  = 1.0_dp ; w2  = 1.0_dp ; w3  = 1.0_dp
-        do i=1,self%wdim
-            w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
-            w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
-            w3(:,:,i) = self%kbwin%apod_dp( real( win(1,3)+i-1,kind=dp) - loc(3) )
-            dapod_tmp(1,i) = self%kbwin%dapod( real( win(1,1)+i-1,kind=dp) - loc(1) )
-            dapod_tmp(2,i) = self%kbwin%dapod( real( win(1,2)+i-1,kind=dp) - loc(2) )
-            dapod_tmp(3,i) = self%kbwin%dapod( real( win(1,3)+i-1,kind=dp) - loc(3) )
-        end do
-        w     = w1 * w2 * w3
-        fcomp = cmplx(sum(w*self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3))))
-        do j = 1,3 ! theta, phi, psi
-            dRdangle = matmul(q, drotmat(:,:,j))
-            do i = 1,self%wdim
-                dw1(i,:,:) = - dapod_tmp(1,i) * dRdangle(1)
-                dw2(:,i,:) = - dapod_tmp(2,i) * dRdangle(2)
-                dw3(:,:,i) = - dapod_tmp(3,i) * dRdangle(3)
-            end do
-            w = dw1  * w2 * w3  + w1 * (dw2  * w3  + w2 * dw3)
-            dfcomps(j) = cmplx(sum(w*self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3))))
-        enddo
-    end subroutine fdf_interp_fcomp_grid
 
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
     subroutine kill_expanded( self )
