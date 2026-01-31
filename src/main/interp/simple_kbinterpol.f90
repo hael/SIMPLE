@@ -71,7 +71,7 @@ contains
     end function get_wdim
 
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
-    pure function apod( self, x ) result( r )
+    pure elemental function apod( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: r, arg
@@ -84,59 +84,58 @@ contains
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
-     pure subroutine apod_mat_2d( self, loc, win_lo1, win_lo2, wdim, kbw )
+    pure subroutine apod_mat_2d(self, loc, iwinsz, wdim, kbw)
         class(kbinterpol), intent(in)  :: self
         real(sp),          intent(in)  :: loc(2)
-        integer,           intent(in)  :: win_lo1, win_lo2, wdim
-        real,              intent(out) :: kbw(wdim,wdim)
-        real(sp):: wx(wdim), wy(wdim), s, x, y, recip
-        integer :: i, j
+        integer,           intent(in)  :: iwinsz, wdim
+        real(sp),          intent(out) :: kbw(wdim,wdim)
+        integer  :: win_lo(2)
+        real(sp) :: base(2), ww(2)
+        real(sp) :: wrow(wdim), wcol(wdim)
+        real(sp) :: recip
+        integer  :: i
+        ! Window lower corner
+        win_lo = nint(loc) - iwinsz
+        base   = real(win_lo, sp) - loc
+        ! 1D weights along each axis (self%apod is pure elemental)
         do i = 1, wdim
-            x     = real(win_lo1 + i - 1, sp) - loc(1)
-            y     = real(win_lo2 + i - 1, sp) - loc(2)
-            wx(i) = self%apod(x)
-            wy(i) = self%apod(y)
+            ww      = self%apod(base + real(i-1, sp)) ! length-2 vector -> length-2 weights
+            wrow(i) = ww(1)
+            wcol(i) = ww(2)
         end do
-        ! Fill as outer product (no temporaries)
-        s = 0.
-        do j = 1, wdim
-            do i = 1, wdim
-                kbw(i,j) = wx(i) * wy(j)
-                s = s + kbw(i,j)
-            end do
-        end do
-        ! always normalize
-        recip = 1.0_sp / s
+        ! Separable 2D outer product: kbw(i,j) = wrow(i) * wcol(j)
+        kbw = spread(wrow, dim=2, ncopies=wdim) * spread(wcol, dim=1, ncopies=wdim)
+        ! Always normalize
+        recip = 1.0_sp / sum(kbw)
         kbw   = kbw * recip
     end subroutine apod_mat_2d
 
-    pure subroutine apod_mat_3d( self, loc, win_lo1, win_lo2, win_lo3, wdim, kbw )
+    pure subroutine apod_mat_3d(self, loc, iwinsz, wdim, kbw)
         class(kbinterpol), intent(in)  :: self
         real(sp),          intent(in)  :: loc(3)
-        integer,           intent(in)  :: win_lo1, win_lo2, win_lo3, wdim
-        real,              intent(out) :: kbw(3,3,3)
-        integer :: i, j, k
-        real(sp):: wx(wdim), wy(wdim), wz(wdim), wyz, sx, sy, sz, s, x, y, z, recip
+        integer,           intent(in)  :: iwinsz, wdim
+        real(sp),          intent(out) :: kbw(wdim,wdim,wdim)
+        integer  :: win_lo(3)
+        real(sp) :: base(3), ww(3)
+        real(sp) :: wx(wdim), wy(wdim), wz(wdim)
+        real(sp) :: recip
+        integer  :: i
+        ! Window lower corner
+        win_lo = nint(loc) - iwinsz
+        base   = real(win_lo, sp) - loc
+        ! 1D weights along each axis (self%apod is pure elemental)
         do i = 1, wdim
-            x     = real(win_lo1 + i - 1, sp) - loc(1)
-            y     = real(win_lo2 + i - 1, sp) - loc(2)
-            z     = real(win_lo3 + i - 1, sp) - loc(3)
-            wx(i) = self%apod(x)
-            wy(i) = self%apod(y)
-            wz(i) = self%apod(z)
+            ww    = self%apod(base + real(i-1, sp)) ! length-3 vector -> length-3 weights
+            wx(i) = ww(1)
+            wy(i) = ww(2)
+            wz(i) = ww(3)
         end do
-        s = 0.
-        do k = 1, wdim
-            do j = 1, wdim
-                wyz = wy(j) * wz(k)
-                do i = 1, wdim
-                    kbw(i,j,k) = wx(i) * wyz
-                    s = s + kbw(i,j,k)
-                end do
-            end do
-        end do
-         ! always normalize
-        recip = 1.0_sp / s
+        ! Separable 3D outer product: kbw(i,j,k) = wx(i) * wy(j) * wz(k)
+        kbw = spread(spread(wx, dim=2, ncopies=wdim), dim=3, ncopies=wdim) &
+            * spread(spread(wy, dim=1, ncopies=wdim), dim=3, ncopies=wdim) &
+            * spread(spread(wz, dim=1, ncopies=wdim), dim=2, ncopies=wdim)
+        ! Always normalize
+        recip = 1.0_sp / sum(kbw)
         kbw   = kbw * recip
     end subroutine apod_mat_3d
 
