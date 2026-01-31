@@ -52,8 +52,7 @@ call test_online_var
 call test_imghead
 call test_oris(.false.)
 call test_image(.false.)
-!!!!!!!!!!!!!!! TAKEN OUT: commit a2b1c5b by cyrilreboul breaks this test
-! call test_ftexp_shsrch
+call test_ftexp_shsrch
 call test_ftiter
 ! local test functions
 call test_multinomal

@@ -273,7 +273,7 @@ contains
                             endif
                         end do
                     end do
-                    dist = euclid(real([xsh_best,ysh_best]), real([-x,-y]))
+                    dist = euclid(real([xsh_best,ysh_best]), real([x,y]))
                     vec  = dble([xsh_best,ysh_best])
                     call ftexp_shsrch_fdfcost_8(ftexp_shsrch_trial, vec, dbl_corr, grad, 2)
                     call ftexp_img%corr_normalize(ftexp_trial, dbl_corr)
@@ -281,7 +281,7 @@ contains
                     diff = abs(real(dbl_corr)-corr_best)
                     call ftexp_img%corr_normalize(ftexp_trial, grad(1))
                     call ftexp_img%corr_normalize(ftexp_trial, grad(2))
-                    print *, x,y, xsh_best,ysh_best, corr_best, dbl_corr, grad
+                    ! print *, x,y, xsh_best,ysh_best, corr_best, dbl_corr, grad, dist
                     mag  = real(sqrt(sum(grad**2)))
                     call ftexp_trial%kill
                     call ftexp_shsrch_trial%kill
@@ -295,7 +295,8 @@ contains
                 distavg       = distavg/real(NTST)
                 diff_corr_avg = diff_corr_avg/real(NTST)
                 grad_mag_avg  = grad_mag_avg/real(NTST)
-                if( corravg > 0.999 .and. distavg < 0.0001 .and. diff_corr<0.0001 )then
+                ! print *,corravg,distavg,diff_corr_avg
+                if( corravg > 0.999 .and. distavg < 0.0001 .and. diff_corr_avg<0.0001 )then
                     write(logfhandle,'(a)')'>>> CORRELATIONS TEST PASSED'
                 else
                     print *, 'corravg:   ', corravg
@@ -390,7 +391,7 @@ contains
             call img_ptcl%shift([x,y,0.])
             call ftexp_ptcl%new(img_ptcl, hp, lp, .true.)
             cxy = ftexp_srch%minimize()
-            print *,i,x,y,cxy
+            ! print *,i,x,y,cxy
             if( cxy(1) < 0.999 )then
                 THROW_HARD('shift alignment failed; test_ftexp_shsrch')
             endif
