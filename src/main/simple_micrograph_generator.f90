@@ -37,7 +37,6 @@ type :: mic_generator
     logical                  :: l_gain         = .false.
     logical                  :: l_eer          = .false.
     logical                  :: l_poly         = .false.
-    logical                  :: l_nn_interp    = .false.
     logical                  :: l_frameweights = .false.
     logical                  :: exists         = .false.
   contains
@@ -55,13 +54,12 @@ end type mic_generator
 contains
 
     !>  Constructor
-    subroutine new( self, omic, convention, frames_range, bilinear_interp )
+    subroutine new( self, omic, convention, frames_range )
         use simple_ori, only: ori
         class(mic_generator), intent(inout) :: self
         class(ori),           intent(in)    :: omic
         character(len=*),     intent(in)    :: convention
         integer,              intent(in)    :: frames_range(2)
-        logical,              intent(in)    :: bilinear_interp
         real(dp), allocatable :: poly(:)
         type(string) :: poly_fname
         integer      :: iframe
@@ -76,7 +74,6 @@ contains
         endif
         self%convention = trim(convention)
         ! weights & interpolation
-        self%l_nn_interp    = .not.bilinear_interp
         select case(self%convention%to_char())
             case('simple')
                 self%l_frameweights = .true.
@@ -469,11 +466,7 @@ contains
                         xy = x*y
                         pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
                         pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
-                        if( self%l_nn_interp )then
-                            rmatout(i,j,1) = rmatout(i,j,1) + w*interp_nn(pixx,pixy)
-                        else
-                            rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
-                        endif
+                        rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
                     end do
                 end do
                 !$omp end parallel do
@@ -517,14 +510,6 @@ contains
                                  &t  *       u  * rmatin(x2_h, y2_h, 1) + &
                            &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
         end function interp_bilin
-
-        pure real function interp_nn( xval, yval )
-            real, intent(in) :: xval, yval
-            integer  :: x, y
-            x = min(max(nint(xval),1),ldim(1))
-            y = min(max(nint(yval),1),ldim(2))
-            interp_nn = rmatin(x,y,1)
-        end function interp_nn
 
     end subroutine generate_micrographs
 
@@ -930,7 +915,6 @@ contains
         self%l_doseweighing = .false.
         self%l_gain         = .false.
         self%l_eer          = .false.
-        self%l_nn_interp    = .false.
         self%l_frameweights = .false.
         self%nframes        = 0
         self%nhotpix        = 0

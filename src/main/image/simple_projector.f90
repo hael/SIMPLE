@@ -9,7 +9,6 @@ private
 
 type, extends(image) :: projector
     private
-    procedure(interp_fcomp_fun), pointer, public :: interp_fcomp !< pointer to interpolation function
     type(kbinterpol)      :: kbwin                   !< window function object
     integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
     complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
@@ -18,29 +17,19 @@ type, extends(image) :: projector
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
-    procedure          :: expand_cmat
+    procedure :: expand_cmat
     ! SETTERS
-    procedure          :: reset_expanded
+    procedure :: reset_expanded
     ! GETTERS
-    procedure          :: is_expanded
+    procedure :: is_expanded
     ! FOURIER PROJECTORS
-    procedure          :: fproject
-    procedure          :: fproject_serial
-    procedure          :: fproject_polar
-    procedure          :: interp_fcomp_norm
-    procedure          :: interp_fcomp_grid
-    procedure          :: interp_fcomp_trilinear
+    procedure :: fproject
+    procedure :: fproject_serial
+    procedure :: fproject_polar
+    procedure :: interp_fcomp
     ! DESTRUCTOR
-    procedure          :: kill_expanded
+    procedure :: kill_expanded
 end type projector
-
-interface
-    pure complex function interp_fcomp_fun( self, loc )
-        import :: projector
-        class(projector), intent(in) :: self
-        real,             intent(in) :: loc(3)
-    end function
-end interface
 
 contains
 
@@ -105,17 +94,6 @@ contains
         enddo
         !$omp end parallel do
         deallocate( cych,cyck,cycm )
-        ! gridding correction & interpolation
-        select case(trim(params_glob%interpfun))
-            case('linear')
-                self%interp_fcomp => interp_fcomp_trilinear
-            case DEFAULT
-                ! defaults to Kaiser-Bessel
-                self%interp_fcomp     => interp_fcomp_norm
-                if( params_glob%gridding.eq.'yes')then
-                    self%interp_fcomp     => interp_fcomp_grid
-                endif
-        end select
         self%expanded_exists = .true.
     end subroutine expand_cmat
 
@@ -235,7 +213,7 @@ contains
     end subroutine fproject_polar
 
     !>  \brief is to interpolate from the expanded complex matrix
-    pure function interp_fcomp_norm( self, loc )result( comp )
+    pure function interp_fcomp( self, loc )result( comp )
         class(projector), intent(in) :: self
         real,             intent(in) :: loc(3)
         complex :: comp
@@ -245,59 +223,11 @@ contains
         win(1,:) = nint(loc)
         win(2,:) = win(1,:) + self%iwinsz
         win(1,:) = win(1,:) - self%iwinsz
-        ! interpolation kernel matrix
-        w = 1.
-        do i=1,self%wdim
-            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
-            w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(1,2)+i-1)-loc(2) )
-            w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
-        end do
-        ! SUM( kernel x components )
-        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) / sum(w)
-    end function interp_fcomp_norm
-
-    !>  \brief is to interpolate from the expanded complex matrix
-    pure function interp_fcomp_grid( self, loc )result( comp )
-        class(projector), intent(in) :: self
-        real,             intent(in) :: loc(3)
-        complex :: comp
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
-        integer :: i, win(2,3) ! window boundary array in fortran contiguous format
-        ! interpolation kernel window
-        win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + self%iwinsz
-        win(1,:) = win(1,:) - self%iwinsz
-        ! interpolation kernel matrix
-        w = 1.
-        do i=1,self%wdim
-            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
-            w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(1,2)+i-1)-loc(2) )
-            w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
-        end do
+        ! evaluate apodization function in window
+        call self%kbwin%apod_mat_3d(loc, self%iwinsz, self%wdim, w)
         ! SUM( kernel x components )
         comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
-    end function interp_fcomp_grid
-
-    !>  \brief is for tri-linear interpolation from the expanded complex matrix
-    pure function interp_fcomp_trilinear( self, loc )result( comp )
-        class(projector), intent(in) :: self
-        real,             intent(in) :: loc(3)
-        complex :: comp
-        real    :: w(2,2,2), d(3), dp(3)
-        integer :: lb(3)
-        lb = floor(loc)
-        d  = loc - real(lb)
-        dp = 1. - d
-        w(1,1,1) = product(dp)
-        w(2,1,1) =  d(1) * dp(2) * dp(3)
-        w(1,2,1) = dp(1) *  d(2) * dp(3)
-        w(1,1,2) = dp(1) * dp(2) *  d(3)
-        w(2,1,2) =  d(1) * dp(2) *  d(3)
-        w(1,2,2) = dp(1) *  d(2) *  d(3)
-        w(2,2,1) =  d(1) *  d(2) * dp(3)
-        w(2,2,2) = product(d)
-        comp = sum(w * self%cmat_exp(lb(1):lb(1)+1,lb(2):lb(2)+1,lb(3):lb(3)+1))
-    end function interp_fcomp_trilinear
+    end function interp_fcomp
 
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
     subroutine kill_expanded( self )

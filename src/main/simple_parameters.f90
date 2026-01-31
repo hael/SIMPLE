@@ -230,7 +230,6 @@ type :: parameters
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
-    character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
@@ -728,7 +727,6 @@ contains
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('inivol',         self%inivol)
         call check_carg('interactive',    self%interactive)
-        call check_carg('interpfun',      self%interpfun)
         call check_carg('iterstats',      self%iterstats)
         call check_carg('json',           self%json)
         call check_carg('keepvol',        self%keepvol)
@@ -1688,13 +1686,6 @@ contains
                 self%ncls = ncls
             endif
         endif
-        ! interpolation function
-        select case(trim(self%interpfun))
-            case('kb','linear', 'nn')
-                ! supported
-            case DEFAULT
-                THROW_HARD('Unsupported interpolation function')
-        end select
         ! set remap_clusters flag
         self%l_remap_cls = .false.
         if( self%remap_cls .eq. 'yes' ) self%l_remap_cls = .true.

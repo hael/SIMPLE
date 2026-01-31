@@ -156,14 +156,7 @@ contains
             call eucl_sigma%new(fname, params%box)
             call eucl_sigma%read_groups(build%spproj_field)
         end if
-        if( trim(params%projrec).eq.'yes' )then
-            ! making sure the projection directions assignment
-            ! refers to current reference space
-            call build%spproj_field%set_projs(build%eulspace)
-            call calc_projdir3Drec( cline, nptcls2update, pinds )
-        else
-            call calc_3Drec( cline, nptcls2update, pinds )
-        endif
+        call calc_3Drec( cline, nptcls2update, pinds )
         ! cleanup
         call eucl_sigma%kill
         call qsys_job_finished(string('simple_commanders_rec :: exec_reconstruct3D'))

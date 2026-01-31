@@ -84,6 +84,7 @@ contains
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
+    ! generate apodization fuction matrix in window
     pure subroutine apod_mat_2d(self, loc, iwinsz, wdim, kbw)
         class(kbinterpol), intent(in)  :: self
         real(sp),          intent(in)  :: loc(2)

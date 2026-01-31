@@ -232,14 +232,6 @@ contains
                 &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
         end function interp_bilin
 
-        pure real function interp_nn( xval, yval )
-            real, intent(in) :: xval, yval
-            integer  :: x, y
-            x = min(max(nint(xval),1),ldim(1))
-            y = min(max(nint(yval),1),ldim(2))
-            interp_nn = rmatin(x,y,1)
-        end function interp_nn
-
     end subroutine micrograph_interp
 
     !>  Utility to calculate the number fractions, # eer frames per fraction and adjusted total_dose

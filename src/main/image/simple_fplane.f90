@@ -194,13 +194,12 @@ contains
     end subroutine gen_planes
 
     !> Produces padded shifted, rotated, CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes_pad( self, img, ctfvars, shift, e3, iptcl, linear )
+    subroutine gen_planes_pad( self, img, ctfvars, shift, e3, iptcl )
         class(fplane),                  intent(inout) :: self
         class(image),                   intent(inout) :: img
         class(ctfparams),               intent(in)    :: ctfvars
         real,                           intent(in)    :: shift(2), e3
         integer,                        intent(in)    :: iptcl
-        logical,                        intent(in)    :: linear
         type(ctf)                :: tfun
         complex(c_float_complex) :: c,w1, w2, ph0, ph_h, ph_k
         real(dp) :: pshift(2)
@@ -239,151 +238,71 @@ contains
                     real(sin(real(self%frlims_crop(1,1),dp)*pshift(1)), c_float), kind=c_float_complex )
         ph_k = cmplx( real(cos(real(self%frlims_crop(2,1),dp)*pshift(2)), c_float), &
                     real(sin(real(self%frlims_crop(2,1),dp)*pshift(2)), c_float), kind=c_float_complex )
-        if( linear )then
-            ! Bilinear interpolation
-            do k = self%frlims_crop(2,1),0
-                if( k == 0 )then
-                    hlim = -1
-                else
-                    hlim = self%frlims_crop(1,2)
-                endif
-                ph_h = ph0
-                do h = self%frlims_crop(1,1),hlim
-                    shell = nint(sqrt(real(h*h + k*k)))
-                    if( shell <= self%nyq_crop )then
-                        ! Retrieve component & shift
-                        physh = ft_map_phys_addrh(h,k)
-                        physk = ft_map_phys_addrk(h,k)
-                        c     = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0)&
-                                & * (ph_k * ph_h)
-                        ! CTF
-                        if( l_ctf )then
-                            tval   = tfun%eval(ft_map_spaFreqSq(h,k), ft_map_astigang(h,k), add_phshift)
-                            tvalsq = tval * tval
-                            c      = merge(abs(tval)*c, tval*c, l_flip)
-                        else
-                            tvalsq = 1.0
-                        endif
-                        ! sigma2 weighing
-                        if( params_glob%l_ml_reg ) then
-                            if(shell >= sigma2_kfromto(1))then
-                                c      = c      / self%sigma2_noise(shell)
-                                tvalsq = tvalsq / self%sigma2_noise(shell)
-                            else
-                                c      = c      / self%sigma2_noise(sigma2_kfromto(1))
-                                tvalsq = tvalsq / self%sigma2_noise(sigma2_kfromto(1))
-                            endif
-                        endif
-                        ! rotation
-                        loc = matmul(real([h,k]), rmat)
-                        ! bottom left corner
-                        fh  = floor(loc(1))
-                        fk  = floor(loc(2))
-                        ! kernel
-                        dh = loc(1) - real(fh)
-                        dk = loc(2) - real(fk)
-                        w(1,:) = 1.-dh
-                        w(2,:) = dh
-                        w(:,1) = w(:,1)*(1.-dk)
-                        w(:,2) = w(:,2)*dk
-                        ! interpolation
-                        i = 0
-                        do hh = fh,fh+1
-                            i = i+1
-                            if( abs(hh) > self%nyq_croppd )cycle
-                            j = 0
-                            do kk = fk,fk+1
-                                j = j+1
-                                if( (kk >= self%frlims_croppd(2,1)) .and. (kk <= self%frlims_croppd(2,2)) )then
-                                    self%cmplx_plane(hh,kk) = self%cmplx_plane(hh,kk) + w(i,j) * c
-                                    self%ctfsq_plane(hh,kk) = self%ctfsq_plane(hh,kk) + w(i,j) * tvalsq
-                                endif
-                                ! Friedel symmetric
-                                ! hh is in [-N/2;N/2] so no need to check for bounds of -hh again
-                                if( (-kk >= self%frlims_croppd(2,1)) .and. (-kk <= self%frlims_croppd(2,2)) )then
-                                    self%cmplx_plane(-hh,-kk) = self%cmplx_plane(-hh,-kk) + w(i,j) * conjg(c)
-                                    self%ctfsq_plane(-hh,-kk) = self%ctfsq_plane(-hh,-kk) + w(i,j) * tvalsq
-                                endif
-                            enddo
-                        enddo
+        ! KB interpolation
+        iwinsz = ceiling(self%winsz - 0.5)
+        do k = self%frlims_crop(2,1),0
+            if( k == 0 )then
+                hlim = -1 ! h=0, k=0 is treated after the loop
+            else
+                hlim = self%frlims_crop(1,2)
+            endif
+            ph_h = ph0
+            do h = self%frlims_crop(1,1),hlim
+                shell = nint(sqrt(real(h*h + k*k)))
+                if( shell > self%nyq_crop ) cycle
+                    ! Retrieve component & shift
+                    physh = ft_map_phys_addrh(h,k)
+                    physk = ft_map_phys_addrk(h,k)
+                    c     = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0)&
+                            & * (ph_k * ph_h)
+                    ! CTF
+                    if( l_ctf )then
+                        tval   = tfun%eval(ft_map_spaFreqSq(h,k), ft_map_astigang(h,k), add_phshift)
+                        tvalsq = tval * tval
+                        c      = merge(abs(tval)*c, tval*c, l_flip)
+                    else
+                        tvalsq = 1.0
+                    endif                    ! sigma2 weighing
+                if( params_glob%l_ml_reg ) then
+                    if(shell >= sigma2_kfromto(1))then
+                        c      = c      / self%sigma2_noise(shell)
+                        tvalsq = tvalsq / self%sigma2_noise(shell)
+                    else
+                        c      = c      / self%sigma2_noise(sigma2_kfromto(1))
+                        tvalsq = tvalsq / self%sigma2_noise(sigma2_kfromto(1))
                     endif
-                    ph_h = ph_h * w1    ! phase shift along h
-                enddo
-                ph_k = ph_k * w2        ! phase shift along k
-            enddo
-        else
-            ! KB interpolation
-            iwinsz = ceiling(self%winsz - 0.5)
-            do k = self%frlims_crop(2,1),0
-                if( k == 0 )then
-                    hlim = -1 ! h=0, k=0 is treated after the loop
-                else
-                    hlim = self%frlims_crop(1,2)
                 endif
-                ph_h = ph0
-                do h = self%frlims_crop(1,1),hlim
-                    shell = nint(sqrt(real(h*h + k*k)))
-                    if( shell > self%nyq_crop ) cycle
-                        ! Retrieve component & shift
-                        physh = ft_map_phys_addrh(h,k)
-                        physk = ft_map_phys_addrk(h,k)
-                        c     = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0)&
-                                & * (ph_k * ph_h)
-                        ! CTF
-                        if( l_ctf )then
-                            tval   = tfun%eval(ft_map_spaFreqSq(h,k), ft_map_astigang(h,k), add_phshift)
-                            tvalsq = tval * tval
-                            c      = merge(abs(tval)*c, tval*c, l_flip)
-                        else
-                            tvalsq = 1.0
-                        endif                    ! sigma2 weighing
-                    if( params_glob%l_ml_reg ) then
-                        if(shell >= sigma2_kfromto(1))then
-                            c      = c      / self%sigma2_noise(shell)
-                            tvalsq = tvalsq / self%sigma2_noise(shell)
-                        else
-                            c      = c      / self%sigma2_noise(sigma2_kfromto(1))
-                            tvalsq = tvalsq / self%sigma2_noise(sigma2_kfromto(1))
+                ! rotation
+                loc = matmul(real([h,k]), rmat)
+                ! window
+                win(1,:) = nint(loc)
+                win(2,:) = win(1,:) + iwinsz
+                win(1,:) = win(1,:) - iwinsz
+                ! generate apodization fuction matrix in window
+                call self%kbwin%apod_mat_2d(loc, iwinsz, self%wdim, kbw)
+                ! interpolation
+                i = 0
+                do hh = win(1,1),win(2,1)
+                    i = i+1
+                    if( abs(hh) > self%nyq_croppd )cycle
+                    j = 0
+                    do kk = win(1,2),win(2,2)
+                        j = j+1
+                        if( (kk >= self%frlims_croppd(2,1)) .and. (kk <= self%frlims_croppd(2,2)) )then
+                            self%cmplx_plane(hh,kk) = self%cmplx_plane(hh,kk) + kbw(i,j) * c
+                            self%ctfsq_plane(hh,kk) = self%ctfsq_plane(hh,kk) + kbw(i,j) * tvalsq
                         endif
-                    endif
-                    ! rotation
-                    loc = matmul(real([h,k]), rmat)
-                    ! window
-                    win(1,:) = nint(loc)
-                    win(2,:) = win(1,:) + iwinsz
-                    win(1,:) = win(1,:) - iwinsz
-                    ! kernel
-                    kbw = 1.
-                    do i = 1,self%wdim
-                        d = real(win(1,:) + i - 1) - loc
-                        kbw(i,:) = kbw(i,:) * self%kbwin%apod(d(1))
-                        kbw(:,i) = kbw(:,i) * self%kbwin%apod(d(2))
-                    enddo
-                    kbw = kbw / sum(kbw)
-                    ! interpolation
-                    i = 0
-                    do hh = win(1,1),win(2,1)
-                        i = i+1
-                        if( abs(hh) > self%nyq_croppd )cycle
-                        j = 0
-                        do kk = win(1,2),win(2,2)
-                            j = j+1
-                            if( (kk >= self%frlims_croppd(2,1)) .and. (kk <= self%frlims_croppd(2,2)) )then
-                                self%cmplx_plane(hh,kk) = self%cmplx_plane(hh,kk) + kbw(i,j) * c
-                                self%ctfsq_plane(hh,kk) = self%ctfsq_plane(hh,kk) + kbw(i,j) * tvalsq
-                            endif
-                            ! Friedel symmetric
-                            ! hh is in [-N/2;N/2] so no need to check for bounds of -hh
-                            if( (-kk >= self%frlims_croppd(2,1)) .and. (-kk <= self%frlims_croppd(2,2)) )then
-                                self%cmplx_plane(-hh,-kk) = self%cmplx_plane(-hh,-kk) + kbw(i,j) * conjg(c)
-                                self%ctfsq_plane(-hh,-kk) = self%ctfsq_plane(-hh,-kk) + kbw(i,j) * tvalsq
-                            endif
-                        enddo
+                        ! Friedel symmetric
+                        ! hh is in [-N/2;N/2] so no need to check for bounds of -hh
+                        if( (-kk >= self%frlims_croppd(2,1)) .and. (-kk <= self%frlims_croppd(2,2)) )then
+                            self%cmplx_plane(-hh,-kk) = self%cmplx_plane(-hh,-kk) + kbw(i,j) * conjg(c)
+                            self%ctfsq_plane(-hh,-kk) = self%ctfsq_plane(-hh,-kk) + kbw(i,j) * tvalsq
+                        endif
                     enddo
                 enddo
-                ph_k = ph_k * w2 ! phase shift along k
             enddo
-        endif
+            ph_k = ph_k * w2 ! phase shift along k
+        enddo
         ! Interpolation free DC
         c = img%get_fcomp2D(0,0)
         if( l_ctf )then

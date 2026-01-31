@@ -330,11 +330,7 @@ contains
                 ! Cartesian volume
                 call pftc%kill
                 if( trim(params_glob%volrec).eq.'yes' )then
-                    if( trim(params_glob%projrec).eq.'yes' )then
-                        call calc_projdir3Drec( cline, nptcls2update, pinds )
-                    else
-                        call calc_3Drec( cline, nptcls2update, pinds )
-                    endif
+                     call calc_3Drec( cline, nptcls2update, pinds )
                 endif
                 call eucl_sigma%kill
                 call killimgbatch

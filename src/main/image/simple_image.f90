@@ -2068,9 +2068,8 @@ interface
 
     !--- Background ---!
 
-    module subroutine div_w_instrfun( self, interpfun, alpha, padded_dim )
+    module subroutine div_w_instrfun( self, alpha, padded_dim )
         class(image),           intent(inout) :: self
-        character(len =*),      intent(in)    :: interpfun
         real,         optional, intent(in)    :: alpha
         integer,      optional, intent(in)    :: padded_dim
     end subroutine div_w_instrfun

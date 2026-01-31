@@ -172,9 +172,8 @@ contains
     ! Background
     !===========================
 
-    module subroutine div_w_instrfun( self, interpfun, alpha, padded_dim )
+    module subroutine div_w_instrfun( self, alpha, padded_dim )
         class(image),           intent(inout) :: self
-        character(len =*),      intent(in)    :: interpfun
         real,         optional, intent(in)    :: alpha
         integer,      optional, intent(in)    :: padded_dim
         type(kbinterpol)  :: kbwin
@@ -187,69 +186,33 @@ contains
         center = self%ldim/2+1
         dim    = self%ldim(1)
         if( present(padded_dim) ) dim = padded_dim
-        select case(trim(interpfun))
-        case('kb')
-            ! kaiser-bessel window
-            if(.not.present(alpha)) THROW_HARD('alpha must be given for KB interpolator')
-            kbwin = kbinterpol(KBWINSZ,alpha)
-            allocate(w(self%ldim(1)),source=1.)
+        ! kaiser-bessel window
+        if(.not.present(alpha)) THROW_HARD('alpha must be given for KB interpolator')
+        kbwin = kbinterpol(KBWINSZ,alpha)
+        allocate(w(self%ldim(1)),source=1.)
+        do i = 1,self%ldim(1)
+            arg  = real(i-center(1))/real(dim)
+            w(i) = kbwin%instr(arg)
+        end do
+        if( self%is_2d() )then
+            !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close) schedule(static)
             do i = 1,self%ldim(1)
-                arg  = real(i-center(1))/real(dim)
-                w(i) = kbwin%instr(arg)
-            end do
-            if( self%is_2d() )then
-                !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close) schedule(static)
-                do i = 1,self%ldim(1)
-                    do j = 1,self%ldim(2)
-                        self%rmat(i,j,1) = self%rmat(i,j,1) / (w(i)*w(j))
-                    enddo
+                do j = 1,self%ldim(2)
+                    self%rmat(i,j,1) = self%rmat(i,j,1) / (w(i)*w(j))
                 enddo
-                !$omp end parallel do
-            else
-                !$omp parallel do collapse(3) private(i,j,k) default(shared) proc_bind(close) schedule(static)
-                do i = 1,self%ldim(1)
-                    do j = 1,self%ldim(2)
-                        do k = 1,self%ldim(3)
-                            self%rmat(i,j,k) = self%rmat(i,j,k) / (w(i)*w(j)*w(k))
-                        enddo
-                    enddo
-                enddo
-                !$omp end parallel do
-            endif
-        case('linear')
-            ! Tri-linear interpolation
-            !$omp parallel do collapse(3) private(i,j,k,iarg,arg) default(shared) proc_bind(close) schedule(static)
+            enddo
+            !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) private(i,j,k) default(shared) proc_bind(close) schedule(static)
             do i = 1,self%ldim(1)
                 do j = 1,self%ldim(2)
                     do k = 1,self%ldim(3)
-                        iarg = sum(([i,j,k]-center)**2)
-                        if( iarg == 0 )cycle
-                        arg = PI * sqrt(real(iarg)) / real(dim)
-                        arg = sin(arg) / arg
-                        arg = arg*arg ! normalized sinc^2
-                        self%rmat(i,j,k) = self%rmat(i,j,k) / arg
+                        self%rmat(i,j,k) = self%rmat(i,j,k) / (w(i)*w(j)*w(k))
                     enddo
                 enddo
             enddo
             !$omp end parallel do
-        case('nn')
-            ! Nearest-neighbour interpolation
-            !$omp parallel do collapse(3) private(i,j,k,iarg,arg) default(shared) proc_bind(close) schedule(static)
-            do i = 1,self%ldim(1)
-                do j = 1,self%ldim(2)
-                    do k = 1,self%ldim(3)
-                        iarg = sum(([i,j,k]-center)**2)
-                        if( iarg == 0 )cycle
-                        arg = PI * sqrt(real(iarg)) / real(dim)
-                        arg = sin(arg) / arg ! normalized sinc
-                        self%rmat(i,j,k) = self%rmat(i,j,k) / arg
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        case DEFAULT
-            THROW_HARD('Unsupported interpolation method')
-        end select
+        endif
     end subroutine div_w_instrfun
 
     !>  Estimates background from gaussian filtered image, for micrographs

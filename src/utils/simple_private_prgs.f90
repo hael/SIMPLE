@@ -326,7 +326,6 @@ contains
         call cmd_dict%push('imgkind',       'type of image(ptcl|cavg|mic|movie){ptcl}')
         call cmd_dict%push('infile',        'file with inputs(.txt)')
         call cmd_dict%push('infile2',       'file with inputs(.txt)')
-        call cmd_dict%push('interpfun',     'interpolation function(kb|linear){kb}')
         call cmd_dict%push('job_memory_per_task', 'memory in MB per task in distributed exec (typically memory per socket)')
         call cmd_dict%push('job_memory_per_task2D', 'memory in MB per 2D task in distributed exec (typically memory per socket)')
         call cmd_dict%push('jumpsz',        'size of contigous segment')

@@ -57,7 +57,7 @@ contains
         ! memoize instrument function
         if( present(instrfun_img) )then
             call instrfun_img%new(self%ldim, self%smpd, self%wthreads)
-            call gen_instrfun_img(instrfun_img, 'kb', kbwin=kbwin, norm=.true.)
+            call gen_instrfun_img(instrfun_img, kbwin=kbwin)
         endif
         deallocate(w)
     end subroutine memoize4polarize
