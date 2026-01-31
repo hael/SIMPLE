@@ -29,7 +29,7 @@ contains
         call vol%pad(vol_pad)
         if( params_glob%gridding.eq.'yes' )then
             ! corrects for interpolation function
-            call vol_pad%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
+            call vol_pad%div_w_instrfun(alpha=KBALPHA, padded_dim=boxpd)
         endif
         call vol_pad%fft
         call vol_pad%mul(real(boxpd)) ! correct for FFTW convention
@@ -95,7 +95,7 @@ contains
         call vol%pad(vol_pad)
         if( params_glob%gridding.eq.'yes' )then
             ! corrects for interpolation function
-            call vol_pad%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
+            call vol_pad%div_w_instrfun(alpha=KBALPHA, padded_dim=boxpd)
         endif
         call vol_pad%fft
         call vol_pad%expand_cmat(KBALPHA)

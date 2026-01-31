@@ -334,7 +334,6 @@ contains
         if( .not.cline%defined('mcconvention') ) call cline%set('mcconvention', 'simple')
         if( .not.cline%defined('fromf') )        call cline%set('fromf',        1)
         if( .not.cline%defined('tof') )          call cline%set('tof',          0)
-        if( .not.cline%defined('interpfun') )    call cline%set('interpfun',    'linear')
         call params%new(cline)
         call spproj%read_segment(params%oritype, params%projfile)
         ! sanity checks
@@ -342,12 +341,6 @@ contains
         nmovies = spproj%get_nmovies()
         if( nmovies == 0 ) THROW_HARD('No movie to process!')
         call spproj%kill
-        select case(trim(params%interpfun))
-        case('linear', 'nn')
-            ! all good
-        case DEFAULT
-            THROW_HARD('Invalid interpolation scheme: '//trim(params%interpfun))
-        end select
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -385,27 +378,17 @@ contains
         real,             allocatable :: frc(:), res(:)
         type(string)                  :: orig_mic
         integer :: nmovies, imov, cnt, n
-        logical :: l_bilinear_interp
         call cline%set('mkdir',   'no')
         call cline%set('oritype', 'mic')
         if( .not.cline%defined('mcconvention') ) call cline%set('mcconvention', 'simple')
         if( .not.cline%defined('fromf') )        call cline%set('fromf',        1)
         if( .not.cline%defined('tof') )          call cline%set('tof',          0)
-        if( .not.cline%defined('interpfun') )    call cline%set('interpfun',    'linear')
         call params%new(cline)
         call spproj%read(params%projfile)
         ! sanity checks
         if( (params%fromf < 1) ) THROW_HARD('Invalid fractions range!')
         nmovies = spproj%get_nmovies()
         if( nmovies == 0 ) THROW_HARD('No movie to process!')
-        select case(trim(params%interpfun))
-        case('linear')
-            l_bilinear_interp = .true.
-        case('nn')
-            l_bilinear_interp = .false.
-        case DEFAULT
-            THROW_HARD('Invalid interpolation scheme: '//trim(params%interpfun))
-        end select
         ! Main loop
         cnt = 0
         do imov = params%fromp,params%top
@@ -416,7 +399,7 @@ contains
             cnt = cnt + 1
             orig_mic = o%get_str('intg')
             ! new micrograph
-            call generator%new(o, params%mcconvention, [params%fromf, params%tof], l_bilinear_interp)
+            call generator%new(o, params%mcconvention, [params%fromf, params%tof])
             select case(trim(params%mcconvention))
             case('cs')
                 call generator%generate_micrographs(micrograph_dw, micrograph_nodw, background=background)

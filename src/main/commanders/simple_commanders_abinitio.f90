@@ -506,7 +506,6 @@ contains
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                                'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                          'c1')
         if( .not. cline%defined('ptclw')               ) call cline%set('ptclw',                               'no')
-        if( .not. cline%defined('projrec')             ) call cline%set('projrec',                            'yes')
         if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                            'yes')
         if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                        'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                 'comlin_noself')
@@ -854,7 +853,6 @@ contains
             endif
             call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
             call cline_ini3D%delete('nparts')
-            call cline_ini3D%delete('projrec')
             call cline_ini3D%delete('oritype')
             call cline_ini3D%delete('imgkind')
             call cline_ini3D%delete('prob_athres')
