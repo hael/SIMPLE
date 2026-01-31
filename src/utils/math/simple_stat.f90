@@ -641,8 +641,6 @@ contains
         sxx = 0.
         syy = 0.
         sxy = 0.
-        !$omp parallel do default(shared) private(i,j,xt,yt) collapse(2)&
-        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
         do i=1,nx
             do j=1,ny
                 xt  = x(i,j)-ax
@@ -652,7 +650,6 @@ contains
                 sxy = sxy+xt*yt
             end do
         end do
-        !$omp end parallel do
         if( sxx > TINY .and. syy > TINY )then
             r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
         else
@@ -674,8 +671,6 @@ contains
         sxx = 0.
         syy = 0.
         sxy = 0.
-        !$omp parallel do default(shared) private(i,j,k,xt,yt) collapse(2)&
-        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
         do i=1,nx
             do j=1,ny
                 do k=1,nz
@@ -687,7 +682,6 @@ contains
                 end do
             end do
         end do
-        !$omp end parallel do
         if( sxx > TINY .and. syy > TINY )then
             r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
         else
