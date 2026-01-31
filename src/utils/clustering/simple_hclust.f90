@@ -119,7 +119,7 @@ contains
                     case (LINK_COMPLETE)
                         dnew = max(self%dmat(y,k), self%dmat(x,k))
                     case (LINK_AVERAGE)
-                        dnew = (na*self%dmat(y,k) + nb*self%dmat(x,k)) / real(na+nb)
+                        dnew = (real(na)*self%dmat(y,k) + real(nb)*self%dmat(x,k)) / real(na)+real(nb)
                 end select
                 self%dmat(y,k) = dnew
                 self%dmat(k,y) = dnew
