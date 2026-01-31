@@ -298,6 +298,10 @@ contains
                 if( corravg > 0.999 .and. distavg < 0.0001 .and. diff_corr<0.0001 )then
                     write(logfhandle,'(a)')'>>> CORRELATIONS TEST PASSED'
                 else
+                    print *, 'corravg:   ', corravg
+                    print *, 'distavg:   ', distavg
+                    print *, 'diff_corr: ', diff_corr
+
                     THROW_HARD('****ft_expanded_tester FAILURE 1 :: test_shifted_correlator')
                 endif
                 if( grad_mag_avg < 0.000001 )then
