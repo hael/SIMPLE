@@ -502,7 +502,7 @@ contains
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds)
-        call ptcl_match_imgs(1)%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
+        call ptcl_match_imgs(1)%memoize4polarize(pftc%get_pdim(), build_glob%img_instr)
         ! mask memoization for prepimg4align
         call ptcl_match_imgs(1)%memoize_mask_coords
         ! memoize FT mapping stuff
@@ -592,7 +592,7 @@ contains
             endif
         endif
         ! prepare the polarizer images
-        call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
+        call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), build_glob%img_instr)
         allocate(match_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! mask memoization

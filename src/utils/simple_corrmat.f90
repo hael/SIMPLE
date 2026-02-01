@@ -148,7 +148,7 @@ contains
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! initialize
         call pftc%new(nimgs, [1,nimgs], kfromto)
-        call imgs(1)%memoize4polarize(pftc%get_pdim(), KBALPHA)
+        call imgs(1)%memoize4polarize(pftc%get_pdim())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs

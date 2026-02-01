@@ -6,11 +6,10 @@ implicit none
 contains
 
     !> \brief  initialises the image polarizer
-    module subroutine memoize4polarize( self, pdim, alpha, instrfun_img )
+    module subroutine memoize4polarize( self, pdim, instrfun_img )
         use simple_gridding, only: gen_instrfun_img
         class(image),           intent(in)    :: self         !< instance
         integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
-        real,                   intent(in)    :: alpha        !< oversampling factor
         class(image), optional, intent(inout) :: instrfun_img !< instrument function
         type(kbinterpol)  :: kbwin                            !< KB kernel  object
         real, allocatable :: w(:,:)
@@ -21,7 +20,7 @@ contains
         if( allocated(mem_polcyc2_mat)    ) deallocate(mem_polcyc2_mat)
         mem_poldim   = pdim
         lims         = transpose(self%loop_lims(3)) ! fortran layered memory
-        kbwin        = kbinterpol(KBWINSZ, alpha)
+        kbwin        = kbinterpol(KBWINSZ, 1.0)     ! no oversampling
         mem_polwdim  = kbwin%get_wdim()
         mem_polwlen  = mem_polwdim**2
         allocate( mem_polcyc1_mat(    1:mem_polwdim, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&

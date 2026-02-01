@@ -2158,10 +2158,9 @@ interface
 
     ! ===== polarization procedure interfaces =====
 
-    module subroutine memoize4polarize( self, pdim, alpha, instrfun_img )
+    module subroutine memoize4polarize( self, pdim, instrfun_img )
         class(image),           intent(in)    :: self         !< instance
         integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
-        real,                   intent(in)    :: alpha        !< oversampling factor
         class(image), optional, intent(inout) :: instrfun_img !< instrument function
     end subroutine memoize4polarize
 
