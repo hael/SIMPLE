@@ -967,7 +967,7 @@ contains
             ! PREPARATION OF pftc AND REFERENCES
             nrefs = params_glob%nspace * params_glob%nstates
             call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-            call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
+            call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), build_glob%img_instr)
             ! Read polar references
             call pftc%polar_cavger_new(.true.)
             call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -1046,7 +1046,7 @@ contains
         ! pftc
         nrefs = params_glob%nspace * params_glob%nstates
         call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-        call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), params_glob%alpha, build_glob%img_instr)
+        call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), build_glob%img_instr)
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             if( str_has_substr(params_glob%refine, 'prob') )then

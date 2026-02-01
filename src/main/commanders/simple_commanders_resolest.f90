@@ -119,7 +119,7 @@ contains
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
         ! PREPARATION OF PARTICLES
         call pftc%new(params%nspace, [1,nptcls], params%kfromto)
-        call build%img_crop%memoize4polarize(pftc%get_pdim(), params%alpha)
+        call build%img_crop%memoize4polarize(pftc%get_pdim())
         call prepimgbatch(nptcls)
         allocate(tmp_imgs(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
