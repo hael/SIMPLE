@@ -1,4 +1,4 @@
-!@descr: optimization(search)-based filtering (uniform/nonuniform)
+!@descr: optimization(search)-based filtering
 module simple_opt_filter
 use simple_core_module_api
 use simple_image,      only: image, image_ptr
@@ -7,7 +7,7 @@ use simple_butterworth
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt3D, estimate_lplim, estimate_lplims2D
+public :: estimate_lplim, estimate_lplims2D
 private
 
 interface estimate_lplim
@@ -16,143 +16,6 @@ end interface estimate_lplim
 
 
 contains
-
-    ! 3D optimization(search)-based nonuniform filter, paralellized version
-    subroutine nonuni_filt3D(odd, even, mskimg, lpstop)
-        class(image),           intent(inout) :: odd, even
-        class(image), optional, intent(inout) :: mskimg
-        real,         optional, intent(in)    :: lpstop
-        type(image)          :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
-                               &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
-        integer              :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
-        integer              :: filtsz, cutoff_find, lb(3), ub(3), smooth_ext
-        real                 :: rad, find_stepsz, val, smpd
-        type(image_ptr)      :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights
-        integer, parameter   :: CHUNKSZ = 20
-        real,    pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
-        real,    allocatable :: fsc(:), cur_fil(:)
-        type(string) :: fsc_fname
-        ldim       = odd%get_ldim()
-        filtsz     = odd%get_filtsz()
-        smooth_ext = params_glob%smooth_ext
-        box        = ldim(1)
-        fsc_fname  = params_glob%fsc
-        smpd       = even%get_smpd()
-        find_start = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
-        find_stop  = find_start
-        if( present(lpstop) )then
-            find_stop = calc_fourier_index(lpstop, box, smpd)
-        else
-            ! calculate Fourier index low-pass limit for search based on FSC
-            if( .not.file_exists(fsc_fname) ) then
-                THROW_HARD('FSC file: '//fsc_fname%to_char()//' not found')
-            else
-                ! retrieve FSC and calculate low-pass limit
-                fsc       = file2rarr(fsc_fname)
-                find_stop = min(get_find_at_crit(fsc, 0.1),calc_fourier_index(params_glob%lpstop, box, smpd)) ! little overshoot, filter function anyway applied in polarft_calc
-            endif
-        endif
-        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        if( find_start >= find_stop ) THROW_HARD('nonuni_filt3D: starting Fourier index is larger than ending Fourier index!')
-        call       weights_img%new(ldim, smpd)
-        call      diff_img_odd%new(ldim, smpd)
-        call     diff_img_even%new(ldim, smpd)
-        call  diff_img_opt_odd%new(ldim, smpd)
-        call diff_img_opt_even%new(ldim, smpd)
-        call       weights_img%get_mat_ptrs(pweights)
-        call      diff_img_odd%get_mat_ptrs(pdiff_odd)
-        call     diff_img_even%get_mat_ptrs(pdiff_even)
-        call  diff_img_opt_odd%get_mat_ptrs(pdiff_opt_odd)
-        call diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
-        call  odd_copy_rmat%copy(odd)
-        call even_copy_rmat%copy(even)
-        call  odd_copy_cmat%copy(odd)
-        call even_copy_cmat%copy(even)
-        call       odd_filt%copy(odd)
-        call      even_filt%copy(even)
-        call even_copy_cmat%fft
-        call odd_copy_cmat%fft
-        allocate(cur_fil(box), source=0.)
-        if( present(mskimg) )then
-            call bounds_from_mask3D(mskimg%bin2logical(), lb, ub)
-        else
-            lb = (/ 1, 1, 1/)
-            ub = (/ box, box, box /)
-        endif
-        do k = 1, 3
-            if( lb(k) < smooth_ext + 1 )   lb(k) = smooth_ext+1
-            if( ub(k) > box - smooth_ext ) ub(k) = box - smooth_ext
-        enddo
-        call weights_img%zero_and_unflag_ft()
-        do k = -smooth_ext, smooth_ext
-            do l = -smooth_ext, smooth_ext
-                do m = -smooth_ext, smooth_ext
-                    rad = hyp(k,l,m)
-                    val = -rad/(smooth_ext + 1) + 1.
-                    if( val > 0 ) call weights_img%set_rmat_at(box/2+k+1, box/2+l+1, box/2+m+1, val)
-                enddo
-            enddo
-        enddo
-        call weights_img%fft()
-        ! searching for the best fourier index from here and generating the optimized filter
-        pdiff_opt_odd%rmat  = huge(val)
-        pdiff_opt_even%rmat = huge(val)
-        call  odd%get_rmat_ptr(rmat_odd)
-        call even%get_rmat_ptr(rmat_even)
-        rmat_odd  = 0.
-        rmat_even = 0.
-        call  odd_filt%get_rmat_ptr( rmat_odd_filt)
-        call even_filt%get_rmat_ptr(rmat_even_filt)
-        do iter_no = 1, params_glob%nsearch
-            cutoff_find = nint(find_start + (iter_no - 1)*find_stepsz)
-            ! filtering odd/even
-            call  odd_filt%copy_fast( odd_copy_cmat)
-            call even_filt%copy_fast(even_copy_cmat)
-            call butterworth_filter( odd_filt, cutoff_find, cur_fil)
-            call butterworth_filter(even_filt, cutoff_find, cur_fil)
-            call even_filt%ifft
-            call odd_filt%ifft
-            call  odd_filt%sqeuclid_matrix(even_copy_rmat, diff_img_odd)
-            call even_filt%sqeuclid_matrix( odd_copy_rmat, diff_img_even)
-            ! do the non-uniform, i.e. optimizing at each voxel
-            call diff_img_even%fft
-            call diff_img_odd%fft
-            !$omp parallel workshare
-            pdiff_odd% cmat = pdiff_odd %cmat * pweights%cmat
-            pdiff_even%cmat = pdiff_even%cmat * pweights%cmat
-            !$omp end parallel workshare
-            call diff_img_even%ifft
-            call diff_img_odd%ifft
-            !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(dynamic,CHUNKSZ) proc_bind(close)
-            do m = lb(3),ub(3)
-                do l = lb(2),ub(2)
-                    do k = lb(1),ub(1)
-                        if( pdiff_odd%rmat(k,l,m) < pdiff_opt_odd%rmat(k,l,m) )then
-                            rmat_odd(          k,l,m) = rmat_odd_filt( k,l,m)
-                            pdiff_opt_odd%rmat(k,l,m) = pdiff_odd%rmat(k,l,m)
-                        endif
-                        if( pdiff_even%rmat(k,l,m) < pdiff_opt_even%rmat(k,l,m) )then
-                            rmat_even(          k,l,m) = rmat_even_filt( k,l,m)
-                            pdiff_opt_even%rmat(k,l,m) = pdiff_even%rmat(k,l,m)
-                        endif
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        enddo
-        deallocate(cur_fil)
-        call odd_copy_rmat%kill
-        call odd_copy_cmat%kill
-        call even_copy_rmat%kill
-        call even_copy_cmat%kill
-        call odd_filt%kill
-        call even_filt%kill
-        call weights_img%kill
-        call diff_img_odd%kill
-        call diff_img_even%kill
-        call diff_img_opt_odd%kill
-        call diff_img_opt_even%kill
-    end subroutine nonuni_filt3D
 
     subroutine estimate_lplim_1( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
         class(image),           intent(inout) :: odd, even, mskimg

@@ -76,13 +76,6 @@ contains
         allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
     end function get_rmat
 
-    module subroutine get_mat_ptrs( self, mat_ptrs )
-        class(image),      target, intent(in)  :: self
-        class(image_ptr),          intent(out) :: mat_ptrs
-        mat_ptrs%cmat => self%cmat
-        mat_ptrs%rmat => self%rmat
-    end subroutine get_mat_ptrs
-
     module subroutine get_rmat_ptr( self, rmat_ptr )
         class(image), target,        intent(in)  :: self
         real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)

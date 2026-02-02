@@ -139,7 +139,6 @@ contains
     ! Getters
     procedure          :: get
     procedure          :: get_rmat
-    procedure          :: get_mat_ptrs
     procedure          :: get_rmat_ptr
     procedure          :: get_rmat_sub
     procedure          :: get_rmat_at
@@ -958,11 +957,6 @@ interface
         class(image), intent(in) :: self
         real, allocatable :: rmat(:,:,:)
     end function get_rmat
-
-    module subroutine get_mat_ptrs( self, mat_ptrs )
-        class(image), target, intent(in)  :: self
-        class(image_ptr),     intent(out) :: mat_ptrs
-    end subroutine get_mat_ptrs
 
     module subroutine get_rmat_ptr( self, rmat_ptr )
         class(image), target,        intent(in)  :: self

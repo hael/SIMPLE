@@ -22,11 +22,6 @@ type, extends(commander_base) :: commander_uniform_filter2D
     procedure :: execute      => exec_uniform_filter2D
 end type commander_uniform_filter2D
 
-type, extends(commander_base) :: commander_nununiform_filter3D
-  contains
-    procedure :: execute      => exec_nununiform_filter3D
-end type commander_nununiform_filter3D
-
 type, extends(commander_base) :: commander_uniform_filter3D
   contains
     procedure :: execute      => exec_uniform_filter3D
@@ -151,64 +146,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLIN_FSC NORMAL STOP ****')
     end subroutine exec_clin_fsc
-
-    subroutine exec_nununiform_filter3D(self, cline)
-        use simple_opt_filter, only: nonuni_filt3D
-        class(commander_nununiform_filter3D), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: even, odd, mskvol
-        logical           :: have_mask_file
-        type(string)      :: file_tag
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        call odd %new([params%box,params%box,params%box], params%smpd)
-        call even%new([params%box,params%box,params%box], params%smpd)
-        call odd %read(params%vols(1))
-        call even%read(params%vols(2))
-        file_tag = 'nonuniform_3D_filter_ext_'//int2str(params%smooth_ext)
-        have_mask_file = .false.
-        if( params%l_filemsk )then
-            call mskvol%new([params%box,params%box,params%box], params%smpd)
-            call mskvol%read(params%mskfile)
-            call even%zero_env_background(mskvol)
-            call odd%zero_env_background(mskvol)
-            call even%mul(mskvol)
-            call odd%mul(mskvol)
-            call mskvol%one_at_edge ! to expand before masking of reference internally
-            have_mask_file = .true.
-        else
-            ! spherical masking
-            call even%mask3D_soft(params%msk)
-            call odd%mask3D_soft(params%msk)
-            call mskvol%disc([params%box,params%box,params%box], params%smpd,&
-            &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
-        endif
-        if( cline%defined('lpstop') )then
-            call nonuni_filt3D(odd, even, mskvol, params%lpstop)
-        else
-            call nonuni_filt3D(odd, even, mskvol)
-        endif
-        if( have_mask_file )then
-            call mskvol%read(params%mskfile) ! restore the soft edge
-            call even%mul(mskvol)
-            call odd%mul(mskvol)
-        else
-            call even%mask3D_soft(params%msk)
-            call odd%mask3D_soft(params%msk)
-        endif
-        call odd%write(file_tag//'_odd.mrc')
-        call even%write(file_tag//'_even.mrc')
-        call odd%add(even)
-        call odd%mul(0.5)
-        call odd%write(file_tag//'_avg.mrc')
-        ! destruct
-        call odd%kill
-        call even%kill
-        call mskvol%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_NONUNIFORM_FILTER3D NORMAL STOP ****')
-    end subroutine exec_nununiform_filter3D
 
     subroutine exec_uniform_filter3D(self, cline)
         use simple_opt_filter, only: estimate_lplim
