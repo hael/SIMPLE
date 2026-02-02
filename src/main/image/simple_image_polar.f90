@@ -68,7 +68,7 @@ contains
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
         complex(kind=c_float_complex) :: acc, fcomp
         logical :: h_negative
-        integer :: i, k, l, m, ind, h_val, k_val, phys1, phys2
+        integer :: i, k, l, m, ind, h_val, k_val, phys1, phys2, ithr
         ! interpolate
         !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val,k_val,phys1,phys2,h_negative,fcomp)
         do k=mem_poldim(2),mem_poldim(3)

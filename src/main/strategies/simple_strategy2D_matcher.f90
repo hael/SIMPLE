@@ -508,7 +508,6 @@ contains
         ! memoize FT mapping stuff
         call memoize_ft_maps(ptcl_match_imgs(1)%get_ldim(), ptcl_match_imgs(1)%get_smpd())
         ! allocate pft
-        pft = pftc%allocate_pft()
         ! rt_prep1    = 0.
         ! rt_ctf      = 0.
         ! rt_prep2    = 0.
@@ -525,8 +524,10 @@ contains
             ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), build_glob%img_instr, ptcl_match_imgs(ithr),&
             ! &rt_prep1, rt_ctf, rt_prep2, rt_prep)
             ! t_polarize = tic()
+            pft = pftc%allocate_pft()
             call ptcl_match_imgs(ithr)%polarize(pft, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
+            deallocate(pft)
             ! rt_polarize = rt_polarize + toc(t_polarize)
             ! e/o flag
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
@@ -559,7 +560,6 @@ contains
         call pftc%memoize_ptcls
         ! destruct
         call forget_ft_maps
-        if( allocated(pft) ) deallocate(pft)
     end subroutine build_batch_particles2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
@@ -599,8 +599,6 @@ contains
         call cavgs_merged(1)%memoize_mask_coords
         ! mode of cavg centering
         centype = get_centype(params_glob%center_type)
-        ! allocte pft
-        pft = pftc%allocate_pft()
         ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz,pft)&
@@ -627,11 +625,13 @@ contains
                     xyz = 0.0
                 endif
                 ! Prepare the references
+                ! allocte pft
+                pft = pftc%allocate_pft()
                 if( params_glob%l_lpset )then
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_merged(icls))
                     call prep2Dref(match_imgs(icls), icls, xyz, build_glob%img_instr)
-                    call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)  ! 2 polar coords
+                    call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)      ! 2 polar coords
                     call pftc%set_ref_pft(icls, pft, iseven=.true.)
                     call pftc%cp_even2odd_ref(icls)
                 else
@@ -654,6 +654,7 @@ contains
                         call pftc%cp_even2odd_ref(icls)
                     endif
                 endif
+                deallocate(pft)
                 call match_imgs(icls)%kill
             endif
         end do
@@ -662,7 +663,6 @@ contains
         ! CLEANUP
         deallocate(match_imgs)
         call cavgs_merged(1)%kill_thread_safe_tmp_imgs
-        if( allocated(pft) ) deallocate(pft)
     end subroutine preppftc4align2D
 
     !>  \brief  prepares the polarft corrcalc object for search and imports polar references

@@ -706,10 +706,12 @@ contains
         pft = pftc%allocate_pft()
         call img_ref%polarize(pft)
         call pftc%set_ref_pft(1, pft, iseven=.true.)
+        deallocate(pft)
         if( didft ) call img_ref%ifft
         ! set the particle transforms
         !$omp parallel do default(shared) private(i,pft) schedule(static) proc_bind(close)
         do i = 1, 2 * n
+            pft = pftc%allocate_pft()
             if( i <= n )then
                 call imgs(i)%fft()
                 call imgs(i)%polarize(pft)
@@ -718,9 +720,10 @@ contains
             else
                 call imgs_mirr(i-n)%fft()
                 call imgs_mirr(i-n)%polarize(pft)
-                call pftc%set_ptcl_pft(i-n, pft)
+                call pftc%set_ptcl_pft(i, pft)
                 call imgs_mirr(i-n)%ifft()
             endif
+            deallocate(pft)
         end do
         !$omp end parallel do
         call pftc%memoize_refs
@@ -765,7 +768,6 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call pftc%kill
-        if( allocated(pft) ) deallocate(pft)
     end function match_imgs2ref
 
     function match_imgs( hp, lp, trs, imgs_ref, imgs_targ ) result( algninfo )
@@ -802,20 +804,22 @@ contains
             call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
-        pft = pftc%allocate_pft()
         !$omp parallel default(shared)  private(i,m,pft)  proc_bind(close)
         ! set the reference transforms
         !$omp do schedule(static)
         do i = 1, nrefs
+            pft = pftc%allocate_pft()
             call imgs_ref(i)%fft()
             call imgs_ref(i)%polarize(pft)
             call pftc%set_ref_pft(i, pft, iseven=.true.)
             call imgs_ref(i)%ifft
+            deallocate(pft)
         end do
         !$omp end do nowait
         ! set the particle transforms
         !$omp do schedule(static)
         do i = 1,ntargets
+            pft = pftc%allocate_pft()
             ! target
             call imgs_targ(i)%fft()
             call imgs_targ(i)%polarize(pft)
@@ -828,6 +832,7 @@ contains
             call imgs_targ_mirr(i)%fft()
             call imgs_targ_mirr(i)%polarize(pft)
             call pftc%set_ptcl_pft(m, pft)
+            deallocate(pft)
         end do
         !$omp end do
         !$omp end parallel
@@ -909,7 +914,6 @@ contains
         end do
         call pftc%kill
         deallocate(algninfo_mirr)
-        if( allocated(pft) ) deallocate(pft)
     end function match_imgs
 
     subroutine rtsq_imgs( n, algninfo, imgs )

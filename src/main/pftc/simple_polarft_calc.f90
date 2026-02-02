@@ -161,7 +161,7 @@ type :: polarft_calc
     ! ===== CTF: simple_polarft_ctf.f90
     procedure          :: create_polar_absctfmats
     ! ===== GEOM: simple_polarft_geom.f90
-    procedure          :: gen_shmat
+    procedure, private :: gen_shmat
     procedure, private :: gen_shmat_8
     procedure          :: gen_clin_weights
     procedure          :: shift_ptcl
@@ -264,14 +264,14 @@ interface
     module subroutine set_ref_pft(self, iref, pft, iseven)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        complex(sp),         intent(in)    :: pft(:,:)
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         logical,             intent(in)    :: iseven
     end subroutine set_ref_pft
 
     module subroutine set_ptcl_pft(self, iptcl, pft)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        complex(sp),         intent(in)    :: pft(:,:)
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
     end subroutine set_ptcl_pft
 
     module subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
@@ -465,8 +465,8 @@ interface
     module subroutine create_polar_absctfmats(self, spproj, oritype, pfromto)
         class(polarft_calc),       intent(inout) :: self
         class(sp_project), target, intent(inout) :: spproj
-        character(len=*),          intent(in) :: oritype
-        integer, optional,         intent(in) :: pfromto(2)
+        character(len=*),          intent(in)    :: oritype
+        integer, optional,         intent(in)    :: pfromto(2)
     end subroutine create_polar_absctfmats
 
     ! ===== GEOM (rotate_pft, rotate_iref, shift matrices) =====
@@ -512,31 +512,31 @@ interface
     end subroutine mirror_ref_pft
 
     module subroutine rotate_pft_1(self, pft, irot, pft_rot)
-        class(polarft_calc), intent(in) :: self
-        complex(dp),         intent(in) :: pft(:,:)
-        integer,             intent(in) :: irot
-        complex(dp),         intent(out) :: pft_rot(:,:)
+        class(polarft_calc), intent(in)  :: self
+        complex(dp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)  :: irot
+        complex(dp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
     end subroutine rotate_pft_1
 
     module subroutine rotate_pft_2(self, pft, irot, pft_rot)
-        class(polarft_calc), intent(in) :: self
-        complex(sp),         intent(in) :: pft(:,:)
-        integer,             intent(in) :: irot
-        complex(sp),         intent(out) :: pft_rot(:,:)
+        class(polarft_calc), intent(in)  :: self
+        complex(sp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)  :: irot
+        complex(sp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
     end subroutine rotate_pft_2
 
     module subroutine rotate_pft_3(self, pft, irot, pft_rot)
-        class(polarft_calc), intent(in) :: self
-        real(sp),            intent(in) :: pft(:,:)
-        integer,             intent(in) :: irot
-        real(sp),            intent(out) :: pft_rot(:,:)
+        class(polarft_calc), intent(in)  :: self
+        real(sp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)  :: irot
+        real(sp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
     end subroutine rotate_pft_3
 
     module subroutine rotate_pft_4(self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
-        real(dp),            intent(in)  :: pft(:,:)
+        real(dp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,             intent(in)  :: irot
-        real(dp),            intent(out) :: pft_rot(:,:)
+        real(dp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
     end subroutine rotate_pft_4
 
     module subroutine rotate_iref_1(self, iref, irot, sh)
@@ -670,29 +670,29 @@ interface
     module subroutine gen_euclid_grad_for_rot_8(self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         complex(dp), pointer,        intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,                     intent(in) :: iptcl, irot
-        real(dp),                    intent(out) :: f, grad(2)
+        integer,                     intent(in)    :: iptcl, irot
+        real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_euclid_grad_for_rot_8
 
     module subroutine gen_corr_grad_only_for_rot_8(self, iref, iptcl, shvec, irot, grad)
         class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in) :: iref, iptcl, irot
-        real(dp),                    intent(in) :: shvec(2)
-        real(dp),                    intent(out) :: grad(2)
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: grad(2)
     end subroutine gen_corr_grad_only_for_rot_8
 
     module subroutine gen_corr_cc_grad_only_for_rot_8(self, pft_ref, pft_ref_tmp, i, irot, grad)
         class(polarft_calc),  intent(inout) :: self
         complex(dp), pointer, intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,              intent(in) :: i, irot
-        real(dp),             intent(out) :: grad(2)
+        integer,              intent(in)    :: i, irot
+        real(dp),             intent(out)   :: grad(2)
     end subroutine gen_corr_cc_grad_only_for_rot_8
 
     module subroutine gen_sigma_contrib(self, iref, iptcl, shvec, irot, sigma_contrib)
         class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in) :: iref, iptcl, irot
-        real(sp),                    intent(in) :: shvec(2)
-        real(sp), optional,          intent(out) :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(sp),                    intent(in)    :: shvec(2)
+        real(sp), optional,          intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
     end subroutine gen_sigma_contrib
 
     ! ===== CORR_MAG  =====
@@ -799,12 +799,12 @@ interface
 
     module subroutine polar_prep2Dref( self, icls, gaufilt )
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: icls
-        logical,             intent(in) :: gaufilt
+        integer,             intent(in)    :: icls
+        logical,             intent(in)    :: gaufilt
     end subroutine polar_prep2Dref
 
     module subroutine polar_cavger_gen2Dclassdoc( self, spproj )
-        class(polarft_calc),       intent(in) :: self
+        class(polarft_calc),       intent(in)    :: self
         class(sp_project), target, intent(inout) :: spproj
     end subroutine polar_cavger_gen2Dclassdoc
 
