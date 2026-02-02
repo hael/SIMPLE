@@ -148,7 +148,6 @@ type(simple_program), target :: multivol_assign
 type(simple_program), target :: new_project
 type(simple_program), target :: noisevol
 type(simple_program), target :: normalize_
-type(simple_program), target :: nununiform_filter3D
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
 type(simple_program), target :: pdb2mrc
@@ -291,7 +290,6 @@ type(simple_input_param) :: ncls_start
 type(simple_input_param) :: neg
 type(simple_input_param) :: niceprocid
 type(simple_input_param) :: niceserver
-type(simple_input_param) :: nonuniform
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nparts_chunk
 type(simple_input_param) :: nparts_pool
@@ -343,7 +341,6 @@ type(simple_input_param) :: script
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
 type(simple_input_param) :: sigma_est
-type(simple_input_param) :: smooth_ext
 type(simple_input_param) :: smpd
 type(simple_input_param) :: smpd_downscale
 type(simple_input_param) :: smpd_target
@@ -465,7 +462,6 @@ contains
         call new_new_project
         call new_noisevol
         call new_normalize
-        call new_nununiform_filter3D
         call new_orisops
         call new_oristats
         call new_pdb2mrc
@@ -603,7 +599,6 @@ contains
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(noisevol)
         call push2prg_ptr_array(normalize_)
-        call push2prg_ptr_array(nununiform_filter3D)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
         call push2prg_ptr_array(pdb2mrc)
@@ -754,7 +749,6 @@ contains
             case('new_project');                 ptr2prg => new_project
             case('noisevol');                    ptr2prg => noisevol
             case('normalize');                   ptr2prg => normalize_
-            case('nununiform_filter3D');         ptr2prg => nununiform_filter3D
             case('orisops');                     ptr2prg => orisops
             case('oristats');                    ptr2prg => oristats
             case('pdb2mrc');                     ptr2prg => pdb2mrc
@@ -915,7 +909,6 @@ contains
         write(logfhandle,'(A)') filter%name%to_char()
         write(logfhandle,'(A)') uniform_filter2D%name%to_char()
         write(logfhandle,'(A)') uniform_filter3D%name%to_char()
-        write(logfhandle,'(A)') nununiform_filter3D%name%to_char()
         write(logfhandle,'(A)') ''
         !====================================================================
         ! GENERAL IMAGE PROCESSING
@@ -1164,7 +1157,6 @@ contains
         call set_param(lp_backgr,      'lp_backgr',       'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(lp_pick,        'lp_pick',         'num',    'Low-pass limit for picking', 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         call set_param(lplim_crit,     'lplim_crit',      'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}', 'low-pass FSC criterion(0.143-0.5){0.143}', .false., 0.143)
-        call set_param(lpstart_nonuni, 'lpstart_nonuni',  'num',    'Low resolution limit, nonuniform filter', 'Low-pass limit in discrete nonuniform filter search{30 A}', 'input low-pass limit{30 A}', .false., 30.)
         call set_param(lpthres,        'lpthres',         'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(max_dose,       'max_dose',        'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
         call set_param(max_rad,        'max_rad',         'num',    'Maximum radius in A', 'Maximum radius in A {300.}', '{300.}', .true., 300.)
@@ -1189,7 +1181,6 @@ contains
         call set_param(ncls,           'ncls',            'num',    'Number of 2D clusters', 'Number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
         call set_param(ncls_start,     'ncls_start',      'num',    'Number of 2D clusters per subset of particles', 'Number of class averages used in the independent 2D analysis of each subset of particles', '# 2D clusters / subset', .true., 50.)
         call set_param(neg,            'neg',             'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(nonuniform,     'nonuniform',      'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(nparts,         'nparts',          'num',    'Number of computing nodes', 'Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
         call set_param(nparts_chunk,   'nparts_chunk',    'num',    'Number of computing nodes per subset', 'Number of computing nodes allocated to 2D analysis of each particles subset (chunk){1}', '# of nodes per subset{1}', .false., 1.0)
         call set_param(nparts_pool,    'nparts_pool',     'num',    'Number of computing nodes for the pooled subsets', 'Number of computing nodes allocated to 2D analysis of the pooled particles subsets', '# of nodes for the pooled subsets', .false., 2.0)
@@ -1198,7 +1189,6 @@ contains
         call set_param(nran,           'nran',            'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
         call set_param(nrestarts,      'nrestarts',       'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
         call set_param(nsample,        'nsample',         'num',    'Number of particles to sample', 'Number of particles to sample each iteration', '# particles to sample', .false., 0.)
-        call set_param(nsearch,        'nsearch',         'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
         call set_param(nsig,           'nsig',            'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
         call set_param(nspace,         'nspace',          'num',    'Number of projection directions', 'Number of projection directions used', '# projections', .false., 2500.)
         call set_param(nstates,        'nstates',         'num',    'Number of states', 'Number of conformational/compositional states to reconstruct', '# states to reconstruct', .false., 1.0)
@@ -1239,7 +1229,6 @@ contains
         call set_param(script,         'script',          'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(sherr,          'sherr',           'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
         call set_param(sigma_est,      'sigma_est',       'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
-        call set_param(smooth_ext,     'smooth_ext',      'num',    'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(smpd,           'smpd',            'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(smpd_downscale, 'smpd_downscale',  'num',    'Sampling distance after downscale', 'Distance between neighbouring pixels in Angstroms after downscale', 'pixel size in Angstroms{1.3}', .false., 1.3)
         call set_param(smpd_target,    'smpd_target',     'num',    'Target sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
@@ -3329,37 +3318,6 @@ contains
         call multivol_assign%set_input('comp_ctrls', 2, nthr,    gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_multivol_assign
 
-    subroutine new_nununiform_filter3D
-        ! PROGRAM SPECIFICATION
-        call nununiform_filter3D%new(&
-        &'nununiform_filter3D',&                                ! name
-        &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
-        &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
-        &'simple_exec',&                                        ! executable
-        &2, 1, 0, 0, 5, 2, 1, .false.)                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call nununiform_filter3D%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call nununiform_filter3D%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
-        ! parameter input/output
-        call nununiform_filter3D%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call nununiform_filter3D%set_input('filt_ctrls', 1, smooth_ext)
-        call nununiform_filter3D%set_input('filt_ctrls', 2, lpstart_nonuni)
-        call nununiform_filter3D%set_input('filt_ctrls', 3, nsearch)
-        call nununiform_filter3D%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .false., '')
-        call nununiform_filter3D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
-        ! mask controls
-        call nununiform_filter3D%set_input('mask_ctrls', 1, mskdiam)
-        call nununiform_filter3D%set_input('mask_ctrls', 2, mskfile)
-        ! computer controls
-        call nununiform_filter3D%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_nununiform_filter3D
-
     subroutine new_uniform_filter3D
         ! PROGRAM SPECIFICATION
         call uniform_filter3D%new(&
@@ -4185,12 +4143,11 @@ contains
         call refine3D%set_input('filt_ctrls', 5, lplim_crit, gui_submenu="filter")
         call refine3D%set_input('filt_ctrls', 6, lp_backgr, gui_submenu="filter")
         call refine3D%set_input('filt_ctrls', 7, envfsc, gui_submenu="filter")
-        call refine3D%set_input('filt_ctrls', 8, nonuniform, gui_submenu="filter")
-        call refine3D%set_input('filt_ctrls', 9, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        call refine3D%set_input('filt_ctrls', 8, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
-        call refine3D%set_input('filt_ctrls', 10, wiener, gui_submenu="filter")
-        call refine3D%set_input('filt_ctrls', 11, ml_reg, gui_submenu="filter")
-        call refine3D%set_input('filt_ctrls', 12, combine_eo, gui_submenu="filter")
+        call refine3D%set_input('filt_ctrls', 9, wiener, gui_submenu="filter")
+        call refine3D%set_input('filt_ctrls', 10, ml_reg, gui_submenu="filter")
+        call refine3D%set_input('filt_ctrls', 11, combine_eo, gui_submenu="filter")
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         call refine3D%set_input('mask_ctrls', 2, mskfile, gui_submenu="mask")

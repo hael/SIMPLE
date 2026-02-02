@@ -79,7 +79,6 @@ type :: parameters
     character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
-    character(len=3)          :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
@@ -381,7 +380,6 @@ type :: parameters
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
-    integer :: smooth_ext=8        !< smoothing window extension
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -751,7 +749,6 @@ contains
         call check_carg('niceserver',     self%niceserver)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
-        call check_carg('nonuniform',     self%nonuniform)
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
@@ -992,7 +989,6 @@ contains
         call check_iarg('tof',            self%tof)
         call check_iarg('vol_dim',        self%vol_dim)
         call check_iarg('which_iter',     self%which_iter)
-        call check_iarg('smooth_ext',     self%smooth_ext)
         call check_iarg('walltime',       self%walltime)
         call check_iarg('xdim',           self%xdim)
         call check_iarg('xcoord',         self%xcoord)

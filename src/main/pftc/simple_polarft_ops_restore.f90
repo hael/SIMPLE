@@ -606,10 +606,12 @@ contains
         integer,             intent(in)    :: icls
         real,                intent(in)    :: filter(:)
         integer :: k
+        real    :: fk
         do k = self%kfromto(1),self%kfromto(2)
-            self%pfts_merg(:,k,icls) = filter(k) * self%pfts_merg(:,k,icls)
-            self%pfts_even(:,k,icls) = filter(k) * self%pfts_even(:,k,icls)
-            self%pfts_odd(:,k,icls)  = filter(k) * self%pfts_odd(:,k,icls)
+            fk = filter(k)
+            self%pfts_merg(:,k,icls) = fk * self%pfts_merg(:,k,icls)
+            self%pfts_even(:,k,icls) = fk * self%pfts_even(:,k,icls)
+            self%pfts_odd(:,k,icls)  = fk * self%pfts_odd(:,k,icls)
         enddo
     end subroutine polar_filterrefs
 
