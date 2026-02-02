@@ -13,7 +13,7 @@ use simple_sp_project,        only: sp_project
 implicit none
 
 public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
-public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset
+public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset, test_strat2D_utils
 private
 #include "simple_local_flags.inc"
 
@@ -977,4 +977,45 @@ contains
         if( allocated(ccsz) ) deallocate(ccsz)
     end subroutine calc_cavg_offset
 
+    subroutine test_strat2D_utils
+        type(parameters), target    :: params
+        type(image)         :: test
+        type(inpl_struct), allocatable  :: alg_info1(:), alg_info2(:,:)
+        type(image), allocatable    :: stk(:)
+        integer :: i, nimgs = 10, ldim(3) = [256, 256, 1]
+        real    :: mskdiam, smpd = 3.0, hp = 20., lp = 3.0, trs = 5.0
+        logical :: passed = .true. 
+        params%box = 256
+        params%mskdiam = 256
+        params%objfun = 'cc'
+        params%nthr = 1
+        params%msk_crop = 256
+        params%ctf = 'no'
+        params_glob => params
+        allocate(stk(nimgs))
+        ! create synthetic image 
+        allocate(alg_info1(nimgs))
+        allocate(alg_info2(nimgs, nimgs))
+        do i = 1, nimgs - 1 
+            call stk(i)%new(ldim, smpd)
+            if( i == 1) call stk(1)%ran()
+            call stk(i)%rtsq(90.*real(i), real(i)* 0.5, real(i)*0.5, stk(i+1))
+        end do
+        alg_info1 = match_imgs2ref(hp, lp, trs, stk(1), stk)
+        alg_info2 = match_imgs(hp, lp, trs, stk, stk)
+        ! rotate images
+        call rtsq_imgs(nimgs, alg_info1, stk)
+        ! check real corr 
+        do i = 1, nimgs 
+            if(stk(1)%real_corr(stk(i)) < 0.99) then 
+                passed = .false. 
+                exit
+            end if 
+        end do 
+        if(passed) then 
+            print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST PASSED'
+        else 
+            print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST FAILED'
+        end if 
+    end subroutine test_strat2D_utils
 end module simple_strategy2D_utils

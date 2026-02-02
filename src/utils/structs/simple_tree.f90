@@ -1,5 +1,6 @@
 !@descr: binary tree data structure
 module simple_tree  
+use simple_core_module_api
 use simple_srch_sort_loc, only: hpsort, locate, mask2inds
 use simple_hclust,        only: hclust
 implicit none
@@ -14,7 +15,7 @@ type  :: s2_node
    integer     :: level      = 0           ! where we are in the dendrogram, 0 is bottom
    logical     :: visit      = .false.     ! have visited this one
    logical     :: is_pop     = .false.     ! is populated 
-   integer     :: ref_idx    = 0
+   integer     :: ref_idx    = 0, node_idx = 0
 end type s2_node
 
 type node_storage
@@ -30,13 +31,16 @@ type  :: multi_dendro
    logical,            allocatable :: cls_map(:,:)  ! AP cluster mapping
    integer,            allocatable :: medoids(:)   
    integer :: n_trees = 0                           ! number of AP clusters
-   integer :: n_refs  = 0                           ! number of AP lustered references
+   integer :: n_refs  = 0                           ! number of AP clustered references
+   integer :: imedoid                               ! current medoid being tracked
    logical :: exists  = .false.
 contains
    ! constructor
    procedure          :: new
    ! tree builder
    procedure          :: build_multi_dendro
+   ! setters 
+   procedure          :: set_imedoid
    ! left/right search
    procedure          :: get_left_right_idxs
    ! private accesors
@@ -131,12 +135,13 @@ contains
                nodes(k)%visit      = .false.
                nodes(k)%is_pop     = .false.
                nodes(k)%ref_idx    = 0
+               nodes(k)%node_idx        = k 
                if (allocated(nodes(k)%subset)) deallocate(nodes(k)%subset)
                ! can set all leaves
                if (k <= nref_sub) then
-                  nodes(k)%ref_idx = refs(k)
-                  nodes(k)%is_pop  = .true.
-                  nodes(k)%level   = 0 
+                  nodes(k)%ref_idx  = refs(k)
+                  nodes(k)%is_pop   = .true.
+                  nodes(k)%level    = 0 
                   allocate(nodes(k)%subset(1))
                   nodes(k)%subset = [refs(k)]
                end if
@@ -178,19 +183,29 @@ contains
          end subroutine gen_tree4ap_cluster
 
    end subroutine build_multi_dendro
+
+   subroutine set_imedoid(self, ref_idx)
+      class(multi_dendro), intent(inout)  :: self
+      integer,             intent(in)  :: ref_idx
+      integer  :: imedoid 
+      self%imedoid = self%get_cls_indx(ref_idx)
+   end subroutine set_imedoid
    
    ! getter to return left and right indices
-   function get_left_right_idxs(self, ref_idx) result(idxs)
-      class(multi_dendro), intent(in) :: self 
-      integer,             intent(in) :: ref_idx
+   function get_left_right_idxs(self, node_idx) result(idxs)
+      class(multi_dendro), intent(inout) :: self 
+      integer,             intent(inout) :: node_idx(2)
       type(s2_node), pointer  :: rootp, refp
-      integer :: idxs(2), imedoid
-      imedoid = self%get_cls_indx(ref_idx)
-      rootp = self%node_store(imedoid)%nodes(self%node_store(imedoid)%root_idx)
-      refp => search_tree4ref(rootp, ref_idx)
+      integer :: idxs(2), imedoid, ref_idx
+      imedoid = self%imedoid
+      if(node_idx(1) == 2*self%cls_pops(imedoid) - 1) then 
+         rootp = self%node_store(imedoid)%nodes(self%node_store(imedoid)%root_idx)
+      end if  
+      node_idx(1) = search_tree4ref(self, rootp, ref_idx)
+      refp = self%node_store(imedoid)%nodes(node_idx(1))
       idxs = 0
-      if ( associated(refp%left)  ) idxs(1) = refp%left%ref_idx
-      if ( associated(refp%right) ) idxs(2) = refp%right%ref_idx
+      if ( associated(refp%left)  ) idxs(1) = refp%left%ref_idx ; node_idx(1)  = refp%left%node_idx
+      if ( associated(refp%right) ) idxs(2) = refp%right%ref_idx ; node_idx(2) = refp%right%node_idx
    end function get_left_right_idxs
 
    ! find the cluster to which an aribitrary reference belongs
@@ -217,13 +232,14 @@ contains
    end function get_cls_indx
 
    ! private helper to search for node with inputted reference index
-   recursive function search_tree4ref(root, ref_idx) result(final)
+   recursive function search_tree4ref(self, root, ref_idx) result(node_index)
+      type(multi_dendro), intent(inout)  :: self 
       type(s2_node), pointer, intent(in) :: root
       integer,                intent(in) :: ref_idx
       type(s2_node), pointer :: final
       type(s2_node), pointer :: cur
       integer,   allocatable :: tmp(:)
-      integer :: j, n
+      integer :: j, n, node_index
       logical :: in_left
       ! root should be immutable 
       final => null()
@@ -232,6 +248,7 @@ contains
          ! return if ref_idx found   
          if (cur%ref_idx == ref_idx) then
             final => cur
+            node_index = final%node_idx
             return
          end if
          in_left = .false.
@@ -254,91 +271,8 @@ contains
          end if
       end do
       final => null()
+      node_index = final%node_idx
    end function search_tree4ref
-
-   recursive subroutine print_s2_tree(root, unit, indent, show_subset, max_subset)
-      type(s2_node), intent(in) :: root
-      integer,        intent(in), optional :: unit
-      integer,        intent(in), optional :: indent
-      logical,        intent(in), optional :: show_subset
-      integer,        intent(in), optional :: max_subset
-      integer :: u, ind, ms, nshow
-      logical :: do_subset
-      character(len=:), allocatable :: pad
-
-      if (present(indent)) then
-         ind = indent
-      else
-         ind = 0
-      end if
-   
-      if (present(show_subset)) then
-         do_subset = show_subset
-      else
-         do_subset = .false.
-      end if
-   
-      if (present(max_subset)) then
-         ms = max_subset
-      else
-         ms = 10
-      end if
-
-      pad = repeat(" ", ind)
-
-      write(u,'(a,"node: lvl=",i0," ref=",i0," pop=",l1," visit=",l1)') &
-         pad, root%level, root%ref_idx, root%is_pop, root%visit
-
-      if (do_subset) then
-         if (allocated(root%subset)) then
-            if (size(root%subset) == 0) then
-               write(u,'(a,"  subset(n=0): <empty>")') pad
-            else
-               nshow = min(size(root%subset), ms)
-               write(u,'(a,"  subset(n=",i0,"): ",*(i0,1x))') pad, size(root%subset), root%subset(1:nshow)
-               if (size(root%subset) > nshow) write(u,'(a,"  ... (truncated)")') pad
-            end if
-         else
-            write(u,'(a,"  subset: <unallocated>")') pad
-         end if
-      end if
-
-      if (associated(root%left)) then
-         write(u,'(a,"  L:")') pad
-         call print_s2_tree(root%left, unit=u, indent=ind+4, show_subset=do_subset, max_subset=ms)
-      end if
-
-      if (associated(root%right)) then
-         write(u,'(a,"  R:")') pad
-         call print_s2_tree(root%right, unit=u, indent=ind+4, show_subset=do_subset, max_subset=ms)
-      end if
-   end subroutine print_s2_tree
-
-   subroutine print_multi_dendro(self, unit, show_subset, max_subset)
-      class(multi_dendro), intent(in) :: self
-      integer, intent(in), optional :: unit
-      logical, intent(in), optional :: show_subset
-      integer, intent(in), optional :: max_subset
-
-      integer :: u, i
-      logical :: do_subset
-      integer :: ms
-
-      if (present(show_subset)) then
-         do_subset = show_subset
-      else
-         do_subset = .false.
-      end if
-   
-      if (present(max_subset)) then
-         ms = max_subset
-      else
-         ms = 10
-      end if
-
-      write(u,'("multi_dendro: n_trees=",i0)') self%n_trees
-
-   end subroutine print_multi_dendro
    
    subroutine kill( self )
       class(multi_dendro), intent(inout) :: self
