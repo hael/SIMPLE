@@ -1088,7 +1088,7 @@ contains
         ! memoize CTF stuff
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         ! allocate a pft
-        pft = pftc%allocate_pft()
+        
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -1096,8 +1096,10 @@ contains
             ! prep
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), build_glob%img_instr, tmp_imgs(ithr))
             ! transfer to polar coordinates
+            pft = pftc%allocate_pft()
             call tmp_imgs(ithr)%polarize(pft, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
+            deallocate(pft)
             ! e/o flags
             call pftc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do

@@ -205,7 +205,7 @@ contains
     module subroutine set_ref_pft(self, iref, pft, iseven)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        complex(sp),         intent(in)    :: pft(:,:)
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         logical,             intent(in)    :: iseven
         if( iseven )then
             self%pfts_refs_even(:,:,iref) = pft
@@ -217,7 +217,7 @@ contains
     module subroutine set_ptcl_pft(self, iptcl, pft)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        complex(sp),         intent(in)    :: pft(:,:)
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         self%pfts_ptcls(:,:,self%pinds(iptcl)) = pft
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine set_ptcl_pft

@@ -124,9 +124,9 @@ contains
 
     module subroutine rotate_pft_1(self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
-        complex(dp),         intent(in)  :: pft(:,:)
+        complex(dp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,             intent(in)  :: irot
-        complex(dp),         intent(out) :: pft_rot(:,:)
+        complex(dp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft
@@ -145,9 +145,9 @@ contains
 
     module subroutine rotate_pft_2(self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
-        complex(sp),         intent(in)  :: pft(:,:)
+        complex(sp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,             intent(in)  :: irot
-        complex(sp),         intent(out) :: pft_rot(:,:)
+        complex(sp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft
@@ -166,9 +166,9 @@ contains
 
     module subroutine rotate_pft_3(self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
-        real(sp),            intent(in)  :: pft(:,:)
+        real(sp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,             intent(in)  :: irot
-        real(sp),            intent(out) :: pft_rot(:,:)
+        real(sp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft
@@ -187,9 +187,9 @@ contains
 
     module subroutine rotate_pft_4(self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
-        real(dp),            intent(in)  :: pft(:,:)
+        real(dp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,             intent(in)  :: irot
-        real(dp),            intent(out) :: pft_rot(:,:)
+        real(dp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: mid
         if( irot == 1 )then
             pft_rot = pft

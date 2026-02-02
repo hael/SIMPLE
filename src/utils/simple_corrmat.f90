@@ -158,14 +158,15 @@ contains
             call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
-        pft = pftc%allocate_pft()
-        !$omp parallel do default(shared)  private(i,pft) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared)  private(i,ithr,pft) proc_bind(close) schedule(static)
         do i = 1, nimgs
+            pft = pftc%allocate_pft()
             call imgs(i)%fft()
             call imgs(i)%polarize(pft)
             call pftc%set_ref_pft(i, pft, iseven=.true.)
             call pftc%cp_even_ref2ptcl(i, i)
             call imgs(i)%ifft
+            deallocate(pft)
         end do
         !$omp end parallel do
         call pftc%memoize_refs
@@ -200,7 +201,6 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call pftc%kill
-        if( allocated(pft) ) deallocate(pft)
     end function calc_inpl_invariant_cc_nomirr
 
 end module simple_corrmat
