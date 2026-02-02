@@ -1,0 +1,12 @@
+#!/bin/bash
+# To enable this pre-push hook, add it to your SIMPLE hook folder and rename it ".git/hooks/pre-push", then give the file execute permissions "chmod u+x pre-push".
+echo "🔧 Running compile_clean.sh before pushing changes to SIMPLE repository..."
+./compile_clean.sh
+status=$?
+if [ "$status" -eq 0 ]; then
+    echo "✅ SIMPLE compilation succeeded. Proceeding with pushing changes."
+    exit 0
+else
+    echo "❌ SIMPLE compilation failed. Push aborted."
+    exit 1
+fi

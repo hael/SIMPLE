@@ -1,0 +1,16 @@
+#!/bin/bash
+# To enable this pre-commit hook, add it to your SIMPLE hook folder and rename it ".git/hooks/pre-commit". Then give the file execute permissions "chmod u+x pre-commit".
+echo "🔧 Running compile_clean.sh before commit..."
+./compile_clean.sh
+status=$?
+if [ "$status" -eq 0 ]; then
+    echo "✅ SIMPLE compilation succeeded."
+    git add production/simple_exec.f90 production/simple_stream.f90 production/single_exec.f90
+    echo "✅ Added Git hash SIMPLE."
+    echo "✅ Proceeding with commit."
+    echo "📌 Remember to rebase ('git pull --rebase') before push."
+    exit 0
+else
+    echo "❌ SIMPLE compilation failed. Commit aborted."
+    exit 1
+fi
