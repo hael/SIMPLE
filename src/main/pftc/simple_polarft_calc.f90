@@ -87,7 +87,7 @@ type :: polarft_calc
     type(c_ptr)              :: plan_fwd1, plan_bwd1
     type(c_ptr)              :: plan_mem_r2c
     ! batched FFT plans for vectors of length nrots (nk transforms)
-    type(c_ptr) :: plan_fwd1_many, plan_bwd1_many
+    type(c_ptr) :: plan_fwd1_many, plan_bwd1_many, plan_mem_r2c_many
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_absptcl_ctf(:,:,:)                   !< Fourier Transform of (particle times CTF)**2
@@ -194,10 +194,6 @@ type :: polarft_calc
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
 
-    ! ===== CORR_MAG: simple_polarft_corr_mag.f90
-    procedure          :: calc_magcorr_rot
-    procedure          :: gen_corrs_mag, gen_corrs_mag_cc
-    procedure          :: bidirectional_shift_search
     ! ===== STATE: simple_polarft_ops_state.f90
     procedure          :: polar_cavger_new
     procedure          :: polar_cavger_zero_pft_refs
@@ -694,37 +690,6 @@ interface
         real(sp),                    intent(in)    :: shvec(2)
         real(sp), optional,          intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
     end subroutine gen_sigma_contrib
-
-    ! ===== CORR_MAG  =====
-
-    module function calc_magcorr_rot(self, iref, iptcl, irot, kweight) result(val)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot
-        logical, optional,   intent(in)    :: kweight
-        real :: val
-    end function calc_magcorr_rot
-
-    module subroutine gen_corrs_mag_cc( self, iref, iptcl, ccs, kweight)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real,                intent(inout) :: ccs(self%pftsz)
-        logical, optional,   intent(in)    :: kweight
-
-    end subroutine gen_corrs_mag_cc
-
-    module subroutine gen_corrs_mag(self, iref, iptcl, ccs, kweight)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real,                intent(inout) :: ccs(self%pftsz)
-        logical, optional,   intent(in)    :: kweight
-    end subroutine gen_corrs_mag
-
-    module subroutine bidirectional_shift_search(self, iref, iptcl, irot, hn, shifts, grid1, grid2)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, irot, hn
-        real,                intent(in)    :: shifts(-hn:hn)
-        real,                intent(out)   :: grid1(-hn:hn,-hn:hn), grid2(-hn:hn,-hn:hn)
-    end subroutine bidirectional_shift_search
 
     ! The below routines were previoulsy implemented as an independent set of submodules.
     ! This design decision was incorrect and forced the use of pointers to access encapsulated data.
