@@ -284,21 +284,21 @@ contains
         use simple_memoize_ft_maps
         logical, intent(in)      :: do_frac_update
         integer, parameter       :: READBUFFSZ = 1024
-        complex, parameter       :: c_zero = cmplx(0.,0.,kind=c_float_complex)
         type(image), allocatable :: cgrid_imgs(:), read_imgs(:)
         type(kbinterpol)         :: kbwin
         type(dstack_io)          :: dstkio_r
         type(string)             :: stk_fname
         complex(kind=c_float_complex), allocatable :: cmats(:,:,:), thr_cmats(:,:,:)
-        real,                          allocatable :: rhos(:,:,:), tvals(:,:,:)
-        complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), tval, kw, reg_scale, crop_scale
-        integer :: batch_iprecs(READBUFFSZ), fdims_crop(3), logi_lims_crop(3,2)
-        integer :: win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
-        integer :: iprec, i, sh, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff
-        integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind, physh, physk
+        real,                          allocatable :: rhos(:,:,:), tvals(:,:,:), kbw(:,:)
+        complex :: fcomp, fcompl
+        real    :: loc(2), mat(2,2), tval, reg_scale, crop_scale
+        integer :: batch_iprecs(READBUFFSZ), fdims_crop(3), logi_lims_crop(3,2), win(2,2)
+        integer :: hh,kk, cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
+        integer :: iprec, i, sh, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff, iwinsz
+        integer :: wdim, h, k, l, m, icls, iptcl, interp_shlim, batchind, physh, physk
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
+        logical :: l_conjg
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( l_alloc_read_cavgs )then
@@ -314,8 +314,11 @@ contains
                 call init_cavgs_sums
             endif
         endif
-        kbwin = kbinterpol(KBWINSZ, params_glob%alpha)
-        wdim  = kbwin%get_wdim()
+        ! interpolation variables
+        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
+        wdim   = kbwin%get_wdim()
+        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
+        allocate(kbw(wdim,wdim),source=0.)
         ! Number stacks
         first_pind = params_glob%fromp
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
@@ -387,14 +390,14 @@ contains
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
                 !$omp parallel default(shared) proc_bind(close)&
-                !$omp private(i,ithr,icls,iprec,win_corner,mat,h,k,l,m,ll,mm,dist,loc,sh,physh,physk,kw,tval,fcompl,fcompll)
+                !$omp private(i,ithr,icls,iprec,win,mat,kbw,h,k,hh,kk,l,m,loc,sh,physh,physk,tval,fcomp,fcompl,l_conjg)
                 !$omp do schedule(static)
                 do i = 1,nptcls_in_batch
                     iprec = batch_iprecs(i)
                     if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
                     ithr         = omp_get_thread_num() + 1
-                    cmats(:,:,i) = c_zero
+                    cmats(:,:,i) = CMPLX_ZERO
                     rhos(:,:,i)  = 0.0
                     tvals(:,:,i) = 0.0
                     ! prep image
@@ -421,51 +424,41 @@ contains
                     endif
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
-                    ! Interpolation
-                    thr_cmats(:,:,ithr) = c_zero
+                    ! Kaiser-Bessel Interpolation
+                    thr_cmats(:,:,ithr) = CMPLX_ZERO
                     do h = logi_lims_crop(1,1),logi_lims_crop(1,2)
                         do k = logi_lims_crop(2,1),logi_lims_crop(2,2)
-                            sh = nint(hyp(h,k))
+                            sh = nint(hyp(real(h),real(k)))
                             if( sh > interp_shlim )cycle
-                            ! Rotation
-                            loc        = matmul(real([h,k]),mat)
-                            win_corner = floor(loc) ! bottom left corner
-                            dist       = loc - real(win_corner)
-                            ! Bi-linear interpolation
-                            l     = cyci_1d(cyc_lims_cropR(:,1), win_corner(1))
-                            ll    = cyci_1d(cyc_lims_cropR(:,1), win_corner(1)+1)
-                            m     = cyci_1d(cyc_lims_cropR(:,2), win_corner(2))
-                            mm    = cyci_1d(cyc_lims_cropR(:,2), win_corner(2)+1)
-                            ! l, bottom left corner
-                            physh = ft_map_phys_addrh(l,m)
-                            physk = ft_map_phys_addrk(l,m)
-                            kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                            fcompl = kw * cmats(physh, physk, i)
-                            tval   = kw * tvals(physh, physk, i)
-                            ! l, bottom right corner
-                            physh  = ft_map_phys_addrh(l,mm)
-                            physk  = ft_map_phys_addrk(l,mm)
-                            kw     = (1.-dist(1))*dist(2)
-                            fcompl = fcompl + kw * cmats(physh, physk, i)
-                            tval   = tval   + kw * tvals(physh, physk, i)
-                            if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
-                            ! ll, upper left corner
-                            physh   = ft_map_phys_addrh(ll,m)
-                            physk   = ft_map_phys_addrk(ll,m)
-                            kw      = dist(1)*(1.-dist(2))
-                            fcompll =         kw * cmats(physh, physk, i)
-                            tval    = tval  + kw * tvals(physh, physk, i)
-                            ! ll, upper right corner
-                            physh   = ft_map_phys_addrh(ll,mm)
-                            physk   = ft_map_phys_addrk(ll,mm)
-                            kw      = dist(1)*dist(2)
-                            fcompll = fcompll + kw * cmats(physh, physk, i)
-                            tval    = tval    + kw * tvals(physh, physk, i)
-                            if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
-                            ! update with interpolated values
+                            ! rotation
+                            loc = matmul(real([h,k]),mat)
+                            ! interpolation window
+                            win(1,:) = nint(loc)
+                            win(2,:) = win(1,:) + iwinsz
+                            win(1,:) = win(1,:) - iwinsz
+                            ! interpolation kernel
+                            call kbwin%apod_mat_2d(loc, iwinsz, wdim, kbw)
+                            ! intepolation
+                            fcomp = CMPLX_ZERO
+                            tval  = 0.0
+                            do l = 1,wdim
+                                hh      = win(1,1)+l-1
+                                l_conjg = hh < 0
+                                hh      = cyci_1d(cyc_lims_cropR(:,1), hh)
+                                fcompl  = CMPLX_ZERO
+                                do m = 1,wdim
+                                    kk     = win(1,2)+m-1
+                                    kk     = cyci_1d(cyc_lims_cropR(:,2), kk)
+                                    physh  = ft_map_phys_addrh(hh,kk)
+                                    physk  = ft_map_phys_addrk(hh,kk)
+                                    fcompl = fcompl + kbw(l,m) * cmats(physh, physk, i)
+                                    tval   = tval   + kbw(l,m) * tvals(physh, physk, i)
+                                enddo
+                                fcomp = fcomp + merge(conjg(fcompl), fcompl, l_conjg)
+                            end do
                             physh = ft_map_phys_addrh(h,k)
                             physk = ft_map_phys_addrk(h,k)
-                            thr_cmats(physh, physk, ithr) = fcompl + fcompll
+                            thr_cmats(physh, physk, ithr) = fcomp
                             rhos(physh, physk, i)         = tval*tval
                         end do
                     end do
@@ -1121,22 +1114,20 @@ contains
     !>  \brief  corrects for Fourier domain bilinear interpolation
     subroutine cavger_prep_gridding_correction( img )
         class(image), intent(inout) :: img
-        real    :: center(3),dist(2),pid,sinc,pad_sc
+        type(kbinterpol) :: kbwin
+        real    :: center(3),dist(2),pid,sinc,pad_sc,kbzero,vj,v
         integer :: i,j
         call img%new(ldim_crop,smpd_crop)
         center = real(ldim_crop/2 + 1)
         pad_sc = 1. / real(ldim_croppd(1))
-        do i = 1, ldim_crop(1)
-            dist(1) = pad_sc * (real(i) - center(1))
-            do j = 1, ldim_crop(2)
-                dist(2) = pad_sc * (real(j) - center(2))
-                pid     = PI * sqrt(sum(dist**2.))
-                if( pid < TINY )then
-                    sinc = 1.
-                else
-                    sinc = sin(pid) / pid
-                endif
-                call img%set([i,j,1], sinc*sinc)
+        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
+        kbzero = kbwin%instr(0.)
+        do j = 1, ldim_crop(2)
+            dist(2) = pad_sc * (real(j) - center(2))
+            vj      = kbwin%instr(dist(2)) / kbzero**2
+            do i = 1, ldim_crop(1)
+                dist(1) = pad_sc * (real(i) - center(1))
+                call img%set([i,j,1], kbwin%instr(dist(1)) * vj)
             enddo
         enddo
     end subroutine cavger_prep_gridding_correction
@@ -1205,15 +1196,17 @@ contains
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         logical,     optional,              intent(in)    :: just_transf
         class(oris),  pointer :: pos
+        type(kbinterpol)      :: kbwin
         type(image)           :: img(nthr_glob), timg(nthr_glob)
         type(ctfparams)       :: ctfparms
         type(ctf)             :: tfun
         type(string)          :: str
-        complex :: fcompl, fcompll
-        real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
-        integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
-        integer :: i,iptcl, l,ll,m,mm, pop, h,k, ithr
-        logical :: l_phflip, l_imgs, l_just_transf
+        real,     allocatable :: kbw(:,:)
+        complex :: fcomp, fcompl
+        real    :: mat(2,2), shift(2), loc(2), e3
+        integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
+        integer :: i,iptcl, l,m, pop, h,k, hh,kk, ithr, iwinsz, wdim, physh,physk
+        logical :: l_phflip, l_imgs, l_just_transf, l_conjg
         l_imgs        = .false.
         l_just_transf = .false.
         if( present(imgs_ori) )then
@@ -1278,6 +1271,11 @@ contains
                 call imgs_ori(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
             enddo
         endif
+        ! interpolation variables
+        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
+        wdim   = kbwin%get_wdim()
+        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
+        allocate(kbw(wdim,wdim),source=0.)
         ! temporary objects
         call prepimgbatch(pop)
         do ithr = 1, nthr_glob
@@ -1290,7 +1288,7 @@ contains
         cyc_limsR(:,1) = cyc_lims(1,:)
         cyc_limsR(:,2) = cyc_lims(2,:)
         call discrete_read_imgbatch(pop, pinds(:), [1,pop])
-        !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,loc,win_corner,dist,l,ll,m,mm,phys,kw,fcompl,fcompll) &
+        !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
         !$omp default(shared) schedule(static) proc_bind(close)
         do i = 1,pop
             ithr  = omp_get_thread_num() + 1
@@ -1318,42 +1316,39 @@ contains
             endif
             ! shift
             call img(ithr)%shift2Dserial(-shift)
-            ! particle rotation
+            ! rotation matrix
             call rotmat2d(-e3, mat)
             do h = logi_lims(1,1),logi_lims(1,2)
                 do k = logi_lims(2,1),logi_lims(2,2)
-                    ! Rotation
-                    loc        = matmul(real([h,k]),mat)
-                    win_corner = floor(loc) ! bottom left corner
-                    dist       = loc - real(win_corner)
-                    ! Bi-linear interpolation
-                    l      = cyci_1d(cyc_limsR(:,1), win_corner(1))
-                    ll     = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
-                    m      = cyci_1d(cyc_limsR(:,2), win_corner(2))
-                    mm     = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
-                    ! l, bottom left corner
-                    phys   = img(ithr)%comp_addr_phys(l,m)
-                    kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                    fcompl = kw * img(ithr)%get_cmat_at(phys(1), phys(2),1)
-                    ! l, bottom right corner
-                    phys   = img(ithr)%comp_addr_phys(l,mm)
-                    kw     = (1.-dist(1))*dist(2)
-                    fcompl = fcompl + kw * img(ithr)%get_cmat_at(phys(1), phys(2),1)
-                    if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
-                    ! ll, upper left corner
-                    phys    = img(ithr)%comp_addr_phys(ll,m)
-                    kw      = dist(1)*(1.-dist(2))
-                    fcompll = kw * img(ithr)%get_cmat_at(phys(1), phys(2),1)
-                    ! ll, upper right corner
-                    phys    = img(ithr)%comp_addr_phys(ll,mm)
-                    kw      = dist(1)*dist(2)
-                    fcompll = fcompll + kw * img(ithr)%get_cmat_at(phys(1), phys(2),1)
-                    if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
-                    ! update with interpolated values
-                    phys = img(ithr)%comp_addr_phys(h,k)
-                    call timg(ithr)%set_cmat_at(phys(1),phys(2),1, fcompl + fcompll)
-                end do
-            end do
+                    ! rotation
+                    loc = matmul(real([h,k]),mat)
+                    ! interpolation window
+                    win(1,:) = nint(loc)
+                    win(2,:) = win(1,:) + iwinsz
+                    win(1,:) = win(1,:) - iwinsz
+                    ! interpolation kernel
+                    call kbwin%apod_mat_2d(loc, iwinsz, wdim, kbw)
+                    ! intepolation
+                    fcomp = CMPLX_ZERO
+                    do l = 1,wdim
+                        hh      = win(1,1)+l-1
+                        l_conjg = hh < 0
+                        hh      = cyci_1d(cyc_limsR(:,1), hh)
+                        fcompl  = CMPLX_ZERO
+                        do m = 1,wdim
+                            kk     = win(1,2)+m-1
+                            kk     = cyci_1d(cyc_limsR(:,2), kk)
+                            physh  = ft_map_phys_addrh(hh,kk)
+                            physk  = ft_map_phys_addrk(hh,kk)
+                            fcompl = fcompl + kbw(l,m) * img(ithr)%get_cmat_at(physh,physk,1)
+                        enddo
+                        fcomp = fcomp + merge(conjg(fcompl), fcompl, l_conjg)
+                    end do
+                    physh = ft_map_phys_addrh(h,k)
+                    physk = ft_map_phys_addrk(h,k)
+                    call timg(ithr)%set_cmat_at(physh, physk, 1, fcomp)
+                enddo
+            enddo
             call timg(ithr)%ifft
             call timg(ithr)%clip(timgs(i))
         enddo
