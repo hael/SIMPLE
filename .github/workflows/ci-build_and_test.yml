@@ -52,7 +52,6 @@ jobs:
              echo >> /Users/runner/.bash_profile
              echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/runner/.bash_profile
              eval "$(/opt/homebrew/bin/brew shellenv)"
-             brew install git
              brew install jbigkit
              brew install python@3.10
              brew install fftw
