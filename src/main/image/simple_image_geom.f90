@@ -1291,36 +1291,4 @@ contains
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscen
 
-    module subroutine masscen_adjusted( self, xyz, mask_in )
-        class(image),      intent(inout) :: self
-        real        ,      intent(out)   :: xyz(3)
-        logical, optional, intent(in)    :: mask_in(:,:,:)
-        real                 ::  spix
-        integer              :: i, j, k
-        logical, allocatable :: mask_here(:,:,:)
-        allocate(mask_here(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
-        if (present(mask_in)) then 
-            if (.not.(size(mask_in, dim=1) .eq. self%ldim(1))) THROW_HARD('mask_in dimension must match dimension of image')
-            if (.not.(size(mask_in, dim=2) .eq. self%ldim(2))) THROW_HARD('mask_in dimension must match dimension of image')
-            if (.not.(size(mask_in, dim=3) .eq. self%ldim(3))) THROW_HARD('mask_in dimension must match dimension of image')
-            mask_here = mask_in   
-        end if
-        if( self%is_ft() ) THROW_HARD('masscen not implemented for FTs; masscen')
-        spix = 0.
-        xyz  = 0.
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                    if (mask_here(i,j,k)) then
-                        xyz  = xyz  + self%rmat(i,j,k) * [i, j, k]
-                        spix = spix + self%rmat(i,j,k) 
-                    end if
-                end do
-            end do
-        end do
-        if( is_equal(spix,0.) ) return
-        xyz = xyz / spix
-        if( self%ldim(3) == 1 ) xyz(3) = 0.
-    end subroutine masscen_adjusted
-
 end submodule simple_image_geom

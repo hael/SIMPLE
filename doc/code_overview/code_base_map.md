@@ -27,7 +27,6 @@
       - `simple_test_graphene_mask.f90`
       - `simple_test_image_bin.f90`
       - `simple_test_imgfile.f90`
-      - `simple_test_insert_plane.f90`
       - `simple_test_inside_write.f90`
       - `simple_test_install.f90` — for testing a SIMPLE installation, generates an image stack of cubes and runs all the unit tests
       - `simple_test_io.f90`
@@ -262,7 +261,6 @@
         - `simple_polarft_calc.f90` — polarft class complete interface
         - `simple_polarft_core.f90` — polarft class core submodule: object lifecycle etc.
         - `simple_polarft_corr.f90` — polarft class submodule for objective function evaluations
-        - `simple_polarft_corr_mag.f90` — polarft class submodule for shift-invariant correlations
         - `simple_polarft_ctf.f90` — polarft class submodule for dealing with CTF-related things
         - `simple_polarft_geom.f90` — polarft class submodule for geometry-related things: shift, rotate, mirror etc.
         - `simple_polarft_memo.f90` — polarft class submodule for memoization for performance
@@ -387,7 +385,7 @@
         - `simple_butterworth.f90` — Butterworth low-pass filtering kernel
         - `simple_estimate_ssnr.f90` — spectral signal-to-noise ratio estimation routines
         - `simple_fsc.f90` — various Fourier Shell Correlation utilities
-        - `simple_opt_filter.f90` — optimization(search)-based filtering (uniform/nonuniform)
+        - `simple_opt_filter.f90` — optimization(search)-based filtering
         - `simple_tvfilter.f90` — filter based on total variation in real space
       - **gui/** — utilities for feeding information to the GUI
         - `simple_gui_utils.f90` — various GUI utility functions

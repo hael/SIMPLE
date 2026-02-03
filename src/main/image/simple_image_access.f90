@@ -359,18 +359,6 @@ contains
     ! Flags
     !===========================
 
-    module function rmat_associated( self ) result( assoc )
-        class(image), intent(in) :: self
-        logical :: assoc
-        assoc = associated(self%rmat)
-    end function rmat_associated
-
-    module function cmat_associated( self ) result( assoc )
-        class(image), intent(in) :: self
-        logical :: assoc
-        assoc = associated(self%cmat)
-    end function cmat_associated
-
     module function is_wthreads( self ) result( is )
         class(image), intent(in) :: self
         logical :: is

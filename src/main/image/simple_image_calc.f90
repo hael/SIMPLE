@@ -1020,30 +1020,6 @@ contains
         endif
     end function real_corr_2
 
-    module function euclid_dist_two_imgs(self1, self2, mask1) result(dist)
-        use simple_linalg, only: euclid
-        class(image),      intent(inout) :: self1, self2
-        logical, optional, intent(in)    :: mask1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        real              :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        real              :: diff2(self2%ldim(1),self2%ldim(2),self2%ldim(3))
-        real              :: ax, ay, npix, dist
-        real, allocatable :: diff1_flat(:), diff2_flat(:)
-        logical           :: mask_here(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        if (present(mask1)) then
-            mask_here = mask1
-        else 
-            mask_here = .true.
-        end if
-        npix       = real(count(mask_here))
-        ax         = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)), mask=mask_here) / npix
-        ay         = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)), mask=mask_here) / npix
-        diff1      = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
-        diff2      = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
-        diff1_flat = pack(diff1, mask=.true.)
-        diff2_flat = pack(diff2, mask=.true.)
-        dist       = euclid(diff1_flat, diff2_flat)
-    end function euclid_dist_two_imgs
-
     module subroutine phase_corr(self1, self2, pc, lp )
         class(image),      intent(inout) :: self1, self2, pc
         real,              intent(in)    :: lp

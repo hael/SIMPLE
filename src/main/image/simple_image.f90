@@ -20,8 +20,8 @@ type image_ptr
 end type image_ptr
 
 ! mask memoization
-integer           :: mem_msk_box = 0
-real, allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
+integer              :: mem_msk_box = 0
+real,    allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
 
 ! polarization memoization
 real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
@@ -102,7 +102,6 @@ contains
     generic            :: mul_cmat => mul_cmat_1, mul_cmat_2
     procedure, private :: div_cmat_at_1, div_cmat_at_2
     generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2
-    procedure          :: sq_rt
     procedure          :: add_cmats_to_cmat
     ! FFT, file: simple_image_fft.f90
     procedure          :: fft  => fwd_ft
@@ -141,7 +140,7 @@ contains
     ! Getters
     procedure          :: get
     procedure          :: get_rmat
-    procedure          :: get_rmat_ptr
+    procedure          :: get_rmat_ptr ! VIOLATES ENCAPSULATION
     procedure          :: get_rmat_sub
     procedure          :: get_rmat_at
     procedure          :: get_cmat
@@ -171,8 +170,6 @@ contains
     procedure          :: get_spat_freq
     procedure          :: get_find
     ! Flags
-    procedure          :: rmat_associated
-    procedure          :: cmat_associated
     procedure          :: is_wthreads
     procedure          :: set_ft
     ! Serialization / misc
@@ -260,7 +257,6 @@ contains
     procedure          :: corr_shifted
     procedure, private :: real_corr_1, real_corr_2
     generic            :: real_corr => real_corr_1, real_corr_2
-    procedure          :: euclid_dist_two_imgs
     procedure          :: phase_corr
     procedure          :: fcorr_shift, fcorr_shift3D
     procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
@@ -400,7 +396,6 @@ contains
     generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
     procedure          :: shift2D_demoivre
     procedure          :: masscen
-    procedure          :: masscen_adjusted
     ! NORMALIZE, file: simple_image_norm.f90
     procedure          :: scale_pixels
     procedure          :: norm
@@ -765,10 +760,6 @@ interface
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
     end subroutine div_cmat_at_2
-
-    module subroutine sq_rt( self )
-        class(image), intent(inout) :: self
-    end subroutine sq_rt
 
     module subroutine add_cmats_to_cmat( self1 , self2 , self3, self4, cmat_sums )
         class(image),                  intent(in)    :: self1, self2,self3,self4
@@ -1151,16 +1142,6 @@ interface
     end function get_find
 
     !--- Flags ---!
-
-    module function rmat_associated( self ) result( assoc )
-        class(image), intent(in) :: self
-        logical :: assoc
-    end function rmat_associated
-
-    module function cmat_associated( self ) result( assoc )
-        class(image), intent(in) :: self
-        logical :: assoc
-    end function cmat_associated
 
     module function is_wthreads( self ) result( is )
         class(image), intent(in) :: self
@@ -1676,12 +1657,6 @@ interface
         logical,      intent(in)    :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
         real :: r
     end function real_corr_2
-
-    module function euclid_dist_two_imgs(self1, self2, mask1) result(dist)
-        class(image),      intent(inout) :: self1, self2
-        logical, optional, intent(in)    :: mask1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        real :: dist
-    end function euclid_dist_two_imgs
 
     module subroutine phase_corr(self1, self2, pc, lp )
         class(image),      intent(inout) :: self1, self2, pc
@@ -2430,12 +2405,6 @@ interface
         real        ,      intent(out)   :: xyz(3)
         logical, optional, intent(in)    :: mask_in(:,:,:)
     end subroutine masscen
-
-    module subroutine masscen_adjusted( self, xyz, mask_in )
-        class(image),      intent(inout) :: self
-        real        ,      intent(out)   :: xyz(3)
-        logical, optional, intent(in)    :: mask_in(:,:,:)
-    end subroutine masscen_adjusted
 
     ! ===== normalization procedure interfaces =====
 
