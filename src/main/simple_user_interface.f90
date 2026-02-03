@@ -4105,7 +4105,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 12, 12, 3, 2, .true.,&                                                            ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 11, 3, 2, .true.,&                                                            ! # entries in each group, requires sp_project
         &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
