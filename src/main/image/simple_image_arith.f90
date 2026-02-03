@@ -614,19 +614,6 @@ contains
         end if
     end subroutine div_cmat_at_2
 
-    !===============================
-    ! sq_rt
-    !===============================
-    module subroutine sq_rt( self )
-        class(image), intent(inout) :: self
-        if( self%ft ) THROW_HARD('Real space only; sq_rt')
-        where( self%rmat > 0. )
-            self%rmat = sqrt(self%rmat)
-        else where
-            self%rmat = 0.
-        end where
-    end subroutine sq_rt
-
     !>  adds complex matrices from images & arrays. Specialized routine for simple_classaverager
     module subroutine add_cmats_to_cmat( self1 , self2 , self3, self4, cmat_sums )
         class(image),                  intent(in)    :: self1, self2,self3,self4
