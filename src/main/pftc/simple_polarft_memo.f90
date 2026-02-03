@@ -184,33 +184,25 @@ contains
         class(polarft_calc), intent(inout) :: self
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
-        integer             :: ithr, nk
-        nk = self%kfromto(2) - self%kfromto(1) + 1
-        self%nk_many = nk
+        integer             :: ithr
         if( allocated(self%ft_ref_even) ) call self%kill_memoized_refs
         allocate(self%ft_ref_even( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%ft_ref_odd(  self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%ft_ref2_even(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%ft_ref2_odd( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%rvec1(nthr_glob), self%cvec1(nthr_glob),self%cvec2(nthr_glob),&
                 &self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%crmat1_many(nthr_glob))
         ! convenience objects
         do ithr = 1,nthr_glob
-            self%cvec1(ithr)%p = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
-            self%cvec2(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
-            call c_f_pointer(self%cvec1(ithr)%p, self%cvec1(ithr)%c, [self%pftsz+1])
-            call c_f_pointer(self%cvec1(ithr)%p, self%rvec1(ithr)%r, [self%nrots+2])
-            call c_f_pointer(self%cvec2(ithr)%p, self%cvec2(ithr)%c, [self%nrots])
             self%drvec(ithr)%p = fftw_alloc_real(int(self%nrots, c_size_t))
             call c_f_pointer(self%drvec(ithr)%p, self%drvec(ithr)%r, [self%nrots])
-            self%cmat2_many(ithr)%p = fftwf_alloc_complex(int(self%nrots * nk, c_size_t))
-            call c_f_pointer(self%cmat2_many(ithr)%p, self%cmat2_many(ithr)%c, [self%nrots, nk])
+            self%cmat2_many(ithr)%p = fftwf_alloc_complex(int(self%nrots * self%nk, c_size_t))
+            call c_f_pointer(self%cmat2_many(ithr)%p, self%cmat2_many(ithr)%c, [self%nrots, self%nk])
             ! Allocate complex storage for (pftsz+1) * nk transforms
-            self%crmat1_many(ithr)%p = fftwf_alloc_complex(int((self%pftsz+1) * nk, c_size_t))
+            self%crmat1_many(ithr)%p = fftwf_alloc_complex(int((self%pftsz+1) * self%nk, c_size_t))
             ! Complex view: (pftsz+1, nk)
-            call c_f_pointer(self%crmat1_many(ithr)%p, self%crmat1_many(ithr)%c, [self%pftsz+1, nk])
+            call c_f_pointer(self%crmat1_many(ithr)%p, self%crmat1_many(ithr)%c, [self%pftsz+1, self%nk])
             ! Real in-place view on same memory: (nrots+2, nk)
-            call c_f_pointer(self%crmat1_many(ithr)%p, self%crmat1_many(ithr)%r, [self%nrots+2, nk])
+            call c_f_pointer(self%crmat1_many(ithr)%p, self%crmat1_many(ithr)%r, [self%nrots+2, self%nk])
         enddo
         ! plans & FFTW3 wisdoms
         if( params_glob%l_distr_exec )then
@@ -219,13 +211,10 @@ contains
             allocate(fft_wisdoms_fname, source='fft_wisdoms.dat'//c_null_char)
         endif
         wsdm_ret = fftw_import_wisdom_from_filename(fft_wisdoms_fname)
-        self%plan_fwd1    = fftwf_plan_dft_1d(    self%nrots, self%cvec2(1)%c, self%cvec2(1)%c, FFTW_FORWARD, ior(FFTW_MEASURE, FFTW_USE_WISDOM))
-        self%plan_bwd1    = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r,               ior(FFTW_MEASURE, FFTW_USE_WISDOM))
-        self%plan_mem_r2c = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c,               ior(FFTW_MEASURE, FFTW_USE_WISDOM))
         ! plan the many
         rank       = 1_c_int
         n(1)       = int(self%nrots, c_int)
-        howmany    = int(nk, c_int)
+        howmany    = int(self%nk, c_int)
         ! Layout: cmat2_many(:,:) is (nrots, nk) column-major, each column contiguous
         istride    = 1_c_int
         ostride    = 1_c_int
@@ -252,7 +241,7 @@ contains
         ! Plan the many R2C transforms for CTF2 memoization
         rank       = 1_c_int
         n(1)       = int(self%nrots, c_int)
-        howmany    = int(nk, c_int)
+        howmany    = int(self%nk, c_int)
         ! Input real layout: (nrots+2, nk) with padding
         inembed(1) = int(self%nrots, c_int)
         istride    = 1_c_int
@@ -281,20 +270,15 @@ contains
 
     module subroutine kill_memoized_refs(self)
         class(polarft_calc), intent(inout) :: self
-        integer :: i
+        integer :: ithr
         if( allocated(self%ft_ref_even) )then
-            do i = 1,size(self%cvec1,dim=1)
-                call fftwf_free(self%cvec1(i)%p)
-                call fftwf_free(self%cvec2(i)%p)
-                call fftw_free( self%drvec(i)%p)
-                call fftwf_free(self%cmat2_many(i)%p)
-                call fftwf_free(self%crmat1_many(i)%p)
+            do ithr = 1,nthr_glob
+                call fftw_free( self%drvec(ithr)%p)
+                call fftwf_free(self%cmat2_many(ithr)%p)
+                call fftwf_free(self%crmat1_many(ithr)%p)
             enddo
             deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd,&
-            &self%rvec1,self%cvec1,self%cvec2,self%drvec, self%cmat2_many, self%crmat1_many)
-            call fftwf_destroy_plan(self%plan_fwd1)
-            call fftwf_destroy_plan(self%plan_bwd1)
-            call fftwf_destroy_plan(self%plan_mem_r2c)
+            &self%drvec, self%cmat2_many, self%crmat1_many)
             call fftwf_destroy_plan(self%plan_mem_r2c_many)
             call fftwf_destroy_plan(self%plan_fwd1_many)
             call fftwf_destroy_plan(self%plan_bwd1_many)
