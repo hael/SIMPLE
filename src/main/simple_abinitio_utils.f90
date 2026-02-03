@@ -60,8 +60,6 @@ contains
         call cline_reconstruct3D%delete('polar')
         ! no fractional update
         call cline_reconstruct3D%delete('update_frac')
-        ! individual particles reconstruction
-        call cline_reconstruct3D%set('projrec', 'no')
         ! postprocess volume
         call cline_postprocess%set('prg',                   'postprocess')
         call cline_postprocess%set('projfile',                   projfile)
@@ -543,7 +541,6 @@ contains
         call cline_startrec%set('pgrp',        params_glob%pgrp)
         call cline_startrec%set('objfun',      'cc') ! ugly, but this is how it works in parameters 
         call cline_startrec%set('box_crop',    lpinfo(istage)%box_crop)
-        call cline_startrec%set('projrec',     'no')
         call cline_startrec%delete('update_frac')    ! use all particles that have been updated
         call cline_startrec%delete('which_iter')
         call cline_startrec%delete('endit')
@@ -618,7 +615,6 @@ contains
         endif
         call cline_rec%set('pgrp',      pgrp)
         call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
-        call cline_rec%set('projrec',   'yes')
         call cline_rec%set('trail_rec', 'no')
         if( cline_rec%get_carg('ml_reg').ne.'yes' )then
             call cline_rec%set('objfun','cc')
