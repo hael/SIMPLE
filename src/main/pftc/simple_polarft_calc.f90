@@ -11,16 +11,6 @@ public :: polarft_calc, pftc_glob, polaft_dims_from_file_header
 private
 #include "simple_local_flags.inc"
 
-type fftw_cvec
-    type(c_ptr)                            :: p
-    complex(kind=c_float_complex), pointer :: c(:) => null()
-end type fftw_cvec
-
-type fftw_rvec
-    type(c_ptr)                 :: p
-    real(kind=c_float), pointer :: r(:) => null()
-end type fftw_rvec
-
 type fftw_drvec
     type(c_ptr)                  :: p
     real(kind=c_double), pointer :: r(:) => null()
@@ -66,7 +56,6 @@ type :: polarft_calc
     integer                  :: ldim(3)    = 0           !< logical dimensions of original cartesian image
     integer                  :: kfromto(2)               !< band-pass Fourier index limits
     integer                  :: nk                       !< number of shells used during alignment
-    integer                  :: nk_many = 0
     real                     :: dang                     !< angular increment
     integer,     allocatable :: pinds(:)                 !< index array (to reduce memory when frac_update < 1)
     real,        allocatable :: npix_per_shell(:)        !< number of (cartesian) pixels per shell
@@ -84,8 +73,6 @@ type :: polarft_calc
     complex(sp), allocatable :: pfts_drefs_odd(:,:,:,:)  !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp), allocatable :: pfts_ptcls(:,:,:)        !< 3D complex matrix of particle sections
     ! FFTW plans
-    type(c_ptr)              :: plan_fwd1, plan_bwd1
-    type(c_ptr)              :: plan_mem_r2c
     ! batched FFT plans for vectors of length nrots (nk transforms)
     type(c_ptr) :: plan_fwd1_many, plan_bwd1_many, plan_mem_r2c_many
     ! Memoized terms
@@ -94,20 +81,18 @@ type :: polarft_calc
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)                          !< Fourier Transform of CTF squared modulus
     complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),  ft_ref_odd(:,:,:)  !< Fourier Transform of even/odd references
     complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:) !< Fourier Transform of even/odd references squared modulus
-    ! buffer: (nrots, nk_many) holding cvec2 for all k
+    ! buffer: (nrots,nk) holding cvec2 for all k
     type(fftw_cmat),  allocatable :: cmat2_many(:)  ! per thread
     ! batched backward (c2r) plan: nk transforms of length nrots, in-place
     type(fftw_crmat), allocatable :: crmat1_many(:) ! per thread
     ! Convenience vectors, thread memoization
-    type(heap_vars),               allocatable :: heap_vars(:)
-    type(fftw_cvec),               allocatable :: cvec1(:), cvec2(:)
-    type(fftw_rvec),               allocatable :: rvec1(:)
-    type(fftw_drvec),              allocatable :: drvec(:)
+    type(heap_vars),  allocatable :: heap_vars(:)
+    type(fftw_drvec), allocatable :: drvec(:)
     ! for the subset of polarft_ops submodules
-    complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
-    real(dp),    allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
-    integer,     allocatable :: prev_eo_pops(:,:), eo_pops(:,:)
-    logical                  :: l_comlin   = .false.
+    complex(dp),      allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
+    real(dp),         allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
+    integer,          allocatable :: prev_eo_pops(:,:), eo_pops(:,:)
+    logical                       :: l_comlin   = .false.
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
     real,    pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
@@ -947,7 +932,6 @@ contains
 
     ! PUBLIC UTILITIES
 
-     ! does not belong here, should be somewhere else accessible
     subroutine polaft_dims_from_file_header( fname, pftsz_here, kfromto_here, ncls_here )
         class(string), intent(in)    :: fname
         integer,       intent(inout) :: pftsz_here, kfromto_here(2), ncls_here

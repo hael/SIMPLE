@@ -166,7 +166,7 @@ contains
         call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
         ! Accumulate denominator
         self%drvec(ithr)%r = 0.d0
-        do kk = 1, self%nk_many
+        do kk = 1, self%nk
             self%drvec(ithr)%r = self%drvec(ithr)%r + real(self%crmat1_many(ithr)%r(1:self%nrots,kk), dp)
         end do
         ! ========================================================================
@@ -179,7 +179,7 @@ contains
         call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
         ! Accumulate numerator
         self%heap_vars(ithr)%kcorrs = 0.d0
-        do kk = 1, self%nk_many
+        do kk = 1, self%nk
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(self%crmat1_many(ithr)%r(1:self%nrots,kk), dp)
         end do
         ! Final correlation computation
@@ -264,7 +264,7 @@ contains
         ! Accumulate using pre-computed weights (NO redundant computation)
         ! ========================================================================
         self%heap_vars(ithr)%kcorrs = 0.d0
-        do kk = 1, self%nk_many
+        do kk = 1, self%nk
             ! Use pre-computed values from w_weights and sumsq_cache
             self%drvec(ithr)%r = (w_weights(kk) / real(2*self%nrots, dp)) * &
                                 real(self%crmat1_many(ithr)%r(1:self%nrots, kk), dp)
