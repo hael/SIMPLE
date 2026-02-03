@@ -89,6 +89,13 @@ contains
         call ioimg%close
     end subroutine read
 
+    ! For fast serial i/o of a square Fourier volume in mrc format (cf reconstructor)
+    module subroutine read_raw_mrc( self, ioimg )
+        class(image),   intent(inout) :: self
+        class(imgfile), intent(inout) :: ioimg  ! is assumed externally open
+        call ioimg%rSlices(1, self%ldim(1), self%rmat, is_mrc=.true.)
+    end subroutine read_raw_mrc
+
     !===========================
     ! write
     !===========================

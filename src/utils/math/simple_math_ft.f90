@@ -190,7 +190,7 @@ contains
     end function get_resarr
 
     !>   is for calculating complex arg/abs/modulus, from numerical recipes
-    elemental function mycabs( a ) result( myabs )
+    pure elemental function mycabs( a ) result( myabs )
         complex, intent(in) :: a      !< complx component
         real                :: myabs, x, y, frac
         x = abs(real(a))

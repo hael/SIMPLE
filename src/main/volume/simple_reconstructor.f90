@@ -39,12 +39,12 @@ type, extends(image) :: reconstructor
     procedure          :: reset_exp
     procedure          :: apply_weight
     procedure          :: set_sh_lim
+    procedure          :: pad_with_zeros
     ! GETTERS
     procedure          :: get_kbwin
-    procedure          :: get_rho_ptr, get_rhoexp_ptr
     ! I/O
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
-    procedure          :: read_rho
+    procedure          :: read_rho, read_raw_rho
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane
     procedure          :: sampl_dens_correct
@@ -115,14 +115,8 @@ contains
     ! the workshare pragma is faster than a parallel do
     subroutine reset( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        complex(kind=c_float_complex), pointer :: pcmat(:,:,:)
         call self%set_ft(.true.)
-        call self%get_cmat_ptr(pcmat)
-        !$omp parallel workshare default(shared) proc_bind(close)
-        pcmat    = cmplx(0.0, 0.0, kind=c_float_complex)
-        self%rho = real(0., kind=c_float)
-        !$omp end parallel workshare
-        nullify(pcmat)
+        call self%reset_mats(self%rho)
     end subroutine reset
 
     ! resets the reconstructor expanded matrices before reconstruction
@@ -159,6 +153,13 @@ contains
         endif
     end subroutine set_sh_lim
 
+    subroutine pad_with_zeros( self, vol_prev, rho_prev )
+        class(reconstructor),      intent(inout) :: self !< this instance
+        class(image),               intent(in)   :: vol_prev
+        real(kind=c_float_complex), intent(in)   :: rho_prev(:,:,:)
+        call self%pad_mats(self%rho, vol_prev, rho_prev)
+    end subroutine pad_with_zeros
+
     ! GETTERS
 
     !> get the kbinterpol window
@@ -167,18 +168,6 @@ contains
         type(kbinterpol) :: wf                      !< return kbintpol window
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
-
-    subroutine get_rho_ptr( self, rho_ptr )
-        class(reconstructor), target, intent(in)  :: self
-        real(kind=c_float), pointer,  intent(out) :: rho_ptr(:,:,:)
-        rho_ptr => self%rho
-    end subroutine get_rho_ptr
-
-    subroutine get_rhoexp_ptr( self, rho_ptr )
-        class(reconstructor), target, intent(in)  :: self
-        real(kind=c_float), pointer,  intent(out) :: rho_ptr(:,:,:)
-        rho_ptr => self%rho_exp
-    end subroutine get_rhoexp_ptr
 
     ! I/O
     !>Write reconstructed image
@@ -208,6 +197,16 @@ contains
         call fclose(filnum)
     end subroutine read_rho
 
+    !> Serial read of sampling density matrix given an open pipe
+    subroutine read_raw_rho( self, fhandle )
+        class(reconstructor), intent(inout) :: self
+        integer,              intent(in)    :: fhandle
+        integer :: ierr
+        read(fhandle, pos=1, iostat=ierr) self%rho
+        if( ierr .ne. 0 ) &
+            call fileiochk('simple_reconstructor::raw read_rho; simple_reconstructor reading from pipe', ierr)
+    end subroutine read_raw_rho
+
     ! CONVOLUTION INTERPOLATION
 
     !> insert Fourier plane, single orientation
@@ -222,7 +221,6 @@ contains
         complex   :: comp
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
         real      :: vec(3), loc(3), odists(3), dists(3), ctfval
-        real      :: w000, w001, w010, w011, w100, w101, w110, w111
         integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
         integer   :: i, h, k, l, nsym, isym, iwinsz, sh, fplnyq, stride
         if( pwght < TINY )return
@@ -369,17 +367,13 @@ contains
         use simple_gridding, only: mul_w_instr
         class(reconstructor),    intent(inout) :: self
         logical, optional,       intent(in)    :: do_gridcorr
-        complex(kind=c_float_complex), pointer :: cmatW(:,:,:)    =>null()
-        complex(kind=c_float_complex), pointer :: cmatWprev(:,:,:)=>null()
-        complex,    parameter :: one   = cmplx(1.,0.)
-        complex,    parameter :: zero  = cmplx(0.,0.)
         logical,    parameter :: skip_pipemenon = .false.
         logical,    parameter :: do_hann_window = .true.
         type(kbinterpol)      :: kbwin
         type(image)           :: W_img, Wprev_img
         real,     allocatable :: antialw(:)
         real    :: winsz, val_prev, val, invrho, rsh_sq
-        integer :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
+        integer :: h,k,m, phys(3), iter, sh, i,j,l
         logical :: l_gridcorr, l_lastiter
         ! kernel
         winsz   = max(1., 2.*self%kbwin%get_winsz())
@@ -389,61 +383,23 @@ contains
         if( present(do_gridcorr) ) l_gridcorr = do_gridcorr
         l_gridcorr = l_gridcorr .and. (GRIDCORR_MAXITS > 0)
         if( l_gridcorr )then
-            cmat_shape = self%get_array_shape()
             call W_img%new(self%ldim_img, self%get_smpd())
             call Wprev_img%new(self%ldim_img, self%get_smpd())
             call W_img%set_ft(.true.)
             call Wprev_img%set_ft(.true.)
-            call W_img%get_cmat_ptr(cmatW)
-            call Wprev_img%get_cmat_ptr(cmatWprev)
-            !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(i,j,l) proc_bind(close)
-            do l = 1,cmat_shape(3)
-                do j = 1,cmat_shape(2)
-                    do i = 1,cmat_shape(1)
-                        ! init
-                        cmatWprev(i,j,l) = one
-                        ! W <- W * rho
-                        cmatW(i,j,l) = cmplx(self%rho(i,j,l),0.)
-                    end do
-                end do
-            end do
-            !$omp end parallel do
+            call W_img%init_gridcorr_mats(Wprev_img, self%rho)
             if( .not. skip_pipemenon )then
                 do iter = 1, GRIDCORR_MAXITS
-                    l_lastiter = (iter == GRIDCORR_MAXITS)
                     ! W <- (W / rho) x kernel
                     call W_img%ifft()
                     call mul_w_instr(W_img, kbwin=kbwin)
                     call W_img%fft()
-                    !$omp parallel do default(shared) private(i,j,l,val,val_prev) proc_bind(close)&
-                    !$omp collapse(3) schedule(static)
-                    do l = 1,cmat_shape(3)
-                        do j = 1,cmat_shape(2)
-                            do i = 1,cmat_shape(1)
-                                ! W <- Wprev / ((W / rho) x kernel)
-                                val      = mycabs(cmatW(i,j,l))
-                                if( val > 1.0e38 )then
-                                    cmatW(i,j,l) = zero
-                                else
-                                    val_prev     = real(cmatWprev(i,j,l))
-                                    cmatW(i,j,l) = cmplx(min(val_prev/val, 1.e20),0.)
-                                endif
-                                if( l_lastiter )then
-                                    cycle
-                                else
-                                    ! W <- W * rho
-                                    cmatWprev(i,j,l) = cmatW(i,j,l)
-                                    cmatW(i,j,l)     = self%rho(i,j,l)*cmatW(i,j,l)
-                                endif
-                            end do
-                        end do
-                    end do
-                    !$omp end parallel do
+                    ! W <- Wprev / ((W / rho) x kernel)
+                    ! and optionally: W <- W * rho
+                    l_lastiter = (iter == GRIDCORR_MAXITS)
+                    call W_img%iter_gridcorr(Wprev_img, self%rho, l_lastiter)
                 enddo
             end if
-            nullify(cmatW)
-            nullify(cmatWprev)
             call Wprev_img%kill
             ! Fourier comps / rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
@@ -456,7 +412,7 @@ contains
                         phys   = W_img%comp_addr_phys(h, k, m)
                         if( sh > self%sh_lim )then
                             ! outside Nyqvist, zero
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), CMPLX_ZERO)
                         else
                             if( skip_pipemenon )then
                                 invrho = 1. / (1.e-2+self%rho(phys(1),phys(2),phys(3)))
@@ -484,7 +440,7 @@ contains
                         phys = self%comp_addr_phys(h, k, m )
                         if( sh > self%sh_lim )then
                             ! outside Nyqvist, zero
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), CMPLX_ZERO)
                         else
                             call self%div_cmat_at(phys(1),phys(2),phys(3), self%rho(phys(1),phys(2),phys(3)))
                         endif
@@ -614,14 +570,7 @@ contains
     subroutine sum_reduce( self, self_in )
         class(reconstructor), intent(inout) :: self    !< this instance
         class(reconstructor), intent(in)    :: self_in !< other instance
-        complex(kind=c_float_complex), pointer :: ptr_self(:,:,:)    => null()
-        complex(kind=c_float_complex), pointer :: ptr_self_in(:,:,:) => null()
-        call self%get_cmat_ptr(ptr_self)
-        call self_in%get_cmat_ptr(ptr_self_in)
-        !$omp parallel workshare proc_bind(close) default(shared)
-        ptr_self(:,:,:) = ptr_self + ptr_self_in
-        self%rho(:,:,:) = self%rho + self_in%rho
-        !$omp end parallel workshare
+        call self%sum_reduce_mats(self_in, self%rho, self_in%rho)
     end subroutine sum_reduce
 
     subroutine add_invtausq2rho( self, fsc )

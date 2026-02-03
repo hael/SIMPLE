@@ -183,6 +183,20 @@ contains
         endif
     end subroutine cure_outliers
 
+    ! Gain reference prep (for EER and extnsion /= .gain)
+    module subroutine inv_gain( self )
+        class(image), intent(inout) :: self
+        real :: avg
+        !$omp parallel workshare proc_bind(close)
+        avg = real(sum(real(self%rmat(:self%ldim(1),:self%ldim(2),1),dp)) / real(self%ldim(1)*self%ldim(2),dp))
+        where( is_zero(self%rmat(:self%ldim(1),:self%ldim(2),1)) )
+            ! zeroes are preserved and dealt with at outliers curation level
+        else where
+            self%rmat(:self%ldim(1),:self%ldim(2),1) = avg / self%rmat(:self%ldim(1),:self%ldim(2),1)
+        end where
+        !$omp end parallel workshare
+    end subroutine inv_gain
+
     module subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: nquanta
