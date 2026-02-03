@@ -45,7 +45,6 @@ type :: reconstructor_eo
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
-    procedure          :: get_rhoexp_ptr
     ! I/O
     ! writers
     procedure          :: write_eos
@@ -53,7 +52,7 @@ type :: reconstructor_eo
     procedure, private :: write_odd
     ! readers
     procedure          :: read_eos
-    procedure, private :: read_eos_parallel_io
+    procedure          :: read_eos_parallel_io
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
@@ -194,18 +193,6 @@ contains
         res_fsc05   = self%res_fsc05
     end subroutine get_res
 
-    subroutine get_rhoexp_ptr( self, str_eo, rho_ptr )
-        class(reconstructor_eo), target, intent(in)  :: self
-        character(len=*),                intent(in)  :: str_eo
-        real(kind=c_float), pointer,     intent(out) :: rho_ptr(:,:,:)
-        select case(trim(str_eo))
-            case('even')
-                call self%even%get_rhoexp_ptr(rho_ptr)
-            case('odd')
-                call self%odd%get_rhoexp_ptr(rho_ptr)
-        end select
-    end subroutine get_rhoexp_ptr
-
     ! I/O
 
     !>  \brief  write the even and odd reconstructions
@@ -250,18 +237,14 @@ contains
         use simple_imgfile, only: imgfile
         class(reconstructor_eo), intent(inout) :: self
         class(string),           intent(in)    :: fbody
-        real(kind=c_float),            pointer :: rmat_ptr(:,:,:) => null() !< image pixels/voxels (in data)
-        real(kind=c_float),            pointer :: rho_ptr(:,:,:)  => null() !< sampling+CTF**2 density
-        complex(kind=c_float_complex), pointer :: pcmate(:,:,:),pcmato(:,:,:), pprevcmate(:,:,:),pprevcmato(:,:,:)
-        real(kind=c_float),            pointer :: prhoe(:,:,:), prhoo(:,:,:)
-        real,                      allocatable :: rho_e(:,:,:), rho_o(:,:,:)
-        type(string)  :: even_vol, even_rho, odd_vol, odd_rho
-        type(image)   :: prev_vol_e, prev_vol_o
-        type(imgfile) :: ioimg_e, ioimg_o
-        integer       :: lims(3,2), cshape(3), prev_ldim(3), phys_out(3),phys_in(3)
-        integer       :: h,k,l, fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
-        real          :: prev_smpd
-        logical       :: here(4), l_pad_with_zeros
+        type(string)      :: even_vol, even_rho, odd_vol, odd_rho
+        type(image)       :: prev_vol_e, prev_vol_o
+        type(imgfile)     :: ioimg_e, ioimg_o
+        real, allocatable :: rho_e(:,:,:), rho_o(:,:,:)
+        integer :: lims(3,2), cshape(3), prev_ldim(3), phys_out(3),phys_in(3)
+        integer :: h,k,l, fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
+        real    :: prev_smpd
+        logical :: here(4), l_pad_with_zeros
         even_vol = fbody//'_even'//self%ext%to_char()
         even_rho = string('rho_')//fbody//'_even'//self%ext%to_char()
         odd_vol  = fbody//'_odd'//self%ext
@@ -297,15 +280,13 @@ contains
                 call self%reset_even
                 call self%reset_odd
                 ! read
-                !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
+                !$omp parallel do default(shared) private(i,ierr) schedule(static) num_threads(4)
                 do i = 1, 4
                     select case(i)
                         case(1)
-                            call prev_vol_e%get_rmat_ptr(rmat_ptr)
-                            call ioimg_e%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
+                            call prev_vol_e%read_raw_mrc(ioimg_e)
                         case(2)
-                            call prev_vol_o%get_rmat_ptr(rmat_ptr)
-                            call ioimg_o%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
+                            call prev_vol_o%read_raw_mrc(ioimg_o)
                         case(3)
                             read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
                             if( ierr .ne. 0 )&
@@ -318,53 +299,26 @@ contains
                 end do
                 !$omp end parallel do
                 ! pad
-                lims = prev_vol_e%loop_lims(2)
-                call self%even%get_cmat_ptr(pcmate)
-                call self%odd%get_cmat_ptr(pcmato)
-                call self%even%get_rho_ptr(prhoe)
-                call self%odd%get_rho_ptr(prhoo)
-                call prev_vol_e%get_cmat_ptr(pprevcmate)
-                call prev_vol_o%get_cmat_ptr(pprevcmato)
-                !$omp parallel do collapse(3) schedule(static) default(shared)&
-                !$omp private(h,k,l,phys_out,phys_in) proc_bind(close)
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys_out = self%even%comp_addr_phys(h,k,l)
-                            phys_in  = prev_vol_e%comp_addr_phys(h,k,l)
-                            pcmate(phys_out(1),phys_out(2),phys_out(3))= pprevcmate(phys_in(1),phys_in(2),phys_in(3))
-                            pcmato(phys_out(1),phys_out(2),phys_out(3))= pprevcmato(phys_in(1),phys_in(2),phys_in(3))
-                            prhoe(phys_out(1),phys_out(2),phys_out(3)) = rho_e(phys_in(1),phys_in(2),phys_in(3))
-                            prhoo(phys_out(1),phys_out(2),phys_out(3)) = rho_o(phys_in(1),phys_in(2),phys_in(3))
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
+                call self%even%pad_with_zeros(prev_vol_e, rho_e)
+                call self%odd%pad_with_zeros(prev_vol_o, rho_o)
+                ! cleanup
                 call prev_vol_e%kill
                 call prev_vol_o%kill
                 deallocate(rho_e,rho_o)
             else
                 call ioimg_e%open(even_vol, self%ldim, self%even%get_smpd(), formatchar='M', readhead=.false., rwaction='read')
                 call ioimg_o%open(odd_vol,  self%ldim, self%odd%get_smpd(),  formatchar='M', readhead=.false., rwaction='read')
-                !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
+                !$omp parallel do default(shared) private(i) schedule(static) num_threads(4)
                 do i = 1, 4
                     select case(i)
                         case(1)
-                            call self%even%get_rmat_ptr(rmat_ptr)
-                            call ioimg_e%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
+                            call self%even%read_raw_mrc(ioimg_e)
                         case(2)
-                            call self%odd%get_rmat_ptr(rmat_ptr)
-                            call ioimg_o%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
+                            call self%odd%read_raw_mrc(ioimg_o)
                         case(3)
-                            call self%even%get_rho_ptr(rho_ptr)
-                            read(fhandle_rho_e, pos=1, iostat=ierr) rho_ptr
-                            if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// even_rho%to_char(), ierr)
+                            call self%even%read_raw_rho(fhandle_rho_e)
                         case(4)
-                            call self%odd%get_rho_ptr(rho_ptr)
-                            read(fhandle_rho_o, pos=1, iostat=ierr) rho_ptr
-                            if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// odd_rho%to_char(), ierr)
+                            call self%odd%read_raw_rho(fhandle_rho_o)
                     end select
                 end do
                 !$omp end parallel do

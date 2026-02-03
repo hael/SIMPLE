@@ -101,12 +101,6 @@ contains
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
     end function get_cmat
 
-    module subroutine get_cmat_ptr( self, cmat_ptr )
-        class(image), target,                   intent(in)  :: self
-        complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
-        cmat_ptr => self%cmat
-    end subroutine get_cmat_ptr
-
     module pure subroutine get_cmat_sub( self, cmat )
         class(image), intent(in)  :: self
         complex,      intent(out) :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
@@ -278,6 +272,15 @@ contains
             end do
       end do
     end subroutine set_within
+
+    subroutine reset_mats( self, rho )
+        class(image),       intent(inout) :: self
+        real(kind=c_float), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        !$omp parallel workshare default(shared) proc_bind(close)
+        self%cmat = cmplx(0.0, 0.0, kind=c_float_complex)
+        rho       = real(0., kind=c_float)
+        !$omp end parallel workshare
+    end subroutine reset_mats
 
     !===========================
     ! Slices, sub-images, freq info

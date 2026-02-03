@@ -193,11 +193,10 @@ contains
         integer,            intent(in)    :: istart, iend ! base 1
 #ifdef USING_TIFF
         integer(kind=2), parameter :: one2 = int(1,kind=2)
-        real,              pointer :: prmat(:,:,:)
         integer(kind=1),   pointer :: byte_array(:)
         type(c_ptr)     :: cptr
         integer         :: symbols(self%nmax_el), pos_els(self%nmax_el)
-        integer(kind=2) :: imat(self%onx,self%ony)
+        integer(kind=2) :: imat(self%onx,self%ony,1)
         integer(kind=8) :: pos, first_byte
         integer         :: iframe, n_el, p1,s1,p2,s2, x,y, i, iostat, bit_pos, pos_el
         if( .not.self%l_exists ) THROW_HARD('EER decoder object has not been instantiated!')
@@ -265,27 +264,25 @@ contains
             case(1)
                 do i = 1,n_el
                     call EERdecodePos4K(pos_els(i), x,y)
-                    imat(x,y) = imat(x,y) + one2
+                    imat(x,y,1) = imat(x,y,1) + one2
                 enddo
             case(2)
                 do i = 1,n_el
                     call EERdecodePos8K(pos_els(i), symbols(i), x,y)
-                    imat(x,y) = imat(x,y) + one2
+                    imat(x,y,1) = imat(x,y,1) + one2
                 enddo
             case(3)
                 do i = 1,n_el
                     call EERdecodePos16K(pos_els(i), symbols(i), x,y)
-                    imat(x,y) = imat(x,y) + one2
+                    imat(x,y,1) = imat(x,y,1) + one2
                 enddo
             end select
         enddo
         ! generates image
         call img%new([self%onx,self%ony,1], self%osmpd, wthreads=.false.)
-        call img%zero_and_unflag_ft
-        call img%get_rmat_ptr(prmat)
-        prmat(:self%onx,:self%ony,1) = real(imat)
+        call img%set_rmat(real(imat), .false.)
         ! cleanup
-        nullify(prmat,byte_array)
+        nullify(byte_array)
         iostat = TIFFfree(cptr)
 #endif
     end subroutine decode_frames
@@ -295,9 +292,7 @@ contains
         class(string),      intent(in)    :: fname
         class(image),       intent(inout) :: gain
         type(image)   :: tmp
-        real, pointer :: prmat(:,:,:)
-        real          :: avg
-        integer       :: ldim_gain(3), ifoo, i,j, ii,jj
+        integer       :: ldim_gain(3), ifoo
         logical       :: dotgain
         dotgain = (fname2format(fname) == 'J') .or. (fname2format(fname) == 'L')
         call find_ldim_nptcls(fname,ldim_gain,ifoo)
@@ -314,45 +309,17 @@ contains
             call gain%zero
             if( ldim_gain(1)==EER_IMAGE_WIDTH .and. self%upsampling==2 )then
                 ! gain 4K, images 8K
-                !$omp parallel do default(shared) private(i,j,ii,jj) proc_bind(close) schedule(static) collapse(2)
-                do j = 1,2*EER_IMAGE_HEIGHT
-                    do i = 1,2*EER_IMAGE_WIDTH
-                        jj = floor(real(j-1)/2.)+1
-                        ii = floor(real(i-1)/2.)+1
-                        call gain%set([i,j,1], tmp%get([ii,jj,1]))
-                    enddo
-                enddo
-                !$omp end parallel do
+                call gain%upsample_gain(tmp)
             else if( ldim_gain(1)==2*EER_IMAGE_WIDTH .and. self%upsampling==1 )then
                 ! gain 8K, images 4K
-                call tmp%get_rmat_ptr(prmat)
-                !$omp parallel do default(shared) private(i,j,ii,jj) proc_bind(close) schedule(static) collapse(2)
-                do j = 1,self%ony
-                    do i = 1,self%onx
-                        jj  = 2*(j-1) + 1
-                        ii  = 2*(i-1) + 1
-                        call gain%set([i,j,1], sum(prmat(ii:ii+1,jj:jj+1,1)))
-                    enddo
-                enddo
-                !$omp end parallel do
-                nullify(prmat)
+                call gain%downsample_gain(tmp)
             else
                 THROW_HARD('Unsupported combination of eer sampling & gain reference dimensions; prep_gainref')
             endif
             call tmp%kill
         endif
-        if( .not.dotgain )then
-            ! .mrc, taking inverse times average
-            call gain%get_rmat_ptr(prmat)
-            !$omp workshare
-            avg = real(sum(real(prmat(:self%onx,:self%ony,1),dp)) / real(self%onx*self%ony,dp))
-            where( is_zero(prmat(:self%onx,:self%ony,1)) )
-                ! zeroes are preserved and dealt with at outliers curation level
-            else where
-                prmat(:self%onx,:self%ony,1) = avg / prmat(:self%onx,:self%ony,1)
-            end where
-            !$omp end workshare
-        endif
+        ! .mrc, taking inverse times average
+        if( .not.dotgain ) call gain%inv_gain
     end subroutine prep_gainref
 
     integer function get_nframes( self )

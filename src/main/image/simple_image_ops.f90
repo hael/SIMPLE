@@ -423,6 +423,38 @@ contains
         call upsampled%kill
     end subroutine upsample_square_background
 
+    ! Upsamples the gain twice in real space (gain 4K, frame 8K)
+    module subroutine upsample_gain( self_up, self_down)
+        class(image), intent(inout) :: self_up
+        class(image), intent(in)    :: self_down
+        integer :: i,j,ii,jj
+        !$omp parallel do default(shared) private(i,j,ii,jj) proc_bind(close) schedule(static) collapse(2)
+        do j = 1,self_up%ldim(2)
+            do i = 1,self_up%ldim(1)
+                jj = floor(real(j-1)/2.)+1
+                ii = floor(real(i-1)/2.)+1
+                self_up%rmat(i,j,1) = self_down%rmat(ii,jj,1)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine upsample_gain
+
+    ! Downsamples the gain twice in real space (gain 8K, frame 4K)
+    module subroutine downsample_gain( self_down, self_up)
+        class(image), intent(inout) :: self_down
+        class(image), intent(in)    :: self_up
+        integer :: i,j,ii,jj
+        !$omp parallel do default(shared) private(i,j,ii,jj) proc_bind(close) schedule(static) collapse(2)
+        do j = 1,self_down%ldim(2)
+            do i = 1,self_down%ldim(1)
+                jj  = 2*(j-1) + 1
+                ii  = 2*(i-1) + 1
+                self_down%rmat(i,j,1) = sum(self_up%rmat(ii:ii+1,jj:jj+1,1))
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine downsample_gain
+
     !===========================
     ! Arithmetics
     !===========================
@@ -574,5 +606,51 @@ contains
         class(image), intent(inout) :: self
         where( self%rmat < TINY ) self%rmat = 0.
     end subroutine zero_neg
+
+    !========================================
+    ! Gridding correction (cf reconstructor)
+    !========================================
+
+    subroutine init_gridcorr_mats( self_W, self_Wprev, rho )
+        class(image),       intent(inout) :: self_W, self_Wprev
+        real(kind=c_float), intent(in)    :: rho(self_W%array_shape(1),self_W%array_shape(2),self_W%array_shape(3))
+        complex(kind=c_float_complex), parameter :: one = cmplx(1.,0.,kind=c_float_complex)
+        !$omp parallel workshare proc_bind(close)
+        self_Wprev%cmat = one
+        self_W%cmat     = cmplx(rho, 0., kind=c_float_complex)
+        !$omp end parallel workshare
+    end subroutine init_gridcorr_mats
+
+    module subroutine iter_gridcorr( self_W, self_Wprev, rho, skip_prevW_update )
+        class(image),       intent(inout) :: self_W, self_Wprev
+        real(kind=c_float), intent(in)    :: rho(self_W%array_shape(1),self_W%array_shape(2),self_W%array_shape(3))
+        logical,            intent(in)    :: skip_prevW_update
+        real    :: val, val_prev
+        integer :: i,j,l
+        ! W <- Wprev / ((W / rho) x kernel)
+        !$omp parallel do default(shared) private(i,j,l,val,val_prev) proc_bind(close)&
+        !$omp collapse(3) schedule(static)
+        do l = 1,self_W%array_shape(3)
+            do j = 1,self_W%array_shape(2)
+                do i = 1,self_W%array_shape(1)
+                    val = mycabs(self_W%cmat(i,j,l))
+                    if( val > 1.0e38 )then
+                        self_W%cmat(i,j,l) = CMPLX_ZERO
+                    else
+                        val_prev           = real(self_Wprev%cmat(i,j,l))
+                        self_W%cmat(i,j,l) = cmplx(min(val_prev/val, 1.e20),0.)
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! W <- W * rho
+        if( .not.skip_prevW_update )then
+            !$omp parallel workshare proc_bind(close)
+            self_Wprev%cmat = self_W%cmat
+            self_W%cmat     = rho * self_W%cmat
+            !$omp end parallel workshare
+        endif
+    end subroutine iter_gridcorr
 
 end submodule simple_image_ops

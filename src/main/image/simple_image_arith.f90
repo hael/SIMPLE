@@ -283,6 +283,17 @@ contains
         endif
     end subroutine add_workshare_2
 
+    module subroutine sum_reduce_mats( self, self1, rho, rho1 )
+        class(image),       intent(inout) :: self
+        class(image),       intent(in)    :: self1
+        real(kind=c_float), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        real(kind=c_float), intent(in)    :: rho1(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        !$omp parallel workshare proc_bind(close)
+        self%cmat = self%cmat + self1%cmat
+        rho       = rho       + rho1
+        !$omp end parallel workshare
+    end subroutine sum_reduce_mats
+
     !===============================
     ! subtr_* family
     !===============================

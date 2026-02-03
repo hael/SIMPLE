@@ -193,8 +193,8 @@ contains
         class(motion_align_poly), intent(inout) :: self
         real, optional,           intent(in)    :: boxdata(:,:)
         type(image)            :: tmp_imgs(self%nthr)
-        type(image_ptr)        :: ptmp_imgs(self%nthr), pframes(self%nframes), ptiles(self%nthr)
-        real, allocatable      :: bfac_weights(:,:), res(:)
+        type(image_ptr)        :: ptmp_imgs(self%nthr), pframes(self%nframes)
+        real, allocatable      :: bfac_weights(:,:,:), res(:)
         real          :: spafreqsq, spafreqh, spafreqk, shsq, sumsq, w, sumw, d, sigma
         integer       :: nr_lims(3,2),phys(3),cdim(3),find,magic_ldim,hplim,lplim,hplimsq,lplimsq
         integer       :: pi,pj,i,j,t,h,k,n,x,y,ithr,l_sq,d_sq
@@ -260,7 +260,7 @@ contains
         lplimsq = lplim*lplim
         ! generate b-factor matrix & resolution mask
         allocate(self%resolution_mask(cdim(1),cdim(2),1),source=.false.)
-        allocate(bfac_weights(cdim(1),cdim(2)),source=0.0)
+        allocate(bfac_weights(cdim(1),cdim(2),1),source=0.0)
         do k = nr_lims(2,1),nr_lims(2,2)
             spafreqk = real(k) / real(self%tilesz) / self%smpd
             do h = nr_lims(1,1),nr_lims(1,2)
@@ -269,7 +269,7 @@ contains
                     spafreqh  = real(h) / real(self%tilesz) / self%smpd
                     spafreqsq = spafreqh*spafreqh + spafreqk*spafreqk
                     phys      = self%tiles(1,1,1)%comp_addr_phys(h,k,0)
-                    bfac_weights(phys(1),phys(2)) = max(0.,exp(-spafreqsq*self%bfactor/4.))
+                    bfac_weights(phys(1),phys(2),1)         = max(0.,exp(-spafreqsq*self%bfactor/4.))
                     self%resolution_mask(phys(1),phys(2),1) = .true.
                 endif
             enddo
@@ -282,8 +282,7 @@ contains
                 do j = 1,self%nypatch
                     ithr = omp_get_thread_num() + 1
                     ! apply b-factor weights
-                    call self%tiles(t,i,j)%get_cmat_ptr(ptiles(ithr)%cmat)
-                    ptiles(ithr)%cmat(:,:,1) = ptiles(ithr)%cmat(:,:,1) * bfac_weights
+                    call self%tiles(t,i,j)%mul_cmat(bfac_weights)
                     ! normalize within resolution range
                     sumsq = self%tiles(t,i,j)%masked_sqsum(self%resolution_mask)
                     if( sumsq > TINY ) call self%tiles(t,i,j)%mul(1.0 / sqrt(sumsq))

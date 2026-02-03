@@ -84,6 +84,7 @@ contains
     procedure          :: add_dble_cmat2mat
     procedure, private :: add_workshare_1, add_workshare_2
     generic            :: add_workshare => add_workshare_1, add_workshare_2
+    procedure          :: sum_reduce_mats
     procedure, private :: subtr_1, subtr_2, subtr_3, subtr_4
     generic            :: subtr => subtr_1, subtr_2, subtr_3, subtr_4
     procedure, private :: div_1, div_2, div_3, div_4
@@ -124,6 +125,7 @@ contains
     ! I/O
     procedure, private :: open
     procedure          :: read
+    procedure          :: read_raw_mrc
     procedure          :: write
     procedure          :: update_header_stats
     procedure          :: write_jpg
@@ -143,7 +145,6 @@ contains
     procedure          :: get_rmat_sub
     procedure          :: get_rmat_at
     procedure          :: get_cmat
-    procedure          :: get_cmat_ptr
     procedure          :: get_cmat_sub
     procedure          :: allocate_cmat
     procedure          :: get_cmat_at
@@ -159,6 +160,7 @@ contains
     procedure          :: set_cmat_at
     procedure          :: set_fcomp
     procedure          :: set_within
+    procedure          :: reset_mats
     ! Slices, sub-images, freq info
     procedure          :: get_slice
     procedure          :: set_slice
@@ -208,6 +210,7 @@ contains
     procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
     procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
     procedure          :: GLCM
+    procedure          :: tv_apply_reg
     ! FREQUENCY ANALYSIS, file: simple_image_freq_anal.f90
     procedure          :: acf
     procedure          :: ccf
@@ -335,6 +338,8 @@ contains
     procedure          :: subtr_backgr_ramp
     procedure          :: subtract_background
     procedure          :: upsample_square_background
+    procedure          :: upsample_gain
+    procedure          :: downsample_gain
     procedure          :: remove_neg
     ! arithmetics
     procedure          :: neg
@@ -349,6 +354,9 @@ contains
     procedure          :: zero_edgeavg
     procedure          :: zero_env_background
     procedure          :: zero_neg
+    ! gridding correction
+    procedure          :: init_gridcorr_mats
+    procedure          :: iter_gridcorr
     ! POLARIZATION, file: simple_image_polar.f90
     procedure          :: memoize4polarize
     procedure          :: polarize
@@ -375,6 +383,7 @@ contains
     procedure          :: pad_inplace
     procedure, private :: pad_mirr_1, pad_mirr_2
     generic            :: pad_mirr => pad_mirr_1, pad_mirr_2
+    procedure          :: pad_mats
     procedure          :: clip
     procedure          :: clip_inplace
     procedure          :: read_and_crop
@@ -401,6 +410,7 @@ contains
     procedure          :: norm_noise
     procedure          :: norm_within
     procedure          :: cure_outliers
+    procedure          :: inv_gain
     procedure          :: quantize_fwd
     procedure          :: quantize_bwd
 end type image
@@ -601,11 +611,18 @@ interface
         class(image),   intent(in)    :: self_to_add
     end subroutine add_workshare_1
 
-        module subroutine add_workshare_2( self, self_to_add, w )
+    module subroutine add_workshare_2( self, self_to_add, w )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
         real,           intent(in)    :: w
     end subroutine add_workshare_2
+
+    module subroutine sum_reduce_mats( self, self1, rho, rho1 )
+        class(image),       intent(inout) :: self
+        class(image),       intent(in)    :: self1
+        real(kind=c_float), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        real(kind=c_float), intent(in)    :: rho1(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+    end subroutine sum_reduce_mats
 
     !--- subtr_* ---!
     module subroutine subtr_1( self, self_to_subtr, w )
@@ -881,6 +898,11 @@ interface
         logical,          optional, intent(in)    :: readhead
     end subroutine read
 
+    module subroutine read_raw_mrc( self, ioimg )
+        class(image),   intent(inout) :: self
+        class(imgfile), intent(inout) :: ioimg
+    end subroutine read_raw_mrc
+
     module subroutine write( self, fname, i, del_if_exists)
         class(image),      intent(inout) :: self
         class(string),     intent(in)    :: fname
@@ -979,11 +1001,6 @@ interface
         complex, allocatable :: cmat(:,:,:)
     end function get_cmat
 
-    module subroutine get_cmat_ptr( self, cmat_ptr )
-        class(image), target,                   intent(in)  :: self
-        complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
-    end subroutine get_cmat_ptr
-
     module pure subroutine get_cmat_sub( self, cmat )
         class(image), intent(in)  :: self
         complex,      intent(out) :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
@@ -1077,6 +1094,11 @@ interface
         class(image), intent(inout) :: self
         real,         intent(in)    :: xyz(3), radius, val
     end subroutine set_within
+
+    module subroutine reset_mats( self, rho )
+        class(image),       intent(inout) :: self
+        real(kind=c_float), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+    end subroutine reset_mats
 
     !--- Slices, sub-images, freq info ---!
 
@@ -1361,6 +1383,12 @@ interface
         integer,      intent(in)    :: nquanta
         real,         intent(inout) :: pmat(nquanta,nquanta)
     end subroutine GLCM
+
+    module subroutine tv_apply_reg( self, self_b, self_r, lambda )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self_b, self_r
+        real,         intent(in)    :: lambda
+    end subroutine tv_apply_reg
 
     ! ===== frequency analysis procedure interfaces =====
 
@@ -2096,6 +2124,16 @@ interface
         integer,      intent(in)    :: ldim(2)
     end subroutine upsample_square_background
 
+    module subroutine upsample_gain( self_up, self_down)
+        class(image), intent(inout) :: self_up
+        class(image), intent(in)    :: self_down
+    end subroutine upsample_gain
+
+    module subroutine downsample_gain( self_down, self_up)
+        class(image), intent(inout) :: self_down
+        class(image), intent(in)    :: self_up
+    end subroutine downsample_gain
+
     !--- Arithmetics ---!
 
     module subroutine remove_neg( self )
@@ -2149,6 +2187,19 @@ interface
     module subroutine zero_neg( self )
         class(image), intent(inout) :: self
     end subroutine zero_neg
+
+    !--- Gridding correction ---!
+
+    module subroutine init_gridcorr_mats( self_W, self_Wprev, rho )
+        class(image),       intent(inout) :: self_W, self_Wprev
+        real(kind=c_float), intent(in)    :: rho(self_W%array_shape(1),self_W%array_shape(2),self_W%array_shape(3))
+    end subroutine init_gridcorr_mats
+
+    module subroutine iter_gridcorr( self_W, self_Wprev, rho, skip_prevW_update )
+        class(image),       intent(inout) :: self_W, self_Wprev
+        real(kind=c_float), intent(in)    :: rho(self_W%array_shape(1),self_W%array_shape(2),self_W%array_shape(3))
+        logical,            intent(in)    :: skip_prevW_update
+    end subroutine iter_gridcorr
 
     ! ===== polarization procedure interfaces =====
 
@@ -2279,6 +2330,13 @@ interface
         class(image), intent(inout) :: self
         integer,      intent(in)    :: ldim(3)
     end subroutine pad_mirr_2
+
+    module subroutine pad_mats( self, rho, self_prev, rho_prev)
+        class(image),               intent(inout) :: self
+        real(kind=c_float_complex), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        class(image),               intent(in)    :: self_prev
+        real(kind=c_float_complex), intent(in)    :: rho_prev(self_prev%array_shape(1),self_prev%array_shape(2),self_prev%array_shape(3))
+    end subroutine pad_mats
 
     module subroutine clip( self_in, self_out )
         class(image), intent(inout) :: self_in, self_out
@@ -2425,6 +2483,10 @@ interface
         integer,                        intent(out)   :: deadhot(2)
         logical, allocatable, optional, intent(out)   :: outliers(:,:)
     end subroutine cure_outliers
+
+    module subroutine inv_gain( self )
+        class(image), intent(inout) :: self
+    end subroutine inv_gain
 
     module subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
         class(image),      intent(inout) :: self

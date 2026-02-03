@@ -225,7 +225,7 @@ contains
         !$omp end parallel do
         self%eo_pops = self%eo_pops + eopops
         ! cleanup
-        nullify(spproj_field,rptcl,rctf)
+        nullify(spproj_field,rptcl,rctf,rctf2)
     end subroutine polar_cavger_update_sums
 
     module subroutine polar_cavger_kill( self )

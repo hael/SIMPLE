@@ -1223,4 +1223,14 @@ contains
         call img_q%kill
     end subroutine GLCM
 
+    module subroutine tv_apply_reg( self, self_b, self_r, lambda )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self_b, self_r
+        real,         intent(in)    :: lambda
+        integer :: c
+        c = self%ldim(1)/2 + 1
+        self%cmat(1:c,:,:) = self%cmat(1:c,:,:) * (real(self_b%cmat(1:c,:,:))**2 + aimag(self_b%cmat(1:c,:,:))**2)
+        self%cmat(1:c,:,:) = self%cmat(1:c,:,:) / (real(self_b%cmat(1:c,:,:))**2 + aimag(self_b%cmat(1:c,:,:))**2 + lambda * self_r%cmat(1:c,:,:))
+    end subroutine tv_apply_reg
+
 end submodule simple_image_filt

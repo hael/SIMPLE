@@ -589,6 +589,29 @@ contains
         call tmp%kill
     end subroutine pad_mirr_2
 
+    ! For reconstruction: pads fourier self_prev & rho_prev array, it is assumed self & rho have been zeroed
+    module subroutine pad_mats( self, rho, self_prev, rho_prev)
+        class(image),               intent(inout) :: self
+        real(kind=c_float_complex), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        class(image),               intent(in)    :: self_prev
+        real(kind=c_float_complex), intent(in)    :: rho_prev(self_prev%array_shape(1),self_prev%array_shape(2),self_prev%array_shape(3))
+        integer :: lims(3,2), phys_in(3), phys_out(3), h,k,l
+        lims = self_prev%loop_lims(2)
+        !$omp parallel do collapse(3) schedule(static) default(shared)&
+        !$omp private(h,k,l,phys_out,phys_in) proc_bind(close)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                do l = lims(3,1),lims(3,2)
+                    phys_out = self%comp_addr_phys(h,k,l)
+                    phys_in  = self_prev%comp_addr_phys(h,k,l)
+                    self%cmat(phys_out(1),phys_out(2),phys_out(3)) = self_prev%cmat(phys_in(1),phys_in(2),phys_in(3))
+                    rho(phys_out(1),phys_out(2),phys_out(3))       = rho_prev(phys_in(1),phys_in(2),phys_in(3))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine pad_mats
+
     ! DO NOT PARALLELISE
     module subroutine clip( self_in, self_out )
         class(image), intent(inout) :: self_in, self_out
