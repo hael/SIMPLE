@@ -36,7 +36,7 @@ foreach(_cand IN LISTS _gfortran_candidates)
     message(STATUS "AutoDetectGCC: candidate ${_fc_prog} (version ${_fc_ver})")
     # Require at least 14.2 here
     if(_fc_ver VERSION_LESS "14.2")
-        continue()
+        message(FATAL_ERROR "SIMPLE requires GCC 14.2 or higher.")
     endif()
     if(NOT _best_gfortran OR _fc_ver VERSION_GREATER _best_version)
         set(_best_gfortran "${_fc_prog}")
