@@ -275,6 +275,7 @@ contains
         else
             write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
         endif
+        call img_bin(1)%memoize_mask_coords
         !$omp parallel do default(shared) private(i,ccsizes,loc,xyz) schedule(static) proc_bind(close)
         do i = 1,n
             call img_bin(i)%zero_edgeavg
