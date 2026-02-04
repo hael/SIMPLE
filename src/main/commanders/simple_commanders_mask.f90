@@ -1,6 +1,6 @@
 !@descr: masking and auto-masking
 module simple_commanders_mask
-use simple_commander_module_api
+use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 

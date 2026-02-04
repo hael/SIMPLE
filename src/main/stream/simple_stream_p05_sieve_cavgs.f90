@@ -1,6 +1,6 @@
 !@descr: task 5 in the stream pipeline: chunk-based 2D clustering and automatic selection of high-quality class averages (sieving)
 module simple_stream_p05_sieve_cavgs
-use simple_stream_module_api
+use simple_stream_api
 use simple_stream_pool2D_utils, only: set_lpthres_type
 implicit none
 

@@ -1,5 +1,5 @@
 !@descr: Aggregated public API for stream_exec.
-module simple_stream_module_api
+module simple_stream_api
 use simple_core_module_api
 use simple_defs_environment
 use json_kinds
@@ -30,4 +30,4 @@ use simple_stream_communicator,    only: stream_http_communicator
 use simple_stream_utils,           only: update_user_params, wait_for_folder, class_rejection, stream_datestr, process_selected_refs,&
                                   &get_latest_optics_map_id
 use simple_stream_watcher,         only: stream_watcher, sniff_folders_SJ, workout_directory_structure 
-end module simple_stream_module_api
+end module simple_stream_api

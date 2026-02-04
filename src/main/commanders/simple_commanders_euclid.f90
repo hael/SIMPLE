@@ -1,6 +1,6 @@
 !@descr: for sigma2 calculations in objfun=euclid 2D and 3D refinement
 module simple_commanders_euclid
-use simple_commander_module_api
+use simple_commanders_api
 use simple_sigma2_binfile, only: sigma2_binfile
 implicit none
 #include "simple_local_flags.inc"

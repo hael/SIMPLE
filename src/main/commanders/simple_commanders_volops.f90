@@ -1,6 +1,6 @@
 !@descr: operations on volumes
 module simple_commanders_volops
-use simple_commander_module_api
+use simple_commanders_api
 use simple_strategy2D_utils
 use simple_simple_volinterp, only: reproject, rotvol
 use simple_projector,        only: projector

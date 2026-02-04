@@ -11,7 +11,7 @@
 !!  2. Add the corresponding commander_* symbol to the PUBLIC list.
 !!  3. Declare a type(commander_...) variable in simple_exec and wire it
 !!     into the SELECT CASE(prg) dispatch.
-module simple_private_exec_module_api
+module simple_private_exec_api
 use simple_core_module_api
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_jiffys,         only: simple_print_timer
@@ -76,4 +76,4 @@ use single_commanders_trajectory, only: commander_track_particles
 
 ! distr commanders, support routines for distributed execution
 use simple_commanders_distr, only: commander_split
-end module simple_private_exec_module_api
+end module simple_private_exec_api

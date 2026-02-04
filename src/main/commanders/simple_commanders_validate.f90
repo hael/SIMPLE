@@ -1,7 +1,7 @@
 
 !@descr: validation of stream functionalities in batch execution mode
 module simple_commanders_validate
-use simple_commander_module_api
+use simple_commanders_api
 use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_preprocess,   only: commander_ctf_estimate_distr
 use simple_commanders_project_core, only: commander_new_project

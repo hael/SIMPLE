@@ -1,6 +1,6 @@
 !@descr: task 2 in the stream pipeline: assigning optics groups for when beam-tilt is used to change the exposure area
 module simple_stream_p02_assign_optics
-use simple_stream_module_api
+use simple_stream_api
 implicit none
 
 public :: stream_p02_assign_optics

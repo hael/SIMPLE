@@ -1,5 +1,5 @@
 !@descr: Aggregated public API for single_exec
-module single_exec_module_api
+module single_exec_api
 use simple_core_module_api
 use simple_cmdline,                 only: cmdline, cmdline_err
 use simple_commanders_atoms,        only: commander_pdb2mrc, commander_conv_atom_denoise, commander_atoms_stats, commander_atoms_register,&
@@ -23,4 +23,4 @@ commander_trajectory_reconstruct3D_distr, commander_trajectory_reconstruct3D_dis
 use single_commanders_trajectory,   only: commander_import_trajectory, commander_track_particles_distr, commander_graphene_subtr,&
 commander_denoise_trajectory, commander_extract_substk, commander_trajectory_swap_stack
 use single_commanders_tseries,      only: commander_tseries_import, commander_tseries_make_pickavg, commander_tseries_motion_correct_distr
-end module single_exec_module_api
+end module single_exec_api

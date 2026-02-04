@@ -678,7 +678,7 @@ contains
                         Rj = matmul(Rj, tRi)
                     endif
                     ! Euler angles identification
-                    eulers = m2euler_fast(Rj)
+                    eulers = m2euler(Rj)
                     ! in plane rotation angle of jref slice intersecting iref
                     psi = 360.0 - eulers(3)
                     ! get the weights, rotation indeces and compute the interpolated common line

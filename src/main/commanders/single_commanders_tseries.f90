@@ -1,6 +1,6 @@
 !@descr: commanders operating on the full time-series field of view, used in SINGLE for nanoparticle processing
 module single_commanders_tseries
-use simple_commander_module_api
+use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 

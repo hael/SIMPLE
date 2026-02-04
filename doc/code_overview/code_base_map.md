@@ -137,13 +137,13 @@
       - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
       - `simple_user_interface.f90` — the user interface class (it's a beast)
       - **apis/** — application programming interfaces for cleaner use inclusion and faster compilation
-        - `simple_commander_module_api.f90` — API for the commanders
+        - `simple_commanders_api.f90` — API for the commanders
         - `simple_core_module_api.f90` — API for the core modules
-        - `simple_exec_module_api.f90` — Aggregated public API for simple_exec
+        - `simple_exec_api.f90` — Aggregated public API for simple_exec
         - `simple_pftc_srch_api.f90` — Facade pattern API to avoid circular dependencies involving polarft_calc
-        - `simple_private_exec_module_api.f90` — Aggregated public API for simple_private_exec.
-        - `simple_stream_module_api.f90` — Aggregated public API for stream_exec.
-        - `single_exec_module_api.f90` — Aggregated public API for single_exec
+        - `simple_private_exec_api.f90` — Aggregated public API for simple_private_exec.
+        - `simple_stream_api.f90` — Aggregated public API for stream_exec.
+        - `single_exec_api.f90` — Aggregated public API for single_exec
       - **commanders/** — home of the commanders implementing high-level application code
         - `simple_commander_base.f90` — abstract base commander
         - `simple_commander_imgops.f90` — standard image operations: binarize, filter, denoise, normalize, scale etc.

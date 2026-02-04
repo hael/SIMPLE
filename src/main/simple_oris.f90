@@ -1,24 +1,7 @@
 !@descr: an agglomeration of orientations
 module simple_oris
-!$ use omp_lib
-!$ use omp_lib_kinds
-use json_kinds
-use json_module
-use simple_defs
-use simple_defs_ori
-use simple_fileio
-use simple_fileio
-use simple_is_check_assert
-use simple_math
-use simple_math_ft
-use simple_ori
-use simple_ran_tabu
-use simple_rnd
-use simple_srch_sort_loc
-use simple_stat
-use simple_string
-use simple_string_utils
-use simple_syslib
+use simple_ori_api
+use simple_ori, only: ori
 implicit none
 
 public :: oris, test_oris

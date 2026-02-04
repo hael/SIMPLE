@@ -1,6 +1,6 @@
 !@descr: task 3 in the stream pipeline: the first 2D analyis from segmentation picked particles used for initial screening and generation of picking references
 module simple_stream_p03_opening2D
-use simple_stream_module_api
+use simple_stream_api
 use simple_commanders_pick,       only: commander_extract_distr
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D

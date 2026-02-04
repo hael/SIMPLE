@@ -1,6 +1,6 @@
 !@descr: analysis of class averages
 module simple_commanders_cavgs
-use simple_commander_module_api
+use simple_commanders_api
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs
 implicit none

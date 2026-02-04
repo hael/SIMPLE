@@ -1,6 +1,6 @@
 !@descr: operations on image stacks
 module simple_commanders_stkops
-use simple_commander_module_api
+use simple_commanders_api
 use simple_pftc_srch_api
 use simple_strategy2D_utils, only: calc_cluster_cavgs_dmat, calc_match_cavgs_dmat
 implicit none

@@ -1,5 +1,5 @@
 program simple_test_sim_workflow
-use simple_stream_module_api
+use simple_stream_api
 use simple_commanders_project_core, only: commander_new_project
 use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_atoms,        only: commander_pdb2mrc

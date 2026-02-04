@@ -1,7 +1,7 @@
 !@descr: stuff that didn't fit elsewhere
 module simple_commanders_misc
 include "starfile_enum.inc"
-use simple_commander_module_api
+use simple_commanders_api
 use simple_simple_volinterp, only: rotvol
 implicit none
 #include "simple_local_flags.inc"

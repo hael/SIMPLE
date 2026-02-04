@@ -1,6 +1,6 @@
 !@descr: commanders operating on extracted time-trajectories, used in SINGLE for nanoparticle processing
 module single_commanders_trajectory
-use simple_commander_module_api
+use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 

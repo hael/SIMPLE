@@ -1,6 +1,6 @@
 !@descr: supporting 3D orientation search
 module simple_commanders_refine3D
-use simple_commander_module_api
+use simple_commanders_api
 use simple_pftc_srch_api
 use simple_commanders_euclid
 use simple_cluster_seed,      only: gen_labelling
