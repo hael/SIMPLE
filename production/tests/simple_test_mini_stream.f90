@@ -1,6 +1,6 @@
 !@descr: test for running the mini stream across multiple data sets
 program simple_test_mini_stream
-use simple_stream_module_api
+use simple_stream_api
 use simple_commanders_project_core, only: commander_new_project, commander_selection
 use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_validate,     only: commander_mini_stream

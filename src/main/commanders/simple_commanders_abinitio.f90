@@ -1,6 +1,6 @@
 !@descr: abinitio 3D reconstruction in single- and multi-particle mode
 module simple_commanders_abinitio
-use simple_commander_module_api
+use simple_commanders_api
 use simple_abinitio_config
 use simple_abinitio_utils
 use simple_procimgstk,          only: shift_imgfile

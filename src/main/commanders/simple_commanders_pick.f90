@@ -1,6 +1,6 @@
 !@descr: for picking, extraction, and making picking references
 module simple_commanders_pick
-use simple_commander_module_api
+use simple_commanders_api
 ! use simple_progress
 implicit none
 

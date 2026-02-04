@@ -1,5 +1,5 @@
 program simple_test_coarrays
-use simple_stream_module_api   
+use simple_stream_api   
 use simple_image,   only: image
 use simple_imgfile, only: imgfile
 implicit none

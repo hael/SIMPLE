@@ -1,6 +1,6 @@
 !@descr: task 4 in the stream pipeline: reference-based picking and extraction
 module simple_stream_p04_refpick_extract
-use simple_stream_module_api
+use simple_stream_api
 use simple_commanders_pick, only: commander_make_pickrefs
 use simple_timer
 implicit none

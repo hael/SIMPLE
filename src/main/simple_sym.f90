@@ -1,11 +1,8 @@
 !@descr: defines protein point-group symmetries
 module simple_sym
-use simple_math
-use simple_ori
-use simple_oris
-use simple_rnd
-use simple_string
-use simple_string_utils
+use simple_ori_api
+use simple_ori,  only: ori
+use simple_oris, only: oris
 implicit none
 
 public :: sym, is_valid_pointgroup, sym_tester

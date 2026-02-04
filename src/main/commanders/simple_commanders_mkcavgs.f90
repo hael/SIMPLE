@@ -1,6 +1,6 @@
 !@descr: for producing class averages
 module simple_commanders_mkcavgs
-use simple_commander_module_api
+use simple_commanders_api
 use simple_pftc_srch_api
 use simple_classaverager
 implicit none

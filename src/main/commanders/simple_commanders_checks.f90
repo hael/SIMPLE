@@ -1,6 +1,6 @@
 !@descr: checking info about images, project, or checking update calculations
 module simple_commanders_checks
-use simple_commander_module_api
+use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 

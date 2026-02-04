@@ -1,6 +1,6 @@
 !@descr: utilities for ab initio 3D reconstruction used by commanders_abinitio
 module simple_abinitio_utils
-use simple_commander_module_api
+use simple_commanders_api
 use simple_abinitio_config
 use simple_commanders_volops, only: commander_postprocess, commander_symmetrize_map
 use simple_commanders_mask,   only: commander_automask

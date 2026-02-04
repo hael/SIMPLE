@@ -1,6 +1,6 @@
 !@descr: starproject import, export, etc.
 module simple_commanders_starproject
-use simple_commander_module_api
+use simple_commanders_api
 use simple_starproject, only: starproject
 use simple_jiffys,      only: simple_end
 implicit none

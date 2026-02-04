@@ -1,6 +1,6 @@
 !@descr: supporting interoperability with RELION
 module simple_commanders_relion
-use simple_commander_module_api
+use simple_commanders_api
 use simple_relion, only: relion_project
 implicit none
 #include "simple_local_flags.inc"

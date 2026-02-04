@@ -1,6 +1,6 @@
 !@descr: standard image operations: binarize, filter, denoise, normalize, scale etc.
 module simple_commanders_imgops
-use simple_commander_module_api
+use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 

@@ -1,6 +1,6 @@
 !@descr: experimental commanders under development
 module single_commanders_experimental
-use simple_commander_module_api
+use simple_commanders_api
 use simple_commanders_volops, only: commander_reproject
 implicit none
 #include "simple_local_flags.inc"

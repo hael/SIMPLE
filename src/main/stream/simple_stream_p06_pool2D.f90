@@ -1,6 +1,6 @@
 !@descr: task 6 in the stream pipeline: global 2D refinement of pooled particles from the sieving
 module simple_stream_p06_pool2D
-use simple_stream_module_api
+use simple_stream_api
 use simple_stream_pool2D_utils
 implicit none
 

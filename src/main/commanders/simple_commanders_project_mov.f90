@@ -1,6 +1,6 @@
 !@descr: project commanders for movie-related things
 module simple_commanders_project_mov
-use simple_commander_module_api
+use simple_commanders_api
 use simple_stream_watcher, only: stream_watcher
 implicit none
 #include "simple_local_flags.inc"

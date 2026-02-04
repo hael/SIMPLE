@@ -36,7 +36,8 @@ use simple_math,            only: otsu, pixels_dist, equispaced_vals, put_last, 
 use simple_math_ft,         only: csq_fast, csq, calc_fourier_index, calc_graphene_mask, calc_lowpass_lim, cyci_1d, cyci_1d_static,&
                                  &fdim, get_find_at_res, get_find_at_crit, get_resarr, mycabs, phase_angle, resang
 use simple_nrtxtfile,       only: nrtxtfile
-use simple_ori,             only: ori, euler2m, m2euler, m2euler_fast, euler_dist, euler_inplrotdist, euler_compose, euler_mirror, geodesic_frobdev
+use simple_ori,             only: ori
+use simple_ori_utils,       only: euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror, geodesic_frobdev
 use simple_oris,            only: oris
 use simple_ran_tabu,        only: ran_tabu
 use simple_rnd,             only: ran3arr, gasdev, greedy_sampling, seed_rnd, ran3, irnd_uni, irnd_uni_pair, shcloc, rnd_inds, mnorm_smp,&

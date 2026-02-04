@@ -1,9 +1,10 @@
 !@descr: unit test routines for the ori class
 module simple_ori_tester
-use simple_ori                 ! the class under test
-use simple_string, only: string
-use simple_test_utils          ! assertions etc.
-use simple_defs                ! dp, STDLEN, etc.
+use simple_test_utils ! assertions etc.
+use simple_defs       ! dp, STDLEN, etc.
+use simple_ori,       only: ori
+use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev
+use simple_string,    only: string
 implicit none
 private
 public :: run_all_ori_tests
@@ -19,7 +20,6 @@ contains
         call test_euler_basic_set_get()
         call test_euler_matrix_roundtrip()
         call test_normal_and_mat_consistency()
-        call test_m2euler_fast_vs_m2euler()
         call test_2Dshift_set_get_and_rounding()
         call test_state_class_proj_eo_sampled_updatecnt()
         call test_get_dfx_dfy_and_setters()
@@ -114,28 +114,11 @@ contains
         call assert_real(n1(3), n2(3), EPS, 'get_normal vs get_mat(3)')
     end subroutine test_normal_and_mat_consistency
 
-    !---------------- m2euler_fast vs m2euler ----------------
-
-    subroutine test_m2euler_fast_vs_m2euler()
-        type(ori) :: o
-        real :: e0(3), R(3,3), e1(3), e2(3)
-        write(*,'(A)') 'test_m2euler_fast_vs_m2euler'
-        e0 = [35.0, 70.0, 110.0]
-        call o%new_ori(.false.)
-        call o%set_euler(e0)
-        R  = o%get_mat()
-        e1 = m2euler(R)
-        e2 = m2euler_fast(R)
-        call assert_real(e1(1), e2(1), 1.0e-2, 'm2euler_fast vs m2euler e1')
-        call assert_real(e1(2), e2(2), 1.0e-2, 'm2euler_fast vs m2euler e2')
-        call assert_real(e1(3), e2(3), 1.0e-2, 'm2euler_fast vs m2euler e3')
-    end subroutine test_m2euler_fast_vs_m2euler
-
     !---------------- 2D shift set/get/rounding ----------------
 
     subroutine test_2Dshift_set_get_and_rounding()
         type(ori) :: o
-        real :: v(2), off(2)
+        real :: v(2), off(2), euls(3)
         write(*,'(A)') 'test_2Dshift_set_get_and_rounding'
         call o%new_ori(.true.)
         call o%set_shift([1.2, -3.4])
@@ -146,8 +129,9 @@ contains
         v = o%get_2Dshift()
         call assert_int(1,  nint(v(1)), 'round_shifts x')
         call assert_int(-3, nint(v(2)), 'round_shifts y')
-        ! calc_offset2D must be consistent with psi
-        call o%set_euler([0.0, 0.0, 90.0])  ! 90° in-plane
+        ! calc_offset2D must be consistent with phi
+        call o%set_euler([0.0, 0.1, 90.0])  ! 90° in-plane, need slight tilt for correct angle order
+                                            ! when the tilt is zero, e1/e3 is ambiguous
         call o%set_shift([1.0, 0.0])        ! shift along x
         call o%calc_offset2D(off)
         call assert_real(0.0, off(1), 1.0e-5, 'calc_offset2D offset(1)')

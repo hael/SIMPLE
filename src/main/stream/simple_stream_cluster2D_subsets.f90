@@ -20,7 +20,7 @@
 ! This is a stream-like sieving / bootstrapping policy, not a global optimization.
 !
 module simple_stream_cluster2D_subsets
-use simple_stream_module_api
+use simple_stream_api
 use simple_commanders_cavgs, only: commander_cluster_cavgs, commander_match_cavgs
 implicit none
 #include "simple_local_flags.inc"

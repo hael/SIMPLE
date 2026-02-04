@@ -1,6 +1,6 @@
 !@descr: for simulating noise, particles, movies, atoms, etc.
 module simple_commanders_sim
-use simple_commander_module_api
+use simple_commanders_api
 use simple_defs_atoms
 use simple_ctf,       only: ctf
 use simple_simulator, only: simimg

@@ -1,6 +1,6 @@
 !@descr: project commanders for dealing with 2D class-related things
 module simple_commanders_project_cls
-use simple_commander_module_api
+use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 

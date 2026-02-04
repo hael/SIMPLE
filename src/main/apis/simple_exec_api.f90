@@ -11,7 +11,7 @@
 !!  2. Add the corresponding commander_* symbol to the PUBLIC list.
 !!  3. Declare a type(commander_...) variable in simple_exec and wire it
 !!     into the SELECT CASE(prg) dispatch.
-module simple_exec_module_api
+module simple_exec_api
 use simple_core_module_api
 use simple_exec_helpers,   only: script_exec, restarted_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
@@ -116,4 +116,4 @@ use simple_commanders_atoms, only: commander_map2model_fsc, commander_pdb2mrc, c
 
 ! distr commanders, support routines for distributed execution
 use simple_commanders_distr, only: commander_split
-end module simple_exec_module_api
+end module simple_exec_api
