@@ -6,6 +6,7 @@ use simple_hclust,        only: hclust
 implicit none
 
 public :: multi_dendro
+public :: test_simple_tree
 private
 #include "simple_local_flags.inc"
 
@@ -62,6 +63,7 @@ contains
       self%n_refs  = size(labels)
       allocate(self%dist_mat(self%n_refs,self%n_refs), source=dist_mat)
       allocate(self%cls_pops(self%n_trees), source=0)
+      allocate(self%medoids(self%n_trees))
       do i = 1, self%n_trees
          self%cls_pops(i) = count(labels == i)
       end do
@@ -111,6 +113,7 @@ contains
          call hc%kill()
          ! Tracking Merges
          call gen_tree4ap_cluster(merge_mat, height, refs, self%node_store(icls)%nodes, self%node_store(icls)%root_idx)
+         self%medoids(icls) = self%node_store(icls)%nodes(self%node_store(icls)%root_idx)%ref_idx
          deallocate(sub_distmat, refs, merge_mat, height)
       end do
 
@@ -192,21 +195,34 @@ contains
    end subroutine set_imedoid
    
    ! getter to return left and right indices
-   function get_left_right_idxs(self, node_idx) result(idxs)
-      class(multi_dendro), intent(inout) :: self 
-      integer,             intent(inout) :: node_idx(2)
-      type(s2_node), pointer  :: rootp, refp
-      integer :: idxs(2), imedoid, ref_idx
+   subroutine get_left_right_idxs(self, node_idx, ref_idx)
+      class(multi_dendro), intent(in)    :: self 
+      integer,             intent(inout) :: node_idx(2), ref_idx(2)
+      type(s2_node), target           :: rootp
+      type(s2_node), pointer  :: refp, tmp 
+      integer :: imedoid
       imedoid = self%imedoid
       if(node_idx(1) == 2*self%cls_pops(imedoid) - 1) then 
          rootp = self%node_store(imedoid)%nodes(self%node_store(imedoid)%root_idx)
+         tmp => rootp
+         refp => search_tree4ref(tmp, ref_idx(1))
+         node_idx(1) = refp%node_idx
       end if  
-      node_idx(1) = search_tree4ref(self, rootp, ref_idx)
-      refp = self%node_store(imedoid)%nodes(node_idx(1))
-      idxs = 0
-      if ( associated(refp%left)  ) idxs(1) = refp%left%ref_idx ; node_idx(1)  = refp%left%node_idx
-      if ( associated(refp%right) ) idxs(2) = refp%right%ref_idx ; node_idx(2) = refp%right%node_idx
-   end function get_left_right_idxs
+      if (associated(refp%left)) then
+         ref_idx(1)  = refp%left%ref_idx
+         node_idx(1) = refp%left%node_idx
+      else
+         ref_idx(1)  = refp%ref_idx 
+         node_idx(1) = refp%node_idx
+      end if
+      if (associated(refp%right)) then
+         ref_idx(2)  = refp%right%ref_idx
+         node_idx(2) = refp%right%node_idx
+      else
+         ref_idx(2)  = refp%ref_idx
+         node_idx(2) = refp%node_idx
+      end if
+   end subroutine get_left_right_idxs
 
    ! find the cluster to which an aribitrary reference belongs
    pure function get_cls_indx(self, ref_idx) result(tree_idx)
@@ -232,14 +248,13 @@ contains
    end function get_cls_indx
 
    ! private helper to search for node with inputted reference index
-   recursive function search_tree4ref(self, root, ref_idx) result(node_index)
-      type(multi_dendro), intent(inout)  :: self 
+   recursive function search_tree4ref(root, ref_idx) result(final)
       type(s2_node), pointer, intent(in) :: root
       integer,                intent(in) :: ref_idx
       type(s2_node), pointer :: final
       type(s2_node), pointer :: cur
       integer,   allocatable :: tmp(:)
-      integer :: j, n, node_index
+      integer :: j, n
       logical :: in_left
       ! root should be immutable 
       final => null()
@@ -248,20 +263,19 @@ contains
          ! return if ref_idx found   
          if (cur%ref_idx == ref_idx) then
             final => cur
-            node_index = final%node_idx
             return
          end if
          in_left = .false.
          ! heap sort + binary search to check if ref_idx is in the subset
          if (associated(cur%left)) then
             n = size(cur%left%subset)
-            if (n > 0) then
-               allocate(tmp(n), source=cur%left%subset)
-               j = locate(tmp, n, ref_idx)
-               if (j >= 1 .and. j <= n) then
-                  if (tmp(j) == ref_idx .or. tmp(j+1) == ref_idx) in_left = .true.
+            if (n == 1) then
+               in_left = (cur%left%subset(1) == ref_idx)
+            else if (n > 1) then
+               j = locate(cur%left%subset, n, ref_idx)
+               if (j >= 1 .and. j <= n-1) then
+                  in_left = (cur%left%subset(j) == ref_idx) .or. (cur%left%subset(j+1) == ref_idx)
                end if
-               deallocate(tmp)
             end if
          end if
          if (in_left) then
@@ -271,7 +285,6 @@ contains
          end if
       end do
       final => null()
-      node_index = final%node_idx
    end function search_tree4ref
    
    subroutine kill( self )
@@ -302,4 +315,76 @@ contains
       endif
    end subroutine kill
 
+   subroutine test_simple_tree()
+      type(multi_dendro) :: md
+      integer, allocatable :: labels(:)
+      real,    allocatable :: dist(:,:)
+      integer :: n, i, j, icls
+      integer :: ref_in, true_node, step, max_steps, n_nodes 
+      integer :: left_node, right_node, left_ref, right_ref, node_idxs(2), ref_idxs(2)
+      real    :: f_left, f_right
+      type(s2_node), target :: rootp
+      type(s2_node), pointer  :: refp, tmp 
+      n = 6
+      allocate(dist(n,n), labels(n))
+      ! Two clusters: {1,2,3} and {4,5,6}
+      labels = [1,1,1, 2,2,2]
+      dist = 0.0
+      do i = 1, n
+         do j = 1, n
+            if (i == j) then
+               dist(i,j) = 0.0
+            else if (labels(i) == labels(j)) then
+               dist(i,j) = 1.0 + 0.1*abs(real(i-j))
+            else
+               dist(i,j) = 10.0 + 0.1*abs(real(i-j))
+            end if
+         end do
+      end do
+      call md%new(dist, labels)
+      call md%build_multi_dendro(1)
+      do icls = 1, md%n_trees
+         if(2*md%cls_pops(icls) - 1 /= size(md%node_store(icls)%nodes) ) then 
+            print *, 'TEST FAILED: TREE ASSEMBLED INCORRECT'
+            return
+         end if 
+      end do
+      print *, 'TREE ASSEMBLED CORRECTLY'
+      ref_in = 6
+      call md%set_imedoid(ref_in)
+      n_nodes = 2*md%cls_pops(md%imedoid) - 1
+      if(md%imedoid == labels(ref_in)) then 
+         print *, 'IMEDOID SET CORRECTLY'
+      else 
+         print *, 'IMEDOID SET INCORRECTLY'
+         return 
+      end if 
+      print *, md%medoids(1), md%medoids(2)
+      ! starting at 2n - 1 th node 
+      node_idxs = [n_nodes, 0]
+      ref_idxs  = [md%medoids(md%imedoid), 0]
+      print *, 'node_idxs', node_idxs, 'ref_idxs', ref_idxs
+      print *, '>>> CHECKING PRIVATE HELPERS'
+      if(get_cls_indx(md, ref_in) == md%imedoid) then 
+         print *, 'GET_CLS_INDX IS CORRECT'
+      else
+         print *, 'GET_CLS_INDX IS INCORRECT'
+      end if 
+      rootp = md%node_store(md%imedoid)%nodes(n_nodes)
+      print *, rootp%ref_idx, rootp%node_idx
+      print *, 'ROOT NODE SET CORRECTLY'
+      tmp => rootp
+      refp => search_tree4ref(tmp, ref_in)
+      if(refp%node_idx > 1 .and. refp%node_idx < n_nodes .and. refp%ref_idx == ref_in) then 
+         print *, 'SEARCH_TREE4REF IS CORRECT'
+      else
+         print *, 'SEARCH_TREE4REF IS INCORRECT'
+      end if 
+      call get_left_right_idxs(md,node_idxs,ref_idxs)
+      print *, '>>> GETTING LEFT/RIGHT'
+      print *, 'node_idxs', node_idxs, 'ref_idxs', ref_idxs
+      call md%kill()
+      print *, 'TREE KILLED'
+      deallocate(dist, labels)
+   end subroutine test_simple_tree
 end module simple_tree
