@@ -423,7 +423,7 @@ contains
         endif
         call stkio_w%open(string(STREAM_SELECTED_REFS)//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=nsel)
         ! mask memoization
-        call cavgs(1)%memoize_mask_coords
+        call cavgs(1)%memoize_mask_coords(box=box_for_extract)
         do icls=1, nsel
             call stkio_r%get_image(selection(icls), cavgs(icls))
             if( ldim(1) > box_for_extract ) then

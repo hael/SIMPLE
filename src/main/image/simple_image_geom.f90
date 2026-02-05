@@ -654,7 +654,7 @@ contains
                     stops(3)  = 1
                 endif
                 self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3))&
-                = self_in%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3))
+                &= self_in%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3))
                 self_out%ft = .false.
             endif
         endif
