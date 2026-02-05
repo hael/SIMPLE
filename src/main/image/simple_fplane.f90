@@ -13,12 +13,12 @@ private
 #include "simple_local_flags.inc"
 
 type :: fplane
-    complex, allocatable :: cmplx_plane(:,:)             !< On output image pre-multiplied by CTF
-    real,    allocatable :: ctfsq_plane(:,:)             !< On output CTF normalization
-    integer              :: frlims_crop(3,2)   = 0       !< Redundant Fourier cropped limits
-    real                 :: shconst(3)    = 0.           !< memoized constants for origin shifting
-    integer              :: nyq_crop      = 0            !< cropped Nyqvist Fourier index
-    logical              :: exists        = .false.
+    complex, allocatable :: cmplx_plane(:,:)      !< On output image pre-multiplied by CTF
+    real,    allocatable :: ctfsq_plane(:,:)      !< On output CTF normalization
+    integer              :: frlims_crop(3,2) = 0  !< Redundant Fourier cropped limits
+    real                 :: shconst(3)       = 0. !< memoized constants for origin shifting
+    integer              :: nyq_crop         = 0  !< cropped Nyqvist Fourier index
+    logical              :: exists           = .false.
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -28,7 +28,6 @@ type :: fplane
     procedure :: gen_planes
     ! MODIFIERS
     procedure :: zero
-    procedure :: neg
     ! DESTRUCTOR
     procedure :: kill
 end type fplane
@@ -52,7 +51,6 @@ contains
         allocate(self%cmplx_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
         &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)))
         call self%zero
-        
         self%exists = .true.
     end subroutine new
 
@@ -69,7 +67,7 @@ contains
         real,                           intent(in)    :: shift(2)
         integer,                        intent(in)    :: iptcl
         type(ctf)                :: tfun
-        real,    allocatable         :: sigma2_noise(:)              !< Noise power spectrum for ML regularization
+        real,    allocatable     :: sigma2_noise(:) !< Noise power spectrum for ML regularization
         complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
         real(dp) :: pshift(2)
         real     :: tval, tvalsq, add_phshift
@@ -113,8 +111,7 @@ contains
                     ! Retrieve component & shift
                     physh = ft_map_phys_addrh(h,k)
                     physk = ft_map_phys_addrk(h,k)
-                    c    = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0)&
-                            & * (ph_k * ph_h)
+                    c    = merge(conjg(img%get_cmat_at(physh,physk,1)), img%get_cmat_at(physh,physk,1), h<0) * (ph_k * ph_h)
                     ! CTF
                     if( l_ctf )then
                         tval   = tfun%eval(ft_map_spafreqsq(h,k), ft_map_astigang(h,k), add_phshift)
@@ -161,12 +158,6 @@ contains
         self%cmplx_plane  = cmplx(0.,0.)
         self%ctfsq_plane  = 0.
     end subroutine zero
-
-    subroutine neg( self )
-        class(fplane),    intent(inout) :: self
-        self%cmplx_plane = -self%cmplx_plane
-        self%ctfsq_plane = -self%ctfsq_plane
-    end subroutine neg
 
     !>  \brief  is a destructor
     elemental subroutine kill( self )
