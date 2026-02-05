@@ -312,6 +312,7 @@ contains
     procedure          :: ctf2img
     procedure          :: apply_ctf_wpad
     procedure          :: apply_ctf
+    procedure          :: gen_fplane4rec
     procedure          :: calc_ice_frac
     procedure          :: ctf_dens_correct
     procedure          :: ctf_dens_correct_wiener
@@ -1987,6 +1988,14 @@ interface
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
+
+    module subroutine gen_fplane4rec( self, ctfparms, shift, iptcl, fplane )
+        class(image),      intent(inout) :: self
+        class(ctfparams),  intent(in)    :: ctfparms
+        real,              intent(in)    :: shift(2)
+        integer,           intent(in)    :: iptcl
+        type(fplane_type), intent(out)   :: fplane
+    end subroutine gen_fplane4rec
 
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )
         class(image),     intent(in)    :: self

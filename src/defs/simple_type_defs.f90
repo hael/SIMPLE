@@ -81,6 +81,14 @@ type stats_struct
     real :: minv = 0.
 end type stats_struct
 
+type fplane_type
+    complex, allocatable :: cmplx_plane(:,:) !< On output image pre-multiplied by CTF
+    real,    allocatable :: ctfsq_plane(:,:) !< On output CTF normalization
+    integer              :: frlims(3,2) = 0  !< Redundant Fourier limits
+    real                 :: shconst(3)  = 0. !< memoized constants for origin shifting
+    integer              :: nyq         = 0  !< Nyqvist Fourier index
+end type fplane_type
+
 type inpl_struct
     real    :: e3 = 0., x = 0., y = 0., corr = 0.
     logical :: l_mirr = .false.

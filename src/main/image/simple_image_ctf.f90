@@ -1,7 +1,9 @@
 !@descr: for applying CTF to images
 submodule (simple_image) simple_image_ctf
 use simple_memoize_ft_maps
-use simple_math_ctf, only: ft_map_ctf_kernel
+use simple_math_ctf,      only: ft_map_ctf_kernel
+use simple_parameters,    only: params_glob
+use simple_euclid_sigma2, only: eucl_sigma2_glob
 implicit none
 #include "simple_local_flags.inc"
 
@@ -126,7 +128,157 @@ contains
         end do
     end subroutine apply_ctf
 
-     ! Calculate Joe's Ice Fraction Score for images, not intended for micrographs
+    module subroutine gen_fplane4rec( self, ctfparms, shift, iptcl, fplane )
+        class(image),      intent(inout) :: self
+        class(ctfparams),  intent(in)    :: ctfparms
+        real,              intent(in)    :: shift(2)
+        integer,           intent(in)    :: iptcl
+        type(fplane_type), intent(out)   :: fplane
+        type(ctf)                :: tfun
+        type(ctfvars) :: ctfvals
+        real, allocatable        :: sigma2_noise(:) !< Noise power spectrum for ML regularization
+        complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
+        real(dp)                 :: pshift(2)
+        ! CTF kernel scalars (precomputed)
+        real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
+        integer :: physh, physk, sigma2_kfromto(2), h, k, shell, hmin, hmax, kmin, kmax 
+        logical :: l_ctf, l_flip
+        ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
+        integer, allocatable :: shell_lut(:)
+        integer :: max_r2, r2, abs_hmax, abs_kmax
+        ! -----------------------
+        ! setup the Fourier plane
+        ! -----------------------
+        ! shift is with respect to the image dimensions
+        fplane%shconst = self%get_shconst()
+        ! Fourier limits & dimensions
+        fplane%frlims  = self%fit%loop_lims(3)
+        fplane%nyq     = self%fit%get_lfny(1)
+        ! matrices
+        if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
+        if( allocated(fplane%ctfsq_plane) ) deallocate(fplane%ctfsq_plane)
+        allocate(fplane%cmplx_plane(fplane%frlims(1,1):fplane%frlims(1,2),fplane%frlims(2,1):fplane%frlims(2,2)),&
+        &fplane%ctfsq_plane(fplane%frlims(1,1):fplane%frlims(1,2),fplane%frlims(2,1):fplane%frlims(2,2)))
+        fplane%cmplx_plane  = cmplx(0.,0.)
+        fplane%ctfsq_plane  = 0.
+        ! -----------------------
+        ! CTF flags
+        ! -----------------------
+        l_ctf  = (ctfparms%ctfflag /= CTFFLAG_NO)
+        l_flip = .false.
+        if (l_ctf) then
+            l_flip = (ctfparms%ctfflag == CTFFLAG_FLIP)
+            tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+            call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+            ! --- optimized kernel scalars ---
+            ctfvals         = tfun%get_ctfvars()
+            wl              = ctfvals%wl
+            half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
+            sum_df          = ctfvals%dfx + ctfvals%dfy
+            diff_df         = ctfvals%dfx - ctfvals%dfy
+            angast          = ctfvals%angast
+            amp_contr_const = ctfvals%amp_contr_const
+        end if
+        ! -----------------------
+        ! ML regularization noise spectrum
+        ! -----------------------
+        if (params_glob%l_ml_reg) then
+            allocate(sigma2_noise(1:fplane%nyq), source=0.0)
+            sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
+            sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
+            sigma2_noise(sigma2_kfromto(1):fplane%nyq) = &
+                eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):fplane%nyq, iptcl)
+        end if
+        ! -----------------------
+        ! Shift phase recurrence
+        ! -----------------------
+        pshift = real(-shift * fplane%shconst(1:2), dp)
+        w1     = cmplx( real(cos(pshift(1)), c_float), real(sin(pshift(1)), c_float), kind=c_float_complex )
+        w2     = cmplx( real(cos(pshift(2)), c_float), real(sin(pshift(2)), c_float), kind=c_float_complex )
+        ph0    = cmplx( real(cos(real(fplane%frlims(1,1),dp)*pshift(1)), c_float), &
+                        real(sin(real(fplane%frlims(1,1),dp)*pshift(1)), c_float), kind=c_float_complex )
+        ph_k   = cmplx( real(cos(real(fplane%frlims(2,1),dp)*pshift(2)), c_float), &
+                        real(sin(real(fplane%frlims(2,1),dp)*pshift(2)), c_float), kind=c_float_complex )
+        ! -----------------------
+        ! Precompute shell LUT to avoid sqrt in inner loops
+        ! r2 = h*h + k*k, shell = nint(sqrt(r2))
+        ! -----------------------
+        hmin = fplane%frlims(1,1)
+        hmax = fplane%frlims(1,2)
+        kmin = fplane%frlims(2,1)
+        kmax = fplane%frlims(2,2)
+        abs_hmax = max(abs(hmin), abs(hmax))
+        abs_kmax = max(abs(kmin), abs(kmax))
+        max_r2   = abs_hmax*abs_hmax + abs_kmax*abs_kmax
+        allocate(shell_lut(0:max_r2))
+        do r2 = 0, max_r2
+            shell_lut(r2) = nint(sqrt(real(r2)))
+        end do
+        ! ============================================================
+        ! Fill k in [kmin .. 0] explicitly
+        ! ============================================================
+        do k = kmin, 0
+            ph_h = ph0
+            do h = hmin, hmax
+                r2    = h*h + k*k
+                shell = shell_lut(r2)
+                if (shell > fplane%nyq) then
+                    c      = cmplx(0.0_c_float, 0.0_c_float, kind=c_float_complex)
+                    tvalsq = 0.0
+                else
+                    ! Retrieve Fourier component & apply shift phase
+                    physh = ft_map_phys_addrh(h,k)
+                    physk = ft_map_phys_addrk(h,k)
+                    c     = merge(conjg(self%cmat(physh,physk,1)), self%cmat(physh,physk,1), h < 0) * (ph_k * ph_h)
+                    ! CTF (optimized kernel; no phase-plate support)
+                    if (l_ctf) then
+                        ker = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
+                        if (l_flip) then
+                            ! Consistent with norm_noise_fft_clip_shift_ctf_flip:
+                            ! flip sign only; ctfsq is 1 (then ML weighting may scale it)
+                            tval   = sign(1.0, ker)
+                            tvalsq = 1.0
+                            c      = tval * c
+                        else
+                            tval   = ker
+                            tvalsq = tval * tval
+                            c      = tval * c
+                        end if
+                    else
+                        tvalsq = 1.0
+                    end if
+                    ! sigma2 weighting (unchanged semantics)
+                    if (params_glob%l_ml_reg) then
+                        if (shell >= sigma2_kfromto(1)) then
+                            c      = c      / sigma2_noise(shell)
+                            tvalsq = tvalsq / sigma2_noise(shell)
+                        else
+                            c      = c      / sigma2_noise(sigma2_kfromto(1))
+                            tvalsq = tvalsq / sigma2_noise(sigma2_kfromto(1))
+                        end if
+                    end if
+                end if
+                fplane%cmplx_plane(h,k) = c
+                fplane%ctfsq_plane(h,k) = tvalsq
+                ph_h = ph_h * w1
+            end do
+            ph_k = ph_k * w2
+        end do
+        ! ============================================================
+        ! Fill k in [1 .. kmax] by Friedel symmetry only
+        ! No sqrt/shell needed: if (-h,-k) was out of nyq, it was already zeroed.
+        ! ============================================================
+        do k = 1, kmax
+            do h = hmin, hmax
+                fplane%cmplx_plane(h,k) = conjg(fplane%cmplx_plane(-h,-k))
+                fplane%ctfsq_plane(h,k) =       fplane%ctfsq_plane(-h,-k)
+            end do
+        end do
+        if (allocated(shell_lut))    deallocate(shell_lut)
+        if (allocated(sigma2_noise)) deallocate(sigma2_noise)
+    end subroutine gen_fplane4rec
+
+    ! Calculate Joe's Ice Fraction Score for images, not intended for micrographs
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )
         class(image),     intent(in)    :: self
         class(ctf),       intent(inout) :: tfun
