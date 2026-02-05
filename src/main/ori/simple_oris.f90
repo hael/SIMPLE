@@ -186,7 +186,7 @@ type :: oris
     procedure          :: set_updatecnt
     procedure          :: clean_entry
     !======================================================================
-    ! DISTANCES (simple_oris_dist.f90)
+    ! DISTANCES (simple_oris_dists.f90)
     !======================================================================
     procedure, private :: euldist_1, euldist_2
     generic            :: euldist => euldist_1, euldist_2
