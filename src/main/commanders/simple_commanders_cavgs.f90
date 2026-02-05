@@ -228,7 +228,7 @@ contains
                 if( labels(icls) == iclust )then
                     call spproj%os_cls2D%set(clsinds(icls),'cluster', iclust)                            ! 2D class field
                     call spproj%os_cls3D%set(clsinds(icls),'cluster', iclust)                            ! 3D class field
-                    call spproj%os_cls2D%set(clsinds(icls),'jointscore', clust_info_arr(icls)%jointscore)! 2D joint score field  
+                    call spproj%os_cls2D%set(clsinds(icls),'jointscore', clust_info_arr(iclust)%jointscore)! 2D joint score field  
                     call spproj%os_cls2D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad)    ! 2D class accepted field
                     call spproj%os_cls3D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad)    ! 3D class accepted field
                     call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust)    ! 2D particle field

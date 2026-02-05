@@ -96,6 +96,7 @@ type(simple_program), target :: center
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: check_refpick
 type(simple_program), target :: clin_fsc
+type(simple_program), target :: cleanup2D
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_stream
@@ -409,6 +410,7 @@ contains
         call new_center
         call new_center2D_nano
         call new_check_refpick
+        call new_cleanup2D
         call new_clin_fsc
         call new_cluster2D
         call new_cluster2D_nano
@@ -549,6 +551,7 @@ contains
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(check_refpick)
         call push2prg_ptr_array(clin_fsc)
+        call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_stream)
@@ -696,6 +699,7 @@ contains
             case('center');                      ptr2prg => center
             case('center2D_nano');               ptr2prg => center2D_nano
             case('check_refpick');               ptr2prg => check_refpick
+            case('cleanup2D');                   ptr2prg => cleanup2D    
             case('clin_fsc');                    ptr2prg => clin_fsc
             case('cluster2D');                   ptr2prg => cluster2D
             case('cluster2D_nano');              ptr2prg => cluster2D_nano
@@ -858,6 +862,7 @@ contains
         !====================================================================
         write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio2D%name%to_char()
+        write(logfhandle,'(A)') cleanup2D%name%to_char()
         write(logfhandle,'(A)') cluster2D%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
         write(logfhandle,'(A)') cluster_cavgs%name%to_char()
@@ -1923,6 +1928,31 @@ contains
         call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_cluster2D_stream
+
+    subroutine new_cleanup2D
+        ! PROGRAM SPECIFICATION
+        call cleanup2D%new(&
+        &'cleanup2D',&                                                           ! name
+        &'Analysis of class averages with affinity propagation',&                ! descr_short
+        &'is a program for analyzing class averages with affinity propagation',& ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+
+        ! filter controls
+   
+        ! mask controls
+  
+        ! computer controls
+     
+    end subroutine new_cleanup2D
 
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION
