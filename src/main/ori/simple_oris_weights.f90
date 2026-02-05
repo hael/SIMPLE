@@ -1,3 +1,4 @@
+!@descr: routines for calculating weights for oris (e.g. for resampling, class averaging, etc.)
 submodule (simple_oris) simple_oris_weights
 use simple_ori_api
 use simple_ori, only: ori

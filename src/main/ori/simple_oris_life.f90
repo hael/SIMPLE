@@ -1,3 +1,4 @@
+!@descr: life-cycle management of oris object (constructors, destructors, etc.)
 submodule (simple_oris) simple_oris_life
 use simple_ori_api
 use simple_ori, only: ori

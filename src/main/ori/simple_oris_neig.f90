@@ -1,3 +1,4 @@
+!@descr: routines for identifying neighbors of oris and calculating correlations/overlaps/distances between oris
 submodule (simple_oris) simple_oris_neigh
 use simple_ori_api
 use simple_ori, only: ori
