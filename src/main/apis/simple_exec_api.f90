@@ -54,6 +54,9 @@ use simple_commanders_cluster2D, only: commander_cluster2D_autoscale, commander_
 ! ab initio 2D commanders, for simultanous 2D alignment and clustering of single-particle images
 use simple_commanders_abinitio2D, only: commander_abinitio2D
 
+! cleanup2D commander
+use simple_commanders_cleanup2D, only: commander_cleanup2D
+
 ! stream_cluster2D commanders, for testing sieving in an offline fashion
 use simple_stream_cluster2D_subsets, only: stream_cluster2D_subsets
 
