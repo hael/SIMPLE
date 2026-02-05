@@ -373,11 +373,10 @@ contains
 
     !> \brief  for gridding a Fourier plane
     subroutine grid_plane( self, se, o, fpl, eo, pwght )
-        use simple_fplane, only: fplane
         class(reconstructor_eo), intent(inout) :: self    !< instance
         class(sym),              intent(inout) :: se      !< symmetry elements
         class(ori),              intent(inout) :: o       !< orientation
-        class(fplane),           intent(in)    :: fpl     !< Forurier & ctf planes
+        class(fplane_type),      intent(in)    :: fpl     !< Forurier & ctf planes
         integer,                 intent(in)    :: eo      !< eo flag
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         select case(eo)
@@ -392,11 +391,10 @@ contains
 
     !> \brief  for testing gridding a Fourier plane
     subroutine test_grid_plane( self, se, o, fpl, eo, pwght, stride )
-        use simple_fplane, only: fplane
         class(reconstructor_eo), intent(inout) :: self
         class(sym),              intent(inout) :: se
         class(ori),              intent(inout) :: o
-        class(fplane),           intent(in)    :: fpl
+        class(fplane_type),      intent(in)    :: fpl
         integer,                 intent(in)    :: eo, stride
         real,                    intent(in)    :: pwght
         select case(eo)

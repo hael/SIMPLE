@@ -211,11 +211,10 @@ contains
 
     !> insert Fourier plane, single orientation
     subroutine insert_plane( self, se, o, fpl, pwght )
-        use simple_fplane, only: fplane
         class(reconstructor), intent(inout) :: self    !< instance
         class(sym),           intent(inout) :: se      !< symmetry elements
         class(ori),           intent(inout) :: o       !< orientation
-        class(fplane),        intent(in)    :: fpl     !< Fourier plane
+        class(fplane_type),   intent(in)    :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         type(ori) :: o_sym
         complex   :: comp
@@ -245,8 +244,8 @@ contains
         !     fplnyq  = fpl%nyq_croppd
         ! else
             ! the input slice is not padded
-            fpllims = fpl%frlims_crop
-            fplnyq  = fpl%nyq_crop
+            fpllims = fpl%frlims
+            fplnyq  = fpl%nyq
             rotmats = self%alpha * rotmats ! scale & rotation
         ! endif
         ! KB interpolation
@@ -288,11 +287,10 @@ contains
     !> does not insert Fourier plane, it performs all the appropriate calculations
     !    and instead only counts the number of times the rho_exp matrix is updated
     subroutine test_insert_plane( self, se, o, fpl, pwght, stride )
-        use simple_fplane, only: fplane
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
-        class(fplane),        intent(in)    :: fpl
+        class(fplane_type),   intent(in)    :: fpl
         real,                 intent(in)    :: pwght
         integer,              intent(in)    :: stride
         type(ori) :: o_sym
@@ -323,8 +321,8 @@ contains
         !     fplnyq  = fpl%nyq_croppd
         ! else
             ! the input slice is not padded
-            fpllims = fpl%frlims_crop
-            fplnyq  = fpl%nyq_crop
+            fpllims = fpl%frlims
+            fplnyq  = fpl%nyq
             rotmats = self%alpha * rotmats ! scale & rotation
         ! endif
         ! KB interpolation

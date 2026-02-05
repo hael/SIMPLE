@@ -5,7 +5,6 @@ use simple_timer
 use simple_builder,            only: build_glob
 use simple_butterworth,        only: butterworth_filter
 use simple_discrete_stack_io,  only: dstack_io
-use simple_fplane,             only: fplane
 use simple_gridding,           only: gen_instrfun_img
 use simple_nanoparticle_utils, only: phasecorr_one_atom
 use simple_opt_filter,         only: estimate_lplim
@@ -722,9 +721,9 @@ contains
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( fpl, se, o )
-        class(fplane),   intent(in)    :: fpl
-        class(sym),      intent(inout) :: se
-        class(ori),      intent(inout) :: o
+        class(fplane_type), intent(in)    :: fpl
+        class(sym),         intent(inout) :: se
+        class(ori),         intent(inout) :: o
         real    :: pw
         integer :: s, eo
         ! state flag
@@ -743,7 +742,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
-        type(fplane),      allocatable   :: fpls(:)
+        type(fplane_type), allocatable   :: fpls(:)
         type(ctfparams),   allocatable   :: ctfparms(:)
         type(ori) :: orientation, o_thres, o_mirr
         real      :: shift(2), euls(3), euls_mirr(3)
@@ -788,11 +787,12 @@ contains
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
-                if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
+                ! if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
                 call build_glob%imgbatch(ibatch)%norm_noise_fft(build_glob%lmsk)
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
-                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
+                ! call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
+                call build_glob%imgbatch(ibatch)%gen_fplane4rec(ctfparms(ibatch), shift, iptcl, fpls(ibatch))
             end do
             !$omp end parallel do
             if( DEBUG )then
@@ -824,7 +824,9 @@ contains
         call forget_ft_maps
         call killrecvols()
         do ibatch=1,MAXIMGBATCHSZ
-            call fpls(ibatch)%kill
+            if( allocated(fpls(ibatch)%cmplx_plane) ) deallocate(fpls(ibatch)%cmplx_plane)
+            if( allocated(fpls(ibatch)%ctfsq_plane) ) deallocate(fpls(ibatch)%ctfsq_plane)
+            ! call fpls(ibatch)%kill
         end do
         deallocate(fpls,ctfparms)
         call orientation%kill
