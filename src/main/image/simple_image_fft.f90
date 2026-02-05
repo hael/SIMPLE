@@ -373,6 +373,180 @@ contains
         self_out%ft   = .true.
     end subroutine norm_noise_pad_fft
 
+    module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out)
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        class(image), intent(inout) :: self_out
+        integer       :: n1, n2, n1o, n2o, h1o, h2o
+        integer       :: i, j, npix, starts(3), x0, y0, xo, yo, winsz
+        ! Normalization stats in DP (scalars only)
+        real(dp)      :: mean_dp, var_dp, sum_dp, sum_sq_dp, rnpix, invstd_dp
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat, x_sp
+        logical       :: do_norm
+        ! --- taper vars (square, 2D, n3=1) ---
+        integer       :: n, wtap, wavg, wbg, j1, j2, border_count
+        real(dp)      :: alpha_dp, inv_wtap_dp, inv_n_dp
+        real(dp)      :: bg_fill_dp, border_sum_dp, edge_mean_dp
+        real(c_float) :: alpha_sp, inv_wtap_sp, inv_n_sp, border_sum_sp
+        ! Edge profiles remain single precision (cheap+stable)
+        real(c_float) :: x_start(self%ldim(2)), x_stop(self%ldim(2))
+        real(c_float) :: x_smooth_start(self%ldim(2)), x_smooth_stop(self%ldim(2))
+        real(c_float) :: y_start(self%ldim(1)), y_stop(self%ldim(1))
+        real(c_float) :: y_smooth_start(self%ldim(1)), y_smooth_stop(self%ldim(1))
+        real(c_float) :: edge_avg(self%ldim(1))
+        winsz = nint(COSMSKHALFWIDTH)
+        ! n3 is always 1 here
+        n1  = self%ldim(1)
+        n2  = self%ldim(2)
+        n   = n1   ! assume square: n1==n2
+        n1o = self_out%ldim(1)
+        n2o = self_out%ldim(2)
+        h1o = n1o/2
+        h2o = n2o/2
+        ! ============================================================
+        ! 1) TAPER EDGES (in-place on self) + compute edge_mean
+        !    Edge-profile arrays are SP; only scalar accumulations are DP.
+        ! ============================================================
+        wtap = min(max(winsz, 0), n/2)
+        wbg  = max(1, winsz/2)
+        wbg  = min(wbg, n/2)
+        if (wtap > 0) then
+            wavg = min(max(1, wtap/8), n)
+            inv_n_sp = 1.0_c_float / real(wavg, c_float)
+            ! ---- Pass 1: X edges ----
+            do j = 1, n
+                ! sum() is SP; stable enough for small wavg (~<=32); cheap
+                x_start(j) = sum(self%rmat(1:wavg,     j, 1)) * inv_n_sp
+                x_stop (j) = sum(self%rmat(n-wavg+1:n, j, 1)) * inv_n_sp
+            end do
+            edge_avg(:) = 0.5_c_float * (x_start(:) + x_stop(:))
+            x_start(:)  = x_start(:) - edge_avg(:)
+            x_stop(:)   = x_stop(:)  - edge_avg(:)
+            ! Fixed 3-point smoothing along y
+            do j = 1, n
+                j1 = max(1, j-1)
+                j2 = min(n, j+1)
+                inv_n_sp = 1.0_c_float / real(j2 - j1 + 1, c_float)
+                x_smooth_start(j) = sum(x_start(j1:j2)) * inv_n_sp
+                x_smooth_stop (j) = sum(x_stop (j1:j2)) * inv_n_sp
+            end do
+            inv_wtap_sp = 1.0_c_float / real(wtap, c_float)
+            do i = 1, wtap
+                alpha_sp = real(wtap - i + 1, c_float) * inv_wtap_sp
+                self%rmat(i, 1:n, 1) = self%rmat(i, 1:n, 1) - x_smooth_start(:) * alpha_sp
+            end do
+            do i = n - wtap + 1, n
+                alpha_sp = real(wtap + i - n, c_float) * inv_wtap_sp
+                self%rmat(i, 1:n, 1) = self%rmat(i, 1:n, 1) - x_smooth_stop(:) * alpha_sp
+            end do
+            ! ---- Pass 2: Y edges ----
+            inv_n_sp = 1.0_c_float / real(wavg, c_float)
+            do i = 1, n
+                y_start(i) = sum(self%rmat(i, 1:wavg,     1)) * inv_n_sp
+                y_stop (i) = sum(self%rmat(i, n-wavg+1:n, 1)) * inv_n_sp
+            end do
+            edge_avg(:) = 0.5_c_float * (y_start(:) + y_stop(:))
+            y_start(:)  = y_start(:) - edge_avg(:)
+            y_stop(:)   = y_stop(:)  - edge_avg(:)
+            ! Fixed 3-point smoothing along x
+            do i = 1, n
+                j1 = max(1, i-1)
+                j2 = min(n, i+1)
+                inv_n_sp = 1.0_c_float / real(j2 - j1 + 1, c_float)
+                y_smooth_start(i) = sum(y_start(j1:j2)) * inv_n_sp
+                y_smooth_stop (i) = sum(y_stop (j1:j2)) * inv_n_sp
+            end do
+            do j = 1, wtap
+                alpha_sp = real(wtap - j + 1, c_float) * inv_wtap_sp
+                self%rmat(1:n, j, 1) = self%rmat(1:n, j, 1) - y_smooth_start(:) * alpha_sp
+            end do
+            do j = n - wtap + 1, n
+                alpha_sp = real(wtap + j - n, c_float) * inv_wtap_sp
+                self%rmat(1:n, j, 1) = self%rmat(1:n, j, 1) - y_smooth_stop(:) * alpha_sp
+            end do
+        end if
+        ! Compute edge_mean using DP scalar accumulation (avoids SP overflow/rounding)
+        border_sum_dp = 0.0_dp
+        border_sum_dp = border_sum_dp + sum( real(self%rmat(1:wbg,       1:n,        1), dp) )
+        border_sum_dp = border_sum_dp + sum( real(self%rmat(n-wbg+1:n,   1:n,        1), dp) )
+        border_sum_dp = border_sum_dp + sum( real(self%rmat(wbg+1:n-wbg, 1:wbg,      1), dp) )
+        border_sum_dp = border_sum_dp + sum( real(self%rmat(wbg+1:n-wbg, n-wbg+1:n,  1), dp) )
+        border_count  = 4*wbg*n - 4*wbg*wbg
+        edge_mean_dp  = border_sum_dp / real(border_count, dp)
+        ! ============================================================
+        ! 2) NOISE NORMALIZATION (mask-based) on tapered self (DP scalars)
+        ! ============================================================
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        do i = 1, n1
+            do j = 1, n2
+                if (.not. lmsk(i,j,1)) then
+                    npix = npix + 1
+                    x_sp = self%rmat(i,j,1)
+                    sum_dp    = sum_dp    + real(x_sp, dp)
+                    sum_sq_dp = sum_sq_dp + real(x_sp, dp) * real(x_sp, dp)
+                end if
+            end do
+        end do
+        mean_dp   = 0.0_dp
+        var_dp    = 0.0_dp
+        invstd_dp = 1.0_dp
+        do_norm   = .false.
+        if (npix > 1) then
+            rnpix   = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp * sum_dp / rnpix) / real(npix - 1, dp)
+            if (is_a_number(real(var_dp, kind=kind(1.0))) .and. var_dp > 0.0_dp) then
+                invstd_dp = 1.0_dp / sqrt(var_dp)
+                do_norm = (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_dp /= 1.0_dp)
+            end if
+        end if
+        ! Keep SP versions for the per-pixel fast path
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = real(invstd_dp, c_float)
+        ! ============================================================
+        ! 3) PAD + FFTSHIFT (fused) + apply normalization while copying
+        !    Pad background is edge_mean transformed when normalization is used
+        ! ============================================================
+        starts = (self_out%ldim - self%ldim) / 2 + 1
+        if (do_norm) then
+            bg_fill_dp = (edge_mean_dp - mean_dp) * invstd_dp
+        else
+            bg_fill_dp = edge_mean_dp
+        end if
+        self_out%ft   = .false.
+        self_out%rmat = real(bg_fill_dp, c_float)
+        if (do_norm) then
+            do j = 1, n2
+                y0 = starts(2) + j - 1
+                yo = modulo((y0 - 1) + h2o, n2o) + 1
+                do i = 1, n1
+                    x0 = starts(1) + i - 1
+                    xo = modulo((x0 - 1) + h1o, n1o) + 1
+                    self_out%rmat(xo, yo, 1) = (self%rmat(i,j,1) - mean_sp) * invstd_sp
+                end do
+            end do
+        else
+            do j = 1, n2
+                y0 = starts(2) + j - 1
+                yo = modulo((y0 - 1) + h2o, n2o) + 1
+                do i = 1, n1
+                    x0 = starts(1) + i - 1
+                    xo = modulo((x0 - 1) + h1o, n1o) + 1
+                    self_out%rmat(xo, yo, 1) = self%rmat(i,j,1)
+                end do
+            end do
+        end if
+        ! ============================================================
+        ! 4) FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self_out%plan_fwd, self_out%rmat, self_out%cmat)
+        scale_cmat    = 1.0_c_float / real(n1o*n2o, c_float)
+        self_out%cmat = self_out%cmat * scale_cmat
+        self_out%ft   = .true.
+    end subroutine norm_noise_taper_edge_pad_fft
+
     subroutine norm_noise_pad_fft_clip_shift( self, lmsk, self_out, self_out2, shvec )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))

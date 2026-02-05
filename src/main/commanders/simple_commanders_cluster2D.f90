@@ -1321,7 +1321,7 @@ contains
                     call imgs_ori(j)%write(fname_denoised, cnt2)
                     if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
                 end do
-                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori, just_transf=.true.)
+                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
             else
                 fname_class_ptcls_den = 'class'//int2str_pad(i,4)//'ptcls.mrcs'
                 do j = 1, nptcls
