@@ -34,6 +34,7 @@ contains
     procedure, private :: init_from_group_header
     ! utils
     procedure          :: write_info
+    procedure          :: get_kfromto
     ! I/O
     procedure          :: read_part
     procedure          :: read_groups
@@ -150,6 +151,12 @@ contains
         write(logfhandle,*) 'fromp:   ',self%fromp
         write(logfhandle,*) 'top:     ',self%top
     end subroutine write_info
+
+    pure function get_kfromto( self )result( kfromto )
+        class(euclid_sigma2), intent(in) :: self
+        integer :: kfromto(2)
+        kfromto = self%kfromto
+    end function get_kfromto
 
     ! I/O
 

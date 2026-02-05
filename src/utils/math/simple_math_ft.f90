@@ -236,4 +236,36 @@ contains
         res = (ang/360.)*(pi*diam)
     end function resang
 
+    !>  Interpolates sigma2 for upsampled images
+    subroutine upsample_sigma2( kstart, nyq, sigma2, nyq_out, sigma2_out)
+        integer, intent(in)  :: kstart                  ! >= 0
+        integer, intent(in)  :: nyq, nyq_out            ! corresponding Nyquist indices
+        real,    intent(in)  :: sigma2(kstart:nyq)
+        real,    intent(out) :: sigma2_out(0:nyq_out)   ! starts at zero for convenience
+        real    :: ksc, scale, d
+        integer :: k, f,c
+        if( nyq_out < nyq )then
+            ! upsampling only
+            sigma2_out = -1.0
+        else if( nyq_out == nyq )then
+            sigma2_out(0:kstart)         = sigma2(kstart)
+            sigma2_out(kstart+1:nyq_out) = sigma2(kstart+1:nyq)
+        else
+            scale = real(nyq) / real(nyq_out)
+            do k = 0,nyq_out
+                ksc = scale*real(k)
+                f   = floor(ksc)
+                c   = f + 1
+                if( c <= kstart )then
+                    sigma2_out(k) = sigma2(kstart)
+                else if( c > nyq )then
+                    sigma2_out(k) = sigma2(nyq)
+                else
+                    d = ksc - real(f)
+                    sigma2_out(k) = (1.0-d)*sigma2(f) + d*sigma2(c)
+                endif
+            enddo
+        endif
+    end subroutine upsample_sigma2
+
 end module simple_math_ft
