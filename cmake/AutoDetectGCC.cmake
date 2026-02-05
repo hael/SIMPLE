@@ -25,7 +25,7 @@ foreach(_cand IN LISTS _gfortran_candidates)
         continue()
     endif()
     execute_process(
-        COMMAND "${_fc_prog}" -dumpversion
+        COMMAND "${_fc_prog}" -dumpfullversion
         OUTPUT_VARIABLE _fc_ver
         ERROR_QUIET
         OUTPUT_STRIP_TRAILING_WHITESPACE
