@@ -1342,6 +1342,119 @@ interface
         character(len=*),  optional, intent(in)    :: varflag2
     end subroutine clean_entry
 
+
+
+
+    ! module subroutine sample4update_all( self, fromto, nsampled, sampled_inds, l_update_state )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: fromto(2)
+    !     integer,           intent(out)   :: nsampled
+    !     integer, allocatable, intent(inout) :: sampled_inds(:)
+    !     logical, optional, intent(in)    :: l_update_state
+    ! end subroutine sample4update_all
+
+    ! module subroutine sample4update_rnd( self, fromto, frac, nsampled, sampled_inds, l_update_state )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: fromto(2)
+    !     real,              intent(in)    :: frac
+    !     integer,           intent(out)   :: nsampled
+    !     integer, allocatable, intent(inout) :: sampled_inds(:)
+    !     logical, optional, intent(in)    :: l_update_state
+    ! end subroutine sample4update_rnd
+
+    ! module subroutine sample4update_cnt( self, fromto, cnt, nsampled, sampled_inds, l_update_state )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: fromto(2), cnt
+    !     integer,           intent(out)   :: nsampled
+    !     integer, allocatable, intent(inout) :: sampled_inds(:)
+    !     logical, optional, intent(in)    :: l_update_state
+    ! end subroutine sample4update_cnt
+
+    ! module subroutine sample4update_class( self, class, nsampled, sampled_inds, l_update_state )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: class
+    !     integer,           intent(out)   :: nsampled
+    !     integer, allocatable, intent(inout) :: sampled_inds(:)
+    !     logical, optional, intent(in)    :: l_update_state
+    ! end subroutine sample4update_class
+
+    ! module subroutine sample4update_reprod( self, nsampled, sampled_inds, l_update_state )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(out)   :: nsampled
+    !     integer, allocatable, intent(inout) :: sampled_inds(:)
+    !     logical, optional, intent(in)    :: l_update_state
+    ! end subroutine sample4update_reprod
+
+    ! module subroutine sample4update_updated( self, nsampled, sampled_inds, l_update_state )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(out)   :: nsampled
+    !     integer, allocatable, intent(inout) :: sampled_inds(:)
+    !     logical, optional, intent(in)    :: l_update_state
+    ! end subroutine sample4update_updated
+
+    ! module subroutine sample4update_fillin( self, nsampled, sampled_inds, l_update_state )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(out)   :: nsampled
+    !     integer, allocatable, intent(inout) :: sampled_inds(:)
+    !     logical, optional, intent(in)    :: l_update_state
+    ! end subroutine sample4update_fillin
+
+    ! module subroutine sample_balanced_1( self, label, nsample, greedy, state )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: label
+    !     integer,           intent(in)    :: nsample
+    !     logical,           intent(in)    :: greedy
+    !     integer, optional, intent(out)   :: state(:)
+    ! end subroutine sample_balanced_1
+
+    ! module subroutine sample_balanced_2( self, label, nsample, greedy, state )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: label
+    !     integer,           intent(in)    :: nsample
+    !     logical,           intent(in)    :: greedy
+    !     integer, optional, intent(out)   :: state(:)
+    ! end subroutine sample_balanced_2
+
+    ! module subroutine sample_balanced_inv( self, label, nsample, frac_worst, state )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: label
+    !     integer,           intent(in)    :: nsample
+    !     real,              intent(in)    :: frac_worst
+    !     integer, optional, intent(out)   :: state(:)
+    ! end subroutine sample_balanced_inv
+
+    ! module subroutine sample_balanced_parts( self, label, nparts, state, nptcls_per_part )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: label
+    !     integer,           intent(in)    :: nparts
+    !     integer, optional, intent(out)   :: state(:)
+    !     integer, optional, intent(in)    :: nptcls_per_part
+    ! end subroutine sample_balanced_parts
+
+    ! module subroutine sample_ranked_parts( self, label, nparts, state, nptcls_per_part )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: label
+    !     integer,           intent(in)    :: nparts
+    !     integer, optional, intent(out)   :: state(:)
+    !     integer, optional, intent(in)    :: nptcls_per_part
+    ! end subroutine sample_ranked_parts
+
+    ! module subroutine balance_ptcls_within_cls( self, label )
+    !     class(oris),      intent(inout) :: self
+    !     character(len=*), intent(in)    :: label
+    ! end subroutine balance_ptcls_within_cls
+
+    ! module subroutine get_sample_ind( self, i, ind )
+    !     class(oris), intent(in)  :: self
+    !     integer,     intent(in)  :: i
+    !     integer,     intent(out) :: ind
+    ! end subroutine get_sample_ind
+
+    ! module subroutine incr_sampled_updatecnt( self, i )
+    !     class(oris), intent(inout) :: self
+    !     integer,     intent(in)    :: i
+    ! end subroutine incr_sampled_updatecnt
+
     !======================================================================
     ! DISTANCES (simple_oris_dist.f90)
     !======================================================================
