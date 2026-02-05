@@ -313,6 +313,7 @@ contains
     procedure          :: apply_ctf_wpad
     procedure          :: apply_ctf
     procedure          :: gen_fplane4rec
+    procedure          :: norm_noise_taper_edge_pad_fft_gen_fplane4rec
     procedure          :: calc_ice_frac
     procedure          :: ctf_dens_correct
     procedure          :: ctf_dens_correct_wiener
@@ -1996,6 +1997,16 @@ interface
         integer,           intent(in)    :: iptcl
         type(fplane_type), intent(out)   :: fplane
     end subroutine gen_fplane4rec
+
+    module subroutine norm_noise_taper_edge_pad_fft_gen_fplane4rec( self, lmsk, work, ctfparms, shift, iptcl, fplane )
+        class(image),      intent(inout) :: self
+        logical,           intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        class(image),      intent(inout) :: work          !< padded FFT workspace (rmat+cmat+plan_fwd)
+        class(ctfparams),  intent(in)    :: ctfparms
+        real,              intent(in)    :: shift(2)
+        integer,           intent(in)    :: iptcl
+        type(fplane_type), intent(out)   :: fplane
+    end subroutine norm_noise_taper_edge_pad_fft_gen_fplane4rec
 
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )
         class(image),     intent(in)    :: self
