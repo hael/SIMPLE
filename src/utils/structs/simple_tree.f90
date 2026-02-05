@@ -33,15 +33,12 @@ type  :: multi_dendro
    integer,            allocatable :: medoids(:)   
    integer :: n_trees = 0                           ! number of AP clusters
    integer :: n_refs  = 0                           ! number of AP clustered references
-   integer :: imedoid                               ! current medoid being tracked
    logical :: exists  = .false.
 contains
    ! constructor
    procedure          :: new
    ! tree builder
    procedure          :: build_multi_dendro
-   ! setters 
-   procedure          :: set_imedoid
    ! left/right search
    procedure          :: get_left_right_idxs
    ! private accesors
@@ -187,40 +184,41 @@ contains
 
    end subroutine build_multi_dendro
 
-   subroutine set_imedoid(self, ref_idx)
-      class(multi_dendro), intent(inout)  :: self
-      integer,             intent(in)  :: ref_idx
-      integer  :: imedoid 
-      self%imedoid = self%get_cls_indx(ref_idx)
-   end subroutine set_imedoid
-   
    ! getter to return left and right indices
    subroutine get_left_right_idxs(self, node_idx, ref_idx)
-      class(multi_dendro), intent(in)    :: self 
+      class(multi_dendro), intent(in)    :: self
       integer,             intent(inout) :: node_idx(2), ref_idx(2)
-      type(s2_node), target           :: rootp
-      type(s2_node), pointer  :: refp, tmp 
-      integer :: imedoid
-      imedoid = self%imedoid
-      if(node_idx(1) == 2*self%cls_pops(imedoid) - 1) then 
-         rootp = self%node_store(imedoid)%nodes(self%node_store(imedoid)%root_idx)
-         tmp => rootp
-         refp => search_tree4ref(tmp, ref_idx(1))
-         node_idx(1) = refp%node_idx
-      end if  
-      if (associated(refp%left)) then
-         ref_idx(1)  = refp%left%ref_idx
-         node_idx(1) = refp%left%node_idx
+      integer :: imedoid, n_nodes, cur
+      integer :: root_idx
+      type(s2_node), pointer :: lp, rp
+      imedoid  = get_cls_indx(self, ref_idx(1))
+      n_nodes  = 2*self%cls_pops(imedoid) - 1
+      root_idx = self%node_store(imedoid)%root_idx
+      if (node_idx(1) == n_nodes) then
+         cur = search_tree4ref_idx(self%node_store(imedoid)%nodes, ref_idx(1))
+         if (cur == 0) THROW_HARD('search_tree4ref_idx failed in get_left_right_idxs')
+         node_idx(1) = cur
       else
-         ref_idx(1)  = refp%ref_idx 
-         node_idx(1) = refp%node_idx
+         cur = node_idx(1)
+         if (cur < 1 .or. cur > n_nodes) THROW_HARD('node_idx out of range in get_left_right_idxs')
       end if
-      if (associated(refp%right)) then
-         ref_idx(2)  = refp%right%ref_idx
-         node_idx(2) = refp%right%node_idx
+      ! Left child
+      lp => self%node_store(imedoid)%nodes(cur)%left
+      if (associated(lp)) then
+         ref_idx(1)  = lp%ref_idx
+         node_idx(1) = lp%node_idx
       else
-         ref_idx(2)  = refp%ref_idx
-         node_idx(2) = refp%node_idx
+         ref_idx(1)  = self%node_store(imedoid)%nodes(cur)%ref_idx
+         node_idx(1) = self%node_store(imedoid)%nodes(cur)%node_idx
+      end if
+      ! Right child
+      rp => self%node_store(imedoid)%nodes(cur)%right
+      if (associated(rp)) then
+         ref_idx(2)  = rp%ref_idx
+         node_idx(2) = rp%node_idx
+      else
+         ref_idx(2)  = self%node_store(imedoid)%nodes(cur)%ref_idx
+         node_idx(2) = self%node_store(imedoid)%nodes(cur)%node_idx
       end if
    end subroutine get_left_right_idxs
 
@@ -247,45 +245,43 @@ contains
       end do
    end function get_cls_indx
 
-   ! private helper to search for node with inputted reference index
-   recursive function search_tree4ref(root, ref_idx) result(final)
-      type(s2_node), pointer, intent(in) :: root
-      integer,                intent(in) :: ref_idx
-      type(s2_node), pointer :: final
-      type(s2_node), pointer :: cur
-      integer,   allocatable :: tmp(:)
-      integer :: j, n
+   ! private helper to search for node idx with inputted reference index
+   pure function search_tree4ref_idx(nodes, ref_idx) result(found_idx)
+      type(s2_node), intent(in) :: nodes(:)
+      integer,       intent(in) :: ref_idx
+      integer :: found_idx
+      integer :: cur_idx, j, n
       logical :: in_left
-      ! root should be immutable 
-      final => null()
-      cur   => root
-      do while (associated(cur))
-         ! return if ref_idx found   
-         if (cur%ref_idx == ref_idx) then
-            final => cur
+      found_idx = 0
+      cur_idx   = size(nodes)
+      do
+         if (cur_idx < 1 .or. cur_idx > size(nodes)) return
+         if (nodes(cur_idx)%ref_idx == ref_idx) then
+            found_idx = cur_idx
             return
          end if
          in_left = .false.
-         ! heap sort + binary search to check if ref_idx is in the subset
-         if (associated(cur%left)) then
-            n = size(cur%left%subset)
+         if (associated(nodes(cur_idx)%left)) then
+            n = size(nodes(cur_idx)%left%subset)
             if (n == 1) then
-               in_left = (cur%left%subset(1) == ref_idx)
+               in_left = (nodes(cur_idx)%left%subset(1) == ref_idx)
             else if (n > 1) then
-               j = locate(cur%left%subset, n, ref_idx)
+               j = locate(nodes(cur_idx)%left%subset, n, ref_idx)
                if (j >= 1 .and. j <= n-1) then
-                  in_left = (cur%left%subset(j) == ref_idx) .or. (cur%left%subset(j+1) == ref_idx)
+                  in_left = (nodes(cur_idx)%left%subset(j) == ref_idx) .or. &
+                            (nodes(cur_idx)%left%subset(j+1) == ref_idx)
                end if
             end if
          end if
          if (in_left) then
-            cur => cur%left
+            if (.not. associated(nodes(cur_idx)%left)) return
+            cur_idx = nodes(cur_idx)%left%node_idx
          else
-            cur => cur%right
+            if (.not. associated(nodes(cur_idx)%right)) return
+            cur_idx = nodes(cur_idx)%right%node_idx
          end if
       end do
-      final => null()
-   end function search_tree4ref
+   end function search_tree4ref_idx
    
    subroutine kill( self )
       class(multi_dendro), intent(inout) :: self
@@ -320,15 +316,17 @@ contains
       integer, allocatable :: labels(:)
       real,    allocatable :: dist(:,:)
       integer :: n, i, j, icls
-      integer :: ref_in, true_node, step, max_steps, n_nodes 
-      integer :: left_node, right_node, left_ref, right_ref, node_idxs(2), ref_idxs(2)
-      real    :: f_left, f_right
-      type(s2_node), target :: rootp
-      type(s2_node), pointer  :: refp, tmp 
+      integer :: ref_in, n_nodes
+      integer :: node_idxs(2), ref_idxs(2)
+      integer :: found_idx
+      integer :: imed
+
       n = 6
       allocate(dist(n,n), labels(n))
+
       ! Two clusters: {1,2,3} and {4,5,6}
       labels = [1,1,1, 2,2,2]
+
       dist = 0.0
       do i = 1, n
          do j = 1, n
@@ -341,50 +339,165 @@ contains
             end if
          end do
       end do
+
       call md%new(dist, labels)
       call md%build_multi_dendro(1)
+
       do icls = 1, md%n_trees
-         if(2*md%cls_pops(icls) - 1 /= size(md%node_store(icls)%nodes) ) then 
+         if (2*md%cls_pops(icls) - 1 /= size(md%node_store(icls)%nodes)) then
             print *, 'TEST FAILED: TREE ASSEMBLED INCORRECT'
             return
-         end if 
+         end if
       end do
       print *, 'TREE ASSEMBLED CORRECTLY'
+
+      ! pick a reference to test
       ref_in = 6
-      call md%set_imedoid(ref_in)
-      n_nodes = 2*md%cls_pops(md%imedoid) - 1
-      if(md%imedoid == labels(ref_in)) then 
-         print *, 'IMEDOID SET CORRECTLY'
-      else 
-         print *, 'IMEDOID SET INCORRECTLY'
-         return 
-      end if 
-      print *, md%medoids(1), md%medoids(2)
-      ! starting at 2n - 1 th node 
-      node_idxs = [n_nodes, 0]
-      ref_idxs  = [md%medoids(md%imedoid), 0]
-      print *, 'node_idxs', node_idxs, 'ref_idxs', ref_idxs
-      print *, '>>> CHECKING PRIVATE HELPERS'
-      if(get_cls_indx(md, ref_in) == md%imedoid) then 
+
+      ! verify get_cls_indx works (private helper)
+      imed = get_cls_indx(md, ref_in)
+      if (imed == labels(ref_in)) then
          print *, 'GET_CLS_INDX IS CORRECT'
       else
-         print *, 'GET_CLS_INDX IS INCORRECT'
-      end if 
-      rootp = md%node_store(md%imedoid)%nodes(n_nodes)
-      print *, rootp%ref_idx, rootp%node_idx
-      print *, 'ROOT NODE SET CORRECTLY'
-      tmp => rootp
-      refp => search_tree4ref(tmp, ref_in)
-      if(refp%node_idx > 1 .and. refp%node_idx < n_nodes .and. refp%ref_idx == ref_in) then 
-         print *, 'SEARCH_TREE4REF IS CORRECT'
+         print *, 'GET_CLS_INDX IS INCORRECT: imed=', imed, 'labels(ref_in)=', labels(ref_in)
+         return
+      end if
+
+      ! Show the root node (access by index, no copying)
+      print *, 'root(ref_idx,node_idx)=', &
+               md%node_store(imed)%nodes(md%node_store(imed)%root_idx)%ref_idx, &
+               md%node_store(imed)%nodes(md%node_store(imed)%root_idx)%node_idx
+      print *, 'ROOT NODE SET (INDEX ACCESS)'
+
+      ! Check search_tree4ref_idx (index-based)
+      found_idx = search_tree4ref_idx( md%node_store(imed)%nodes, ref_in )
+      if (found_idx > 0 .and. found_idx < 2*md%cls_pops(imed) - 1 .and. &
+          md%node_store(imed)%nodes(found_idx)%ref_idx == ref_in) then
+         print *, 'SEARCH_TREE4REF_IDX IS CORRECT'
       else
-         print *, 'SEARCH_TREE4REF IS INCORRECT'
-      end if 
-      call get_left_right_idxs(md,node_idxs,ref_idxs)
-      print *, '>>> GETTING LEFT/RIGHT'
+         print *, 'SEARCH_TREE4REF_IDX IS INCORRECT. found_idx=', found_idx
+         return
+      end if
+
+      ! ------------------------------------------------------------
+      ! Single-call sanity for get_left_right_idxs
+      ! We must set ref_idxs(1) so get_left_right_idxs can infer the cluster
+      ! starting at sentinel root: node_idxs(1) = n_nodes, ref_idxs(1) = medoid
+      ! ------------------------------------------------------------
+      n_nodes = 2*md%cls_pops(imed) - 1
+      node_idxs = [n_nodes, 0]
+      ref_idxs  = [ md%medoids(imed), 0 ]   ! IMPORTANT: seed ref_idx(1) with medoid
+
+      call get_left_right_idxs(md, node_idxs, ref_idxs)
+      print *, '>>> GETTING LEFT/RIGHT (single call)'
       print *, 'node_idxs', node_idxs, 'ref_idxs', ref_idxs
+
+      ! ============================================================
+      ! Robust traversal test: repeatedly call get_left_right_idxs to traverse
+      ! entire tree from root, like in production usage. The routine
+      ! infers the tree from ref_idx(1) on each call.
+      ! ============================================================
+      block
+         integer :: top, cur_node, cur_ref
+         integer, allocatable :: node_stack(:), ref_stack(:)
+         logical, allocatable :: seen(:)
+         integer :: node_idxs2(2), ref_idxs2(2)
+         integer :: expansions, max_expansions
+         logical :: failed
+
+         n_nodes = 2*md%cls_pops(imed) - 1
+
+         allocate(seen(n_nodes), source=.false.)
+         allocate(node_stack(n_nodes), ref_stack(n_nodes))
+
+         top = 1
+         node_stack(top) = n_nodes
+         ref_stack(top)  = md%medoids(imed)
+
+         expansions     = 0
+         max_expansions = n_nodes
+         failed         = .false.
+
+         do while (top > 0)
+            cur_node = node_stack(top)
+            cur_ref  = ref_stack(top)
+            top = top - 1
+
+            node_idxs2 = [cur_node, 0]
+            ref_idxs2  = [cur_ref,  0]
+
+            ! call the version that infers the imedoid from ref_idxs2(1)
+            call get_left_right_idxs(md, node_idxs2, ref_idxs2)
+            expansions = expansions + 1
+
+            if (expansions > max_expansions) then
+               print *, 'TEST FAILED: get_left_right loop exceeded max expansions (possible cycle)'
+               failed = .true.
+               exit
+            end if
+
+            if (node_idxs2(1) < 1 .or. node_idxs2(1) > n_nodes) then
+               print *, 'TEST FAILED: left child node index out of range:', node_idxs2(1)
+               failed = .true.
+               exit
+            end if
+            if (node_idxs2(2) < 1 .or. node_idxs2(2) > n_nodes) then
+               print *, 'TEST FAILED: right child node index out of range:', node_idxs2(2)
+               failed = .true.
+               exit
+            end if
+
+            ! Mark the node we are expanding (counts root too)
+            if (cur_node >= 1 .and. cur_node <= n_nodes) seen(cur_node) = .true.
+
+            ! Mark returned children
+            seen(node_idxs2(1)) = .true.
+            seen(node_idxs2(2)) = .true.
+
+            ! Optional stronger invariant: children subsets partition parent subset
+            ! (uncomment if you want extra checking)
+            ! if (.not. (node_idxs2(1) == node_idxs2(2) .and. ref_idxs2(1) == ref_idxs2(2))) then
+            !    if ( size(md%node_store(imed)%nodes(node_idxs2(1))%subset) + &
+            !         size(md%node_store(imed)%nodes(node_idxs2(2))%subset) /= &
+            !         size(md%node_store(imed)%nodes(cur_node)%subset) ) then
+            !       print *, 'TEST FAILED: child subsets do not sum to parent subset size at node ', cur_node
+            !       failed = .true.
+            !       exit
+            !    end if
+            ! end if
+
+            ! Leaf convention: if no children, routine returns same node for left/right
+            if (.not. (node_idxs2(1) == node_idxs2(2) .and. ref_idxs2(1) == ref_idxs2(2))) then
+               if (top + 2 > n_nodes) then
+                  print *, 'TEST FAILED: traversal stack overflow (unexpected for a tree)'
+                  failed = .true.
+                  exit
+               end if
+
+               top = top + 1
+               node_stack(top) = node_idxs2(1)
+               ref_stack(top)  = ref_idxs2(1)
+
+               top = top + 1
+               node_stack(top) = node_idxs2(2)
+               ref_stack(top)  = ref_idxs2(2)
+            end if
+         end do
+
+         if (.not. failed) then
+            if (count(seen) /= n_nodes) then
+               print *, 'TEST FAILED: traversal did not visit all nodes. Seen=', count(seen), 'Expected=', n_nodes
+            else
+               print *, 'GET_LEFT_RIGHT LOOP TEST PASSED: visited all nodes via repeated calls'
+            end if
+         end if
+
+         deallocate(seen, node_stack, ref_stack)
+      end block
+
       call md%kill()
       print *, 'TREE KILLED'
       deallocate(dist, labels)
    end subroutine test_simple_tree
+
 end module simple_tree
