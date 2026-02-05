@@ -238,16 +238,17 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        if( fpl%padded )then
-            ! the input slice has the size of the padded volume
-            fpllims = fpl%frlims_croppd
-            fplnyq  = fpl%nyq_croppd
-        else
+        ! never actually happens
+        ! if( fpl%padded )then
+        !     ! the input slice has the size of the padded volume
+        !     fpllims = fpl%frlims_croppd
+        !     fplnyq  = fpl%nyq_croppd
+        ! else
             ! the input slice is not padded
             fpllims = fpl%frlims_crop
             fplnyq  = fpl%nyq_crop
             rotmats = self%alpha * rotmats ! scale & rotation
-        endif
+        ! endif
         ! KB interpolation
         !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,dists)&
         !$omp proc_bind(close)
@@ -315,16 +316,17 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        if( fpl%padded )then
-            ! the input slice has the size of the padded volume
-            fpllims = fpl%frlims_croppd
-            fplnyq  = fpl%nyq_croppd
-        else
+        ! never actually happens
+        ! if( fpl%padded )then
+        !     ! the input slice has the size of the padded volume
+        !     fpllims = fpl%frlims_croppd
+        !     fplnyq  = fpl%nyq_croppd
+        ! else
             ! the input slice is not padded
             fpllims = fpl%frlims_crop
             fplnyq  = fpl%nyq_crop
             rotmats = self%alpha * rotmats ! scale & rotation
-        endif
+        ! endif
         ! KB interpolation
         !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,dists)&
         !$omp proc_bind(close)
