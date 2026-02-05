@@ -313,7 +313,6 @@ contains
     procedure          :: ctf2img
     procedure          :: apply_ctf_wpad
     procedure          :: apply_ctf
-    procedure          :: eval_and_apply_ctf
     procedure          :: calc_ice_frac
     procedure          :: ctf_dens_correct
     procedure          :: ctf_dens_correct_wiener
@@ -1918,8 +1917,9 @@ interface
         real,         intent(out)   :: thres 
     end subroutine calc_bin_thres
 
-    module subroutine memoize_mask_coords(self)
-        class(image), intent(in) :: self
+    module subroutine memoize_mask_coords( self, box )
+        class(image),      intent(in) :: self
+        integer, optional, intent(in) :: box
     end subroutine memoize_mask_coords
 
     module subroutine mask2D_soft(self, mskrad, width, backgr)
@@ -1989,17 +1989,6 @@ interface
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
-
-    module subroutine eval_and_apply_ctf( self, tfun, imode, tvalsdims, tvals, dfx_in, dfy_in, angast_in )
-        class(image), intent(inout) :: self         !< instance
-        class(ctf),   intent(inout) :: tfun         !< CTF object
-        integer,      intent(in)    :: imode        !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
-        integer,      intent(in)    :: tvalsdims(2) !< tvals dimensions
-        real,         intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-        real,         intent(in)    :: dfx_in       !< defocus x-axis
-        real,         intent(in)    :: dfy_in       !< defocus y-axis
-        real,         intent(in)    :: angast_in    !< angle of astigmatism
-    end subroutine eval_and_apply_ctf
 
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )
         class(image),     intent(in)    :: self

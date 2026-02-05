@@ -44,7 +44,7 @@ contains
         iy     = 1
         ntiles = 0
         ! mask memoization
-        call img%memoize_mask_coords
+        call img%memoize_mask_coords(box=ldim_read(1))
         present_mskdiam_px = present(mskdiam_px)
         do icls = 1,ncls_sel
             call img%new(ldim_read, smpd)

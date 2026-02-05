@@ -209,35 +209,46 @@ contains
         thres    = pix_ts(loc(1))
     end subroutine calc_bin_thres
     
-    module subroutine memoize_mask_coords(self)
-        class(image), intent(in) :: self
-        integer :: i, box
+    module subroutine memoize_mask_coords( self, box )
+        class(image),      intent(in) :: self
+        integer, optional, intent(in) :: box
+        integer :: i, box_here
         if( OMP_IN_PARALLEL() )then
             THROW_HARD('No memoization inside OpenMP regions')
         endif
-        if( self%ldim(1) /= self%ldim(2) )then
-            THROW_HARD('square images assumed')
-        endif
-        if( (self%ldim(3) == 1) .or. (self%ldim(3) == self%ldim(2)) )then
-            ! all good
+        if( present(box) )then
+            ! override such that the image does not need to always exist
+            if( is_odd(box) ) THROW_HARD('Even image dimensions only!')
+            box_here = box
         else
-            THROW_HARD('square images assumed')
+            if( self%existence )then
+                if( self%ldim(1) /= self%ldim(2) )then
+                    THROW_HARD('square images assumed')
+                endif
+                if( (self%ldim(3) == 1) .or. (self%ldim(3) == self%ldim(2)) )then
+                    ! all good
+                else
+                    THROW_HARD('square images assumed')
+                endif
+                box_here = self%ldim(1)
+            else
+                THROW_HARD('Image has not been initialized!')
+            endif
         endif
-        box = self%ldim(1)
         ! Rebuild only if geometry in the first two logical dimensions has changed
-        if (mem_msk_box == box ) then
+        if (mem_msk_box == box_here ) then
             return
         endif
         ! Update cache key
-        mem_msk_box = box
+        mem_msk_box = box_here
         ! (Re)allocate
         if( allocated(mem_msk_cs)  ) deallocate(mem_msk_cs)
         if( allocated(mem_msk_cs2) ) deallocate(mem_msk_cs2)
         ! memoize 3D coordinates
-        allocate(mem_msk_cs(box), mem_msk_cs2(box))
+        allocate(mem_msk_cs(box_here), mem_msk_cs2(box_here))
         ! Fill (origin at center) + squares
-        do i = 1, box
-            mem_msk_cs(i)  = -0.5*real(box) + real(i-1)
+        do i = 1, box_here
+            mem_msk_cs(i)  = -0.5*real(box_here) + real(i-1)
             mem_msk_cs2(i) = mem_msk_cs(i) * mem_msk_cs(i)
         end do
     end subroutine memoize_mask_coords

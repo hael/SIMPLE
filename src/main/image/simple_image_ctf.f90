@@ -126,49 +126,6 @@ contains
         end do
     end subroutine apply_ctf
 
-    ! apply CTF to image, CTF values are also returned
-    module subroutine eval_and_apply_ctf( self, tfun, imode, tvalsdims, tvals, dfx_in, dfy_in, angast_in )
-        class(image), intent(inout) :: self         !< instance
-        class(ctf),   intent(inout) :: tfun         !< CTF object
-        integer,      intent(in)    :: imode        !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
-        integer,      intent(in)    :: tvalsdims(2) !< tvals dimensions
-        real,         intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-        real,         intent(in)    :: dfx_in       !< defocus x-axis
-        real,         intent(in)    :: dfy_in       !< defocus y-axis
-        real,         intent(in)    :: angast_in    !< angle of astigmatism
-        type(ctfvars) :: ctfvals !< CTF derived variables
-        real    :: angast, amp_contr_const, wl, half_wl2_cs
-        real    :: sum_df, diff_df,tval,t
-        integer :: h,k, physh,physk
-        logical :: l_flip
-        if( imode == CTFFLAG_NO )then
-            tvals = 1.0
-            return
-        endif
-        ! initialize
-        call tfun%init(dfx_in, dfy_in, angast_in) ! conversions
-        ctfvals         = tfun%get_ctfvars()
-        wl              = ctfvals%wl
-        half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
-        angast          = ctfvals%angast
-        amp_contr_const = ctfvals%amp_contr_const    
-        l_flip          = imode == CTFFLAG_FLIP
-        sum_df          = ctfvals%dfx + ctfvals%dfy
-        diff_df         = ctfvals%dfx - ctfvals%dfy
-        do h = ft_map_lims(1,1), ft_map_lims(1,2)
-            do k = ft_map_lims(2,1), ft_map_lims(2,2)
-                ! calculate CTF
-                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
-                t    = merge(abs(tval), tval, l_flip)
-                ! store tval and multiply image with tval
-                physh = ft_map_phys_addrh(h,k)
-                physk = ft_map_phys_addrk(h,k)
-                tvals(physh, physk)      = t
-                self%cmat(physh,physk,1) = t * self%cmat(physh,physk,1)
-            end do
-        end do
-    end subroutine eval_and_apply_ctf
-
      ! Calculate Joe's Ice Fraction Score for images, not intended for micrographs
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )
         class(image),     intent(in)    :: self
