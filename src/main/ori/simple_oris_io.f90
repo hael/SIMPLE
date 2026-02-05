@@ -1,3 +1,4 @@
+!@descr: input/output routines for oris object
 submodule (simple_oris) simple_oris_io
 use simple_ori_api
 use simple_ori, only: ori

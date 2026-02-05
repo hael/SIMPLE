@@ -1,3 +1,4 @@
+!@descr: reshaping/partitioning/remapping routines for oris object
 submodule (simple_oris) simple_oris_reshape
 use simple_ori_api
 use simple_ori, only: ori

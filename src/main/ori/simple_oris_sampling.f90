@@ -1,3 +1,4 @@
+!@descr: sampling and updatecnt related routines for oris
 submodule (simple_oris) simple_oris_sampling
 use simple_ori_api
 use simple_ori, only: ori

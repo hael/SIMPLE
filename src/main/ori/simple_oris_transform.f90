@@ -1,3 +1,4 @@
+!@descr: transform/offset/rotation routines for oris object
 submodule (simple_oris) simple_oris_transform
 use simple_ori_api
 use simple_ori, only: ori

@@ -30,7 +30,7 @@ type :: fplane
     integer                      :: wdim          = 0            !< dim of interpolation matrix
     logical                      :: genplane      = .true.
     logical,              public :: padded        = .false.      !< Whether the resulting planes are padded
-    logical                      :: exists        = .false.      !< Volta phaseplate images or not
+    logical                      :: exists        = .false.
   contains
     ! CONSTRUCTOR
     procedure :: new
