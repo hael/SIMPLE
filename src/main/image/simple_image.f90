@@ -308,7 +308,7 @@ contains
     procedure          :: mask3D_soft
     procedure          :: mask3D_softavg
     procedure          :: mask3D_hard
-    procedure          :: taper_edges, taper_edges_hann
+    procedure          :: taper_edges, taper_edges_hann, taper_edges_particle
     ! CTF, file: simple_image_ctf.f90
     procedure          :: ctf2img
     procedure          :: apply_ctf_wpad
@@ -1964,6 +1964,12 @@ interface
         class(image), intent(inout) :: self
         integer,      intent(in)    :: borders(2)
     end subroutine taper_edges_hann
+
+    module subroutine taper_edges_particle(self, winsz, edge_mean)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: winsz
+        real,         intent(out)   :: edge_mean
+    end subroutine taper_edges_particle
 
     ! ===== image CTF procedure interfaces =====
 

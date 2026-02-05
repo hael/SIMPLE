@@ -631,7 +631,8 @@ contains
         real,          intent(in) :: smpd
         type(stack_io) :: stkio_r, stkio_w
         type(image)    :: img
-        integer        :: n, i, ldim(3)
+        integer        :: n, i, ldim(3), winsz
+        real           :: edge_mean
         call find_ldim_nptcls(fname2mask, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'taper_edges_imgfile' )
@@ -639,10 +640,11 @@ contains
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
         write(logfhandle,'(a)') '>>> TAPERING EDGES OF IMAGES'
+        winsz = nint(COSMSKHALFWIDTH)
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
-            call img%taper_edges
+            call img%taper_edges_particle(winsz, edge_mean)
             call stkio_w%write(i, img)
         end do
         call stkio_r%close

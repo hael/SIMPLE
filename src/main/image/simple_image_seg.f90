@@ -737,4 +737,86 @@ contains
         enddo
     end subroutine taper_edges_hann
 
+    module subroutine taper_edges_particle(self, winsz, edge_mean)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: winsz
+        real,         intent(out)   :: edge_mean
+        integer :: n, wtap, wavg, wbg, i, j, j1, j2, border_count
+        real    :: alpha, inv_wtap, inv_n, border_sum
+        ! 1D edge profiles
+        real :: x_start(self%ldim(2)), x_stop(self%ldim(2))
+        real :: x_smooth_start(self%ldim(2)), x_smooth_stop(self%ldim(2))
+        real :: y_start(self%ldim(1)), y_stop(self%ldim(1))
+        real :: y_smooth_start(self%ldim(1)), y_smooth_stop(self%ldim(1))
+        real :: edge_avg(self%ldim(1))
+        ! Assume square, 2D
+        n    = self%ldim(1)
+        ! Primary taper width
+        wtap = min(max(winsz, 0), n/2)
+        ! Background edge width: half of winsz, minimum 1
+        wbg  = max(1, winsz/2)
+        wbg  = min(wbg, n/2)
+        ! Cheap+stable edge averaging width
+        wavg = min(max(1, wtap/8), n)
+        ! -----------------------
+        ! Pass 1: taper X edges
+        ! -----------------------
+        inv_n       = 1.0 / real(wavg)
+        x_start(:)  = sum(self%rmat(1:wavg,     1:n, 1), dim=1) * inv_n
+        x_stop(:)   = sum(self%rmat(n-wavg+1:n, 1:n, 1), dim=1) * inv_n
+        edge_avg(:) = 0.5 * (x_start(:) + x_stop(:))
+        x_start(:)  = x_start(:) - edge_avg(:)
+        x_stop(:)   = x_stop(:)  - edge_avg(:)
+        do j = 1, n
+            j1 = max(1, j-1)
+            j2 = min(n, j+1)
+            inv_n = 1.0 / real(j2 - j1 + 1)
+            x_smooth_start(j) = sum(x_start(j1:j2)) * inv_n
+            x_smooth_stop(j)  = sum(x_stop (j1:j2)) * inv_n
+        end do
+        inv_wtap = 1.0 / real(wtap)
+        do i = 1, wtap
+            alpha = real(wtap - i + 1) * inv_wtap
+            self%rmat(i, 1:n, 1) = self%rmat(i, 1:n, 1) - x_smooth_start(:) * alpha
+        end do
+        do i = n - wtap + 1, n
+            alpha = real(wtap + i - n) * inv_wtap
+            self%rmat(i, 1:n, 1) = self%rmat(i, 1:n, 1) - x_smooth_stop(:) * alpha
+        end do
+        ! -----------------------
+        ! Pass 2: taper Y edges
+        ! -----------------------
+        inv_n       = 1.0 / real(wavg)
+        y_start(:)  = sum(self%rmat(1:n, 1:wavg,     1), dim=2) * inv_n
+        y_stop(:)   = sum(self%rmat(1:n, n-wavg+1:n, 1), dim=2) * inv_n
+        edge_avg(:) = 0.5 * (y_start(:) + y_stop(:))
+        y_start(:)  = y_start(:) - edge_avg(:)
+        y_stop(:)   = y_stop(:)  - edge_avg(:)
+        do i = 1, n
+            j1 = max(1, i-1)
+            j2 = min(n, i+1)
+            inv_n = 1.0 / real(j2 - j1 + 1)
+            y_smooth_start(i) = sum(y_start(j1:j2)) * inv_n
+            y_smooth_stop(i)  = sum(y_stop (j1:j2)) * inv_n
+        end do
+        do j = 1, wtap
+            alpha = real(wtap - j + 1) * inv_wtap
+            self%rmat(1:n, j, 1) = self%rmat(1:n, j, 1) - y_smooth_start(:) * alpha
+        end do
+        do j = n - wtap + 1, n
+            alpha = real(wtap + j - n) * inv_wtap
+            self%rmat(1:n, j, 1) = self%rmat(1:n, j, 1) - y_smooth_stop(:) * alpha
+        end do
+        ! -----------------------
+        ! Compute background mean from outer strip of width wbg
+        ! -----------------------
+        border_sum =  &
+            sum(self%rmat(1:wbg,       1:n,        1)) + &
+            sum(self%rmat(n-wbg+1:n,   1:n,        1)) + &
+            sum(self%rmat(wbg+1:n-wbg, 1:wbg,      1)) + &
+            sum(self%rmat(wbg+1:n-wbg, n-wbg+1:n,  1))
+        border_count = 4*wbg*n - 4*wbg*wbg
+        edge_mean = border_sum / real(border_count)
+    end subroutine taper_edges_particle
+
 end submodule simple_image_seg
