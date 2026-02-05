@@ -1,3 +1,4 @@
+!@descr: routines for calculating statistics of oris (e.g. mean, median, min, max, etc.)
 submodule (simple_oris) simple_oris_stats
 use simple_ori_api
 use simple_ori, only: ori
