@@ -59,6 +59,15 @@ contains
         does_exist = self%exists
     end function does_exist
 
+    ! example usage of upsample_sigma2
+    ! real, allocatable :: sigma2_noise(:)
+    ! integer           :: kfromto(2), nyq_croppd
+    ! nyq_croppd = padded_img%get_lfny(1)
+    ! allocate(sigma2_noise(0:nyq_croppd), source=0.0)
+    ! kfromto = eucl_sigma2_glob%get_kfromto()
+    ! call upsample_sigma2(kfromto(1), self%nyq_crop,&
+    !   &eucl_sigma2_glob%sigma2_noise(kfromto(1):self%nyq_crop, iptcl), nyq_croppd, sigma2_noise)
+
     !> Produces shifted, CTF multiplied fourier & CTF-squared planes
     subroutine gen_planes( self, img, ctfvars, shift, iptcl )
         class(fplane),                  intent(inout) :: self
