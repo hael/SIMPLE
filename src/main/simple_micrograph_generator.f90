@@ -286,7 +286,7 @@ contains
         class(mic_generator),  intent(inout) :: self
         type(image),           intent(inout) :: micrograph_dw, micrograph_nodw
         type(image), optional, intent(inout) :: background
-        real,        pointer     :: rmat(:,:,:), rmatin(:,:,:), rmatout(:,:,:)
+        real,        pointer     :: rmatin(:,:,:), rmatout(:,:,:)
         type(image), allocatable :: local_frames(:)
         type(image)              :: backgr
         integer                  :: ldim(3), iframe, n
@@ -306,12 +306,8 @@ contains
             ! Sum of raw frames
             call micrograph_nodw%new(ldim, self%smpd_out)
             call micrograph_nodw%zero_and_unflag_ft
-            call micrograph_nodw%get_rmat_ptr(rmatout)
             do iframe = self%fromtof(1),self%fromtof(2)
-                call local_frames(iframe)%get_rmat_ptr(rmat)
-                !$omp parallel workshare
-                rmatout = rmatout + rmat
-                !$omp end parallel workshare
+                call micrograph_nodw%add_workshare(local_frames(iframe))
             end do
             ! Background
             call micrograph_nodw%estimate_background(200., backgr, self%convention%to_char())
@@ -320,14 +316,11 @@ contains
             ! background subtraction
             call micrograph_nodw%subtr(backgr)
             call backgr%div(real(n))
-            call backgr%get_rmat_ptr(rmatout)
+            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
             do iframe = self%fromtof(1),self%fromtof(2)
-                call local_frames(iframe)%get_rmat_ptr(rmat)
-                !$omp parallel workshare
-                rmat = rmat - rmatout
-                !$omp end parallel workshare
+                call local_frames(iframe)%subtr(backgr)
             end do
-            nullify(rmatout)
+            !$omp end parallel do
             ! Non dose-weighted beam-induced correction
             if( self%l_poly ) call bimc(micrograph_nodw)
             ! Dose-weighing
@@ -350,12 +343,8 @@ contains
                     ! Dose-weighted stage-drift correction
                     call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%zero_and_unflag_ft
-                    call micrograph_dw%get_rmat_ptr(rmatout)
                     do iframe = self%fromtof(1),self%fromtof(2)
-                        call local_frames(iframe)%get_rmat_ptr(rmat)
-                        !$omp parallel workshare
-                        rmatout = rmatout + rmat
-                        !$omp end parallel workshare
+                        call micrograph_dw%add_workshare(local_frames(iframe))
                     end do
                 endif
             else
