@@ -401,7 +401,7 @@ contains
                     rhos(:,:,i)  = 0.0
                     tvals(:,:,i) = 0.0
                     ! prep image
-                    call read_imgs(i)%norm_noise_pad_fft_shift_2mat(build_glob%lmsk, cgrid_imgs(i), -precs(iprec)%shift*crop_scale,&
+                    call read_imgs(i)%norm_noise_taper_edge_pad_fft_shift_2mat(build_glob%lmsk, cgrid_imgs(i), -precs(iprec)%shift*crop_scale,&
                                                                     &ldim_croppd, logi_lims_crop, cmats(:,:,i))
                     ! apply CTF to image, stores CTF values
                     call precs(iprec)%tfun%eval_and_apply(ctfflag, precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast,&

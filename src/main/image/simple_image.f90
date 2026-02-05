@@ -111,10 +111,8 @@ contains
     procedure          :: ft2img
     procedure          :: pad_fft
     procedure          :: norm_noise_fft
-    procedure          :: norm_noise_pad_fft
     procedure          :: norm_noise_taper_edge_pad_fft
-    procedure          :: norm_noise_pad_fft_clip_shift
-    procedure          :: norm_noise_pad_fft_shift_2mat
+    procedure          :: norm_noise_taper_edge_pad_fft_shift_2mat
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_fft_clip_shift_ctf_flip
     procedure          :: norm_noise_divwinstrfun_fft
@@ -803,24 +801,11 @@ interface
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
     end subroutine norm_noise_fft
 
-    module subroutine norm_noise_pad_fft( self, lmsk, self_out )
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        class(image), intent(inout) :: self_out
-    end subroutine norm_noise_pad_fft
-
     module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out)
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
         class(image), intent(inout) :: self_out
     end subroutine norm_noise_taper_edge_pad_fft
-
-    module subroutine norm_noise_pad_fft_clip_shift( self, lmsk, self_out, self_out2, shvec )
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        class(image), intent(inout) :: self_out, self_out2
-        real,         intent(in)    :: shvec(2)
-    end subroutine norm_noise_pad_fft_clip_shift
 
     module subroutine norm_noise_fft_clip_shift_ctf_flip( self, lmsk, self_out, shvec, tfun, ctfparms )
         class(image),    intent(inout) :: self
@@ -831,14 +816,14 @@ interface
         type(ctfparams), intent(in)    :: ctfparms !< CTF parameters
     end subroutine norm_noise_fft_clip_shift_ctf_flip
 
-    module subroutine norm_noise_pad_fft_shift_2mat( self, lmsk, self_out, shvec, ldim_out, flim_out, cmat_out )
+    module subroutine norm_noise_taper_edge_pad_fft_shift_2mat( self, lmsk, self_out, shvec, ldim_out, flim_out, cmat_out )
         class(image),                  intent(inout) :: self
         logical,                       intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image),                  intent(inout) :: self_out
         real,                          intent(in)    :: shvec(2)
         integer,                       intent(in)    :: ldim_out(3), flim_out(3,2)
         complex(kind=c_float_complex), intent(out)   :: cmat_out(:,:)
-    end subroutine norm_noise_pad_fft_shift_2mat
+    end subroutine norm_noise_taper_edge_pad_fft_shift_2mat
 
     module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
         class(image), intent(inout) :: self
