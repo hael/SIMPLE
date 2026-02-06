@@ -63,7 +63,7 @@ contains
         call vol_in%shift([params%xsh,params%ysh,params%zsh])
         ldim    = vol_in%get_ldim()
         smpd    = vol_in%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
+        boxpd   = 2 * round2even(KBALPHA3D * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         call vol_in%ifft
         ! rotate asymmetric volume
@@ -76,7 +76,7 @@ contains
         call vol_pad%new(ldim_pd, smpd)
         call vol_in%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat(KBALPHA)
+        call vol_pad%expand_cmat
         ! generate volume aligned to symaxis
         call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
         call vol_asym_aligned2axis%write(string('vol_c1_aligned2_'//trim(params%pgrp)//'axis.mrc'))
@@ -272,13 +272,13 @@ contains
         ! prepare for volume rotations
         ldim    = vol_in%get_ldim()
         smpd    = vol_in%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
+        boxpd   = 2 * round2even(KBALPHA3D * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         ! make padded volume for interpolation
         call vol_pad%new(ldim_pd, smpd)
         call vol_in%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat(KBALPHA)
+        call vol_pad%expand_cmat
         ! make outputs
         call vol_sym%new(ldim, smpd)
         call vol_asym_aligned2axis%new(ldim, smpd)

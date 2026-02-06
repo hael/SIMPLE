@@ -17,8 +17,6 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    real                        :: winsz          = RECWINSZ    !< window half-width
-    real                        :: alpha          = KBALPHA     !< oversampling ratio
     real                        :: shconst_rec(3) = 0.          !< memoized constants for origin shifting
     integer                     :: wdim           = 0           !< dim of interpolation matrix
     integer                     :: nyq            = 0           !< Nyqvist Fourier index
@@ -78,11 +76,9 @@ contains
         self%ldim_img       =  self%get_ldim()
         self%nyq            =  self%get_lfny(1)
         self%sh_lim         =  self%nyq
-        self%winsz          =  params_glob%winsz
-        self%alpha          =  params_glob%alpha
         self%ctfflag        =  spproj%get_ctfflag_type(params_glob%oritype)
         self%phaseplate     =  spproj%has_phaseplate(params_glob%oritype)
-        self%kbwin          =  kbinterpol(self%winsz,self%alpha)
+        self%kbwin          =  kbinterpol(KBWINSZ,KBALPHA3D)
         self%wdim           =  self%kbwin%get_wdim()
         self%lims           =  self%loop_lims(2)
         self%cyc_lims       =  self%loop_lims(3)
@@ -97,7 +93,7 @@ contains
         self%rho_allocated = .true.
         if( l_expand )then
             ! setup expanded matrices
-            dim = maxval(abs(self%lims)) + ceiling(self%winsz)
+            dim = maxval(abs(self%lims)) + ceiling(KBWINSZ)
             self%ldim_exp(1,:) = [self%lims(1,1)-self%wdim, dim]
             self%ldim_exp(2,:) = [-dim, dim]
             self%ldim_exp(3,:) = [-dim, dim]
@@ -166,7 +162,7 @@ contains
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self !< this instance
         type(kbinterpol) :: wf                      !< return kbintpol window
-        wf = kbinterpol(self%winsz,self%alpha)
+        wf = kbinterpol(KBWINSZ, KBALPHA3D)
     end function get_kbwin
 
     ! I/O
@@ -224,7 +220,7 @@ contains
         integer   :: i, h, k, l, nsym, isym, iwinsz, sh, fplnyq, stride
         if( pwght < TINY )return
         ! window size
-        iwinsz = ceiling(self%winsz - 0.5)
+        iwinsz = ceiling(KBWINSZ - 0.5)
         ! stride along h dimension for interpolation: all threads are at least
         ! wdim pixels away from each other to avoid race conditions
         stride = self%wdim
@@ -296,7 +292,7 @@ contains
         if( pwght < TINY )return
         thread_usage = .false.
         ! window size
-        iwinsz = ceiling(self%winsz - 0.5)
+        iwinsz = ceiling(KBWINSZ - 0.5)
         ! setup rotation matrices
         nsym = se%get_nsym()
         rotmats(1,:,:) = o%get_mat()
@@ -361,7 +357,7 @@ contains
         logical :: l_gridcorr, l_lastiter
         ! kernel
         winsz   = max(1., 2.*self%kbwin%get_winsz())
-        kbwin   = kbinterpol(winsz, self%alpha)
+        kbwin   = kbinterpol(winsz, KBALPHA3D)
         antialw = self%hannw()
         l_gridcorr = .true.
         if( present(do_gridcorr) ) l_gridcorr = do_gridcorr

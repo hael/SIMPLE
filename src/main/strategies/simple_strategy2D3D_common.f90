@@ -336,7 +336,6 @@ contains
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
         shvec(1)    = -build_glob%spproj_field%get(iptcl, 'x') * crop_factor
         shvec(2)    = -build_glob%spproj_field%get(iptcl, 'y') * crop_factor
-        
         ! Phase-flipping
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         select case(ctfparms%ctfflag)
@@ -710,13 +709,11 @@ contains
         ! back to real space
         call vol_ptr%ifft()
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' )then
-            call vol_ptr%div_w_instrfun(alpha=params_glob%alpha)
-        endif
+        call vol_ptr%div_w_instrfun
         ! FT volume
         call vol_ptr%fft()
         ! expand for fast interpolation & correct for norm when clipped
-        call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
+        call vol_ptr%expand_cmat
     end subroutine preprefvol
 
     !>  \brief  grids one particle image to the volume

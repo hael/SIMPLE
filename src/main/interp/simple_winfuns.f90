@@ -8,7 +8,7 @@ private
 !>  window function stuct and operations
 type :: winfuns
     private
-    character(len=STDLEN) :: wfun_str=''                      !< wfun string descriptor
+    character(len=STDLEN) :: wfun_str=''                  !< wfun string descriptor
     procedure(wfun), pointer, nopass :: apod_fun=>null()  !< apodization function
     procedure(ifun), pointer, nopass :: instr_fun=>null() !< instrument function
     real :: Whalf=0.                                      !< window halfwidth

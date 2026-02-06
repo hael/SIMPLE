@@ -107,10 +107,10 @@ contains
         end do
         ! prepare for fast interpolation
         call self%vol_ref%fft()
-        call self%vol_ref%expand_cmat(alpha)
+        call self%vol_ref%expand_cmat
         if( present(vol_target) )then
             call self%vol_target%fft()
-            call self%vol_target%expand_cmat(alpha)
+            call self%vol_target%expand_cmat
         endif
         ! extract the reference lines
         call self%extract_ref

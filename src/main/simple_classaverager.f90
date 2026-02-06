@@ -315,7 +315,7 @@ contains
             endif
         endif
         ! interpolation variables
-        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
+        kbwin  = kbinterpol(KBWINSZ, KBALPHA2D)
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)
@@ -1120,7 +1120,7 @@ contains
         call img%new(ldim_crop,smpd_crop)
         center = real(ldim_crop/2 + 1)
         pad_sc = 1. / real(ldim_croppd(1))
-        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
+        kbwin  = kbinterpol(KBWINSZ, KBALPHA2D)
         kbzero = kbwin%instr(0.)
         do j = 1, ldim_crop(2)
             dist(2) = pad_sc * (real(j) - center(2))
@@ -1262,7 +1262,7 @@ contains
             enddo
         endif
         ! interpolation variables
-        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
+        kbwin  = kbinterpol(KBWINSZ, KBALPHA2D)
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)

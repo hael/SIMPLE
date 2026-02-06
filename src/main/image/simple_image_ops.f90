@@ -172,10 +172,8 @@ contains
     ! Background
     !===========================
 
-    module subroutine div_w_instrfun( self, alpha, padded_dim )
-        class(image),           intent(inout) :: self
-        real,         optional, intent(in)    :: alpha
-        integer,      optional, intent(in)    :: padded_dim
+    module subroutine div_w_instrfun( self )
+        class(image), intent(inout) :: self
         type(kbinterpol)  :: kbwin
         real, allocatable :: w(:)
         real    :: arg
@@ -185,10 +183,12 @@ contains
         endif
         center = self%ldim/2+1
         dim    = self%ldim(1)
-        if( present(padded_dim) ) dim = padded_dim
         ! kaiser-bessel window
-        if(.not.present(alpha)) THROW_HARD('alpha must be given for KB interpolator')
-        kbwin = kbinterpol(KBWINSZ,alpha)
+        if( self%is_2d() )then
+            kbwin = kbinterpol(KBWINSZ,KBALPHA2D)
+        else
+            kbwin = kbinterpol(KBWINSZ,KBALPHA3D)
+        endif
         allocate(w(self%ldim(1)),source=1.)
         do i = 1,self%ldim(1)
             arg  = real(i-center(1))/real(dim)

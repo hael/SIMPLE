@@ -422,9 +422,6 @@ contains
         integer,     allocatable :: states(:), tmp(:)
         integer                  :: i, s
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
-        if( .not. cline%defined('wfun')   ) call cline%set('wfun',   'kb')
-        if( .not. cline%defined('winsz')  ) call cline%set('winsz',   1.5)
-        if( .not. cline%defined('alpha')  ) call cline%set('alpha',    2.)
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'reprojs'//STK_EXT)
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) THROW_HARD('need nspace (for number of projections)!')

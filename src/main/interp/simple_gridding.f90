@@ -12,10 +12,9 @@ private
 contains
 
     !>  \brief generates instrument function image for division of real-space images
-    subroutine gen_instrfun_img( instrfun_img, kbwin, padded_dim )
+    subroutine gen_instrfun_img( instrfun_img, kbwin )
         class(image),      intent(inout) :: instrfun_img
         class(kbinterpol), intent(in)    :: kbwin
-        integer, optional, intent(in)    :: padded_dim
         real, allocatable :: w(:)
         real    :: arg
         integer :: ldim(3), center(3), i,j,k, iarg, dim
@@ -25,7 +24,6 @@ contains
         endif
         center = ldim/2+1
         dim    = ldim(1)
-        if( present(padded_dim) ) dim = padded_dim
         ! Kaiser-bessel window
         allocate(w(ldim(1)),source=1.)
         do i = 1,ldim(1)

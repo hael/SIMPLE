@@ -23,7 +23,7 @@ integer(timer_int_kind) :: t_kb, t_kb_fast
 call seed_rnd
 
 ! intepolation windows
-kbwin = kbinterpol(RECWINSZ,ALPHA)
+kbwin = kbinterpol(KBWINSZ,ALPHA)
 wdim  = kbwin%get_wdim()
 
 allocate(kbw(wdim,wdim), kbw_fast(wdim,wdim), kbw3D(wdim,wdim,wdim), kbw3D_fast(wdim,wdim,wdim), source=1.)
@@ -31,7 +31,7 @@ allocate(kbw(wdim,wdim), kbw_fast(wdim,wdim), kbw3D(wdim,wdim,wdim), kbw3D_fast(
 ! rotation & scale
 call rotmat2D(ran3()*180., rmat)
 rmat   = ALPHA * rmat
-iwinsz = ceiling(RECWINSZ - 0.5)
+iwinsz = ceiling(KBWINSZ - 0.5)
 
 ! time original approach
 t_kb = tic()
@@ -102,7 +102,7 @@ print *, 'Absolute difference vs. fast 2D: ', kbw_diff / real(cnt, sp)
 ! rotation & scale
 call rnd_romat(rmat3D)
 rmat3D = ALPHA * rmat3D
-iwinsz = ceiling(RECWINSZ - 0.5)
+iwinsz = ceiling(KBWINSZ - 0.5)
 
 ! time original approach
 t_kb  = tic()

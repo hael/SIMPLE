@@ -22,15 +22,13 @@ contains
         ldim    = vol%get_ldim()
         box     = ldim(1)
         smpd    = vol%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA * real(box / 2))
+        boxpd   = 2 * round2even(KBALPHA3D * real(box / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         ! padding & fft
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
-        if( params_glob%gridding.eq.'yes' )then
-            ! corrects for interpolation function
-            call vol_pad%div_w_instrfun(alpha=KBALPHA, padded_dim=boxpd)
-        endif
+        ! corrects for interpolation function
+        call vol_pad%div_w_instrfun
         call vol_pad%fft
         call vol_pad%mul(real(boxpd)) ! correct for FFTW convention
         if( present(top) )then
@@ -47,7 +45,7 @@ contains
             call imgs_pad(ithr)%new([boxpd,boxpd,1], smpd, wthreads=.false.)
         end do
         ! prepare for projection
-        call vol_pad%expand_cmat(KBALPHA)
+        call vol_pad%expand_cmat
         write(logfhandle,'(A)') '>>> GENERATING PROJECTIONS'
         !$omp parallel do schedule(static) default(shared)&
         !$omp private(i,ithr,o2) proc_bind(close)
@@ -87,18 +85,16 @@ contains
         real             :: smpd
         ldim    = vol%get_ldim()
         smpd    = vol%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
+        boxpd   = 2 * round2even(KBALPHA3D * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         call rovol%new(ldim, smpd)
         call rovol_pad%new(ldim_pd, smpd)
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
-        if( params_glob%gridding.eq.'yes' )then
-            ! corrects for interpolation function
-            call vol_pad%div_w_instrfun(alpha=KBALPHA, padded_dim=boxpd)
-        endif
+        ! corrects for interpolation function
+        call vol_pad%div_w_instrfun
         call vol_pad%fft
-        call vol_pad%expand_cmat(KBALPHA)
+        call vol_pad%expand_cmat
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
         call vol_pad%kill_expanded
         call vol_pad%kill
