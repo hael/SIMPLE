@@ -12,10 +12,10 @@ endif()
 # 1. Scan for candidate gfortran binaries
 # ---------------------------------------------------------------------------
 set(_gfortran_candidates
-    gfortran
     gfortran-16
     gfortran-15
     gfortran-14
+    gfortran
 )
 set(_best_gfortran "")
 set(_best_version "")
@@ -56,8 +56,8 @@ message(STATUS "AutoDetectGCC: selected gfortran = ${_best_gfortran} (version ${
 # 2. Derive gcc/g++ from same directory
 # ---------------------------------------------------------------------------
 get_filename_component(_fc_dir "${_best_gfortran}" DIRECTORY)
-set(_gcc_candidates gcc gcc-16 gcc-15 gcc-14)
-set(_gxx_candidates g++ g++-16 g++-15 g++-14)
+set(_gcc_candidates gcc-16 gcc-15 gcc-14 gcc)
+set(_gxx_candidates g++-16 g++-15 g++-14 g++)
 set(_best_gcc "")
 foreach(_cand IN LISTS _gcc_candidates)
     find_program(_gcc_prog NAMES ${_cand} HINTS "${_fc_dir}")
