@@ -739,6 +739,7 @@ contains
 
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, nptcls2update, pinds )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
@@ -746,7 +747,7 @@ contains
         type(ctfparams),   allocatable   :: ctfparms(:)
         type(ori) :: orientation, o_thres, o_mirr
         real      :: shift(2), euls(3), euls_mirr(3)
-        integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff
+        integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff, ithr
         logical   :: l_rec_state
         logical   :: DEBUG = .false.
         integer(timer_int_kind) :: t
@@ -774,6 +775,8 @@ contains
         ! logical/physical adress mapping
         call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), build_glob%imgbatch(1)%get_smpd())
         ! call memoize_ft_maps([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
+        ! heap of padded images
+        call alloc_imgarr(nthr_glob, [params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, build_glob%img_pad_heap)
         ! gridding batch loop
         nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
@@ -784,16 +787,15 @@ contains
                 t_ini = t_ini + toc(t)
                 t = tic()
             endif
-            !$omp parallel do default(shared) private(i,iptcl,ibatch,shift) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(i,ithr,iptcl,ibatch,shift) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
+                ithr   = omp_get_thread_num() + 1
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
-                ! if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                call build_glob%imgbatch(ibatch)%norm_noise_fft(build_glob%lmsk)
+                call build_glob%imgbatch(ibatch)%norm_noise_taper_edge_pad_fft(build_glob%lmsk, build_glob%img_pad_heap(ithr))
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build_glob%spproj_field%get_2Dshift(iptcl)
-                ! call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl)
-                call build_glob%imgbatch(ibatch)%gen_fplane4rec(ctfparms(ibatch), shift, iptcl, fpls(ibatch))
+                call build_glob%img_pad_heap(ithr)%gen_fplane4rec(ctfparms(ibatch), shift, iptcl, fpls(ibatch))
             end do
             !$omp end parallel do
             if( DEBUG )then
@@ -817,6 +819,7 @@ contains
                 t_grid = t_grid + toc(t)
             endif
         end do
+        call dealloc_imgarr(build_glob%img_pad_heap)
         if( DEBUG ) print *,'timing: ',t_ini, t_2dprep, t_grid
         if( trim(params_glob%recthres).eq.'yes' ) print *, 'nptcls in 3D reconstruction = ', nptcls_eff
         ! normalise structure factors

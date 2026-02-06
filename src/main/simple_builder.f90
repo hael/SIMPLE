@@ -29,6 +29,7 @@ type :: builder
     type(image)                         :: vol2                   !< -"-
     type(image)                         :: mskvol                 !< envelope mask volume
     type(image),            allocatable :: imgbatch(:)            !< batch of images
+    type(image),            allocatable :: img_pad_heap(:)        !< heap of padded images for use in norm_noise_taper_edge_pad_fft_gen_fplane4rec
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
