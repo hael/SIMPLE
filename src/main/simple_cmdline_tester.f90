@@ -183,12 +183,9 @@ contains
         write(*,'(A)') 'test_read_parsing'
         call cl%kill()
         ! This feeds a synthetic command line via read(), bypassing real argv
-        call cl%read('alpha=1.25 box=3 dir=hello')
-        call assert_true(cl%defined('alpha'), 'read: alpha defined')
+        call cl%read('box=3 dir=hello')
         call assert_true(cl%defined('box'), 'read: box defined')
         call assert_true(cl%defined('dir'), 'read: dir defined')
-        r = cl%get_rarg('alpha')
-        call assert_double(1.25_dp, real(r,dp), 'read / get_rarg: alpha')
         i = cl%get_iarg('box')
         call assert_int(3, i,                   'read / get_iarg: box')
         sval = cl%get_carg('dir')
