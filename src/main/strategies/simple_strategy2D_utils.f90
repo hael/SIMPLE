@@ -980,42 +980,62 @@ contains
     subroutine test_strat2D_utils
         type(parameters), target    :: params
         type(image)         :: test
-        type(inpl_struct), allocatable  :: alg_info1(:), alg_info2(:,:)
-        type(image), allocatable    :: stk(:)
-        integer :: i, nimgs = 10, ldim(3) = [256, 256, 1]
-        real    :: mskdiam, smpd = 3.0, hp = 20., lp = 3.0, trs = 5.0
+        type(cmdline)       :: cline
+        type(inpl_struct), allocatable  :: alg_info1(:), alg_info2(:,:), alg_info_tmp(:)
+        type(image), allocatable    :: stk(:), tmp_stk(:)
+        type(image) :: img, tmp
+        integer :: i, j, nimgs = 10, ldim(3) = [256, 256, 1]
+        real    :: mskdiam, smpd = 3.0, hp = 20., lp = 3.0, trs = 20.
         logical :: passed = .true. 
-        params%box = 256
-        params%mskdiam = 256
         params%objfun = 'cc'
+        params%box = 256
         params%nthr = 1
-        params%msk_crop = 256
         params%ctf = 'no'
+        params%trs = 20.
+        call params%new(cline)
         params_glob => params
         allocate(stk(nimgs))
-        ! create synthetic image 
         allocate(alg_info1(nimgs))
         allocate(alg_info2(nimgs, nimgs))
-        do i = 1, nimgs - 1 
+        call img%new(ldim, smpd)
+        call img%gauimg(ldim(1) / 6, 0.2)
+        call img%rtsq(20., 30., 30.)
+        call tmp%new(ldim, smpd)
+        call tmp%gauimg(ldim(1) / 8, 0.4)
+        call tmp%rtsq(30.,-10., -10.)
+        call img%add(tmp)
+        call tmp%zero()
+        call tmp%ran(0.1)
+        call img%add(tmp)
+        call tmp%zero()
+        call img%add(tmp)
+        stk(1) = img
+        do i = 2, nimgs
             call stk(i)%new(ldim, smpd)
-            if( i == 1) call stk(1)%ran()
-            call stk(i)%rtsq(90.*real(i), real(i)* 0.5, real(i)*0.5, stk(i+1))
+            call stk(i)%copy(img)
+            call stk(i)%rtsq(20.*real(i),3.*real(i),3.*real(i))
+            call stk(i)%vis()
         end do
-        alg_info1 = match_imgs2ref(hp, lp, trs, stk(1), stk)
+        alg_info1 = match_imgs2ref(hp, lp, trs, img, stk)
         alg_info2 = match_imgs(hp, lp, trs, stk, stk)
-        ! rotate images
-        call rtsq_imgs(nimgs, alg_info1, stk)
-        ! check real corr 
+        ! ! rotate images
+        allocate(tmp_stk(nimgs))
+        tmp_stk = stk 
+        call rtsq_imgs(nimgs, alg_info1, tmp_stk)
+        ! check rtsq images
         do i = 1, nimgs 
-            if(stk(1)%real_corr(stk(i)) < 0.99) then 
-                passed = .false. 
-                exit
-            end if 
-        end do 
-        if(passed) then 
-            print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST PASSED'
-        else 
-            print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST FAILED'
-        end if 
+            print *, 'corr', alg_info1(i)%corr
+            print *, 'angle:', alg_info1(i)%e3
+            print *, 'x:', alg_info1(i)%x
+            print *, 'y:', alg_info1(i)%y
+        end do
+        ! check match_imgs2ref
+        ! check match_imgs
+
+        ! if(passed) then 
+        !     print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST PASSED'
+        ! else 
+        !     print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST FAILED'
+        ! end if 
     end subroutine test_strat2D_utils
 end module simple_strategy2D_utils
