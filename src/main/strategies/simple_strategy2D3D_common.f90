@@ -773,10 +773,9 @@ contains
             t_grid   = 0.
         endif
         ! logical/physical adress mapping
-        call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), build_glob%imgbatch(1)%get_smpd())
-        ! call memoize_ft_maps([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
+        call memoize_ft_maps([params_glob%boxpd, params_glob%boxpd, 1], build_glob%imgbatch(1)%get_smpd())
         ! heap of padded images
-        call alloc_imgarr(nthr_glob, [params_glob%box, params_glob%box, 1], build_glob%imgbatch(1)%get_smpd(), build_glob%img_pad_heap)
+        call alloc_imgarr(nthr_glob, [params_glob%boxpd, params_glob%boxpd, 1], build_glob%imgbatch(1)%get_smpd(), build_glob%img_pad_heap)
         ! gridding batch loop
         nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ

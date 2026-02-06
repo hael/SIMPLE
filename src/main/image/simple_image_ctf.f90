@@ -129,50 +129,36 @@ contains
     end subroutine apply_ctf
 
     module subroutine gen_fplane4rec( self, ctfparms, shift, iptcl, fplane )
+        use simple_math_ft, only: upsample_sigma2
         class(image),      intent(inout) :: self
         class(ctfparams),  intent(in)    :: ctfparms
         real,              intent(in)    :: shift(2)
         integer,           intent(in)    :: iptcl
         type(fplane_type), intent(out)   :: fplane
         type(ctf)                :: tfun
-        type(ctfvars) :: ctfvals
-        real, allocatable        :: sigma2_noise(:) !< Noise power spectrum for ML regularization
+        type(ctfvars)            :: ctfvals
+        real, allocatable        :: sigma2_noise_tmp(:), sigma2_noise(:) !< Noise power spectrum for ML regularization
         complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
         real(dp)                 :: pshift(2)
         type(ftiter) :: fiterator
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
-        integer :: physh, physk, sigma2_kfromto(2), h, k, shell, hmin, hmax, kmin, kmax 
-
-        integer :: frlims_crop(3,2),nyq_crop
-
+        integer :: physh, physk, sigma2_kfromto(2), h, k, shell, hmin, hmax, kmin, kmax,  frlims_crop(3,2), sigma_nyq
         logical :: l_ctf, l_flip
         ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
         integer, allocatable :: shell_lut(:)
         integer :: max_r2, r2, abs_hmax, abs_kmax
-
         ! shift is with respect to the original image dimension
         fplane%shconst = self%get_shconst()
-        
         ! -----------------------
         ! setup the Fourier plane
         ! -----------------------
-
-        ! Fourier limits & dimensions should not be the same as the image because this bugs out
-        
-        ! fplane%frlims  = self%fit%loop_lims(3)
-        ! fplane%nyq     = self%fit%get_lfny(1)
-        ! print *, 'frclims1_fplane: ', fplane%frlims(1,1), fplane%frlims(1,2)
-        ! print *, 'frclims2_fplane: ', fplane%frlims(1,1), fplane%frlims(1,2)
-        ! print *, 'frclims3_fplane: ', fplane%frlims(1,1), fplane%frlims(1,2)
-        ! print *, 'nyq_fplane:      ', fplane%nyq
-
         ! cropped Fourier limits & dimensions need to be congruent with how the reconstroctor_eo objects are set up
-        ! I guess this will have to change with the new padding policy, but for now it runs
-        call fiterator%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop)
+        call fiterator%new([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
         fplane%frlims = fiterator%loop_lims(3)
         fplane%nyq    = fiterator%get_lfny(1)
-
+        call fiterator%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop)
+        sigma_nyq     = fiterator%get_lfny(1)
         ! matrices
         if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
         if( allocated(fplane%ctfsq_plane) ) deallocate(fplane%ctfsq_plane)
@@ -202,11 +188,11 @@ contains
         ! ML regularization noise spectrum
         ! -----------------------
         if (params_glob%l_ml_reg) then
-            allocate(sigma2_noise(1:fplane%nyq), source=0.0)
+            allocate(sigma2_noise_tmp(1:sigma_nyq), sigma2_noise(1:fplane%nyq), source=0.0)
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
-            sigma2_noise(sigma2_kfromto(1):fplane%nyq) = &
-                eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):fplane%nyq, iptcl)
+            sigma2_noise_tmp(sigma2_kfromto(1):sigma_nyq) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):sigma_nyq, iptcl)
+            call upsample_sigma2(sigma2_kfromto(1), sigma_nyq, sigma2_noise_tmp, fplane%nyq, sigma2_noise)
         end if
         ! -----------------------
         ! Shift phase recurrence
@@ -268,13 +254,8 @@ contains
                     end if
                     ! sigma2 weighting (unchanged semantics)
                     if (params_glob%l_ml_reg) then
-                        if (shell >= sigma2_kfromto(1)) then
-                            c      = c      / sigma2_noise(shell)
-                            tvalsq = tvalsq / sigma2_noise(shell)
-                        else
-                            c      = c      / sigma2_noise(sigma2_kfromto(1))
-                            tvalsq = tvalsq / sigma2_noise(sigma2_kfromto(1))
-                        end if
+                        c      = c      / sigma2_noise(shell)
+                        tvalsq = tvalsq / sigma2_noise(shell)
                     end if
                 end if
                 fplane%cmplx_plane(h,k) = c
@@ -293,8 +274,9 @@ contains
                 fplane%ctfsq_plane(h,k) =       fplane%ctfsq_plane(-h,-k)
             end do
         end do
-        if (allocated(shell_lut))    deallocate(shell_lut)
-        if (allocated(sigma2_noise)) deallocate(sigma2_noise)
+        if (allocated(shell_lut)       ) deallocate(shell_lut)
+        if (allocated(sigma2_noise_tmp)) deallocate(sigma2_noise_tmp)
+        if (allocated(sigma2_noise)    ) deallocate(sigma2_noise)
     end subroutine gen_fplane4rec
 
     ! Calculate Joe's Ice Fraction Score for images, not intended for micrographs
