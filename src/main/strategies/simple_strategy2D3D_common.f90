@@ -776,7 +776,7 @@ contains
         call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), build_glob%imgbatch(1)%get_smpd())
         ! call memoize_ft_maps([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
         ! heap of padded images
-        call alloc_imgarr(nthr_glob, [params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, build_glob%img_pad_heap)
+        call alloc_imgarr(nthr_glob, [params_glob%box, params_glob%box, 1], build_glob%imgbatch(1)%get_smpd(), build_glob%img_pad_heap)
         ! gridding batch loop
         nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
