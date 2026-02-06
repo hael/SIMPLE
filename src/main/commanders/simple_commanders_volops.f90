@@ -490,7 +490,6 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',    'yes')
-        if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
         call init_volanalyzer(params%filetab)
         if( cline%defined('ref_ind') )then
@@ -622,7 +621,6 @@ contains
         type(dock_vols)  :: dvols
         type(parameters) :: params
         type(string)     :: fn_vol_docked
-        if( .not. cline%defined('gridding') ) call cline%set('gridding', 'yes')
         call params%new(cline)
         fn_vol_docked = get_fbody(params%vols(2),'mrc')//'_docked.mrc'
         call dvols%new(params%vols(1), params%vols(2), params%smpd, params%hp, params%lp, params%mskdiam)

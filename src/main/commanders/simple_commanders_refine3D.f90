@@ -240,7 +240,7 @@ contains
         integer,      allocatable :: state_pops(:)
         real,         allocatable :: res(:), fsc(:) 
         logical :: err, vol_defined, have_oris, converged, fall_over, l_multistates, l_automsk
-        logical :: l_combine_eo, l_griddingset, do_automsk
+        logical :: l_combine_eo, do_automsk
         real    :: smpd
         integer :: i, state, iter, box, nfiles, niters, nthr_here
         601 format(A,1X,F12.3)
@@ -252,7 +252,6 @@ contains
         call set_master_num_threads(nthr_here, string('REFINE3D'))
         ! local options & flags
         l_multistates = cline%defined('nstates')
-        l_griddingset = cline%defined('gridding')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -358,7 +357,6 @@ contains
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                    if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -376,7 +374,6 @@ contains
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                    if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
