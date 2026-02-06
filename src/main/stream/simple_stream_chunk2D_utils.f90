@@ -101,7 +101,7 @@ contains
         call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
         call cline_cluster2D_chunk%set('sigma_est', params_glob%sigma_est)
-        call cline_cluster2D_chunk%set('rank_cavgs','no')
+        call cline_cluster2D_chunk%set('rank_cavgs','yes')
         call cline_cluster2D_chunk%set('chunk',     'yes')
         ! objective function
         call cline_cluster2D_chunk%set('objfun', 'euclid')
