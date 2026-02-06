@@ -188,7 +188,7 @@ contains
         ! ML regularization noise spectrum
         ! -----------------------
         if (params_glob%l_ml_reg) then
-            allocate(sigma2_noise_tmp(1:sigma_nyq), sigma2_noise(1:fplane%nyq), source=0.0)
+            allocate(sigma2_noise_tmp(1:sigma_nyq), sigma2_noise(0:fplane%nyq), source=0.0)
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_noise_tmp(sigma2_kfromto(1):sigma_nyq) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):sigma_nyq, iptcl)
