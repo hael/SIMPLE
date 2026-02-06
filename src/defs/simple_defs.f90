@@ -78,7 +78,7 @@ integer, parameter    :: PICKER_OFFSET             = 3         !< picker offset 
 ! constants for masking/interpolation
 real,    parameter    :: COSMSKHALFWIDTH           = 6.0       !< spherical soft masking
 real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size for 2D
-real,    parameter    :: KBALPHA                   = 2.        !< interpolation alpha (oversampling constant), previously sqrt(2)
+real,    parameter    :: KBALPHA                   = sqrt(2.)  !< interpolation alpha (oversampling constant)
 real,    parameter    :: RECWINSZ                  = 1.5       !< half-window size for 3D reconstruction
 ! real constants that control search and convergence
 real,    parameter    :: FRAC_SH_LIM               = 75.0      !< at what frac to turn on the shift search
