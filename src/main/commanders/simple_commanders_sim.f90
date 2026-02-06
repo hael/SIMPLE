@@ -108,11 +108,11 @@ contains
         ! prepare for image generation
         call build%vol%read(params%vols(1))
         call build%vol%mask3D_soft(params%msk, backgr=0.)
-        if( params%gridding.eq.'yes' ) call build%vol%div_w_instrfun(alpha=params%alpha)
+        call build%vol%div_w_instrfun
         call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
         call build%vol%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat(params%alpha)
+        call vol_pad%expand_cmat
         if( l_ptcl_frames )then
             if( cline%defined('part') ) THROW_HARD('PART is not supported together with NFRAMES')
             call prepimgbatch(params%nframes,box=params%boxpd)

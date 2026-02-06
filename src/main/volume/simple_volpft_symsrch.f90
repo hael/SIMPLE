@@ -44,7 +44,7 @@ contains
         real    :: lims(3,2)
         call volpft_symsrch_kill
         ! create the correlator
-        call vpftc%new(vol, hp, lp, KBALPHA)
+        call vpftc%new(vol, hp, lp, KBALPHA3D)
         nspace        = vpftc%get_nspace()
         nspace_nonred = vpftc%get_nspace_nonred()
         kfromto       = vpftc%get_kfromto()

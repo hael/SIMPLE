@@ -20,7 +20,11 @@ contains
         if( allocated(mem_polcyc2_mat)    ) deallocate(mem_polcyc2_mat)
         mem_poldim   = pdim
         lims         = transpose(self%loop_lims(3)) ! fortran layered memory
-        kbwin        = kbinterpol(KBWINSZ, 1.0)     ! no oversampling
+        
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        kbwin        = kbinterpol(KBWINSZ, 1.0)     ! no oversampling for now, this needs to be looked at
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         mem_polwdim  = kbwin%get_wdim()
         mem_polwlen  = mem_polwdim**2
         allocate( mem_polcyc1_mat(    1:mem_polwdim, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&

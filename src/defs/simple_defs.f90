@@ -77,9 +77,9 @@ real,    parameter    :: RADFRAC_NORM_EXTRACT      = 0.75      !< radius fractio
 integer, parameter    :: PICKER_OFFSET             = 3         !< picker offset for grid search
 ! constants for masking/interpolation
 real,    parameter    :: COSMSKHALFWIDTH           = 6.0       !< spherical soft masking
-real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size for 2D
-real,    parameter    :: KBALPHA                   = sqrt(2.)  !< interpolation alpha (oversampling constant)
-real,    parameter    :: RECWINSZ                  = 1.5       !< half-window size for 3D reconstruction
+real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size
+real,    parameter    :: KBALPHA3D                 = sqrt(2.)  !< 3D interpolation alpha (oversampling constant)
+real,    parameter    :: KBALPHA2D                 = 2.0       !< 2D interpolation alpha (oversampling constant)
 ! real constants that control search and convergence
 real,    parameter    :: FRAC_SH_LIM               = 75.0      !< at what frac to turn on the shift search
 real,    parameter    :: NEIGH_MINFRAC             = 0.3       !< minimum fraction of search space scanned in refine=neigh

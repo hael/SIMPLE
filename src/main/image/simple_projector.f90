@@ -36,30 +36,22 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor of the expanded Fourier matrix
-    subroutine expand_cmat( self, alpha, norm4proj )
+    subroutine expand_cmat( self )
         class(projector),  intent(inout) :: self
-        real,              intent(in)    :: alpha !< oversampling factor
-        logical, optional, intent(in)    :: norm4proj
         integer, allocatable :: cyck(:), cycm(:), cych(:)
         real    :: factor
         integer :: h, k, m, phys(3), logi(3), lims(2,3), ldim(3)
-        logical :: l_norm4proj
         call self%kill_expanded
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) THROW_HARD('volume needs to be FTed before call; expand_cmat')
         if( ldim(3) == 1      ) THROW_HARD('only for volumes; expand_cmat')
-        self%kbwin         = kbinterpol(KBWINSZ, alpha)
+        self%kbwin         = kbinterpol(KBWINSZ, KBALPHA3D)
         self%iwinsz        = ceiling(self%kbwin%get_winsz() - 0.5)
         self%wdim          = self%kbwin%get_wdim()
         lims               = transpose(self%loop_lims(3))
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
-        ! normalize when working with 2D projections
-        ! not for producing real space projections
-        l_norm4proj = .false.
-        if( present(norm4proj) ) l_norm4proj = norm4proj
-        factor = 1.
-        if( l_norm4proj ) factor = real(params_glob%box)
+        factor = real(params_glob%box)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&

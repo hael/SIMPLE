@@ -218,7 +218,6 @@ contains
         call cmd_dict%new(NMAX_CMD_DICT)
         call cmd_dict%push('acf',           'calculate autocorrelation function(yes|no){no}')
         call cmd_dict%push('algorithm',     'Algorithm to be used')
-        call cmd_dict%push('alpha',         'oversampling factor{sqrt(2)}')
         call cmd_dict%push('amsklp',        'low-pass limit for envelope mask generation(in A)')
         call cmd_dict%push('angastunit',    'angle of astigmatism unit (radians|degrees){degrees}')
         call cmd_dict%push('angerr',        'angular error(in degrees){0}')

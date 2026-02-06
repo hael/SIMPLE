@@ -54,7 +54,6 @@ type :: parameters
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
-    character(len=3)          :: gridding='no'        !< to test gridding correction
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
@@ -261,7 +260,6 @@ type :: parameters
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
-    character(len=STDLEN)     :: wfun='kb'
     character(len=STDLEN)     :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
@@ -385,7 +383,6 @@ type :: parameters
     integer :: xdimpd=0
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
-    real    :: alpha=KBALPHA
     real    :: amsklp=8.           !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: angthres_mi_proj = ANGTHRES_MI_PROJ_DEFAULT !< 4 convergence checking
@@ -500,7 +497,7 @@ type :: parameters
     real    :: update_frac = 1.
     real    :: ufrac_trec  = 1.    !< update frac trailing rec
     real    :: width=10.           !< falloff of mask(in pixels){10}
-    real    :: winsz=RECWINSZ
+    real    :: winsz=KBWINSZ
     real    :: xsh=0.              !< x shift(in pixels){0}
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
@@ -717,7 +714,6 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('greedy_sampling',self%greedy_sampling)
-        call check_carg('gridding',       self%gridding)
         call check_carg('hist',           self%hist)
         call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
@@ -833,7 +829,6 @@ contains
         call check_carg('verbose_exit',   self%verbose_exit)
         call check_carg('volrec',         self%volrec)
         call check_carg('wcrit',          self%wcrit)
-        call check_carg('wfun',           self%wfun)
         call check_carg('wiener',         self%wiener)
         call check_carg('write_imgarr',   self%write_imgarr)
         call check_carg('zero',           self%zero)
@@ -993,7 +988,6 @@ contains
         call check_iarg('ycoord',         self%ycoord)
         call check_iarg('ydim',           self%ydim)
         ! Float args
-        call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)
         call check_rarg('angerr',         self%angerr)
         call check_rarg('angthres_mi_proj', self%angthres_mi_proj)
@@ -1120,6 +1114,9 @@ contains
         l_distr_exec_glob = self%l_distr_exec
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
+        ! controls KB alpha (oversampling) factor usage in reconstruction and 2D averaging
+        is_2D = .false.
+        if( self%prg%has_substr('2D') ) is_2D = .true.
         ! look for the last previous execution directory and get next directory number
         call self%last_prev_dir%kill
         idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
@@ -1524,12 +1521,17 @@ contains
             self%walltime = WALLTIME_DEFAULT
         endif
         !<<< END, PARALLELISATION-RELATED
-
         !>>> START, IMAGE-PROCESSING-RELATED
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
-        self%xdimpd     = round2even(self%alpha*real(self%box/2))
-        self%boxpd      = 2*self%xdimpd
-        self%box_croppd = 2*round2even(self%alpha*real(self%box_crop/2))
+        if( is_2d )then
+            self%xdimpd     = round2even(KBALPHA2D*real(self%box/2))
+            self%boxpd      = 2*self%xdimpd
+            self%box_croppd = 2*round2even(KBALPHA2D*real(self%box_crop/2))
+        else
+            self%xdimpd     = round2even(KBALPHA3D*real(self%box/2))
+            self%boxpd      = 2*self%xdimpd
+            self%box_croppd = 2*round2even(KBALPHA3D*real(self%box_crop/2))
+        endif
         ! set derived Fourier related variables
         self%dstep   = real(self%box-1)*self%smpd                  ! first wavelength of FT
         self%dsteppd = real(self%boxpd-1)*self%smpd                ! first wavelength of padded FT
@@ -1767,9 +1769,6 @@ contains
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
         ! B-facor
         self%l_bfac = cline%defined('bfac')
-        ! smoothing extension
-        is_2D = .false.
-        if( self%prg%has_substr('2D') ) is_2D = .true.
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then

@@ -2061,10 +2061,8 @@ interface
 
     !--- Background ---!
 
-    module subroutine div_w_instrfun( self, alpha, padded_dim )
-        class(image),           intent(inout) :: self
-        real,         optional, intent(in)    :: alpha
-        integer,      optional, intent(in)    :: padded_dim
+    module subroutine div_w_instrfun( self )
+        class(image), intent(inout) :: self
     end subroutine div_w_instrfun
 
     module subroutine estimate_background( self, freq, backgr, mode )

@@ -236,7 +236,7 @@ contains
         call setup_downscaling
         pool_dims%smpd  = params_glob%smpd_crop
         pool_dims%box   = params_glob%box_crop
-        pool_dims%boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
+        pool_dims%boxpd = 2 * round2even(KBALPHA2D * real(params_glob%box_crop/2)) ! logics from parameters
         pool_dims%msk   = params_glob%msk_crop
         chunk_dims = pool_dims ! chunk & pool have the same dimensions to start with
         ! Scaling-related command lines update
