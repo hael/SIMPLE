@@ -139,21 +139,40 @@ contains
         real, allocatable        :: sigma2_noise(:) !< Noise power spectrum for ML regularization
         complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
         real(dp)                 :: pshift(2)
+        type(ftiter) :: fiterator
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
         integer :: physh, physk, sigma2_kfromto(2), h, k, shell, hmin, hmax, kmin, kmax 
+
+        integer :: frlims_crop(3,2),nyq_crop
+
         logical :: l_ctf, l_flip
         ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
         integer, allocatable :: shell_lut(:)
         integer :: max_r2, r2, abs_hmax, abs_kmax
+
+        ! shift is with respect to the original image dimension
+        fplane%shconst = self%get_shconst()
+        
         ! -----------------------
         ! setup the Fourier plane
         ! -----------------------
-        ! shift is with respect to the image dimensions
-        fplane%shconst = self%get_shconst()
-        ! Fourier limits & dimensions
-        fplane%frlims  = self%fit%loop_lims(3)
-        fplane%nyq     = self%fit%get_lfny(1)
+
+        ! Fourier limits & dimensions should not be the same as the image because this bugs out
+        
+        ! fplane%frlims  = self%fit%loop_lims(3)
+        ! fplane%nyq     = self%fit%get_lfny(1)
+        ! print *, 'frclims1_fplane: ', fplane%frlims(1,1), fplane%frlims(1,2)
+        ! print *, 'frclims2_fplane: ', fplane%frlims(1,1), fplane%frlims(1,2)
+        ! print *, 'frclims3_fplane: ', fplane%frlims(1,1), fplane%frlims(1,2)
+        ! print *, 'nyq_fplane:      ', fplane%nyq
+
+        ! cropped Fourier limits & dimensions need to be congruent with how the reconstroctor_eo objects are set up
+        ! I guess this will have to change with the new padding policy, but for now it runs
+        call fiterator%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop)
+        fplane%frlims = fiterator%loop_lims(3)
+        fplane%nyq    = fiterator%get_lfny(1)
+
         ! matrices
         if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
         if( allocated(fplane%ctfsq_plane) ) deallocate(fplane%ctfsq_plane)

@@ -773,6 +773,7 @@ contains
         endif
         ! logical/physical adress mapping
         call memoize_ft_maps(build_glob%imgbatch(1)%get_ldim(), build_glob%imgbatch(1)%get_smpd())
+        ! call memoize_ft_maps([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
         ! gridding batch loop
         nptcls_eff = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
