@@ -10,8 +10,11 @@ integer, parameter :: NP = 3, NS = 4, NC = 3, MAXPCAITS = 15
 type(ppca_inmem)   :: prob_pca
 type(pca_svd)      :: pca_obj
 type(kpca_svd)     :: kpca_obj
+type(parameters)   :: params
+type(cmdline)      :: cline
 integer :: j
 real    :: data_ori(NP, NS), avg(NP), tmpvec(NP), data_pca(NP, NS), E_zn(NC, NS), data_cen(NP, NS)
+call params%new(cline)
 data_ori(1,:) = [ 1, 2, 3, 4]
 data_ori(2,:) = [ 3, 1, 5, 8]
 data_ori(3,:) = [-1, 0, 4, 10]
