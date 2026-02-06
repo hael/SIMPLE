@@ -281,7 +281,7 @@ contains
         type(string)              :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
         real                      :: frac_srch_space
         integer                   :: nthr_here, iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
-        logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg, l_scale_inirefs
+        logical                   :: l_stream, l_switch2euclid, l_converged, l_ml_reg, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         ! streaming
@@ -291,7 +291,6 @@ contains
         endif
         call cline%set('stream','no') ! for parameters determination
         ! objective functions part 1
-        l_griddingset   = cline%defined('gridding')
         l_switch2euclid = .false.
         if( cline%defined('objfun') )then
             if( cline%get_carg('objfun').eq.'euclid' )then
@@ -318,7 +317,6 @@ contains
                 ! already performing euclidian-based optimization, no switch
                 iter_switch2euclid = params%startit
                 l_switch2euclid    = .false.
-                if( .not.l_griddingset ) call cline%set('gridding','yes')
             else
                 ! switching objective function from cc_iters+1
                 call cline%set('objfun','cc')
@@ -571,10 +569,6 @@ contains
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
                 call cline%set('objfun', orig_objfun)
-                if(.not.l_griddingset )then
-                    call cline%set('gridding',     'yes')
-                    call job_descr%set('gridding', 'yes')
-                endif
                 call job_descr%set('objfun', orig_objfun)
                 call cline_cavgassemble%set('objfun', orig_objfun)
                 params%objfun = orig_objfun%to_char()
@@ -651,7 +645,7 @@ contains
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
         integer :: startit, i, cnt, iptcl, ptclind
         integer :: iter_switch2euclid, j, io_stat, funit, class_ind, class_max
-        logical :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg, l_scale_inirefs
+        logical :: converged, l_stream, l_switch2euclid, l_ml_reg, l_scale_inirefs
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -780,7 +774,6 @@ contains
             ! objective functions
             l_switch2euclid = params%cc_objfun==OBJFUN_EUCLID
             orig_objfun     = cline%get_carg('objfun')
-            l_griddingset   = cline%defined('gridding')
             l_ml_reg        = params%l_ml_reg
             iter_switch2euclid = -1
             if( l_switch2euclid )then
@@ -792,7 +785,6 @@ contains
                     endif
                     iter_switch2euclid = params%startit
                     l_switch2euclid    = .false.
-                    if( .not.l_griddingset ) call cline%set('gridding','yes')
                 else
                     ! switching objective function from cc_iters+1
                     call cline%set('objfun','cc')
