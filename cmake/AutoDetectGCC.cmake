@@ -12,10 +12,10 @@ endif()
 # 1. Scan for candidate gfortran binaries
 # ---------------------------------------------------------------------------
 set(_gfortran_candidates
+    gfortran
     gfortran-16
     gfortran-15
     gfortran-14
-    gfortran
 )
 set(_best_gfortran "")
 set(_best_version "")

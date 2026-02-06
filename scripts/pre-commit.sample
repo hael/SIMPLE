@@ -7,9 +7,17 @@ if [ "$status" -eq 0 ]; then
     echo "✅ SIMPLE compilation succeeded."
     git add production/simple_exec.f90 production/simple_stream.f90 production/single_exec.f90
     echo "✅ Added Git hash SIMPLE."
-    echo "✅ Proceeding with commit."
-    echo "📌 Remember to rebase ('git pull --rebase') before push."
-    exit 0
+    simple_test_units
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "✅ SIMPLE units test succeeded. Proceeding with commit."
+        echo "✅ Proceeding with commit."
+        echo "📌 Remember to rebase ('git pull --rebase') before push."
+        exit 0
+    else
+        echo "❌ SIMPLE test units failed. Push aborted."
+        exit 1
+    fi
 else
     echo "❌ SIMPLE compilation failed. Commit aborted."
     exit 1
