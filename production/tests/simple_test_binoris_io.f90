@@ -3,12 +3,14 @@ use simple_core_module_api
 use simple_cmdline,                 only: cmdline
 use simple_commanders_project_core, only: commander_new_project
 use simple_sp_project,              only: sp_project
+use simple_parameters,              only: parameters
 use simple_binoris_io
 implicit none
 type(commander_new_project) :: xnew_project
 type(cmdline)               :: cline
 type(oris)                  :: o
 type(sp_project)            :: spproj 
+type(parameters)            :: params
 logical                     :: test_passed
 type(string)                :: fname, projname
 integer                     :: fromto(2)
@@ -17,6 +19,7 @@ test_passed = .true.
 fname       = 'spproject.simple'
 projname    = 'spproject'
 fromto      = [ 1, 2 ]
+call params%new(cline)
 call cline%set('projname', projname)
 call cline%set('mkdir',        'no')
 call cline%check()
