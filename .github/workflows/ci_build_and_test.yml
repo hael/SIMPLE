@@ -22,28 +22,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
-             echo "Install GCC 15.2"
-             sudo apt install software-properties-common
-             sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-             sudo apt-get update
-             sudo apt-get install gcc-14 g++-14 
-             sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-             sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-             sudo update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-14 100 
-             echo "Install FFTW"
-             wget ftp://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
-             tar zxvf fftw-3.3.8.tar.gz
-             cd fftw-3.3.8
-             ./bootstrap.sh --prefix=/usr/local
-             make -j
-             sudo make install
-             make distclean
-             ./bootstrap.sh --prefix=/usr/local --enable-single
-             make -j
-             sudo make install
-             make distclean
-             cd ..
+             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
