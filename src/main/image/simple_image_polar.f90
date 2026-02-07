@@ -109,4 +109,54 @@ contains
         endif
     end subroutine polarize
 
+    module subroutine polarize_strided( self, pft, padding_factor, mask )
+        class(image),      intent(in)    :: self           !< padded image instance to polarize
+        integer,           intent(in)    :: padding_factor !< integer pad factor: self is padded by this factor
+        complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
+        logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
+        complex(kind=c_float_complex) :: acc, fcomp
+        logical :: h_negative
+        integer :: original_box, i, k, l, m, ind, h_val, k_val, phys1, phys2, phys1p, phys2p, ithr
+        original_box = self%ldim(1) / padding_factor
+        ! interpolate (but fetch from padded FFT at strided (every padding_factor-th) samples)
+        !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val,k_val,phys1,phys2,phys1p,phys2p,h_negative,fcomp)
+        do k = mem_poldim(2), mem_poldim(3)
+            do i = 1, mem_poldim(1)
+                acc = CMPLX_ZERO
+                ind = 0
+                do m = 1, mem_polwdim
+                    k_val = mem_polcyc2_mat(m,i,k)
+                    do l = 1, mem_polwdim
+                        ind   = ind + 1
+                        h_val = mem_polcyc1_mat(l,i,k)
+                        ! Branch-free indexing computation on the ORIGINAL (unpadded) Fourier lattice
+                        h_negative = (h_val < 0)
+                        phys1      = merge(-h_val, h_val, h_negative) + 1
+                        phys2      = merge(-k_val, k_val, h_negative) + 1 + &
+                                    merge(original_box, 0, merge(-k_val, k_val, h_negative) < 0)
+                        ! Map original Fourier lattice indices -> padded Fourier lattice indices (stride)
+                        ! Note: assumes self%cmat is the padded FFT with dimensions = padding_factor * original_dims.
+                        phys1p = 1 + (phys1 - 1) * padding_factor
+                        phys2p = 1 + (phys2 - 1) * padding_factor
+                        ! Fetch complex value from padded spectrum at strided location
+                        fcomp  = merge(conjg(self%cmat(phys1p,phys2p,1)), self%cmat(phys1p,phys2p,1), h_negative)
+                        ! accumulate dot product
+                        acc = acc + mem_polweights_mat(ind,i,k) * fcomp
+                    end do
+                end do
+                pft(i,k) = acc
+            end do
+        end do
+        !$OMP END SIMD
+
+        if( present(mask) )then
+            ! band masking
+            !$OMP SIMD
+            do k = mem_poldim(2), mem_poldim(3)
+                if( .not.mask(k) ) pft(:,k) = CMPLX_ZERO
+            enddo
+            !$OMP END SIMD
+        endif
+    end subroutine polarize_strided
+
 end submodule simple_image_polar
