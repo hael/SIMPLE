@@ -7,7 +7,6 @@ contains
 
     !> \brief  initialises the image polarizer
     module subroutine memoize4polarize( self, pdim, instrfun_img )
-        use simple_gridding, only: gen_instrfun_img
         class(image),           intent(in)    :: self         !< instance
         integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
         class(image), optional, intent(inout) :: instrfun_img !< instrument function
@@ -57,11 +56,6 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! memoize instrument function
-        if( present(instrfun_img) )then
-            call instrfun_img%new(self%ldim, self%smpd, self%wthreads)
-            call gen_instrfun_img(instrfun_img, kbwin=kbwin)
-        endif
         deallocate(w)
     end subroutine memoize4polarize
 

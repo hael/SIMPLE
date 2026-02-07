@@ -105,7 +105,6 @@ contains
         ! prepare for image generation
         call build%vol%read(params%vols(1))
         call build%vol%mask3D_soft(params%msk, backgr=0.)
-        ! call build%vol%div_w_instrfun ! used to be turned off through params%gridding = no
         call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
         call build%vol%pad(vol_pad)
         call vol_pad%fft

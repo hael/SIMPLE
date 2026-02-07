@@ -115,10 +115,9 @@ contains
     procedure          :: norm_noise_taper_edge_pad_fft_shift_2mat
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_fft_clip_shift_ctf_flip
-    procedure          :: norm_noise_divwinstrfun_fft
     procedure          :: norm_noise_mask_fft_powspec
-    procedure          :: mask_divwinstrfun_fft
-    procedure          :: ifft_mask_divwinstrfun_fft
+    procedure          :: mask_fft
+    procedure          :: ifft_mask_fft
     procedure          :: expand_ft
     ! I/O
     procedure, private :: open
@@ -327,7 +326,6 @@ contains
     procedure          :: add_gauran
     procedure          :: salt_n_pepper
     ! background
-    procedure          :: div_w_instrfun
     procedure          :: estimate_background
     procedure          :: subtr_backgr
     procedure          :: subtr_backgr_ramp
@@ -834,12 +832,6 @@ interface
         real,         intent(in)    :: shvec(2)
     end subroutine norm_noise_fft_clip_shift
 
-    module subroutine norm_noise_divwinstrfun_fft( self, lmsk, instrfun )
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        class(image), intent(in)    :: instrfun
-    end subroutine norm_noise_divwinstrfun_fft
-
     module subroutine norm_noise_mask_fft_powspec( self, lmsk, mskrad, spec )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
@@ -847,17 +839,15 @@ interface
         real,         intent(inout) :: spec(fdim(self%ldim(1)) - 1)
     end subroutine norm_noise_mask_fft_powspec
 
-    module subroutine mask_divwinstrfun_fft( self, mskrad, instrfun )
+    module subroutine mask_fft( self, mskrad )
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
-        class(image), intent(in)    :: instrfun
-    end subroutine mask_divwinstrfun_fft
+    end subroutine mask_fft
 
-    module subroutine ifft_mask_divwinstrfun_fft( self, mskrad, instrfun )
+    module subroutine ifft_mask_fft( self, mskrad )
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
-        class(image), intent(in)    :: instrfun
-    end subroutine ifft_mask_divwinstrfun_fft
+    end subroutine ifft_mask_fft
 
     module function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self
@@ -2061,10 +2051,6 @@ interface
     end subroutine salt_n_pepper
 
     !--- Background ---!
-
-    module subroutine div_w_instrfun( self )
-        class(image), intent(inout) :: self
-    end subroutine div_w_instrfun
 
     module subroutine estimate_background( self, freq, backgr, mode )
         class(image),     intent(in)    :: self

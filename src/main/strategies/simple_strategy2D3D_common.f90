@@ -5,7 +5,6 @@ use simple_timer
 use simple_builder,            only: build_glob
 use simple_butterworth,        only: butterworth_filter
 use simple_discrete_stack_io,  only: dstack_io
-use simple_gridding,           only: gen_instrfun_img
 use simple_nanoparticle_utils, only: phasecorr_one_atom
 use simple_opt_filter,         only: estimate_lplim
 use simple_projector,          only: projector
@@ -325,10 +324,9 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !          serial routine
-    subroutine prepimg4align( iptcl, img, img_instr, img_out )
+    subroutine prepimg4align( iptcl, img, img_out )
         integer,      intent(in)    :: iptcl
         class(image), intent(inout) :: img
-        class(image), intent(in)    :: img_instr
         class(image), intent(inout) :: img_out
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
@@ -350,14 +348,13 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
-        ! fused IFFT, masking, division with instrument function & FFT
-        call img_out%ifft_mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
+        ! fused IFFT, mask, FFT
+        call img_out%ifft_mask_fft(params_glob%msk_crop)
     end subroutine prepimg4align
 
-    subroutine prepimg4align_bench( iptcl, img, img_instr, img_out, rt_prep1, rt_ctf, rt_prep2, rt_prep )
+    subroutine prepimg4align_bench( iptcl, img, img_out, rt_prep1, rt_ctf, rt_prep2, rt_prep )
         integer,              intent(in)    :: iptcl
         class(image),         intent(inout) :: img
-        class(image),         intent(in)    :: img_instr
         class(image),         intent(inout) :: img_out
         real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_prep2, rt_prep
         integer(timer_int_kind) :: t_prep1, t_ctf, t_prep2, t_prep
@@ -387,8 +384,8 @@ contains
         end select
         rt_ctf  = rt_ctf + toc(t_ctf)
         t_prep2 = tic()
-        ! fused IFFT, masking, division with instrument function & FFT
-        call img_out%ifft_mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
+        ! fused IFFT, mask, FFT
+        call img_out%ifft_mask_fft(params_glob%msk_crop)
         rt_prep2 = rt_prep2 + toc(t_prep2)
         rt_prep   = rt_prep   + toc(t_prep)
     end subroutine prepimg4align_bench
@@ -424,11 +421,10 @@ contains
     end subroutine calc_2Dref_offset
 
     !>  \brief  Prepares one cluster centre image for alignment
-    subroutine prep2Dref( img, icls, xyz, img_instr )
+    subroutine prep2Dref( img, icls, xyz )
         class(image), intent(inout) :: img
         integer,      intent(in)    :: icls
         real,         intent(in)    :: xyz(3)
-        class(image), intent(in)    :: img_instr
         integer :: filtsz
         real    :: frc(img%get_filtsz()), filter(img%get_filtsz()), crop_factor
         ! Cavg & particles centering
@@ -462,7 +458,7 @@ contains
             call img%ICM2D( params_glob%lambda, verbose=.false. )
         endif
         ! mask, grid, fft
-        call img%mask_divwinstrfun_fft(params_glob%msk_crop, img_instr)
+        call img%mask_fft(params_glob%msk_crop)
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
@@ -708,8 +704,6 @@ contains
         endif
         ! back to real space
         call vol_ptr%ifft()
-        ! gridding prep
-        ! call vol_ptr%div_w_instrfun ! used to be turned off through params%gridding = no
         ! FT volume
         call vol_ptr%fft()
         ! expand for fast interpolation & correct for norm when clipped
@@ -969,7 +963,7 @@ contains
             ! PREPARATION OF pftc AND REFERENCES
             nrefs = params_glob%nspace * params_glob%nstates
             call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-            call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), build_glob%img_instr)
+            call build_glob%img_crop%memoize4polarize(pftc%get_pdim())
             ! Read polar references
             call pftc%polar_cavger_new(.true.)
             call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -1048,7 +1042,7 @@ contains
         ! pftc
         nrefs = params_glob%nspace * params_glob%nstates
         call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-        call build_glob%img_crop%memoize4polarize(pftc%get_pdim(), build_glob%img_instr)
+        call build_glob%img_crop%memoize4polarize(pftc%get_pdim())
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             if( str_has_substr(params_glob%refine, 'prob') )then
@@ -1096,7 +1090,7 @@ contains
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), build_glob%img_instr, tmp_imgs(ithr))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr))
             ! transfer to polar coordinates
             pft = pftc%allocate_pft()
             call tmp_imgs(ithr)%polarize(pft, mask=build_glob%l_resmsk)

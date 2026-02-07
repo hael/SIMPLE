@@ -23,7 +23,6 @@ type :: builder
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
     type(image)                         :: img_crop               !< for cropped image
-    type(image)                         :: img_instr              !< for instrument function for gridding correction
     type(image)                         :: img_pad                !< -"-
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
