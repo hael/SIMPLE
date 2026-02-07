@@ -709,7 +709,7 @@ contains
         ! back to real space
         call vol_ptr%ifft()
         ! gridding prep
-        call vol_ptr%div_w_instrfun
+        ! call vol_ptr%div_w_instrfun ! used to be turned off through params%gridding = no
         ! FT volume
         call vol_ptr%fft()
         ! expand for fast interpolation & correct for norm when clipped
