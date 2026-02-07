@@ -462,7 +462,7 @@ contains
             ! preprocessing for FSC calculation
             ! even
             cmat = self%even%get_cmat()
-            call self%even%sampl_dens_correct(do_gridcorr=.false.)
+            call self%even%sampl_dens_correct
             even = self%even
             call self%even%set_cmat(cmat)
             deallocate(cmat)
@@ -472,7 +472,7 @@ contains
             call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
-            call self%odd%sampl_dens_correct(do_gridcorr=.false.)
+            call self%odd%sampl_dens_correct
             odd = self%odd
             call self%odd%set_cmat(cmat)
             deallocate(cmat)
@@ -506,7 +506,7 @@ contains
             call self%odd%add_invtausq2rho(self%fsc)
             ! Even: uneven sampling density correction, clip, & write
             cmat = self%even%get_cmat()
-            call self%even%sampl_dens_correct(do_gridcorr=.false.)
+            call self%even%sampl_dens_correct
             call self%even%ifft
             call even%zero_and_unflag_ft
             call self%even%clip(even)
@@ -517,7 +517,7 @@ contains
             deallocate(cmat)
             ! Odd: uneven sampling density correction, clip, & write
             cmat = self%odd%get_cmat()
-            call self%odd%sampl_dens_correct(do_gridcorr=.false.)
+            call self%odd%sampl_dens_correct
             call self%odd%ifft
             call odd%zero_and_unflag_ft
             call self%odd%clip(odd)
@@ -531,8 +531,8 @@ contains
             call even%new([self%box,self%box,self%box],self%smpd)
             call odd%new([self%box,self%box,self%box],self%smpd)
             ! correct for the uneven sampling density
-            call self%even%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
-            call self%odd%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
+            call self%even%sampl_dens_correct
+            call self%odd%sampl_dens_correct
             ! reverse FT
             call self%even%ifft()
             call self%odd%ifft()
@@ -630,7 +630,7 @@ contains
         class(image),            intent(inout) :: reference !< reference volume
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call reference%set_ft(.false.)
-        call self%eosum%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
+        call self%eosum%sampl_dens_correct
         call self%eosum%ifft()
         call self%eosum%div(self%mag_correction)
         call self%eosum%clip(reference)
