@@ -41,7 +41,6 @@ print *,'---------------------'
 call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
 call b%vol%read(p%vols(1))
 call b%vol%mask3D_soft(p%msk)
-! call b%vol%div_w_instrfun ! used to be turned off through params%gridding = no
 call b%vol%fft()
 call b%vol%expand_cmat
 call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)

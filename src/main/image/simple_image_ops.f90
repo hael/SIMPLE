@@ -172,49 +172,6 @@ contains
     ! Background
     !===========================
 
-    module subroutine div_w_instrfun( self )
-        class(image), intent(inout) :: self
-        type(kbinterpol)  :: kbwin
-        real, allocatable :: w(:)
-        real    :: arg
-        integer :: center(3), i,j,k, dim, iarg
-        if( any(self%ldim==0) .or. self%is_ft() .or. .not.self%square_dims() )then
-            THROW_HARD('Erroneous image in div_w_instrfun')
-        endif
-        center = self%ldim/2+1
-        dim    = self%ldim(1)
-        ! kaiser-bessel window
-        if( self%is_2d() )then
-            kbwin = kbinterpol(KBWINSZ,KBALPHA2D)
-        else
-            kbwin = kbinterpol(KBWINSZ,KBALPHA3D)
-        endif
-        allocate(w(self%ldim(1)),source=1.)
-        do i = 1,self%ldim(1)
-            arg  = real(i-center(1))/real(dim)
-            w(i) = kbwin%instr(arg)
-        end do
-        if( self%is_2d() )then
-            !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close) schedule(static)
-            do i = 1,self%ldim(1)
-                do j = 1,self%ldim(2)
-                    self%rmat(i,j,1) = self%rmat(i,j,1) / (w(i)*w(j))
-                enddo
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do collapse(3) private(i,j,k) default(shared) proc_bind(close) schedule(static)
-            do i = 1,self%ldim(1)
-                do j = 1,self%ldim(2)
-                    do k = 1,self%ldim(3)
-                        self%rmat(i,j,k) = self%rmat(i,j,k) / (w(i)*w(j)*w(k))
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
-    end subroutine div_w_instrfun
-
     !>  Estimates background from gaussian filtered image, for micrographs
     module subroutine estimate_background( self, freq, backgr, mode )
         class(image),     intent(in)    :: self

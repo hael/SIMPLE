@@ -5,11 +5,37 @@ use simple_image,     only: image
 use simple_projector, only: projector
 implicit none
 
-public :: mul_w_instr, gen_instrfun_img
+public :: mul_w_instr
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    ! THIS SEEMS TO BE THE CORRECT WAY OF PREPARING THE IMAGE FOR INSTRUMENT FUNCTION DIVISION
+    ! INSTRUMENT FUNCTION DIVISION OUGHT TO NOT MATTER AS LONG AS WE STAY IN THE FOURIER DOMAIN
+    ! HOWEVER WHEN THE IMAGES THAT HAVE BEEN INTERPOLATED WITH THE KB APODIZATION FUNCTION AND NEED TO
+    ! BE BACK-TRANSFORMED TO CREATE REAL-SPACE OUTPUT, DIVISION WITH THIS IMAGE IS NECESSARY POST IFFT
+    ! OF AVERAGED INTERPOLATED OUTPUT
+    !>  \brief  corrects for Fourier domain bilinear interpolation
+    ! subroutine cavger_prep_gridding_correction( img )
+    !     class(image), intent(inout) :: img
+    !     type(kbinterpol) :: kbwin
+    !     real    :: center(3),dist(2),pid,sinc,pad_sc,kbzero,vj,v
+    !     integer :: i,j
+    !     call img%new(ldim_crop,smpd_crop)
+    !     center = real(ldim_crop/2 + 1)
+    !     pad_sc = 1. / real(ldim_croppd(1))
+    !     kbwin  = kbinterpol(KBWINSZ, KBALPHA2D)
+    !     kbzero = kbwin%instr(0.)
+    !     do j = 1, ldim_crop(2)
+    !         dist(2) = pad_sc * (real(j) - center(2))
+    !         vj      = kbwin%instr(dist(2)) / kbzero**2
+    !         do i = 1, ldim_crop(1)
+    !             dist(1) = pad_sc * (real(i) - center(1))
+    !             call img%set([i,j,1], kbwin%instr(dist(1)) * vj)
+    !         enddo
+    !     enddo
+    ! end subroutine cavger_prep_gridding_correction
 
     !>  \brief generates instrument function image for division of real-space images
     subroutine gen_instrfun_img( instrfun_img, kbwin )
