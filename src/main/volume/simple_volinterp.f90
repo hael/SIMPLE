@@ -28,7 +28,7 @@ contains
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
         ! corrects for interpolation function
-        call vol_pad%div_w_instrfun
+        ! call vol_pad%div_w_instrfun ! used to be turned off through params%gridding = no
         call vol_pad%fft
         call vol_pad%mul(real(boxpd)) ! correct for FFTW convention
         if( present(top) )then
@@ -92,7 +92,7 @@ contains
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
         ! corrects for interpolation function
-        call vol_pad%div_w_instrfun
+        ! call vol_pad%div_w_instrfun ! used to be turned off through params%gridding = no
         call vol_pad%fft
         call vol_pad%expand_cmat
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
