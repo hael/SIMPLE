@@ -355,6 +355,7 @@ contains
     ! POLARIZATION, file: simple_image_polar.f90
     procedure          :: memoize4polarize
     procedure          :: polarize
+    procedure          :: polarize_strided
     ! GEOMETRICAL, file: simple_image_geom.f90
     ! windowing
     procedure          :: window
@@ -2183,6 +2184,13 @@ interface
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft to be filled
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
     end subroutine polarize
+
+    module subroutine polarize_strided( self, pft, padding_factor, mask )
+        class(image),      intent(in)    :: self           !< padded image instance to polarize
+        integer,           intent(in)    :: padding_factor !< integer pad factor: self is padded by this factor
+        complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
+        logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
+    end subroutine polarize_strided
 
     ! ===== geometric procedure interfaces =====
 
