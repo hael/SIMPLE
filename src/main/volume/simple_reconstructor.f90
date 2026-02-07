@@ -341,94 +341,26 @@ contains
         ! print *,count(thread_usage) ! number of individualthreads actually used
     end subroutine test_insert_plane
 
-    !>  is for uneven distribution of orientations correction
-    !>  from Pipe & Menon 1999
-    subroutine sampl_dens_correct( self, do_gridcorr )
-        use simple_gridding, only: mul_w_instr
-        class(reconstructor),    intent(inout) :: self
-        logical, optional,       intent(in)    :: do_gridcorr
-        logical,    parameter :: skip_pipemenon = .false.
-        logical,    parameter :: do_hann_window = .true.
-        type(kbinterpol)      :: kbwin
-        type(image)           :: W_img, Wprev_img
-        real,     allocatable :: antialw(:)
-        real    :: winsz, val_prev, val, invrho, rsh_sq
-        integer :: h,k,m, phys(3), iter, sh, i,j,l
-        logical :: l_gridcorr, l_lastiter
-        ! kernel
-        winsz   = max(1., 2.*self%kbwin%get_winsz())
-        kbwin   = kbinterpol(winsz, KBALPHA3D)
-        antialw = self%hannw()
-        l_gridcorr = .true.
-        if( present(do_gridcorr) ) l_gridcorr = do_gridcorr
-        l_gridcorr = l_gridcorr .and. (GRIDCORR_MAXITS > 0)
-        if( l_gridcorr )then
-            call W_img%new(self%ldim_img, self%get_smpd())
-            call Wprev_img%new(self%ldim_img, self%get_smpd())
-            call W_img%set_ft(.true.)
-            call Wprev_img%set_ft(.true.)
-            call W_img%init_gridcorr_mats(Wprev_img, self%rho)
-            if( .not. skip_pipemenon )then
-                do iter = 1, GRIDCORR_MAXITS
-                    ! W <- (W / rho) x kernel
-                    call W_img%ifft()
-                    call mul_w_instr(W_img, kbwin=kbwin)
-                    call W_img%fft()
-                    ! W <- Wprev / ((W / rho) x kernel)
-                    ! and optionally: W <- W * rho
-                    l_lastiter = (iter == GRIDCORR_MAXITS)
-                    call W_img%iter_gridcorr(Wprev_img, self%rho, l_lastiter)
-                enddo
-            end if
-            call Wprev_img%kill
-            ! Fourier comps / rho
-            !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,rsh_sq,sh,invrho) proc_bind(close)
-            do h = self%lims(1,1),self%lims(1,2)
-                do k = self%lims(2,1),self%lims(2,2)
-                    do m = self%lims(3,1),self%lims(3,2)
-                        rsh_sq = real(h*h + k*k + m*m)
-                        sh     = nint(sqrt(rsh_sq))
-                        phys   = W_img%comp_addr_phys(h, k, m)
-                        if( sh > self%sh_lim )then
-                            ! outside Nyqvist, zero
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), CMPLX_ZERO)
-                        else
-                            if( skip_pipemenon )then
-                                invrho = 1. / (1.e-2+self%rho(phys(1),phys(2),phys(3)))
-                            else
-                                invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3)))
-                            end if
-                            if( do_hann_window )then
-                                invrho = invrho * antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(m)))
-                            endif
-                            call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho)
-                        endif
-                    end do
+    subroutine sampl_dens_correct( self )
+        class(reconstructor), intent(inout) :: self
+        integer :: h,k,m,phys(3),sh
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,phys,sh) proc_bind(close)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                    phys = self%comp_addr_phys(h, k, m )
+                    if( sh > self%sh_lim )then
+                        ! outside Nyqvist, zero
+                        call self%set_cmat_at(phys(1),phys(2),phys(3), CMPLX_ZERO)
+                    else
+                        call self%div_cmat_at(phys(1),phys(2),phys(3), self%rho(phys(1),phys(2),phys(3)))
+                    endif
                 end do
             end do
-            !$omp end parallel do
-            ! cleanup
-            call W_img%kill
-        else            
-            !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,sh) proc_bind(close)
-            do h = self%lims(1,1),self%lims(1,2)
-                do k = self%lims(2,1),self%lims(2,2)
-                    do m = self%lims(3,1),self%lims(3,2)
-                        sh   = nint(sqrt(real(h*h + k*k + m*m)))
-                        phys = self%comp_addr_phys(h, k, m )
-                        if( sh > self%sh_lim )then
-                            ! outside Nyqvist, zero
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), CMPLX_ZERO)
-                        else
-                            call self%div_cmat_at(phys(1),phys(2),phys(3), self%rho(phys(1),phys(2),phys(3)))
-                        endif
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
+        !$omp end parallel do
     end subroutine sampl_dens_correct
 
     subroutine compress_exp( self )

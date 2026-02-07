@@ -55,10 +55,8 @@ integer                       :: part_glob                     !< global part in
 character(len=:), allocatable :: cmdline_glob                  !< global command line string
 integer,          parameter   :: NTHR_SHMEM_MAX     = 20       !< maximum number of shared-memory threads used by master process
 logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
-logical,          parameter   :: L_DO_GRIDCORR_GLOB = .false.  !< global gridding correction flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
 logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate memory usage for parts
-logical,          parameter   :: L_DEV_GLOB         = .false.  !< global development flag
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
 ! general parameters
@@ -120,7 +118,6 @@ real,    parameter    :: MSK_EXP_FAC               = 1.2       !< Multiplication
 integer, parameter    :: LPLIM1ITERBOUND           = 5              !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter    :: LPLIM3ITERBOUND           = 7              !< # iteration bound lplim stage 2 (PRIME2D)
 integer, parameter    :: MINCLSPOPLIM              = 5              !< limit for adaptive cluster splitting/spreading (PRIME2D)
-integer, parameter    :: GRIDCORR_MAXITS           = 2              !< # iterations for reconstruction gridding correction
 integer, parameter    :: MAXIMGBATCHSZ             = 500            !< max # images in batch
 integer, parameter    :: MAX_EXTRLIM2D             = 15             !< maximum # of iterations for which 2D extremal opt is performed
 integer, parameter    :: NPEAKS_DEFAULT            = 3              !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
