@@ -26,6 +26,8 @@ type, extends(image) :: projector
     procedure :: fproject
     procedure :: fproject_serial
     procedure :: fproject_polar
+    procedure :: fproject_polar_strided
+    procedure :: interp_fcomp_strided
     procedure :: interp_fcomp
     ! DESTRUCTOR
     procedure :: kill_expanded
@@ -35,6 +37,14 @@ contains
 
     ! CONSTRUCTOR
 
+    ! Why params_glob%box shows up in expand_cmat (in this context)???
+    ! Given that hk is “unpadded image Fourier units,” the projector has to maintain a global, consistent Fourier normalization between:
+    !     ** images prepared by prepimg4align (which scale FFTs by 1/(n1*n2) in your snippets), and
+    !     ** projections computed from the volume FT.
+    ! Using params_glob%box as a factor inside expand_cmat is almost certainly a normalization bridge to match those conventions
+    ! (and keep scores comparable across crops / boxes).
+    ! using the global parameter ensures the projector normalization doesn’t silently change if the volume happens to be in a different 
+    ! internal box than the nominal pipeline box.
     !>  \brief  is a constructor of the expanded Fourier matrix
     subroutine expand_cmat( self )
         class(projector),  intent(inout) :: self
@@ -203,6 +213,78 @@ contains
             end do
         end do
     end subroutine fproject_polar
+
+    ! This strided version is correct if all of the following are true:
+    ! ** loc is expressed in the same logical Fourier index units as cmat_exp 
+    !    (the current code strongly suggests yes, since it directly uses nint(loc) to index cmat_exp)
+    ! ** self%cmat_exp was built from a padded volume FT, such that the padded logical indices are 
+    !    scaled by padding_factor relative to the original lattice. In other words: the padded expanded 
+    !    FT includes indices like …,-2s,-s,0,s,2s,… that correspond exactly to the original lattice points.
+    ! ** The KB weights apod_mat_3d(loc, ...) are meant to be evaluated in original-grid coordinate units 
+    !    (i.e., distances measured in “original grid steps”). That matches the goal: keep the same 
+    !    interpolation behavior, just fetch samples from the padded FT at exact corresponding points.
+    !> \brief  extracts a polar FT from a volume's expanded FT (self),
+    !>         using STRIDED sampling from a PADDED expanded FT.
+    subroutine fproject_polar_strided( self, iref, e, pftc, iseven, mask, padding_factor )
+        class(projector),    intent(inout) :: self
+        integer,             intent(in)    :: iref
+        class(ori),          intent(in)    :: e
+        class(polarft_calc), intent(inout) :: pftc
+        logical,             intent(in)    :: iseven
+        logical,             intent(in)    :: mask(:)
+        integer,             intent(in)    :: padding_factor
+        integer :: pdim(3), irot, k
+        real    :: loc(3), e_rotmat(3,3), hk(2)
+        pdim     = pftc%get_pdim()
+        e_rotmat = e%get_mat()
+        do irot = 1, pdim(1)
+            do k = pdim(2), pdim(3)
+                if( mask(k) )then
+                    hk  = pftc%get_coord(irot,k)                 !< ORIGINAL (unpadded) 2D Fourier coords
+                    loc = matmul([hk(1), hk(2), 0.0], e_rotmat)  !< ORIGINAL 3D logical Fourier coords
+                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_strided(loc, padding_factor), iseven)
+                else
+                    call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
+                endif
+            end do
+        end do
+    end subroutine fproject_polar_strided
+
+    !> \brief interpolate from PADDED expanded complex matrix, but using ORIGINAL-grid weights.
+    !>        loc is in ORIGINAL logical Fourier units. We fetch samples at stride = padding_factor.
+    pure function interp_fcomp_strided( self, loc, padding_factor ) result( comp )
+        class(projector), intent(in) :: self
+        real,             intent(in) :: loc(3) !< ORIGINAL logical Fourier coords
+        integer,          intent(in) :: padding_factor
+        complex :: comp
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        integer :: win0(3)    ! center (nearest grid point) on ORIGINAL lattice
+        integer :: i0(3)      ! window origin on ORIGINAL lattice
+        integer :: iw, jw, kw
+        integer :: h, k, m    ! ORIGINAL lattice indices
+        integer :: hp, kp, mp ! PADDED lattice indices
+        ! center index on ORIGINAL lattice
+        win0 = nint(loc)
+        ! ORIGINAL lattice window origin (lower corner)
+        i0 = win0 - self%iwinsz
+        ! KB weights evaluated for ORIGINAL coordinates and ORIGINAL window geometry
+        call self%kbwin%apod_mat_3d(loc, self%iwinsz, self%wdim, w)
+        ! Strided accumulate: map ORIGINAL grid indices -> PADDED expanded FT indices
+        comp = CMPLX_ZERO
+        do kw = 1, self%wdim
+            m  = i0(3) + (kw-1)
+            mp = m * padding_factor
+            do jw = 1, self%wdim
+                k  = i0(2) + (jw-1)
+                kp = k * padding_factor
+                do iw = 1, self%wdim
+                    h  = i0(1) + (iw-1)
+                    hp = h * padding_factor
+                    comp = comp + w(iw,jw,kw) * self%cmat_exp(hp, kp, mp)
+                end do
+            end do
+        end do
+    end function interp_fcomp_strided
 
     !>  \brief is to interpolate from the expanded complex matrix
     pure function interp_fcomp( self, loc )result( comp )
