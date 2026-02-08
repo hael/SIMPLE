@@ -1253,6 +1253,205 @@ contains
         self%ft    = .true.
     end subroutine ifft_mask_fft
 
+    ! keep serial
+    module subroutine ifft_mask_pad_fft( self, mskrad, self_out )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        class(image), intent(inout) :: self_out
+        integer       :: n1, n2, h1, h2, n1o, n2o, h1o, h2o, i, j, ii, jj, x0, y0, minlen, np, starts(3)
+        ! Edge-mean (border-band) vars
+        integer       :: wbg, wbg1, wbg2, i1, i2, j1, j2, border_count
+        real(dp)      :: sv, border_sum_dp, edge_mean_dp
+        ! Masking vars
+        real(c_float) :: rad_sq, ave, r2, e, scale_cmat, cis2, cjs2, v_val, edge_mean_sp
+        real(c_float), parameter :: EPS_E = 1.e-4_c_float
+        real(c_float), parameter :: ONE   = 1.0_c_float
+        ! Precomputed output index maps (avoid modulo in inner loop)
+        integer       :: xo_map(self%ldim(1)), yo_map(self%ldim(2)), yo
+        ! --------------------------
+        ! dims
+        ! --------------------------
+        n1  = self%ldim(1)
+        n2  = self%ldim(2)
+        h1  = n1/2
+        h2  = n2/2
+        n1o = self_out%ldim(1)
+        n2o = self_out%ldim(2)
+        h1o = n1o/2
+        h2o = n2o/2
+        ! Center placement
+        starts = (self_out%ldim - self%ldim) / 2 + 1
+        ! Precompute mapping from input indices -> padded+fftswapped output indices
+        do i = 1, n1
+            x0        = starts(1) + i - 1
+            xo_map(i) = modulo((x0 - 1) + h1o, n1o) + 1
+        end do
+        do j = 1, n2
+            y0        = starts(2) + j - 1
+            yo_map(j) = modulo((y0 - 1) + h2o, n2o) + 1
+        end do
+        ! ============================================================
+        ! 1) IFFT
+        ! ============================================================
+        call fftwf_execute_dft_c2r(self%plan_bwd, self%cmat, self%rmat)
+        self%ft = .false.
+        ! ============================================================
+        ! 2) SHIFT TO PHASE ORIGIN (fftshift)
+        ! ============================================================
+        do j = 1, h2
+            jj = h2 + j
+            do i = 1, h1
+                ii = h1 + i
+                v_val = self%rmat(i ,j ,1);  self%rmat(i ,j ,1)  = self%rmat(ii,jj,1); self%rmat(ii,jj,1) = v_val
+                v_val = self%rmat(i ,jj,1);  self%rmat(i ,jj,1)  = self%rmat(ii,j ,1); self%rmat(ii,j ,1) = v_val
+            end do
+        end do
+        ! ============================================================
+        ! 3) Compute average outside radius (ave)
+        ! ============================================================
+        minlen = minval(self%ldim(1:2))
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        rad_sq = real(mskrad*mskrad, c_float)
+        sv = 0.0_dp
+        np = 0
+        do i = 1, n1
+            cis2 = mem_msk_cs2(i)
+            do j = 1, n2
+                r2 = cis2 + mem_msk_cs2(j)
+                if (r2 > rad_sq) then
+                    np = np + 1
+                    sv = sv + real(self%rmat(i,j,1), dp)
+                end if
+            end do
+        end do
+        if (np > 0) then
+            ave = real(sv / real(np, dp), c_float)
+        else
+            ave = 0.0_c_float
+        end if
+        ! ============================================================
+        ! 4) Compute post-mask edge_mean from a border band (like taper routine)
+        !    BUT: do it without storing the full masked image.
+        ! ============================================================
+        wbg  = max(1, nint(COSMSKHALFWIDTH) / 2)
+        wbg1 = min(wbg, n1/2)
+        wbg2 = min(wbg, n2/2)
+        border_sum_dp = 0.0_dp
+        ! Define interior bounds (exclude top/bottom bands for left/right bands)
+        i1 = wbg1 + 1
+        i2 = n1 - wbg1
+        j1 = wbg2 + 1
+        j2 = n2 - wbg2
+        ! Helper: accumulate masked value at (i,j)
+        ! (Inline repeated for performance in this serial routine)
+        ! -- Top band: i = 1:wbg1, all j
+        do i = 1, wbg1
+            cis2 = mem_msk_cs2(i)
+            do j = 1, n2
+                cjs2 = mem_msk_cs2(j)
+                v_val = self%rmat(i,j,1)
+                r2 = cis2 + cjs2
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < EPS_E) then
+                    v_val = ave
+                else if (e < (ONE - EPS_E)) then
+                    v_val = e*v_val + (ONE - e)*ave
+                end if
+                border_sum_dp = border_sum_dp + real(v_val, dp)
+            end do
+        end do
+        ! -- Bottom band: i = n1-wbg1+1:n1, all j
+        do i = n1 - wbg1 + 1, n1
+            cis2 = mem_msk_cs2(i)
+            do j = 1, n2
+                cjs2 = mem_msk_cs2(j)
+                v_val = self%rmat(i,j,1)
+                r2 = cis2 + cjs2
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                if (e < EPS_E) then
+                    v_val = ave
+                else if (e < (ONE - EPS_E)) then
+                    v_val = e*v_val + (ONE - e)*ave
+                end if
+                border_sum_dp = border_sum_dp + real(v_val, dp)
+            end do
+        end do
+        ! -- Left band: j = 1:wbg2, rows excluding top/bottom bands
+        if (i1 <= i2) then
+            do i = i1, i2
+                cis2 = mem_msk_cs2(i)
+                do j = 1, wbg2
+                    cjs2 = mem_msk_cs2(j)
+                    v_val = self%rmat(i,j,1)
+                    r2 = cis2 + cjs2
+                    e  = cosedge_r2_2d(r2, minlen, mskrad)
+                    if (e < EPS_E) then
+                        v_val = ave
+                    else if (e < (ONE - EPS_E)) then
+                        v_val = e*v_val + (ONE - e)*ave
+                    end if
+                    border_sum_dp = border_sum_dp + real(v_val, dp)
+                end do
+            end do
+            ! -- Right band: j = n2-wbg2+1:n2, rows excluding top/bottom bands
+            do i = i1, i2
+                cis2 = mem_msk_cs2(i)
+                do j = n2 - wbg2 + 1, n2
+                    cjs2 = mem_msk_cs2(j)
+                    v_val = self%rmat(i,j,1)
+                    r2 = cis2 + cjs2
+                    e  = cosedge_r2_2d(r2, minlen, mskrad)
+                    if (e < EPS_E) then
+                        v_val = ave
+                    else if (e < (ONE - EPS_E)) then
+                        v_val = e*v_val + (ONE - e)*ave
+                    end if
+                    border_sum_dp = border_sum_dp + real(v_val, dp)
+                end do
+            end do
+        end if
+        ! Count border pixels (avoid double-counting corners by excluding top/bottom in left/right bands)
+        border_count = 2*wbg1*n2 + 2*wbg2*max(0, (n1 - 2*wbg1))
+        if (border_count > 0) then
+            edge_mean_dp = border_sum_dp / real(border_count, dp)
+        else
+            edge_mean_dp = real(ave, dp)
+        end if
+        edge_mean_sp = real(edge_mean_dp, c_float)
+        ! ============================================================
+        ! 5) Pad background with edge_mean (post-mask) then write masked pixels
+        !    directly into padded+fftswapped output
+        ! ============================================================
+        self_out%ft   = .false.
+        self_out%rmat = edge_mean_sp
+        do j = 1, n2
+            cjs2 = mem_msk_cs2(j)
+            yo   = yo_map(j)
+            do i = 1, n1
+                cis2 = mem_msk_cs2(i)
+                v_val = self%rmat(i,j,1)
+
+                r2 = cis2 + cjs2
+                e  = cosedge_r2_2d(r2, minlen, mskrad)
+
+                if (e < EPS_E) then
+                    v_val = ave
+                else if (e < (ONE - EPS_E)) then
+                    v_val = e*v_val + (ONE - e)*ave
+                end if
+
+                self_out%rmat(xo_map(i), yo, 1) = v_val
+            end do
+        end do
+        ! ============================================================
+        ! 6) FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
+        ! ============================================================
+        call fftwf_execute_dft_r2c(self_out%plan_fwd, self_out%rmat, self_out%cmat)
+        scale_cmat     = 1.0_c_float / real(n1o*n2o, c_float)
+        self_out%cmat  = self_out%cmat * scale_cmat
+        self_out%ft    = .true.
+    end subroutine ifft_mask_pad_fft
+
     !>  \brief  expand_ft is for getting a Fourier plane using the old SIMPLE logics
     module function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self

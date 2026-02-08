@@ -118,6 +118,7 @@ contains
     procedure          :: norm_noise_mask_fft_powspec
     procedure          :: mask_fft
     procedure          :: ifft_mask_fft
+    procedure          :: ifft_mask_pad_fft
     procedure          :: expand_ft
     ! I/O
     procedure, private :: open
@@ -848,6 +849,12 @@ interface
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
     end subroutine ifft_mask_fft
+
+    module subroutine ifft_mask_pad_fft( self, mskrad, self_out )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        class(image), intent(inout) :: self_out
+    end subroutine ifft_mask_pad_fft
 
     module function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self

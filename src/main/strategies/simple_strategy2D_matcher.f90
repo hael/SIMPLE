@@ -28,7 +28,7 @@ private
 
 type(polarft_calc)       :: pftc
 type(euclid_sigma2)      :: eucl_sigma
-type(image), allocatable :: ptcl_match_imgs(:)
+type(image), allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
 real(timer_int_kind)     :: rt_init, rt_prep_pftc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)  :: t, t_init,  t_prep_pftc,  t_align,  t_cavg,  t_projio,  t_tot
 type(string)             :: benchfname
@@ -470,22 +470,23 @@ contains
         integer, intent(in) :: batchsz_max
         integer :: ithr
         call prepimgbatch(batchsz_max)
-        allocate(ptcl_match_imgs(params_glob%nthr))
+        allocate(ptcl_match_imgs(params_glob%nthr), ptcl_match_imgs_pad(params_glob%nthr))
         !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
         do ithr = 1,params_glob%nthr
             call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1],&
+                &params_glob%smpd_crop, wthreads=.false.)
+            call ptcl_match_imgs_pad(ithr)%new([params_glob%box_crop * POLARIZE_PAD_FAC, params_glob%box_crop * POLARIZE_PAD_FAC, 1],&
                 &params_glob%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
     end subroutine prep_batch_particles2D
 
     subroutine clean_batch_particles2D
+        use simple_imgarr_utils, only: dealloc_imgarr
         integer :: ithr
         call killimgbatch
-        do ithr = 1,params_glob%nthr
-            call ptcl_match_imgs(ithr)%kill
-        enddo
-        deallocate(ptcl_match_imgs)
+        call dealloc_imgarr(ptcl_match_imgs)
+        call dealloc_imgarr(ptcl_match_imgs_pad)
     end subroutine clean_batch_particles2D
 
     !>  \brief  fills batch particle images for polar alignment
@@ -519,13 +520,13 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             ! t_polarize = tic()
-            ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr),&
+            ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr),&
             ! &rt_prep1, rt_ctf, rt_prep2, rt_prep)
             ! t_polarize = tic()
             pft = pftc%allocate_pft()
-            call ptcl_match_imgs(ithr)%polarize(pft, mask=build_glob%l_resmsk)
+            call ptcl_match_imgs_pad(ithr)%polarize_strided(pft, POLARIZE_PAD_FAC, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)
             ! rt_polarize = rt_polarize + toc(t_polarize)

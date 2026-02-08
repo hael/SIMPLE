@@ -100,10 +100,11 @@ contains
 
     subroutine exec_clin_fsc( self, cline )
         use simple_strategy2D3D_common
+        use simple_imgarr_utils, only: dealloc_imgarr, write_imgarr
         class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
-        type(image),      allocatable :: tmp_imgs(:), cavgs(:)
+        type(image),      allocatable :: tmp_imgs(:), cavgs(:), tmp_imgs_pad(:)
         type(polarft_calc)            :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
@@ -116,14 +117,16 @@ contains
         call pftc%new(params%nspace, [1,nptcls], params%kfromto)
         call build%img_crop%memoize4polarize(pftc%get_pdim())
         call prepimgbatch(nptcls)
-        allocate(tmp_imgs(nthr_glob))
+        allocate(tmp_imgs(nthr_glob), tmp_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
         do ithr = 1,nthr_glob
             call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
+            call tmp_imgs_pad(ithr)%new([params%box_crop * POLARIZE_PAD_FAC,params%box_crop * POLARIZE_PAD_FAC,1], params%smpd_crop, wthreads=.false.)
         enddo
+        !$omp end parallel do
         ! Build polar particle images
         call pftc%allocate_refs_memoization
-        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs)
+        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs,tmp_imgs_pad)
         ! Dealing with polar cavgs
         call pftc%polar_cavger_new(.true.)
         call pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)
@@ -143,6 +146,8 @@ contains
         call killimgbatch
         call pftc%kill
         call build%kill_general_tbox
+        call dealloc_imgarr(tmp_imgs)
+        call dealloc_imgarr(tmp_imgs_pad)
         ! end gracefully
         call simple_end('**** SIMPLE_CLIN_FSC NORMAL STOP ****')
     end subroutine exec_clin_fsc

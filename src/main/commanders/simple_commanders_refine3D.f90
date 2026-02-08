@@ -987,11 +987,12 @@ contains
 
     subroutine exec_prob_tab( self, cline )
         use simple_strategy2D3D_common
-        use simple_eul_prob_tab,  only: eul_prob_tab
+        use simple_eul_prob_tab, only: eul_prob_tab
+        use simple_imgarr_utils, only: dealloc_imgarr
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
-        type(image),      allocatable :: tmp_imgs(:)
+        type(image),      allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
         type(string)                  :: fname
         type(polarft_calc)            :: pftc
         type(builder)                 :: build
@@ -1011,10 +1012,11 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
-        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, tmp_imgs, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
+                                        
         ! Build polar particle images
-        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs)
+        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
@@ -1029,6 +1031,8 @@ contains
         call killimgbatch
         call pftc%kill
         call build%kill_general_tbox
+        call dealloc_imgarr(tmp_imgs)
+        call dealloc_imgarr(tmp_imgs_pad)
         call qsys_job_finished(string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab

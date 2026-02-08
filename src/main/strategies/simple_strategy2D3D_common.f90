@@ -12,7 +12,7 @@ use simple_strategy2D_utils,   only: calc_cavg_offset
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
-public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align,  prepimg4align_bench
+public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align!,  prepimg4align_bench
 public :: prep2Dref, build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec
 public :: calc_2Dref_offset
 private
@@ -324,10 +324,11 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !          serial routine
-    subroutine prepimg4align( iptcl, img, img_out )
+    subroutine prepimg4align( iptcl, img, img_out, img_out_pd )
         integer,      intent(in)    :: iptcl
         class(image), intent(inout) :: img
         class(image), intent(inout) :: img_out
+        class(image), intent(inout) :: img_out_pd
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: shvec(2), crop_factor
@@ -349,46 +350,47 @@ contains
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
         ! fused IFFT, mask, FFT
-        call img_out%ifft_mask_fft(params_glob%msk_crop)
+        call img_out%ifft_mask_pad_fft(params_glob%msk_crop, img_out_pd)
     end subroutine prepimg4align
 
-    subroutine prepimg4align_bench( iptcl, img, img_out, rt_prep1, rt_ctf, rt_prep2, rt_prep )
-        integer,              intent(in)    :: iptcl
-        class(image),         intent(inout) :: img
-        class(image),         intent(inout) :: img_out
-        real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_prep2, rt_prep
-        integer(timer_int_kind) :: t_prep1, t_ctf, t_prep2, t_prep
-        type(ctf)       :: tfun
-        type(ctfparams) :: ctfparms
-        real            :: shvec(2), crop_factor
-        t_prep1 = tic()
-        t_prep   = t_prep1
-        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-        shvec(1)    = -build_glob%spproj_field%get(iptcl, 'x') * crop_factor
-        shvec(2)    = -build_glob%spproj_field%get(iptcl, 'y') * crop_factor
-        ! fused noise normalization, FFT, clip & shift
-        call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
-        rt_prep1 = rt_prep1 + toc(t_prep1)
-        ! Phase-flipping
-        t_ctf    = tic()
-        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-        select case(ctfparms%ctfflag)
-            case(CTFFLAG_NO, CTFFLAG_FLIP)
-                ! nothing to do
-            case(CTFFLAG_YES)
-                ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
-                tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call img_out%apply_ctf(tfun, 'flip', ctfparms)
-            case DEFAULT
-                THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
-        end select
-        rt_ctf  = rt_ctf + toc(t_ctf)
-        t_prep2 = tic()
-        ! fused IFFT, mask, FFT
-        call img_out%ifft_mask_fft(params_glob%msk_crop)
-        rt_prep2 = rt_prep2 + toc(t_prep2)
-        rt_prep   = rt_prep   + toc(t_prep)
-    end subroutine prepimg4align_bench
+    ! subroutine prepimg4align_bench( iptcl, img, img_out, img_out_pd,rt_prep1, rt_ctf, rt_prep2, rt_prep )
+    !     integer,              intent(in)    :: iptcl
+    !     class(image),         intent(inout) :: img
+    !     class(image),         intent(inout) :: img_out
+    !     class(image),         intent(inout) :: img_out_pd
+    !     real(timer_int_kind), intent(inout) :: rt_prep1, rt_ctf, rt_prep2, rt_prep
+    !     integer(timer_int_kind) :: t_prep1, t_ctf, t_prep2, t_prep
+    !     type(ctf)       :: tfun
+    !     type(ctfparams) :: ctfparms
+    !     real            :: shvec(2), crop_factor
+    !     t_prep1 = tic()
+    !     t_prep   = t_prep1
+    !     crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+    !     shvec(1)    = -build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+    !     shvec(2)    = -build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+    !     ! fused noise normalization, FFT, clip & shift
+    !     call img%norm_noise_fft_clip_shift(build_glob%lmsk, img_out, shvec)
+    !     rt_prep1 = rt_prep1 + toc(t_prep1)
+    !     ! Phase-flipping
+    !     t_ctf    = tic()
+    !     ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+    !     select case(ctfparms%ctfflag)
+    !         case(CTFFLAG_NO, CTFFLAG_FLIP)
+    !             ! nothing to do
+    !         case(CTFFLAG_YES)
+    !             ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
+    !             tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+    !             call img_out%apply_ctf(tfun, 'flip', ctfparms)
+    !         case DEFAULT
+    !             THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
+    !     end select
+    !     rt_ctf  = rt_ctf + toc(t_ctf)
+    !     t_prep2 = tic()
+    !     ! fused IFFT, mask, FFT
+    !     call img_out%ifft_mask_pad_fft(params_glob%msk_crop, img_out_pd)
+    !     rt_prep2 = rt_prep2 + toc(t_prep2)
+    !     rt_prep   = rt_prep   + toc(t_prep)
+    ! end subroutine prepimg4align_bench
 
     !>  \brief  Calculates the centering offset of the input cavg
     !>          cavg & particles centering is not performed
@@ -944,11 +946,12 @@ contains
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
 
-    subroutine prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_imgs, batchsz, which_iter, do_polar )
+    subroutine prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_imgs, ptcl_imgs_pad, batchsz, which_iter, do_polar )
         class(polarft_calc),      intent(inout) :: pftc
         class(cmdline),           intent(in)    :: cline !< command line
         class(euclid_sigma2),     intent(inout) :: eucl_sigma
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
+        type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
         integer,                  intent(in)    :: batchsz
         integer,                  intent(in)    :: which_iter
         logical,     optional,    intent(in)    :: do_polar
@@ -1014,10 +1017,11 @@ contains
         end if
         ! PREPARATION OF PARTICLES
         call prepimgbatch(batchsz)
-        allocate(ptcl_imgs(nthr_glob))
+        allocate(ptcl_imgs(nthr_glob), ptcl_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
         do ithr = 1,nthr_glob
             call ptcl_imgs(ithr)%new([params_glob%box_crop,params_glob%box_crop,1], params_glob%smpd_crop, wthreads=.false.)
+            call ptcl_imgs_pad(ithr)%new([params_glob%box_crop * POLARIZE_PAD_FAC,params_glob%box_crop * POLARIZE_PAD_FAC,1], params_glob%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
         call build_glob%vol%kill
@@ -1069,11 +1073,11 @@ contains
         call pftc%memoize_refs
     end subroutine prepare_polar_references
 
-    subroutine build_batch_particles( pftc, nptcls_here, pinds_here, tmp_imgs )
+    subroutine build_batch_particles( pftc, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad )
         class(polarft_calc), intent(inout) :: pftc
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds_here(nptcls_here)
-        type(image),         intent(inout) :: tmp_imgs(params_glob%nthr)
+        type(image),         intent(inout) :: tmp_imgs(params_glob%nthr), tmp_imgs_pad(params_glob%nthr)
         complex, allocatable :: pft(:,:)
         integer     :: iptcl_batch, iptcl, ithr
         ! reassign particles indices & associated variables
@@ -1082,18 +1086,16 @@ contains
         ! mask memoization for prepimg4align
         call tmp_imgs(1)%memoize_mask_coords
         ! memoize CTF stuff
-        call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
-        ! allocate a pft
-        
+        call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())        
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             ! transfer to polar coordinates
             pft = pftc%allocate_pft()
-            call tmp_imgs(ithr)%polarize(pft, mask=build_glob%l_resmsk)
+            call tmp_imgs_pad(ithr)%polarize_strided(pft, POLARIZE_PAD_FAC, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)
             ! e/o flags
