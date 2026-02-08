@@ -27,7 +27,7 @@ private
 
 logical                    :: has_been_searched
 type(eul_prob_tab), target :: eulprob_obj_part
-type(image),   allocatable :: ptcl_match_imgs(:)
+type(image),   allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
 integer,       allocatable :: pinds(:)
 type(string)               :: fname
 integer                    :: nptcls2update
@@ -115,8 +115,8 @@ contains
             rt_init = toc(t_init)
             t_prepare_refs_sigmas_ptcls = tic()
         endif
-        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_match_imgs, batchsz_max, which_iter,&
-                                        &do_polar=(l_polar .and. .not.cline%defined('vol1')) )
+        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_match_imgs, ptcl_match_imgs_pad,&
+                                        &batchsz_max, which_iter, do_polar=(l_polar .and. .not.cline%defined('vol1')) )
         if( L_BENCH_GLOB )then
             rt_prepare_refs_sigmas_ptcls = toc(t_prepare_refs_sigmas_ptcls)
             t_prepare_polar_references   = tic()
@@ -170,7 +170,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftc
             if( L_BENCH_GLOB ) t_build_batch_particles = tic()
-            call build_batch_particles(pftc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs)
+            call build_batch_particles(pftc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs, ptcl_match_imgs_pad)
             if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -288,10 +288,8 @@ contains
         call clean_strategy3D ! deallocate s3D singleton
         call build_glob%vol%kill
         call orientation%kill
-        do ithr = 1,params_glob%nthr
-            call ptcl_match_imgs(ithr)%kill
-        enddo
-        deallocate(ptcl_match_imgs)
+        call dealloc_imgarr(ptcl_match_imgs)
+        call dealloc_imgarr(ptcl_match_imgs_pad)
 
         ! OUTPUT ORIENTATIONS
         select case(trim(params_glob%refine))
