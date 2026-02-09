@@ -63,7 +63,7 @@ contains
         call vol_in%shift([params%xsh,params%ysh,params%zsh])
         ldim    = vol_in%get_ldim()
         smpd    = vol_in%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA3D * real(ldim(1) / 2))
+        boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         call vol_in%ifft
         ! rotate asymmetric volume
@@ -272,7 +272,7 @@ contains
         ! prepare for volume rotations
         ldim    = vol_in%get_ldim()
         smpd    = vol_in%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA3D * real(ldim(1) / 2))
+        boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         ! make padded volume for interpolation
         call vol_pad%new(ldim_pd, smpd)

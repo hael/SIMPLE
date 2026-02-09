@@ -76,9 +76,8 @@ integer, parameter    :: PICKER_OFFSET             = 3         !< picker offset 
 ! constants for masking/interpolation
 real,    parameter    :: COSMSKHALFWIDTH           = 6.0       !< spherical soft masking
 real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size
-real,    parameter    :: KBALPHA3D                 = sqrt(2.)  !< 3D interpolation alpha (oversampling constant)
-real,    parameter    :: KBALPHA2D                 = 2.0       !< 2D interpolation alpha (oversampling constant)
-integer, parameter    :: POLARIZE_PAD_FAC          = 2         !< factor by which to pad particles for strided polarization
+integer, parameter    :: STRIDE_GRID_PAD_FAC       = 2         !< factor by which to pad for strided gridding
+real,    parameter    :: KBALPHA                   = real(STRIDE_GRID_PAD_FAC) !< interpolation alpha (oversampling constant)
 ! real constants that control search and convergence
 real,    parameter    :: FRAC_SH_LIM               = 75.0      !< at what frac to turn on the shift search
 real,    parameter    :: NEIGH_MINFRAC             = 0.3       !< minimum fraction of search space scanned in refine=neigh

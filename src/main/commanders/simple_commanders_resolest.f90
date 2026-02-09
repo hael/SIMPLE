@@ -120,8 +120,8 @@ contains
         allocate(tmp_imgs(nthr_glob), tmp_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
         do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-            call tmp_imgs_pad(ithr)%new([params%box_crop * POLARIZE_PAD_FAC,params%box_crop * POLARIZE_PAD_FAC,1], params%smpd_crop, wthreads=.false.)
+            call tmp_imgs(ithr)%new(    [params%box_crop,  params%box_crop,  1], params%smpd_crop, wthreads=.false.)
+            call tmp_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
         ! Build polar particle images

@@ -216,8 +216,7 @@ contains
             endif
         endif
         ! Prep for correction of the shape of the interpolator
-        gridcorr_img = prep3D_inv_instrfun4mul(build%vol%get_ldim(),&
-            &[params_glob%box_croppd,params_glob%box_croppd,params_glob%box_croppd], params_glob%smpd_crop)
+        gridcorr_img = prep3D_inv_instrfun4mul(build%vol%get_ldim(), params_glob%smpd_crop)
         ! assemble volumes
         do state=1,params%nstates
             call build%eorecvol%reset_all

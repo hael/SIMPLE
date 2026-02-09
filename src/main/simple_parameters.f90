@@ -1525,15 +1525,9 @@ contains
         !<<< END, PARALLELISATION-RELATED
         !>>> START, IMAGE-PROCESSING-RELATED
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
-        if( is_2d )then
-            self%xdimpd     = round2even(KBALPHA2D*real(self%box/2))
-            self%boxpd      = 2*self%xdimpd
-            self%box_croppd = 2*round2even(KBALPHA2D*real(self%box_crop/2))
-        else
-            self%xdimpd     = round2even(KBALPHA3D*real(self%box/2))
-            self%boxpd      = 2*self%xdimpd
-            self%box_croppd = 2*round2even(KBALPHA3D*real(self%box_crop/2))
-        endif
+        self%xdimpd     = round2even(KBALPHA*real(self%box/2))
+        self%boxpd      = 2*self%xdimpd
+        self%box_croppd = 2*round2even(KBALPHA*real(self%box_crop/2))
         ! set derived Fourier related variables
         self%dstep   = real(self%box-1)*self%smpd                  ! first wavelength of FT
         self%dsteppd = real(self%boxpd-1)*self%smpd                ! first wavelength of padded FT

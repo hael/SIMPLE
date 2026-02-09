@@ -11,38 +11,12 @@ private
 
 contains
 
-    ! THIS SEEMS TO BE THE CORRECT WAY OF PREPARING THE IMAGE FOR INSTRUMENT FUNCTION DIVISION
-    ! INSTRUMENT FUNCTION DIVISION OUGHT TO NOT MATTER AS LONG AS WE STAY IN THE FOURIER DOMAIN
-    ! HOWEVER WHEN THE IMAGES THAT HAVE BEEN INTERPOLATED WITH THE KB APODIZATION FUNCTION AND NEED TO
-    ! BE BACK-TRANSFORMED TO CREATE REAL-SPACE OUTPUT, DIVISION WITH THIS IMAGE IS NECESSARY POST IFFT
-    ! OF AVERAGED INTERPOLATED OUTPUT
-    ! >  \brief  corrects for KB Fourier interpolation
-    ! subroutine prep_instrfun4div( img )
-    !     class(image), intent(inout) :: img
-    !     type(kbinterpol) :: kbwin
-    !     real    :: center(3),dist(2),pid,sinc,pad_sc,kbzero,vj,v
-    !     integer :: i,j
-    !     call img%new(ldim_crop,smpd_crop)
-    !     center = real(ldim_crop/2 + 1)
-    !     pad_sc = 1. / real(ldim_croppd(1))
-    !     kbwin  = kbinterpol(KBWINSZ, KBALPHA2D)
-    !     kbzero = kbwin%instr(0.)
-    !     do j = 1, ldim_crop(2)
-    !         dist(2) = pad_sc * (real(j) - center(2))
-    !         vj      = kbwin%instr(dist(2)) / kbzero**2
-    !         do i = 1, ldim_crop(1)
-    !             dist(1) = pad_sc * (real(i) - center(1))
-    !             call img%set([i,j,1], kbwin%instr(dist(1)) * vj)
-    !         enddo
-    !     enddo
-    ! end subroutine prep_instrfun4div
-
     !=============================================================
-    ! 2D: SIMPLE convention => ldim_crop(3)=1, square (n x n)
     ! Returns inverse instrument function for multiplication.
+    ! Assumes strided gridding, i.e. Foruier rep generated at unpadded ldim
     !=============================================================
-    function prep2D_inv_instrfun4mul( ldim_crop, ldim_croppd, smpd_crop ) result( img )
-        integer,      intent(in) :: ldim_crop(3), ldim_croppd(3)
+    function prep2D_inv_instrfun4mul( ldim_crop, smpd_crop ) result( img )
+        integer,      intent(in) :: ldim_crop(3)
         real,         intent(in) :: smpd_crop
         type(image)              :: img
         real(c_float), parameter :: EPS_DIV = 1.0e-8_c_float
@@ -59,10 +33,10 @@ contains
         call img%new(ldim_crop, smpd_crop)
         ! centre coordinate (Fortran 1-based)
         center = real(n/2 + 1, c_float)
-        ! pad scaling: mirror original intent (use provided ldim_croppd(1))
-        pad_sc = 1.0_c_float / real(ldim_croppd(1), c_float)
-        ! create KB window object (assumes KBWINSZ, KBALPHA2D in scope)
-        kbwin = kbinterpol(KBWINSZ, KBALPHA2D)
+        ! scaling: mirror original intent
+        pad_sc = 1.0_c_float / real(ldim_crop(1), c_float)
+        ! create KB window object (assumes KBWINSZ, KBALPHA in scope)
+        kbwin = kbinterpol(KBWINSZ, KBALPHA)
         ! normalization constant at zero (guard small values)
         kbzero = kbwin%instr(0.0_c_float)
         if ( abs(kbzero) < EPS_DIV ) kbzero = 1.0_c_float
@@ -85,11 +59,11 @@ contains
     end function prep2D_inv_instrfun4mul
 
     !=============================================================
-    ! 3D: cube (n x n x n)
     ! Returns inverse instrument function for multiplication.
+    ! Assumes strided gridding, i.e. Foruier rep generated at unpadded ldim
     !=============================================================
-    function prep3D_inv_instrfun4mul( ldim_crop, ldim_croppd, smpd_crop ) result( img )
-        integer,      intent(in) :: ldim_crop(3), ldim_croppd(3)
+    function prep3D_inv_instrfun4mul( ldim_crop, smpd_crop ) result( img )
+        integer,      intent(in) :: ldim_crop(3)
         real,         intent(in) :: smpd_crop
         type(image)              :: img
         real(c_float), parameter :: EPS_DIV = 1.0e-8_c_float
@@ -105,10 +79,10 @@ contains
         call img%new(ldim_crop, smpd_crop)
         ! centre coordinate (Fortran 1-based)
         center = real(n/2 + 1, c_float)
-        ! pad scaling: mirror original intent (use provided ldim_croppd(1))
-        pad_sc = 1.0_c_float / real(ldim_croppd(1), c_float)
-        ! create KB window object (assumes KBWINSZ, KBALPHA3D in scope)
-        kbwin = kbinterpol(KBWINSZ, KBALPHA3D)
+        ! scaling: mirror original intent
+        pad_sc = 1.0_c_float / real(ldim_crop(1), c_float)
+        ! create KB window object (assumes KBWINSZ, KBALPHA in scope)
+        kbwin = kbinterpol(KBWINSZ, KBALPHA)
         ! normalization constant at zero (guard small values)
         kbzero = kbwin%instr(0.0_c_float)
         if ( abs(kbzero) < EPS_DIV ) kbzero = 1.0_c_float

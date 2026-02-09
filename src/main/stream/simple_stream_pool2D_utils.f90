@@ -619,7 +619,7 @@ contains
         call setup_downscaling
         pool_dims%smpd  = params_glob%smpd_crop
         pool_dims%box   = params_glob%box_crop
-        pool_dims%boxpd = 2*round2even(KBALPHA2D*real(params_glob%box_crop/2)) ! logics from parameters
+        pool_dims%boxpd = 2*round2even(KBALPHA*real(params_glob%box_crop/2)) ! logics from parameters
         pool_dims%msk   = params_glob%msk_crop
         ! chunk & pool have the same dimensions to start with (used for import)
         chunk_dims = pool_dims
@@ -820,7 +820,7 @@ contains
         scale_factor   = real(new_dims%box) / real(params_glob%box)
         if( scale_factor > 0.99 ) return ! safety
         new_dims%smpd  = params_glob%smpd / scale_factor
-        new_dims%boxpd = 2 * round2even(KBALPHA2D * real(new_dims%box/2)) ! logics from parameters
+        new_dims%boxpd = 2 * round2even(KBALPHA * real(new_dims%box/2)) ! logics from parameters
         new_dims%msk   = round2even(params_glob%mskdiam / new_dims%smpd / 2.)
         ! New dimensions are accepted when new Nyquist is > 5/4 of original
         if( new_dims%smpd < 1.25*params_glob%smpd ) return

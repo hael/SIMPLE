@@ -297,7 +297,7 @@ contains
         call setup_downscaling
         chunk_dims%smpd  = params_glob%smpd_crop
         chunk_dims%box   = params_glob%box_crop
-        chunk_dims%boxpd = 2 * round2even(KBALPHA2D * real(params_glob%box_crop/2)) ! logics from parameters
+        chunk_dims%boxpd = 2 * round2even(KBALPHA * real(params_glob%box_crop/2)) ! logics from parameters
         chunk_dims%msk   = params_glob%msk_crop
         ! Scaling-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', chunk_dims%smpd)

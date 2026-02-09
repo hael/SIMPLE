@@ -22,7 +22,7 @@ contains
         ldim    = vol%get_ldim()
         box     = ldim(1)
         smpd    = vol%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA3D * real(box / 2))
+        boxpd   = 2 * round2even(KBALPHA * real(box / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         ! padding & fft
         call vol_pad%new(ldim_pd, smpd)
@@ -84,7 +84,7 @@ contains
         real             :: smpd
         ldim    = vol%get_ldim()
         smpd    = vol%get_smpd()
-        boxpd   = 2 * round2even(KBALPHA3D * real(ldim(1) / 2))
+        boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         call rovol%new(ldim, smpd)
         call rovol_pad%new(ldim_pd, smpd)

@@ -1456,11 +1456,7 @@ contains
         complex :: comp
         real    :: arg
         integer :: ldim
-        if( self%ldim(3) == 1 )then
-            ldim = 2
-        else
-            ldim = 3
-        endif
+        ldim = merge(2,3,self%ldim(3) == 1)
         arg  = sum(logi(:ldim)*shvec(:ldim)*self%shconst(:ldim))
         comp = cmplx(cos(arg),sin(arg))
     end function oshift_1
