@@ -166,12 +166,13 @@ contains
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
+        use simple_gridding,         only: prep3D_inv_instrfun4mul
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
-        type(image)                   :: vol_prev_even, vol_prev_odd
+        type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
         type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
         type(string)                  :: eonames(2), benchfname
@@ -214,6 +215,9 @@ contains
                 update_frac_trail_rec = build%spproj%os_ptcl3D%get_update_frac()
             endif
         endif
+        ! Prep for correction of the shape of the interpolator
+        gridcorr_img = prep3D_inv_instrfun4mul(build%vol%get_ldim(),&
+            &[params_glob%box_croppd,params_glob%box_croppd,params_glob%box_croppd], params_glob%smpd_crop)
         ! assemble volumes
         do state=1,params%nstates
             call build%eorecvol%reset_all
@@ -275,8 +279,6 @@ contains
             if( L_BENCH_GLOB ) t_sampl_dens_correct_sum = tic()
             call build%eorecvol%sampl_dens_correct_sum( build%vol )
             if( L_BENCH_GLOB ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
-            call build%vol%write( volname, del_if_exists=.true. )
-            call wait_for_closure( volname )
             ! need to put the sum back at lowres for the eo pairs
             if( L_BENCH_GLOB ) t_eoavg = tic()
             call build%vol%fft
@@ -285,15 +287,21 @@ contains
             call build%vol2%fft()
             call build%vol2%insert_lowres(build%vol, find4eoavg)
             call build%vol2%ifft()
+            call build%vol2%mul(gridcorr_img)
             call build%vol2%write(eonames(1), del_if_exists=.true.)
             call build%vol2%zero_and_unflag_ft
             call build%vol2%read(eonames(2))
             call build%vol2%fft()
             call build%vol2%insert_lowres(build%vol, find4eoavg)
             call build%vol2%ifft()
+            call build%vol2%mul(gridcorr_img)
             call build%vol2%write(eonames(2), del_if_exists=.true.)
+            ! merged volume
+            call build%vol%ifft
+            call build%vol%mul(gridcorr_img)
+            call build%vol%write( volname, del_if_exists=.true. )
+            call wait_for_closure( volname )
             if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                call build%vol%ifft
                 call build%vol%read(eonames(1))  ! even current
                 call build%vol2%read(eonames(2)) ! odd current
                 weight_prev = 1. - update_frac_trail_rec
@@ -313,6 +321,7 @@ contains
             call volname%kill
         end do
         ! destruct
+        call gridcorr_img%kill
         call build%kill_general_tbox
         call build%eorecvol%kill_exp
         call build%kill_rec_eo_tbox
