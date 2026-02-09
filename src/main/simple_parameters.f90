@@ -1116,7 +1116,9 @@ contains
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! controls KB alpha (oversampling) factor usage in reconstruction and 2D averaging
         is_2D = .false.
-        if( self%prg%has_substr('2D') ) is_2D = .true.
+        if( self%prg%has_substr('2D').or.self%prg%has_substr('cavg').or.self%prg%has_substr('classes') )then
+            is_2D = .true.
+        endif
         ! look for the last previous execution directory and get next directory number
         call self%last_prev_dir%kill
         idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
