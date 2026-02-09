@@ -117,7 +117,7 @@ contains
         call self%vol%ifft
         call self%vol%set_smpd(self%smpd_clip) ! safety
         ! create volpft_corrcalc object
-        call self%vpcc%new(self%vol_ref, self%hp, self%lp, KBALPHA3D, self%vol)
+        call self%vpcc%new(self%vol_ref, self%hp, self%lp, KBALPHA, self%vol)
     end subroutine set_target
 
     ! (3)

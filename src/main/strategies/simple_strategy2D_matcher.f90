@@ -473,10 +473,10 @@ contains
         allocate(ptcl_match_imgs(params_glob%nthr), ptcl_match_imgs_pad(params_glob%nthr))
         !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
         do ithr = 1,params_glob%nthr
-            call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1],&
-                &params_glob%smpd_crop, wthreads=.false.)
-            call ptcl_match_imgs_pad(ithr)%new([params_glob%box_crop * POLARIZE_PAD_FAC, params_glob%box_crop * POLARIZE_PAD_FAC, 1],&
-                &params_glob%smpd_crop, wthreads=.false.)
+            call ptcl_match_imgs(ithr)%new(    [params_glob%box_crop,   params_glob%box_crop,   1],&
+            &params_glob%smpd_crop, wthreads=.false.)
+            call ptcl_match_imgs_pad(ithr)%new([params_glob%box_croppd, params_glob%box_croppd, 1],&
+            &params_glob%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
     end subroutine prep_batch_particles2D
@@ -526,7 +526,7 @@ contains
             ! &rt_prep1, rt_ctf, rt_prep2, rt_prep)
             ! t_polarize = tic()
             pft = pftc%allocate_pft()
-            call ptcl_match_imgs_pad(ithr)%polarize_strided(pft, POLARIZE_PAD_FAC, mask=build_glob%l_resmsk)
+            call ptcl_match_imgs_pad(ithr)%polarize_strided(pft, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)
             ! rt_polarize = rt_polarize + toc(t_polarize)

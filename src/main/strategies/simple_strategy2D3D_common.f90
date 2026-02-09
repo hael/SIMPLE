@@ -830,7 +830,7 @@ contains
             endif
         endif
         ! Prep for correction of the shape of the interpolator
-        gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params_glob%smpd_crop)
+        gridcorr_img = prep3D_inv_instrfun4mul(ldim, params_glob%smpd_crop)
         ! cycle through states
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
@@ -1004,8 +1004,8 @@ contains
         allocate(ptcl_imgs(nthr_glob), ptcl_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
         do ithr = 1,nthr_glob
-            call ptcl_imgs(ithr)%new([params_glob%box_crop,params_glob%box_crop,1], params_glob%smpd_crop, wthreads=.false.)
-            call ptcl_imgs_pad(ithr)%new([params_glob%box_crop * POLARIZE_PAD_FAC,params_glob%box_crop * POLARIZE_PAD_FAC,1], params_glob%smpd_crop, wthreads=.false.)
+            call ptcl_imgs(ithr)%new(    [params_glob%box_crop,  params_glob%box_crop,  1], params_glob%smpd_crop, wthreads=.false.)
+            call ptcl_imgs_pad(ithr)%new([params_glob%box_croppd,params_glob%box_croppd,1], params_glob%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
         call build_glob%vol%kill
@@ -1020,7 +1020,7 @@ contains
         integer,             intent(in)    :: batchsz
         type(ori) :: o_tmp
         real      :: xyz(3)
-        integer   :: s, iproj, iref, nrefs, box_pad
+        integer   :: s, iproj, iref, nrefs
         logical   :: do_center
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols([params_glob%lpstart,params_glob%lpstop])
@@ -1042,10 +1042,10 @@ contains
             call read_mask_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             ! do even/odd in separate passes to reduce memory usage when padding is large (2X)
-            box_pad = params_glob%box_crop * POLARIZE_PAD_FAC
-            
+
             ! PREPARE EVEN REFERENCES
-            call build_glob%vol_pad%new([box_pad, box_pad, box_pad], params_glob%smpd_crop)
+            call build_glob%vol_pad%new([params_glob%box_croppd, params_glob%box_croppd, params_glob%box_croppd],&
+            &params_glob%smpd_crop, wthreads=.true.)
             if( do_center )then
                 call build_glob%vol%fft()
                 call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
@@ -1060,8 +1060,7 @@ contains
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                call build_glob%vol_pad%fproject_polar_strided(iref, o_tmp, pftc,&
-                &iseven=.true., mask=build_glob%l_resmsk, padding_factor=POLARIZE_PAD_FAC)
+                call build_glob%vol_pad%fproject_polar_strided(iref, o_tmp, pftc, iseven=.true., mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
@@ -1069,7 +1068,8 @@ contains
             call build_glob%vol_pad%kill_expanded
 
             ! PREPARE ODD REFERENCES
-            call build_glob%vol_odd_pad%new([box_pad, box_pad, box_pad], params_glob%smpd_crop)
+            call build_glob%vol_odd_pad%new([params_glob%box_croppd, params_glob%box_croppd, params_glob%box_croppd],&
+            &params_glob%smpd_crop, wthreads=.true.)
             if( do_center )then
                 call build_glob%vol_odd%fft()
                 call build_glob%vol_odd%shift([xyz(1),xyz(2),xyz(3)])
@@ -1084,8 +1084,7 @@ contains
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                call build_glob%vol_odd_pad%fproject_polar_strided(iref, o_tmp, pftc,&
-                &iseven=.false., mask=build_glob%l_resmsk, padding_factor=POLARIZE_PAD_FAC)
+                call build_glob%vol_odd_pad%fproject_polar_strided(iref, o_tmp, pftc, iseven=.false., mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
@@ -1117,7 +1116,7 @@ contains
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             ! transfer to polar coordinates
             pft = pftc%allocate_pft()
-            call tmp_imgs_pad(ithr)%polarize_strided(pft, POLARIZE_PAD_FAC, mask=build_glob%l_resmsk)
+            call tmp_imgs_pad(ithr)%polarize_strided(pft, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)
             ! e/o flags

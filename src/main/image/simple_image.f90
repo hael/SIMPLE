@@ -2178,9 +2178,8 @@ interface
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
     end subroutine polarize
 
-    module subroutine polarize_strided( self, pft, padding_factor, mask )
+    module subroutine polarize_strided( self, pft, mask )
         class(image),      intent(in)    :: self           !< padded image instance to polarize
-        integer,           intent(in)    :: padding_factor !< integer pad factor: self is padded by this factor
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
     end subroutine polarize_strided

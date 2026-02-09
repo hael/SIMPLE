@@ -56,7 +56,7 @@ type :: reconstructor_eo
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
-    procedure          :: grid_plane, test_grid_plane
+    procedure          :: grid_plane
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: sum_eos    !< for merging even and odd into sum
@@ -75,11 +75,14 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self,  spproj, expand )
+    subroutine new( self, spproj, expand  )
         class(reconstructor_eo), intent(inout) :: self   !< instance
         class(sp_project),       intent(inout) :: spproj !< project description
-        logical,       optional, intent(in)    :: expand
+        logical, optional,       intent(in)    :: expand !< create expanded matrix versions or not
+        logical :: l_expand
         call self%kill
+        l_expand = .true.
+        if( present(expand) ) l_expand = expand
         ! set constants
         self%box     = params_glob%box_crop
         self%boxpd   = params_glob%box_croppd
@@ -91,20 +94,19 @@ contains
         self%filtsz  = fdim(self%box) - 1
         self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
         self%automsk = params_glob%l_filemsk .and. params_glob%l_envfsc
-        ! overall magnitude correction (interpolation padding + downscaling)
-        self%mag_correction = real(params_glob%box)                                        ! insertion of 2D slice into 3D
-        self%mag_correction = self%mag_correction * (real(self%boxpd) / real(self%box))**3 ! 3D padding factor
-        self%ldim           = [self%boxpd,self%boxpd,self%boxpd]
+        ! strided Fourier interpolation, so construct this at native size
+        self%mag_correction = real(params_glob%box) ! consistent with the current scheme
+        self%ldim           = [self%box,self%box,self%box]
         ! create composites
         if( self%automsk )then
             call self%envmask%new([self%box,self%box,self%box],self%smpd)
             call self%envmask%read(params_glob%mskfile)
         endif
         call self%even%new(self%ldim, params_glob%smpd)
-        call self%even%alloc_rho(spproj, expand=expand)
+        call self%even%alloc_rho(spproj, expand=l_expand)
         call self%even%set_ft(.true.)
         call self%odd%new(self%ldim, params_glob%smpd)
-        call self%odd%alloc_rho(spproj, expand=expand)
+        call self%odd%alloc_rho(spproj, expand=l_expand)
         call self%odd%set_ft(.true.)
         call self%eosum%new(self%ldim, params_glob%smpd)
         call self%eosum%alloc_rho(spproj, expand=.false.)
@@ -381,31 +383,13 @@ contains
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%insert_plane(se, o, fpl, pwght)
+                call self%even%insert_plane_strided(se, o, fpl, pwght)
             case(1)
-                call self%odd%insert_plane(se, o, fpl, pwght)
+                call self%odd%insert_plane_strided(se, o, fpl, pwght)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; grid_plane')
         end select
     end subroutine grid_plane
-
-    !> \brief  for testing gridding a Fourier plane
-    subroutine test_grid_plane( self, se, o, fpl, eo, pwght, stride )
-        class(reconstructor_eo), intent(inout) :: self
-        class(sym),              intent(inout) :: se
-        class(ori),              intent(inout) :: o
-        class(fplane_type),      intent(in)    :: fpl
-        integer,                 intent(in)    :: eo, stride
-        real,                    intent(in)    :: pwght
-        select case(eo)
-            case(-1,0)
-                call self%even%test_insert_plane(se, o, fpl, pwght, stride)
-            case(1)
-                call self%odd%test_insert_plane(se, o, fpl, pwght, stride)
-            case DEFAULT
-                THROW_HARD('unsupported eo flag; test_grid_plane')
-        end select
-    end subroutine test_grid_plane
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )

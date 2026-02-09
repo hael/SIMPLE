@@ -55,7 +55,7 @@ contains
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) THROW_HARD('volume needs to be FTed before call; expand_cmat')
         if( ldim(3) == 1      ) THROW_HARD('only for volumes; expand_cmat')
-        self%kbwin         = kbinterpol(KBWINSZ, KBALPHA3D)
+        self%kbwin         = kbinterpol(KBWINSZ, KBALPHA)
         self%iwinsz        = ceiling(self%kbwin%get_winsz() - 0.5)
         self%wdim          = self%kbwin%get_wdim()
         lims               = transpose(self%loop_lims(3))
@@ -216,7 +216,6 @@ contains
 
     ! This strided version is correct if all of the following are true:
     ! ** loc is expressed in the same logical Fourier index units as cmat_exp 
-    !    (the current code strongly suggests yes, since it directly uses nint(loc) to index cmat_exp)
     ! ** self%cmat_exp was built from a padded volume FT, such that the padded logical indices are 
     !    scaled by padding_factor relative to the original lattice. In other words: the padded expanded 
     !    FT includes indices like …,-2s,-s,0,s,2s,… that correspond exactly to the original lattice points.
@@ -225,14 +224,13 @@ contains
     !    interpolation behavior, just fetch samples from the padded FT at exact corresponding points.
     !> \brief  extracts a polar FT from a volume's expanded FT (self),
     !>         using STRIDED sampling from a PADDED expanded FT.
-    subroutine fproject_polar_strided( self, iref, e, pftc, iseven, mask, padding_factor )
+    subroutine fproject_polar_strided( self, iref, e, pftc, iseven, mask )
         class(projector),    intent(inout) :: self
         integer,             intent(in)    :: iref
         class(ori),          intent(in)    :: e
         class(polarft_calc), intent(inout) :: pftc
         logical,             intent(in)    :: iseven
         logical,             intent(in)    :: mask(:)
-        integer,             intent(in)    :: padding_factor
         integer :: pdim(3), irot, k
         real    :: loc(3), e_rotmat(3,3), hk(2)
         pdim     = pftc%get_pdim()
@@ -242,7 +240,7 @@ contains
                 if( mask(k) )then
                     hk  = pftc%get_coord(irot,k)                 !< ORIGINAL (unpadded) 2D Fourier coords
                     loc = matmul([hk(1), hk(2), 0.0], e_rotmat)  !< ORIGINAL 3D logical Fourier coords
-                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_strided(loc, padding_factor), iseven)
+                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_strided(loc), iseven)
                 else
                     call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
                 endif
@@ -252,10 +250,9 @@ contains
 
     !> \brief interpolate from PADDED expanded complex matrix, but using ORIGINAL-grid weights.
     !>        loc is in ORIGINAL logical Fourier units. We fetch samples at stride = padding_factor.
-    pure function interp_fcomp_strided( self, loc, padding_factor ) result( comp )
+    pure function interp_fcomp_strided( self, loc ) result( comp )
         class(projector), intent(in) :: self
         real,             intent(in) :: loc(3) !< ORIGINAL logical Fourier coords
-        integer,          intent(in) :: padding_factor
         complex :: comp
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), padding_factor_scaling
         integer :: win0(3)    ! center (nearest grid point) on ORIGINAL lattice
@@ -265,7 +262,7 @@ contains
         integer :: hp, kp, mp ! PADDED lattice indices
         ! To account for the FFTW division by box_pd^3 and recover values
         ! at the same scale as the original image
-        padding_factor_scaling = real(padding_factor**3)
+        padding_factor_scaling = real(STRIDE_GRID_PAD_FAC**3)
         ! center index on ORIGINAL lattice
         win0 = nint(loc)
         ! ORIGINAL lattice window origin (lower corner)
@@ -276,13 +273,13 @@ contains
         comp = CMPLX_ZERO
         do kw = 1, self%wdim
             m  = i0(3) + (kw-1)
-            mp = m * padding_factor
+            mp = m * STRIDE_GRID_PAD_FAC
             do jw = 1, self%wdim
                 k  = i0(2) + (jw-1)
-                kp = k * padding_factor
+                kp = k * STRIDE_GRID_PAD_FAC
                 do iw = 1, self%wdim
                     h  = i0(1) + (iw-1)
-                    hp = h * padding_factor
+                    hp = h * STRIDE_GRID_PAD_FAC
                     comp = comp + w(iw,jw,kw) * self%cmat_exp(hp, kp, mp)
                 end do
             end do

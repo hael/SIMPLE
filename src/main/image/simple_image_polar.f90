@@ -103,20 +103,19 @@ contains
         endif
     end subroutine polarize
 
-    module subroutine polarize_strided( self, pft, padding_factor, mask )
+    module subroutine polarize_strided( self, pft, mask )
         class(image),      intent(in)    :: self           !< padded image instance to polarize
-        integer,           intent(in)    :: padding_factor !< integer pad factor: self is padded by this factor
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
         complex(kind=c_float_complex) :: acc, fcomp
         real    :: padding_factor_scaling
         logical :: h_negative
         integer :: original_box, i, k, l, m, ind, h_val, k_val, phys1, phys2, phys1p, phys2p, ithr
-        original_box = self%ldim(1) / padding_factor
+        original_box = self%ldim(1) / STRIDE_GRID_PAD_FAC
         ! To account for the FFTW division by box_pd^2 and recover values
         ! at the same scale as the original image
-        padding_factor_scaling = real(padding_factor**2)
-        ! interpolate (but fetch from padded FFT at strided (every padding_factor-th) samples)
+        padding_factor_scaling = real(STRIDE_GRID_PAD_FAC**2)
+        ! interpolate (but fetch from padded FFT at strided (every STRIDE_GRID_PAD_FAC-th) samples)
         !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val,k_val,phys1,phys2,phys1p,phys2p,h_negative,fcomp)
         do k = mem_poldim(2), mem_poldim(3)
             do i = 1, mem_poldim(1)
@@ -133,9 +132,9 @@ contains
                         phys2      = merge(-k_val, k_val, h_negative) + 1 + &
                                     merge(original_box, 0, merge(-k_val, k_val, h_negative) < 0)
                         ! Map original Fourier lattice indices -> padded Fourier lattice indices (stride)
-                        ! Note: assumes self%cmat is the padded FFT with dimensions = padding_factor * original_dims.
-                        phys1p = 1 + (phys1 - 1) * padding_factor
-                        phys2p = 1 + (phys2 - 1) * padding_factor
+                        ! Note: assumes self%cmat is the padded FFT with dimensions = STRIDE_GRID_PAD_FAC * original_dims.
+                        phys1p = 1 + (phys1 - 1) * STRIDE_GRID_PAD_FAC
+                        phys2p = 1 + (phys2 - 1) * STRIDE_GRID_PAD_FAC
                         ! Fetch complex value from padded spectrum at strided location
                         fcomp  = merge(conjg(self%cmat(phys1p,phys2p,1)), self%cmat(phys1p,phys2p,1), h_negative)
                         ! accumulate dot product

@@ -44,11 +44,10 @@ type, extends(image) :: reconstructor
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
     procedure          :: read_rho, read_raw_rho
     ! CONVOLUTION INTERPOLATION
-    procedure          :: insert_plane
+    procedure          :: insert_plane_strided
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
-    procedure          :: test_insert_plane
     ! SUMMATION
     procedure          :: sum_reduce
     procedure          :: add_invtausq2rho
@@ -63,26 +62,25 @@ contains
 
     subroutine alloc_rho( self, spproj, expand )
         use simple_sp_project, only: sp_project
-        class(reconstructor), intent(inout) :: self   !< this instance
-        class(sp_project),    intent(inout) :: spproj !< project description
-        logical, optional,    intent(in)    :: expand !< expand flag
+        class(reconstructor), intent(inout) :: self           !< this instance
+        class(sp_project),    intent(inout) :: spproj         !< project description
+        logical,              intent(in)    :: expand         !< expand flag
         integer :: dim
         logical :: l_expand
         if(.not. self%exists() ) THROW_HARD('construct image before allocating rho; alloc_rho')
         if(      self%is_2d()  ) THROW_HARD('only for volumes; alloc_rho')
         call self%dealloc_rho
-        l_expand = .true.
-        if( present(expand) ) l_expand = expand
-        self%ldim_img       =  self%get_ldim()
-        self%nyq            =  self%get_lfny(1)
-        self%sh_lim         =  self%nyq
-        self%ctfflag        =  spproj%get_ctfflag_type(params_glob%oritype)
-        self%phaseplate     =  spproj%has_phaseplate(params_glob%oritype)
-        self%kbwin          =  kbinterpol(KBWINSZ,KBALPHA3D)
-        self%wdim           =  self%kbwin%get_wdim()
-        self%lims           =  self%loop_lims(2)
-        self%cyc_lims       =  self%loop_lims(3)
-        self%shconst_rec    =  self%get_shconst()
+        l_expand            = expand
+        self%ldim_img       = self%get_ldim()
+        self%nyq            = self%get_lfny(1)
+        self%sh_lim         = self%nyq
+        self%ctfflag        = spproj%get_ctfflag_type(params_glob%oritype)
+        self%phaseplate     = spproj%has_phaseplate(params_glob%oritype)
+        self%kbwin          = kbinterpol(KBWINSZ,KBALPHA)
+        self%wdim           = self%kbwin%get_wdim()
+        self%lims           = self%loop_lims(2)
+        self%cyc_lims       = self%loop_lims(3)
+        self%shconst_rec    = self%get_shconst()
         ! Work out dimensions of the rho array
         self%rho_shape(1)   = fdim(self%ldim_img(1))
         self%rho_shape(2:3) = self%ldim_img(2:3)
@@ -162,7 +160,7 @@ contains
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self !< this instance
         type(kbinterpol) :: wf                      !< return kbintpol window
-        wf = kbinterpol(KBWINSZ, KBALPHA3D)
+        wf = kbinterpol(KBWINSZ, KBALPHA)
     end function get_kbwin
 
     ! I/O
@@ -205,141 +203,87 @@ contains
 
     ! CONVOLUTION INTERPOLATION
 
-    !> insert Fourier plane, single orientation
-    subroutine insert_plane( self, se, o, fpl, pwght )
-        class(reconstructor), intent(inout) :: self    !< instance
-        class(sym),           intent(inout) :: se      !< symmetry elements
-        class(ori),           intent(inout) :: o       !< orientation
-        class(fplane_type),   intent(in)    :: fpl     !< Fourier plane
-        real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        type(ori) :: o_sym
-        complex   :: comp
-        real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
-        real      :: vec(3), loc(3), odists(3), dists(3), ctfval
-        integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
-        integer   :: i, h, k, l, nsym, isym, iwinsz, sh, fplnyq, stride
-        if( pwght < TINY )return
-        ! window size
-        iwinsz = ceiling(KBWINSZ - 0.5)
-        ! stride along h dimension for interpolation: all threads are at least
-        ! wdim pixels away from each other to avoid race conditions
-        stride = self%wdim
-        ! setup rotation matrices
-        nsym = se%get_nsym()
-        rotmats(1,:,:) = o%get_mat()
-        if( nsym > 1 )then
-            do isym=2,nsym
-                call se%apply(o, isym, o_sym)
-                rotmats(isym,:,:) = o_sym%get_mat()
-            end do
-        endif
-        fpllims = fpl%frlims
-        fplnyq  = fpl%nyq
-        ! endif
-        ! KB interpolation
-        !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,dists)&
-        !$omp proc_bind(close)
-        do isym=1,nsym
-            do l = 0,stride-1
-                !$omp do schedule(static)
-                do h = fpllims(1,1)+l,fpllims(1,2),stride
-                    do k = fpllims(2,1),fpllims(2,2)
-                        sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fplnyq ) cycle
-                        ! non-uniform sampling location
-                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
-                        ! window
-                        win(1,:) = nint(loc)
-                        win(2,:) = win(1,:) + iwinsz
-                        win(1,:) = win(1,:) - iwinsz
-                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                        if( win(2,1) < self%lims(1,1) )cycle
-                        ! Fourier component & CTF
-                        comp   = pwght * fpl%cmplx_plane(h,k)
-                        ctfval = pwght * fpl%ctfsq_plane(h,k)
-                        call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
-                        ! expanded matrices update
-                        self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                            &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + comp*w
-                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                            &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
-                    end do
-                end do
-                !$omp end do
-            enddo
-            end do
-            !$omp end parallel
-        call o_sym%kill
-    end subroutine insert_plane
-
-    !> does not insert Fourier plane, it performs all the appropriate calculations
-    !    and instead only counts the number of times the rho_exp matrix is updated
-    subroutine test_insert_plane( self, se, o, fpl, pwght, stride )
+    !> insert Fourier plane into NATIVE (unpadded) expanded Fourier volume,
+    !> sampling the PADDED plane by STRIDING 
+    subroutine insert_plane_strided( self, se, o, fpl, pwght )
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl
         real,                 intent(in)    :: pwght
-        integer,              intent(in)    :: stride
         type(ori) :: o_sym
-        logical   :: thread_usage(nthr_glob)
         complex   :: comp
-        real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
-        real      :: vec(3), loc(3), odists(3), dists(3), ctfval
-        real      :: w000, w001, w010, w011, w100, w101, w110, w111
-        integer   :: win(2,3), floc(3), cloc(3), fpllims(3,2)
-        integer   :: i, h, k, l, nsym, isym, iwinsz, sh, fplnyq
-        if( pwght < TINY )return
-        thread_usage = .false.
+        real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim), loc(3), ctfval
+        integer   :: win(2,3), i, h, k, l, nsym, isym, iwinsz, sh, stride, fpllims_pd(3,2), fpllims(3,2), fplnyq_pd, fplnyq, hp, kp
+        real      :: pf2
+        if( pwght < TINY ) return
         ! window size
         iwinsz = ceiling(KBWINSZ - 0.5)
+        ! stride along h dimension for interpolation: all threads are at least
+        ! wdim pixels away from each other to avoid race conditions
+        stride = self%wdim ! this is striding for OpenMP, unrelated to the Fourier striding
         ! setup rotation matrices
         nsym = se%get_nsym()
         rotmats(1,:,:) = o%get_mat()
-        if( nsym > 1 )then
-            do isym=2,nsym
+        if( nsym > 1 ) then
+            do isym = 2, nsym
                 call se%apply(o, isym, o_sym)
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        ! the input slice is not padded
-        fpllims = fpl%frlims
-        fplnyq  = fpl%nyq
-        ! KB interpolation
-        !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,dists)&
+        ! Plane limits/nyq are for the PADDED plane (input)
+        fpllims_pd = fpl%frlims
+        fplnyq_pd  = fpl%nyq
+        ! Convert to NATIVE iteration limits (integer-safe shrink)
+        ! We only iterate points that have exact padded counterparts at hp=h*pf, kp=k*pf.
+        fpllims      = fpllims_pd
+        fpllims(1,1) = ceiling( real(fpllims_pd(1,1)) / KBALPHA )
+        fpllims(1,2) = floor  ( real(fpllims_pd(1,2)) / KBALPHA )
+        fpllims(2,1) = ceiling( real(fpllims_pd(2,1)) / KBALPHA )
+        fpllims(2,2) = floor  ( real(fpllims_pd(2,2)) / KBALPHA )
+        fplnyq = fplnyq_pd / STRIDE_GRID_PAD_FAC  ! conservative
+        ! Scale correction: padded 2D FFT usually normalized by 1/(Npd^2).
+        ! If you want the same amplitude scale as native 2D FFT (1/N^2),
+        ! multiply by padding_factor^2.
+        pf2 = real(STRIDE_GRID_PAD_FAC*STRIDE_GRID_PAD_FAC)
+        ! KB interpolation / insertion
+        !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,hp,kp)&
         !$omp proc_bind(close)
-        do isym=1,nsym
-            do l = 0,stride-1
+        do isym = 1, nsym
+            do l = 0, stride-1
                 !$omp do schedule(static)
-                do h = fpllims(1,1)+l,fpllims(1,2),stride
-                    ! thread_usage(omp_get_thread_num()+1) = .true.
-                    do k = fpllims(2,1),fpllims(2,2)
+                do h = fpllims(1,1)+l, fpllims(1,2), stride
+                    hp = h * STRIDE_GRID_PAD_FAC
+                    do k = fpllims(2,1), fpllims(2,2)
+                        kp = k * STRIDE_GRID_PAD_FAC
                         sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fplnyq ) cycle
-                        ! non-uniform sampling location
+                        if (sh > self%nyq) cycle
+                        ! non-uniform sampling location on the ORIGINAL (native) lattice
                         loc = matmul(real([h,k,0]), rotmats(isym,:,:))
-                        ! window
+                        ! window on ORIGINAL (native) lattice
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
                         win(1,:) = win(1,:) - iwinsz
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                        if( win(2,1) < self%lims(1,1) )cycle
-                        ! Fourier component & CTF
-                        comp   = pwght * fpl%cmplx_plane(h,k)
-                        ctfval = pwght * fpl%ctfsq_plane(h,k)
-                        ! (weighted) kernel
+                        if( win(2,1) < self%lims(1,1) ) cycle
+                        ! Fourier component & CTF from PADDED plane at STRIDED indices
+                        comp   = pwght * pf2 * fpl%cmplx_plane(hp, kp)
+                        ctfval = pwght * pf2 * fpl%ctfsq_plane(hp, kp)
+                        ! KB weights evaluated in ORIGINAL coordinates / geometry
                         call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
-                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                            &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + 1.0
+                        ! expanded matrices update (NATIVE volume)
+                        self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
+                            self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + comp*w
+                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
+                            self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
                     end do
                 end do
                 !$omp end do
-            enddo
+            end do
         end do
         !$omp end parallel
         call o_sym%kill
-        ! print *,count(thread_usage) ! number of individualthreads actually used
-    end subroutine test_insert_plane
+    end subroutine insert_plane_strided
 
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self
