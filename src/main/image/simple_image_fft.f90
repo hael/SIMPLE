@@ -167,43 +167,56 @@ contains
     ! Padding / normalization
     !===========================
 
+    ! keep serial
     module subroutine pad_fft( self, self_out )
         class(image), intent(in)    :: self
         class(image), intent(inout) :: self_out
-        integer       :: n1, n2, n1o, n2o, h1o, h2o
-        integer       :: i, j
-        integer       :: starts(3), stops(3)
-        integer       :: x0, y0, xo, yo
+        integer :: n1, n2, n3, n1o, n2o, n3o, h1o, h2o, h3o
+        integer :: i, j, k, starts(3), stops(3), x0, y0, z0, xo, yo, zo
         real(c_float) :: scale_cmat
-        ! n3 is always 1 here
-        n1  = self%ldim(1)
-        n2  = self%ldim(2)
+        ! determine input dims
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        n3 = self%ldim(3)
+        ! determine output dims
         n1o = self_out%ldim(1)
         n2o = self_out%ldim(2)
-        h1o = n1o/2
-        h2o = n2o/2
+        n3o = self_out%ldim(3)
+        h1o = n1o / 2
+        h2o = n2o / 2
+        h3o = n3o / 2
+        ! compute start/stop positions (centered)
         starts = (self_out%ldim - self%ldim) / 2 + 1
         stops  = self_out%ldim - starts + 1
+        ! clear out destination real buffer (phase origin will be applied by writing to fftshifted indices)
         self_out%ft   = .false.
         self_out%rmat = 0.0_c_float
         ! ============================================================
-        ! PAD + FFTSHIFT (fused): write each source pixel directly to
-        ! its fftshifted output index.
+        ! PAD + FFTSHIFT (fused): write each source voxel directly
+        ! to its fftshifted output index.
+        ! Works for 2D (n3 = 1) and 3D (n3 > 1).
         ! ============================================================
-        do j = 1, n2
-            y0 = starts(2) + j - 1
-            yo = modulo((y0 - 1) + h2o, n2o) + 1
-            do i = 1, n1
-                x0 = starts(1) + i - 1
-                xo = modulo((x0 - 1) + h1o, n1o) + 1
-                self_out%rmat(xo, yo, 1) = self%rmat(i,j,1)
+        do k = 1, n3
+            z0 = starts(3) + k - 1
+            zo = modulo((z0 - 1) + h3o, n3o) + 1
+            do j = 1, n2
+                y0 = starts(2) + j - 1
+                yo = modulo((y0 - 1) + h2o, n2o) + 1
+                do i = 1, n1
+                    x0 = starts(1) + i - 1
+                    xo = modulo((x0 - 1) + h1o, n1o) + 1
+                    ! write source (i,j,k) into fftshifted destination (xo,yo,zo)
+                    self_out%rmat(xo, yo, zo) = self%rmat(i, j, k)
+                end do
             end do
         end do
         ! ============================================================
-        ! FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
+        ! FFT (FFTW r2c) + normalization
+        ! For 2D images the plan should be an r2c 2D plan (n3o should be 1).
+        ! For 3D images the plan should be an r2c 3D plan.
         ! ============================================================
         call fftwf_execute_dft_r2c(self_out%plan_fwd, self_out%rmat, self_out%cmat)
-        scale_cmat    = 1.0_c_float / real(n1o*n2o, c_float)
+        scale_cmat = 1.0_c_float / real(n1o * n2o * n3o, c_float)
         self_out%cmat = self_out%cmat * scale_cmat
         self_out%ft   = .true.
     end subroutine pad_fft
