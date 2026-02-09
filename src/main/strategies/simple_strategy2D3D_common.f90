@@ -804,16 +804,18 @@ contains
     end subroutine calc_3Drec
 
     subroutine norm_struct_facts( cline )
+        use simple_gridding, only: prep3D_inv_instrfun4mul
         class(cmdline),    intent(inout) :: cline
         type(string) :: recname, volname, volname_prev, volname_prev_even
         type(string) :: volname_prev_odd, str_state, str_iter, fsc_txt_file, eonames(2)
         real, allocatable :: fsc(:)
-        type(image) :: vol_prev_even, vol_prev_odd
-        integer     :: s, find4eoavg, ldim(3)
+        type(image) :: vol_prev_even, vol_prev_odd, gridcorr_img
+        integer     :: s, find4eoavg, ldim_pd(3), ldim(3)
         real        :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
         real        :: weight_prev, update_frac_trail_rec
         ! init
-        ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
+        ldim    = [params_glob%box_crop,  params_glob%box_crop,  params_glob%box_crop]
+        ldim_pd = [params_glob%box_croppd,params_glob%box_croppd,params_glob%box_croppd]
         call build_glob%vol%new(ldim,params_glob%smpd_crop)
         call build_glob%vol2%new(ldim,params_glob%smpd_crop)
         res0143s = 0.
@@ -827,6 +829,8 @@ contains
                 update_frac_trail_rec = build_glob%spproj_field%get_update_frac()
             endif
         endif
+        ! Prep for correction of the shape of the interpolator
+        gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params_glob%smpd_crop)
         ! cycle through states
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
@@ -879,7 +883,6 @@ contains
                 endif
                 call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
-                call build_glob%vol%write(volname, del_if_exists=.true.)
                 ! need to put the sum back at lowres for the eo pairs
                 call build_glob%vol%fft
                 call build_glob%vol2%zero_and_unflag_ft
@@ -887,15 +890,20 @@ contains
                 call build_glob%vol2%fft()
                 call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
                 call build_glob%vol2%ifft()
+                call build_glob%vol2%mul(gridcorr_img)
                 call build_glob%vol2%write(eonames(1), del_if_exists=.true.)
                 call build_glob%vol2%zero_and_unflag_ft
                 call build_glob%vol2%read(eonames(2))
                 call build_glob%vol2%fft()
                 call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
                 call build_glob%vol2%ifft()
+                call build_glob%vol2%mul(gridcorr_img)
                 call build_glob%vol2%write(eonames(2), del_if_exists=.true.)
+                ! merged volume
+                call build_glob%vol%ifft
+                call build_glob%vol%mul(gridcorr_img)
+                call build_glob%vol%write(volname, del_if_exists=.true.)
                 if( params_glob%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                    call build_glob%vol%ifft
                     call build_glob%vol%read(eonames(1))  ! even current
                     call build_glob%vol2%read(eonames(2)) ! odd current
                     weight_prev = 1. - update_frac_trail_rec
@@ -919,6 +927,7 @@ contains
             endif
         end do
         call build_glob%vol2%kill
+        call gridcorr_img%kill
     end subroutine norm_struct_facts
 
     subroutine prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_imgs, ptcl_imgs_pad, batchsz, which_iter, do_polar )
