@@ -25,6 +25,7 @@ type :: builder
     type(image)                         :: img_crop               !< for cropped image
     type(image)                         :: img_pad                !< -"-
     type(projector)                     :: vol, vol_odd
+    type(projector)                     :: vol_pad, vol_odd_pad
     type(image)                         :: vol2                   !< -"-
     type(image)                         :: mskvol                 !< envelope mask volume
     type(image),            allocatable :: imgbatch(:)            !< batch of images
@@ -322,10 +323,14 @@ contains
             call self%img%kill
             call self%img_crop%kill
             call self%img_pad%kill
-            call self%vol%kill_expanded
             call self%vol%kill
-            call self%vol_odd%kill_expanded
+            call self%vol_pad%kill
             call self%vol_odd%kill
+            call self%vol_odd_pad%kill
+            call self%vol%kill_expanded
+            call self%vol_pad%kill_expanded
+            call self%vol_odd%kill_expanded
+            call self%vol_odd_pad%kill_expanded
             call self%vol2%kill
             if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
             if( allocated(self%fsc)           ) deallocate(self%fsc)

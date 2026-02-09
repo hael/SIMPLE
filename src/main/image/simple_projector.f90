@@ -257,12 +257,15 @@ contains
         real,             intent(in) :: loc(3) !< ORIGINAL logical Fourier coords
         integer,          intent(in) :: padding_factor
         complex :: comp
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), padding_factor_scaling
         integer :: win0(3)    ! center (nearest grid point) on ORIGINAL lattice
         integer :: i0(3)      ! window origin on ORIGINAL lattice
         integer :: iw, jw, kw
         integer :: h, k, m    ! ORIGINAL lattice indices
         integer :: hp, kp, mp ! PADDED lattice indices
+        ! To account for the FFTW division by box_pd^3 and recover values
+        ! at the same scale as the original image
+        padding_factor_scaling = real(padding_factor**3)
         ! center index on ORIGINAL lattice
         win0 = nint(loc)
         ! ORIGINAL lattice window origin (lower corner)
@@ -284,6 +287,7 @@ contains
                 end do
             end do
         end do
+        comp = comp * padding_factor_scaling
     end function interp_fcomp_strided
 
     !>  \brief is to interpolate from the expanded complex matrix

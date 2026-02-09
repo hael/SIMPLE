@@ -687,31 +687,6 @@ contains
         endif
     end subroutine read_mask_and_filter_refvols
 
-    !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol( cline, s, do_center, xyz, iseven )
-        class(cmdline), intent(in) :: cline
-        integer,        intent(in) :: s
-        logical,        intent(in) :: do_center
-        real,           intent(in) :: xyz(3)
-        logical,        intent(in) :: iseven
-        type(projector), pointer :: vol_ptr => null()
-        if( iseven )then
-            vol_ptr => build_glob%vol
-        else
-            vol_ptr => build_glob%vol_odd
-        endif
-        if( do_center )then
-            call vol_ptr%fft()
-            call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
-        endif
-        ! back to real space
-        call vol_ptr%ifft()
-        ! FT volume
-        call vol_ptr%fft()
-        ! expand for fast interpolation & correct for norm when clipped
-        call vol_ptr%expand_cmat
-    end subroutine preprefvol
-
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( fpl, se, o )
         class(fplane_type), intent(in)    :: fpl
@@ -1036,7 +1011,7 @@ contains
         integer,             intent(in)    :: batchsz
         type(ori) :: o_tmp
         real      :: xyz(3)
-        integer   :: s, iproj, iref, nrefs
+        integer   :: s, iproj, iref, nrefs, box_pad
         logical   :: do_center
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols([params_glob%lpstart,params_glob%lpstop])
@@ -1058,26 +1033,55 @@ contains
             call read_mask_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
             ! do even/odd in separate passes to reduce memory usage when padding is large (2X)
+            box_pad = params_glob%box_crop * POLARIZE_PAD_FAC
+            
             ! PREPARE EVEN REFERENCES
-            call preprefvol(cline, s, do_center, xyz, iseven=.true.)
+            call build_glob%vol_pad%new([box_pad, box_pad, box_pad], params_glob%smpd_crop)
+            if( do_center )then
+                call build_glob%vol%fft()
+                call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
+            endif
+            ! back to real space
+            call build_glob%vol%ifft()
+            ! FT volume
+            call build_glob%vol%pad_fft(build_glob%vol_pad)
+            ! expand for fast interpolation & correct for norm when clipped
+            call build_glob%vol_pad%expand_cmat
             !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                call build_glob%vol%fproject_polar( iref, o_tmp, pftc, iseven=.true., mask=build_glob%l_resmsk)
+                call build_glob%vol_pad%fproject_polar_strided(iref, o_tmp, pftc,&
+                &iseven=.true., mask=build_glob%l_resmsk, padding_factor=POLARIZE_PAD_FAC)
                 call o_tmp%kill
             end do
             !$omp end parallel do
+            call build_glob%vol_pad%kill
+            call build_glob%vol_pad%kill_expanded
+
             ! PREPARE ODD REFERENCES
-            call preprefvol(cline, s, do_center, xyz, iseven=.false.)
+            call build_glob%vol_odd_pad%new([box_pad, box_pad, box_pad], params_glob%smpd_crop)
+            if( do_center )then
+                call build_glob%vol_odd%fft()
+                call build_glob%vol_odd%shift([xyz(1),xyz(2),xyz(3)])
+            endif
+            ! back to real space
+            call build_glob%vol_odd%ifft()
+            ! FT volume
+            call build_glob%vol_odd%pad_fft(build_glob%vol_odd_pad)
+            ! expand for fast interpolation & correct for norm when clipped
+            call build_glob%vol_odd_pad%expand_cmat
             !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                call build_glob%vol_odd%fproject_polar(iref, o_tmp, pftc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol_odd_pad%fproject_polar_strided(iref, o_tmp, pftc,&
+                &iseven=.false., mask=build_glob%l_resmsk, padding_factor=POLARIZE_PAD_FAC)
                 call o_tmp%kill
             end do
             !$omp end parallel do
+            call build_glob%vol_odd_pad%kill
+            call build_glob%vol_odd_pad%kill_expanded
         end do
         call pftc%memoize_refs
     end subroutine prepare_polar_references
