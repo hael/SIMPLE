@@ -233,9 +233,8 @@ contains
         logical,             intent(in)    :: iseven
         logical,             intent(in)    :: mask(:)
         integer,             intent(in)    :: padding_factor
-        integer :: pdim(3), irot, k, original_box
+        integer :: pdim(3), irot, k
         real    :: loc(3), e_rotmat(3,3), hk(2)
-        original_box = self%ldim(1) / padding_factor
         pdim     = pftc%get_pdim()
         e_rotmat = e%get_mat()
         do irot = 1, pdim(1)
