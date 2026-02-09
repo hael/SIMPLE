@@ -1057,15 +1057,24 @@ contains
             endif
             call read_mask_and_filter_refvols(s)
             ! PREPARE E/O VOLUMES
-            call preprefvol(cline, s, do_center, xyz, .false.)
-            call preprefvol(cline, s, do_center, xyz, .true.)
-            ! PREPARE REFERENCES
+            ! do even/odd in separate passes to reduce memory usage when padding is large (2X)
+            ! PREPARE EVEN REFERENCES
+            call preprefvol(cline, s, do_center, xyz, iseven=.true.)
+            !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
+            do iproj=1,params_glob%nspace
+                iref = (s - 1) * params_glob%nspace + iproj
+                call build_glob%eulspace%get_ori(iproj, o_tmp)
+                call build_glob%vol%fproject_polar( iref, o_tmp, pftc, iseven=.true., mask=build_glob%l_resmsk)
+                call o_tmp%kill
+            end do
+            !$omp end parallel do
+            ! PREPARE ODD REFERENCES
+            call preprefvol(cline, s, do_center, xyz, iseven=.false.)
             !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
                 call build_glob%vol_odd%fproject_polar(iref, o_tmp, pftc, iseven=.false., mask=build_glob%l_resmsk)
-                call build_glob%vol%fproject_polar(    iref, o_tmp, pftc, iseven=.true.,  mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
