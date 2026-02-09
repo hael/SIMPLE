@@ -23,15 +23,15 @@ contains
         type(sp_project), target  :: spproj
         type(parameters)     :: params
         type(string)         :: projname
-        integer, allocatable    :: labels(:), clust_inds(:), inds(:)
-        logical, allocatable    :: inds_msk(:)
-        real,    allocatable    :: joint_scores(:)
-        integer :: icls, ncls, nptcls, nclus, iclus, i 
-        type(string)    :: selflag
-        ! change this to input later 
-        ncls = 10
+        type(stats_struct)   :: diam_stats
+        type(string)         :: selflag
+        type(image), allocatable :: stk(:)
+        integer,     allocatable :: labels(:), inds(:), pinds(:)
+        logical,     allocatable :: inds_msk(:)
+        real,        allocatable :: joint_scores(:), diams_arr(:)
+        integer :: icls, ncls, iptcls, nptcls
         call cline%set('polar', 'yes')
-        call cline%set('ncls', ncls)
+        call cline%set('ncls', 10)
         call cline%set('autoscale', 'yes')
         call cline%set('mskdiam', 100)
         call params%new(cline)
@@ -42,26 +42,33 @@ contains
         call cline%set('prune', 'no')
         call cline%delete('ncls')
         call xcluster_cavgs%execute_safe(cline)
-        call cline%set('select_flag', 'cluster')
+        call cline%set('select_flag', 'class')
         call params%new(cline)
         call spproj%read(params%projfile)
-        labels = spproj%os_cls2D%get_all_asint('cluster')
+        labels = spproj%os_cls2D%get_all_asint('class')
         ncls = size(labels)
-        print *, ncls, labels 
         allocate(joint_scores(ncls))
         do icls = 1, ncls
             joint_scores(icls) = spproj%os_cls2D%get(icls, 'jointscore')
         end do
         allocate(inds_msk(ncls), source = .false.)
-        where(joint_scores >= 40) inds_msk = .true.
-        allocate(inds(ncls))
-        inds = [(icls, icls = 1, ncls)]
+        where(joint_scores >= 40.) inds_msk = .true.
+        deallocate(joint_scores, labels)
         do icls = 1, ncls 
-            if(inds_msk(icls)) continue
-            call cline%set('clustind', inds(icls))
+            if(.not. inds_msk(icls)) cycle
+            call cline%set('clustind', icls)
+            call cline%set('subprojname', 'subproj' // int2str(icls))
             call xextract_subproj%execute_safe(cline)
+            call spproj%read(params%projfile)
+            nptcls = spproj%os_ptcl2D%get_noris()
+            allocate(stk(nptcls))
+            allocate(diams_arr(nptcls))
+           
+            call calc_stats(diams_arr, diam_stats)
+            deallocate(stk, diams_arr)
         end do 
-        deallocate(joint_scores, labels, inds_msk)
+
+        deallocate(inds_msk)
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****', print_simple = .false.)
     end subroutine exec_cleanup2D
 
