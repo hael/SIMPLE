@@ -109,9 +109,13 @@ contains
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
         complex(kind=c_float_complex) :: acc, fcomp
+        real    :: padding_factor_scaling
         logical :: h_negative
         integer :: original_box, i, k, l, m, ind, h_val, k_val, phys1, phys2, phys1p, phys2p, ithr
         original_box = self%ldim(1) / padding_factor
+        ! To account for the FFTW division by box_pd^2 and recover values
+        ! at the same scale as the original image
+        padding_factor_scaling = real(padding_factor**2)
         ! interpolate (but fetch from padded FFT at strided (every padding_factor-th) samples)
         !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val,k_val,phys1,phys2,phys1p,phys2p,h_negative,fcomp)
         do k = mem_poldim(2), mem_poldim(3)
@@ -138,11 +142,10 @@ contains
                         acc = acc + mem_polweights_mat(ind,i,k) * fcomp
                     end do
                 end do
-                pft(i,k) = acc
+                pft(i,k) = acc * padding_factor_scaling
             end do
         end do
         !$OMP END SIMD
-
         if( present(mask) )then
             ! band masking
             !$OMP SIMD
