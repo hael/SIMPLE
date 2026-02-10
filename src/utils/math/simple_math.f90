@@ -119,6 +119,27 @@ contains
         deallocate(mask)
     end subroutine elim_dup
 
+    !=============================================================
+    ! Helpers: integer-safe floor/ceil division (handles negatives)
+    !=============================================================
+    pure integer function floor_div(a, b) result(q)
+        implicit none
+        integer, intent(in) :: a, b
+        integer :: r
+        q = a / b
+        r = mod(a, b)
+        if (r /= 0 .and. ((r > 0) .neqv. (b > 0))) q = q - 1
+    end function floor_div
+
+    pure integer function ceil_div(a, b) result(q)
+        implicit none
+        integer, intent(in) :: a, b
+        integer :: r
+        q = a / b
+        r = mod(a, b)
+        if (r /= 0 .and. ((r > 0) .eqv. (b > 0))) q = q + 1
+    end function ceil_div
+
     ! All the 4 following routines have testing purposes and allow
     ! the user to print a matrix so that the output is similar to
     ! the usual representation of a matrix.
