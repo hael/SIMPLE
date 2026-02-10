@@ -497,7 +497,7 @@ contains
         integer,             intent(in)    :: pinds(nptcls_here)
         logical,             intent(in)    :: l_ctf_here
         complex, allocatable :: pft(:,:)
-        ! real(timer_int_kind)    :: rt_prep1, rt_ctf, rt_prep2, rt_prep, rt_polarize, rt_sum, rt_loop
+        ! real(timer_int_kind)    :: rt_prep1, rt_prep2, rt_prep, rt_polarize, rt_sum, rt_loop
         ! integer(timer_int_kind) :: t_polarize, t_loop
         integer     :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
@@ -510,7 +510,6 @@ contains
         call memoize_ft_maps(ptcl_match_imgs(1)%get_ldim(), ptcl_match_imgs(1)%get_smpd())
         ! allocate pft
         ! rt_prep1    = 0.
-        ! rt_ctf      = 0.
         ! rt_prep2    = 0.
         ! rt_prep     = 0.
         ! rt_polarize = 0.
@@ -523,7 +522,7 @@ contains
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             ! t_polarize = tic()
             ! call prepimg4align_bench(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr),&
-            ! &rt_prep1, rt_ctf, rt_prep2, rt_prep)
+            ! &rt_prep1, rt_prep2, rt_prep)
             ! t_polarize = tic()
             pft = pftc%allocate_pft()
             call ptcl_match_imgs_pad(ithr)%polarize_strided(pft, mask=build_glob%l_resmsk)
@@ -538,23 +537,17 @@ contains
         ! rt_sum = rt_prep + rt_polarize
 
         ! print *, 'rt_prep1    =', rt_prep1,    ' % ', 100.*(rt_prep1/rt_sum)
-        ! print *, 'rt_ctf      =', rt_ctf,      ' % ', 100.*(rt_ctf/rt_sum)
         ! print *, 'rt_prep2    =', rt_prep2,    ' % ', 100.*(rt_prep2/rt_sum)
         ! print *, 'rt_prep     =', rt_prep,     ' % ', 100.*(rt_prep/rt_sum)
         ! print *, 'rt_polarize =', rt_polarize, ' % ', 100.*(rt_polarize/rt_sum)
         ! print *, 'accounted for % ', 100.*(rt_sum/rt_loop)
         ! print *, ''
 
-        ! rt_prep1    =   1.1228021550000002       %    47.656603255671037     
-        ! rt_ctf      =  0.29249281800000010       %    12.414666395576340     
+        ! rt_prep1    =   1.1228021550000002       %    47.656603255671037         
         ! rt_prep2    =  0.78998149100000004       %    33.530247807469209     
         ! rt_prep     =   2.2056463639999984       %    93.617217622334607     
         ! rt_polarize =  0.15038003799999988       %    6.3827823776653929     
         ! accounted for %    99.978044541257489  
-        ! prep1 is dominated by FFT (70%), we could pre-normalize but there is a dependency on mask so not an option
-        ! ctf is optimized to the limit
-        ! prep2 is completely dominated by two FFTs, nothing to do there
-        ! polarize is optimized to the limit
 
         ! always create this one, CTF logic internal
         call pftc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
