@@ -12,11 +12,11 @@ private
 contains
 
     !=============================================================
+    ! 2D: SIMPLE convention => ldim_crop(3)=1, square (n x n)
     ! Returns inverse instrument function for multiplication.
-    ! Assumes strided gridding, i.e. Foruier rep generated at unpadded ldim
     !=============================================================
-    function prep2D_inv_instrfun4mul( ldim_crop, smpd_crop ) result( img )
-        integer,      intent(in) :: ldim_crop(3)
+    function prep2D_inv_instrfun4mul( ldim_crop, ldim_croppd, smpd_crop ) result( img )
+        integer,      intent(in) :: ldim_crop(3), ldim_croppd(3)
         real,         intent(in) :: smpd_crop
         type(image)              :: img
         real(c_float), parameter :: EPS_DIV = 1.0e-8_c_float
@@ -33,9 +33,9 @@ contains
         call img%new(ldim_crop, smpd_crop)
         ! centre coordinate (Fortran 1-based)
         center = real(n/2 + 1, c_float)
-        ! scaling: mirror original intent
-        pad_sc = 1.0_c_float / real(ldim_crop(1), c_float)
-        ! create KB window object (assumes KBWINSZ, KBALPHA in scope)
+        ! pad scaling: mirror original intent (use provided ldim_croppd(1))
+        pad_sc = 1.0_c_float / real(ldim_croppd(1), c_float)
+        ! create KB window object
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         ! normalization constant at zero (guard small values)
         kbzero = kbwin%instr(0.0_c_float)
@@ -59,11 +59,11 @@ contains
     end function prep2D_inv_instrfun4mul
 
     !=============================================================
+    ! 3D: cube (n x n x n)
     ! Returns inverse instrument function for multiplication.
-    ! Assumes strided gridding, i.e. Foruier rep generated at unpadded ldim
     !=============================================================
-    function prep3D_inv_instrfun4mul( ldim_crop, smpd_crop ) result( img )
-        integer,      intent(in) :: ldim_crop(3)
+    function prep3D_inv_instrfun4mul( ldim_crop, ldim_croppd, smpd_crop ) result( img )
+        integer,      intent(in) :: ldim_crop(3), ldim_croppd(3)
         real,         intent(in) :: smpd_crop
         type(image)              :: img
         real(c_float), parameter :: EPS_DIV = 1.0e-8_c_float
@@ -79,9 +79,9 @@ contains
         call img%new(ldim_crop, smpd_crop)
         ! centre coordinate (Fortran 1-based)
         center = real(n/2 + 1, c_float)
-        ! scaling: mirror original intent
-        pad_sc = 1.0_c_float / real(ldim_crop(1), c_float)
-        ! create KB window object (assumes KBWINSZ, KBALPHA in scope)
+        ! pad scaling: mirror original intent (use provided ldim_croppd(1))
+        pad_sc = 1.0_c_float / real(ldim_croppd(1), c_float)
+        ! create KB window object
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         ! normalization constant at zero (guard small values)
         kbzero = kbwin%instr(0.0_c_float)

@@ -830,7 +830,7 @@ contains
             endif
         endif
         ! Prep for correction of the shape of the interpolator
-        gridcorr_img = prep3D_inv_instrfun4mul(ldim, params_glob%smpd_crop)
+        gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params_glob%smpd_crop)
         ! cycle through states
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
