@@ -268,7 +268,8 @@ contains
                         if( win(2,1) < self%lims(1,1) ) cycle
                         ! Fourier component & CTF from PADDED plane at STRIDED indices
                         comp   = pwght * pf2 * fpl%cmplx_plane(hp, kp)
-                        ctfval = pwght * pf2 * fpl%ctfsq_plane(hp, kp)
+                        ! CTF values are calculated analytically, no FFTW/padding scaling to account for
+                        ctfval = pwght * fpl%ctfsq_plane(hp, kp)
                         ! KB weights evaluated in ORIGINAL coordinates / geometry
                         call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
                         ! expanded matrices update (NATIVE volume)
