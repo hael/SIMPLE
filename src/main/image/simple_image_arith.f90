@@ -526,6 +526,12 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * c
     end subroutine mul_5
 
+    module pure subroutine mul_rmat( self, rmat )
+        class(image), intent(in)    :: self
+        real,         intent(inout) :: rmat(:,:,:)
+        rmat(:,:,:) = rmat(:,:,:) * self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
+    end subroutine mul_rmat
+
     module subroutine conjugate( self )
         class(image), intent(inout) :: self
         type(image) :: self_out
