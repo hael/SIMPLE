@@ -91,6 +91,7 @@ contains
     generic            :: div => div_1, div_2, div_3, div_4
     procedure, private :: mul_1, mul_2, mul_3, mul_4, mul_5
     generic            :: mul => mul_1, mul_2, mul_3, mul_4, mul_5
+    procedure          :: mul_rmat
     procedure, private :: conjugate
     generic            :: conjg => conjugate
     procedure          :: mul_rmat_at
@@ -699,6 +700,11 @@ interface
         integer,      intent(in)    :: logi(3)
         complex,      intent(in)    :: c
     end subroutine mul_5
+
+    module pure subroutine mul_rmat( self, rmat )
+        class(image), intent(in)    :: self
+        real,         intent(inout) :: rmat(:,:,:)
+    end subroutine mul_rmat
 
     module subroutine conjugate( self )
         class(image), intent(inout) :: self

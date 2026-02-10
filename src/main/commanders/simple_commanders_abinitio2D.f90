@@ -677,6 +677,8 @@ contains
                 call cline_make_cavgs%set('prg',        'make_cavgs')
                 call cline_make_cavgs%set('refs',       finalcavgs)
                 call cline_make_cavgs%set('which_iter', iter)
+                ! Cavgs final output is regularized
+                call cline_make_cavgs%set('ml_reg',     'yes')
                 if( l_shmem )then
                     call xmake_cavgs%execute_safe(cline_make_cavgs)
                 else

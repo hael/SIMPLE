@@ -1074,6 +1074,10 @@ contains
             call cavgs_odd(icls)     %set_cmat(csums(:,:,icls,2))
             call ctfsqsums_even(icls)%set_cmat(csums(:,:,icls,3))
             call ctfsqsums_odd(icls) %set_cmat(csums(:,:,icls,4))
+            if( l_ml_reg )then
+                call cavgs_even_part(icls)%copy(cavgs_even(icls))
+                call cavgs_odd_part(icls)%copy(cavgs_odd(icls))
+            endif
         end do
         !$omp end parallel do
         if( L_BENCH_GLOB ) rt_set_sums = rt_set_sums + toc(t_set_sums)
