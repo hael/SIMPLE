@@ -155,7 +155,8 @@ contains
         ! -----------------------
         ! cropped Fourier limits & dimensions need to be congruent with how the reconstroctor_eo objects are set up
         call fiterator%new([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
-        fplane%frlims = fiterator%loop_lims(3) ! need to loop over non-redundant indices
+        ! use redundant logical limits (mode 3) so negative h exists for Friedel access (-h,-k)
+        fplane%frlims = fiterator%loop_lims(3)
         fplane%nyq    = fiterator%get_lfny(1)
         call fiterator%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop)
         sigma_nyq     = fiterator%get_lfny(1)
@@ -165,10 +166,6 @@ contains
         ! allocate only k<=0 due to Friedel symmetry; the rest will be filled in by conjugation
         hmin = fplane%frlims(1,1); hmax = fplane%frlims(1,2)
         kmin = fplane%frlims(2,1); kmax = fplane%frlims(2,2)
-        ! allocate(fplane%cmplx_plane(fplane%frlims(1,1):fplane%frlims(1,2),fplane%frlims(2,1):fplane%frlims(2,2)),&
-        ! &fplane%ctfsq_plane(fplane%frlims(1,1):fplane%frlims(1,2),fplane%frlims(2,1):fplane%frlims(2,2)))
-        ! fplane%cmplx_plane  = cmplx(0.,0.)
-        ! fplane%ctfsq_plane  = 0.
         allocate(fplane%cmplx_plane(hmin:hmax, kmin:0), &
         fplane%ctfsq_plane(hmin:hmax, kmin:0))
         fplane%cmplx_plane = cmplx(0.,0.)
@@ -271,16 +268,6 @@ contains
             end do
             ph_k = ph_k * w2
         end do
-        ! ============================================================
-        ! Fill k in [1 .. kmax] by Friedel symmetry only
-        ! No sqrt/shell needed: if (-h,-k) was out of nyq, it was already zeroed.
-        ! ============================================================
-        ! do k = 1, kmax
-        !     do h = hmin, hmax
-        !         fplane%cmplx_plane(h,k) = conjg(fplane%cmplx_plane(-h,-k))
-        !         fplane%ctfsq_plane(h,k) =       fplane%ctfsq_plane(-h,-k)
-        !     end do
-        ! end do
         if (allocated(shell_lut)       ) deallocate(shell_lut)
         if (allocated(sigma2_noise_tmp)) deallocate(sigma2_noise_tmp)
         if (allocated(sigma2_noise)    ) deallocate(sigma2_noise)
