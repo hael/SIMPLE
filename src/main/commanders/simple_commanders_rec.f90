@@ -178,7 +178,7 @@ contains
         type(string)                  :: eonames(2), benchfname
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec
-        integer                       :: part, state, find4eoavg, fnr
+        integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3)
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -216,7 +216,9 @@ contains
             endif
         endif
         ! Prep for correction of the shape of the interpolator
-        gridcorr_img = prep3D_inv_instrfun4mul(build%vol%get_ldim(), params_glob%smpd_crop)
+        ldim         = build%vol%get_ldim()
+        ldim_pd      = STRIDE_GRID_PAD_FAC * ldim
+        gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params_glob%smpd_crop)
         ! assemble volumes
         do state=1,params%nstates
             call build%eorecvol%reset_all
