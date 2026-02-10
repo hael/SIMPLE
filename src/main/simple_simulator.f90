@@ -15,27 +15,17 @@ contains
         real,              intent(in)    :: snr
         real,    optional, intent(in)    :: bfac
         logical, optional, intent(in)    :: apply_ctf
-        logical :: aapply_ctf
-        real :: dfx, dfy, angast
+        type(ctfparams) :: ctfparms
+        logical         :: aapply_ctf
+        real            :: dfx, dfy, angast
         aapply_ctf = .true.
         if( present(apply_ctf) ) aapply_ctf = apply_ctf
         ! back FT (to make sure)
         call img%ifft()
         call img%fft()
-        ! apply ctf/bfactor
-        if( orientation%isthere('dfx') .and. orientation%isthere('dfy') .and. aapply_ctf )then
-            dfx = orientation%get_dfx()
-            dfy = orientation%get_dfy()
-            angast = orientation%get('angast')
-            call img%apply_ctf_wpad(tfun, dfx, 'ctf', dfy, angast, bfac=bfac)
-        else if( orientation%isthere('dfx') .and. aapply_ctf )then
-            dfx = orientation%get_dfx()
-            dfy = dfx
-            angast = 0.
-            call img%apply_ctf_wpad(tfun, orientation%get_dfx(), 'ctf', bfac=bfac)
-        else
-            if( present(bfac) ) call img%apply_bfac(bfac)
-        endif
+        ctfparms = orientation%get_ctfvars()
+        call img%apply_ctf(tfun, 'ctf', ctfparms )
+        if( present(bfac) ) call img%apply_bfac(bfac)
         ! add detector noise
         call img%ifft()
         if( snr < 5 )then
@@ -45,12 +35,12 @@ contains
         if( ctfflag .eq. 'flip' )then
             ! simulate phase-flipped images
             call img%fft()
-            call img%apply_ctf_wpad(tfun, dfx, 'flip', dfy, angast)
+            call img%apply_ctf(tfun, 'flip', ctfparms )
             call img%ifft()
         else if( ctfflag .eq. 'mul' )then
             ! simulate CTF multiplied images
             call img%fft()
-            call img%apply_ctf_wpad(tfun, dfx, 'ctf', dfy, angast)
+            call img%apply_ctf(tfun, 'ctf', ctfparms )
             call img%ifft()
         endif
     end subroutine simimg
