@@ -206,6 +206,8 @@ contains
     !> insert Fourier plane into NATIVE (unpadded) expanded Fourier volume,
     !> sampling the PADDED plane by STRIDING 
     subroutine insert_plane_strided( self, se, o, fpl, pwght )
+        use simple_math,    only: ceil_div, floor_div
+        use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
@@ -214,7 +216,8 @@ contains
         type(ori) :: o_sym
         complex   :: comp
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim), loc(3), ctfval
-        integer   :: win(2,3), i, h, k, l, nsym, isym, iwinsz, sh, stride, fpllims_pd(3,2), fpllims(3,2), fplnyq_pd, fplnyq, hp, kp
+        integer   :: win(2,3), i, h, k, l, nsym, isym, iwinsz, sh, stride, fpllims_pd(3,2)
+        integer   :: fpllims(3,2), fplnyq, hp, kp, pf
         real      :: pf2
         if( pwght < TINY ) return
         ! window size
@@ -233,29 +236,24 @@ contains
         endif
         ! Plane limits/nyq are for the PADDED plane (input)
         fpllims_pd = fpl%frlims
-        fplnyq_pd  = fpl%nyq
-        ! Convert to NATIVE iteration limits (integer-safe shrink)
-        ! We only iterate points that have exact padded counterparts at hp=h*pf, kp=k*pf.
-        fpllims      = fpllims_pd
-        fpllims(1,1) = ceiling( real(fpllims_pd(1,1)) / KBALPHA )
-        fpllims(1,2) = floor  ( real(fpllims_pd(1,2)) / KBALPHA )
-        fpllims(2,1) = ceiling( real(fpllims_pd(2,1)) / KBALPHA )
-        fpllims(2,2) = floor  ( real(fpllims_pd(2,2)) / KBALPHA )
-        fplnyq = fplnyq_pd / STRIDE_GRID_PAD_FAC  ! conservative
-        ! Scale correction: padded 2D FFT usually normalized by 1/(Npd^2).
-        ! If you want the same amplitude scale as native 2D FFT (1/N^2),
-        ! multiply by padding_factor^2.
-        pf2 = real(STRIDE_GRID_PAD_FAC*STRIDE_GRID_PAD_FAC)
+        ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
+        fpllims_pd = fpl%frlims
+        pf         = STRIDE_GRID_PAD_FAC
+        pf2        = real(pf*pf)
+        fpllims    = fpllims_pd
+        fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
+        fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
+        fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf)
+        fpllims(2,2) = floor_div(fpllims_pd(2,2), pf)
         ! KB interpolation / insertion
-        !$omp parallel default(shared) private(i,h,k,l,sh,comp,ctfval,w,win,loc,hp,kp)&
-        !$omp proc_bind(close)
+        !$omp parallel default(shared) private(h,k,l,sh,comp,ctfval,w,win,loc,hp,kp) proc_bind(close)
         do isym = 1, nsym
             do l = 0, stride-1
                 !$omp do schedule(static)
                 do h = fpllims(1,1)+l, fpllims(1,2), stride
-                    hp = h * STRIDE_GRID_PAD_FAC
+                    hp = h * pf
                     do k = fpllims(2,1), fpllims(2,2)
-                        kp = k * STRIDE_GRID_PAD_FAC
+                        kp = k * pf
                         sh = nint(sqrt(real(h*h + k*k)))
                         if (sh > self%nyq) cycle
                         ! non-uniform sampling location on the ORIGINAL (native) lattice
@@ -267,9 +265,9 @@ contains
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) ) cycle
                         ! Fourier component & CTF from PADDED plane at STRIDED indices
-                        comp   = pwght * pf2 * fpl%cmplx_plane(hp, kp)
+                        comp   = pwght * pf2 * fplane_get_cmplx(fpl, hp, kp)
                         ! CTF values are calculated analytically, no FFTW/padding scaling to account for
-                        ctfval = pwght * fpl%ctfsq_plane(hp, kp)
+                        ctfval = pwght * fplane_get_ctfsq(fpl, hp, kp)
                         ! KB weights evaluated in ORIGINAL coordinates / geometry
                         call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
                         ! expanded matrices update (NATIVE volume)

@@ -139,6 +139,37 @@ contains
         endif
     end function fdim
 
+    !=============================================================
+    ! Accessors for half-plane stored fplane (k<=0 stored)
+    !=============================================================
+    pure function fplane_get_cmplx( fpl, h, k ) result(c)
+        use, intrinsic :: iso_c_binding, only: c_float_complex
+        use simple_type_defs, only: fplane_type
+        implicit none
+        type(fplane_type), intent(in) :: fpl
+        integer,           intent(in) :: h, k
+        complex(c_float_complex) :: c
+        if (k <= 0) then
+            c = fpl%cmplx_plane(h,k)
+        else
+            c = conjg( fpl%cmplx_plane(-h,-k) )
+        end if
+    end function fplane_get_cmplx
+
+    pure function fplane_get_ctfsq( fpl, h, k ) result(v)
+        use, intrinsic :: iso_c_binding, only: c_float
+         use simple_type_defs, only: fplane_type
+        implicit none
+        type(fplane_type), intent(in) :: fpl
+        integer,           intent(in) :: h, k
+        real(c_float) :: v
+        if (k <= 0) then
+            v = fpl%ctfsq_plane(h,k)
+        else
+            v = fpl%ctfsq_plane(-h,-k)
+        end if
+    end function fplane_get_ctfsq
+
     function get_find_at_res( res, crit_res ) result( find )
         real,    intent(in) :: res(:), crit_res
         integer :: n, h, find

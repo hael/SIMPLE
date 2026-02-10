@@ -151,11 +151,11 @@ contains
         ! shift is with respect to the original image dimension
         fplane%shconst = self%get_shconst()
         ! -----------------------
-        ! setup the Fourier plane
+        ! setup the Fourier plane (PADDED/CROPPED)
         ! -----------------------
         ! cropped Fourier limits & dimensions need to be congruent with how the reconstroctor_eo objects are set up
         call fiterator%new([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
-        fplane%frlims = fiterator%loop_lims(3)
+        fplane%frlims = fiterator%loop_lims(3) ! switched from 3 to 2, no reduntant Friedel filling of k>0
         fplane%nyq    = fiterator%get_lfny(1)
         call fiterator%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop)
         sigma_nyq     = fiterator%get_lfny(1)
@@ -220,7 +220,7 @@ contains
             shell_lut(r2) = nint(sqrt(real(r2)))
         end do
         ! ============================================================
-        ! Fill k in [kmin .. 0] explicitly
+        ! Fill k in [kmin .. 0] explicitly (ONLY STORED REGION)
         ! ============================================================
         do k = kmin, 0
             ph_h = ph0
