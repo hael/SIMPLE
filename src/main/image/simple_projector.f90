@@ -249,37 +249,34 @@ contains
     end subroutine fproject_polar_strided
 
     !> \brief interpolate from PADDED expanded complex matrix, but using ORIGINAL-grid weights.
-    !>        loc is in ORIGINAL logical Fourier units. We fetch samples at stride = padding_factor.
+    !>        loc is in ORIGINAL logical Fourier units. We fetch samples at stride = padding_factor
     pure function interp_fcomp_strided( self, loc ) result( comp )
         class(projector), intent(in) :: self
-        real,             intent(in) :: loc(3) !< ORIGINAL logical Fourier coords
+        real,             intent(in) :: loc(3) ! ORIGINAL logical Fourier coords
         complex :: comp
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), padding_factor_scaling
-        integer :: win0(3)    ! center (nearest grid point) on ORIGINAL lattice
-        integer :: i0(3)      ! window origin on ORIGINAL lattice
-        integer :: iw, jw, kw
-        integer :: h, k, m    ! ORIGINAL lattice indices
-        integer :: hp, kp, mp ! PADDED lattice indices
-        ! To account for the FFTW division by box_pd^3 and recover values
-        ! at the same scale as the original image
-        padding_factor_scaling = real(STRIDE_GRID_PAD_FAC**3)
-        ! center index on ORIGINAL lattice
+        integer :: win0(3), win0p(3), i0(3), off(3), iw, jw, kw, pad_fac
+        integer :: h, k, m, hp, kp, mp
+        pad_fac = STRIDE_GRID_PAD_FAC
+        padding_factor_scaling = real(pad_fac**3)
+        ! Original center (for window geometry + weights)
         win0 = nint(loc)
-        ! ORIGINAL lattice window origin (lower corner)
-        i0 = win0 - self%iwinsz
-        ! KB weights evaluated for ORIGINAL coordinates and ORIGINAL window geometry
+        i0   = win0 - self%iwinsz
+        ! Padded center (nearest padded lattice point)
+        win0p = nint(loc * real(pad_fac))
+        ! Offset that selects the correct strided sublattice (parity class)
+        off = win0p - pad_fac * win0   ! for pad_fac=2, off is 0 or 1 in each dim
         call self%kbwin%apod_mat_3d(loc, self%iwinsz, self%wdim, w)
-        ! Strided accumulate: map ORIGINAL grid indices -> PADDED expanded FT indices
         comp = CMPLX_ZERO
         do kw = 1, self%wdim
             m  = i0(3) + (kw-1)
-            mp = m * STRIDE_GRID_PAD_FAC
+            mp = m * pad_fac + off(3)
             do jw = 1, self%wdim
                 k  = i0(2) + (jw-1)
-                kp = k * STRIDE_GRID_PAD_FAC
+                kp = k * pad_fac + off(2)
                 do iw = 1, self%wdim
                     h  = i0(1) + (iw-1)
-                    hp = h * STRIDE_GRID_PAD_FAC
+                    hp = h * pad_fac + off(1)
                     comp = comp + w(iw,jw,kw) * self%cmat_exp(hp, kp, mp)
                 end do
             end do
