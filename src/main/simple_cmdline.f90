@@ -28,6 +28,7 @@ type cmdline
   contains
     procedure          :: parse
     procedure          :: parse_private
+    procedure          :: parse_test
     procedure          :: parse_oldschool
     procedure, private :: parse_command_line_value
     procedure, private :: copy
@@ -228,6 +229,88 @@ contains
         end do
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private
+
+    !> \brief for parsing the command line arguments passed as key=val
+    subroutine parse_test( self )
+        class(cmdline), intent(inout) :: self
+        type(string), allocatable     :: keys_required(:)
+        type(args)                    :: allowed_args
+        character(len=XLONGSTRLEN)    :: arg
+        type(simple_program), pointer :: ptr2prg => null()
+        integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
+        ! parse command line
+        self%argcnt = command_argument_count()
+        call get_command(self%entire_line)
+        cmdline_glob = trim(self%entire_line)
+        if( .not. str_has_substr(self%entire_line,'test=') ) THROW_HARD('test= flag must be set on command line')
+        ! parse program name
+        call get_command_argument(1, arg, cmdlen, cmdstat)
+        pos = index(arg, '=') ! position of '='
+        call cmdline_err(cmdstat, cmdlen, arg, pos)
+        ! obtain pointer to the program in the simple_user_interface specification
+        call get_prg_ptr(string(arg(pos+1:)), ptr2prg)
+        ! decide wether to print the command line instructions or not
+        select case(trim(arg(pos+1:)))
+            case('write_ui_json','print_ui_json','print_sym_subgroups','print_ui_stream')
+                ! no command line arguments
+                return
+            case DEFAULT
+                if( associated(ptr2prg) )then
+                    ! get required keys
+                    sz_keys_req = ptr2prg%get_nrequired_keys()
+                    if( sz_keys_req > 0 )then
+                        keys_required  = ptr2prg%get_required_keys()
+                        nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
+                    else
+                        nargs_required = 1
+                    endif
+                    if( self%argcnt < nargs_required )then
+                        call ptr2prg%print_cmdline()
+                        stop
+                    else
+                        ! indicate which variables are required
+                        if( sz_keys_req > 0 )then
+                            do ikey=1,sz_keys_req
+                                if( keys_required(ikey)%is_allocated() ) call self%checkvar(keys_required(ikey)%to_char(), ikey)
+                            end do
+                        endif
+                    endif
+                else
+                    ! get required keys
+                    sz_keys_req = get_n_private_keys_required(trim(arg(pos+1:)))
+                    if( sz_keys_req > 0 )then
+                        keys_required  = get_private_keys_required(trim(arg(pos+1:)))
+                        nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
+                    else
+                        nargs_required = 1
+                    endif
+                    if( self%argcnt < nargs_required .or. (sz_keys_req == 0 .and. self%argcnt == 1) )then
+                        call print_private_cmdline(arg(pos+1:))
+                        stop
+                    else
+                        ! indicate which variables are required
+                        if( sz_keys_req > 0 )then
+                            do ikey=1,sz_keys_req
+                                if( keys_required(ikey)%is_allocated() ) call self%checkvar(keys_required(ikey)%to_char(), ikey)
+                            end do
+                        endif
+                    endif
+                endif
+        end select
+        allowed_args = args()
+        do i=1,self%argcnt
+            call get_command_argument(i, arg, cmdlen, cmdstat)
+            if( cmdstat == -1 )then
+                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_test'
+                write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+                write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
+                write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
+                stop
+            endif
+            call self%parse_command_line_value(i, arg, allowed_args)
+        end do
+        if( sz_keys_req > 0 ) call self%check
+    end subroutine parse_test
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse_oldschool( self, keys_required, keys_optional )
@@ -728,18 +811,21 @@ contains
             write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
             stop
         endif
-        if( arg(:pos-1) .ne. 'prg' )then
-            write(logfhandle,'(a)') 'ERROR!'
-            write(logfhandle,'(a)') ''
-            write(logfhandle,'(a)') 'prg=program required to be first on command line'
-            write(logfhandle,'(a)') ''
-            write(logfhandle,'(a)') 'Please, execute with prg=list to print all available programs'
-            write(logfhandle,'(a)') ''
-            write(logfhandle,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
-            write(logfhandle,'(a)') ''
-            write(logfhandle,'(a)') 'Executing with prg flag only prints all available command-line options'
-            stop
-        endif
+        selectcase(arg(:pos-1))   
+            case('prg', 'test')
+                return
+            case DEFAULT
+                write(logfhandle,'(a)') 'ERROR!'
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'prg=program or test=test required to be first on command line'
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'Please, execute with prg=list or test=list to print all available programs or tests'
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'Executing with prg flag only prints all available command-line options'
+                stop
+        end select
     end subroutine cmdline_err
 
 end module simple_cmdline
