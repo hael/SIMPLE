@@ -15,7 +15,7 @@ module simple_exec_api
 use simple_core_module_api
 use simple_exec_helpers,   only: script_exec, restarted_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
-use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
+use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
 use iso_fortran_env,       only: output_unit
 use simple_cmdline,        only: cmdline, cmdline_err
 
@@ -119,4 +119,8 @@ use simple_commanders_atoms, only: commander_map2model_fsc, commander_pdb2mrc, c
 
 ! distr commanders, support routines for distributed execution
 use simple_commanders_distr, only: commander_split
+
+! test commanders, for testing purposes
+use simple_commanders_test, only: commander_test_sim_workflow
+
 end module simple_exec_api

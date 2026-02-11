@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_ansi_ctrls
 implicit none
 
-public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
+public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
 public :: print_ui_json, write_ui_json, list_single_prgs_in_ui, list_stream_prgs_in_ui
 public :: print_stream_ui_json, validate_ui_json
 private
@@ -212,6 +212,9 @@ type(simple_program), target :: volops
 type(simple_program), target :: write_classes
 type(simple_program), target :: write_mic_filetab
 type(simple_program), target :: zero_project_shifts
+
+! declare test programs here
+type(simple_program), target :: test_sim_workflow
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: algorithm
@@ -526,6 +529,8 @@ contains
         call new_write_classes
         call new_write_mic_filetab
         call new_zero_project_shifts
+        ! test programs
+        call new_test_sim_workflow
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
@@ -663,6 +668,8 @@ contains
         call push2prg_ptr_array(write_classes)
         call push2prg_ptr_array(write_mic_filetab)
         call push2prg_ptr_array(zero_project_shifts)
+
+        call push2prg_ptr_array(test_sim_workflow)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
         
         contains
@@ -815,6 +822,8 @@ contains
             case('write_classes');               ptr2prg => write_classes
             case('write_mic_filetab');           ptr2prg => write_mic_filetab
             case('zero_project_shifts');         ptr2prg => zero_project_shifts
+            ! test programs
+            case('test_sim_workflow');           ptr2prg => test_sim_workflow
             case DEFAULT
                 ptr2prg => null()
         end select
@@ -1015,6 +1024,12 @@ contains
         write(logfhandle,'(A)') model_validation%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine list_simple_prgs_in_ui
+
+    subroutine list_simple_test_prgs_in_ui
+        write(logfhandle,'(A)') format_str('TEST PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') test_sim_workflow%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine list_simple_test_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
         write(logfhandle,'(A)') abinitio2D_stream%name%to_char()
@@ -3285,6 +3300,26 @@ contains
         call motion_correct%set_input('comp_ctrls', 1, nparts, gui_submenu="compute")
         call motion_correct%set_input('comp_ctrls', 2, nthr, gui_submenu="compute")
     end subroutine new_motion_correct
+
+    subroutine new_test_sim_workflow
+        ! PROGRAM SPECIFICATION
+        call test_sim_workflow%new(&
+        &'test_sim_workflow', &                                                                       ! name
+        &'Test simulation workflow',&                                                                 ! descr_short
+        &'is test',&                                                                                  ! descr long
+        &'simple_test_exec',&                                                                         ! executable
+        &0, 0, 0, 0, 0, 0, 0, .false.)                                                                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! computer controls
+    end subroutine new_test_sim_workflow
 
     subroutine new_model_validation
         ! PROGRAM SPECIFICATION
