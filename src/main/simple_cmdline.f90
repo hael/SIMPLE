@@ -1,9 +1,10 @@
 !@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
-use simple_user_interface
+use simple_user_interface, only: get_prg_ptr, list_simple_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
+use simple_ui_program,     only: ui_program
+use simple_args,           only: args
 use simple_private_prgs 
-use simple_args, only: args
 implicit none
 private
 public :: cmdline, cmdline_err
@@ -60,7 +61,7 @@ contains
         class(cmdline), intent(inout) :: self
         type(string), allocatable     :: keys_required(:)
         type(args)                    :: allowed_args
-        type(simple_program), pointer :: ptr2prg => null()
+        type(ui_program), pointer :: ptr2prg => null()
         type(string)                  :: prgname, exec_cmd_ui, exec_cmd
         character(len=XLONGSTRLEN)     :: arg, buffer
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
@@ -154,7 +155,7 @@ contains
         type(string), allocatable     :: keys_required(:)
         type(args)                    :: allowed_args
         character(len=XLONGSTRLEN)     :: arg
-        type(simple_program), pointer :: ptr2prg => null()
+        type(ui_program), pointer :: ptr2prg => null()
         integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
         ! parse command line
         self%argcnt = command_argument_count()
@@ -236,7 +237,7 @@ contains
         type(string), allocatable     :: keys_required(:)
         type(args)                    :: allowed_args
         character(len=XLONGSTRLEN)    :: arg
-        type(simple_program), pointer :: ptr2prg => null()
+        type(ui_program), pointer :: ptr2prg => null()
         integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
         ! parse command line
         self%argcnt = command_argument_count()

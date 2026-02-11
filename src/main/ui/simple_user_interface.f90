@@ -2,10 +2,15 @@
 module simple_user_interface
 use simple_core_module_api
 use simple_ansi_ctrls
-use simple_ui_params
+use simple_ui_program ! use everything from here, entangled module
+use simple_ui_api
+use single_ui_api
+use stream_ui_api
+use simple_tests_ui_api
+use other_ui_api
 implicit none
 
-public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
+public :: make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
 public :: print_ui_json, write_ui_json, list_single_prgs_in_ui, list_stream_prgs_in_ui
 public :: print_stream_ui_json, validate_ui_json
 private
@@ -14,197 +19,9 @@ private
 character(len=26), parameter :: UI_FNAME = 'simple_user_interface.json'
 logical,           parameter :: DEBUG    = .false.
 
-! production-level program interface for simple_exec, single_exec & simple_stream executables
-type :: simple_program
-    private
-    type(string) :: name
-    type(string) :: descr_short
-    type(string) :: descr_long
-    type(string) :: executable
-    type(string) :: gui_submenu_list
-    logical      :: advanced = .true.
-    ! image input/output
-    type(simple_ui_param), allocatable :: img_ios(:)
-    ! parameter input/output
-    type(simple_ui_param), allocatable :: parm_ios(:)
-    ! alternative inputs
-    type(simple_ui_param), allocatable :: alt_ios(:)
-    ! search controls
-    type(simple_ui_param), allocatable :: srch_ctrls(:)
-    ! filter controls
-    type(simple_ui_param), allocatable :: filt_ctrls(:)
-    ! mask controls
-    type(simple_ui_param), allocatable :: mask_ctrls(:)
-    ! computer controls
-    type(simple_ui_param), allocatable :: comp_ctrls(:)
-    ! sp_project required flag
-    logical :: sp_required = .true.
-    ! existence flag
-    logical :: exists = .false.
-  contains
-    procedure, private :: new
-    procedure, private :: set_input_1
-    procedure, private :: set_input_2
-    procedure, private :: set_input_3
-    generic,   private :: set_input => set_input_1, set_input_2, set_input_3
-    procedure          :: print_ui
-    procedure          :: print_cmdline
-    procedure          :: print_prg_descr_long
-    procedure          :: write2json
-    procedure          :: get_name
-    procedure          :: get_executable
-    procedure          :: get_nrequired_keys
-    procedure          :: get_required_keys
-    procedure          :: requires_sp_project
-    procedure, private :: kill
-end type simple_program
-
-! declare simple_exec and single_exec program specifications here
-! instances of this class - special
-type(simple_program), target :: abinitio2D
-type(simple_program), target :: abinitio2D_stream
-type(simple_program), target :: abinitio3D
-type(simple_program), target :: abinitio3D_cavgs
-type(simple_program), target :: afm
-type(simple_program), target :: analysis2D_nano
-type(simple_program), target :: assign_optics
-type(simple_program), target :: assign_optics_groups
-type(simple_program), target :: atoms_register
-type(simple_program), target :: atoms_stats
-type(simple_program), target :: auto_spher_mask
-type(simple_program), target :: automask
-type(simple_program), target :: automask2D
-type(simple_program), target :: autorefine3D_nano
-type(simple_program), target :: binarize
-type(simple_program), target :: cavgseoproc_nano
-type(simple_program), target :: cavgsproc_nano
-type(simple_program), target :: center
-type(simple_program), target :: center2D_nano
-type(simple_program), target :: check_refpick
-type(simple_program), target :: clin_fsc
-type(simple_program), target :: cleanup2D
-type(simple_program), target :: cluster2D
-type(simple_program), target :: cluster2D_nano
-type(simple_program), target :: cluster2D_stream
-type(simple_program), target :: cluster2D_subsets
-type(simple_program), target :: cluster_cavgs
-type(simple_program), target :: cluster_cavgs_selection
-type(simple_program), target :: cluster_stack
-type(simple_program), target :: conv_atom_denoise
-type(simple_program), target :: convert
-type(simple_program), target :: crys_score
-type(simple_program), target :: ctf_estimate
-type(simple_program), target :: ctf_phaseflip
-type(simple_program), target :: ctfops
-type(simple_program), target :: denoise_trajectory
-type(simple_program), target :: detect_atoms
-type(simple_program), target :: dock_volpair
-type(simple_program), target :: estimate_diam
-type(simple_program), target :: estimate_lpstages
-type(simple_program), target :: export_relion
-type(simple_program), target :: export_starproject
-type(simple_program), target :: extract
-type(simple_program), target :: extract_subproj
-type(simple_program), target :: extract_substk
-type(simple_program), target :: filter
-type(simple_program), target :: fsc
-type(simple_program), target :: gen_pickrefs
-type(simple_program), target :: gen_pspecs_and_thumbs
-type(simple_program), target :: graphene_subtr
-type(simple_program), target :: icm2D
-type(simple_program), target :: icm3D
-type(simple_program), target :: import_boxes
-type(simple_program), target :: import_cavgs
-type(simple_program), target :: import_movies
-type(simple_program), target :: import_particles
-type(simple_program), target :: import_starproject
-type(simple_program), target :: info_image
-type(simple_program), target :: info_stktab
-type(simple_program), target :: make_cavgs
-type(simple_program), target :: make_oris
-type(simple_program), target :: map_cavgs_selection
-type(simple_program), target :: mask
-type(simple_program), target :: match_cavgs
-type(simple_program), target :: match_stacks
-type(simple_program), target :: merge_projects
-type(simple_program), target :: mini_stream
-type(simple_program), target :: mkdir_
-type(simple_program), target :: model_validation
-type(simple_program), target :: motion_correct
-type(simple_program), target :: multivol_assign
-type(simple_program), target :: new_project
-type(simple_program), target :: noisevol
-type(simple_program), target :: normalize_
-type(simple_program), target :: orisops
-type(simple_program), target :: oristats
-type(simple_program), target :: pdb2mrc
-type(simple_program), target :: pick
-type(simple_program), target :: pick_extract
-type(simple_program), target :: postprocess
-type(simple_program), target :: ppca_denoise
-type(simple_program), target :: ppca_denoise_classes
-type(simple_program), target :: ppca_volvar
-type(simple_program), target :: preproc
-type(simple_program), target :: preprocess
-type(simple_program), target :: print_dose_weights
-type(simple_program), target :: print_fsc
-type(simple_program), target :: print_magic_boxes
-type(simple_program), target :: print_project_field
-type(simple_program), target :: print_project_info
-type(simple_program), target :: print_ui_stream
-type(simple_program), target :: prune_project
-type(simple_program), target :: ptclsproc_nano
-type(simple_program), target :: reconstruct3D
-type(simple_program), target :: reextract
-type(simple_program), target :: refine3D
-type(simple_program), target :: refine3D_auto
-type(simple_program), target :: refine3D_nano
-type(simple_program), target :: replace_project_field
-type(simple_program), target :: reproject
-type(simple_program), target :: sample_classes
-type(simple_program), target :: scale
-type(simple_program), target :: select_
-type(simple_program), target :: select_clusters
-type(simple_program), target :: selection
-type(simple_program), target :: sieve_cavgs
-type(simple_program), target :: simulate_atoms
-type(simple_program), target :: simulate_movie
-type(simple_program), target :: simulate_noise
-type(simple_program), target :: simulate_particles
-type(simple_program), target :: split_
-type(simple_program), target :: split_stack
-type(simple_program), target :: stack
-type(simple_program), target :: stackops
-type(simple_program), target :: symaxis_search
-type(simple_program), target :: symmetrize_map
-type(simple_program), target :: symmetry_test
-type(simple_program), target :: tseries_atoms_rmsd
-type(simple_program), target :: tseries_core_atoms_analysis
-type(simple_program), target :: trajectory_core_finder
-type(simple_program), target :: tseries_import
-type(simple_program), target :: tseries_import_particles
-type(simple_program), target :: tseries_make_pickavg
-type(simple_program), target :: trajectory_make_projavgs
-type(simple_program), target :: tseries_motion_correct
-type(simple_program), target :: trajectory_reconstruct3D
-type(simple_program), target :: trajectory_swap_stack
-type(simple_program), target :: track_particles
-type(simple_program), target :: uniform_filter2D
-type(simple_program), target :: uniform_filter3D
-type(simple_program), target :: update_project
-type(simple_program), target :: vizoris
-type(simple_program), target :: volanalyze
-type(simple_program), target :: volops
-type(simple_program), target :: write_classes
-type(simple_program), target :: write_mic_filetab
-type(simple_program), target :: zero_project_shifts
-
-! declare test programs here
-type(simple_program), target :: test_sim_workflow
-
 ! this is for making an array of pointers to all programs
 type simple_prg_ptr
-    type(simple_program), pointer :: ptr2prg => null()
+    type(ui_program), pointer :: ptr2prg => null()
 end type simple_prg_ptr
 integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
@@ -212,6 +29,7 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 contains
 
+    
     ! public class methods
 
     subroutine make_user_interface
@@ -363,7 +181,6 @@ contains
         call push2prg_ptr_array(abinitio2D_stream)
         call push2prg_ptr_array(abinitio3D)
         call push2prg_ptr_array(abinitio3D_cavgs)
-        call push2prg_ptr_array(afm)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(atoms_register)
@@ -498,7 +315,7 @@ contains
         contains
 
             subroutine push2prg_ptr_array( prg )
-                type(simple_program), target :: prg
+                type(ui_program), target :: prg
                 n_prg_ptrs = n_prg_ptrs + 1
                 prg_ptr_array(n_prg_ptrs)%ptr2prg => prg
             end subroutine push2prg_ptr_array
@@ -507,13 +324,12 @@ contains
 
     subroutine get_prg_ptr( which_program, ptr2prg )
         class(string), intent(in) :: which_program
-        type(simple_program), pointer :: ptr2prg
+        type(ui_program), pointer :: ptr2prg
         select case(which_program%to_char())
             case('abinitio2D');                  ptr2prg => abinitio2D
             case('abinitio2D_stream');           ptr2prg => abinitio2D_stream
             case('abinitio3D');                  ptr2prg => abinitio3D
             case('abinitio3D_cavgs');            ptr2prg => abinitio3D_cavgs
-            case('afm');                         ptr2prg => afm
             case('analysis2D_nano');             ptr2prg => analysis2D_nano
             case('assign_optics');               ptr2prg => assign_optics   
             case('assign_optics_groups');        ptr2prg => assign_optics_groups
@@ -5359,356 +5175,6 @@ contains
         ! <empty>
     end subroutine new_zero_project_shifts
 
-    ! instance methods
-
-    subroutine new( self, name, descr_short, descr_long, executable, n_img_ios, n_parm_ios,&
-        &n_alt_ios, n_srch_ctrls, n_filt_ctrls, n_mask_ctrls, n_comp_ctrls, sp_required, gui_advanced, gui_submenu_list)
-        class(simple_program),      intent(inout) :: self
-        character(len=*),           intent(in)    :: name, descr_short, descr_long, executable
-        integer,                    intent(in)    :: n_img_ios, n_parm_ios, n_alt_ios, n_srch_ctrls
-        integer,                    intent(in)    :: n_filt_ctrls, n_mask_ctrls, n_comp_ctrls
-        logical,                    intent(in)    :: sp_required
-        logical,          optional, intent(in)    :: gui_advanced
-        character(len=*), optional, intent(in)    :: gui_submenu_list
-        call self%kill
-        self%name        = trim(name)
-        self%descr_short = trim(descr_short)
-        self%descr_long  = trim(descr_long)
-        self%executable  = trim(executable)
-        if( n_img_ios    > 0 ) allocate(self%img_ios(n_img_ios)      )
-        if( n_parm_ios   > 0 ) allocate(self%parm_ios(n_parm_ios)    )
-        if( n_alt_ios    > 0 ) allocate(self%alt_ios(n_alt_ios)      )
-        if( n_srch_ctrls > 0 ) allocate(self%srch_ctrls(n_srch_ctrls))
-        if( n_filt_ctrls > 0 ) allocate(self%filt_ctrls(n_filt_ctrls))
-        if( n_mask_ctrls > 0 ) allocate(self%mask_ctrls(n_mask_ctrls))
-        if( n_comp_ctrls > 0 ) allocate(self%comp_ctrls(n_comp_ctrls))
-        self%sp_required = sp_required
-        self%exists      = .true.
-        if(present(gui_advanced)) self%advanced = gui_advanced
-        if(present(gui_submenu_list)) self%gui_submenu_list = gui_submenu_list
-    end subroutine new
-
-    subroutine set_input_1( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder,&
-        &required, default_value, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
-        class(simple_program), target,   intent(inout) :: self
-        character(len=*),                intent(in)    :: which
-        integer,                         intent(in)    :: i
-        character(len=*),                intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
-        logical,                         intent(in)    :: required
-        real,                            intent(in)    :: default_value
-        character(len=*),      optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
-        logical,               optional, intent(in)    :: gui_advanced, gui_online
-        select case(trim(which))
-            case('img_ios')
-                call set(self%img_ios, i)
-            case('parm_ios')
-                call set(self%parm_ios, i)
-            case('alt_ios')
-                call set(self%alt_ios, i)
-            case('srch_ctrls')
-                call set(self%srch_ctrls, i)
-            case('filt_ctrls')
-                call set(self%filt_ctrls, i)
-            case('mask_ctrls')
-                call set(self%mask_ctrls, i)
-            case('comp_ctrls')
-                call set(self%comp_ctrls, i)
-            case DEFAULT
-                THROW_HARD('which field selector: '//trim(which)//' is unsupported; simple_program :: set_input_1')
-        end select
-
-        contains
-
-            subroutine set( arr, i )
-                integer,                  intent(in)    :: i
-                type(simple_ui_param), intent(inout) :: arr(:)
-                arr(i)%key               = trim(key)
-                arr(i)%keytype           = trim(keytype)
-                arr(i)%descr_short       = trim(descr_short)
-                arr(i)%descr_long        = trim(descr_long)
-                arr(i)%descr_placeholder = trim(descr_placeholder)
-                arr(i)%required = required
-                if( .not. arr(i)%required ) arr(i)%rval_default = default_value
-                ! GUI options
-                if( present(gui_submenu) ) then
-                    arr(i)%gui_submenu = trim(gui_submenu)
-                endif
-                if( present (gui_exclusive_group) ) then
-                    arr(i)%exclusive_group =trim(gui_exclusive_group)
-                endif
-                if( present(gui_active_flags) ) then
-                    arr(i)%active_flags =trim(gui_active_flags)
-                endif
-                if( present(gui_online) ) then
-                    arr(i)%online = gui_online
-                endif
-                if( present(gui_advanced) ) then
-                    arr(i)%advanced = gui_advanced
-                endif
-            end subroutine set
-
-    end subroutine set_input_1
-
-    subroutine set_input_2( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder, required,&
-        &default_value, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
-        class(simple_program), target,   intent(inout) :: self
-        character(len=*),                intent(in)    :: which
-        integer,                         intent(in)    :: i
-        character(len=*),                intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
-        logical,                         intent(in)    :: required
-        character(len=*),                intent(in)    :: default_value
-        character(len=*),      optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
-        logical,               optional, intent(in)    :: gui_advanced, gui_online
-        select case(trim(which))
-            case('img_ios')
-                call set(self%img_ios, i)
-            case('parm_ios')
-                call set(self%parm_ios, i)
-            case('alt_ios')
-                call set(self%alt_ios, i)
-            case('srch_ctrls')
-                call set(self%srch_ctrls, i)
-            case('filt_ctrls')
-                call set(self%filt_ctrls, i)
-            case('mask_ctrls')
-                call set(self%mask_ctrls, i)
-            case('comp_ctrls')
-                call set(self%comp_ctrls, i)
-            case DEFAULT
-                THROW_HARD('which field selector: '//trim(which)//' is unsupported; simple_program :: set_input_2')
-        end select
-
-        contains
-
-            subroutine set( arr, i )
-                integer,                  intent(in)    :: i
-                type(simple_ui_param), intent(inout) :: arr(:)
-                arr(i)%key               = trim(key)
-                arr(i)%keytype           = trim(keytype)
-                arr(i)%descr_short       = trim(descr_short)
-                arr(i)%descr_long        = trim(descr_long)
-                arr(i)%descr_placeholder = trim(descr_placeholder)
-                arr(i)%required = required
-                if( .not. arr(i)%required ) arr(i)%cval_default = trim(default_value)
-                ! GUI options
-                if( present(gui_submenu) ) then
-                    arr(i)%gui_submenu     = trim(gui_submenu)
-                endif
-                if( present (gui_exclusive_group) ) then
-                    arr(i)%exclusive_group = trim(gui_exclusive_group)
-                endif
-                if( present(gui_active_flags) ) then
-                    arr(i)%active_flags    = trim(gui_active_flags)
-                endif
-                if( present(gui_online) ) then
-                    arr(i)%online = gui_online
-                endif
-                if( present(gui_advanced) ) then
-                    arr(i)%advanced = gui_advanced
-                endif
-            end subroutine set
-
-    end subroutine set_input_2
-
-    subroutine set_input_3( self, which, i, param, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online )
-        class(simple_program),    target,   intent(inout) :: self
-        character(len=*),                   intent(in)    :: which
-        integer,                            intent(in)    :: i
-        type(simple_ui_param),           intent(in)    :: param
-        character(len=*),         optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
-        logical,                  optional, intent(in)    :: gui_advanced, gui_online
-        select case(trim(which))
-            case('img_ios')
-                call set(self%img_ios, i)
-            case('parm_ios')
-                call set(self%parm_ios, i)
-            case('alt_ios')
-                call set(self%alt_ios, i)
-            case('srch_ctrls')
-                call set(self%srch_ctrls, i)
-            case('filt_ctrls')
-                call set(self%filt_ctrls, i)
-            case('mask_ctrls')
-                call set(self%mask_ctrls, i)
-            case('comp_ctrls')
-                call set(self%comp_ctrls, i)
-            case DEFAULT
-                THROW_HARD('which field selector: '//trim(which)//' is unsupported; simple_program :: set_input_3')
-        end select
-
-        contains
-
-            subroutine set( arr, i )
-                integer,                  intent(in)    :: i
-                type(simple_ui_param), intent(inout) :: arr(:)
-                arr(i)%key               = param%key
-                arr(i)%keytype           = param%keytype
-                arr(i)%descr_short       = param%descr_short
-                arr(i)%descr_long        = param%descr_long
-                arr(i)%descr_placeholder = param%descr_placeholder
-                arr(i)%required = param%required
-                if( .not. arr(i)%required ) then
-                    if(arr(i)%keytype%to_char() == "num") then
-                        arr(i)%rval_default = param%rval_default
-                    else if( param%cval_default%is_allocated() ) then
-                        arr(i)%cval_default = param%cval_default
-                    endif
-                endif
-                ! GUI options
-                if( present(gui_submenu) ) then
-                    arr(i)%gui_submenu = trim(gui_submenu)
-                endif
-                if( present (gui_exclusive_group) ) then
-                    arr(i)%exclusive_group = trim(gui_exclusive_group)
-                endif
-                if( present(gui_active_flags) ) then
-                    arr(i)%active_flags = trim(gui_active_flags)
-                endif
-                if( present(gui_online) ) then
-                    arr(i)%online = gui_online
-                endif
-                if( present(gui_advanced) ) then
-                    arr(i)%advanced = gui_advanced
-                endif
-            end subroutine set
-
-    end subroutine set_input_3
-
-    subroutine print_ui( self )
-        class(simple_program), intent(in) :: self
-        type(chash) :: ch
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') '>>> PROGRAM INFO'
-        call ch%new(4)
-        call ch%push('name',        self%name%to_char())
-        call ch%push('descr_short', self%descr_short%to_char())
-        call ch%push('descr_long',  self%descr_long%to_char())
-        call ch%push('executable',  self%executable%to_char())
-        call ch%print_key_val_pairs(logfhandle)
-        call ch%kill
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
-        call print_param_hash(self%img_ios)
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
-        call print_param_hash(self%parm_ios)
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
-        call print_param_hash(self%alt_ios)
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%srch_ctrls)
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%filt_ctrls)
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
-        call print_param_hash(self%mask_ctrls)
-        write(logfhandle,'(a)') ''
-        write(logfhandle,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
-        call print_param_hash(self%comp_ctrls)
-
-        contains
-
-            subroutine print_param_hash( arr )
-                type(simple_ui_param), allocatable, intent(in) :: arr(:)
-                integer :: i
-                if( allocated(arr) )then
-                    do i=1,size(arr)
-                        write(logfhandle,'(a,1x,i3)') '>>> PARAMETER #', i
-                        call ch%new(6)
-                        call ch%push('key',               arr(i)%key%to_char())
-                        call ch%push('keytype',           arr(i)%keytype%to_char())
-                        call ch%push('descr_short',       arr(i)%descr_short%to_char())
-                        call ch%push('descr_long',        arr(i)%descr_long%to_char())
-                        call ch%push('descr_placeholder', arr(i)%descr_placeholder%to_char())
-                        if( arr(i)%required )then
-                            call ch%push('required', 'T')
-                        else
-                            call ch%push('required', 'F')
-                        endif
-                        call ch%print_key_val_pairs(logfhandle)
-                        call ch%kill
-                    end do
-                endif
-            end subroutine print_param_hash
-
-    end subroutine print_ui
-
-    subroutine print_cmdline( self )
-        class(simple_program), intent(in) :: self
-        write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
-        write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' //self%name%to_char() // ' key1=val1 key2=val2 ...', C_ITALIC)
-        write(logfhandle,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
-        if( allocated(self%img_ios) )    write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
-        call print_param_hash(self%img_ios)
-        if( allocated(self%parm_ios) )   write(logfhandle,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
-        call print_param_hash(self%parm_ios)
-        if( allocated(self%alt_ios) )    write(logfhandle,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
-        call print_param_hash(self%alt_ios)
-        if( allocated(self%srch_ctrls) ) write(logfhandle,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%srch_ctrls)
-        if( allocated(self%filt_ctrls) ) write(logfhandle,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%filt_ctrls)
-        if( allocated(self%mask_ctrls) ) write(logfhandle,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
-        call print_param_hash(self%mask_ctrls)
-        if( allocated(self%comp_ctrls) ) write(logfhandle,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
-        call print_param_hash(self%comp_ctrls)
-    end subroutine print_cmdline
-
-    ! supporting the print_cmdline routines (above)
-    subroutine print_param_hash( arr )
-        type(simple_ui_param), allocatable, intent(in) :: arr(:)
-        character(len=KEYLEN),    allocatable :: sorted_keys(:), rearranged_keys(:)
-        logical,                  allocatable :: required(:)
-        integer,                  allocatable :: inds(:)
-        type(chash) :: ch
-        integer     :: i, nparams, nreq, iopt
-        if( allocated(arr) )then
-            nparams = size(arr)
-            call ch%new(nparams)
-            allocate(sorted_keys(nparams), rearranged_keys(nparams), required(nparams))
-            do i=1,nparams
-                call ch%push(arr(i)%key%to_char(), arr(i)%descr_short%to_char()//'; '//arr(i)%descr_placeholder%to_char())
-                sorted_keys(i) = arr(i)%key%to_char()
-                required(i)    = arr(i)%required
-            end do
-            call lex_sort(sorted_keys, inds=inds)
-            required = required(inds)
-            if( any(required) )then
-                ! fish out the required ones
-                nreq = 0
-                do i=1,nparams
-                    if( required(i) )then
-                        nreq = nreq + 1
-                        rearranged_keys(nreq) = sorted_keys(i)
-                    endif
-                enddo
-                ! fish out the optional ones
-                iopt = nreq
-                do i=1,nparams
-                    if( .not. required(i) )then
-                        iopt = iopt + 1
-                        rearranged_keys(iopt) = sorted_keys(i)
-                    endif
-                end do
-                ! replace string array
-                sorted_keys = rearranged_keys
-                ! modify logical mask
-                required(:nreq)     = .true.
-                required(nreq + 1:) = .false.
-            endif
-            call ch%print_key_val_pairs(logfhandle, sorted_keys, mask=required)
-            call ch%kill
-            deallocate(sorted_keys, required)
-        endif
-    end subroutine print_param_hash
-
-    subroutine print_prg_descr_long( self )
-        class(simple_program), intent(in) :: self
-        write(logfhandle,'(a)') self%descr_long%to_char()
-    end subroutine print_prg_descr_long
-
     subroutine print_ui_json
         use json_module
         type(json_core)           :: json
@@ -5757,7 +5223,7 @@ contains
 
             subroutine create_section( name, arr )
                 character(len=*),          intent(in) :: name
-                type(simple_ui_param), allocatable, intent(in) :: arr(:)
+                type(ui_param), allocatable, intent(in) :: arr(:)
                 type(json_value), pointer :: entry, section
                 character(len=STDLEN)     :: options_str, before
                 character(len=KEYLEN)     :: args(10)
@@ -5866,7 +5332,7 @@ contains
 
             subroutine create_section( name, arr )
                 character(len=*),          intent(in) :: name
-                type(simple_ui_param), allocatable, intent(in) :: arr(:)
+                type(ui_param), allocatable, intent(in) :: arr(:)
                 type(json_value), pointer :: entry, section
                 character(len=STDLEN)     :: options_str, before
                 character(len=KEYLEN)     :: args(10)
@@ -6131,83 +5597,6 @@ contains
         call json%destroy(ui)
     end subroutine print_stream_ui_json
 
-    subroutine write2json( self )
-        use json_module
-        class(simple_program), intent(in) :: self
-        type(json_core)           :: json
-        type(json_value), pointer :: program_entry, program
-        ! JSON init
-        call json%initialize()
-        call json%create_object(program_entry,'')
-        call json%create_object(program, self%name%to_char())
-        call json%add(program_entry, program)
-        ! program section
-        call json%add(program, 'name',        self%name%to_char())
-        call json%add(program, 'descr_short', self%descr_short%to_char())
-        call json%add(program, 'descr_long',  self%descr_long%to_char())
-        call json%add(program, 'executable',  self%executable%to_char())
-        ! all sections
-        call create_section( 'image input/output',     self%img_ios )
-        call create_section( 'parameter input/output', self%parm_ios )
-        call create_section( 'alternative inputs',     self%alt_ios )
-        call create_section( 'search controls',        self%srch_ctrls )
-        call create_section( 'filter controls',        self%filt_ctrls )
-        call create_section( 'mask controls',          self%mask_ctrls )
-        call create_section( 'computer controls',      self%comp_ctrls )
-        ! write & clean
-        call json%print(program_entry, self%name%to_char()//'.json')
-        if( json%failed() )then
-            THROW_HARD('json input/output error for program: '//self%name%to_char())
-        endif
-        call json%destroy(program_entry)
-
-        contains
-
-            subroutine create_section( name, arr )
-                character(len=*),          intent(in) :: name
-                type(simple_ui_param), allocatable, intent(in) :: arr(:)
-                type(json_value), pointer :: entry, section
-                character(len=STDLEN)     :: options_str, before
-                character(len=KEYLEN)     :: args(8)
-                integer                   :: i, j, sz, nargs
-                logical :: found, param_is_multi, param_is_binary, exception
-                call json%create_array(section, trim(name))
-                if( allocated(arr) )then
-                    sz = size(arr)
-                    do i=1,sz
-                        call json%create_object(entry,            arr(i)%key%to_char())
-                        call json%add(entry, 'key',               arr(i)%key%to_char())
-                        call json%add(entry, 'keytype',           arr(i)%keytype%to_char())
-                        call json%add(entry, 'descr_short',       arr(i)%descr_short%to_char())
-                        call json%add(entry, 'descr_long',        arr(i)%descr_long%to_char())
-                        call json%add(entry, 'descr_placeholder', arr(i)%descr_placeholder%to_char())
-                        call json%add(entry, 'required',          arr(i)%required)
-                        param_is_multi  = arr(i)%keytype%to_char().eq.'multi'
-                        param_is_binary = arr(i)%keytype%to_char().eq.'binary'
-                        if( param_is_multi .or. param_is_binary )then
-                            options_str = arr(i)%descr_placeholder%to_char()
-                            call split( options_str, '(', before )
-                            call split( options_str, ')', before )
-                            call parsestr(before, '|', args, nargs)
-                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 2)
-                            if( exception )then
-                                write(logfhandle,*)'Poorly formatted options string for entry ', arr(i)%key%to_char()
-                                write(logfhandle,*) arr(i)%descr_placeholder%to_char()
-                                stop
-                            endif
-                            call json%add(entry, 'options', args(1:nargs))
-                            do j = 1, nargs
-                                call json%update(entry, 'options['//int2str(j)//']', trim(args(j)), found)
-                            enddo
-                        endif
-                        call json%add(section, entry)
-                    enddo
-                endif
-                call json%add(program_entry, section)
-            end subroutine create_section
-
-    end subroutine write2json
-
     subroutine validate_ui_json
         use json_module
         use json_kinds
@@ -6228,121 +5617,5 @@ contains
         call json%destroy()
         nullify(p)
     end subroutine validate_ui_json
-
-    function get_name( self ) result( name )
-        class(simple_program), intent(in) :: self
-        type(string) :: name
-        name = self%name
-    end function get_name
-
-    function get_executable( self ) result( name )
-        class(simple_program), intent(in) :: self
-        type(string) :: name
-        name = self%executable
-    end function get_executable
-
-    integer function get_nrequired_keys( self )
-        class(simple_program), intent(in) :: self
-        get_nrequired_keys = nreq_counter(self%img_ios) + nreq_counter(self%parm_ios) +&
-        &nreq_counter(self%srch_ctrls) + nreq_counter(self%filt_ctrls) +&
-        &nreq_counter(self%mask_ctrls) + nreq_counter(self%comp_ctrls)
-        if( get_nrequired_keys == 0 .and. allocated(self%alt_ios) ) get_nrequired_keys = 1
-
-        contains
-
-            function nreq_counter( arr ) result( nreq )
-                type(simple_ui_param), allocatable, intent(in) :: arr(:)
-                integer :: nreq, i
-                nreq = 0
-                if( allocated(arr) )then
-                    do i=1,size(arr)
-                        if( arr(i)%required ) nreq = nreq + 1
-                    end do
-                endif
-            end function nreq_counter
-
-    end function get_nrequired_keys
-
-    function get_required_keys( self ) result( keys )
-        class(simple_program), intent(in) :: self
-        type(string), allocatable :: keys(:)
-        integer :: nreq, ireq
-        ! count # required
-        nreq = self%get_nrequired_keys()
-        ! extract keys
-        if( nreq > 0 )then
-            allocate(keys(nreq))
-            ireq = 0
-            call key_extractor(self%img_ios)
-            call key_extractor(self%parm_ios)
-            call key_extractor(self%alt_ios)
-            call key_extractor(self%srch_ctrls)
-            call key_extractor(self%filt_ctrls)
-            call key_extractor(self%mask_ctrls)
-            call key_extractor(self%comp_ctrls)
-        endif
-
-        contains
-
-            subroutine key_extractor( arr )
-                type(simple_ui_param), allocatable, intent(in) :: arr(:)
-                integer :: i
-                if( allocated(arr) )then
-                    do i=1,size(arr)
-                        if( arr(i)%required )then
-                            ireq = ireq + 1
-                            keys(ireq) = arr(i)%key
-                        endif
-                    end do
-                endif
-            end subroutine key_extractor
-
-    end function get_required_keys
-
-    logical function requires_sp_project( self )
-        class(simple_program), intent(in) :: self
-        requires_sp_project = self%sp_required
-    end function requires_sp_project
-
-    subroutine kill( self )
-        class(simple_program), intent(inout) :: self
-        integer :: i, sz
-        if( self%exists )then
-            call self%name%kill
-            call self%descr_short%kill
-            call self%descr_long%kill
-            call self%executable%kill
-            call dealloc_field(self%img_ios)
-            call dealloc_field(self%parm_ios)
-            call dealloc_field(self%alt_ios)
-            call dealloc_field(self%srch_ctrls)
-            call dealloc_field(self%filt_ctrls)
-            call dealloc_field(self%mask_ctrls)
-            call dealloc_field(self%comp_ctrls)
-            self%exists = .false.
-        endif
-
-        contains
-
-            subroutine dealloc_field( arr )
-                type(simple_ui_param), allocatable, intent(inout) :: arr(:)
-                if( allocated(arr) )then
-                    sz = size(arr)
-                    do i=1,sz
-                        call arr(i)%key%kill
-                        call arr(i)%keytype%kill
-                        call arr(i)%descr_short%kill
-                        call arr(i)%descr_long%kill
-                        call arr(i)%descr_placeholder%kill
-                        call arr(i)%gui_submenu%kill
-                        call arr(i)%active_flags%kill
-                        call arr(i)%exclusive_group%kill
-                        call arr(i)%cval_default%kill
-                    end do
-                    deallocate(arr)
-                endif
-            end subroutine dealloc_field
-
-    end subroutine kill
 
 end module simple_user_interface

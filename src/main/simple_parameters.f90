@@ -2,7 +2,8 @@
 module simple_parameters
 use simple_core_module_api
 use simple_cmdline,        only: cmdline
-use simple_user_interface, only: simple_program, get_prg_ptr
+use simple_ui_program,     only: ui_program
+use simple_user_interface, only: get_prg_ptr
 use simple_atoms,          only: atoms
 use simple_decay_funs
 implicit none
@@ -13,7 +14,7 @@ private
 
 type :: parameters
     ! pointer 2 program UI
-    type(simple_program), pointer :: ptr2prg => null()
+    type(ui_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)          :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)          :: append='no'          !< append selection (yes|no){no}
