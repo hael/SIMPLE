@@ -17,10 +17,10 @@ type ui_param
     type(string) :: active_flags
     type(string) :: exclusive_group
     type(string) :: cval_default
-    real    :: rval_default = 0.
-    logical :: required = .true.
-    logical :: advanced = .true.
-    logical :: online   = .false.
+    real         :: rval_default = 0.
+    logical      :: required = .true.
+    logical      :: advanced = .true.
+    logical      :: online   = .false.
 end type ui_param
 
 ! production-level program interface for simple_exec, single_exec & simple_stream executables

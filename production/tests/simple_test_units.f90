@@ -9,6 +9,7 @@ use simple_string_tester
 use simple_syslib_tester
 use simple_fileio_tester
 use simple_chash_tester
+use simple_vrefhash_tester
 use simple_hash_tester
 use simple_linked_list_tester
 use simple_cmdline_tester
@@ -33,11 +34,12 @@ folder = './SIMPLE_TEST_UNITS_'//datestr
 call simple_mkdir(folder)
 call simple_chdir(folder)
 ! core library tests generated with help from chatgpt
-call run_all_string_tests !#
-call run_all_syslib_tests !#
-call run_all_fileio_tests !#
+call run_all_string_tests
+call run_all_syslib_tests
+call run_all_fileio_tests
 call run_all_chash_tests
 call run_all_hash_tests
+call run_all_vrefhash_tests
 call run_all_list_tests
 call run_all_cmdline_tests
 call run_all_ori_tests
