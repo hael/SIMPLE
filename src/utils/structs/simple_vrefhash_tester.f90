@@ -36,6 +36,8 @@ contains
         call test_delete()
         call test_missing_key_get_ref_returns_null()
         call test_collision_sanity_many_keys()
+        call test_keys_returns_all_keys()
+        call test_keys_sorted_returns_sorted_keys()
         ! call report_summary()
     end subroutine run_all_vrefhash_tests
 
@@ -288,5 +290,57 @@ contains
         end do
         call h%destroy()
     end subroutine test_collision_sanity_many_keys
+
+    !---------------- keys() ----------------
+
+    subroutine test_keys_returns_all_keys()
+        type(vrefhash) :: h
+        integer, target :: a, b, c
+        type(string), allocatable :: ks(:)
+        logical :: fa, fb, fc
+        integer :: i
+        write(*,'(A)') 'test_keys_returns_all_keys'
+        call h%init(32)
+        a = 1; b = 2; c = 3
+        call h%set_ref('  alpha  ', a)          ! trimmed/adjustl in set_ref_char
+        call h%set_ref(string('beta'), b)       ! adjustl(to_char()) in set_ref_str
+        call h%set_ref('GAMMA', c)
+        ks = h%keys()
+        call assert_int(h%count(), size(ks), 'keys() size == count()')
+        fa = .false.; fb = .false.; fc = .false.
+        do i = 1, size(ks)
+            if (ks(i) == 'alpha') fa = .true.
+            if (ks(i) == 'beta')  fb = .true.
+            if (ks(i) == 'GAMMA') fc = .true.
+        end do
+        call assert_true(fa, 'keys() contains "alpha"')
+        call assert_true(fb, 'keys() contains "beta"')
+        call assert_true(fc, 'keys() contains "GAMMA"')
+        call h%destroy()
+    end subroutine test_keys_returns_all_keys
+
+    !---------------- keys_sorted() ----------------
+
+    subroutine test_keys_sorted_returns_sorted_keys()
+        type(vrefhash) :: h
+        integer, target :: a, b, c
+        type(string), allocatable :: ks(:)
+        write(*,'(A)') 'test_keys_sorted_returns_sorted_keys'
+        call h%init(32)
+        a = 1; b = 2; c = 3
+        ! Insert with mixed case/spaces; stored keys will be normalized by set_ref_*:
+        !  - char keys: trim(adjustl())
+        !  - string keys: adjustl(to_char()) (to_char trims trailing)
+        call h%set_ref('gamma', a)
+        call h%set_ref('  Alpha  ', b)
+        call h%set_ref(string('beta'), c)
+        ks = h%keys_sorted()
+        call assert_int(3, size(ks), 'keys_sorted() size == 3')
+        ! Expect case-insensitive lexicographic order: Alpha, beta, gamma
+        call assert_string_eq('Alpha', ks(1), 'keys_sorted(1) == "Alpha"')
+        call assert_string_eq('beta',  ks(2), 'keys_sorted(2) == "beta"')
+        call assert_string_eq('gamma', ks(3), 'keys_sorted(3) == "gamma"')
+        call h%destroy()
+    end subroutine test_keys_sorted_returns_sorted_keys
 
 end module simple_vrefhash_tester

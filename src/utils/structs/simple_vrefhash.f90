@@ -60,8 +60,13 @@ type :: vrefhash
 contains
     ! lifecycle
     procedure          :: init
-    procedure          :: destroy
     procedure          :: clear
+    procedure          :: destroy
+    ! queries
+    procedure          :: count
+    procedure, private :: has_key_char
+    procedure, private :: has_key_str
+    generic            :: has_key => has_key_char, has_key_str
     ! set/get/del (reference semantics)
     procedure, private :: set_ref_char
     procedure, private :: set_ref_str
@@ -72,11 +77,10 @@ contains
     procedure, private :: del_char
     procedure, private :: del_str
     generic            :: del => del_char, del_str
-    ! queries
-    procedure, private :: has_key_char
-    procedure, private :: has_key_str
-    generic            :: has_key => has_key_char, has_key_str
-    procedure          :: count
+    ! keys getters
+    procedure          :: keys
+    procedure          :: keys_sorted
+    
 end type vrefhash
 
 contains
@@ -364,5 +368,45 @@ contains
         deallocate(cur)
         self%n = self%n - 1
     end subroutine del_str
+
+    !=====================
+    ! keys getters
+    !=====================
+
+    function keys(self) result(karr)
+        class(vrefhash), intent(in) :: self
+        type(string), allocatable   :: karr(:)
+        type(vrefhash_node), pointer :: p
+        integer :: i, idx
+        if (.not. self%exists) then
+            allocate(karr(0))
+            return
+        end if
+        if (self%n == 0) then
+            allocate(karr(0))
+            return
+        end if
+        allocate(karr(self%n))
+        idx = 0
+        do i = 1, self%nbuckets
+            p => self%buckets(i)%head
+            do while (associated(p))
+                idx = idx + 1
+                karr(idx) = p%key   ! deep copy of string (safe)
+                p => p%next
+            end do
+        end do
+    end function keys
+
+    function keys_sorted(self) result(karr)
+        use simple_string_utils, only: lex_sort
+        class(vrefhash), intent(in) :: self
+        type(string), allocatable   :: karr(:)
+        integer :: i
+        karr = self%keys()
+        if (size(karr) > 1) then
+            call lex_sort(karr)
+        end if
+    end function keys_sorted
 
 end module simple_vrefhash
