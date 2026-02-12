@@ -55,6 +55,7 @@ contains
     procedure          :: replace_with
     ! iteraton
     procedure          :: begin
+    procedure          :: end
     procedure          :: end_iter
 end type linked_list
 
@@ -496,6 +497,12 @@ contains
         type(list_iterator) :: it
         it%current => self%head
     end function begin
+
+    function end(self) result(it)
+        class(linked_list), intent(in) :: self
+        type(list_iterator) :: it
+        it%current => self%tail
+    end function end
 
     function end_iter(self) result(it)
         class(linked_list), intent(in) :: self

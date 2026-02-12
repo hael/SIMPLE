@@ -20,9 +20,6 @@ contains
     subroutine exec_stream_p05_sieve_cavgs( self, cline )
         class(stream_p05_sieve_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        character(len=STDLEN), parameter :: MERGED_PROJFILE = 'merged.simple'
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        character(len=STDLEN), parameter :: MATCH_PROJFILE  = 'matched.simple'
         type(string),        allocatable :: projects(:), completed_projfiles(:)
         integer,             allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
         real,                allocatable :: cls_res(:), cls_pop(:)
@@ -182,6 +179,7 @@ contains
             call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
             ! update global records
             if( nprojects > 0 )then
+                ! update projects and start chunks
                 call update_records_with_project(projects, n_imported )
                 call project_buff%add2history(projects)
             endif
@@ -205,15 +203,13 @@ contains
             call update_chunks
             call memoize_chunks(chunk_list, nchunks_imported)
             call update_user_params2D(cline, l_params_updated)
-            if( nchunks_imported > 0 )then
-                nchunks_glob = nchunks_glob + nchunks_imported
-                ! build sets
-                call generate_sets(chunk_list, set_list)
-            endif
-            ! Sets analysis section
+            if( nchunks_imported > 0 ) nchunks_glob = nchunks_glob + nchunks_imported
+            ! create sets and cluster/match cavgs when required
+            call manage_sets()
+            ! visualization section
             if( set_list%size() > 0 )then
                 call set_list%at(1, crec)
-                if( crec%processed .and. crec%included .and. (set_list%size() > 1) .and. (.not.l_wait_for_user)) then
+                if( crec%processed .and. (set_list%size() > 1) .and. (.not.l_wait_for_user)) then
                     l_processed = set_list%get_processed_flags()
                     ! all sets but the first employ match_cavgs
                     latest_processed_set = 0
@@ -224,12 +220,10 @@ contains
                             call it%next()
                             cycle
                         endif
-                        call is_set_processed(it)
                         if( l_processed(i) ) latest_processed_set = i
                         ! move iterator
                         call it%next()
                     enddo
-                    call submit_match_cavgs
                     ! http stats
                     call json%remove(accepted_cls2D, destroy=.true.)
                     call json%remove(rejected_cls2D, destroy=.true.)
@@ -278,11 +272,9 @@ contains
                 else
                     ! first set uses cluster_cavgs
                     it = set_list%begin()
-                    call is_set_processed(it)
-                    call submit_cluster_cavgs
                     ! interactive selection
                     call set_list%at(1, crec)
-                    if( l_wait_for_user .and. crec%processed ) then
+                    if( l_wait_for_user .and. crec%waiting ) then
                         call http_communicator%update_json("user_input", .true., found)
                         call http_communicator%update_json("stage", "waiting for user selection", found)
                         if(.not. selection_jpeg_created) then
@@ -331,15 +323,15 @@ contains
                 ! nothing for abinitio2D_stream until the first set has been selected
                 if( set_list%size() > 0 ) then
                     call set_list%at(1, crec)
-                    if( crec%processed ) then
+                    if( crec%waiting ) then
                         call http_communicator%get_json_arg('accepted_cls2D', accepted_cls_ids, found) ! accepted_cls2D now contains user selection
                         if(found) then
                             call http_communicator%get_json_arg('rejected_cls2D', rejected_cls_ids, found) ! rejected_cls2D now contains user selection
                             if(found) then
                                 call http_communicator%update_json("user_input", .false., found)
                                 ! apply interactive selection
-                                call report_interactive_selection( rejected_cls_ids )
-                                write(logfhandle,'(A)') '>>> RECEIVED USER SELECTIONS'
+                                write(logfhandle,'(A)') '>>> RECEIVED USER SELECTIONS', rejected_cls_ids
+                                call user_select_reference_set( rejected_cls_ids )
                                 ! http stats
                                 call json%remove(accepted_cls2D, destroy=.true.)
                                 call json%remove(rejected_cls2D, destroy=.true.)
@@ -387,15 +379,7 @@ contains
                     endif
                 endif
             endif
-            ! make completed sets available to abinitio2D_stream
-            if ( params%interactive == 'no' ) then
-                ! for non-iteractive
-                call flag_complete_sets
-            else if ( .not. l_wait_for_user) then
-                ! interactive -> l_wait_for_user must be false (ie user selection performed) before completing any sets
-                call flag_complete_sets
-            endif
-            ! 2D analyses
+            ! Create new chunks and 
             call analyze2D_new_chunks(project_list)
             call sleep(WAITTIME)
             ! http stats send
@@ -535,296 +519,6 @@ contains
                 enddo
                 deallocate(spprojs)
             end subroutine update_records_with_project
-
-            subroutine generate_sets( chunks, sets )
-                class(rec_list), intent(in)    :: chunks
-                class(rec_list), intent(inout) :: sets
-                type(string),      allocatable :: starfiles(:), projfiles(:)
-                integer,           allocatable :: ids(:)
-                type(sp_project) :: spproj
-                type(string)     :: tmpl
-                integer          :: navail_chunks, n, iset, i, ic, ic_start, ic_end
-                navail_chunks = chunks%size() - sets%size() * params%nchunksperset
-                n = floor(real(navail_chunks) / real(params%nchunksperset))
-                if( n < 1 )return
-                do iset = 1,n
-                    ! merge chunks project into designated folder
-                    ic_start = sets%size() * params%nchunksperset + 1
-                    ic_end   = ic_start + params%nchunksperset - 1
-                    tmpl     = DIR_SET//int2str(sets%size() + 1)
-                    call simple_mkdir(tmpl)
-                    projfiles = chunks%get_projfiles([ic_start,ic_end])
-                    call merge_chunk_projfiles(projfiles, tmpl, spproj, projname_out=tmpl)
-                    ! average and stash sigma2
-                    allocate(starfiles(params%nchunksperset))
-                    ids = chunks%get_ids()
-                    do i = 1,params%nchunksperset
-                        ic = ic_start + i - 1
-                        starfiles(i) = SIGMAS_DIR//'/chunk_'//int2str(ids(ic))//STAR_EXT
-                    enddo
-                    call average_sigma2_groups(tmpl//'/'//tmpl//STAR_EXT, starfiles)
-                    ! update global list
-                    call sets%push2chunk_list(tmpl//'/'//tmpl//METADATA_EXT, sets%size() + 1, .false.)
-                    ! remove imported chunk
-                    ! if( trim(params%remove_chunks).eq.'yes' )then
-                    !     do ic = 1,size(projfiles)
-                    !         call simple_rmdir(stemname(projfiles(ic)))
-                    !     enddo
-                    ! endif
-                    call projfiles%kill
-                    call starfiles%kill
-                    if( allocated(ids) ) deallocate(ids)
-                enddo
-                call spproj%kill
-                call tmpl%kill
-            end subroutine generate_sets
-
-            subroutine submit_cluster_cavgs
-                type(cmdline)   :: cline_cluster_cavgs
-                type(string)    :: cwd
-                type(chunk_rec) :: crec
-                if( set_list%size() < 1 ) return  ! no sets generated yet
-                call set_list%at(1, crec)
-                if( crec%busy )           return  ! ongoing
-                if( crec%processed )      return  ! already done
-                call cline_cluster_cavgs%set('prg',          'cluster_cavgs')
-                call cline_cluster_cavgs%set('projfile',     basename(crec%projfile))
-                call cline_cluster_cavgs%set('mkdir',        'no')
-                call cline_cluster_cavgs%set('nthr',         params%nthr)
-                call cline_cluster_cavgs%set('mskdiam',      params%mskdiam)
-                call cline_cluster_cavgs%set('verbose_exit', 'yes')
-                call simple_chdir(stemname(crec%projfile))
-                call simple_getcwd(cwd)
-                CWD_GLOB = cwd%to_char()
-                call qenv%exec_simple_prg_in_queue_async(cline_cluster_cavgs,&
-                    &string('cluster_cavgs_script'), string('cluster_cavgs.log'))
-                call simple_chdir('..')
-                call simple_getcwd(cwd)
-                CWD_GLOB = cwd%to_char()
-                crec%busy      = .true.
-                crec%processed = .false.
-                call set_list%replace_at(1, crec)
-                call cline_cluster_cavgs%kill
-                call cwd%kill
-            end subroutine submit_cluster_cavgs
-
-            subroutine submit_match_cavgs
-                type(cmdline)        :: cline_match_cavgs
-                type(string)         :: path, cwd, projfile
-                type(chunk_rec)      :: crec, crecm1
-                type(rec_iterator)   :: it
-                logical, allocatable :: l_processed(:), l_busy(:)
-                integer              :: iset
-                if( set_list%size() < 2 ) return ! not enough sets generated
-                l_processed = set_list%get_processed_flags()
-                l_busy      = set_list%get_busy_flags()
-                ! any unprocessed and not being processed?
-                if ( all(l_processed(2:) .or. l_busy(2:)) ) return
-                call cline_match_cavgs%set('prg',          'match_cavgs')
-                call cline_match_cavgs%set('mkdir',        'no')
-                call cline_match_cavgs%set('nthr',         params%nthr)
-                call cline_match_cavgs%set('mskdiam',      params%mskdiam)
-                call cline_match_cavgs%set('verbose_exit', 'yes')
-                call cline_match_cavgs%delete('nparts')
-                it = set_list%begin()
-                do iset = 1,set_list%size()
-                    call it%get(crec)
-                    if( iset == 1 .or. (crec%processed .or. crec%busy) )then
-                        call it%next()
-                        cycle
-                    endif
-                    call set_list%at(iset-1, crecm1)
-                    if( .not.crecm1%included )then
-                        call it%next()
-                        cycle
-                    endif
-                    ! dynamic clustering reference
-                    if( iset == 2 )then
-                        projfile = simple_abspath(crecm1%projfile)
-                    else
-                        projfile = simple_abspath(string('set_')//int2str(iset-1))//'/'//trim(MERGED_PROJFILE)
-                    endif
-                    call cline_match_cavgs%set('projfile',         projfile)
-                    ! target: current set 2 cluster and transfer 2 pool2D
-                    call cline_match_cavgs%set('projfile_target',  basename(crec%projfile))
-                    ! merged: dynamic reference for next set
-                    call cline_match_cavgs%set('projfile_merged',  string(trim(MERGED_PROJFILE)))
-                    ! match: current set selected ready for pool2D
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    ! call cline_match_cavgs%set('projfile_matched', string(trim(MATCH_PROJFILE)))
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-                    ! submission
-                    path = stemname(crec%projfile)
-                    call simple_chdir(path)
-                    call simple_getcwd(cwd)
-                    CWD_GLOB = cwd%to_char()
-                    call qenv%exec_simple_prg_in_queue_async(cline_match_cavgs,&
-                        &string('match_cavgs_script'), string('match_cavgs.log'))
-                    call simple_chdir('..')
-                    call simple_getcwd(cwd)
-                    CWD_GLOB = cwd%to_char()
-                    ! update status in list
-                    crec%busy      = .true.   ! ongoing
-                    crec%processed = .false.  ! not complete
-                    call set_list%replace_iterator(it, crec)
-                    ! move iterator
-                    call it%next()
-                enddo
-                if( allocated(l_processed) ) deallocate(l_processed)
-                if( allocated(l_busy)      ) deallocate(l_busy)
-                call cline_match_cavgs%kill
-            end subroutine submit_match_cavgs
-
-            ! Check for status of individual sets
-            subroutine is_set_processed( it )
-                class(rec_iterator), intent(inout) :: it
-                type(string)    :: fname
-                type(chunk_rec) :: crec
-                if( set_list%size() < 1 ) return  ! no sets generated yet
-                call it%get(crec)
-                if( crec%processed )      return  ! already done
-                fname = stemname(crec%projfile)//'/'//TASK_FINISHED
-                if( file_exists(fname) )then
-                    crec%busy      = .false.
-                    crec%processed = .true.       ! now ready for pool import
-                else
-                    crec%processed = .false.
-                endif
-                call set_list%replace_iterator(it, crec)
-            end subroutine is_set_processed
-
-            ! apply user-inputted selection on the first set
-            subroutine report_interactive_selection( cls2reject )
-                integer, allocatable, intent(in) :: cls2reject(:)
-                integer, allocatable             :: states(:)
-                type(sp_project)                 :: spproj
-                integer, allocatable :: clusters_accepted(:)
-                type(chunk_rec) :: crec
-                integer :: i, n, n_clusters, cluster
-                logical :: l_class_selection
-                if( .not.allocated(cls2reject) )then
-                    write(logfhandle, *) ">>> cls2reject not allocated"
-                    return  ! gui must return an non empty vector
-                endif
-                ! read all fields
-                call set_list%at(1, crec)
-                call spproj%read(crec%projfile)
-                n = spproj%os_cls2D%get_noris()
-                ! undo the default particles cluster_cavgs selection
-                call spproj%os_ptcl2D%set_all2single('state', 1)
-                call spproj%os_ptcl3D%set_all2single('state', 1)
-                ! selection
-                allocate(states(n), source=1)
-                l_class_selection = .true.
-                if( size(cls2reject) == 1 )then
-                    ! no rejection applied, all classes are to be selected
-                    l_class_selection = cls2reject(1) /= 0
-                endif
-                if( l_class_selection )then
-                    ! get all clusters and calculate their populations
-                    n_clusters = maxval(spproj%os_cls2D%get_all_asint('cluster'))
-                    allocate(clusters_accepted(n_clusters), source=0)
-                    do i=1, spproj%os_cls2D%get_noris()
-                        ! set clusters_accepted(cluster) to 1 if any child class is selected
-                        if( any(cls2reject == i) ) cycle
-                        cluster = spproj%os_cls2D%get_int(i, 'cluster')
-                        if( cluster > 0 ) clusters_accepted(cluster) = 1
-                    enddo
-                    do i=1, size(clusters_accepted)
-                        if( clusters_accepted(i) > 0) then
-                            write(logfhandle, *) ">>> CLUSTER ", i, " HAS BEEN SELECTED"
-                        else
-                            write(logfhandle, *) ">>> CLUSTER ", i, " HAS BEEN DESELECTED"
-                        endif
-                    enddo
-                    do i=1, spproj%os_cls2D%get_noris()
-                        cluster = spproj%os_cls2D%get_int(i, 'cluster')
-                        if( cluster == 0 ) then
-                            states(i) = 0
-                        else
-                            states(i) = clusters_accepted(cluster)
-                        endif
-                    enddo
-                endif
-                ! maintain state=0 for junk
-                do i = 1, n
-                    if(.not. spproj%os_cls2D%isthere(i, 'cluster')) states(i) = 0
-                enddo
-                ! report selection to particles
-                call spproj%map_cavgs_selection(states)
-                call spproj%write(crec%projfile)
-                ! cleanup
-                call spproj%kill
-                if( allocated(clusters_accepted) ) deallocate(clusters_accepted)
-                deallocate(states)
-            end subroutine report_interactive_selection
-
-            ! make completed project files visible to the watcher of the next application
-            subroutine flag_complete_sets
-                use simple_image, only:image
-                type(sp_project)   :: spproj
-                type(image)        :: img
-                type(string)       :: source, destination, stk
-                type(rec_iterator) :: it
-                type(chunk_rec)    :: crec
-                real    :: smpd
-                integer :: ldim(3), icls, iset, n_state_nonzero, nimgs, ncls
-                it = set_list%begin()
-                do iset = 1,set_list%size()
-                    call it%get(crec)
-                    if( crec%included )then
-                        ! move iterator
-                        call it%next() 
-                        cycle
-                    endif
-                    if( crec%processed )then
-                        if( iset == 1 )then
-                            source = crec%projfile  ! from cluster_cavgs
-                        else
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                            source = stemname(crec%projfile)//'/'//trim(MATCH_PROJFILE)
-                        endif
-                        destination = DIR_STREAM_COMPLETED//DIR_SET//int2str(iset)//METADATA_EXT
-                        call simple_rename(source, destination)
-                        crec%projfile = destination ! relocation
-                        crec%included = .true.
-                        write(logfhandle,'(A,I3)')'>>> COMPLETED SET ', crec%id
-                        call set_list%replace_iterator(it, crec)
-                        ! update particle counts
-                        call spproj%read_segment('ptcl2D', destination)
-                        n_state_nonzero = spproj%os_ptcl2D%count_state_gt_zero()
-                        n_accepted      = n_accepted + n_state_nonzero
-                        n_rejected      = n_rejected + spproj%os_ptcl2D%get_noris() - n_state_nonzero
-                        ! updates stack of rejected classes
-                        call spproj%read_segment('cls2D', destination)
-                        call spproj%read_segment('out', destination)
-                        call spproj%get_cavgs_stk(stk, ncls, smpd)
-                        nimgs = 0
-                        if( file_exists(REJECTED_CLS_STACK) )then
-                            call find_ldim_nptcls(string(REJECTED_CLS_STACK), ldim, nimgs)
-                        else
-                            call find_ldim_nptcls(stk, ldim, ncls)
-                        endif
-                        if( .not.img%exists() )then
-                            ldim(3) = 1
-                            call img%new(ldim,smpd)
-                        endif
-                        do icls = 1,ncls
-                            if( spproj%os_cls2D%get_state(icls) == 0 )then
-                                nimgs = nimgs+1
-                                call img%read(stk,icls)
-                                call img%write(string(REJECTED_CLS_STACK), nimgs)
-                            endif
-                        enddo
-                        call spproj%kill
-                    endif
-                    ! move iterator
-                    call it%next() 
-                enddo
-                call img%kill
-            end subroutine flag_complete_sets
 
             subroutine communicator_init()
                 call http_communicator%add_to_json( "stage",                   "initialising")
@@ -1002,6 +696,311 @@ contains
                     call json%add(rejected_cls2D, template)
                 endif
             end subroutine add_cls2D_rejected_to_json
+
+            subroutine user_select_reference_set( my_cls2reject )
+                integer, allocatable, intent(in) :: my_cls2reject(:)
+                type(sp_project)                 :: my_spproj
+                type(chunk_rec)                  :: my_ref_srec
+                integer, allocatable             :: my_states(:)
+                integer                          :: my_i, my_ncls
+                if( .not.allocated(my_cls2reject) )then
+                    write(logfhandle, *) ">>> cls2reject not allocated"
+                    return  ! gui must return an non empty vector
+                endif
+                ! get reference set record
+                call set_list%at(1, my_ref_srec)
+                ! read project -> only need 2d so can improve
+                call my_spproj%read(my_ref_srec%projfile)
+                my_ncls = my_spproj%os_cls2D%get_noris()
+                if( my_ncls == 0 )then
+                    write(logfhandle, *) ">>> no cls2D information in project file"
+                    return 
+                endif
+                ! allocate states
+                allocate( my_states(my_ncls) )
+                ! set all state flags to 1
+                my_states = 1
+                call my_spproj%os_cls2D%set_all2single('state', 1)
+                ! set all rejected cls state flags to 0
+                do my_i=1,size(my_cls2reject)
+                    my_states( my_cls2reject(my_i) ) = 0
+                    call my_spproj%os_cls2D%set(my_cls2reject(my_i), 'state', 0)
+                enddo
+                ! write project file -> state particle mapping and junk rejection handled by cluster_cavgs_selection
+                call my_spproj%write(my_ref_srec%projfile)
+                ! cleanup
+                deallocate(my_states)
+                call my_spproj%kill()
+                ! submit cluster_cavgs_selection
+                call submit_cluster_cavgs_selection()
+            end subroutine user_select_reference_set
+
+            subroutine submit_aggregate_chunks( my_set_it, my_chunk_it, my_cavgs_max )
+                class(rec_iterator), intent(inout) :: my_set_it, my_chunk_it
+                integer,             intent(in)    :: my_cavgs_max
+                type(cmdline)                      :: my_cline_aggregate_chunks
+                type(string)                       :: my_cwd
+                type(chunk_rec)                    :: my_crec, my_srec
+                call my_chunk_it%get(my_crec)
+                call my_set_it%get(my_srec)
+                call my_cline_aggregate_chunks%set('prg',                             'aggregate_chunks')
+                call my_cline_aggregate_chunks%set('projfile',                basename(my_srec%projfile))
+                call my_cline_aggregate_chunks%set('mkdir',                                         'no')
+                call my_cline_aggregate_chunks%set('nthr',                                   params%nthr)
+                call my_cline_aggregate_chunks%set('mskdiam',                             params%mskdiam)
+                call my_cline_aggregate_chunks%set('ncls',                                  my_cavgs_max)
+                call my_cline_aggregate_chunks%set('projfile_target',    string('../')//my_crec%projfile)
+                call my_cline_aggregate_chunks%set('verbose_exit',                                 'yes')
+                call my_cline_aggregate_chunks%set('verbose_exit_fname',                      TARGET_MET)
+                call simple_chdir(stemname(my_srec%projfile))
+                call del_file(TASK_FINISHED)
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                call qenv%exec_simple_prg_in_queue_async(my_cline_aggregate_chunks,&
+                    &string('aggregate_chunks_script'), string('aggregate_chunks.log'), string('simple_private_exec'))
+                call simple_chdir('..')
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                my_srec%busy      = .true.
+                my_srec%processed = .false.
+                call set_list%replace_iterator(my_set_it, my_srec)
+                call my_cline_aggregate_chunks%kill
+                call my_cwd%kill
+            end subroutine submit_aggregate_chunks
+
+            subroutine submit_cluster_cavgs( my_set_it )
+                class(rec_iterator), intent(inout) :: my_set_it
+                type(cmdline)                      :: my_cline_cluster_cavgs
+                type(string)                       :: my_cwd
+                type(chunk_rec)                    :: my_srec
+                call my_set_it%get(my_srec)
+                call my_cline_cluster_cavgs%set('prg',                           'cluster_cavgs')
+                call my_cline_cluster_cavgs%set('projfile',           basename(my_srec%projfile))
+                call my_cline_cluster_cavgs%set('mkdir',                                    'no')
+                call my_cline_cluster_cavgs%set('nthr',                              params%nthr)
+                call my_cline_cluster_cavgs%set('mskdiam',                        params%mskdiam)
+                call my_cline_cluster_cavgs%set('verbose_exit',                            'yes')
+                call my_cline_cluster_cavgs%set('verbose_exit_fname',        CLUSTERING_COMPLETE)
+                call simple_chdir(stemname(my_srec%projfile))
+                call del_file(TASK_FINISHED)
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                call qenv%exec_simple_prg_in_queue_async(my_cline_cluster_cavgs,&
+                    &string('cluster_cavgs_script'), string('cluster_cavgs.log'))
+                call simple_chdir('..')
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                my_srec%busy      = .true.
+                my_srec%processed = .false.
+                call set_list%replace_iterator(my_set_it, my_srec)
+                call my_cline_cluster_cavgs%kill
+                call my_cwd%kill
+                write(logfhandle, '(A,I4,A)') '>>> CLUSTERING CAVGS IN REFERENCE SET (', my_srec%id, ')'
+            end subroutine submit_cluster_cavgs
+
+            subroutine submit_match_cavgs( my_set_it )
+                class(rec_iterator), intent(inout) :: my_set_it
+                type(rec_iterator)                 :: my_refset_it
+                type(cmdline)                      :: my_cline_match_cavgs
+                type(string)                       :: my_cwd
+                type(chunk_rec)                    :: my_srec, my_srec_refs
+                my_refset_it = set_list%begin()
+                call my_set_it%get(my_srec)
+                call my_refset_it%get(my_srec_refs)
+                ! exit if refset not processed
+                if( .not.my_srec_refs%processed ) return
+                call my_cline_match_cavgs%set('prg',                                       'match_cavgs')
+                call my_cline_match_cavgs%set('projfile',                     basename(my_srec%projfile))
+                call my_cline_match_cavgs%set('projfile_ref',       string('../')//my_srec_refs%projfile)
+                call my_cline_match_cavgs%set('mkdir',                                              'no')
+                call my_cline_match_cavgs%set('nthr',                                        params%nthr)
+                call my_cline_match_cavgs%set('mskdiam',                                  params%mskdiam)
+                call my_cline_match_cavgs%set('verbose_exit',                                      'yes')
+                call my_cline_match_cavgs%set('verbose_exit_fname',                  CLUSTERING_COMPLETE)
+                call simple_chdir(stemname(my_srec%projfile))
+                call del_file(TASK_FINISHED)
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                call qenv%exec_simple_prg_in_queue_async(my_cline_match_cavgs,&
+                    &string('match_cavgs_script'), string('match_cavgs.log'))
+                call simple_chdir('..')
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                my_srec%busy      = .true.
+                my_srec%processed = .false.
+                call set_list%replace_iterator(my_set_it, my_srec)
+                call my_cline_match_cavgs%kill
+                call my_cwd%kill
+                write(logfhandle, '(A,I4,A,I4,A)') '>>> MATCHING CAVGS IN SET', my_srec%id, ' TO REFERENCE SET (', my_srec_refs%id, ')'
+            end subroutine submit_match_cavgs
+
+            subroutine submit_cluster_cavgs_selection()
+                type(rec_iterator)                 :: my_refset_it
+                type(cmdline)                      :: my_cline_cluster_cavgs_selection
+                type(string)                       :: my_cwd
+                type(chunk_rec)                    :: my_srec_refs
+                my_refset_it = set_list%begin()
+                call my_refset_it%get(my_srec_refs)
+                call my_cline_cluster_cavgs_selection%set('prg',                     'cluster_cavgs_selection')
+                call my_cline_cluster_cavgs_selection%set('projfile',          basename(my_srec_refs%projfile))
+                call my_cline_cluster_cavgs_selection%set('mkdir',                                        'no')
+                call my_cline_cluster_cavgs_selection%set('nthr',                                  params%nthr)
+                call my_cline_cluster_cavgs_selection%set('mskdiam',                            params%mskdiam)
+                call my_cline_cluster_cavgs_selection%set('verbose_exit',                                'yes')
+                call my_cline_cluster_cavgs_selection%set('verbose_exit_fname',                  USER_SELECTED)
+                call simple_chdir(stemname(my_srec_refs%projfile))
+                call del_file(TASK_FINISHED)
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                call qenv%exec_simple_prg_in_queue_async(my_cline_cluster_cavgs_selection,&
+                    &string('cluster_cavgs_selection_script'), string('cluster_cavgs_selection.log'))
+                call simple_chdir('..')
+                call simple_getcwd(my_cwd)
+                CWD_GLOB = my_cwd%to_char()
+                my_srec_refs%busy      = .true.
+                my_srec_refs%processed = .false.
+                call set_list%replace_iterator(my_refset_it, my_srec_refs)
+                call my_cline_cluster_cavgs_selection%kill
+                call my_cwd%kill
+                write(logfhandle, '(A,I4,A)') '>>> SELECTING CAVGS IN REFERENCE SET (', my_srec_refs%id, ')'
+            end subroutine submit_cluster_cavgs_selection
+
+            subroutine create_new_set( my_chunk_it )
+                class(rec_iterator), intent(inout) :: my_chunk_it
+                type(chunk_rec)                    :: my_crec
+                type(string)                       :: my_tmpl, my_set_proj
+                my_tmpl     = DIR_SET//int2str(set_list%size() + 1)
+                my_set_proj = my_tmpl//'/'//my_tmpl//METADATA_EXT
+                call my_chunk_it%get(my_crec)
+                call simple_mkdir(my_tmpl)
+                call simple_copy_file(my_crec%projfile, my_set_proj)
+                call simple_touch(my_tmpl//'/'//TASK_FINISHED)
+                call set_list%push2chunk_list(my_set_proj, set_list%size() + 1, .false.)
+                my_crec%processed = .true.
+                call chunk_list%replace_iterator(my_chunk_it, my_crec)
+                write(logfhandle, '(A,I4,A,I4)') '>>> CREATED SET', set_list%size(), ' AND APPENDED CHUNK', my_crec%id
+            end subroutine create_new_set
+
+            subroutine append_to_set( my_set_it, my_chunk_it )
+                class(rec_iterator), intent(inout) :: my_set_it, my_chunk_it
+                type(chunk_rec)                    :: my_crec, my_srec
+                integer                            :: my_cavgs_max
+                my_cavgs_max = SIEVING_MATCH_CAVGS_MAX                                   ! match set size
+                if( my_set_it == set_list%begin() ) my_cavgs_max = SIEVING_REF_CAVGS_MAX ! reference set size
+                call my_chunk_it%get(my_crec)
+                call my_set_it%get(my_srec)
+                my_crec%processed = .true.
+                call chunk_list%replace_iterator(my_chunk_it, my_crec)
+                call submit_aggregate_chunks(my_set_it, my_chunk_it, my_cavgs_max)
+                write(logfhandle, '(A,I4,A,I4)') '>>> APPENDING CHUNK', my_crec%id, ' TO SET', my_srec%id
+            end subroutine append_to_set
+
+            subroutine update_set_status( my_set_it, my_l_is_ref )
+                class(rec_iterator), intent(inout) :: my_set_it
+                logical,             intent(in)    :: my_l_is_ref
+                type(string)                       :: my_fname1, my_fname2, my_fname3, my_fname4
+                type(chunk_rec)                    :: my_srec
+                if( set_list%size() < 1 ) return  ! no sets generated yet
+                call my_set_it%get(my_srec)
+                if( my_srec%processed )      return  ! already done
+                my_fname1 = stemname(my_srec%projfile)//'/'//TASK_FINISHED
+                my_fname2 = stemname(my_srec%projfile)//'/'//CLUSTERING_COMPLETE
+                my_fname3 = stemname(my_srec%projfile)//'/'//TARGET_MET
+                my_fname4 = stemname(my_srec%projfile)//'/'//USER_SELECTED
+                ! busy is set if a process is running
+                if( file_exists(my_fname1) )then
+                    my_srec%busy      = .false.
+                else
+                    my_srec%busy      = .true.
+                endif
+                ! included is set once the number of non-junk cavgs in set >= cavgs_max
+                if( file_exists(my_fname3) )then
+                    ! now ready for cavgs clustering/matching
+                    my_srec%included = .true. 
+                else
+                    my_srec%included = .false.
+                endif
+                if( my_l_is_ref ) then
+                    ! processed is set only when user cavg selection has been completed
+                    if( file_exists(my_fname4) )then
+                        ! now ready for pool import
+                        my_srec%processed = .true.
+                        my_srec%waiting   = .false.
+                        call simple_copy_file(my_srec%projfile, string(DIR_STREAM_COMPLETED) // basename(my_srec%projfile))
+                    else if( file_exists(my_fname2) ) then
+                        ! waiting for user selection
+                        my_srec%processed = .false.
+                        my_srec%waiting   = .true.
+                    else
+                        my_srec%processed = .false.
+                    endif
+                else
+                    ! processed is set only when cavgs clustering/matching has been completed
+                    if( file_exists(my_fname2) )then
+                        ! now ready for pool import
+                        my_srec%processed = .true.
+                        call simple_copy_file(my_srec%projfile, string(DIR_STREAM_COMPLETED) // basename(my_srec%projfile)) 
+                    else
+                        my_srec%processed = .false.
+                    endif
+                endif
+                call set_list%replace_iterator(my_set_it, my_srec)
+            end subroutine update_set_status
+
+            subroutine manage_sets() ! note: this causes submit_cluster_cavgs/submit_match_cavgs to be run once the following chunk is complete -> can be improved
+                type(rec_iterator) :: my_chunk_it, my_set_it
+                type(chunk_rec)    :: my_srec, my_crec
+                integer            :: my_ichunk
+                if( chunk_list%size() > 0 )then
+                    ! we have completed chunks
+                    if( set_list%size() > 0 )then
+                        ! At least 1 set created. Get last set. No new sets created until last is complete so no need to test all
+                        my_set_it = set_list%end()
+                        ! update final set complete status
+                        call update_set_status( my_set_it, my_set_it == set_list%begin() )
+                        ! get last set record
+                        call my_set_it%get(my_srec)
+                        ! iterate through chunks
+                        my_chunk_it = chunk_list%begin()
+                        do my_ichunk=1, chunk_list%size()
+                            ! get chunk record
+                            call my_chunk_it%get(my_crec)
+                            ! get latest copy of set record
+                            call my_set_it%get(my_srec)
+                            ! test if chunk has been added to a set
+                            if( .not.my_crec%processed )then
+                                ! chunk has not been added to a set
+                                if( my_srec%processed )then
+                                    ! last set complete -> create new set
+                                    call create_new_set(my_chunk_it)
+                                    ! update l_set_it to new set
+                                    my_set_it = set_list%end()
+                                else if( .not.my_srec%busy .and. .not.my_srec%waiting )then
+                                    if( my_srec%included ) then
+                                        ! set reached target size
+                                        if( my_set_it == set_list%begin() ) then
+                                            ! run cluster cavgs on reference set
+                                            call submit_cluster_cavgs(my_set_it)
+                                        else
+                                            ! run match cavgs
+                                            call submit_match_cavgs(my_set_it)
+                                        endif
+                                    else
+                                        ! last chunk added but set not reached target size -> add next chunk
+                                        call append_to_set(my_set_it, my_chunk_it)
+                                    endif
+                                endif
+                            endif
+                            ! increment iterator
+                            call my_chunk_it%next()
+                        enddo                 
+                    else
+                        ! generate 1st(reference) set
+                        my_chunk_it = chunk_list%begin()
+                        call create_new_set(my_chunk_it)
+                    endif
+                endif
+            end subroutine manage_sets
 
     end subroutine exec_stream_p05_sieve_cavgs
 

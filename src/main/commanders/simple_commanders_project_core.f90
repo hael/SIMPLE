@@ -45,6 +45,11 @@ type, extends(commander_base) :: commander_concatenate_projects
     procedure :: execute      => exec_concatenate_projects
 end type commander_concatenate_projects
 
+type, extends(commander_base) :: commander_aggregate_chunks
+  contains
+    procedure :: execute      => exec_aggregate_chunks
+end type commander_aggregate_chunks
+
 type, extends(commander_base) :: commander_extract_subproj
 contains
     procedure :: execute      => exec_extract_subproj
@@ -382,6 +387,49 @@ contains
         call spproj%kill
         call simple_end('**** SIMPLE_CONCATENATE_PROJECTS NORMAL STOP ****')
     end subroutine exec_concatenate_projects
+
+    subroutine exec_aggregate_chunks( self, cline )
+        use simple_imgarr_utils,     only: read_cavgs_into_imgarr, dealloc_imgarr
+        use simple_strategy2D_utils, only: flag_non_junk_cavgs
+        use simple_projfile_utils,   only: merge_chunk_projfiles
+        class(commander_aggregate_chunks), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(image),                       allocatable   :: cavg_imgs(:)
+        logical,                           allocatable   :: l_non_junk(:)
+        real,                              parameter     :: LP_BIN = 20.
+        type(sp_project)                                 :: spproj
+        type(parameters)                                 :: params
+        type(string)                                     :: chunk_fnames(2), folder, cavgs
+        real                                             :: smpd, mskrad
+        integer                                          :: ldim(3), box, n_non_junk
+        ! init params          
+        call params%new(cline)
+        ! declare constants
+        folder          = PATH_HERE
+        cavgs           = string('cavgs_merged')//params%ext
+        chunk_fnames(1) = params%projfile
+        chunk_fnames(2) = params%projfile_target
+        ! merge spproj & spproj_target projects
+        call merge_chunk_projfiles(chunk_fnames, folder, spproj, write_proj=.false., cavgs_out=cavgs, cavgs_replace=.true.)
+        call spproj%write(params%projfile)
+        ! read cavgs
+        cavg_imgs = read_cavgs_into_imgarr(spproj)
+        smpd      = cavg_imgs(1)%get_smpd()
+        ldim      = cavg_imgs(1)%get_ldim()
+        box       = ldim(1)
+        mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
+        ! flag non-junk in cavgs
+        call flag_non_junk_cavgs( cavg_imgs, LP_BIN, mskrad, l_non_junk )
+        ! write verbose_exit_fname file when number non-junk classes >= ncls
+        n_non_junk = 0
+        if( allocated(l_non_junk) ) n_non_junk = count(l_non_junk)
+        if( n_non_junk >= params%ncls .and. params%verbose_exit_fname /= '' ) call simple_touch(params%verbose_exit_fname)
+        ! tidy up
+        call spproj%kill()
+        call dealloc_imgarr(cavg_imgs)
+        if( allocated(l_non_junk)   ) deallocate(l_non_junk)
+        call simple_end('**** SIMPLE_AGGREGATE_CHUNKS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes')
+    end subroutine exec_aggregate_chunks
 
     subroutine exec_extract_subproj( self, cline )
         use simple_commanders_project_ptcl, only: commander_import_particles

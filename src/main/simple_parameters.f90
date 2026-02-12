@@ -182,6 +182,7 @@ type :: parameters
     type(string)              :: projfile             !< SIMPLE *.simple project file
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
+    type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name
     type(string)              :: refs                 !< initial2Dreferences.ext
@@ -199,6 +200,7 @@ type :: parameters
     type(string)              :: stk_backgr           !< stack with image for background subtraction
     type(string)              :: stktab               !< list of per-micrograph stacks
     type(string)              :: subprojname          !< SIMPLE  subproject name
+    type(string)              :: verbose_exit_fname   !< File name of indicator file when task completes(TASK_FINISHED)
     type(string)              :: vol
     type(string)              :: vol_even             !< even reference volume
     type(string)              :: vol_odd              !< odd  reference volume
@@ -599,6 +601,7 @@ contains
         self%projfile=''          !< SIMPLE *.simple project file
         self%projfile_merged=''   !< merged SIMPLE *.simple project file output
         self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
+        self%projfile_ref=''      !< SIMPLE project containing reference assignments
         self%projfile_target=''   !< another SIMPLE *.simple project file
         self%projname=''          !< SIMPLE  project name
         self%refs=''              !< initial2Dreferences.ext
@@ -828,6 +831,7 @@ contains
         call check_carg('use_thres',      self%use_thres)
         call check_carg('vis',            self%vis)
         call check_carg('verbose_exit',   self%verbose_exit)
+        call check_carg('verbose_exit_fname', self%verbose_exit_fname)   
         call check_carg('volrec',         self%volrec)
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wiener',         self%wiener)
@@ -858,9 +862,10 @@ contains
         call check_file('pdbfiles',       self%pdbfiles,     'T')
         call check_file('pdbout',         self%pdbout)
         call check_file('pickrefs',       self%pickrefs,     notAllowed='T')
-        call check_file('plaintexttab',   self%plaintexttab, 'T')
-        call check_file('projfile',       self%projfile,     'O')
-        call check_file('projfile_target',self%projfile_target,'O')
+        call check_file('plaintexttab',   self%plaintexttab,    'T')
+        call check_file('projfile',       self%projfile,        'O')
+        call check_file('projfile_ref',   self%projfile_ref,    'O')
+        call check_file('projfile_target',self%projfile_target, 'O')
         call check_file('refs',           self%refs,         notAllowed='T')
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER

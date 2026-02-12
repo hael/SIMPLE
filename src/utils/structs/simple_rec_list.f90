@@ -55,6 +55,7 @@ type, extends(rec) :: chunk_rec
     logical      :: busy      = .false. ! true after submission and until completion is detected
     logical      :: processed = .false. ! chunk: has converged; set: has been clustered/selected/matched
     logical      :: included  = .false. ! whether the set has been imported into the pool
+    logical      :: waiting   = .false. ! whether set is waiting on user input
 contains
     procedure :: print => print_file
 end type chunk_rec
@@ -96,6 +97,7 @@ contains
     procedure, private :: at_project_rec, at_process_rec, at_chunk_rec
     generic            :: at => at_project_rec, at_process_rec, at_chunk_rec
     procedure          :: begin
+    procedure          :: end
     procedure          :: end_iter
     ! Lifecycle
     procedure, private :: assign
@@ -340,6 +342,12 @@ contains
         type(rec_iterator) :: it
         it%it = self%list%begin()
     end function begin
+
+    function end(self) result(it)
+        class(rec_list), intent(in) :: self
+        type(rec_iterator) :: it
+        it%it = self%list%end()
+    end function end
 
     function end_iter(self) result(it)
         class(rec_list), intent(in) :: self

@@ -10,12 +10,13 @@ implicit none
 
 contains
 
-    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out )
+    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, cavgs_replace )
         class(string),           intent(in)    :: chunk_fnames(:) ! List of project files
         class(string),           intent(in)    :: folder          ! output folder
         class(sp_project),       intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
         class(string), optional, intent(in)    :: projname_out    ! name for output project file
         logical,       optional, intent(in)    :: write_proj      ! write project file
+        logical,       optional, intent(in)    :: cavgs_replace   ! replace cavgs
         class(string), optional, intent(in)    :: cavgs_out       ! name for output cls2D stack
         type(sp_project), allocatable :: chunks(:)
         real,             allocatable :: states(:)
@@ -23,12 +24,15 @@ contains
         type(class_frcs) :: frcs, frcs_chunk
         type(image)      :: img
         type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
+        type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp
         real             :: smpd
         integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
-        logical          :: l_write_proj
-        l_write_proj = .true.
-        if(present(write_proj)) l_write_proj = write_proj
+        logical          :: l_write_proj, l_cavgs_replace
+        l_write_proj    = .true.
+        l_cavgs_replace = .false.
+        if( present( write_proj )   ) l_write_proj    = write_proj
+        if( present( cavgs_replace )) l_cavgs_replace = cavgs_replace
         nchunks = size(chunk_fnames)
         allocate(chunks(nchunks))
         dir = folder%to_char()//'/'
@@ -47,7 +51,13 @@ contains
         if( present(cavgs_out) )then
             cavgs = dir//cavgs_out
         else
-            cavgs = dir%to_char()//'cavgs.mrc'
+            cavgs = dir%to_char()//'cavgs'//params_glob%ext%to_char()
+        endif
+        if( l_cavgs_replace ) then
+            cavgs_tmp    = cavgs
+            evenname_tmp = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//params_glob%ext
+            oddname_tmp  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//params_glob%ext
+            cavgs        = dir%to_char()//'cavgs_tmp'//params_glob%ext%to_char()
         endif
         if( file_exists(cavgs) )THROW_WARN('ouput stack already exists: '//cavgs%to_char())
         nallptcls = 0
@@ -74,9 +84,9 @@ contains
                 call img%read(stkname,i)
                 call img%write(cavgs,icls)
                 call img%read(evenname,i)
-                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even.mrc',icls)
+                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//params_glob%ext,icls)
                 call img%read(oddname,i)
-                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd.mrc',icls)
+                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//params_glob%ext,icls)
             enddo
         enddo
         call img%kill
@@ -160,6 +170,14 @@ contains
         ! add classes, frcs
         call frcs%write(dir//trim(FRCS_FILE))
         call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
+        if( l_cavgs_replace ) then
+            evenname = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//params_glob%ext
+            oddname  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//params_glob%ext
+            call simple_rename( cavgs,    cavgs_tmp,    overwrite=.true. )
+            call simple_rename( evenname, evenname_tmp, overwrite=.true. )
+            call simple_rename( oddname,  oddname_tmp,  overwrite=.true. )
+            cavgs = cavgs_tmp
+        endif
         call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
         states = merged_proj%os_cls2D%get_all('state')
         call merged_proj%os_cls3D%new(ncls_tot, .false.)

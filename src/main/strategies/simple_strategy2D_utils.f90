@@ -12,7 +12,7 @@ use simple_segmentation,      only: otsu_img
 use simple_sp_project,        only: sp_project
 implicit none
 
-public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
+public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, id_junk, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
 public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset, test_strat2D_utils
 private
 #include "simple_local_flags.inc"
@@ -114,6 +114,24 @@ contains
         !$omp end parallel do
         call clsfrcs%kill
     end subroutine id_junk_and_prep_cavgs4clust
+
+    subroutine id_junk( spproj, mskdiam, l_non_junk )
+        class(sp_project),        intent(inout) :: spproj
+        real,                     intent(in)    :: mskdiam
+        logical,     allocatable, intent(inout) :: l_non_junk(:)
+        type(image), allocatable                :: cavg_imgs(:)
+        real,        parameter                  :: LP_BIN = 20.
+        integer                                 :: ldim(3), box
+        real                                    :: smpd, mskrad
+        cavg_imgs = read_cavgs_into_imgarr(spproj)
+        smpd      = cavg_imgs(1)%get_smpd()
+        ldim      = cavg_imgs(1)%get_ldim()
+        box       = ldim(1)
+        mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * mskdiam/smpd)
+        if( allocated(l_non_junk) ) deallocate(l_non_junk)
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
+        call dealloc_imgarr(cavg_imgs)
+    end subroutine id_junk
 
     subroutine prep_cavgs4clust( spproj, cavg_imgs, mskdiam, clspops, clsinds, mask, mm )
         class(sp_project),        intent(inout) :: spproj

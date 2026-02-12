@@ -64,12 +64,14 @@ contains
     end subroutine simple_print_git_version
 
     !> \brief  is for pretty ending
-    subroutine simple_end( str, print_simple, verbose_exit )
+    subroutine simple_end( str, print_simple, verbose_exit, verbose_exit_fname )
         use simple_syslib, only: simple_touch
         use simple_string
-        character(len=*),  intent(in) :: str
-        logical, optional, intent(in) :: print_simple, verbose_exit
-        logical :: pprint_simple
+        character(len=*),       intent(in) :: str
+        type(string), optional, intent(in) :: verbose_exit_fname
+        logical,      optional, intent(in) :: print_simple, verbose_exit
+        type(string)                       :: exit_fname
+        logical                            :: pprint_simple
         ! pretty ending
         pprint_simple = .true.
         if( present(print_simple) ) pprint_simple = print_simple
@@ -86,7 +88,13 @@ contains
         write(logfhandle,'(A)') str
         ! write file indicating completed process
         if( present(verbose_exit) )then
-            if( verbose_exit ) call simple_touch(TASK_FINISHED)
+            if( verbose_exit ) then
+                exit_fname = TASK_FINISHED
+                if( present(verbose_exit_fname) )then
+                    if( verbose_exit_fname /= '') exit_fname = verbose_exit_fname
+                endif   
+                call simple_touch(exit_fname)
+            endif
         endif
     end subroutine simple_end
 
