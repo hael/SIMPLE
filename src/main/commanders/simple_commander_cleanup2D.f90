@@ -6,6 +6,7 @@ use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_cavgs,        only: commander_cluster_cavgs
 use simple_segmentation,            only: otsu_img
 use simple_projfile_utils,          only: merge_chunk_projfiles
+use simple_imgarr_utils,            only: read_cavgs_into_imgarr
 implicit none
 #include "simple_local_flags.inc"
 
@@ -16,31 +17,27 @@ end type commander_cleanup2D
 
 contains 
     subroutine exec_cleanup2D( self, cline )
-        real,              parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
-        integer,           parameter     :: BOXFAC = 3, NQ_DIAMS = 10
         class(commander_cleanup2D), intent(inout)  :: self
         class(cmdline),              intent(inout) :: cline
         type(cmdline), allocatable      :: cline_clust_js(:), cline_clust_pop(:)
         type(commander_abinitio2D)      :: xabinitio2D
         type(commander_cluster_cavgs)   :: xcluster_cavgs
         type(commander_extract_subproj) :: xextract_subproj
-        type(image),          allocatable :: stk(:)
-        type(image_bin), allocatable      :: binptcl_stk(:)
-        type(string), allocatable         :: chunk_fnames_js(:), chunk_fnames_pop(:)
-        integer,     allocatable :: labels(:), diam_labels(:)
-        logical,     allocatable :: inds_msk_js(:), inds_msk_pop(:)
-        real,        allocatable :: joint_scores(:), diams_arr(:), diam_means(:), abs_z_scores(:), tmp(:), diams_arr_ts(:)
-        type(sp_project)     :: spproj, spproj_merged_1, spproj_merged_fin 
+        type(image),  allocatable       :: stk(:)
+        type(string), allocatable       :: chunk_fnames_js(:), chunk_fnames_pop(:)
+        integer, allocatable            :: labels(:)
+        logical, allocatable            :: inds_msk_js(:), inds_msk_pop(:)
+        real,    allocatable            :: joint_scores(:), diams_arr(:), shifts(:,:), fin_mskdiams(:)
+        type(sp_project)     :: spproj, spproj_merged_1, spproj_merged_fin
         type(parameters)     :: params
         type(stats_struct)   :: diam_stats
-        type(string)         :: ptcl_stk, projname, folder 
-        integer :: icls, ncls, iptcl, nptcls, pop, i, box_in_pix, icls_ccavgs, ncls_ccavgs, jcls 
-        integer :: icls2, ncls2, jcls2 
-        real    :: mad, mskdiam
+        type(string)         :: folder
+        integer :: icls, ncls, pop, icls_ccavgs, ncls_ccavgs, jcls
+        integer :: icls2, ncls2, jcls2, n_cavgs_subproj
+        real    :: mskdiam
         call cline%set('polar', 'yes')
         call cline%set('ncls', 10)
         call cline%set('autoscale', 'yes')
-        call cline%set('mskdiam', 100)
         call params%new(cline)
         call spproj%read_segment('mic',   params%projfile)
         call spproj%read_segment('stk',   params%projfile)
@@ -64,8 +61,9 @@ contains
         deallocate(joint_scores, labels)
         allocate(cline_clust_js(count(inds_msk_js)), source = cline)
         allocate(chunk_fnames_js(count(inds_msk_js)))
+        allocate(fin_mskdiams(count(inds_msk_js)))
         jcls = 0
-        do icls = 1, ncls 
+        do icls = 1, ncls
             if(.not. inds_msk_js(icls)) cycle
             jcls = jcls + 1
             call cline_clust_js(jcls)%set('clustind', icls)
@@ -73,91 +71,66 @@ contains
             call xextract_subproj%execute_safe(cline_clust_js(jcls))
             call params%new(cline_clust_js(jcls))
             call spproj%read(params%projfile)
-            nptcls = spproj%os_ptcl2D%get_noris()
-            allocate(stk(nptcls))
-            if( .not. cline_clust_js(jcls)%defined('stk') )then
-                call spproj%get_cavgs_stk(ptcl_stk, nptcls, params%smpd, imgkind='ptcl')
-                params%stk = ptcl_stk
-            end if 
-            allocate(binptcl_stk(nptcls), diams_arr(nptcls))
-            ! calc mskdiams in same way as stream
-            do iptcl = 1, nptcls
-                call stk(iptcl)%new([params%box,params%box,1], params%smpd)
-                call stk(iptcl)%read(params%stk, iptcl)
-                call binptcl_stk(iptcl)%copy(stk(iptcl))
-                call otsu_img(binptcl_stk(iptcl))
-                call binptcl_stk(iptcl)%erode()
-                call binptcl_stk(iptcl)%erode()
-                call binptcl_stk(iptcl)%diameter_bin(diams_arr(iptcl))
-            end do 
-            deallocate(stk, binptcl_stk)
-            diams_arr = diams_arr + 2. * SMPD_SHRINK1
+            ! read cavgs and calculate mask
+            n_cavgs_subproj = spproj%os_cls2D%get_noris()
+            allocate(stk(n_cavgs_subproj))
+            stk = read_cavgs_into_imgarr(spproj)
+            call automask2D(stk, params%ngrow, nint(params%winsz), params%edge, diams_arr, shifts)
             call calc_stats(diams_arr, diam_stats)
-            allocate( diam_means(NQ_DIAMS), diam_labels(NQ_DIAMS) )
-            call sortmeans(diams_arr, NQ_DIAMS, diam_means, diam_labels)
-            mad = mad_gau(diams_arr, diam_stats%med)
-            allocate(abs_z_scores(NQ_DIAMS), source=abs((diam_means - diam_stats%med) / mad))
-            pop = 0
-            do i = 2, NQ_DIAMS - 1
-                if( abs_z_scores(i) < SIGMA_CRIT )then
-                    pop = pop + count(diam_labels == i)
-                    tmp = pack(diams_arr, mask=diam_labels == i)
-                    if( allocated(diams_arr_ts) )then
-                        diams_arr_ts = [diams_arr_ts(:), tmp(:)]
-                        deallocate(tmp)
-                    else
-                        allocate(diams_arr_ts(size(tmp)), source=tmp)
-                        deallocate(tmp)
-                    endif
-                endif
-            end do
-            call calc_stats(diams_arr_ts, diam_stats)
-            box_in_pix = find_magic_box(BOXFAC * nint(diam_stats%med/params%smpd))
-            mskdiam = min((real(box_in_pix) - COSMSKHALFWIDTH) * params%smpd, diam_stats%maxv)
-            mskdiam = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, mskdiam)
+            mskdiam = diam_stats%med
+            fin_mskdiams(jcls) = mskdiam
             call cline_clust_js(jcls)%set('mskdiam', mskdiam)
-            deallocate(diams_arr)
+            ! compute abinitio2D and cluster cavgs with more suitable mask
             call xabinitio2D%execute_safe(cline_clust_js(jcls))
             call xcluster_cavgs%execute_safe(cline_clust_js(jcls))
             call params%new(cline_clust_js(jcls))
             call spproj%read(params%projfile)
+            ! logic to filter subsubcls
             ncls_ccavgs = spproj%os_cls2D%get_noris()
             allocate(labels(ncls_ccavgs), inds_msk_pop(ncls_ccavgs))
             labels = spproj%os_cls2D%get_all_asint('class')
-            inds_msk_pop = .true. 
-            ! first 300 ptcls, only keeping clusterss with max 300 ptcls
-            ! maybe cap the number of clsclscls 
+            inds_msk_pop = .true.
+            ! first 300 clusters, only keep clusters with max 300 ptcls
             do icls_ccavgs = 1, min(300, ncls_ccavgs)
-                pop = spproj%os_cls2D%get(icls_ccavgs, 'pop')
+                ! pop = spproj%os_cls2D%get(icls_ccavgs, 'pop')
                 if (pop > 300) inds_msk_pop(icls_ccavgs) = .false.
             end do
             allocate(cline_clust_pop(count(inds_msk_pop)), source = cline_clust_js(jcls))
             allocate(chunk_fnames_pop(count(inds_msk_pop)))
-            jcls2 = 0 
+            jcls2 = 0
             ncls2 = size(spproj%os_cls2D%get_all_asint('class'))
-            do icls2 = 1, ncls2 
+            do icls2 = 1, ncls2
                 if(.not. inds_msk_js(icls2)) cycle
-                jcls2 = jcls2 + 1 
+                jcls2 = jcls2 + 1
                 call cline_clust_pop(jcls2)%set('clustind', icls2)
                 call cline_clust_pop(jcls2)%set('subprojname', 'subsubproj' // int2str(icls2))
                 call xextract_subproj%execute_safe(cline_clust_pop(jcls2))
+                call cline_clust_pop(jcls2)%set('prune', 'yes')
                 call params%new(cline_clust_pop(jcls2))
                 chunk_fnames_pop(jcls2) = params%projfile
-            end do 
+            end do
             deallocate(cline_clust_pop)
             folder         = PATH_HERE
+            ! first merge
             call merge_chunk_projfiles(chunk_fnames_pop, folder, spproj_merged_1)
             call spproj_merged_1%write(params%projfile_merged)
             deallocate(chunk_fnames_pop)
+        end do
+        ! set mskdiam to maxval of subprojects and prune subprojects
+        jcls = 0
+        do icls = 1, ncls
+            if(.not. inds_msk_js(icls)) cycle
+            call cline_clust_js(jcls)%set('prune', 'yes')
+            call cline_clust_js(jcls)%set('mskdiam', maxval(fin_mskdiams))
             call params%new(cline_clust_js(jcls))
             chunk_fnames_js(jcls) = params%projfile
-        end do 
+        end do
         folder             = PATH_HERE
+        ! second merge
         call merge_chunk_projfiles(chunk_fnames_js, folder, spproj_merged_fin)
         call spproj_merged_fin%write(params%projfile_merged)
         deallocate(inds_msk_js)
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****', print_simple = .false.)
-    end subroutine exec_cleanup2D
-
-    end module simple_commanders_cleanup2D
+    end subroutine exec_cleanup2D    
+end module simple_commanders_cleanup2D
     
