@@ -41,6 +41,11 @@ interface findloc_str
     module procedure findloc_str_2
 end interface findloc_str
 
+interface lex_sort
+    module procedure lex_sort_1
+    module procedure lex_sort_2
+end interface lex_sort
+
 contains
 
     pure function spaces( n ) result( str )
@@ -710,103 +715,220 @@ contains
         end do
     end function findloc_str_2
 
-    !> \brief  Lexographical sort.
-    !> \param strArr is a one-dimensional array of character strings to be  sorted in ascending lexical order.
-    !>   the sorted array. The characters of
-    !>         the elements of the string array are not modified. If blanks or punctuation characters are
-    !>         to be ignored, this needs to be taken care of before calling.
-    subroutine lex_sort( strArr, CaseSens, inds )
+    !> Stable lexicographic sort:
+    !>  - case-insensitive
+    !>  - ignores leading/trailing spaces
+    !>  - stable (preserves original order for equal keys)
+    subroutine lex_sort_1(strArr, inds)
+        implicit none
         character(len=*),               intent(inout) :: strArr(:)
-        logical, optional,              intent(in)    :: CaseSens  !< case-sensitive sorting
         integer, optional, allocatable, intent(out)   :: inds(:)
-        integer, allocatable :: indexarray(:)
-        integer              :: low, high, k
-        logical              :: LCaseSens
-        LCaseSens    = .false.
-        if( present(CaseSens) ) LCaseSens = CaseSens
-        low          = 1
-        high         = size(strArr)
-        allocate(indexarray(high))
-        indexarray = (/(k,k=low,high)/)
-        call quicksort(low, high)
-        strArr = strArr(indexarray)
-        if( present(inds) )then
-            if( allocated(inds) ) deallocate(inds)
-            allocate(inds(high), source=indexarray)
-        endif
-        deallocate(indexarray)
+        integer, allocatable :: idx(:), tmp(:)
+        integer :: n, i
+        n = size(strArr)
+        if (n <= 1) then
+            if (present(inds)) then
+                if (allocated(inds)) deallocate(inds)
+                allocate(inds(n))
+                do i=1,n
+                    inds(i) = i
+                end do
+            end if
+            return
+        end if
+        allocate(idx(n), tmp(n))
+        do i=1,n
+            idx(i) = i
+        end do
+        call mergesort_idx(1, n)
+        strArr = strArr(idx)
+        if (present(inds)) then
+            if (allocated(inds)) deallocate(inds)
+            allocate(inds(n), source=idx)
+        end if
+        deallocate(idx, tmp)
 
-      contains
+    contains
 
-          recursive subroutine quicksort( low, high )
-              integer, intent (in) :: low, high
-              integer :: pivotlocation
-              if( low < high )then
-                  call partition(low, high, pivotlocation)
-                  call quicksort(low, pivotlocation-1)
-                  call quicksort(pivotlocation+1, high)
-              end if
-          end subroutine quicksort
+        recursive subroutine mergesort_idx(l, r)
+            integer, intent(in) :: l, r
+            integer :: m
+            if (l >= r) return
+            m = (l + r) / 2
+            call mergesort_idx(l, m)
+            call mergesort_idx(m+1, r)
+            call merge_idx(l, m, r)
+        end subroutine mergesort_idx
 
-          subroutine partition( low, high, pivotlocation )
-              integer, intent (in) :: low, high
-              integer, intent(out) :: pivotlocation
-              integer :: k, lastsmall
-              call swap(indexarray(low), indexarray((low+high)/2))
-              lastsmall = low
-              do k=low+1,high
-                  if(strComp(strArr(indexarray(k)), strArr(indexarray(low))))then
-                      lastsmall = lastsmall + 1
-                      call swap(indexarray(lastsmall), indexarray(k))
-                  end if
-              end do
-              call swap(indexarray(low), indexarray(lastsmall))
-              pivotlocation = lastsmall
-          end subroutine partition
+        subroutine merge_idx(l, m, r)
+            integer, intent(in) :: l, m, r
+            integer :: i, j, k
+            i = l
+            j = m + 1
+            k = l
+            do while (i <= m .and. j <= r)
+                ! STABLE: if equal, take from left (i)
+                if (key_less(idx(j), idx(i))) then
+                    tmp(k) = idx(j)
+                    j = j + 1
+                else
+                    tmp(k) = idx(i)
+                    i = i + 1
+                end if
+                k = k + 1
+            end do
+            do while (i <= m)
+                tmp(k) = idx(i)
+                i = i + 1
+                k = k + 1
+            end do
+            do while (j <= r)
+                tmp(k) = idx(j)
+                j = j + 1
+                k = k + 1
+            end do
+            idx(l:r) = tmp(l:r)
+        end subroutine merge_idx
 
-          subroutine swap( m, n )
-              integer, intent (inout) :: m, n
-              integer :: temp
-              temp = m
-              m = n
-              n = temp
-          end subroutine swap
+        logical function key_less(i1, i2)
+            integer, intent(in) :: i1, i2
+            character(len=:), allocatable :: a, b
+            a = norm_key(strArr(i1))
+            b = norm_key(strArr(i2))
+            key_less = (a < b)
+        end function key_less
 
-          function strComp( p, q ) result( lexLess )
-              character(len=*), intent(in) :: p, q
-              logical :: lexLess
-              integer :: kq, k
-              if( LCaseSens )then
-                  lexLess = p < q
-              else
-                  kq = 1
-                  do k=1,max(len_trim(p),len_trim(q))
-                      if( UpperCaseFirst(p(k:k)) == UpperCaseFirst(q(k:k)) )then
-                          cycle
-                      else
-                          kq = k
-                          exit
-                      end if
-                  end do
-                  lexLess = UpperCaseFirst(p(kq:kq)) < UpperCaseFirst(q(kq:kq))
-              end if
-          end function strComp
+        pure function norm_key(s) result(out)
+            character(len=*), intent(in)  :: s
+            character(len=:), allocatable :: out
+            character(len=:), allocatable :: t
+            integer :: k, c
+            ! trim leading/trailing spaces
+            t = trim(adjustl(s))
+            allocate(character(len(t)) :: out)
+            ! uppercase ASCII a-z -> A-Z, leave everything else unchanged
+            do k = 1, len(t)
+                c = iachar(t(k:k))
+                if (c >= iachar('a') .and. c <= iachar('z')) then
+                    out(k:k) = achar(c - 32)
+                else
+                    out(k:k) = t(k:k)
+                end if
+            end do
+        end function norm_key
 
-          function UpperCaseFirst( letter ) result( L )
-              character(len=*), intent (in) :: letter
-              character(len=1)              :: L
-              character(len=26), parameter  :: Lower = "abcdefghijklmnopqrstuvwxyz"
-              character(len=26), parameter  :: Upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-              integer :: k
-              k = index(Lower, letter)
-              if (k > 0) then
-                  L = Upper(k:k)
-              else
-                  L = letter
-              end if
-          end function UpperCaseFirst
+    end subroutine lex_sort_1
 
-    end subroutine lex_sort
+    !> Stable lexicographic sort for SIMPLE string:
+    !>  - case-insensitive (ASCII a-z only)
+    !>  - ignores leading/trailing spaces
+    !>  - stable
+    subroutine lex_sort_2(strArr, inds)
+        type(string),                  intent(inout) :: strArr(:)
+        integer, optional, allocatable, intent(out)  :: inds(:)
+        integer, allocatable :: idx(:), tmp(:)
+        integer :: n, i
+        n = size(strArr)
+        if (n <= 1) then
+            if (present(inds)) then
+                if (allocated(inds)) deallocate(inds)
+                allocate(inds(n))
+                do i = 1, n
+                    inds(i) = i
+                end do
+            end if
+            return
+        end if
+        allocate(idx(n), tmp(n))
+        do i = 1, n
+            idx(i) = i
+        end do
+        call mergesort_idx(1, n)
+        strArr = strArr(idx)
+        if (present(inds)) then
+            if (allocated(inds)) deallocate(inds)
+            allocate(inds(n), source=idx)
+        end if
+        deallocate(idx, tmp)
+
+    contains
+
+        recursive subroutine mergesort_idx(l, r)
+            integer, intent(in) :: l, r
+            integer :: m
+            if (l >= r) return
+            m = (l + r) / 2
+            call mergesort_idx(l, m)
+            call mergesort_idx(m+1, r)
+            call merge_idx(l, m, r)
+        end subroutine mergesort_idx
+
+        subroutine merge_idx(l, m, r)
+            integer, intent(in) :: l, m, r
+            integer :: i, j, k
+            i = l
+            j = m + 1
+            k = l
+            do while (i <= m .and. j <= r)
+                ! STABLE: if equal, take from left (i)
+                if (key_less(idx(j), idx(i))) then
+                    tmp(k) = idx(j)
+                    j = j + 1
+                else
+                    tmp(k) = idx(i)
+                    i = i + 1
+                end if
+                k = k + 1
+            end do
+            do while (i <= m)
+                tmp(k) = idx(i)
+                i = i + 1
+                k = k + 1
+            end do
+            do while (j <= r)
+                tmp(k) = idx(j)
+                j = j + 1
+                k = k + 1
+            end do
+            idx(l:r) = tmp(l:r)
+        end subroutine merge_idx
+
+        logical function key_less(i1, i2) result(tf)
+            integer, intent(in) :: i1, i2
+            tf = norm_less( strArr(i1), strArr(i2) )
+        end function key_less
+
+        ! Compare two SIMPLE strings using:
+        ! - trim(adjustl())
+        ! - case-insensitive ASCII
+        logical function norm_less(a, b) result(tf)
+            type(string), intent(in) :: a, b
+            character(len=:), allocatable :: sa, sb
+            integer :: la, lb, k, ca, cb, ncmp
+            sa = trim(adjustl(a%to_char()))
+            sb = trim(adjustl(b%to_char()))
+            la = len(sa)
+            lb = len(sb)
+            ncmp = min(la, lb)
+            do k = 1, ncmp
+                ca = iachar(sa(k:k))
+                cb = iachar(sb(k:k))
+                ! uppercase a-z
+                if (ca >= iachar('a') .and. ca <= iachar('z')) ca = ca - 32
+                if (cb >= iachar('a') .and. cb <= iachar('z')) cb = cb - 32
+                if (ca < cb) then
+                    tf = .true.
+                    return
+                else if (ca > cb) then
+                    tf = .false.
+                    return
+                end if
+            end do
+            ! All equal up to min length -> shorter sorts first
+            tf = (la < lb)
+        end function norm_less
+
+    end subroutine lex_sort_2
 
     !>  \brief  converst to C string
     pure function to_cstring( f_string )result( c_string )

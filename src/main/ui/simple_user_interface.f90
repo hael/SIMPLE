@@ -8,6 +8,7 @@ use single_ui_api
 use stream_ui_api
 use simple_tests_ui_api
 use other_ui_api
+use simple_ui_hash, only: ui_hash
 implicit none
 
 public :: make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
@@ -27,7 +28,18 @@ integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
+type(ui_hash) :: prgtab
+
 contains
+
+    subroutine test_ui_refactoring_func
+        type(string), allocatable :: prgnames_other(:)
+        call add_other_ui_api2prgtab( prgtab )
+        ! prgnames_other = get_other_ui_prgnames()
+
+
+
+    end subroutine test_ui_refactoring_func
 
     
     ! public class methods
