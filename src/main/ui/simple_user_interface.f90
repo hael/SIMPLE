@@ -2566,15 +2566,14 @@ contains
         &'Analysis of class averages with k-medoids',&                ! descr_short
         &'is a program for analyzing class averages with k-medoids',& ! descr_long
         &'simple_exec',&                                              ! executable
-        &0, 4, 0, 1, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
+        &0, 3, 0, 1, 2, 1, 1, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call match_cavgs%set_input('parm_ios', 1, projfile)
-        call match_cavgs%set_input('parm_ios', 2, projfile_target)
-        call match_cavgs%set_input('parm_ios', 3, projfile_merged)
-        call match_cavgs%set_input('parm_ios', 4, prune)
+        call match_cavgs%set_input('parm_ios', 2, projfile_ref)
+        call match_cavgs%set_input('parm_ios', 3, prune)
         ! alternative inputs
         ! <empty>
         ! search controls

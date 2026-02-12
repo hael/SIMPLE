@@ -16,6 +16,7 @@ character(len=*), parameter :: PREPROC_JOB_NAME           = 'preprocessing'     
 character(len=*), parameter :: REFPICK_JOB_NAME           = 'reference_based_picking' ! name of reference based picking job. also used for folder name
 character(len=*), parameter :: REJECTED_CLS_STACK         = './rejected_cls.mrc'
 character(len=*), parameter :: SIEVING_JOB_NAME           = 'particle_sieving'        ! name of particle sieving job. also used for folder name
+character(len=*), parameter :: SIEVING_REFS_FNAME         = 'sieving_references'
 character(len=*), parameter :: STREAM_DEFAULT_CS          = '2.7'
 character(len=*), parameter :: STREAM_DEFAULT_FRACA       = '0.1'
 integer(kind=8),  parameter :: FLUSH_TIMELIMIT            = 900                       ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
@@ -42,7 +43,8 @@ integer,          parameter :: PREPROC_NTHR               = 4
 integer,          parameter :: REFPICK_NPARTS             = 10
 integer,          parameter :: REFPICK_NTHR               = 4
 integer,          parameter :: SHORTWAIT                  = 2                         ! movie folder watched every SHORTTIME seconds in shmem
-integer,          parameter :: SIEVING_MATCH_CAVGS_MAX    = 1000
+integer,          parameter :: SIEVING_MATCH_CAVGS_MAX    = 200
+integer,          parameter :: SIEVING_REF_CAVGS_MAX      = 1000
 integer,          parameter :: SIEVING_NCHUNKS            = 2
 integer,          parameter :: SIEVING_NCLS               = 100
 integer,          parameter :: SIEVING_NPARTS             = 8

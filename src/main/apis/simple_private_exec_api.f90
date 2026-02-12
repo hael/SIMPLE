@@ -65,7 +65,8 @@ use simple_commanders_mask, only: commander_automask
 use simple_commanders_imgops, only: commander_scale, commander_binarize
 
 ! misc commanders, miscallenous commanders (mostly printing)
-use simple_commanders_misc, only: commander_kstest, commander_pearsn
+use simple_commanders_project_core, only: commander_aggregate_chunks
+use simple_commanders_misc,         only: commander_kstest, commander_pearsn
 
 ! oris commanders, construction and operations on oris (per-particle parameters)
 use simple_commanders_oris, only: commander_rotmats2oris
