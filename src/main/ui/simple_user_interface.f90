@@ -677,8 +677,131 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_simple_test_prgs_in_ui
-        write(logfhandle,'(A)') format_str('TEST PROGRAMS:', C_UNDERLINED)
+        !====================================================================
+        ! HIGH-LEVEL
+        !====================================================================
+        write(logfhandle,'(A)') format_str('HIGH LEVEL:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_mini_stream%name%to_char()
         write(logfhandle,'(A)') test_sim_workflow%name%to_char()
+        ! write(logfhandle,'(A)') test_inside_write%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! INPUT/OUTPUT
+        !====================================================================
+        write(logfhandle,'(A)') format_str('INPUT/OPTPUT:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_imgfile%name%to_char()
+        ! write(logfhandle,'(A)') test_io%name%to_char()
+        ! write(logfhandle,'(A)') test_io_parallel%name%to_char()
+        ! write(logfhandle,'(A)') test_stack_io%name%to_char()
+        ! write(logfhandle,'(A)') test_mrc_validation%name%to_char()
+        ! write(logfhandle,'(A)') test_mrc2jpeg%name%to_char()
+        ! write(logfhandle,'(A)') test_starfile%name%to_char()
+        ! write(logfhandle,'(A)') test_star_export%name%to_char()
+        ! write(logfhandle,'(A)') test_inside_write%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! NETWORK
+        !====================================================================
+        write(logfhandle,'(A)') format_str('NETWORK:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_socket_client%name%to_char()
+        ! write(logfhandle,'(A)') test_socket_server%name%to_char()
+        ! write(logfhandle,'(A)') test_socket_io%name%to_char()
+        ! write(logfhandle,'(A)') test_socket_comm_distr%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! PARALLEL
+        !====================================================================
+        write(logfhandle,'(A)') format_str('PARALLEL:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_openmp%name%to_char()
+        ! write(logfhandle,'(A)') test_openacc%name%to_char()
+        ! write(logfhandle,'(A)') test_coarrays%name%to_char()
+        ! write(logfhandle,'(A)') test_simd%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! FFT
+        !====================================================================
+        write(logfhandle,'(A)') format_str('FFT:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_phasecorr%name%to_char()
+        ! write(logfhandle,'(A)') test_order_corr%name%to_char()
+        ! write(logfhandle,'(A)') test_gencorrs_fft%name%to_char()
+        ! write(logfhandle,'(A)') test_ft_expanded%name%to_char()
+        ! write(logfhandle,'(A)') test_eval_polarftcc%name%to_char()
+        ! write(logfhandle,'(A)') test_polarops%name%to_char()
+        ! write(logfhandle,'(A)') test_corrs2weights%name%to_char()
+        ! write(logfhandle,'(A)') test_rank_weights%name%to_char()
+        ! write(logfhandle,'(A)') test_rotate_ref%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! GEOMETRY
+        !====================================================================
+        write(logfhandle,'(A)') format_str('GEOMETRY:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_angres%name%to_char()
+        ! write(logfhandle,'(A)') test_ori%name%to_char()
+        ! write(logfhandle,'(A)') test_oris%name%to_char()
+        ! write(logfhandle,'(A)') test_uniform_euler%name%to_char()
+        ! write(logfhandle,'(A)') test_uniform_rot%name%to_char()
+        ! write(logfhandle,'(A)') test_sym%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! MASKS
+        !====================================================================
+        write(logfhandle,'(A)') format_str('MASKS:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_mask%name%to_char()
+        ! write(logfhandle,'(A)') test_msk_routines%name%to_char()
+        ! write(logfhandle,'(A)') test_otsu%name%to_char()
+        ! write(logfhandle,'(A)') test_bounds_from_mask3D%name%to_char()
+        ! write(logfhandle,'(A)') test_graphene_mask%name%to_char()
+        ! write(logfhandle,'(A)') test_nano_mask%name%to_char()
+        ! write(logfhandle,'(A)') test_ptcl_center%name%to_char()
+        ! write(logfhandle,'(A)') test_image_bin%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! OPTIMIZE
+        !====================================================================
+        write(logfhandle,'(A)') format_str('OPTIMIZE:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_lbfgsb%name%to_char()
+        ! write(logfhandle,'(A)') test_lbfgsb_cosine%name%to_char()
+        ! write(logfhandle,'(A)') test_opt_lp%name%to_char()
+        ! write(logfhandle,'(A)') test_lplims%name%to_char()
+        ! write(logfhandle,'(A)') test_lpstages%name%to_char()
+        ! write(logfhandle,'(A)') test_tree_srch%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! NUMERICS
+        !====================================================================
+        write(logfhandle,'(A)') format_str('NUMERICS:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_eigh%name%to_char()
+        ! write(logfhandle,'(A)') test_kbinterpol_fast%name%to_char()
+        ! write(logfhandle,'(A)') test_neigh%name%to_char()
+        ! write(logfhandle,'(A)') test_maxnloc%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! UTILS
+        !====================================================================
+        write(logfhandle,'(A)') format_str('UTILS:', C_UNDERLINED)
+        ! write(logfhandle,'(A)') test_cmdline%name%to_char()
+        ! write(logfhandle,'(A)') test_stringmatch%name%to_char()
+        ! write(logfhandle,'(A)') test_ansi_colors%name%to_char()
+        ! write(logfhandle,'(A)') test_units%name%to_char()
+        ! write(logfhandle,'(A)') test_serialize%name%to_char()
+        ! write(logfhandle,'(A)') test_install%name%to_char()
+        ! write(logfhandle,'(A)') test_nice%name%to_char()
+        ! write(logfhandle,'(A)') test_binoris_io%name%to_char()
+        write(logfhandle,'(A)') ''
+        !====================================================================
+        ! STATS
+        !====================================================================
+        write(logfhandle,'(A)') format_str('STATS:', C_UNDERLINED) 
+        ! write(logfhandle,'(A)') test_binoris%name%to_char()
+        ! write(logfhandle,'(A)') test_clustering%name%to_char()
+        ! write(logfhandle,'(A)') test_pca_all%name%to_char()
+        ! write(logfhandle,'(A)') test_pca_imgvar%name%to_char()
+        ! write(logfhandle,'(A)') test_class_sample%name%to_char()
+        ! write(logfhandle,'(A)') test_multinomal%name%to_char()
+        ! write(logfhandle,'(A)') test_extr_frac%name%to_char()
+        ! write(logfhandle,'(A)') test_eo_diff%name%to_char()
+        ! write(logfhandle,'(A)') test_ctf%name%to_char()
+        ! write(logfhandle,'(A)') test_sp_project%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine list_simple_test_prgs_in_ui
 
