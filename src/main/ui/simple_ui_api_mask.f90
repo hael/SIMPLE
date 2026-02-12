@@ -11,11 +11,11 @@ type(ui_program), target :: mask
 
 contains
 
-    subroutine register_ui_mask(prgtab)
+    subroutine register_simple_ui_mask(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('auto_spher_mask', auto_spher_mask, prgtab)
         call add_ui_program('automask2D',      automask2D,      prgtab)
         call add_ui_program('mask',            mask,            prgtab)
-    end subroutine register_ui_mask
+    end subroutine register_simple_ui_mask
 
 end module simple_ui_api_mask

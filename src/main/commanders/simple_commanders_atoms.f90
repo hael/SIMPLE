@@ -57,15 +57,15 @@ type, extends(commander_base) :: commander_pdb2mrc
     procedure :: execute      => exec_pdb2mrc
 end type commander_pdb2mrc
 
-type, extends(commander_base) :: commander_tseries_atoms_rmsd
+type, extends(commander_base) :: commander_atoms_rmsd
   contains
-    procedure :: execute      => exec_tseries_atoms_rmsd
-end type commander_tseries_atoms_rmsd
+    procedure :: execute      => exec_atoms_rmsd
+end type commander_atoms_rmsd
 
-type, extends(commander_base) :: commander_tseries_core_atoms_analysis
+type, extends(commander_base) :: commander_core_atoms_analysis
   contains
-    procedure :: execute      => exec_tseries_core_atoms_analysis
-end type commander_tseries_core_atoms_analysis
+    procedure :: execute      => exec_core_atoms_analysis
+end type commander_core_atoms_analysis
 
 type :: common_atoms
     integer           :: ind1, ind2, ncommon, ndiff
@@ -542,8 +542,8 @@ contains
         call simple_end('**** SIMPLE_PDB2MRC NORMAL STOP ****')
     end subroutine exec_pdb2mrc
 
-    subroutine exec_tseries_atoms_rmsd( self, cline )
-        class(commander_tseries_atoms_rmsd), intent(inout) :: self
+    subroutine exec_atoms_rmsd( self, cline )
+        class(commander_atoms_rmsd), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline !< command line input
         type(string),       allocatable :: pdbfnames(:)
         real,               allocatable :: pdbmat1(:,:), pdbmat2(:,:), dists(:), distmat(:,:), dists_neigh(:)
@@ -594,11 +594,11 @@ contains
         end do
         deallocate(dist_stats, dists, dists_neigh, inds, inds_neigh, pairs)
         ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_ATOMS_RMSD NORMAL STOP ****')
-    end subroutine exec_tseries_atoms_rmsd
+        call simple_end('**** SIMPLE_atoms_rmsd NORMAL STOP ****')
+    end subroutine exec_atoms_rmsd
 
-    subroutine exec_tseries_core_atoms_analysis( self, cline )
-        class(commander_tseries_core_atoms_analysis), intent(inout) :: self
+    subroutine exec_core_atoms_analysis( self, cline )
+        class(commander_core_atoms_analysis), intent(inout) :: self
         class(cmdline),                               intent(inout) :: cline !< command line input
         type(string),       allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_bfac(:), pdbfnames_fringe(:)
         type(common_atoms), allocatable :: atms_common(:)
@@ -683,6 +683,6 @@ contains
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
-    end subroutine exec_tseries_core_atoms_analysis
+    end subroutine exec_core_atoms_analysis
 
 end module simple_commanders_atoms

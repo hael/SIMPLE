@@ -13,13 +13,13 @@ type(ui_program), target :: print_magic_boxes
 
 contains
 
-    subroutine register_ui_print(prgtab)
+    subroutine register_simple_ui_print(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('info_image',         info_image,         prgtab)
         call add_ui_program('info_stktab',        info_stktab,        prgtab)
         call add_ui_program('print_dose_weights', print_dose_weights, prgtab)
         call add_ui_program('print_fsc',          print_fsc,          prgtab)
         call add_ui_program('print_magic_boxes',  print_magic_boxes,  prgtab)
-    end subroutine register_ui_print
+    end subroutine register_simple_ui_print
 
 end module simple_ui_api_print

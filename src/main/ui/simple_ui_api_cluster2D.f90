@@ -22,7 +22,7 @@ type(ui_program), target :: write_mic_filetab
 
 contains
 
-    subroutine register_ui_cluster2D(prgtab)
+    subroutine register_simple_ui_cluster2D(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('abinitio2D',              abinitio2D,              prgtab)
         call add_ui_program('cleanup2D',               cleanup2D,               prgtab)
@@ -38,6 +38,6 @@ contains
         call add_ui_program('select_clusters',         select_clusters,         prgtab)
         call add_ui_program('write_classes',           write_classes,           prgtab)
         call add_ui_program('write_mic_filetab',       write_mic_filetab,       prgtab)
-    end subroutine register_ui_cluster2D
+    end subroutine register_simple_ui_cluster2D
 
 end module simple_ui_api_cluster2D

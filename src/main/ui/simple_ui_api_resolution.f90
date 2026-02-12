@@ -10,10 +10,10 @@ type(ui_program), target :: clin_fsc
 
 contains
 
-    subroutine register_ui_resolution(prgtab)
+    subroutine register_simple_ui_resolution(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('fsc',      fsc,      prgtab)
         call add_ui_program('clin_fsc', clin_fsc, prgtab)
-    end subroutine register_ui_resolution
+    end subroutine register_simple_ui_resolution
 
 end module simple_ui_api_resolution

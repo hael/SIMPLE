@@ -16,7 +16,7 @@ type(ui_program), target :: stackops
 
 contains
 
-    subroutine register_ui_image(prgtab)
+    subroutine register_simple_ui_image(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('binarize',      binarize,      prgtab)
         call add_ui_program('convert',       convert,       prgtab)
@@ -26,6 +26,6 @@ contains
         call add_ui_program('select_',       select_,       prgtab)
         call add_ui_program('stack',         stack,         prgtab)
         call add_ui_program('stackops',      stackops,      prgtab)
-    end subroutine register_ui_image
+    end subroutine register_simple_ui_image
 
 end module simple_ui_api_image
