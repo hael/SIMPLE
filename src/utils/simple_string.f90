@@ -52,6 +52,7 @@ type :: string
     generic            :: operator(/=) => is_not_equal_1, is_not_equal_2
     procedure          :: readline
     procedure          :: writeline
+    procedure          :: print
     procedure, private :: set_real, set_dble, set_int
     generic            :: set => set_real, set_dble, set_int
     procedure          :: kill
@@ -488,6 +489,11 @@ contains
             ios = -1
         endif
     end subroutine writeline
+
+    subroutine print( self )
+        class(string), intent(inout) :: self
+        if( allocated(self%buffer) ) write(*, '(A)') trim(adjustl(self%buffer))
+    end subroutine print
         
     elemental subroutine kill( self )
         class(string), intent(inout) :: self

@@ -13,7 +13,7 @@ implicit none
 
 public :: make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
 public :: print_ui_json, write_ui_json, list_single_prgs_in_ui, list_stream_prgs_in_ui
-public :: print_stream_ui_json, validate_ui_json
+public :: print_stream_ui_json, validate_ui_json, test_ui_refactoring_func
 private
 #include "simple_local_flags.inc"
 
@@ -28,19 +28,19 @@ integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
-type(ui_hash) :: prgtab
+type(ui_hash) :: prgtab_other
 
 contains
 
     subroutine test_ui_refactoring_func
         type(string), allocatable :: prgnames_other(:)
-        call add_other_ui_api2prgtab( prgtab )
-        ! prgnames_other = get_other_ui_prgnames()
-
-
-
+        integer :: i
+        call add_other_ui_api2prgtab( prgtab_other )
+        prgnames_other = prgtab_other%keys_sorted()
+        do i = 1, size(prgnames_other)
+            call prgnames_other(i)%print
+        end do
     end subroutine test_ui_refactoring_func
-
     
     ! public class methods
 
