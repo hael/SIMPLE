@@ -16,7 +16,7 @@ type(ui_program), target :: reextract
 
 contains
 
-    subroutine register_ui_preproc(prgtab)
+    subroutine register_simple_ui_preproc(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('assign_optics_groups',  assign_optics_groups,  prgtab)
         call add_ui_program('ctf_estimate',          ctf_estimate,          prgtab)
@@ -26,6 +26,6 @@ contains
         call add_ui_program('pick',                  pick,                  prgtab)
         call add_ui_program('preprocess',            preprocess,            prgtab)
         call add_ui_program('reextract',             reextract,             prgtab)
-    end subroutine register_ui_preproc
+    end subroutine register_simple_ui_preproc
 
 end module simple_ui_api_preproc

@@ -19,7 +19,7 @@ type(commander_tseries_make_pickavg)             :: xtseries_make_pickavg
 type(commander_tseries_motion_correct_distr)     :: xmcorr
 type(commander_track_particles_distr)            :: xtrack
 type(commander_graphene_subtr)                   :: xgraphene_subtr
-type(commander_denoise_trajectory)               :: xden_traj
+type(commander_trajectory_denoise)               :: xden_traj
 
 ! PARTICLE 3D RECONSTRUCTION PROGRAMS
 type(commander_analysis2D_nano)                  :: xanalysis2D_nano
@@ -34,7 +34,7 @@ type(commander_extract_substk)                   :: xextract_substk
 type(commander_extract_subproj)                  :: xextract_subproj
 type(commander_autorefine3D_nano)                :: xautorefine3D_nano
 type(commander_trajectory_reconstruct3D_distr)   :: xtrajectory_reconstruct3D
-type(commander_trajectory_core_finder)           :: xtrajectory_core_finder
+type(commander_tsegmaps_core_finder)           :: xtsegmaps_core_finder
 type(commander_trajectory_swap_stack)            :: xtrajectory_swap_stack
 
 ! VALIDATION PROGRAMS
@@ -51,8 +51,8 @@ type(commander_conv_atom_denoise)                :: xconv_atom_denoise
 type(commander_atoms_stats)                      :: xatoms_stats
 type(commander_atoms_register)                   :: xatoms_register
 type(commander_crys_score)                       :: xcrys_score
-type(commander_tseries_atoms_rmsd)               :: xtseries_atoms_rmsd
-type(commander_tseries_core_atoms_analysis)      :: xtseries_core_atoms_analysis
+type(commander_atoms_rmsd)               :: xatoms_rmsd
+type(commander_core_atoms_analysis)      :: xcore_atoms_analysis
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)      :: args, prg
@@ -101,7 +101,7 @@ select case(prg)
         call xtseries_import%execute(cline)
     case( 'import_particles')
         call ximport_particles%execute(cline)
-    case( 'tseries_import_particles' )
+    case( 'trajectory_import_particles' )
         call ximport_trajectory%execute(cline)
     case( 'prune_project' )
         call xprune_project%execute( cline )
@@ -116,7 +116,7 @@ select case(prg)
     case( 'graphene_subtr' )
         call cline%set('mkdir', 'no')
         call xgraphene_subtr%execute( cline )
-    case( 'denoise_trajectory' )
+    case( 'trajectory_denoise' )
         call cline%set('mkdir', 'no')
         call xden_traj%execute( cline )
 
@@ -151,8 +151,8 @@ select case(prg)
         endif
     case( 'trajectory_reconstruct3D' )
         call xtrajectory_reconstruct3D%execute(cline)
-    case( 'trajectory_core_finder' )
-        call xtrajectory_core_finder%execute(cline)
+    case( 'tsegmaps_core_finder' )
+        call xtsegmaps_core_finder%execute(cline)
     case( 'trajectory_swap_stack' ) 
         call xtrajectory_swap_stack%execute(cline)
 
@@ -184,10 +184,10 @@ select case(prg)
     case( 'crys_score' )
         call cline%set('mkdir', 'no')
         call xcrys_score%execute(cline)
-    case( 'tseries_atoms_rmsd' )
-        call xtseries_atoms_rmsd%execute(cline)
-    case( 'tseries_core_atoms_analysis' )
-        call xtseries_core_atoms_analysis%execute(cline)
+    case( 'atoms_rmsd' )
+        call xatoms_rmsd%execute(cline)
+    case( 'core_atoms_analysis' )
+        call xcore_atoms_analysis%execute(cline)
     case( 'trajectory_make_projavgs' )
         call xtrajectory_make_projavgs%execute(cline)
 
@@ -201,7 +201,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('d5e9f8db')
+    call simple_print_git_version('1af26a6a')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

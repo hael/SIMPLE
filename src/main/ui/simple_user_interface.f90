@@ -1,14 +1,6 @@
 !@descr: the user interface class (it's a beast)
 module simple_user_interface
-use simple_core_module_api
-use simple_ansi_ctrls
-use simple_ui_program ! use everything from here, entangled module
-use simple_ui_api
-use single_ui_api
-use stream_ui_api
-use simple_tests_ui_api
-use other_ui_api
-use simple_ui_hash, only: ui_hash
+use simple_ui_api_all
 implicit none
 
 public :: make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
@@ -35,7 +27,7 @@ contains
     subroutine test_ui_refactoring_func
         type(string), allocatable :: prgnames_other(:)
         integer :: i
-        call add_other_ui_api2prgtab( prgtab_other )
+        call register_simple_ui_other( prgtab_other )
         prgnames_other = prgtab_other%keys_sorted()
         do i = 1, size(prgnames_other)
             call prgnames_other(i)%print
@@ -81,7 +73,7 @@ contains
         call new_ctf_estimate
         call new_ctf_phaseflip
         call new_ctfops
-        call new_denoise_trajectory
+        call new_trajectory_denoise
         call new_detect_atoms
         call new_dock_volpair
         call new_estimate_diam
@@ -162,9 +154,9 @@ contains
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
-        call new_tseries_atoms_rmsd
-        call new_tseries_core_atoms_analysis
-        call new_trajectory_core_finder
+        call new_atoms_rmsd
+        call new_core_atoms_analysis
+        call new_tsegmaps_core_finder
         call new_tseries_import
         call new_import_trajectory
         call new_tseries_make_pickavg
@@ -222,7 +214,7 @@ contains
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctf_phaseflip)
         call push2prg_ptr_array(ctfops)
-        call push2prg_ptr_array(denoise_trajectory)
+        call push2prg_ptr_array(trajectory_denoise)
         call push2prg_ptr_array(detect_atoms)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(export_relion)
@@ -301,11 +293,11 @@ contains
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
-        call push2prg_ptr_array(tseries_atoms_rmsd)
-        call push2prg_ptr_array(tseries_core_atoms_analysis)
-        call push2prg_ptr_array(trajectory_core_finder)
+        call push2prg_ptr_array(atoms_rmsd)
+        call push2prg_ptr_array(core_atoms_analysis)
+        call push2prg_ptr_array(tsegmaps_core_finder)
         call push2prg_ptr_array(tseries_import)
-        call push2prg_ptr_array(tseries_import_particles)
+        call push2prg_ptr_array(trajectory_import_particles)
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
         call push2prg_ptr_array(trajectory_reconstruct3D)
@@ -372,7 +364,7 @@ contains
             case('ctf_estimate');                ptr2prg => ctf_estimate
             case('ctf_phaseflip');               ptr2prg => ctf_phaseflip
             case('ctfops');                      ptr2prg => ctfops
-            case('denoise_trajectory');          ptr2prg => denoise_trajectory
+            case('trajectory_denoise');          ptr2prg => trajectory_denoise
             case('detect_atoms');                ptr2prg => detect_atoms
             case('dock_volpair');                ptr2prg => dock_volpair
             case('estimate_diam');               ptr2prg => estimate_diam
@@ -453,11 +445,11 @@ contains
             case('symaxis_search');              ptr2prg => symaxis_search
             case('symmetrize_map');              ptr2prg => symmetrize_map
             case('symmetry_test');               ptr2prg => symmetry_test
-            case('tseries_atoms_rmsd');          ptr2prg => tseries_atoms_rmsd
-            case('tseries_core_atoms_analysis'); ptr2prg => tseries_core_atoms_analysis
-            case('trajectory_core_finder');      ptr2prg => trajectory_core_finder
+            case('atoms_rmsd');          ptr2prg => atoms_rmsd
+            case('core_atoms_analysis'); ptr2prg => core_atoms_analysis
+            case('tsegmaps_core_finder');      ptr2prg => tsegmaps_core_finder
             case('tseries_import');              ptr2prg => tseries_import
-            case('tseries_import_particles');    ptr2prg => tseries_import_particles
+            case('trajectory_import_particles');    ptr2prg => trajectory_import_particles
             case('tseries_make_pickavg');        ptr2prg => tseries_make_pickavg
             case('trajectory_make_projavgs');    ptr2prg => trajectory_make_projavgs
             case('tseries_motion_correct');      ptr2prg => tseries_motion_correct
@@ -823,7 +815,7 @@ contains
         write(logfhandle,'(A)') print_project_field%name%to_char()
         write(logfhandle,'(A)') tseries_import%name%to_char()
         write(logfhandle,'(A)') import_particles%name%to_char()
-        write(logfhandle,'(A)') tseries_import_particles%name%to_char()
+        write(logfhandle,'(A)') trajectory_import_particles%name%to_char()
         write(logfhandle,'(A)') prune_project%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING PROGRAMS:', C_UNDERLINED)
@@ -831,7 +823,7 @@ contains
         write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
         write(logfhandle,'(A)') track_particles%name%to_char()
         write(logfhandle,'(A)') graphene_subtr%name%to_char()
-        write(logfhandle,'(A)') denoise_trajectory%name%to_char()
+        write(logfhandle,'(A)') trajectory_denoise%name%to_char()
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') analysis2D_nano%name%to_char()
@@ -862,9 +854,9 @@ contains
         write(logfhandle,'(A)') atoms_stats%name%to_char()
         write(logfhandle,'(A)') atoms_register%name%to_char()
         write(logfhandle,'(A)') crys_score%name%to_char()
-        write(logfhandle,'(A)') tseries_atoms_rmsd%name%to_char()
-        write(logfhandle,'(A)') tseries_core_atoms_analysis%name%to_char()
-        write(logfhandle,'(A)') trajectory_core_finder%name%to_char()
+        write(logfhandle,'(A)') atoms_rmsd%name%to_char()
+        write(logfhandle,'(A)') core_atoms_analysis%name%to_char()
+        write(logfhandle,'(A)') tsegmaps_core_finder%name%to_char()
         write(logfhandle,'(A)') trajectory_make_projavgs%name%to_char()
     end subroutine list_single_prgs_in_ui
 
@@ -1758,31 +1750,31 @@ contains
         ! <empty>
     end subroutine new_ctf_phaseflip
 
-    subroutine new_denoise_trajectory
+    subroutine new_trajectory_denoise
         ! PROGRAM SPECIFICATION
-        call denoise_trajectory%new(&
-        &'denoise_trajectory',&                                       ! name
+        call trajectory_denoise%new(&
+        &'trajectory_denoise',&                                       ! name
         &'kPCA-based denoising',&                                     ! descr_short
         &'is a program for kPCA-based denoising of an image stack',&  ! descr_long
         &'single_exec',&                                              ! executable
         &2, 1, 0, 0, 1, 0, 1, .false., gui_advanced=.false.)          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call denoise_trajectory%set_input('img_ios', 1, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
-        call denoise_trajectory%set_input('img_ios', 2, outstk)
+        call trajectory_denoise%set_input('img_ios', 1, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
+        call trajectory_denoise%set_input('img_ios', 2, outstk)
         ! parameter input/output
-        call denoise_trajectory%set_input('parm_ios', 1, smpd)
+        call trajectory_denoise%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call denoise_trajectory%set_input('filt_ctrls', 1, 'neigs', 'num', 'Number of eigencomponents, corresponding to the number of classes in the stack', 'Number of eigencomponents, corresponding to the number of classes in the stack', '# eigenvecs', .false., 500.0)
+        call trajectory_denoise%set_input('filt_ctrls', 1, 'neigs', 'num', 'Number of eigencomponents, corresponding to the number of classes in the stack', 'Number of eigencomponents, corresponding to the number of classes in the stack', '# eigenvecs', .false., 500.0)
         ! mask controls
         ! <empty>
         ! computer controls
-        call denoise_trajectory%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_denoise_trajectory
+        call trajectory_denoise%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_trajectory_denoise
 
     subroutine new_detect_atoms
         ! PROGRAM SPECIFICATION
@@ -4627,10 +4619,10 @@ contains
         call crys_score%set_input('comp_ctrls', 1, nthr)
     end subroutine new_crys_score
 
-    subroutine new_tseries_atoms_rmsd
+    subroutine new_atoms_rmsd
         ! PROGRAM SPECIFICATION
-        call tseries_atoms_rmsd%new(&
-        &'tseries_atoms_rmsd',&                                                       ! name
+        call atoms_rmsd%new(&
+        &'atoms_rmsd',&                                                       ! name
         &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
@@ -4639,25 +4631,25 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_atoms_rmsd%set_input('parm_ios', 1, smpd)
-        call tseries_atoms_rmsd%set_input('parm_ios', 2, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
-        call tseries_atoms_rmsd%set_input('parm_ios', 3, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
+        call atoms_rmsd%set_input('parm_ios', 1, smpd)
+        call atoms_rmsd%set_input('parm_ios', 2, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
+        call atoms_rmsd%set_input('parm_ios', 3, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call tseries_atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_tseries_atoms_rmsd
+    end subroutine new_atoms_rmsd
 
-    subroutine new_tseries_core_atoms_analysis
+    subroutine new_core_atoms_analysis
         ! PROGRAM SPECIFICATION
-        call tseries_core_atoms_analysis%new(&
-        &'tseries_core_atoms_analysis',&                                              ! name
+        call core_atoms_analysis%new(&
+        &'core_atoms_analysis',&                                              ! name
         &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
@@ -4666,35 +4658,35 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_core_atoms_analysis%set_input('parm_ios', 1, smpd)
-        call tseries_core_atoms_analysis%set_input('parm_ios', 2, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
-        call tseries_core_atoms_analysis%set_input('parm_ios', 3, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
+        call core_atoms_analysis%set_input('parm_ios', 1, smpd)
+        call core_atoms_analysis%set_input('parm_ios', 2, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
+        call core_atoms_analysis%set_input('parm_ios', 3, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call tseries_core_atoms_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call core_atoms_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_tseries_core_atoms_analysis
+    end subroutine new_core_atoms_analysis
 
-    subroutine new_trajectory_core_finder
+    subroutine new_tsegmaps_core_finder
         ! PROGRAM SPECIFICATION
-        call trajectory_core_finder%new(&
-        &'trajectory_core_finder',&                                                          ! name
+        call tsegmaps_core_finder%new(&
+        &'tsegmaps_core_finder',&                                                          ! name
         &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! descr_short
         &'is a program that analyses docked time-series density maps',&                   ! descr long
         &'single_exec',&                                                                  ! executable
         &1, 1, 0, 0, 0, 0, 0, .false., gui_advanced=.false.)                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call trajectory_core_finder%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
+        call tsegmaps_core_finder%set_input('img_ios', 1, 'filetab', 'file', 'Volumes list',&
         &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
         ! parameter input/output
-        call trajectory_core_finder%set_input('parm_ios', 1, smpd)
+        call tsegmaps_core_finder%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4705,7 +4697,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_trajectory_core_finder
+    end subroutine new_tsegmaps_core_finder
 
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
@@ -4738,19 +4730,19 @@ contains
 
     subroutine new_import_trajectory
         ! PROGRAM SPECIFICATION
-        call tseries_import_particles%new(&
-        &'tseries_import_particles',&                       ! name
+        call trajectory_import_particles%new(&
+        &'trajectory_import_particles',&                       ! name
         &'Imports time-series particles stack',&            ! descr_short
         &'is a workflow for importing time-series data',&   ! descr_long
         &'single_exec',&                                    ! executable
         &1, 2, 0, 0, 0, 0, 0, .true., gui_advanced=.false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_import_particles%set_input('img_ios', 1, stk)
-        tseries_import_particles%img_ios(1)%required = .true.
+        call trajectory_import_particles%set_input('img_ios', 1, stk)
+        trajectory_import_particles%img_ios(1)%required = .true.
         ! parameter input/output
-        call tseries_import_particles%set_input('parm_ios', 1, smpd)
-        call tseries_import_particles%set_input('parm_ios', 2, deftab)
+        call trajectory_import_particles%set_input('parm_ios', 1, smpd)
+        call trajectory_import_particles%set_input('parm_ios', 2, deftab)
         ! alternative inputs
         ! <empty>
         ! search controls

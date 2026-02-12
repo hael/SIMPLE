@@ -12,12 +12,12 @@ type(ui_program), target :: simulate_particles
 
 contains
 
-    subroutine register_ui_sim(prgtab)
+    subroutine register_simple_ui_sim(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('pdb2mrc',            pdb2mrc,            prgtab)
         call add_ui_program('simulate_movie',     simulate_movie,     prgtab)
         call add_ui_program('simulate_noise',     simulate_noise,     prgtab)
         call add_ui_program('simulate_particles', simulate_particles, prgtab)
-    end subroutine register_ui_sim
+    end subroutine register_simple_ui_sim
 
 end module simple_ui_api_sim

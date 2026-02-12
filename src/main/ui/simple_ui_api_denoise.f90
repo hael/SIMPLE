@@ -13,13 +13,13 @@ type(ui_program), target :: ppca_volvar
 
 contains
 
-    subroutine register_ui_denoise(prgtab)
+    subroutine register_simple_ui_denoise(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('icm2D',                icm2D,                prgtab)
         call add_ui_program('icm3D',                icm3D,                prgtab)
         call add_ui_program('ppca_denoise',         ppca_denoise,         prgtab)
         call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab)
         call add_ui_program('ppca_volvar',          ppca_volvar,          prgtab)
-    end subroutine register_ui_denoise
+    end subroutine register_simple_ui_denoise
 
 end module simple_ui_api_denoise

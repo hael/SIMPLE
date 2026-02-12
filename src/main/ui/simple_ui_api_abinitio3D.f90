@@ -12,13 +12,13 @@ type(ui_program), target :: noisevol
 
 contains
 
-    subroutine register_ui_cluster2D(prgtab)
+    subroutine register_simple_ui_abinitio3D(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('abinitio3D',        abinitio3D,        prgtab)
         call add_ui_program('abinitio3D_cavgs',  abinitio3D_cavgs,  prgtab)
         call add_ui_program('estimate_lpstages', estimate_lpstages, prgtab)
         call add_ui_program('multivol_assign',   multivol_assign,   prgtab)
         call add_ui_program('noisevol',          noisevol,          prgtab)
-    end subroutine register_ui_cluster2D
+    end subroutine register_simple_ui_abinitio3D
 
 end module simple_ui_api_abinitio3D

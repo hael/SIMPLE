@@ -12,12 +12,12 @@ type(ui_program), target :: vizoris
 
 contains
 
-    subroutine register_ui_ori(prgtab)
+    subroutine register_simple_ui_ori(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('make_oris', make_oris, prgtab)
         call add_ui_program('orisops',   orisops,   prgtab)
         call add_ui_program('oristats',  oristats,  prgtab)
         call add_ui_program('vizoris',   vizoris,   prgtab)
-    end subroutine register_ui_ori
+    end subroutine register_simple_ui_ori
 
 end module simple_ui_api_ori

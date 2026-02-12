@@ -13,13 +13,13 @@ type(ui_program), target :: automask
 
 contains
 
-    subroutine register_ui_refine3D(prgtab)
+    subroutine register_simple_ui_refine3D(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('refine3D',      refine3D,      prgtab)
         call add_ui_program('refine3D_auto', refine3D_auto, prgtab)
         call add_ui_program('reconstruct3D', reconstruct3D, prgtab)
         call add_ui_program('postprocess',   postprocess,   prgtab)
         call add_ui_program('automask',      automask,      prgtab)
-    end subroutine register_ui_refine3D
+    end subroutine register_simple_ui_refine3D
 
 end module simple_ui_api_refine3D

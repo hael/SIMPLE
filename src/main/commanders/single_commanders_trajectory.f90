@@ -29,10 +29,10 @@ type, extends(commander_base) :: commander_import_trajectory
     procedure :: execute      => exec_import_trajectory
 end type commander_import_trajectory
 
-type, extends(commander_base) :: commander_denoise_trajectory
+type, extends(commander_base) :: commander_trajectory_denoise
   contains
-    procedure :: execute      => exec_denoise_trajectory
-end type commander_denoise_trajectory
+    procedure :: execute      => exec_trajectory_denoise
+end type commander_trajectory_denoise
 
 type, extends(commander_base) :: commander_trajectory_swap_stack
   contains
@@ -361,18 +361,18 @@ contains
         call spproj%add_single_stk(params%stk, ctfvars, os)
         call spproj%write
         ! end gracefully
-        call simple_end('**** TSERIES_IMPORT_PARTICLES NORMAL STOP ****')
+        call simple_end('**** trajectory_import_particles NORMAL STOP ****')
     end subroutine exec_import_trajectory
 
-    subroutine exec_denoise_trajectory( self, cline )
+    subroutine exec_trajectory_denoise( self, cline )
         use simple_commanders_imgops, only: commander_ppca_denoise
-        class(commander_denoise_trajectory), intent(inout) :: self
+        class(commander_trajectory_denoise), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(commander_ppca_denoise) :: xkpca_den
         if( .not. cline%defined('neigs')    ) call cline%set('neigs', 500)
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'kpca')
         call xkpca_den%execute(cline)
-    end subroutine exec_denoise_trajectory
+    end subroutine exec_trajectory_denoise
 
     subroutine exec_trajectory_swap_stack( self, cline )
         class(commander_trajectory_swap_stack), intent(inout) :: self

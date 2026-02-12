@@ -25,7 +25,7 @@ type(ui_program), target :: zero_project_shifts
 
 contains
 
-    subroutine register_ui_project(prgtab)
+    subroutine register_simple_ui_project(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('export_relion',         export_relion,         prgtab)
         call add_ui_program('export_starproject',    export_starproject,    prgtab)
@@ -44,6 +44,6 @@ contains
         call add_ui_program('selection',             selection,             prgtab)
         call add_ui_program('update_project',        update_project,        prgtab)
         call add_ui_program('zero_project_shifts',   zero_project_shifts,   prgtab)
-    end subroutine register_ui_project
+    end subroutine register_simple_ui_project
 
 end module simple_ui_api_project

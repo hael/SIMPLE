@@ -11,11 +11,11 @@ type(ui_program), target :: uniform_filter3D
 
 contains
 
-    subroutine register_ui_filter(prgtab)
+    subroutine register_simple_ui_filter(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call add_ui_program('filter',           filter,           prgtab)
         call add_ui_program('uniform_filter2D', uniform_filter2D, prgtab)
         call add_ui_program('uniform_filter3D', uniform_filter3D, prgtab)
-    end subroutine register_ui_filter
+    end subroutine register_simple_ui_filter
 
 end module simple_ui_api_filter

@@ -20,10 +20,10 @@ type, extends(commander_base) :: commander_ptclsproc_nano
     procedure :: execute      => exec_ptclsproc_nano
 end type commander_ptclsproc_nano
 
-type, extends(commander_base) :: commander_trajectory_core_finder
+type, extends(commander_base) :: commander_tsegmaps_core_finder
   contains
-    procedure :: execute      => exec_trajectory_core_finder
-end type commander_trajectory_core_finder
+    procedure :: execute      => exec_tsegmaps_core_finder
+end type commander_tsegmaps_core_finder
 
 type, extends(commander_base) :: commander_trajectory_make_projavgs
   contains
@@ -274,9 +274,9 @@ contains
         call simple_end('**** PTCLSPROC_NANO NORMAL STOP ****')
     end subroutine exec_ptclsproc_nano
 
-    subroutine exec_trajectory_core_finder( self, cline )
+    subroutine exec_tsegmaps_core_finder( self, cline )
         use simple_opt_mask,  only: estimate_spher_mask
-        class(commander_trajectory_core_finder), intent(inout) :: self
+        class(commander_tsegmaps_core_finder), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
         real, parameter   :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
         type(parameters)  :: params
@@ -344,7 +344,7 @@ contains
             call vol_sum2%add(vol_ref)
             call vol_sum2%write(string('core_inserted_vol_')// int2str_pad(ivol,2)//'.mrc')
         end do
-    end subroutine exec_trajectory_core_finder
+    end subroutine exec_tsegmaps_core_finder
 
     subroutine exec_trajectory_make_projavgs( self, cline )
         use simple_strategy2D3D_common
