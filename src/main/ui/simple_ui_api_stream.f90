@@ -57,7 +57,7 @@ contains
         ! PROGRAM SPECIFICATION
         call assign_optics%new(&
         &'assign_optics', &                                              ! name
-        &'Assign optics groups',&                                        ! descr_short
+        &'Assign optics groups',&                                         ! descr_short
         &'is a program to assign optics groups during streaming',&       ! descr long
         &'simple_stream',&                                               ! executable
         &.true.)                                                         ! requires sp_project
@@ -203,12 +203,12 @@ contains
         ! PROGRAM SPECIFICATION
         call preproc%new(&
         &'preproc', &                                                                       ! name
-        &'Preprocessing in streaming mode',&                                                ! descr_short
-        &'is a distributed workflow that executes motion_correct, ctf_estimate'//&          ! descr_long
-        &' in streaming mode as the microscope collects the data',&
-        &'simple_stream',&                                                                  ! executable
-        &.true.,&                                                                           ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,motion correction,CTF estimation")  ! GUI                 
+        &'Preprocessing',&                                                                  ! descr_short
+        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
+        &' in sequence',&
+        &'simple_exec',&                                                                    ! executable
+        &.true.)                                                                            ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS           
         ! image input/output
         call preproc%add_input(UI_IMG, dir_movies, gui_submenu="data", gui_advanced=.false.)
         call preproc%add_input(UI_IMG, gainref,    gui_submenu="data", gui_advanced=.false.)

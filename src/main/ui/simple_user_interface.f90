@@ -43,51 +43,51 @@ contains
         call new_abinitio2D_stream( prgtab_all )
         call new_abinitio3D( prgtab_all )
         call new_abinitio3D_cavgs( prgtab_all )
-        call new_analysis2D_nano
+        call new_analysis2D_nano( prgtab_all)
         call new_assign_optics( prgtab_all )
         call new_assign_optics_groups( prgtab_all ) 
-        call new_atoms_register
-        call new_atoms_stats
+        call new_atoms_register( prgtab_all )
+        call new_atoms_stats( prgtab_all )
         call new_auto_spher_mask( prgtab_all )
         call new_automask( prgtab_all )
         call new_automask2D( prgtab_all )
-        call new_autorefine3D_nano
+        call new_autorefine3D_nano( prgtab_all )
         call new_binarize( prgtab_all )
-        call new_cavgseoproc_nano
-        call new_cavgsproc_nano
+        call new_cavgseoproc_nano( prgtab_all)
+        call new_cavgsproc_nano( prgtab_all )
         call new_center( prgtab_all )
-        call new_center2D_nano
+        call new_center2D_nano( prgtab_all )
         call new_check_refpick( prgtab_all )
         call new_cleanup2D( prgtab_all )
         call new_clin_fsc( prgtab_all )
         call new_cluster2D( prgtab_all )
-        call new_cluster2D_nano
+        call new_cluster2D_nano( prgtab_all )
         call new_cluster2D_stream( prgtab_all )
         call new_cluster2D_subsets( prgtab_all )
         call new_cluster_cavgs( prgtab_all )
         call new_cluster_cavgs_selection( prgtab_all )
         call new_cluster_stack( prgtab_all )
-        call new_conv_atom_denoise
+        call new_conv_atom_denoise( prgtab_all )
         call new_convert( prgtab_all )
-        call new_crys_score
+        call new_crys_score( prgtab_all )
         call new_ctf_estimate( prgtab_all )
         call new_ctf_phaseflip( prgtab_all )
         call new_ctfops( prgtab_all )
-        call new_trajectory_denoise
-        call new_detect_atoms
+        call new_trajectory_denoise( prgtab_all )
+        call new_detect_atoms( prgtab_all )
         call new_dock_volpair( prgtab_all )
-        call new_estimate_diam
+        call new_estimate_diam( prgtab_all )
         call new_estimate_lpstages( prgtab_all )
         call new_export_relion( prgtab_all )
         call new_export_starproject( prgtab_all )
         call new_extract( prgtab_all )
         call new_extract_subproj( prgtab_all )
-        call new_extract_substk
+        call new_extract_substk( prgtab_all )
         call new_filter( prgtab_all )
         call new_fsc( prgtab_all )
         call new_gen_pickrefs( prgtab_all )
         call new_gen_pspecs_and_thumbs( prgtab_all )
-        call new_graphene_subtr
+        call new_graphene_subtr( prgtab_all )
         call new_icm2D( prgtab_all )
         call new_icm3D( prgtab_all )
         call new_import_boxes( prgtab_all )
@@ -129,12 +129,12 @@ contains
         call new_print_project_field( prgtab_all )
         call new_print_project_info( prgtab_all )
         call new_prune_project( prgtab_all )
-        call new_ptclsproc_nano
+        call new_ptclsproc_nano( prgtab_all )
         call new_reconstruct3D( prgtab_all )
         call new_reextract( prgtab_all )
         call new_refine3D( prgtab_all )
         call new_refine3D_auto( prgtab_all )
-        call new_refine3D_nano
+        call new_refine3D_nano( prgtab_all )
         call new_replace_project_field( prgtab_all )
         call new_reproject( prgtab_all )
         call new_sample_classes( prgtab_all )
@@ -143,7 +143,7 @@ contains
         call new_select_clusters( prgtab_all )
         call new_selection( prgtab_all )
         call new_sieve_cavgs( prgtab_all )
-        call new_simulate_atoms
+        call new_simulate_atoms( prgtab_all )
         call new_simulate_movie( prgtab_all )
         call new_simulate_noise( prgtab_all )
         call new_simulate_particles( prgtab_all )
@@ -153,18 +153,18 @@ contains
         call new_stackops( prgtab_all )
         call new_symaxis_search( prgtab_all )
         call new_symmetrize_map( prgtab_all )
-        call new_symmetry_test( prgtab_all )
-        call new_atoms_rmsd
-        call new_core_atoms_analysis
-        call new_tsegmaps_core_finder
-        call new_tseries_import
-        call new_import_trajectory
-        call new_tseries_make_pickavg
-        call new_trajectory_make_projavgs
-        call new_tseries_motion_correct
-        call new_trajectory_reconstruct3D
-        call new_trajectory_swap_stack
-        call new_track_particles
+        call new_symmetry_test( prgtab_all )  
+        call new_atoms_rmsd( prgtab_all )
+        call new_core_atoms_analysis( prgtab_all )
+        call new_tsegmaps_core_finder( prgtab_all )
+        call new_tseries_import( prgtab_all )
+        call new_import_trajectory( prgtab_all )
+        call new_tseries_make_pickavg( prgtab_all )
+        call new_trajectory_make_projavgs( prgtab_all )
+        call new_tseries_motion_correct( prgtab_all )
+        call new_trajectory_reconstruct3D( prgtab_all )
+        call new_trajectory_swap_stack( prgtab_all )
+        call new_track_particles( prgtab_all )
         call new_uniform_filter2D( prgtab_all )
         call new_uniform_filter3D( prgtab_all )
         call new_update_project( prgtab_all )

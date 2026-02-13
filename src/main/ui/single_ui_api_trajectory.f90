@@ -13,22 +13,9 @@ type(ui_program), target :: trajectory_swap_stack
 
 contains
 
-    subroutine register_single_ui_trajectory(prgtab)
+
+    subroutine new_extract_substk( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('extract_substk', extract_substk, prgtab)
-        call add_ui_program('graphene_subtr', graphene_subtr, prgtab)
-        call add_ui_program('import_trajectory', import_trajectory, prgtab)
-        call add_ui_program('trajectory_denoise', trajectory_denoise, prgtab)
-        call add_ui_program('trajectory_make_projavgs', trajectory_make_projavgs, prgtab)
-        call add_ui_program('trajectory_reconstruct3D', trajectory_reconstruct3D, prgtab)
-        call add_ui_program('trajectory_swap_stack', trajectory_swap_stack, prgtab)
-    end subroutine register_single_ui_trajectory
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_extract_substk
         ! PROGRAM SPECIFICATION
         call extract_substk%new(&
         &'extract_substk',&                                                                                            ! name
@@ -53,9 +40,11 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('extract_substk', extract_substk, prgtab)
     end subroutine new_extract_substk
 
-    subroutine new_graphene_subtr
+    subroutine new_graphene_subtr( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call graphene_subtr%new(&
         &'graphene_subtr',&                                  ! name
@@ -81,9 +70,11 @@ contains
         ! <empty>
         ! computer controls
         call graphene_subtr%add_input(UI_COMP, nthr)
+        call add_ui_program('graphene_subtr', graphene_subtr, prgtab)
     end subroutine new_graphene_subtr
 
-    subroutine new_import_trajectory
+    subroutine new_import_trajectory( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call import_trajectory%new(&
         &'import_trajectory',&                    ! name
@@ -107,9 +98,11 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('import_trajectory', import_trajectory, prgtab)
     end subroutine new_import_trajectory
 
-    subroutine new_trajectory_denoise
+    subroutine new_trajectory_denoise( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call trajectory_denoise%new(&
         &'trajectory_denoise',&                                       ! name
@@ -133,10 +126,12 @@ contains
         ! <empty>
         ! computer controls
         call trajectory_denoise%add_input(UI_COMP, nthr)
+        call add_ui_program('trajectory_denoise', trajectory_denoise, prgtab)
     end subroutine new_trajectory_denoise
 
 
-    subroutine new_trajectory_make_projavgs
+    subroutine new_trajectory_make_projavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call trajectory_make_projavgs%new(&
         &'trajectory_make_projavgs',&                                                    ! name
@@ -161,10 +156,12 @@ contains
         call trajectory_make_projavgs%add_input(UI_MASK, mskdiam)
         ! computer controls
         call trajectory_make_projavgs%add_input(UI_COMP, nthr)
+        call add_ui_program('trajectory_make_projavgs', trajectory_make_projavgs, prgtab)
     end subroutine new_trajectory_make_projavgs
 
 
-    subroutine new_trajectory_reconstruct3D
+    subroutine new_trajectory_reconstruct3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call trajectory_reconstruct3D%new(&
         &'trajectory_reconstruct3D',&                                    ! name
@@ -191,10 +188,12 @@ contains
         ! computer controls
         call trajectory_reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call trajectory_reconstruct3D%add_input(UI_COMP, nthr)
+        call add_ui_program('trajectory_reconstruct3D', trajectory_reconstruct3D, prgtab)
     end subroutine new_trajectory_reconstruct3D
 
 
-    subroutine new_trajectory_swap_stack
+    subroutine new_trajectory_swap_stack( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call trajectory_swap_stack%new(&
         &'trajectory_swap_stack',&                                        ! name
@@ -217,6 +216,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('trajectory_swap_stack', trajectory_swap_stack, prgtab)
     end subroutine new_trajectory_swap_stack
 
 end module single_ui_api_trajectory

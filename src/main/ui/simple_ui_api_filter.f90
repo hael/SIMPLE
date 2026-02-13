@@ -49,9 +49,9 @@ contains
         ! <empty>
         ! computer controls
         call filter%add_input(UI_COMP, nthr)
-        ! add to ui_hash
         call add_ui_program('filter', filter, prgtab)
     end subroutine new_filter
+
 
     subroutine new_uniform_filter2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab

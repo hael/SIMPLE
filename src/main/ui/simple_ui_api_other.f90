@@ -38,7 +38,6 @@ contains
         call match_stacks%add_input(UI_MASK, mskdiam)
         ! computer controls
         call match_stacks%add_input(UI_COMP, nthr)
-        ! add to ui_hash
         call add_ui_program('match_stacks', match_stacks, prgtab)
     end subroutine new_match_stacks
 
@@ -66,8 +65,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-        ! add to ui_hash
-        call add_ui_program('mkdir', mkdir_, prgtab)
+        call add_ui_program('mkdir_', mkdir_, prgtab)
     end subroutine new_mkdir_
 
     subroutine new_normalize( prgtab )

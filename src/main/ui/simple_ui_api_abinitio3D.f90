@@ -63,6 +63,7 @@ contains
         call add_ui_program('abinitio3D', abinitio3D, prgtab)
     end subroutine new_abinitio3D
 
+
     subroutine new_abinitio3D_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -101,6 +102,7 @@ contains
         call add_ui_program('abinitio3D_cavgs', abinitio3D_cavgs, prgtab)
     end subroutine new_abinitio3D_cavgs
 
+
     subroutine new_estimate_lpstages( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -129,6 +131,7 @@ contains
         ! add to ui_hash
         call add_ui_program('estimate_lpstages', estimate_lpstages, prgtab)
     end subroutine new_estimate_lpstages
+
 
     subroutine new_multivol_assign( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -168,6 +171,7 @@ contains
         ! add to ui_hash
         call add_ui_program('multivol_assign', multivol_assign, prgtab)
     end subroutine new_multivol_assign
+
 
     subroutine new_noisevol( prgtab )
         class(ui_hash), intent(inout) :: prgtab

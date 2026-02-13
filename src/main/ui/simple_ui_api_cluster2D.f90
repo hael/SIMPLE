@@ -83,15 +83,11 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-
         ! alternative inputs
         ! <empty>
         ! search controls
-
         ! filter controls
-   
         ! mask controls
-  
         ! computer controls
         ! add 2 ui_ash
         call add_ui_program('cleanup2D', cleanup2D, prgtab)
