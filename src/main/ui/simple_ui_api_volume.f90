@@ -9,18 +9,8 @@ type(ui_program), target :: volops
 
 contains
 
-    subroutine register_simple_ui_volume(prgtab)
+    subroutine new_center( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('center',    center,    prgtab)
-        call add_ui_program('reproject', reproject, prgtab)
-        call add_ui_program('volops',    volops,    prgtab)
-    end subroutine register_simple_ui_volume
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_center
         ! PROGRAM SPECIFICATION
         call center%new(&
         &'center',&                    ! name
@@ -49,10 +39,12 @@ contains
         ! <empty>
         ! computer controls
         call center%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('center', center, prgtab)
     end subroutine new_center
 
-
-    subroutine new_reproject
+    subroutine new_reproject( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call reproject%new(&
         &'reproject',&                         ! name
@@ -87,10 +79,12 @@ contains
         call reproject%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call reproject%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('reproject', reproject, prgtab)
     end subroutine new_reproject
 
-
-    subroutine new_volops
+    subroutine new_volops( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call volops%new(&
         &'volops',&                                                                               ! name
@@ -129,7 +123,8 @@ contains
         call volops%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call volops%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('volops', volops, prgtab)
     end subroutine new_volops
-
 
 end module simple_ui_api_volume

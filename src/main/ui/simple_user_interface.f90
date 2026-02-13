@@ -26,12 +26,11 @@ type(ui_hash) :: prgtab_all
 contains
 
     subroutine test_ui_refactoring_func
-        type(string), allocatable :: prgnames_other(:)
+        type(string), allocatable :: prgnames(:)
         integer :: i
-        call register_simple_ui_other( prgtab_other )
-        prgnames_other = prgtab_other%keys_sorted()
-        do i = 1, size(prgnames_other)
-            call prgnames_other(i)%print
+        prgnames = prgtab_all%keys_sorted()
+        do i = 1, size(prgnames)
+            call prgnames(i)%print
         end do
     end subroutine test_ui_refactoring_func
     
@@ -40,121 +39,121 @@ contains
     subroutine make_user_interface
         call set_ui_params
         call set_prg_ptr_array
-        call new_abinitio2D
-        call new_abinitio2D_stream
+        call new_abinitio2D( prgtab_all )
+        call new_abinitio2D_stream( prgtab_all )
         call new_abinitio3D( prgtab_all )
         call new_abinitio3D_cavgs( prgtab_all )
         call new_analysis2D_nano
-        call new_assign_optics
-        call new_assign_optics_groups
+        call new_assign_optics( prgtab_all )
+        call new_assign_optics_groups( prgtab_all ) 
         call new_atoms_register
         call new_atoms_stats
-        call new_auto_spher_mask
-        call new_automask
-        call new_automask2D
+        call new_auto_spher_mask( prgtab_all )
+        call new_automask( prgtab_all )
+        call new_automask2D( prgtab_all )
         call new_autorefine3D_nano
-        call new_binarize
+        call new_binarize( prgtab_all )
         call new_cavgseoproc_nano
         call new_cavgsproc_nano
-        call new_center
+        call new_center( prgtab_all )
         call new_center2D_nano
-        call new_check_refpick
-        call new_cleanup2D
-        call new_clin_fsc
-        call new_cluster2D
+        call new_check_refpick( prgtab_all )
+        call new_cleanup2D( prgtab_all )
+        call new_clin_fsc( prgtab_all )
+        call new_cluster2D( prgtab_all )
         call new_cluster2D_nano
-        call new_cluster2D_stream
-        call new_cluster2D_subsets
-        call new_cluster_cavgs
-        call new_cluster_cavgs_selection
-        call new_cluster_stack
+        call new_cluster2D_stream( prgtab_all )
+        call new_cluster2D_subsets( prgtab_all )
+        call new_cluster_cavgs( prgtab_all )
+        call new_cluster_cavgs_selection( prgtab_all )
+        call new_cluster_stack( prgtab_all )
         call new_conv_atom_denoise
-        call new_convert
+        call new_convert( prgtab_all )
         call new_crys_score
-        call new_ctf_estimate
-        call new_ctf_phaseflip
-        call new_ctfops
+        call new_ctf_estimate( prgtab_all )
+        call new_ctf_phaseflip( prgtab_all )
+        call new_ctfops( prgtab_all )
         call new_trajectory_denoise
         call new_detect_atoms
-        call new_dock_volpair
+        call new_dock_volpair( prgtab_all )
         call new_estimate_diam
         call new_estimate_lpstages( prgtab_all )
-        call new_export_relion
-        call new_export_starproject
-        call new_extract
-        call new_extract_subproj
+        call new_export_relion( prgtab_all )
+        call new_export_starproject( prgtab_all )
+        call new_extract( prgtab_all )
+        call new_extract_subproj( prgtab_all )
         call new_extract_substk
-        call new_filter
-        call new_fsc
-        call new_gen_pickrefs
-        call new_gen_pspecs_and_thumbs
+        call new_filter( prgtab_all )
+        call new_fsc( prgtab_all )
+        call new_gen_pickrefs( prgtab_all )
+        call new_gen_pspecs_and_thumbs( prgtab_all )
         call new_graphene_subtr
-        call new_icm2D
-        call new_icm3D
-        call new_import_boxes
-        call new_import_cavgs
-        call new_import_movies
-        call new_import_particles
-        call new_import_starproject
-        call new_info_image
-        call new_info_stktab
-        call new_make_cavgs
-        call new_make_oris
-        call new_map_cavgs_selection
-        call new_mask
-        call new_match_cavgs
-        call new_match_stacks
-        call new_merge_projects
-        call new_mini_stream
-        call new_mkdir_
-        call new_model_validation
-        call new_motion_correct
+        call new_icm2D( prgtab_all )
+        call new_icm3D( prgtab_all )
+        call new_import_boxes( prgtab_all )
+        call new_import_cavgs( prgtab_all )
+        call new_import_movies( prgtab_all )
+        call new_import_particles( prgtab_all )
+        call new_import_starproject( prgtab_all )
+        call new_info_image( prgtab_all )
+        call new_info_stktab( prgtab_all )
+        call new_make_cavgs( prgtab_all )
+        call new_make_oris( prgtab_all )
+        call new_map_cavgs_selection( prgtab_all )
+        call new_mask( prgtab_all )
+        call new_match_cavgs( prgtab_all )
+        call new_match_stacks( prgtab_all )
+        call new_merge_projects( prgtab_all )
+        call new_mini_stream( prgtab_all )
+        call new_mkdir_( prgtab_all )
+        call new_model_validation( prgtab_all )
+        call new_motion_correct( prgtab_all )
         call new_multivol_assign( prgtab_all )
-        call new_new_project
+        call new_new_project( prgtab_all )
         call new_noisevol( prgtab_all )
-        call new_normalize
-        call new_orisops
-        call new_oristats
-        call new_pdb2mrc
-        call new_pick
-        call new_pick_extract
-        call new_postprocess
-        call new_ppca_denoise
-        call new_ppca_denoise_classes
-        call new_ppca_volvar
-        call new_preproc
-        call new_preprocess
-        call new_print_dose_weights
-        call new_print_fsc
-        call new_print_magic_boxes
-        call new_print_project_field
-        call new_print_project_info
-        call new_prune_project
+        call new_normalize( prgtab_all )
+        call new_orisops( prgtab_all )
+        call new_oristats( prgtab_all )
+        call new_pdb2mrc( prgtab_all )
+        call new_pick( prgtab_all )
+        call new_pick_extract( prgtab_all )
+        call new_postprocess( prgtab_all )
+        call new_ppca_denoise( prgtab_all )
+        call new_ppca_denoise_classes( prgtab_all )
+        call new_ppca_volvar( prgtab_all )
+        call new_preproc( prgtab_all )
+        call new_preprocess( prgtab_all )
+        call new_print_dose_weights( prgtab_all )
+        call new_print_fsc( prgtab_all )
+        call new_print_magic_boxes( prgtab_all )
+        call new_print_project_field( prgtab_all )
+        call new_print_project_info( prgtab_all )
+        call new_prune_project( prgtab_all )
         call new_ptclsproc_nano
-        call new_reconstruct3D
-        call new_reextract
-        call new_refine3D
-        call new_refine3D_auto
+        call new_reconstruct3D( prgtab_all )
+        call new_reextract( prgtab_all )
+        call new_refine3D( prgtab_all )
+        call new_refine3D_auto( prgtab_all )
         call new_refine3D_nano
-        call new_replace_project_field
-        call new_reproject
-        call new_sample_classes
-        call new_scale
-        call new_select_
-        call new_select_clusters
-        call new_selection
-        call new_sieve_cavgs
+        call new_replace_project_field( prgtab_all )
+        call new_reproject( prgtab_all )
+        call new_sample_classes( prgtab_all )
+        call new_scale( prgtab_all )
+        call new_select_( prgtab_all )
+        call new_select_clusters( prgtab_all )
+        call new_selection( prgtab_all )
+        call new_sieve_cavgs( prgtab_all )
         call new_simulate_atoms
-        call new_simulate_movie
-        call new_simulate_noise
-        call new_simulate_particles
-        call new_split_
-        call new_split_stack
-        call new_stack
-        call new_stackops
-        call new_symaxis_search
-        call new_symmetrize_map
-        call new_symmetry_test
+        call new_simulate_movie( prgtab_all )
+        call new_simulate_noise( prgtab_all )
+        call new_simulate_particles( prgtab_all )
+        call new_split_( prgtab_all )
+        call new_split_stack( prgtab_all )
+        call new_stack( prgtab_all )
+        call new_stackops( prgtab_all )
+        call new_symaxis_search( prgtab_all )
+        call new_symmetrize_map( prgtab_all )
+        call new_symmetry_test( prgtab_all )
         call new_atoms_rmsd
         call new_core_atoms_analysis
         call new_tsegmaps_core_finder
@@ -166,17 +165,17 @@ contains
         call new_trajectory_reconstruct3D
         call new_trajectory_swap_stack
         call new_track_particles
-        call new_uniform_filter2D
-        call new_uniform_filter3D
-        call new_update_project
-        call new_vizoris
-        call new_volanalyze
-        call new_volops
-        call new_write_classes
-        call new_write_mic_filetab
-        call new_zero_project_shifts
+        call new_uniform_filter2D( prgtab_all )
+        call new_uniform_filter3D( prgtab_all )
+        call new_update_project( prgtab_all )
+        call new_vizoris( prgtab_all )
+        call new_volanalyze( prgtab_all )
+        call new_volops( prgtab_all )
+        call new_write_classes( prgtab_all )
+        call new_write_mic_filetab( prgtab_all )
+        call new_zero_project_shifts( prgtab_all )
         ! test programs
-        call new_test_sim_workflow
+        call new_test_sim_workflow( prgtab_all )
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
@@ -860,431 +859,6 @@ contains
         write(logfhandle,'(A)') tsegmaps_core_finder%name%to_char()
         write(logfhandle,'(A)') trajectory_make_projavgs%name%to_char()
     end subroutine list_single_prgs_in_ui
-
-    ! CONSTRUCTOR TEMPLATE
-    ! INPUT PARAMETER SPECIFICATIONS
-    ! image input/output
-    ! <empty>
-    ! parameter input/output
-    ! <empty>
-    ! alternative inputs
-    ! <empty>
-    ! search controls
-    ! <empty>
-    ! filter controls
-    ! <empty>
-    ! mask controls
-    ! <empty>
-    ! computer controls
-    ! <empty>
-
-
-! moved: new_analysis2d_nano
-
-
-! moved: new_assign_optics
-
-
-! moved: new_assign_optics_groups
-
-
-! moved: new_automask
-
-
-! moved: new_automask2d
-
-
-! moved: new_auto_spher_mask
-
-
-! moved: new_extract_substk
-
-
-! moved: new_extract_subproj
-
-
-! moved: new_autorefine3d_nano
-
-
-! moved: new_binarize
-
-
-! moved: new_cavgsproc_nano
-
-
-! moved: new_cavgseoproc_nano
-
-
-! moved: new_ptclsproc_nano
-
-
-! moved: new_center
-
-
-! moved: new_center2d_nano
-
-
-! moved: new_conv_atom_denoise
-
-
-! moved: new_cluster2d
-
-
-! moved: new_cluster2d_nano
-
-
-! moved: new_cluster2d_subsets
-
-
-! moved: new_cluster2d_stream
-
-
-! moved: new_cleanup2d
-
-
-! moved: new_cluster_cavgs
-
-
-! moved: new_cluster_cavgs_selection
-
-
-! moved: new_cluster_stack
-
-
-! moved: new_convert
-
-
-! moved: new_ctf_estimate
-
-
-! moved: new_ctfops
-
-
-! moved: new_ctf_phaseflip
-
-
-! moved: new_trajectory_denoise
-
-
-! moved: new_detect_atoms
-
-
-! moved: new_dock_volpair
-
-
-! moved: new_estimate_lpstages
-
-
-! moved: new_estimate_diam
-
-
-! moved: new_extract
-
-
-! moved: new_export_starproject
-
-
-! moved: new_filter
-
-
-! moved: new_fsc
-
-
-! moved: new_clin_fsc
-
-
-! moved: new_gen_pspecs_and_thumbs
-
-
-! moved: new_import_starproject
-
-
-! moved: new_icm2d
-
-
-! moved: new_icm3d
-
-
-! moved: new_info_image
-
-
-! moved: new_info_stktab
-
-
-! moved: new_abinitio2d
-
-
-! moved: new_abinitio2d_stream
-
-
-! moved: new_abinitio3d_cavgs
-
-
-! moved: new_abinitio3d
-
-
-! moved: new_import_boxes
-
-
-! moved: new_import_cavgs
-
-
-! moved: new_import_movies
-
-
-! moved: new_import_particles
-
-
-! moved: new_export_relion
-
-
-! moved: new_make_cavgs
-
-
-! moved: new_make_oris
-
-
-! moved: new_map_cavgs_selection
-
-
-! moved: new_mask
-
-
-! moved: new_match_cavgs
-
-
-! moved: new_match_stacks
-
-
-! moved: new_merge_projects
-
-
-! moved: new_mini_stream
-
-
-! moved: new_mkdir_
-
-
-! moved: new_motion_correct
-
-
-! moved: new_test_sim_workflow
-
-
-! moved: new_model_validation
-    
-
-! moved: new_multivol_assign
-
-
-! moved: new_uniform_filter3d
-
-
-! moved: new_new_project
-
-
-! moved: new_pdb2mrc
-
-
-! moved: new_pick
-
-
-! moved: new_pick_extract
-
-
-! moved: new_postprocess
-
-
-! moved: new_ppca_denoise
-
-
-! moved: new_ppca_denoise_classes
-
-
-! moved: new_ppca_volvar
-
-
-! moved: new_preprocess
-
-
-! moved: new_print_dose_weights
-
-
-! moved: new_print_fsc
-
-
-! moved: new_print_magic_boxes
-
-
-! moved: new_print_project_field
-
-
-! moved: new_print_project_info
-
-
-! moved: new_reextract
-
-
-! moved: new_reproject
-
-
-! moved: new_noisevol
-
-
-! moved: new_normalize
-
-
-! moved: new_orisops
-
-
-! moved: new_oristats
-
-
-! moved: new_prune_project
-
-
-! moved: new_reconstruct3d
-
-
-! moved: new_refine3d
-
-
-! moved: new_refine3d_auto
-
-
-! moved: new_refine3d_nano
-
-
-! moved: new_replace_project_field
-
-
-! moved: new_sample_classes
-
-
-! moved: new_selection
-
-
-! moved: new_scale
-
-
-! moved: new_select_
-
-
-! moved: new_select_clusters
-
-
-! moved: new_preproc
-
-
-! moved: new_sieve_cavgs
-
-
-! moved: new_simulate_atoms
-
-
-! moved: new_simulate_movie
-
-
-! moved: new_simulate_noise
-
-
-! moved: new_simulate_particles
-
-
-! moved: new_split_
-
-
-! moved: new_stack
-
-
-! moved: new_split_stack
-
-
-! moved: new_stackops
-
-
-! moved: new_symaxis_search
-
-
-! moved: new_symmetrize_map
-
-
-! moved: new_symmetry_test
-
-
-! moved: new_atoms_stats
-
-
-! moved: new_atoms_register
-
-
-! moved: new_crys_score
-
-
-! moved: new_atoms_rmsd
-
-
-! moved: new_core_atoms_analysis
-
-
-! moved: new_tsegmaps_core_finder
-
-
-! moved: new_tseries_import
-
-
-! moved: new_import_trajectory
-
-
-! moved: new_tseries_motion_correct
-
-
-! moved: new_tseries_make_pickavg
-
-
-! moved: new_trajectory_make_projavgs
-
-
-! moved: new_trajectory_swap_stack
-
-
-! moved: new_track_particles
-
-
-! moved: new_trajectory_reconstruct3d
-
-
-! moved: new_gen_pickrefs
-
-
-! moved: new_graphene_subtr
-
-
-! moved: new_uniform_filter2d
-
-
-! moved: new_update_project
-
-
-! moved: new_check_refpick
-
-
-! moved: new_vizoris
-
-
-! moved: new_volanalyze
-
-
-! moved: new_volops
-
-
-! moved: new_write_classes
-
-
-! moved: new_write_mic_filetab
-
-
-! moved: new_zero_project_shifts
 
     subroutine print_ui_json
         use json_module

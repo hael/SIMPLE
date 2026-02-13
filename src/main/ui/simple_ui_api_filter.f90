@@ -9,18 +9,8 @@ type(ui_program), target :: uniform_filter3D
 
 contains
 
-    subroutine register_simple_ui_filter(prgtab)
+    subroutine new_filter( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('filter',           filter,           prgtab)
-        call add_ui_program('uniform_filter2D', uniform_filter2D, prgtab)
-        call add_ui_program('uniform_filter3D', uniform_filter3D, prgtab)
-    end subroutine register_simple_ui_filter
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_filter
         ! PROGRAM SPECIFICATION
         call filter%new(&
         &'filter',&                                   ! name
@@ -59,10 +49,12 @@ contains
         ! <empty>
         ! computer controls
         call filter%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('filter', filter, prgtab)
     end subroutine new_filter
 
-
-    subroutine new_uniform_filter2D
+    subroutine new_uniform_filter2D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call uniform_filter2D%new(&
         &'uniform_filter2D',&            ! name
@@ -87,10 +79,12 @@ contains
         call uniform_filter2D%add_input(UI_MASK, mskdiam)
         ! computer controls
         call uniform_filter2D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('uniform_filter2D', uniform_filter2D, prgtab)
     end subroutine new_uniform_filter2D
 
-
-    subroutine new_uniform_filter3D
+    subroutine new_uniform_filter3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call uniform_filter3D%new(&
         &'uniform_filter3D',&                                   ! name
@@ -118,7 +112,8 @@ contains
         call uniform_filter3D%add_input(UI_MASK, mskfile)
         ! computer controls
         call uniform_filter3D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('uniform_filter3D', uniform_filter3D, prgtab)
     end subroutine new_uniform_filter3D
-
 
 end module simple_ui_api_filter

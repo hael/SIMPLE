@@ -8,17 +8,8 @@ type(ui_program), target :: volanalyze
 
 contains
 
-    subroutine register_simple_ui_dock(prgtab)
+    subroutine new_dock_volpair( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('dock_volpair', dock_volpair, prgtab)
-        call add_ui_program('volanalyze',   volanalyze,   prgtab)
-    end subroutine register_simple_ui_dock
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_dock_volpair
         ! PROGRAM SPECIFICATION
         call dock_volpair%new(&
         &'dock_volpair', &                              ! name
@@ -47,10 +38,12 @@ contains
         call dock_volpair%add_input(UI_MASK, mskdiam)
         ! computer controls
         call dock_volpair%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('dock_volpair', dock_volpair, prgtab)
     end subroutine new_dock_volpair
 
-
-    subroutine new_volanalyze
+    subroutine new_volanalyze( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call volanalyze%new(&
         &'volanalyze',&                                                             ! name
@@ -77,7 +70,8 @@ contains
         call volanalyze%add_input(UI_MASK, mskdiam)
         ! computer controls
         call volanalyze%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('volanalyze', volanalyze, prgtab)
     end subroutine new_volanalyze
-
 
 end module simple_ui_api_dock

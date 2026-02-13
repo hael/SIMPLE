@@ -9,18 +9,8 @@ type(ui_program), target :: mask
 
 contains
 
-    subroutine register_simple_ui_mask(prgtab)
+    subroutine new_auto_spher_mask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('auto_spher_mask', auto_spher_mask, prgtab)
-        call add_ui_program('automask2D',      automask2D,      prgtab)
-        call add_ui_program('mask',            mask,            prgtab)
-    end subroutine register_simple_ui_mask
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_auto_spher_mask
         ! PROGRAM SPECIFICATION
         call auto_spher_mask%new(&
         &'auto_spher_mask',&                              ! name
@@ -44,10 +34,13 @@ contains
         ! <empty>
         ! computer controls
         call auto_spher_mask%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('auto_spher_mask', auto_spher_mask, prgtab) 
     end subroutine new_auto_spher_mask
 
 
-    subroutine new_automask2D
+    subroutine new_automask2D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call automask2D%new(&
         &'automask2D',&                                        ! name
@@ -79,10 +72,12 @@ contains
         &'Consider only positive pixels for threshold determination(yes|no){no}', 'only positive(yes|no){no}', .false., 'no')
         ! computer controls
         call automask2D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('automask2D', automask2D, prgtab)
     end subroutine new_automask2D
 
-
-    subroutine new_mask
+    subroutine new_mask( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call mask%new(&
         &'mask',&                                                        ! name
@@ -119,7 +114,8 @@ contains
         &'PDB file used to determine the mask', 'e.g. molecule.pdb', .false., '')
         ! computer controls
         call mask%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('mask', mask, prgtab)
     end subroutine new_mask
-
 
 end module simple_ui_api_mask

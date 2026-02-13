@@ -8,17 +8,8 @@ type(ui_program), target :: clin_fsc
 
 contains
 
-    subroutine register_simple_ui_resolution(prgtab)
+    subroutine new_clin_fsc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('fsc',      fsc,      prgtab)
-        call add_ui_program('clin_fsc', clin_fsc, prgtab)
-    end subroutine register_simple_ui_resolution
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_clin_fsc
         ! PROGRAM SPECIFICATION
         call clin_fsc%new(&
         &'clin_fsc', &                                                          ! name
@@ -44,10 +35,12 @@ contains
         call clin_fsc%add_input(UI_MASK, mskfile)
         ! computer controls
         call clin_fsc%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('clin_fsc', clin_fsc, prgtab)
     end subroutine new_clin_fsc
 
-
-    subroutine new_fsc
+    subroutine new_fsc( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call fsc%new(&
         &'fsc', &                                                               ! name
@@ -75,7 +68,8 @@ contains
         call fsc%add_input(UI_MASK, mskfile)
         ! computer controls
         call fsc%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('fsc', fsc, prgtab)
     end subroutine new_fsc
-
 
 end module simple_ui_api_resolution

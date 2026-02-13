@@ -222,7 +222,7 @@ subroutine set_ui_params
 
     call cls_init%set_param(       'cls_init',        'multi',  'Scheme for initial class generation', &
                                    'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', &
-                                   '(ptcl|randcls|rand){ptcl}', .false., 'ptcl')
+                                   '(ptcl|randcls|rand){ptcl}', .false., 'rand')
 
     call clust_crit%set_param(     'clust_crit',      'multi',  'Clustering criterion', &
                                    'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}', &

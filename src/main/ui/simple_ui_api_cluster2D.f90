@@ -20,30 +20,8 @@ type(ui_program), target :: write_mic_filetab
 
 contains
 
-    subroutine register_simple_ui_cluster2D(prgtab)
+    subroutine new_abinitio2D( prgtab ) 
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('abinitio2D',              abinitio2D,              prgtab)
-        call add_ui_program('cleanup2D',               cleanup2D,               prgtab)
-        call add_ui_program('cluster2D',               cluster2D,               prgtab)
-        call add_ui_program('cluster2D_subsets',       cluster2D_subsets,       prgtab)
-        call add_ui_program('cluster_cavgs',           cluster_cavgs,           prgtab)
-        call add_ui_program('cluster_cavgs_selection', cluster_cavgs_selection, prgtab)
-        call add_ui_program('cluster_stack',           cluster_stack,           prgtab)
-        call add_ui_program('make_cavgs',              make_cavgs,              prgtab)
-        call add_ui_program('map_cavgs_selection',     map_cavgs_selection,     prgtab)
-        call add_ui_program('match_cavgs',             match_cavgs,             prgtab)
-        call add_ui_program('sample_classes',          sample_classes,          prgtab)
-        call add_ui_program('select_clusters',         select_clusters,         prgtab)
-        call add_ui_program('write_classes',           write_classes,           prgtab)
-        call add_ui_program('write_mic_filetab',       write_mic_filetab,       prgtab)
-    end subroutine register_simple_ui_cluster2D
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_abinitio2D
-        type(ui_param) :: ptmp
         ! PROGRAM SPECIFICATION
         call abinitio2D%new(&
         &'abinitio2D',&                                                                ! name
@@ -67,11 +45,7 @@ contains
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
         call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob|prob_smpl){snhc_smpl}',&
         &'(snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
-        ptmp = cls_init
-        ptmp%descr_long = 'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){rand}'
-        ptmp%descr_placeholder = '(ptcl|randcls|rand){rand}'
-        ptmp%cval_default = 'rand'
-        call abinitio2D%add_input(UI_SRCH, ptmp, gui_submenu="search")
+        call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, autosample, gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
         &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
@@ -92,10 +66,12 @@ contains
         ! computer controls
         call abinitio2D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call abinitio2D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('abinitio2D', abinitio2D, prgtab)
     end subroutine new_abinitio2D
 
-
-    subroutine new_cleanup2D
+    subroutine new_cleanup2D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cleanup2D%new(&
         &'cleanup2D',&                                                           ! name
@@ -117,11 +93,12 @@ contains
         ! mask controls
   
         ! computer controls
-     
+        ! add 2 ui_ash
+        call add_ui_program('cleanup2D', cleanup2D, prgtab)
     end subroutine new_cleanup2D
 
-
-    subroutine new_cluster2D
+    subroutine new_cluster2D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cluster2D%new(&
         &'cluster2D',&                                                          ! name
@@ -177,11 +154,12 @@ contains
         ! computer controls
         call cluster2D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call cluster2D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('cluster2D', cluster2D, prgtab)
     end subroutine new_cluster2D
 
-
-    subroutine new_cluster2D_subsets
-        type(ui_param) :: ptmp
+    subroutine new_cluster2D_subsets( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cluster2D_subsets%new(&
         &'cluster2D_subsets',&                                                                    ! name
@@ -198,10 +176,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ptmp = nptcls_per_cls
-        ptmp%descr_placeholder = '# of particles per cluster{200}'
-        ptmp%rval_default = 200.
-        call cluster2D_subsets%add_input(UI_SRCH, ptmp, gui_submenu="cluster 2D", gui_advanced=.false.)
+        call cluster2D_subsets%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{200}', gui_submenu="cluster 2D", gui_advanced=.false.)
         call cluster2D_subsets%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call cluster2D_subsets%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles clustered', 'Max # of particles clustered{100000}',&
@@ -222,10 +197,13 @@ contains
         call cluster2D_subsets%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         call cluster2D_subsets%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('cluster2D_subsets', cluster2D_subsets, prgtab)
     end subroutine new_cluster2D_subsets
 
 
-    subroutine new_cluster_cavgs
+    subroutine new_cluster_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cluster_cavgs%new(&
         &'cluster_cavgs',&                                                       ! name
@@ -250,10 +228,12 @@ contains
         call cluster_cavgs%add_input(UI_MASK, mskdiam)
         ! computer controls
         call cluster_cavgs%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('cluster_cavgs', cluster_cavgs, prgtab)
     end subroutine new_cluster_cavgs
 
-
-    subroutine new_cluster_cavgs_selection
+    subroutine new_cluster_cavgs_selection( prgtab )    
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cluster_cavgs_selection%new(&
         &'cluster_cavgs_selection',&                                                                  ! name
@@ -277,10 +257,12 @@ contains
         call cluster_cavgs_selection%add_input(UI_MASK, mskdiam)
         ! computer controls
         call cluster_cavgs_selection%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('cluster_cavgs_selection', cluster_cavgs_selection, prgtab)
     end subroutine new_cluster_cavgs_selection
 
-
-    subroutine new_cluster_stack
+    subroutine new_cluster_stack( prgtab )  
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cluster_stack%new(&
         &'cluster_stack',&                                            ! name
@@ -304,10 +286,12 @@ contains
         call cluster_stack%add_input(UI_MASK, mskdiam)
         ! computer controls
         call cluster_stack%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('cluster_stack', cluster_stack, prgtab)
     end subroutine new_cluster_stack
 
-
-    subroutine new_make_cavgs
+    subroutine new_make_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call make_cavgs%new(&
         &'make_cavgs', &                           ! name
@@ -337,10 +321,12 @@ contains
         ! computer controls
         call make_cavgs%add_input(UI_COMP, nparts)
         call make_cavgs%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('make_cavgs', make_cavgs, prgtab)
     end subroutine new_make_cavgs
 
-
-    subroutine new_map_cavgs_selection
+    subroutine new_map_cavgs_selection( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call map_cavgs_selection%new(&
         &'map_cavgs_selection',&                                         ! name
@@ -364,10 +350,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('map_cavgs_selection', map_cavgs_selection, prgtab)
     end subroutine new_map_cavgs_selection
 
-
-    subroutine new_match_cavgs
+    subroutine new_match_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call match_cavgs%new(&
         &'match_cavgs',&                                              ! name
@@ -393,10 +381,12 @@ contains
         call match_cavgs%add_input(UI_MASK, mskdiam)
         ! computer controls
         call match_cavgs%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('match_cavgs', match_cavgs, prgtab)
     end subroutine new_match_cavgs
 
-
-    subroutine new_sample_classes
+    subroutine new_sample_classes( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call sample_classes%new(&
         &'sample_classes',&                                                                 ! name
@@ -424,10 +414,12 @@ contains
         ! <empty>
         ! computer controls
         call sample_classes%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('sample_classes', sample_classes, prgtab)
     end subroutine new_sample_classes
 
-
-    subroutine new_select_clusters
+    subroutine new_select_clusters( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATIONq
         call select_clusters%new(&
         &'select_clusters',&                                    ! name
@@ -453,10 +445,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('select_clusters', select_clusters, prgtab)
     end subroutine new_select_clusters
 
-
-    subroutine new_write_classes
+    subroutine new_write_classes( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call write_classes%new(&
         &'write_classes',&                                                                                  ! name
@@ -479,10 +473,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('write_classes', write_classes, prgtab)
     end subroutine new_write_classes
 
-
-    subroutine new_write_mic_filetab
+    subroutine new_write_mic_filetab( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call write_mic_filetab%new(&
         &'write_mic_filetab',&                                            ! name
@@ -505,7 +501,8 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('write_mic_filetab', write_mic_filetab, prgtab)
     end subroutine new_write_mic_filetab
-
 
 end module simple_ui_api_cluster2D

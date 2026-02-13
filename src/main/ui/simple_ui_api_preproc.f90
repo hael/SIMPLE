@@ -14,23 +14,8 @@ type(ui_program), target :: reextract
 
 contains
 
-    subroutine register_simple_ui_preproc(prgtab)
+    subroutine new_assign_optics_groups( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('assign_optics_groups',  assign_optics_groups,  prgtab)
-        call add_ui_program('ctf_estimate',          ctf_estimate,          prgtab)
-        call add_ui_program('extract',               extract,               prgtab)
-        call add_ui_program('gen_pspecs_and_thumbs', gen_pspecs_and_thumbs, prgtab)
-        call add_ui_program('motion_correct',        motion_correct,        prgtab)
-        call add_ui_program('pick',                  pick,                  prgtab)
-        call add_ui_program('preprocess',            preprocess,            prgtab)
-        call add_ui_program('reextract',             reextract,             prgtab)
-    end subroutine register_simple_ui_preproc
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_assign_optics_groups
         ! PROGRAM SPECIFICATION
         call assign_optics_groups%new(&
         &'assign_optics_groups', &                                              ! name
@@ -60,10 +45,13 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('assign_optics_groups', assign_optics_groups, prgtab)
     end subroutine new_assign_optics_groups
 
-
-    subroutine new_ctf_estimate
+    subroutine new_ctf_estimate( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ctf_estimate%new(&
         &'ctf_estimate', &                                                  ! name
@@ -92,10 +80,12 @@ contains
         ! computer controls
         call ctf_estimate%add_input(UI_COMP, nparts, gui_submenu="compute")
         call ctf_estimate%add_input(UI_COMP, nthr, gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('ctf_estimate', ctf_estimate, prgtab)
     end subroutine new_ctf_estimate
 
-
-    subroutine new_extract
+    subroutine new_extract( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call extract%new(&
         &'extract', &                                                           ! name
@@ -124,10 +114,12 @@ contains
         ! computer controls
         call extract%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
         call extract%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('extract', extract, prgtab)
     end subroutine new_extract
 
-
-    subroutine new_gen_pspecs_and_thumbs
+    subroutine new_gen_pspecs_and_thumbs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call gen_pspecs_and_thumbs%new(&
         &'gen_pspecs_and_thumbs', &                                              ! name
@@ -152,10 +144,12 @@ contains
         ! computer controls
         call gen_pspecs_and_thumbs%add_input(UI_COMP, nparts)
         call gen_pspecs_and_thumbs%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('gen_pspecs_and_thumbs', gen_pspecs_and_thumbs, prgtab)
     end subroutine new_gen_pspecs_and_thumbs
 
-
-    subroutine new_motion_correct
+    subroutine new_motion_correct( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call motion_correct%new(&
         &'motion_correct', &                                                            ! name
@@ -203,10 +197,12 @@ contains
         ! computer controls
         call motion_correct%add_input(UI_COMP, nparts, gui_submenu="compute")
         call motion_correct%add_input(UI_COMP, nthr, gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('motion_correct', motion_correct, prgtab)
     end subroutine new_motion_correct
 
-
-    subroutine new_pick
+    subroutine new_pick( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call pick%new(&
         &'pick', &                                                         ! name
@@ -245,10 +241,12 @@ contains
         ! computer controls
         call pick%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
         call pick%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('pick', pick, prgtab)
     end subroutine new_pick
 
-
-    subroutine new_preprocess
+    subroutine new_preprocess( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call preprocess%new(&
         &'preprocess', &                                                                    ! name
@@ -300,10 +298,12 @@ contains
         ! computer controls
         call preprocess%add_input(UI_COMP, nparts)
         call preprocess%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('preprocess', preprocess, prgtab)
     end subroutine new_preprocess
 
-
-    subroutine new_reextract
+    subroutine new_reextract( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call reextract%new(&
         &'reextract', &                                                         ! name
@@ -331,7 +331,8 @@ contains
         ! computer controls
         call reextract%add_input(UI_COMP, nparts)
         call reextract%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('reextract', reextract, prgtab)
     end subroutine new_reextract
-
 
 end module simple_ui_api_preproc

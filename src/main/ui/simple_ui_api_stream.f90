@@ -13,22 +13,8 @@ type(ui_program), target :: sieve_cavgs
 
 contains
 
-    subroutine register_simple_ui_stream(prgtab)
+    subroutine new_abinitio2D_stream( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab)
-        call add_ui_program('assign_optics',     assign_optics,     prgtab)
-        call add_ui_program('cluster2D_stream',  cluster2D_stream,  prgtab)
-        call add_ui_program('gen_pickrefs',      gen_pickrefs,      prgtab)
-        call add_ui_program('pick_extract',      pick_extract,      prgtab)
-        call add_ui_program('preproc',           preproc,           prgtab)
-        call add_ui_program('sieve_cavgs',       sieve_cavgs,       prgtab)
-    end subroutine register_simple_ui_stream
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_abinitio2D_stream
         ! PROGRAM SPECIFICATION
         call abinitio2D_stream%new(&
         &'abinitio2D_stream', &                                                  ! name
@@ -61,10 +47,13 @@ contains
         call abinitio2D_stream%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         call abinitio2D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab)
     end subroutine new_abinitio2D_stream
 
 
-    subroutine new_assign_optics
+    subroutine new_assign_optics( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call assign_optics%new(&
         &'assign_optics', &                                              ! name
@@ -86,10 +75,13 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+
+        call assign_optics%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_assign_optics
 
 
-    subroutine new_cluster2D_stream
+    subroutine new_cluster2D_stream( prgtab )
+        class(ui_hash), intent(inout) :: prgtab 
         ! PROGRAM SPECIFICATION
         call cluster2D_stream%new(&
         &'cluster2D_stream', &                                                   ! name
@@ -126,10 +118,13 @@ contains
         call cluster2D_stream%add_input(UI_COMP, nthr,                                   gui_submenu="compute", gui_advanced=.false.)
         call cluster2D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('cluster2D_stream', cluster2D_stream, prgtab)
     end subroutine new_cluster2D_stream
 
 
-    subroutine new_gen_pickrefs
+    subroutine new_gen_pickrefs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call gen_pickrefs%new(&
         &'gen_pickrefs', &                                               ! name
@@ -155,10 +150,12 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+        call gen_pickrefs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_gen_pickrefs
 
 
-    subroutine new_pick_extract
+    subroutine new_pick_extract( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call pick_extract%new(&
         &'pick_extract', &                                                               ! name
@@ -197,10 +194,12 @@ contains
         call pick_extract%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
         call pick_extract%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('pick_extract', pick_extract, prgtab)
     end subroutine new_pick_extract
 
-
-    subroutine new_preproc
+    subroutine new_preproc( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call preproc%new(&
         &'preproc', &                                                                       ! name
@@ -248,10 +247,12 @@ contains
         call preproc%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
         call preproc%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('preproc', preproc, prgtab)
     end subroutine new_preproc
 
-
-    subroutine new_sieve_cavgs
+    subroutine new_sieve_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call sieve_cavgs%new(&
         &'sieve_cavgs', &                                                       ! name
@@ -285,7 +286,8 @@ contains
         call sieve_cavgs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         call sieve_cavgs%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('sieve_cavgs', sieve_cavgs, prgtab)
     end subroutine new_sieve_cavgs
-
 
 end module simple_ui_api_stream
