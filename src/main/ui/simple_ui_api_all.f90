@@ -2,6 +2,7 @@ module simple_ui_api_all
 ! helpers
 use simple_core_module_api
 use simple_ansi_ctrls
+use simple_ui_common_params
 
 ! SIMPLE
 use simple_ui_api_abinitio3D
