@@ -10,19 +10,9 @@ type(ui_program), target :: estimate_diam
 
 contains
 
-    subroutine register_single_ui_nano2D(prgtab)
+
+    subroutine new_analysis2D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('analysis2D_nano', analysis2D_nano, prgtab)
-        call add_ui_program('center2D_nano', center2D_nano, prgtab)
-        call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab)
-        call add_ui_program('estimate_diam', estimate_diam, prgtab)
-    end subroutine register_single_ui_nano2D
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_analysis2D_nano
         ! PROGRAM SPECIFICATION
         call analysis2D_nano%new(&
         &'analysis2D_nano', &                                         ! name
@@ -46,9 +36,12 @@ contains
         ! computer controls
         call analysis2D_nano%add_input(UI_COMP, nthr)
         call analysis2D_nano%add_input(UI_COMP, script)
+        call add_ui_program('analysis2D_nano', analysis2D_nano, prgtab)
     end subroutine new_analysis2D_nano
 
-    subroutine new_center2D_nano
+
+    subroutine new_center2D_nano( prgtab )
+        class(ui_hash), intent(inout) :: prgtab       
         ! PROGRAM SPECIFICATION
         call center2D_nano%new(&
         &'center2D_nano',&                                                      ! name
@@ -74,9 +67,12 @@ contains
         ! computer controls
         call center2D_nano%add_input(UI_COMP, nthr)
         call center2D_nano%add_input(UI_COMP, script)
+        call add_ui_program('center2D_nano', center2D_nano, prgtab)
     end subroutine new_center2D_nano
 
-    subroutine new_cluster2D_nano
+
+    subroutine new_cluster2D_nano( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cluster2D_nano%new(&
         &'cluster2D_nano',&                                                                 ! name
@@ -112,9 +108,12 @@ contains
         call cluster2D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call cluster2D_nano%add_input(UI_COMP, nthr)
         call cluster2D_nano%add_input(UI_COMP, script)
+        call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab)
     end subroutine new_cluster2D_nano
 
-    subroutine new_estimate_diam
+
+    subroutine new_estimate_diam( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call estimate_diam%new(&
         &'estimate_diam',&                                                                                              ! name
@@ -138,6 +137,7 @@ contains
         call estimate_diam%add_input(UI_MASK, mskdiam)
         ! computer controls
         call estimate_diam%add_input(UI_COMP, nthr)
+        call add_ui_program('estimate_diam', estimate_diam, prgtab)
     end subroutine new_estimate_diam
 
 end module single_ui_api_nano2D

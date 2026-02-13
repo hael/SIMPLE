@@ -8,17 +8,8 @@ type(ui_program), target :: tsegmaps_core_finder
 
 contains
 
-    subroutine register_single_ui_map(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('conv_atom_denoise', conv_atom_denoise, prgtab)
-        call add_ui_program('tsegmaps_core_finder', tsegmaps_core_finder, prgtab)
-    end subroutine register_single_ui_map
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_conv_atom_denoise
+    subroutine new_conv_atom_denoise( prgtab )
+        class(ui_hash), intent(inout) :: prgtab           
         ! PROGRAM SPECIFICATION
         call conv_atom_denoise%new(&
         &'conv_atom_denoise', &                                                  ! name
@@ -42,10 +33,12 @@ contains
         call conv_atom_denoise%add_input(UI_MASK, mskdiam)
         ! computer controls
         call conv_atom_denoise%add_input(UI_COMP, nthr)
+        call add_ui_program('conv_atom_denoise', conv_atom_denoise, prgtab)
     end subroutine new_conv_atom_denoise
 
 
-    subroutine new_tsegmaps_core_finder
+    subroutine new_tsegmaps_core_finder( prgtab )
+         class(ui_hash), intent(inout) :: prgtab       
         ! PROGRAM SPECIFICATION
         call tsegmaps_core_finder%new(&
         &'tsegmaps_core_finder',&                                                         ! name
@@ -69,6 +62,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('tsegmaps_core_finder', tsegmaps_core_finder, prgtab)
     end subroutine new_tsegmaps_core_finder
 
 

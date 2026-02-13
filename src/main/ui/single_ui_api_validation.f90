@@ -9,18 +9,8 @@ type(ui_program), target :: ptclsproc_nano
 
 contains
 
-    subroutine register_single_ui_validation(prgtab)
+      subroutine new_cavgseoproc_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('cavgseoproc_nano', cavgseoproc_nano, prgtab)
-        call add_ui_program('cavgsproc_nano', cavgsproc_nano, prgtab)
-        call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
-    end subroutine register_single_ui_validation
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_cavgseoproc_nano
         ! PROGRAM SPECIFICATION
         call cavgseoproc_nano%new(&
         &'cavgseoproc_nano',&                                           ! name
@@ -44,10 +34,12 @@ contains
         ! computer controls
         call cavgseoproc_nano%add_input(UI_COMP, nthr)
         call cavgseoproc_nano%add_input(UI_COMP, script)
+        call add_ui_program('cavgseoproc_nano', cavgseoproc_nano, prgtab)
     end subroutine new_cavgseoproc_nano
 
 
-    subroutine new_cavgsproc_nano
+    subroutine new_cavgsproc_nano( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cavgsproc_nano%new(&
         &'cavgsproc_nano',&                                           ! name
@@ -71,10 +63,12 @@ contains
         ! computer controls
         call cavgsproc_nano%add_input(UI_COMP, nthr)
         call cavgsproc_nano%add_input(UI_COMP, script)
+        call add_ui_program('cavgsproc_nano', cavgsproc_nano, prgtab)
     end subroutine new_cavgsproc_nano
 
 
-    subroutine new_ptclsproc_nano
+    subroutine new_ptclsproc_nano( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ptclsproc_nano%new(&
         &'ptclsproc_nano',&                                           ! name
@@ -97,6 +91,7 @@ contains
         ! computer controls
         call ptclsproc_nano%add_input(UI_COMP, nthr)
         call ptclsproc_nano%add_input(UI_COMP, script)
+        call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
     end subroutine new_ptclsproc_nano
 
 

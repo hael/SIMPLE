@@ -8,17 +8,9 @@ type(ui_program), target :: refine3D_nano
 
 contains
 
-    subroutine register_single_ui_nano3D(prgtab)
+
+    subroutine new_autorefine3D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('autorefine3D_nano', autorefine3D_nano, prgtab)
-        call add_ui_program('refine3D_nano', refine3D_nano, prgtab)
-    end subroutine register_single_ui_nano3D
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_autorefine3D_nano
         ! PROGRAM SPECIFICATION
         call autorefine3D_nano%new(&
         &'autorefine3D_nano',&                                                            ! name
@@ -54,10 +46,12 @@ contains
         ! computer controls
         call autorefine3D_nano%add_input(UI_COMP, nthr)
         call autorefine3D_nano%add_input(UI_COMP, script)
+        call add_ui_program('autorefine3D_nano', autorefine3D_nano, prgtab)
     end subroutine new_autorefine3D_nano
 
 
-    subroutine new_refine3D_nano
+    subroutine new_refine3D_nano( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call refine3D_nano%new(&
         &'refine3D_nano',&                                                                                                    ! name
@@ -97,6 +91,7 @@ contains
         ! computer controls
         call refine3D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call refine3D_nano%add_input(UI_COMP, nthr)
+        call add_ui_program('refine3D_nano', refine3D_nano, prgtab)
     end subroutine new_refine3D_nano
 
 

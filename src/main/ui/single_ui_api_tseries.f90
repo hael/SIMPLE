@@ -10,19 +10,9 @@ type(ui_program), target :: tseries_motion_correct
 
 contains
 
-    subroutine register_single_ui_tseries(prgtab)
+
+    subroutine new_track_particles( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('track_particles', track_particles, prgtab)
-        call add_ui_program('tseries_import', tseries_import, prgtab)
-        call add_ui_program('tseries_make_pickavg', tseries_make_pickavg, prgtab)
-        call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab)
-    end subroutine register_single_ui_tseries
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_track_particles
         ! PROGRAM SPECIFICATION
         call track_particles%new(&
         &'track_particles',&                                                     ! name
@@ -58,10 +48,12 @@ contains
         ! <empty>
         ! computer controls
         call track_particles%add_input(UI_COMP, nthr)
+        call add_ui_program('track_particles', track_particles, prgtab)
     end subroutine new_track_particles
 
 
-    subroutine new_tseries_import
+    subroutine new_tseries_import( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
         &'tseries_import',&                                 ! name
@@ -87,10 +79,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('tseries_import', tseries_import, prgtab)
     end subroutine new_tseries_import
 
 
-    subroutine new_tseries_make_pickavg
+    subroutine new_tseries_make_pickavg( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call tseries_make_pickavg%new(&
         &'tseries_make_pickavg',&                                                        ! name
@@ -123,10 +117,12 @@ contains
         ! <empty>
         ! computer controls
         call tseries_make_pickavg%add_input(UI_COMP, nthr)
+        call add_ui_program('tseries_make_pickavg', tseries_make_pickavg, prgtab)
     end subroutine new_tseries_make_pickavg
 
 
-    subroutine new_tseries_motion_correct
+    subroutine new_tseries_motion_correct( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call tseries_motion_correct%new(&
         &'tseries_motion_correct', &                                                                               ! name
@@ -160,6 +156,7 @@ contains
         ! computer controls
         call tseries_motion_correct%add_input(UI_COMP, nparts)
         call tseries_motion_correct%add_input(UI_COMP, nthr)
+        call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab)
     end subroutine new_tseries_motion_correct
 
 

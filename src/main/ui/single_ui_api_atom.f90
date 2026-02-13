@@ -13,22 +13,8 @@ type(ui_program), target :: simulate_atoms
 
 contains
 
-    subroutine register_single_ui_atom(prgtab)
+    subroutine new_atoms_register( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('atoms_register', atoms_register, prgtab)
-        call add_ui_program('atoms_rmsd', atoms_rmsd, prgtab)
-        call add_ui_program('atoms_stats', atoms_stats, prgtab)
-        call add_ui_program('core_atoms_analysis', core_atoms_analysis, prgtab)
-        call add_ui_program('crys_score', crys_score, prgtab)
-        call add_ui_program('detect_atoms', detect_atoms, prgtab)
-        call add_ui_program('simulate_atoms', simulate_atoms, prgtab)
-    end subroutine register_single_ui_atom
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_atoms_register
         ! PROGRAM SPECIFICATION
         call atoms_register%new(&
         &'atoms_register',&                                                                           ! name
@@ -49,10 +35,12 @@ contains
         ! <empty>
         ! computer controls
         call atoms_register%add_input(UI_COMP, nthr)
+        call add_ui_program('atoms_register', atoms_register, prgtab) 
     end subroutine new_atoms_register
 
 
-    subroutine new_atoms_rmsd
+    subroutine new_atoms_rmsd( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call atoms_rmsd%new(&
         &'atoms_rmsd',&                                                               ! name
@@ -77,10 +65,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('atoms_rmsd', atoms_rmsd, prgtab) 
     end subroutine new_atoms_rmsd
 
 
-    subroutine new_atoms_stats
+    subroutine new_atoms_stats( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call atoms_stats%new(&
         &'atoms_stats',&                                                                              ! name
@@ -111,10 +101,12 @@ contains
         ! <empty>
         ! computer controls
         call atoms_stats%add_input(UI_COMP, nthr)
+        call add_ui_program('atoms_stats', atoms_stats, prgtab) 
     end subroutine new_atoms_stats
 
 
-    subroutine new_core_atoms_analysis
+    subroutine new_core_atoms_analysis( prgtab )
+        class(ui_hash), intent(inout) :: prgtab        
         ! PROGRAM SPECIFICATION
         call core_atoms_analysis%new(&
         &'core_atoms_analysis',&                                                      ! name
@@ -139,10 +131,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('core_atoms_analysis', core_atoms_analysis, prgtab) 
     end subroutine new_core_atoms_analysis
 
 
-    subroutine new_crys_score
+    subroutine new_crys_score( prgtab )
+        class(ui_hash), intent(inout) :: prgtab        
         ! PROGRAM SPECIFICATION
         call crys_score%new(&
         &'crys_score',&                                                 ! name
@@ -167,10 +161,12 @@ contains
         ! <empty>
         ! computer controls
         call crys_score%add_input(UI_COMP, nthr)
+        call add_ui_program('crys_score', crys_score, prgtab) 
     end subroutine new_crys_score
 
 
-    subroutine new_detect_atoms
+    subroutine new_detect_atoms( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call detect_atoms%new(&
         &'detect_atoms', &                                      ! name
@@ -196,10 +192,12 @@ contains
         ! <empty>
         ! computer controls
         call detect_atoms%add_input(UI_COMP, nthr)
+        call add_ui_program('detect_atoms', detect_atoms, prgtab) 
     end subroutine new_detect_atoms
 
 
-    subroutine new_simulate_atoms
+    subroutine new_simulate_atoms( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call simulate_atoms%new(&
         &'simulate_atoms',&                                              ! name
@@ -225,6 +223,7 @@ contains
         ! <empty>
         ! computer controls
         call simulate_atoms%add_input(UI_COMP, nthr)
+        call add_ui_program('simulate_atoms', simulate_atoms, prgtab) 
     end subroutine new_simulate_atoms
 
 
