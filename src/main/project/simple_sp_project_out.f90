@@ -108,6 +108,17 @@ contains
         call self%os_out%set(ind, 'box',     box)
     end subroutine add_fsc2os_out
 
+    module subroutine add_sigma22os_out( self, sigma2path)
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: sigma2path
+        type(string)                     :: abspath
+        integer                          :: ind
+        abspath = simple_abspath(sigma2path)
+        call self%add_entry2os_out('sigma2', ind)
+        call self%os_out%set(ind, 'sigma2',  abspath)
+        call self%os_out%set(ind, 'imgkind', string('sigma2'))
+    end subroutine add_sigma22os_out
+
     module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: vol
@@ -459,6 +470,30 @@ contains
             frcs = NIL
         endif
     end subroutine get_frcs
+
+    module subroutine get_sigma2( self, sigma2_fname )
+        class(sp_project), intent(in)    :: self
+        class(string),     intent(inout) :: sigma2_fname
+        type(string)                     :: imgkind_here
+        integer :: i, ind, cnt
+        ! fetch index
+        ind   = 0
+        cnt   = 0
+        do i=1,self%os_out%get_noris()
+            if( self%os_out%isthere(i,'imgkind') )then
+                call self%os_out%getter(i,'imgkind', imgkind_here)
+                if(imgkind_here%to_char().eq.'sigma2')then
+                    ind = i
+                    cnt = cnt + 1
+                endif
+            endif
+        enddo
+        if( cnt == 0 )THROW_HARD('no os_out entry with imgkind=sigma2 identified, aborting...; get_sigma2')
+        if( cnt > 1 ) THROW_HARD('multiple os_out entries with imgkind=sigma2, aborting...; get_sigma2')
+        ! set output
+        call sigma2_fname%kill
+        call self%os_out%getter(ind, 'sigma2', sigma2_fname)
+    end subroutine get_sigma2
 
     ! static for OpenMP safety
     module subroutine get_imginfo_from_osout( self, smpd, box, nptcls )

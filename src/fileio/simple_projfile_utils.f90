@@ -1,16 +1,17 @@
 !@descr: project file utilities
 module simple_projfile_utils
 use simple_core_module_api
-use simple_image,      only: image
-use simple_parameters, only: params_glob
-use simple_sp_project, only: sp_project
+use simple_image,         only: image
+use simple_parameters,    only: params_glob
+use simple_sp_project,    only: sp_project
+use simple_euclid_sigma2, only: average_sigma2_groups
 use simple_class_frcs
 implicit none
 #include "simple_local_flags.inc"
 
 contains
 
-    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, cavgs_replace )
+    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, cavgs_replace, sigma2_out )
         class(string),           intent(in)    :: chunk_fnames(:) ! List of project files
         class(string),           intent(in)    :: folder          ! output folder
         class(sp_project),       intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
@@ -18,13 +19,15 @@ contains
         logical,       optional, intent(in)    :: write_proj      ! write project file
         logical,       optional, intent(in)    :: cavgs_replace   ! replace cavgs
         class(string), optional, intent(in)    :: cavgs_out       ! name for output cls2D stack
+        class(string), optional, intent(in)    :: sigma2_out      ! name for combined sigma2 file
         type(sp_project), allocatable :: chunks(:)
+        type(string),     allocatable :: chunks_sigma2(:)
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
         type(class_frcs) :: frcs, frcs_chunk
         type(image)      :: img
         type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
-        type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp
+        type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp, sigma2_fname
         real             :: smpd
         integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
@@ -35,11 +38,17 @@ contains
         if( present( cavgs_replace )) l_cavgs_replace = cavgs_replace
         nchunks = size(chunk_fnames)
         allocate(chunks(nchunks))
+        allocate(chunks_sigma2(nchunks))
         dir = folder%to_char()//'/'
         if( present(projname_out) )then
             projfile_out = dir%to_char()//projname_out%to_char()//trim(METADATA_EXT)
         else
             projfile_out = dir%to_char()//'set'//METADATA_EXT
+        endif
+        if( present(sigma2_out) )then
+            sigma2_fname   = dir%to_char()//sigma2_out%to_char()//trim(STAR_EXT)
+        else
+            sigma2_fname   = dir%to_char()//'sigma2_combined'//trim(STAR_EXT)
         endif
         call merged_proj%os_mic%kill
         call merged_proj%os_stk%kill
@@ -157,6 +166,8 @@ contains
                 call merged_proj%os_stk%transfer_ori(istk, chunks(ic)%os_stk, i)
             enddo
             deallocate(clsmap)
+            ! sigma2
+            call chunks(ic)%get_sigma2(chunks_sigma2(ic))
             ! making sure the compenv is informed
             if( (ic == 1) .and. (merged_proj%compenv%get_noris() == 0) )then
                 call chunks(1)%read_non_data_segments(chunk_fnames(1))
@@ -179,6 +190,11 @@ contains
             cavgs = cavgs_tmp
         endif
         call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
+        ! merge and add sigmas
+        call average_sigma2_groups(sigma2_fname, chunks_sigma2)
+        if( file_exists(sigma2_fname) ) call merged_proj%add_sigma22os_out(sigma2_fname)
+        deallocate(chunks_sigma2)
+        ! propagate 2D states to 3D
         states = merged_proj%os_cls2D%get_all('state')
         call merged_proj%os_cls3D%new(ncls_tot, .false.)
         call merged_proj%os_cls3D%set_all('state', states)
