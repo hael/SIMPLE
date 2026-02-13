@@ -20,23 +20,24 @@ contains
     subroutine exec_stream_p05_sieve_cavgs( self, cline )
         class(stream_p05_sieve_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(string),        allocatable :: projects(:), completed_projfiles(:)
-        integer,             allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
-        real,                allocatable :: cls_res(:), cls_pop(:)
-        logical,             allocatable :: l_processed(:)
-        type(json_value),        pointer :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
-        type(rec_list)                   :: project_list, chunk_list, set_list
-        type(parameters)                 :: params
-        type(qsys_env)                   :: qenv
-        type(stream_http_communicator)   :: http_communicator
-        type(oris)                       :: moldiamori, nmicsori
-        type(stream_watcher)             :: project_buff
-        type(chunk_rec)                  :: crec
-        type(rec_iterator)               :: it
-        type(sp_project)                 :: spproj_glob
-        type(json_core)                  :: json
-        type(string)                     :: selection_jpeg, mapfileprefix
-        character(len=STDLEN)            :: chunk_part_env
+        type(string),                    allocatable :: projects(:), completed_projfiles(:)
+        integer,                         allocatable :: accepted_cls_ids(:), rejected_cls_ids(:), jpg_cls_map(:)
+        real,                            allocatable :: cls_res(:), cls_pop(:)
+        logical,                         allocatable :: l_processed(:)
+        integer,                           parameter :: NCLS_MAX = 100, NCLS_MIN=10, MIN_PTCLS_PER_CLASS=200
+        type(json_value),                    pointer :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
+        type(rec_list)                               :: project_list, chunk_list, set_list
+        type(parameters)                             :: params
+        type(qsys_env)                               :: qenv
+        type(stream_http_communicator)               :: http_communicator
+        type(oris)                                   :: moldiamori, nmicsori
+        type(stream_watcher)                         :: project_buff
+        type(chunk_rec)                              :: crec
+        type(rec_iterator)                           :: it
+        type(sp_project)                             :: spproj_glob
+        type(json_core)                              :: json
+        type(string)                                 :: selection_jpeg, mapfileprefix
+        character(len=STDLEN)                        :: chunk_part_env
         real             :: mskdiam
         integer(kind=dp) :: time_last_import
         integer          :: nchunks_glob, nchunks_imported, nprojects, iter, i, envlen
@@ -437,8 +438,8 @@ contains
                 type(sp_project), allocatable :: spprojs(:)
                 type(project_rec) :: prec
                 type(string)      :: fname, abs_fname
-                real              :: avgmicptcls, nptcls_per_cls
-                integer           :: iproj, n_spprojs, n_recs_prev, irec, n_completed, nptcls
+                real              :: avgmicptcls, nptcls_per_cls, chunk_size
+                integer           :: iproj, n_spprojs, n_recs_prev, irec, n_completed, nptcls, ncls
                 integer           :: nmics, imic, n_ptcls, first
                 n_imported = 0
                 n_ptcls    = 0
@@ -484,11 +485,17 @@ contains
                         ! nptcls_per_cls is calculated after params%nmics processed micrographs
                         avgmicptcls    = nptcls_glob / project_list%size()
                         avgmicptcls    = ceiling(avgmicptcls / 10) * 10.0
-                        nptcls_per_cls = ceiling(params%nmics * avgmicptcls / params%ncls)
+                   !     nptcls_per_cls = ceiling(params%nmics * avgmicptcls / params%ncls)
+                        ! testing logic from opening2D
+                        chunk_size     = ceiling((avgmicptcls * params%nmics) / 1000.0 ) * 1000
+                        ncls           = min(NCLS_MAX, max(NCLS_MIN, ceiling(chunk_size/MIN_PTCLS_PER_CLASS)))
+                        nptcls_per_cls = ceiling(chunk_size /(ncls * 10.0)) * 10.0
                         write(logfhandle,'(A,I6)')   '>>> AVERAGE # PARTICLES PER MICROGRAPH : ', int(avgmicptcls)
-                        write(logfhandle,'(A,I6,A)') '>>> USING ', int(nptcls_per_cls), ' PARTICLES PER CLASS'
+                        write(logfhandle,'(A,I6,A,I6,A)') '>>> USING ', ncls, ' CLASSES WITH ',int(nptcls_per_cls), ' PARTICLES PER CLASS'
                         params%nptcls_per_cls = int(nptcls_per_cls)
+                        params%ncls           = ncls
                         call cline%set('nptcls_per_cls', nptcls_per_cls)
+                        call cline%set('ncls',           ncls)
                         params%smpd = spprojs(first)%os_mic%get(1,'smpd')
                         call spprojs(first)%read_segment('stk', projectnames(first))
                         params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
