@@ -361,7 +361,7 @@ contains
         call spproj%add_single_stk(params%stk, ctfvars, os)
         call spproj%write
         ! end gracefully
-        call simple_end('**** trajectory_import_particles NORMAL STOP ****')
+        call simple_end('**** import_trajectory NORMAL STOP ****')
     end subroutine exec_import_trajectory
 
     subroutine exec_trajectory_denoise( self, cline )

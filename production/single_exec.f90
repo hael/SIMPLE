@@ -101,7 +101,7 @@ select case(prg)
         call xtseries_import%execute(cline)
     case( 'import_particles')
         call ximport_particles%execute(cline)
-    case( 'trajectory_import_particles' )
+    case( 'import_trajectory' )
         call ximport_trajectory%execute(cline)
     case( 'prune_project' )
         call xprune_project%execute( cline )
@@ -201,7 +201,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('0dada1ba')
+    call simple_print_git_version('447de7ff')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
