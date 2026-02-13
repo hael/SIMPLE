@@ -1,8 +1,6 @@
 !@descr: "dock" UI api (concrete implementation)
 module simple_ui_api_dock
-use simple_ui_program, only: ui_program
-use simple_ui_hash,    only: ui_hash
-use simple_ui_utils,   only: add_ui_program
+use simple_ui_api_modules
 implicit none
 
 type(ui_program), target :: dock_volpair
@@ -15,5 +13,71 @@ contains
         call add_ui_program('dock_volpair', dock_volpair, prgtab)
         call add_ui_program('volanalyze',   volanalyze,   prgtab)
     end subroutine register_simple_ui_dock
+
+! ============================================================
+! Constructors moved from simple_user_interface.f90
+! ============================================================
+
+    subroutine new_dock_volpair
+        ! PROGRAM SPECIFICATION
+        call dock_volpair%new(&
+        &'dock_volpair', &                              ! name
+        &'Dock a pair of volumes',&                     ! descr_short
+        &'is a program for docking a pair of volumes',& ! descr long
+        &'simple_exec',&                                ! executable
+        &.false.)                                       ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call dock_volpair%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Reference volume', &
+        & 'input reference volume e.g. vol1.mrc', .true., '')
+        call dock_volpair%add_input(UI_IMG, 'vol2', 'file', 'Volume', 'Target volume', &
+        & 'input target volume e.g. vol2.mrc', .true., '')
+        call dock_volpair%add_input(UI_IMG, outvol)
+        ! parameter input/output
+        call dock_volpair%add_input(UI_PARM, smpd)
+        call dock_volpair%add_input(UI_PARM, outfile)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call dock_volpair%add_input(UI_SRCH, trs)
+        ! filter controls
+        call dock_volpair%add_input(UI_FILT, hp)
+        call dock_volpair%add_input(UI_FILT, lp)
+        ! mask controls
+        call dock_volpair%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call dock_volpair%add_input(UI_COMP, nthr)
+    end subroutine new_dock_volpair
+
+
+    subroutine new_volanalyze
+        ! PROGRAM SPECIFICATION
+        call volanalyze%new(&
+        &'volanalyze',&                                                             ! name
+        &'Analyze an emsemble of ab initio volumes',&                               ! descr_short
+        &'is a program for statistical analysis an ensemble of ab initio volumes',& ! descr_long
+        &'simple_exec',&                                                            ! executable
+        &.false.)                                                                   ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call volanalyze%add_input(UI_IMG, 'filetab', 'file', 'Volumes list',&
+        &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
+        ! parameter input/output
+        call volanalyze%add_input(UI_PARM, smpd)
+        call volanalyze%add_input(UI_PARM, 'ref_ind', 'num', 'Reference volume index', 'Index of volume in voltab to use as reference', 'ref idx', .false., 0.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call volanalyze%add_input(UI_FILT, hp, required_override=.true.)
+        call volanalyze%add_input(UI_FILT, lp, required_override=.true.)
+        ! mask controls
+        ! mask controls
+        call volanalyze%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call volanalyze%add_input(UI_COMP, nthr)
+    end subroutine new_volanalyze
+
 
 end module simple_ui_api_dock

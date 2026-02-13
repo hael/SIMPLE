@@ -1,8 +1,6 @@
 !@descr: "single_ui_api_validation" UI api (concrete implementation)
 module single_ui_api_validation
-use simple_ui_program, only: ui_program
-use simple_ui_hash,    only: ui_hash
-use simple_ui_utils,   only: add_ui_program
+use simple_ui_api_modules
 implicit none
 
 type(ui_program), target :: cavgseoproc_nano
@@ -17,5 +15,89 @@ contains
         call add_ui_program('cavgsproc_nano', cavgsproc_nano, prgtab)
         call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
     end subroutine register_single_ui_validation
+
+! ============================================================
+! Constructors moved from simple_user_interface.f90
+! ============================================================
+
+    subroutine new_cavgseoproc_nano
+        ! PROGRAM SPECIFICATION
+        call cavgseoproc_nano%new(&
+        &'cavgseoproc_nano',&                                           ! name
+        &'Analysis of even and odd class averages along nanocrystal time-series',& ! descr_short
+        &'is a program to analyze the core/surface dynamics of nanocrystals using even and odd class averages',& ! descr_long
+        &'single_exec',&                                                ! executable
+        &.true., gui_advanced=.false.)                                  ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cavgseoproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call cavgseoproc_nano%add_input(UI_PARM, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cavgseoproc_nano%add_input(UI_SRCH, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call cavgseoproc_nano%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call cavgseoproc_nano%add_input(UI_COMP, nthr)
+        call cavgseoproc_nano%add_input(UI_COMP, script)
+    end subroutine new_cavgseoproc_nano
+
+
+    subroutine new_cavgsproc_nano
+        ! PROGRAM SPECIFICATION
+        call cavgsproc_nano%new(&
+        &'cavgsproc_nano',&                                           ! name
+        &'Analysis of class averages along nanocrystal time-series',& ! descr_short
+        &'is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections',& ! descr_long
+        &'single_exec',&                                              ! executable
+        &.true., gui_advanced=.false.)                                ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cavgsproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call cavgsproc_nano%add_input(UI_PARM, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cavgsproc_nano%add_input(UI_SRCH, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call cavgsproc_nano%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call cavgsproc_nano%add_input(UI_COMP, nthr)
+        call cavgsproc_nano%add_input(UI_COMP, script)
+    end subroutine new_cavgsproc_nano
+
+
+    subroutine new_ptclsproc_nano
+        ! PROGRAM SPECIFICATION
+        call ptclsproc_nano%new(&
+        &'ptclsproc_nano',&                                           ! name
+        &'Analysis of particle images inside a class along nanocrystal time-series using radial cross-correlation',& ! descr_short
+        &'is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class',& ! descr_long
+        &'single_exec',&                                              ! executable
+        &.true., gui_advanced=.false.)                                ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call ptclsproc_nano%add_input(UI_PARM, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call ptclsproc_nano%add_input(UI_SRCH, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call ptclsproc_nano%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call ptclsproc_nano%add_input(UI_COMP, nthr)
+        call ptclsproc_nano%add_input(UI_COMP, script)
+    end subroutine new_ptclsproc_nano
+
 
 end module single_ui_api_validation
