@@ -4,6 +4,7 @@ implicit none
 
 ! common input parameter type
 type ui_param
+    ! deliberately made public (close entaglement with simple_ui_program)
     type(string) :: key
     type(string) :: keytype
     type(string) :: descr_short
