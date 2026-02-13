@@ -92,7 +92,7 @@ string(APPEND CMAKE_Fortran_FLAGS
 #-O3 -march=native -fopenmp -fopt-info-vec-optimized -fopt-info-vec-missed
 # inspect vectorization reports: -qopt-report, -fopt-info-vec
 # -ffast-math is unsafe, causes bugs
-set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops ${ARCH_FLAG} -fPIC" 
+set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -w -funroll-loops ${ARCH_FLAG} -fPIC" 
     CACHE STRING "Release flags for Fortran" FORCE)
 
 # Debug flags for Fortran
