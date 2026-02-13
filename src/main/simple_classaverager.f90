@@ -5,7 +5,7 @@ use simple_builder,           only: build_glob
 use simple_ctf,               only: ctf
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
-use simple_image,             only: image, image_ptr
+use simple_image,             only: image
 use simple_parameters,        only: params_glob
 use simple_stack_io,          only: stack_io
 implicit none
