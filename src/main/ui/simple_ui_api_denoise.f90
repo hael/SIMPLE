@@ -11,20 +11,8 @@ type(ui_program), target :: ppca_volvar
 
 contains
 
-    subroutine register_simple_ui_denoise(prgtab)
+    subroutine new_icm2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('icm2D',                icm2D,                prgtab)
-        call add_ui_program('icm3D',                icm3D,                prgtab)
-        call add_ui_program('ppca_denoise',         ppca_denoise,         prgtab)
-        call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab)
-        call add_ui_program('ppca_volvar',          ppca_volvar,          prgtab)
-    end subroutine register_simple_ui_denoise
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_icm2D
         ! PROGRAM SPECIFICATION
         call icm2D%new(&
         &'icm2D',&                                                                  ! name
@@ -48,10 +36,12 @@ contains
         ! <empty>
         ! computer controls
         call icm2D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('icm2D', icm2D, prgtab)
     end subroutine new_icm2D
 
-
-    subroutine new_icm3D
+    subroutine new_icm3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call icm3D%new(&
         &'icm3D',&                                                                  ! name
@@ -76,10 +66,12 @@ contains
         ! call icm3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call icm3D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('icm3D', icm3D, prgtab)
     end subroutine new_icm3D
 
-
-    subroutine new_ppca_denoise
+    subroutine new_ppca_denoise( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ppca_denoise%new(&
         &'ppca_based_denoising',&                     ! name
@@ -104,10 +96,12 @@ contains
         ! <empty>
         ! computer controls
         call ppca_denoise%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('ppca_denoise', ppca_denoise, prgtab)
     end subroutine new_ppca_denoise
 
-
-    subroutine new_ppca_denoise_classes
+    subroutine new_ppca_denoise_classes( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ppca_denoise_classes%new(&
         &'ppca_denoise_classes',&                     ! name
@@ -132,10 +126,12 @@ contains
         ! <empty>
         ! computer controls
         call ppca_denoise_classes%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab)
     end subroutine new_ppca_denoise_classes
 
-
-    subroutine new_ppca_volvar
+    subroutine new_ppca_volvar( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ppca_volvar%new(&
         &'ppca_volvar',&                                     ! name
@@ -158,7 +154,8 @@ contains
         call ppca_volvar%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call ppca_volvar%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('ppca_volvar', ppca_volvar, prgtab)
     end subroutine new_ppca_volvar
-
 
 end module simple_ui_api_denoise

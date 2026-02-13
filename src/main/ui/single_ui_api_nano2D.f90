@@ -48,7 +48,6 @@ contains
         call analysis2D_nano%add_input(UI_COMP, script)
     end subroutine new_analysis2D_nano
 
-
     subroutine new_center2D_nano
         ! PROGRAM SPECIFICATION
         call center2D_nano%new(&
@@ -76,7 +75,6 @@ contains
         call center2D_nano%add_input(UI_COMP, nthr)
         call center2D_nano%add_input(UI_COMP, script)
     end subroutine new_center2D_nano
-
 
     subroutine new_cluster2D_nano
         ! PROGRAM SPECIFICATION
@@ -116,9 +114,7 @@ contains
         call cluster2D_nano%add_input(UI_COMP, script)
     end subroutine new_cluster2D_nano
 
-
     subroutine new_estimate_diam
-        type(ui_param) :: ptmp
         ! PROGRAM SPECIFICATION
         call estimate_diam%new(&
         &'estimate_diam',&                                                                                              ! name
@@ -137,15 +133,11 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        ptmp = lp
-        ptmp%descr_short = 'low-pass limit in Angstroms{7.}'
-        ptmp%rval_default = 7.
-        call estimate_diam%add_input(UI_FILT, ptmp)
+        call estimate_diam%add_input(UI_FILT, lp, descr_short_override='low-pass limit in Angstroms{7.}')
         ! mask controls
         call estimate_diam%add_input(UI_MASK, mskdiam)
         ! computer controls
         call estimate_diam%add_input(UI_COMP, nthr)
     end subroutine new_estimate_diam
-
 
 end module single_ui_api_nano2D

@@ -9,18 +9,8 @@ type(ui_program), target :: symmetry_test
 
 contains
 
-    subroutine register_simple_ui_symmetry(prgtab)
+    subroutine new_symaxis_search( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('symaxis_search', symaxis_search, prgtab)
-        call add_ui_program('symmetrize_map', symmetrize_map, prgtab)
-        call add_ui_program('symmetry_test',  symmetry_test,  prgtab)
-    end subroutine register_simple_ui_symmetry
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION
         call symaxis_search%new(&
         &'symaxis_search',&                                                                                 ! name
@@ -52,10 +42,12 @@ contains
         call symaxis_search%add_input(UI_MASK, mskdiam)
         ! computer controls
         call symaxis_search%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('symaxis_search', symaxis_search, prgtab)
     end subroutine new_symaxis_search
 
-
-    subroutine new_symmetrize_map
+    subroutine new_symmetrize_map( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call symmetrize_map%new(&
         &'symmetrize_map',&                                                                                          ! name
@@ -87,10 +79,12 @@ contains
         call symmetrize_map%add_input(UI_MASK, mskdiam)
         ! computer controls
         call symmetrize_map%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('symmetrize_map', symmetrize_map, prgtab)
     end subroutine new_symmetrize_map
 
-
-    subroutine new_symmetry_test
+    subroutine new_symmetry_test( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call symmetry_test%new(&
         &'symmetry_test',&                                                                                           ! name
@@ -122,7 +116,8 @@ contains
         call symmetry_test%add_input(UI_MASK, mskdiam)
         ! computer controls
         call symmetry_test%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('symmetry_test', symmetry_test, prgtab)
     end subroutine new_symmetry_test
-
 
 end module simple_ui_api_symmetry

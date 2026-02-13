@@ -23,32 +23,8 @@ type(ui_program), target :: zero_project_shifts
 
 contains
 
-    subroutine register_simple_ui_project(prgtab)
+    subroutine new_export_relion( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('export_relion',         export_relion,         prgtab)
-        call add_ui_program('export_starproject',    export_starproject,    prgtab)
-        call add_ui_program('extract_subproj',       extract_subproj,       prgtab)
-        call add_ui_program('import_boxes',          import_boxes,          prgtab)
-        call add_ui_program('import_cavgs',          import_cavgs,          prgtab)
-        call add_ui_program('import_movies',         import_movies,         prgtab)
-        call add_ui_program('import_particles',      import_particles,      prgtab)
-        call add_ui_program('import_starproject',    import_starproject,    prgtab)
-        call add_ui_program('merge_projects',        merge_projects,        prgtab)
-        call add_ui_program('new_project',           new_project,           prgtab)
-        call add_ui_program('print_project_field',   print_project_field,   prgtab)
-        call add_ui_program('print_project_info',    print_project_info,    prgtab)
-        call add_ui_program('prune_project',         prune_project,         prgtab)
-        call add_ui_program('replace_project_field', replace_project_field, prgtab)
-        call add_ui_program('selection',             selection,             prgtab)
-        call add_ui_program('update_project',        update_project,        prgtab)
-        call add_ui_program('zero_project_shifts',   zero_project_shifts,   prgtab)
-    end subroutine register_simple_ui_project
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_export_relion
         ! PROGRAM SPECIFICATION
         call export_relion%new(&
         &'export_relion',&                                              ! name
@@ -79,10 +55,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('export_relion', export_relion, prgtab)
     end subroutine new_export_relion
 
-
-    subroutine new_export_starproject
+    subroutine new_export_starproject( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call export_starproject%new(&
         &'export_starproject', &                                                ! name
@@ -103,10 +81,12 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+        !
+        call add_ui_program('export_starproject', export_starproject, prgtab)
     end subroutine new_export_starproject
 
-
-    subroutine new_extract_subproj
+    subroutine new_extract_subproj( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call extract_subproj%new(&
         &'extract_subproj',&                                                                                     ! name
@@ -133,10 +113,11 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        call add_ui_program('extract_subproj', extract_subproj, prgtab)
     end subroutine new_extract_subproj
 
-
-    subroutine new_import_boxes
+    subroutine new_import_boxes( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call import_boxes%new(&
         &'import_boxes',&                                  ! name
@@ -160,10 +141,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('import_boxes', import_boxes, prgtab)
     end subroutine new_import_boxes
 
-
-    subroutine new_import_cavgs
+    subroutine new_import_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call import_cavgs%new(&
         &'import_cavgs',&                                        ! name
@@ -175,10 +158,12 @@ contains
         &'Stack of class average images to import', 'e.g. cavgs.mrcs', .true., '')
         ! parameter input/output
         call import_cavgs%add_input(UI_PARM, smpd)
+        ! add to ui_hash
+        call add_ui_program('import_cavgs', import_cavgs, prgtab)
     end subroutine new_import_cavgs
 
-
-    subroutine new_import_movies
+    subroutine new_import_movies( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call import_movies%new(&
         &'import_movies',&                                       ! name
@@ -212,10 +197,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('import_movies', import_movies, prgtab)
     end subroutine new_import_movies
 
-
-    subroutine new_import_particles
+    subroutine new_import_particles( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call import_particles%new(&
         &'import_particles',&                                       ! name
@@ -253,10 +240,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('import_particles', import_particles, prgtab)
     end subroutine new_import_particles
 
-
-    subroutine new_import_starproject
+    subroutine new_import_starproject( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call import_starproject%new(&
         &'import_starproject', &                                                ! name
@@ -282,10 +271,13 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('import_starproject', import_starproject, prgtab)
     end subroutine new_import_starproject
 
-
-    subroutine new_merge_projects
+    subroutine new_merge_projects( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call merge_projects%new(&
         &'merge_projects', &                                            ! name
@@ -320,10 +312,12 @@ contains
         ! computer controls
         call merge_projects%add_input(UI_COMP, nparts, gui_submenu="compute")
         call merge_projects%add_input(UI_COMP, nthr,   gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('merge_projects', merge_projects, prgtab)
     end subroutine new_merge_projects
 
-
-    subroutine new_new_project
+    subroutine new_new_project( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call new_project%new(&
         &'new_project',&                     ! name
@@ -362,10 +356,12 @@ contains
         call new_project%add_input(UI_COMP, job_memory_per_task)
         call new_project%add_input(UI_COMP, qsys_name)
         call new_project%add_input(UI_COMP, walltime)
+        ! add to ui_hash
+        call add_ui_program('new_project', new_project, prgtab)
     end subroutine new_new_project
 
-
-    subroutine new_print_project_field
+    subroutine new_print_project_field( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call print_project_field%new(&
         &'print_project_field', &                                             ! name
@@ -392,10 +388,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('print_project_field', print_project_field, prgtab)
     end subroutine new_print_project_field
 
-
-    subroutine new_print_project_info
+    subroutine new_print_project_info( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call print_project_info%new(&
         &'print_project_info', &                                           ! name
@@ -418,10 +416,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('print_project_info', print_project_info, prgtab)
     end subroutine new_print_project_info
 
-
-    subroutine new_prune_project
+    subroutine new_prune_project( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call prune_project%new(&
         &'prune_project',&                            ! name
@@ -444,10 +444,12 @@ contains
         ! <empty>
         ! computer controls
         call prune_project%add_input(UI_COMP, nparts)
+        ! add to ui_hash
+        call add_ui_program('prune_project', prune_project, prgtab)
     end subroutine new_prune_project
 
-
-    subroutine new_replace_project_field
+    subroutine new_replace_project_field( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call replace_project_field%new(&
         &'replace_project_field',&                    ! name
@@ -472,10 +474,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('replace_project_field', replace_project_field, prgtab)
     end subroutine new_replace_project_field
 
-
-    subroutine new_selection
+    subroutine new_selection( prgtab )
+        class(ui_hash), intent(inout) :: prgtab 
         ! PROGRAM SPECIFICATION
         call selection%new(&
         &'selection',&                                                                  ! name
@@ -513,10 +517,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('selection', selection, prgtab)
     end subroutine new_selection
 
-
-    subroutine new_update_project
+    subroutine new_update_project( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call update_project%new(&
         &'update_project',&                  ! name
@@ -548,10 +554,12 @@ contains
         call update_project%add_input(UI_COMP, job_memory_per_task)
         call update_project%add_input(UI_COMP, qsys_name)
         call update_project%add_input(UI_COMP, walltime)
+        ! add to ui_hash
+        call add_ui_program('update_project', update_project, prgtab)
     end subroutine new_update_project
 
-
-    subroutine new_zero_project_shifts
+    subroutine new_zero_project_shifts( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call zero_project_shifts%new(&
         &'zero_project_shifts', &                                       ! name
@@ -574,7 +582,8 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('zero_project_shifts', zero_project_shifts, prgtab)
     end subroutine new_zero_project_shifts
-
 
 end module simple_ui_api_project

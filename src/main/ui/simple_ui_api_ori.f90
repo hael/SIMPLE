@@ -10,19 +10,8 @@ type(ui_program), target :: vizoris
 
 contains
 
-    subroutine register_simple_ui_ori(prgtab)
+    subroutine new_make_oris( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('make_oris', make_oris, prgtab)
-        call add_ui_program('orisops',   orisops,   prgtab)
-        call add_ui_program('oristats',  oristats,  prgtab)
-        call add_ui_program('vizoris',   vizoris,   prgtab)
-    end subroutine register_simple_ui_ori
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_make_oris
         ! PROGRAM SPECIFICATION
         call make_oris%new(&
         &'make_oris',&                       ! name
@@ -58,10 +47,12 @@ contains
         ! <empty>
         ! computer controls
         call make_oris%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('make_oris', make_oris, prgtab)
     end subroutine new_make_oris
 
-
-    subroutine new_orisops
+    subroutine new_orisops( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call orisops%new(&
         &'orisops',&                      ! name
@@ -113,10 +104,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('orisops', orisops, prgtab)
     end subroutine new_orisops
-
-
-    subroutine new_oristats
+    
+    subroutine new_oristats( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call oristats%new(&
         &'oristats',&                             ! name
@@ -149,10 +142,12 @@ contains
         ! <empty>
         ! computer controls
         call oristats%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('oristats', oristats, prgtab)
     end subroutine new_oristats
 
-
-    subroutine new_vizoris
+    subroutine new_vizoris( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call vizoris%new(&
         &'vizoris',&                                                                                               ! name
@@ -179,7 +174,8 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('vizoris', vizoris, prgtab)
     end subroutine new_vizoris
-
 
 end module simple_ui_api_ori

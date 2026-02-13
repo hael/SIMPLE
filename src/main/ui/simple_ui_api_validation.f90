@@ -9,18 +9,8 @@ type(ui_program), target :: check_refpick
 
 contains
 
-    subroutine register_simple_ui_validation(prgtab)
+    subroutine new_check_refpick( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('model_validation', model_validation, prgtab)
-        call add_ui_program('mini_stream',      mini_stream,      prgtab)
-        call add_ui_program('check_refpick',    check_refpick,    prgtab)
-    end subroutine register_simple_ui_validation
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_check_refpick
         ! PROGRAM SPECIFICATION
         call check_refpick%new(&
         &'check_refpick',&                                           ! name
@@ -51,10 +41,12 @@ contains
         ! <empty>
         ! computer controls
         call check_refpick%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('check_refpick', check_refpick, prgtab)
     end subroutine new_check_refpick
 
-
-    subroutine new_mini_stream
+    subroutine new_mini_stream( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call mini_stream%new(&
         &'mini_stream',&                                ! name
@@ -82,10 +74,12 @@ contains
         ! <empty>
         ! computer controls
         call mini_stream%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('mini_stream', mini_stream, prgtab)
     end subroutine new_mini_stream
 
-
-    subroutine new_model_validation
+    subroutine new_model_validation( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call model_validation%new(&
         &'model_validation', &                                                                        ! name
@@ -107,7 +101,8 @@ contains
         ! filter controls
         ! mask controls
         ! computer controls
+        ! add to ui_hash
+        call add_ui_program('model_validation', model_validation, prgtab)
     end subroutine new_model_validation
-
 
 end module simple_ui_api_validation

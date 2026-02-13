@@ -11,20 +11,8 @@ type(ui_program), target :: automask
 
 contains
 
-    subroutine register_simple_ui_refine3D(prgtab)
+    subroutine new_automask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('refine3D',      refine3D,      prgtab)
-        call add_ui_program('refine3D_auto', refine3D_auto, prgtab)
-        call add_ui_program('reconstruct3D', reconstruct3D, prgtab)
-        call add_ui_program('postprocess',   postprocess,   prgtab)
-        call add_ui_program('automask',      automask,      prgtab)
-    end subroutine register_simple_ui_refine3D
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_automask
         ! PROGRAM SPECIFICATION
         call automask%new(&
         &'automask',&                                    ! name
@@ -55,10 +43,12 @@ contains
         call automask%add_input(UI_MASK, automsk)
         ! computer controls
         call automask%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('automask', automask, prgtab)
     end subroutine new_automask
 
-
-    subroutine new_postprocess
+    subroutine new_postprocess( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call postprocess%new(&
         &'postprocess',&                                                      ! name
@@ -83,10 +73,12 @@ contains
         call postprocess%add_input(UI_MASK, mskdiam)
         ! computer controls
         call postprocess%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('postprocess', postprocess, prgtab)
     end subroutine new_postprocess
 
-
-    subroutine new_reconstruct3D
+    subroutine new_reconstruct3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call reconstruct3D%new(&
         &'reconstruct3D',&                                               ! name
@@ -115,10 +107,12 @@ contains
         ! computer controls
         call reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call reconstruct3D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('reconstruct3D', reconstruct3D, prgtab)
     end subroutine new_reconstruct3D
 
-
-    subroutine new_refine3D
+    subroutine new_refine3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call refine3D%new(&
         &'refine3D',&                                                                               ! name
@@ -153,7 +147,6 @@ contains
         call refine3D%add_input(UI_SRCH, sigma_est, gui_submenu="search")
         ! filter controls
         call refine3D%add_input(UI_FILT, hp, gui_submenu="filter")
-
         call refine3D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="filter")
@@ -175,10 +168,12 @@ contains
         ! computer controls
         call refine3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call refine3D%add_input(UI_COMP, nthr,                              gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('refine3D', refine3D, prgtab)
     end subroutine new_refine3D
 
-
-    subroutine new_refine3D_auto
+    subroutine new_refine3D_auto( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call refine3D_auto%new(&
         &'refine3D_auto',&                                                                          ! name
@@ -211,7 +206,8 @@ contains
         ! computer controls
         call refine3D_auto%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
         call refine3D_auto%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('refine3D_auto', refine3D_auto, prgtab)
     end subroutine new_refine3D_auto
-
 
 end module simple_ui_api_refine3D

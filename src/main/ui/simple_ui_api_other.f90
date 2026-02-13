@@ -11,21 +11,8 @@ type(ui_program), target :: split_stack
 
 contains
 
-    subroutine register_simple_ui_other( prgtab )
+    subroutine new_match_stacks( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call prgtab%set_ui_program('match_stacks',    match_stacks)
-        call prgtab%set_ui_program('mkdir_',          mkdir_)
-        call prgtab%set_ui_program('normalize_',      normalize_)
-        call prgtab%set_ui_program('print_ui_stream', print_ui_stream)
-        call prgtab%set_ui_program('split_',          split_)
-        call prgtab%set_ui_program('split_stack',     split_stack)
-    end subroutine register_simple_ui_other
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_match_stacks
         ! PROGRAM SPECIFICATION
         call match_stacks%new(&
         &'match_stack',&                                              ! name
@@ -51,9 +38,12 @@ contains
         call match_stacks%add_input(UI_MASK, mskdiam)
         ! computer controls
         call match_stacks%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('match_stacks', match_stacks, prgtab)
     end subroutine new_match_stacks
 
-    subroutine new_mkdir_
+    subroutine new_mkdir_( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call mkdir_%new(&
         &'mkdir',&                                                       ! name
@@ -76,9 +66,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('mkdir', mkdir_, prgtab)
     end subroutine new_mkdir_
 
-    subroutine new_normalize
+    subroutine new_normalize( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call normalize_%new(&
         &'normalize',&                         ! name
@@ -104,9 +97,12 @@ contains
         call normalize_%add_input(UI_MASK, mskdiam)
         ! computer controls
         call normalize_%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('normalize', normalize_, prgtab)
     end subroutine new_normalize
 
-    subroutine new_split_
+    subroutine new_split_( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         call split_%new(&
         &'split',&                                   ! name
         &'Split stack into substacks',&              ! descr_short
@@ -120,10 +116,20 @@ contains
         call split_%add_input(UI_PARM, smpd)
         ! computer controls
         call split_%add_input(UI_COMP, nparts)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>               
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('split', split_, prgtab)
     end subroutine new_split_
 
-
-    subroutine new_split_stack
+    subroutine new_split_stack( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call split_stack%new(&
         &'split_stack',&                                              ! name
@@ -146,6 +152,8 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('split_stack', split_stack, prgtab)
     end subroutine new_split_stack
 
 end module simple_ui_api_other

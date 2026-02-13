@@ -10,19 +10,8 @@ type(ui_program), target :: simulate_particles
 
 contains
 
-    subroutine register_simple_ui_sim(prgtab)
+    subroutine new_pdb2mrc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('pdb2mrc',            pdb2mrc,            prgtab)
-        call add_ui_program('simulate_movie',     simulate_movie,     prgtab)
-        call add_ui_program('simulate_noise',     simulate_noise,     prgtab)
-        call add_ui_program('simulate_particles', simulate_particles, prgtab)
-    end subroutine register_simple_ui_sim
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_pdb2mrc
         ! PROGRAM SPECIFICATION
         call pdb2mrc%new(&
         &'pdb2mrc', &                                      ! name
@@ -46,10 +35,12 @@ contains
         ! filter controls
         ! mask controls
         ! computer controls
+        ! add to ui_hash
+        call add_ui_program('pdb2mrc', pdb2mrc, prgtab)
     end subroutine new_pdb2mrc
 
-
-    subroutine new_simulate_movie
+    subroutine new_simulate_movie( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call simulate_movie%new(&
         &'simulate_movie',&                                 ! name
@@ -82,10 +73,12 @@ contains
         ! <empty>
         ! computer controls
         call simulate_movie%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('simulate_movie', simulate_movie, prgtab)
     end subroutine new_simulate_movie
 
-
-    subroutine new_simulate_noise
+    subroutine new_simulate_noise( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call simulate_noise%new(&
         &'simulate_noise',&                                ! name
@@ -109,10 +102,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('simulate_noise', simulate_noise, prgtab)
     end subroutine new_simulate_noise
 
-
-    subroutine new_simulate_particles
+    subroutine new_simulate_particles( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call simulate_particles%new(&
         &'simulate_particles',&                                           ! name
@@ -158,7 +153,8 @@ contains
         call simulate_particles%add_input(UI_MASK, mskdiam)
         ! computer controls
         call simulate_particles%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('simulate_particles', simulate_particles, prgtab)
     end subroutine new_simulate_particles
-
 
 end module simple_ui_api_sim

@@ -64,7 +64,7 @@ contains
     end subroutine new_abinitio3D
 
     subroutine new_abinitio3D_cavgs( prgtab )
-         class(ui_hash), intent(inout) :: prgtab
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call abinitio3D_cavgs%new(&
         &'abinitio3D_cavgs',&                                                                   ! name
@@ -102,7 +102,7 @@ contains
     end subroutine new_abinitio3D_cavgs
 
     subroutine new_estimate_lpstages( prgtab )
-         class(ui_hash), intent(inout) :: prgtab
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call estimate_lpstages%new(&
         &'estimate_lpstages',&                                                                                             ! name

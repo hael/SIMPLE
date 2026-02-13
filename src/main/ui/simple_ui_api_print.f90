@@ -11,20 +11,8 @@ type(ui_program), target :: print_magic_boxes
 
 contains
 
-    subroutine register_simple_ui_print(prgtab)
+    subroutine new_info_image( prgtab ) 
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('info_image',         info_image,         prgtab)
-        call add_ui_program('info_stktab',        info_stktab,        prgtab)
-        call add_ui_program('print_dose_weights', print_dose_weights, prgtab)
-        call add_ui_program('print_fsc',          print_fsc,          prgtab)
-        call add_ui_program('print_magic_boxes',  print_magic_boxes,  prgtab)
-    end subroutine register_simple_ui_print
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_info_image
         ! PROGRAM SPECIFICATION
         call info_image%new(&
         &'info_image', &                                                                       ! name
@@ -48,10 +36,13 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('info_image', info_image, prgtab)
     end subroutine new_info_image
 
-
-    subroutine new_info_stktab
+    subroutine new_info_stktab( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call info_stktab%new(&
         &'info_stktab', &                                                        ! name
@@ -75,10 +66,14 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('info_stktab', info_stktab, prgtab)
     end subroutine new_info_stktab
 
 
-    subroutine new_print_dose_weights
+    subroutine new_print_dose_weights( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call print_dose_weights%new(&
         &'print_dose_weights', &                                                  ! name
@@ -105,10 +100,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('print_dose_weights', print_dose_weights, prgtab)
     end subroutine new_print_dose_weights
 
-
-    subroutine new_print_fsc
+    subroutine new_print_fsc( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call print_fsc%new(&
         &'print_fsc', &                                                          ! name
@@ -135,10 +132,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('print_fsc', print_fsc, prgtab)
     end subroutine new_print_fsc
 
-
-    subroutine new_print_magic_boxes
+    subroutine new_print_magic_boxes( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call print_magic_boxes%new(&
         &'print_magic_boxes', &                                   ! name
@@ -163,7 +162,8 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('print_magic_boxes', print_magic_boxes, prgtab)
     end subroutine new_print_magic_boxes
-
 
 end module simple_ui_api_print

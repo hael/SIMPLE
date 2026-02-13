@@ -14,23 +14,10 @@ type(ui_program), target :: stackops
 
 contains
 
-    subroutine register_simple_ui_image(prgtab)
+
+
+    subroutine new_binarize( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call add_ui_program('binarize',      binarize,      prgtab)
-        call add_ui_program('convert',       convert,       prgtab)
-        call add_ui_program('ctf_phaseflip', ctf_phaseflip, prgtab)
-        call add_ui_program('ctfops',        ctfops,        prgtab)
-        call add_ui_program('scale',         scale,         prgtab)
-        call add_ui_program('select_',       select_,       prgtab)
-        call add_ui_program('stack',         stack,         prgtab)
-        call add_ui_program('stackops',      stackops,      prgtab)
-    end subroutine register_simple_ui_image
-
-! ============================================================
-! Constructors moved from simple_user_interface.f90
-! ============================================================
-
-    subroutine new_binarize
         call binarize%new(&
         &'binarize',&                                     ! name
         &'Binarization routines for volumes and stacks',& ! descr_long
@@ -58,10 +45,12 @@ contains
         ! computer controls
         ! <empty>
         call binarize%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('binarize', binarize, prgtab)
     end subroutine new_binarize
 
-
-    subroutine new_convert
+    subroutine new_convert( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call convert%new(&
         &'convert',&                                                    ! name
@@ -88,10 +77,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('convert', convert, prgtab)
     end subroutine new_convert
 
-
-    subroutine new_ctf_phaseflip
+    subroutine new_ctf_phaseflip( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ctf_phaseflip%new(&
         &'ctf_phaseflip', &                                        ! name
@@ -114,10 +105,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('ctf_phaseflip', ctf_phaseflip, prgtab)
     end subroutine new_ctf_phaseflip
 
-
-    subroutine new_ctfops
+    subroutine new_ctfops( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ctfops%new(&
         &'ctfops', &                                         ! name
@@ -146,10 +139,12 @@ contains
         ! <empty>
         ! computer controls
         call ctfops%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('ctfops', ctfops, prgtab)
     end subroutine new_ctfops
 
-
-    subroutine new_scale
+    subroutine new_scale( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call scale%new(&
         &'scale', &                                                                               ! name
@@ -181,10 +176,12 @@ contains
         ! <empty>
         ! computer controls
         call scale%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('scale', scale, prgtab)
     end subroutine new_scale
 
-
-    subroutine new_select_
+    subroutine new_select_( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call select_%new(&
         &'select',&                                         ! name
@@ -215,10 +212,12 @@ contains
         ! <empty>
         ! computer controls
         call select_%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('select_', select_, prgtab)
     end subroutine new_select_
 
-
-    subroutine new_stack
+    subroutine new_stack( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call stack%new(&
         &'stack',&                     ! name
@@ -244,10 +243,12 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
+        call add_ui_program('stack', stack, prgtab)
     end subroutine new_stack
 
-
-    subroutine new_stackops
+    subroutine new_stackops( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call stackops%new(&
         &'stackops',&                                ! name
@@ -300,7 +301,8 @@ contains
         ! <empty>
         ! computer controls
         call stackops%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('stackops', stackops, prgtab)
     end subroutine new_stackops
-
 
 end module simple_ui_api_image
