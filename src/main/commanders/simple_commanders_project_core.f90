@@ -458,7 +458,7 @@ contains
             params%outstk = params%subprojname//'.mrcs'
         endif
         if( cline%defined('clustind') )then
-            call spproj%os_ptcl2D%get_pinds(params%clustind, 'class', pinds)
+            call spproj%os_ptcl2D%get_pinds(params%clustind, 'cluster', pinds)
             n = size(pinds)
             call spproj%write_substk(pinds, params%outstk)
             ! extract previous oris
@@ -480,7 +480,7 @@ contains
                 ctfflag = 'no'
             case DEFAULT
                 ! generate file with defocus values
-                if( cline%defined('class') )then
+                if( cline%defined('cluster') )then
                     call os_ptcl2D_prev%write(string(DEFTAB))
                 else
                     call os_ptcl2D_prev%write(string(DEFTAB))
