@@ -481,9 +481,9 @@ contains
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
                 ! Updates global parameters once and init chunk 2D clustering
                 if(params%nptcls_per_cls == 0) then
-                    if( project_list%size() .gt. params%nmics) then
+                    if( project_list%size() * STREAM_NMOVS_SET .gt. params%nmics) then
                         ! nptcls_per_cls is calculated after params%nmics processed micrographs
-                        avgmicptcls    = nptcls_glob / project_list%size()
+                        avgmicptcls    = nptcls_glob / (project_list%size() * STREAM_NMOVS_SET)
                         avgmicptcls    = ceiling(avgmicptcls / 10) * 10.0
                    !     nptcls_per_cls = ceiling(params%nmics * avgmicptcls / params%ncls)
                         ! testing logic from opening2D
