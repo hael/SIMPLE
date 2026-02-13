@@ -1792,7 +1792,6 @@ contains
     end subroutine new_detect_atoms
 
     subroutine new_dock_volpair
-        type(ui_param) :: ptmp
         ! PROGRAM SPECIFICATION
         call dock_volpair%new(&
         &'dock_volpair', &                              ! name
@@ -1813,9 +1812,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ptmp = trs
-        trs%rval_default = 5.
-        call dock_volpair%add_input(UI_SRCH, ptmp)
+        call dock_volpair%add_input(UI_SRCH, trs)
         ! filter controls
         call dock_volpair%add_input(UI_FILT, hp)
         call dock_volpair%add_input(UI_FILT, lp)
@@ -2422,18 +2419,9 @@ contains
         call import_movies%add_input(UI_IMG, 'dir_movies', 'dir',  'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .false., 'preprocess/')
         ! parameter input/output
         call import_movies%add_input(UI_PARM, smpd)
-        call import_movies%add_input(UI_PARM, kv)
-        ! TODO: Manual fix needed - was: import_movies%parm_ios(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         import_movies%parm_ios(2)%required = .true.
-        call import_movies%add_input(UI_PARM, cs)
-        ! TODO: Manual fix needed - was: import_movies%parm_ios(3)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         import_movies%parm_ios(3)%required = .true.
-        call import_movies%add_input(UI_PARM, fraca)
-        ! TODO: Manual fix needed - was: import_movies%parm_ios(4)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         import_movies%parm_ios(4)%required = .true.
+        call import_movies%add_input(UI_PARM, kv,    required_override=.true.)
+        call import_movies%add_input(UI_PARM, cs,    required_override=.true.)
+        call import_movies%add_input(UI_PARM, fraca, required_override=.true.)
         call import_movies%add_input(UI_PARM, ctf_yes)
         call import_movies%add_input(UI_PARM, phaseplate)
         call import_movies%add_input(UI_PARM, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
@@ -2464,18 +2452,9 @@ contains
         ! <empty>
         ! parameter input/output
         call import_particles%add_input(UI_PARM, smpd)
-        call import_particles%add_input(UI_PARM, kv)
-        ! TODO: Manual fix needed - was: import_particles%parm_ios(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         import_particles%parm_ios(2)%required = .true.
-        call import_particles%add_input(UI_PARM, cs)
-        ! TODO: Manual fix needed - was: import_particles%parm_ios(3)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         import_particles%parm_ios(3)%required = .true.
-        call import_particles%add_input(UI_PARM, fraca)
-        ! TODO: Manual fix needed - was: import_particles%parm_ios(4)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         import_particles%parm_ios(4)%required = .true.
+        call import_particles%add_input(UI_PARM, kv,    required_override=.true.)
+        call import_particles%add_input(UI_PARM, cs,    required_override=.true.)
+        call import_particles%add_input(UI_PARM, fraca, required_override=.true.)
         call import_particles%add_input(UI_PARM, ctf_yes)
         call import_particles%add_input(UI_PARM, phaseplate)
         call import_particles%add_input(UI_PARM, oritab)
@@ -2547,17 +2526,11 @@ contains
         call make_cavgs%add_input(UI_IMG, 'refs', 'file', 'Output 2D references',&
         &'Output 2D references', 'xxx.mrc file with references', .false., '')
         ! parameter input/output
-        call make_cavgs%add_input(UI_PARM, ncls)
-        ! TODO: Manual fix needed - was: make_cavgs%parm_ios(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         make_cavgs%parm_ios(1)%required = .false.
+        call make_cavgs%add_input(UI_PARM, ncls, required_override=.false.)
         call make_cavgs%add_input(UI_PARM, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
         call make_cavgs%add_input(UI_PARM, remap_cls)
-        call make_cavgs%add_input(UI_PARM, nspace)
-        ! TODO: Manual fix needed - was: make_cavgs%parm_ios(4)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         make_cavgs%parm_ios(4)%required = .false.
+        call make_cavgs%add_input(UI_PARM, nspace, required_override=.false.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2591,10 +2564,7 @@ contains
         call make_oris%add_input(UI_PARM, 'ncls', 'num', 'Number of random class labels', 'Number of random class labels to produce', '# classes', .false., 0.)
         call make_oris%add_input(UI_PARM, outfile)
         call make_oris%add_input(UI_PARM, 'nstates', 'num', 'Number of random state labels', 'Number of random state labels to produce', '# states', .false., 0.0)
-        call make_oris%add_input(UI_PARM, pgrp)
-        ! TODO: Manual fix needed - was: make_oris%parm_ios(5)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         make_oris%parm_ios(5)%required = .false.
+        call make_oris%add_input(UI_PARM, pgrp, required_override=.false.)
         call make_oris%add_input(UI_PARM, sherr)
         call make_oris%add_input(UI_PARM, angerr)
         call make_oris%add_input(UI_PARM, 'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}', '(yes|no){no}', .false., 'no')
@@ -2664,10 +2634,7 @@ contains
         ! filter controls
         call mask%add_input(UI_FILT, lp_backgr)
         ! mask controls
-        call mask%add_input(UI_MASK, mskdiam)
-        ! TODO: Manual fix needed - was: mask%mask_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         mask%mask_ctrls(1)%required = .false.
+        call mask%add_input(UI_MASK, mskdiam, required_override=.false.)
         call mask%add_input(UI_MASK, mskfile)
         call mask%add_input(UI_MASK, width)
         call mask%add_input(UI_MASK, 'edge', 'num', 'Envelope mask soft edge',&
@@ -2718,14 +2685,8 @@ contains
         &.false.)                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call match_stacks%add_input(UI_IMG, stk)
-        ! TODO: Manual fix needed - was: match_stacks%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         match_stacks%img_ios(1)%required = .true.
-        call match_stacks%add_input(UI_IMG, stk2)
-        ! TODO: Manual fix needed - was: match_stacks%img_ios(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         match_stacks%img_ios(2)%required = .true.
+        call match_stacks%add_input(UI_IMG, stk,  required_override=.true.)
+        call match_stacks%add_input(UI_IMG, stk2, required_override=.true.)
         ! parameter input/output
          ! <empty>
         ! alternative inputs
@@ -2734,14 +2695,8 @@ contains
         call match_stacks%add_input(UI_SRCH, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}',&
         &'(sig|sig_clust|cc|res|hybrid){hybrid}', .false., 'cc')
         ! filter controls
-        call match_stacks%add_input(UI_FILT, hp)
-        ! TODO: Manual fix needed - was: match_stacks%filt_ctrls(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         match_stacks%filt_ctrls(1)%required = .true.
-        call match_stacks%add_input(UI_FILT, lp)
-        ! TODO: Manual fix needed - was: match_stacks%filt_ctrls(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         match_stacks%filt_ctrls(2)%required = .true.
+        call match_stacks%add_input(UI_FILT, hp, required_override=.true.)
+        call match_stacks%add_input(UI_FILT, lp, required_override=.true.)
         ! mask controls
         call match_stacks%add_input(UI_MASK, mskdiam)
         ! computer controls
@@ -2760,24 +2715,15 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call merge_projects%add_input(UI_PARM, projfile_target, gui_submenu="data", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: merge_projects%parm_ios(1)%descr_short = 'Project to merge'
-        ! The new API doesn't support array indexing. Add descr_short='Project to merge' to add_input() call.
-        !         merge_projects%parm_ios(1)%descr_short = 'Project to merge'
-        ! TODO: Manual fix needed - was: merge_projects%parm_ios(1)%descr_long = 'Location of project file to append'
-        ! The new API doesn't support array indexing. Add descr_long='Location of project file to append' to add_input() call.
-        !         merge_projects%parm_ios(1)%descr_long  = 'Location of project file to append'
-        call merge_projects%add_input(UI_PARM, oritype, gui_submenu="extract", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: merge_projects%parm_ios(2)%descr_long = 'Oritype segment in project(ptcl2D|ptcl3D){ptcl2D}'
-        ! The new API doesn't support array indexing. Add descr_long='Oritype segment in project(ptcl2D|ptcl3D){ptcl2D}' to add_input() call.
-        !         merge_projects%parm_ios(2)%descr_long        = 'Oritype segment in project(ptcl2D|ptcl3D){ptcl2D}'
-        ! TODO: Manual fix needed - was: merge_projects%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl2D}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='(ptcl2D|ptcl3D){ptcl2D}' to add_input() call.
-        !         merge_projects%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl2D}'
-        call merge_projects%add_input(UI_PARM, box, gui_submenu="extract", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: merge_projects%parm_ios(3)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         merge_projects%parm_ios(3)%required = .false.
+        call merge_projects%add_input(UI_PARM, projfile_target,&
+        &descr_short_override       = 'Project to merge',&
+        &descr_long_override        = 'Location of project file to append',&
+        &gui_submenu="data", gui_advanced=.false.)
+        call merge_projects%add_input(UI_PARM, oritype,&
+        &descr_long_override        = 'Oritype segment in project(ptcl2D|ptcl3D){ptcl2D}',&
+        &descr_placeholder_override = '(ptcl2D|ptcl3D){ptcl2D}',&
+        gui_submenu="extract", gui_advanced=.false.)
+        call merge_projects%add_input(UI_PARM, box, required_override=.false., gui_submenu="extract", gui_advanced=.false.)
         call merge_projects%add_input(UI_PARM, pcontrast, gui_submenu="extract")
         call merge_projects%add_input(UI_PARM, backgr_subtr, gui_submenu="extract")
         call merge_projects%add_input(UI_PARM, outside, gui_submenu="extract")
@@ -2804,24 +2750,12 @@ contains
         &.false.)                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call mini_stream%add_input(UI_IMG, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
-        ! TODO: Manual fix needed - was: mini_stream%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         mini_stream%img_ios(1)%required = .true.
+        call mini_stream%add_input(UI_IMG, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
         ! parameter input/output
-        call mini_stream%add_input(UI_PARM, smpd)
-        ! TODO: Manual fix needed - was: mini_stream%parm_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         mini_stream%parm_ios(1)%required = .true.
+        call mini_stream%add_input(UI_PARM, smpd, required_override=.true.)
         call mini_stream%add_input(UI_PARM, pcontrast)
-        call mini_stream%add_input(UI_PARM, kv)
-        ! TODO: Manual fix needed - was: mini_stream%parm_ios(3)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         mini_stream%parm_ios(3)%required = .true.
-        call mini_stream%add_input(UI_PARM, cs)
-        ! TODO: Manual fix needed - was: mini_stream%parm_ios(4)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         mini_stream%parm_ios(4)%required = .true.
+        call mini_stream%add_input(UI_PARM, kv,   required_override=.true.)
+        call mini_stream%add_input(UI_PARM, cs,   required_override=.true.)
         call mini_stream%add_input(UI_PARM, fraca)
         call mini_stream%add_input(UI_PARM, moldiam_max)
         ! alternative inputs
@@ -2889,13 +2823,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call motion_correct%add_input(UI_SRCH, trs, gui_submenu="motion correction")
-        ! TODO: Manual fix needed - was: motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='max shift per iteration in pixels{20}' to add_input() call.
-        !         motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        ! TODO: Manual fix needed - was: motion_correct%srch_ctrls(1)%rval_default = 20.
-        ! The new API doesn't support array indexing. Add rval_default=20. to add_input() call.
-        !         motion_correct%srch_ctrls(1)%rval_default      = 20.
+        call motion_correct%add_input(UI_SRCH, trs_mc, gui_submenu ="motion correction")
         call motion_correct%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', &
         &'in Angstroms^2{50}', .false., 50., gui_submenu="motion correction")
         call motion_correct%add_input(UI_SRCH, mcpatch, gui_submenu="motion correction")
@@ -2978,13 +2906,10 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call multivol_assign%add_input(UI_SRCH, pgrp,        gui_submenu="model",  gui_advanced=.false.)
-        call multivol_assign%add_input(UI_SRCH, nsample,     gui_submenu="search", gui_advanced=.false.)
-        call multivol_assign%add_input(UI_SRCH, update_frac, gui_submenu="search", gui_advanced=.true.)
-        call multivol_assign%add_input(UI_SRCH, nstates,     gui_submenu="search", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: multivol_assign%srch_ctrls(4)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         multivol_assign%srch_ctrls(4)%required = .true.
+        call multivol_assign%add_input(UI_SRCH, pgrp,                              gui_submenu="model",  gui_advanced=.false.)
+        call multivol_assign%add_input(UI_SRCH, nsample,                           gui_submenu="search", gui_advanced=.false.)
+        call multivol_assign%add_input(UI_SRCH, update_frac,                       gui_submenu="search", gui_advanced=.true.)
+        call multivol_assign%add_input(UI_SRCH, nstates, required_override=.true., gui_submenu="search", gui_advanced=.false.)
         call multivol_assign%add_input(UI_SRCH, 'srch_oris', 'multi', 'Search orientations',&
         &'Search orientations(yes|no){yes}', '(yes|no){yes}', .false., 'single', gui_submenu="search", gui_advanced=.true.)
         ! filter controls
@@ -2996,10 +2921,7 @@ contains
         ! mask controls
         call multivol_assign%add_input(UI_MASK, mskdiam, gui_submenu="mask",    gui_advanced=.false.)
         ! computer controls
-        call multivol_assign%add_input(UI_COMP, nparts,  gui_submenu="compute", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: multivol_assign%comp_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         multivol_assign%comp_ctrls(1)%required = .false.
+        call multivol_assign%add_input(UI_COMP, nparts,  required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call multivol_assign%add_input(UI_COMP, nthr,    gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_multivol_assign
 
@@ -3051,15 +2973,9 @@ contains
         ! <empty>
         ! parameter input/output
         call new_project%add_input(UI_PARM, user_email)
-        call new_project%add_input(UI_PARM, projfile)
-        ! TODO: Manual fix needed - was: new_project%parm_ios(2)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         new_project%parm_ios(2)%required = .false.
+        call new_project%add_input(UI_PARM, projfile, required_override=.false.)
         ! alternative inputs
-        call new_project%add_input(UI_ALT, projname)
-        ! TODO: Manual fix needed - was: new_project%alt_ios(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         new_project%alt_ios(1)%required = .false.
+        call new_project%add_input(UI_ALT, projname, required_override=.false.)
         call new_project%add_input(UI_ALT, 'dir', 'dir', 'Project directory', 'Project directory', 'give dir', .false., '')
         ! <empty>
         ! search controls
@@ -3092,14 +3008,8 @@ contains
         ! image input/output
         call pdb2mrc%add_input(UI_IMG, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
         ! parameter input/output
-        call pdb2mrc%add_input(UI_PARM, smpd)
-        ! TODO: Manual fix needed - was: pdb2mrc%parm_ios(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         pdb2mrc%parm_ios(1)%required = .false.
-        call pdb2mrc%add_input(UI_PARM, vol_dim)
-        ! TODO: Manual fix needed - was: pdb2mrc%parm_ios(2)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         pdb2mrc%parm_ios(2)%required = .false.
+        call pdb2mrc%add_input(UI_PARM, smpd,    required_override=.false.)
+        call pdb2mrc%add_input(UI_PARM, vol_dim, required_override=.false.)
         call pdb2mrc%add_input(UI_PARM, outvol)
         call pdb2mrc%add_input(UI_PARM, pdbout)
         call pdb2mrc%add_input(UI_PARM, center_pdb)
@@ -3134,9 +3044,6 @@ contains
         call pick%add_input(UI_PARM, moldiam_max, gui_submenu="picking")
         call pick%add_input(UI_PARM, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ',&
         &'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '', gui_submenu="picking")
-        ! TODO: Manual fix needed - was: pick%parm_ios(7)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         pick%parm_ios(7)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3171,9 +3078,9 @@ contains
         call pick_extract%add_input(UI_IMG, 'dir_exec', 'file', 'Previous run directory',&
         &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .false., '', gui_submenu="data")
         ! parameter input/output
-        call pick_extract%add_input(UI_PARM, pcontrast, gui_submenu="picking")
+        call pick_extract%add_input(UI_PARM, pcontrast,   gui_submenu="picking")
         call pick_extract%add_input(UI_PARM, box_extract, gui_submenu="extract")
-        call pick_extract%add_input(UI_PARM, moldiam, gui_submenu="picking")
+        call pick_extract%add_input(UI_PARM, moldiam,     gui_submenu="picking")
         call pick_extract%add_input(UI_PARM, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', gui_submenu="data")
         call pick_extract%add_input(UI_PARM, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested',&
@@ -3182,46 +3089,16 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick_extract%add_input(UI_SRCH, pgrp, gui_submenu="picking", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: pick_extract%srch_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         pick_extract%srch_ctrls(1)%required = .false.
+        call pick_extract%add_input(UI_SRCH, pgrp, required_override=.false., gui_submenu="picking", gui_advanced=.false.)
         ! filter controls
-        call pick_extract%add_input(UI_FILT, lp_pick, gui_submenu="picking")
-        call pick_extract%add_input(UI_FILT, ctfresthreshold, gui_submenu="data")
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(2)%descr_long = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
-        ! The new API doesn't support array indexing. Add descr_long='Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}' to add_input() call.
-        !         pick_extract%filt_ctrls(2)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(2)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='CTF resolution threshold(in Angstroms){10.}' to add_input() call.
-        !         pick_extract%filt_ctrls(2)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(2)%rval_default = STREAM_CTFRES_THRESHOLD
-        ! The new API doesn't support array indexing. Add rval_default=STREAM_CTFRES_THRESHOLD to add_input() call.
-        !         pick_extract%filt_ctrls(2)%rval_default      = STREAM_CTFRES_THRESHOLD
+        call pick_extract%add_input(UI_FILT, lp_pick,          gui_submenu="picking")
+        call pick_extract%add_input(UI_FILT, ctfresthreshold,  gui_submenu="data")
         call pick_extract%add_input(UI_FILT, icefracthreshold, gui_submenu="data")
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(3)%descr_long = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
-        ! The new API doesn't support array indexing. Add descr_long='Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}' to add_input() call.
-        !         pick_extract%filt_ctrls(3)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(3)%descr_placeholder = 'Ice fraction threshold{1.0}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='Ice fraction threshold{1.0}' to add_input() call.
-        !         pick_extract%filt_ctrls(3)%descr_placeholder = 'Ice fraction threshold{1.0}'
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(3)%rval_default = STREAM_ICEFRAC_THRESHOLD
-        ! The new API doesn't support array indexing. Add rval_default=STREAM_ICEFRAC_THRESHOLD to add_input() call.
-        !         pick_extract%filt_ctrls(3)%rval_default      = STREAM_ICEFRAC_THRESHOLD
-        call pick_extract%add_input(UI_FILT, astigthreshold, gui_submenu="data")
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(4)%descr_long = 'Micrographs with an astigmatism (%) above the threshold will be ignored from further processing{10.0}'
-        ! The new API doesn't support array indexing. Add descr_long='Micrographs with an astigmatism (%) above the threshold will be ignored from further processing{10.0}' to add_input() call.
-        !         pick_extract%filt_ctrls(4)%descr_long        = 'Micrographs with an astigmatism (%) above the threshold will be ignored from further processing{10.0}'
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(4)%descr_placeholder = 'Astigmatism threshold{10.0}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='Astigmatism threshold{10.0}' to add_input() call.
-        !         pick_extract%filt_ctrls(4)%descr_placeholder = 'Astigmatism threshold{10.0}'
-        ! TODO: Manual fix needed - was: pick_extract%filt_ctrls(4)%rval_default = STREAM_ASTIG_THRESHOLD
-        ! The new API doesn't support array indexing. Add rval_default=STREAM_ASTIG_THRESHOLD to add_input() call.
-        !         pick_extract%filt_ctrls(4)%rval_default      = STREAM_ASTIG_THRESHOLD
+        call pick_extract%add_input(UI_FILT, astigthreshold,   gui_submenu="data")
         ! mask controls
         ! <empty>
         ! computer controls
-        call pick_extract%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call pick_extract%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
         call pick_extract%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
         call pick_extract%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
@@ -3328,10 +3205,7 @@ contains
         ! filter controls
         call ppca_volvar%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .true., 0.0)
         ! mask controls
-        call ppca_volvar%add_input(UI_MASK, mskdiam)
-        ! TODO: Manual fix needed - was: ppca_volvar%mask_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         ppca_volvar%mask_ctrls(1)%required = .false.
+        call ppca_volvar%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call ppca_volvar%add_input(UI_COMP, nthr)
     end subroutine new_ppca_volvar
@@ -3358,21 +3232,12 @@ contains
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess%add_input(UI_PARM, pspecsz)
         call preprocess%add_input(UI_PARM, numlen)
-        call preprocess%add_input(UI_PARM, ctfpatch)
-        ! TODO: Manual fix needed - was: preprocess%parm_ios(9)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         preprocess%parm_ios(9)%required = .false.
+        call preprocess%add_input(UI_PARM, ctfpatch, required_override=.false.)
         call preprocess%add_input(UI_PARM, flipgain)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call preprocess%add_input(UI_SRCH, trs)
-        ! TODO: Manual fix needed - was: preprocess%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='max shift per iteration in pixels{20}' to add_input() call.
-        !         preprocess%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        ! TODO: Manual fix needed - was: preprocess%srch_ctrls(1)%rval_default = 20.
-        ! The new API doesn't support array indexing. Add rval_default=20. to add_input() call.
-        !         preprocess%srch_ctrls(1)%rval_default      = 20.
+        call preprocess%add_input(UI_SRCH, trs_mc)
         call preprocess%add_input(UI_SRCH, dfmin)
         call preprocess%add_input(UI_SRCH, dfmax)
         call preprocess%add_input(UI_SRCH, astigtol)
@@ -3415,10 +3280,7 @@ contains
         call print_dose_weights%add_input(UI_PARM, box)
         call print_dose_weights%add_input(UI_PARM, 'nframes',   'num', 'Number of frames', 'Number of movie frames', '# frames', .true., 0.)
         call print_dose_weights%add_input(UI_PARM, kv)
-        call print_dose_weights%add_input(UI_PARM, total_dose)
-        ! TODO: Manual fix needed - was: print_dose_weights%parm_ios(5)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         print_dose_weights%parm_ios(5)%required = .true.
+        call print_dose_weights%add_input(UI_PARM, total_dose, required_override=.true.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3443,19 +3305,10 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call print_fsc%add_input(UI_PARM, smpd)
-        ! TODO: Manual fix needed - was: print_fsc%parm_ios(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         print_fsc%parm_ios(1)%required = .false.
-        call print_fsc%add_input(UI_PARM, box)
-        ! TODO: Manual fix needed - was: print_fsc%parm_ios(2)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         print_fsc%parm_ios(2)%required = .false.
+        call print_fsc%add_input(UI_PARM, smpd, required_override=.false.)
+        call print_fsc%add_input(UI_PARM, box,  required_override=.false.)
         call print_fsc%add_input(UI_PARM, 'fsc', 'file', 'FSC file', 'Binary file with FSC info',&
-        'input binary file e.g. fsc_state01.bin', .true., 'fsc_state01.bin')
-        ! TODO: Manual fix needed - was: print_fsc%parm_ios(3)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         print_fsc%parm_ios(3)%required = .false.
+        'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin')
         call print_fsc%add_input(UI_PARM, frcs)
         ! alternative inputs
         ! <empty>
@@ -3508,10 +3361,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call print_project_field%add_input(UI_PARM, oritype)
-        ! TODO: Manual fix needed - was: print_project_field%parm_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         print_project_field%parm_ios(1)%required = .true.
+        call print_project_field%add_input(UI_PARM, oritype, required_override=.true.)
         call print_project_field%add_input(UI_PARM, 'json',     'binary', 'output in JSON format', 'output in JSON format', '(yes|no){no}', .false., 'no')
         call print_project_field%add_input(UI_PARM, 'boxes',    'binary', 'output coordinates in JSON format', 'output coordinates in JSON format', '(yes|no){no}', .false., 'no')
         call print_project_field%add_input(UI_PARM, 'sort',     'string', 'sort oris on key', 'sort oris on key', 'e.g. ctfres', .false., '')
@@ -3565,14 +3415,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call reextract%add_input(UI_PARM, box)
-        ! TODO: Manual fix needed - was: reextract%parm_ios(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         reextract%parm_ios(1)%required = .false.
-        call reextract%add_input(UI_PARM, oritype)
-        ! TODO: Manual fix needed - was: reextract%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl3D}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='(ptcl2D|ptcl3D){ptcl3D}' to add_input() call.
-        !         reextract%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl3D}'
+        call reextract%add_input(UI_PARM, box,     required_override=.false.)
+        call reextract%add_input(UI_PARM, oritype, descr_placeholder_override = '(ptcl2D|ptcl3D){ptcl3D}')
         call reextract%add_input(UI_PARM, pcontrast)
         call reextract%add_input(UI_PARM, backgr_subtr)
         call reextract%add_input(UI_PARM, outside)
@@ -3616,21 +3460,12 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call reproject%add_input(UI_SRCH, nspace)
-        ! TODO: Manual fix needed - was: reproject%srch_ctrls(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         reproject%srch_ctrls(1)%required = .true.
-        call reproject%add_input(UI_SRCH, pgrp)
-        ! TODO: Manual fix needed - was: reproject%srch_ctrls(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         reproject%srch_ctrls(2)%required = .true.
+        call reproject%add_input(UI_SRCH, nspace, required_override=.true.)
+        call reproject%add_input(UI_SRCH, pgrp,   required_override=.true.)
         ! filter controls
         ! <empty>
         ! mask controls
-        call reproject%add_input(UI_MASK, mskdiam)
-        ! TODO: Manual fix needed - was: reproject%mask_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         reproject%mask_ctrls(1)%required = .false.
+        call reproject%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call reproject%add_input(UI_COMP, nthr)
     end subroutine new_reproject
@@ -3711,23 +3546,14 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call orisops%add_input(UI_PARM, oritab)
-        ! TODO: Manual fix needed - was: orisops%parm_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         orisops%parm_ios(1)%required = .true.
+        call orisops%add_input(UI_PARM, oritab, required_override=.true.)
         call orisops%add_input(UI_PARM, outfile)
         call orisops%add_input(UI_PARM, e1)
         call orisops%add_input(UI_PARM, e2)
         call orisops%add_input(UI_PARM, e3)
         call orisops%add_input(UI_PARM, 'nstates', 'num', 'Number of random state labels', 'Number of random state labels to insert', '# states', .false., 0.0)
-        call orisops%add_input(UI_PARM, pgrp)
-        ! TODO: Manual fix needed - was: orisops%parm_ios(7)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         orisops%parm_ios(7)%required = .false.
-        call orisops%add_input(UI_PARM, ctf)
-        ! TODO: Manual fix needed - was: orisops%parm_ios(8)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         orisops%parm_ios(8)%required = .false.
+        call orisops%add_input(UI_PARM, pgrp, required_override=.false.)
+        call orisops%add_input(UI_PARM, ctf,  required_override=.false.)
         call orisops%add_input(UI_PARM, angerr)
         call orisops%add_input(UI_PARM, sherr)
         call orisops%add_input(UI_PARM, dferr)
@@ -3767,15 +3593,9 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call oristats%add_input(UI_PARM, oritab)
-        ! TODO: Manual fix needed - was: oristats%parm_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         oristats%parm_ios(1)%required = .true.
+        call oristats%add_input(UI_PARM, oritab, required_override=.true.)
         call oristats%add_input(UI_PARM, oritab2)
-        call oristats%add_input(UI_PARM, pgrp)
-        ! TODO: Manual fix needed - was: oristats%parm_ios(3)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         oristats%parm_ios(3)%required = .false.
+        call oristats%add_input(UI_PARM, pgrp, required_override=.false.)
         call oristats%add_input(UI_PARM, nspace)
         call oristats%add_input(UI_PARM, oritype)
         call oristats%add_input(UI_PARM, 'ctfstats',  'binary', 'CTF statistics',        'Provide statistics about CTF(yes|no){no}',                      '(yes|no){no}', .false., 'no')
@@ -3846,10 +3666,7 @@ contains
         call reconstruct3D%add_input(UI_MASK, mskdiam)
         call reconstruct3D%add_input(UI_MASK, mskfile)
         ! computer controls
-        call reconstruct3D%add_input(UI_COMP, nparts)
-        ! TODO: Manual fix needed - was: reconstruct3D%comp_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         reconstruct3D%comp_ctrls(1)%required = .false.
+        call reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call reconstruct3D%add_input(UI_COMP, nthr)
     end subroutine new_reconstruct3D
 
@@ -3908,11 +3725,8 @@ contains
         call refine3D%add_input(UI_MASK, mskfile, gui_submenu="mask")
         call refine3D%add_input(UI_MASK, automsk, gui_submenu="mask")
         ! computer controls
-        call refine3D%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: refine3D%comp_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         refine3D%comp_ctrls(1)%required = .false.
-        call refine3D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call refine3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
+        call refine3D%add_input(UI_COMP, nthr,                              gui_submenu="compute", gui_advanced=.false.)
     end subroutine new_refine3D
 
     subroutine new_refine3D_auto
@@ -3932,15 +3746,9 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call refine3D_auto%add_input(UI_SRCH, maxits, gui_submenu="search")
-        ! TODO: Manual fix needed - was: refine3D_auto%srch_ctrls(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         refine3D_auto%srch_ctrls(1)%required = .true.
-        call refine3D_auto%add_input(UI_SRCH, update_frac, gui_submenu="search")
-        ! TODO: Manual fix needed - was: refine3D_auto%srch_ctrls(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         refine3D_auto%srch_ctrls(2)%required = .true.
-        call refine3D_auto%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
+        call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.true., gui_submenu="search")
+        call refine3D_auto%add_input(UI_SRCH, update_frac, required_override=.true., gui_submenu="search")
+        call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
         call refine3D_auto%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
         ! filter controls
@@ -3994,10 +3802,7 @@ contains
         call refine3D_nano%add_input(UI_MASK, mskdiam)
         call refine3D_nano%add_input(UI_MASK, mskfile)
         ! computer controls
-        call refine3D_nano%add_input(UI_COMP, nparts)
-        ! TODO: Manual fix needed - was: refine3D_nano%comp_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         refine3D_nano%comp_ctrls(1)%required = .false.
+        call refine3D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call refine3D_nano%add_input(UI_COMP, nthr)
     end subroutine new_refine3D_nano
 
@@ -4015,10 +3820,7 @@ contains
         ! parameter input/output
         call replace_project_field%add_input(UI_PARM, projfile)
         call replace_project_field%add_input(UI_PARM, projfile_target)
-        call replace_project_field%add_input(UI_PARM, oritype)
-        ! TODO: Manual fix needed - was: replace_project_field%parm_ios(3)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         replace_project_field%parm_ios(3)%required = .true.
+        call replace_project_field%add_input(UI_PARM, oritype, required_override=.true.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4120,10 +3922,7 @@ contains
         call scale%add_input(UI_PARM, outvol)
         call scale%add_input(UI_PARM, outstk)
         ! alternative inputs
-        call scale%add_input(UI_ALT, stk)
-        ! TODO: Manual fix needed - was: scale%alt_ios(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         scale%alt_ios(1)%required = .false.
+        call scale%add_input(UI_ALT, stk, required_override=.false.)
         call scale%add_input(UI_ALT, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
         &'input volume e.g. vol.mrc', .false., '')
         call scale%add_input(UI_ALT, 'filetab', 'file', 'Stacks list',&
@@ -4211,33 +4010,21 @@ contains
         &gui_advanced=.false., gui_submenu_list = "data,motion correction,CTF estimation")  ! GUI                 
         ! image input/output
         call preproc%add_input(UI_IMG, dir_movies, gui_submenu="data", gui_advanced=.false.)
-        call preproc%add_input(UI_IMG, gainref, gui_submenu="data", gui_advanced=.false.)
+        call preproc%add_input(UI_IMG, gainref,    gui_submenu="data", gui_advanced=.false.)
         call preproc%add_input(UI_IMG, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous stream application was run', 'e.g. 2_preproc', .false., '', gui_submenu="data")
         call preproc%add_input(UI_IMG, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
             &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '', gui_submenu="data", gui_advanced=.false.)
         ! parameter input/output
-        call preproc%add_input(UI_PARM, total_dose, gui_submenu="data", gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, fraction_dose_target, gui_submenu="data", gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, smpd_downscale, gui_submenu="motion correction", gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, eer_fraction, gui_submenu="motion correction")
-        call preproc%add_input(UI_PARM, max_dose, gui_submenu="motion correction")
-        call preproc%add_input(UI_PARM, kv, gui_submenu="data", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: preproc%parm_ios(6)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         preproc%parm_ios(6)%required = .true.
-        call preproc%add_input(UI_PARM, cs, gui_submenu="data", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: preproc%parm_ios(7)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         preproc%parm_ios(7)%required = .true.
-        call preproc%add_input(UI_PARM, fraca, gui_submenu="data", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: preproc%parm_ios(8)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         preproc%parm_ios(8)%required = .true.
-        call preproc%add_input(UI_PARM, smpd, gui_submenu="data", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: preproc%parm_ios(9)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         preproc%parm_ios(9)%required = .true.
+        call preproc%add_input(UI_PARM, total_dose,                      gui_submenu="data",              gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, fraction_dose_target,            gui_submenu="data",              gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, smpd_downscale,                  gui_submenu="motion correction", gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, eer_fraction,                    gui_submenu="motion correction")
+        call preproc%add_input(UI_PARM, max_dose,                        gui_submenu="motion correction")
+        call preproc%add_input(UI_PARM, kv,    required_override=.true., gui_submenu="data",              gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, cs,    required_override=.true., gui_submenu="data",              gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, fraca, required_override=.true., gui_submenu="data",              gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, smpd,  required_override=.true., gui_submenu="data",              gui_advanced=.false.)
         call preproc%add_input(UI_PARM, flipgain, gui_submenu="motion correction")
         call preproc%add_input(UI_PARM, 'ninipick', 'num', 'Number of micrographs to perform initial picking preprocessing on',&
         & 'Number of micrographs to perform initial picking preprocessing on', 'e.g 500', .false., 0.0)
@@ -4256,7 +4043,7 @@ contains
         ! <empty>
         ! computer controls
         call preproc%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call preproc%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call preproc%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
         call preproc%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
     end subroutine new_preproc
@@ -4281,23 +4068,17 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call sieve_cavgs%add_input(UI_SRCH, ncls, gui_submenu="cluster 2D", gui_advanced=.false.)
-        call sieve_cavgs%add_input(UI_SRCH, nptcls_per_cls, gui_submenu="cluster 2D", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: sieve_cavgs%srch_ctrls(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         sieve_cavgs%srch_ctrls(2)%required = .true.
-        call sieve_cavgs%add_input(UI_SRCH, nchunksperset, gui_advanced=.false.)
+        call sieve_cavgs%add_input(UI_SRCH, ncls,                                     gui_submenu="cluster 2D", gui_advanced=.false.)
+        call sieve_cavgs%add_input(UI_SRCH, nptcls_per_cls, required_override=.true., gui_submenu="cluster 2D", gui_advanced=.false.)
+        call sieve_cavgs%add_input(UI_SRCH, nchunksperset,                                                      gui_advanced=.false.)
         ! filter controls
         ! <empty>
         ! mask controls
         call sieve_cavgs%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
         &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
-        call sieve_cavgs%add_input(UI_COMP, nchunks, gui_submenu="compute", gui_advanced=.false.)
-        call sieve_cavgs%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        ! TODO: Manual fix needed - was: sieve_cavgs%comp_ctrls(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         sieve_cavgs%comp_ctrls(2)%required = .true.
+        call sieve_cavgs%add_input(UI_COMP, nchunks,                          gui_submenu="compute", gui_advanced=.false.)
+        call sieve_cavgs%add_input(UI_COMP, nparts, required_override=.true., gui_submenu="compute", gui_advanced=.false.)
         call sieve_cavgs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         call sieve_cavgs%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
@@ -4318,10 +4099,7 @@ contains
         ! parameter input/output
         call simulate_atoms%add_input(UI_PARM, smpd)
         call simulate_atoms%add_input(UI_PARM, box)
-        call simulate_atoms%add_input(UI_PARM, element)
-        ! TODO: Manual fix needed - was: simulate_atoms%parm_ios(3)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         simulate_atoms%parm_ios(3)%required = .false.
+        call simulate_atoms%add_input(UI_PARM, element, required_override=.false.)
         call simulate_atoms%add_input(UI_PARM, moldiam)
         ! alternative inputs
         ! <empty>
@@ -4411,10 +4189,7 @@ contains
         &.false.)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call simulate_particles%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
-        ! TODO: Manual fix needed - was: simulate_particles%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         simulate_particles%img_ios(1)%required = .true.
+        call simulate_particles%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call simulate_particles%add_input(UI_PARM, smpd)
         call simulate_particles%add_input(UI_PARM, nptcls)
@@ -4455,10 +4230,7 @@ contains
         &.false.)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call split_%add_input(UI_IMG, stk)
-        ! TODO: Manual fix needed - was: split_%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         split_%img_ios(1)%required = .true.
+        call split_%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
         call split_%add_input(UI_PARM, smpd)
         ! computer controls
@@ -4537,10 +4309,7 @@ contains
         &.false.)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call stackops%add_input(UI_IMG, stk)
-        ! TODO: Manual fix needed - was: stackops%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         stackops%img_ios(1)%required = .true.
+        call stackops%add_input(UI_IMG, stk, required_override=.true.)
         call stackops%add_input(UI_IMG, outstk)
         ! parameter input/output
         call stackops%add_input(UI_PARM, smpd)
@@ -4854,10 +4623,7 @@ contains
         call tseries_import%add_input(UI_IMG, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
         ! parameter input/output
         call tseries_import%add_input(UI_PARM, smpd)
-        call tseries_import%add_input(UI_PARM, kv)
-        ! TODO: Manual fix needed - was: tseries_import%parm_ios(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         tseries_import%parm_ios(2)%required = .true.
+        call tseries_import%add_input(UI_PARM, kv, required_override=.true.)
         call tseries_import%add_input(UI_PARM, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){0.0}', 'in mm{0.0}', .true., 0.0)
         call tseries_import%add_input(UI_PARM, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.4}', 'fraction{0.4}', .true., 0.4)
         ! alternative inputs
@@ -4882,10 +4648,7 @@ contains
         &.true., gui_advanced=.false.)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call trajectory_import_particles%add_input(UI_IMG, stk)
-        ! TODO: Manual fix needed - was: trajectory_import_particles%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         trajectory_import_particles%img_ios(1)%required = .true.
+        call trajectory_import_particles%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
         call trajectory_import_particles%add_input(UI_PARM, smpd)
         call trajectory_import_particles%add_input(UI_PARM, deftab)
@@ -4917,30 +4680,12 @@ contains
         &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .false., '')        ! alternative inputs
         ! <empty>
         ! search controls
-        call tseries_motion_correct%add_input(UI_SRCH, trs)
-        ! TODO: Manual fix needed - was: tseries_motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='max shift per iteration in pixels{10}' to add_input() call.
-        !         tseries_motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        ! TODO: Manual fix needed - was: tseries_motion_correct%srch_ctrls(1)%rval_default = 10.
-        ! The new API doesn't support array indexing. Add rval_default=10. to add_input() call.
-        !         tseries_motion_correct%srch_ctrls(1)%rval_default      = 10.
+        call tseries_motion_correct%add_input(UI_SRCH, trs_mc)
         call tseries_motion_correct%add_input(UI_SRCH, 'nframesgrp', 'num', '# frames in time moving time window', '# frames in time moving time window subjected to correction', '{5}', .false., 5.)
         call tseries_motion_correct%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5.)
         call tseries_motion_correct%add_input(UI_SRCH, mcpatch)
         call tseries_motion_correct%add_input(UI_SRCH, nxpatch)
-        ! TODO: Manual fix needed - was: tseries_motion_correct%srch_ctrls(5)%descr_placeholder = '# x-patches{3}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='# x-patches{3}' to add_input() call.
-        !         tseries_motion_correct%srch_ctrls(5)%descr_placeholder = '# x-patches{3}'
-        ! TODO: Manual fix needed - was: tseries_motion_correct%srch_ctrls(5)%rval_default = 3.
-        ! The new API doesn't support array indexing. Add rval_default=3. to add_input() call.
-        !         tseries_motion_correct%srch_ctrls(5)%rval_default = 3.
         call tseries_motion_correct%add_input(UI_SRCH, nypatch)
-        ! TODO: Manual fix needed - was: tseries_motion_correct%srch_ctrls(6)%descr_placeholder = '# y-patches{3}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='# y-patches{3}' to add_input() call.
-        !         tseries_motion_correct%srch_ctrls(6)%descr_placeholder = '# y-patches{3}'
-        ! TODO: Manual fix needed - was: tseries_motion_correct%srch_ctrls(6)%rval_default = 3.
-        ! The new API doesn't support array indexing. Add rval_default=3. to add_input() call.
-        !         tseries_motion_correct%srch_ctrls(6)%rval_default = 3.
         call tseries_motion_correct%add_input(UI_SRCH, algorithm)
         ! filter controls
         call tseries_motion_correct%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
@@ -4973,29 +4718,11 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call tseries_make_pickavg%add_input(UI_SRCH, trs)
-        ! TODO: Manual fix needed - was: tseries_make_pickavg%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='max shift per iteration in pixels{10}' to add_input() call.
-        !         tseries_make_pickavg%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        ! TODO: Manual fix needed - was: tseries_make_pickavg%srch_ctrls(1)%rval_default = 10.
-        ! The new API doesn't support array indexing. Add rval_default=10. to add_input() call.
-        !         tseries_make_pickavg%srch_ctrls(1)%rval_default      = 10.
+        call tseries_make_pickavg%add_input(UI_SRCH, trs_mc)
         call tseries_make_pickavg%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5.)
         call tseries_make_pickavg%add_input(UI_SRCH, mcpatch)
         call tseries_make_pickavg%add_input(UI_SRCH, nxpatch)
-        ! TODO: Manual fix needed - was: tseries_make_pickavg%srch_ctrls(4)%rval_default = 3.
-        ! The new API doesn't support array indexing. Add rval_default=3. to add_input() call.
-        !         tseries_make_pickavg%srch_ctrls(4)%rval_default = 3.
-        ! TODO: Manual fix needed - was: tseries_make_pickavg%srch_ctrls(4)%descr_placeholder = '# x-patches{3}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='# x-patches{3}' to add_input() call.
-        !         tseries_make_pickavg%srch_ctrls(4)%descr_placeholder = '# x-patches{3}'
         call tseries_make_pickavg%add_input(UI_SRCH, nypatch)
-        ! TODO: Manual fix needed - was: tseries_make_pickavg%srch_ctrls(5)%rval_default = 3.
-        ! The new API doesn't support array indexing. Add rval_default=3. to add_input() call.
-        !         tseries_make_pickavg%srch_ctrls(5)%rval_default = 3.
-        ! TODO: Manual fix needed - was: tseries_make_pickavg%srch_ctrls(5)%descr_placeholder = '# x-patches{3}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='# x-patches{3}' to add_input() call.
-        !         tseries_make_pickavg%srch_ctrls(5)%descr_placeholder = '# x-patches{3}'
         ! filter controls
         call tseries_make_pickavg%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
@@ -5045,10 +4772,7 @@ contains
         &.true., gui_advanced=.false.)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call trajectory_swap_stack%add_input(UI_IMG, stk)
-        ! TODO: Manual fix needed - was: trajectory_swap_stack%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         trajectory_swap_stack%img_ios(1)%required = .true.
+        call trajectory_swap_stack%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
         ! <empty>
         ! alternative inputs
@@ -5089,16 +4813,7 @@ contains
         call track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
         ! <empty>
         ! filter controls
-        call track_particles%add_input(UI_FILT, lp)
-        ! TODO: Manual fix needed - was: track_particles%filt_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         track_particles%filt_ctrls(1)%required     = .false.
-        ! TODO: Manual fix needed - was: track_particles%filt_ctrls(1)%rval_default = 2.3
-        ! The new API doesn't support array indexing. Add rval_default=2.3 to add_input() call.
-        !         track_particles%filt_ctrls(1)%rval_default = 2.3
-        ! TODO: Manual fix needed - was: track_particles%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
-        ! The new API doesn't support array indexing. Add descr_placeholder='Low-pass limit in Angstroms{2.3}' to add_input() call.
-        !         track_particles%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
+        call track_particles%add_input(UI_FILT, lp_track)
         call track_particles%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
         call track_particles%add_input(UI_FILT, 'filter', 'multi','Alternative filter for particle tracking',&
@@ -5135,10 +4850,7 @@ contains
         call trajectory_reconstruct3D%add_input(UI_MASK, mskdiam)
         call trajectory_reconstruct3D%add_input(UI_MASK, mskfile)
         ! computer controls
-        call trajectory_reconstruct3D%add_input(UI_COMP, nparts)
-        ! TODO: Manual fix needed - was: trajectory_reconstruct3D%comp_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         trajectory_reconstruct3D%comp_ctrls(1)%required = .false.
+        call trajectory_reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call trajectory_reconstruct3D%add_input(UI_COMP, nthr)
     end subroutine new_trajectory_reconstruct3D
 
@@ -5180,20 +4892,8 @@ contains
         &.false., gui_advanced=.false.)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call graphene_subtr%add_input(UI_IMG, stk)
-        ! TODO: Manual fix needed - was: graphene_subtr%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         graphene_subtr%img_ios(1)%required = .true.
-        ! TODO: Manual fix needed - was: graphene_subtr%img_ios(1)%descr_placeholder = 'Input tracked particles, eg NP_X.mrc'
-        ! The new API doesn't support array indexing. Add descr_placeholder='Input tracked particles, eg NP_X.mrc' to add_input() call.
-        !         graphene_subtr%img_ios(1)%descr_placeholder = 'Input tracked particles, eg NP_X.mrc'
-        call graphene_subtr%add_input(UI_IMG, stk2)
-        ! TODO: Manual fix needed - was: graphene_subtr%img_ios(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         graphene_subtr%img_ios(2)%required = .true.
-        ! TODO: Manual fix needed - was: graphene_subtr%img_ios(2)%descr_placeholder = 'Input background power spectra stack, eg NP_X_background_pspec.mrc'
-        ! The new API doesn't support array indexing. Add descr_placeholder='Input background power spectra stack, eg NP_X_background_pspec.mrc' to add_input() call.
-        !         graphene_subtr%img_ios(2)%descr_placeholder = 'Input background power spectra stack, eg NP_X_background_pspec.mrc'
+        call graphene_subtr%add_input(UI_IMG, stk_traj)
+        call graphene_subtr%add_input(UI_IMG, stk_backgr)
         call graphene_subtr%add_input(UI_IMG, outstk)
         ! parameter input/output
         call graphene_subtr%add_input(UI_PARM, smpd)
@@ -5281,28 +4981,13 @@ contains
         &.false.)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call check_refpick%add_input(UI_IMG, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .false., '')
-        ! TODO: Manual fix needed - was: check_refpick%img_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         check_refpick%img_ios(1)%required = .true.
-        call check_refpick%add_input(UI_IMG, pickrefs)
-        ! TODO: Manual fix needed - was: check_refpick%img_ios(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         check_refpick%img_ios(2)%required = .true.
+        call check_refpick%add_input(UI_IMG, 'filetab', 'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
+        call check_refpick%add_input(UI_IMG, pickrefs, required_override=.true.)
         ! parameter input/output
-        call check_refpick%add_input(UI_PARM, smpd)
-        ! TODO: Manual fix needed - was: check_refpick%parm_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         check_refpick%parm_ios(1)%required = .true.
+        call check_refpick%add_input(UI_PARM, smpd,    required_override=.true.)
         call check_refpick%add_input(UI_PARM, pcontrast)
-        call check_refpick%add_input(UI_PARM, kv)
-        ! TODO: Manual fix needed - was: check_refpick%parm_ios(3)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         check_refpick%parm_ios(3)%required = .true.
-        call check_refpick%add_input(UI_PARM, cs)
-        ! TODO: Manual fix needed - was: check_refpick%parm_ios(4)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         check_refpick%parm_ios(4)%required = .true.
+        call check_refpick%add_input(UI_PARM, kv,      required_override=.true.)
+        call check_refpick%add_input(UI_PARM, cs,      required_override=.true.)
         call check_refpick%add_input(UI_PARM, fraca)
         ! alternative inputs
         ! <empty>
@@ -5331,10 +5016,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call vizoris%add_input(UI_PARM, oritab)
-        ! TODO: Manual fix needed - was: vizoris%parm_ios(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         vizoris%parm_ios(1)%required = .true.
+        call vizoris%add_input(UI_PARM, oritab, required_override=.true.)
         call vizoris%add_input(UI_PARM, nspace)
         call vizoris%add_input(UI_PARM, pgrp)
         call vizoris%add_input(UI_PARM, oritype)
@@ -5371,14 +5053,8 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call volanalyze%add_input(UI_FILT, hp)
-        ! TODO: Manual fix needed - was: volanalyze%filt_ctrls(1)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         volanalyze%filt_ctrls(1)%required = .true.
-        call volanalyze%add_input(UI_FILT, lp)
-        ! TODO: Manual fix needed - was: volanalyze%filt_ctrls(2)%required = .true.
-        ! The new API doesn't support array indexing. Add required=.true. to add_input() call.
-        !         volanalyze%filt_ctrls(2)%required = .true.
+        call volanalyze%add_input(UI_FILT, hp, required_override=.true.)
+        call volanalyze%add_input(UI_FILT, lp, required_override=.true.)
         ! mask controls
         ! mask controls
         call volanalyze%add_input(UI_MASK, mskdiam)
@@ -5400,10 +5076,7 @@ contains
         & 'input volume e.g. vol.mrc', .true., '')
         call volops%add_input(UI_IMG, outvol)
         ! ! parameter input/output
-        call volops%add_input(UI_PARM, smpd)
-        ! TODO: Manual fix needed - was: volops%parm_ios(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         volops%parm_ios(1)%required = .false.
+        call volops%add_input(UI_PARM, smpd, required_override=.false.)
         call volops%add_input(UI_PARM, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}', '(yes|no){no}', .false., 'no')
         call volops%add_input(UI_PARM, neg)
         call volops%add_input(UI_PARM, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0.)
@@ -5421,17 +5094,11 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call volops%add_input(UI_FILT, lp)
-        ! TODO: Manual fix needed - was: volops%filt_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         volops%filt_ctrls(1)%required = .false.
+        call volops%add_input(UI_FILT, lp, required_override=.false.)
         call volops%add_input(UI_FILT, hp)
         call volops%add_input(UI_FILT, bfac)
         ! mask controls
-        call volops%add_input(UI_MASK, mskdiam)
-        ! TODO: Manual fix needed - was: volops%mask_ctrls(1)%required = .false.
-        ! The new API doesn't support array indexing. Add required=.false. to add_input() call.
-        !         volops%mask_ctrls(1)%required = .false.
+        call volops%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call volops%add_input(UI_COMP, nthr)
     end subroutine new_volops

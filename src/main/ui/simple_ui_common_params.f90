@@ -52,6 +52,7 @@ type(ui_param) :: kv
 type(ui_param) :: lp
 type(ui_param) :: lp_backgr
 type(ui_param) :: lp_pick
+type(ui_param) :: lp_track
 type(ui_param) :: lplim_crit
 type(ui_param) :: lpstart_nonuni
 type(ui_param) :: lpthres
@@ -144,11 +145,14 @@ type(ui_param) :: startit
 type(ui_param) :: startype
 type(ui_param) :: stepsz
 type(ui_param) :: stk
+type(ui_param) :: stk_backgr
+type(ui_param) :: stk_traj
 type(ui_param) :: stk2
 type(ui_param) :: stktab
 type(ui_param) :: time_per_image
 type(ui_param) :: total_dose
 type(ui_param) :: trs
+type(ui_param) :: trs_mc
 type(ui_param) :: tseries
 type(ui_param) :: update_frac
 type(ui_param) :: user_account
@@ -257,8 +261,8 @@ subroutine set_ui_params
                                    '(yes|no){yes}', .false., 'yes')
 
     call ctfresthreshold%set_param('ctfresthreshold', 'num',    'CTF Resolution rejection threshold', &
-                                   'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{50}', &
-                                   'CTF resolution threshold(in Angstroms){50}', .false., 50.0)
+                                   'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{6.}', &
+                                   'CTF resolution threshold(in Angstroms){6.}', .false., 6.0)
 
     call deftab%set_param(         'deftab',          'file',   'CTF parameter file', &
                                    'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values', &
@@ -367,6 +371,11 @@ subroutine set_ui_params
     call lp_pick%set_param(        'lp_pick',         'num',    'Low-pass limit for picking', &
                                    'Low-pass limit for picking in Angstroms{20}', &
                                    'in Angstroms{20}', .false., 20.)
+
+    call lp_track%set_param(       'lp_pick',         'num',    'Low-pass limit in Angs', &
+                                   'Low-pass limit in Angs{2.3}', &
+                                   'lp in Angs{2.3}', .false., 2.3)
+
 
     call lplim_crit%set_param(     'lplim_crit',      'num',    'Low-pass limit FSC criterion', &
                                    'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}', &
@@ -521,12 +530,12 @@ subroutine set_ui_params
                                    '# characters', .false., 5.0)
 
     call nxpatch%set_param(        'nxpatch',         'num',    '# of patches along x-axis', &
-                                   'Motion correction # of patches along x-axis', &
-                                   '# x-patches{5}', .false., 5.)
+                                   '# of patches along x-axis(3)', &
+                                   '# x-patches{3}', .false., 3.)
 
     call nypatch%set_param(        'nypatch',         'num',    '# of patches along y-axis', &
-                                   'Motion correction # of patches along y-axis', &
-                                   '# y-patches{5}', .false., 5.)
+                                   '# of patches along y-axis(3)', &
+                                   '# y-patches{3}', .false., 3.)
 
     call objfun%set_param(         'objfun',          'multi',  'Objective function', &
                                    'Objective function(euclid|cc|prob){euclid}', &
@@ -712,6 +721,16 @@ subroutine set_ui_params
                                    'Particle image stack', &
                                    'xxx.mrc file with particles', .false., '')
 
+
+    call stk_backgr%set_param(      'stk_backgr',      'file',   'background power spectra stack, eg NP_X_background_pspec.mrc', &
+                                   'background power spectra stack', &
+                                   'xxx.mrc file with bg spectra', .true., '')
+
+
+    call stk_traj%set_param(       'stk_traj',         'file',   'Tracked NP image stack', &
+                                   'xxx.mrc file with NP time-trajectory', &
+                                   'trajectory.mrcs', .true., '')
+
     call stk2%set_param(           'stk2',            'file',   'Second Particle image stack', &
                                    'Particle image stack', &
                                    'xxx.mrc file with particles', .false., 'stk2.mrc')
@@ -731,6 +750,10 @@ subroutine set_ui_params
     call trs%set_param(            'trs',             'num',    'Maximum translational shift', &
                                    'Maximum half-width for bund-constrained search of rotational origin shifts', &
                                    'max shift per iteration in pixels{5}', .false., 5.0)
+
+    call trs_mc%set_param(         'trs_mc',           'num',    'Max shift per iter in pixels{10.}', &
+                                   'Maximum half-width for bund-constrained search of movie frame shifts', &
+                                   'max shift per iter in pixels{10}', .false., 5.0)
 
     call tseries%set_param(        'tseries',         'binary', 'Stack is time-series', &
                                    'Stack is time-series(yes|no){no}', &

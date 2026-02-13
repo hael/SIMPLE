@@ -121,16 +121,21 @@ contains
         end select
     end subroutine add_input_str
 
-    subroutine add_input_param(self, which, param, required_override, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
+    subroutine add_input_param(self, which, param, descr_short_override, descr_long_override, descr_placeholder_override,&
+    &required_override, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         type(ui_param),             intent(in)    :: param
+        character(len=*), optional, intent(in)    :: descr_short_override, descr_long_override, descr_placeholder_override
         logical,          optional, intent(in)    :: required_override
         character(len=*), optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
         logical,          optional, intent(in)    :: gui_advanced, gui_online
         type(ui_param) :: p
         p = param
-        if( present(required_override) ) p%required = required_override
+        if( present(descr_short_override)       ) p%descr_short       = descr_short_override
+        if( present(descr_long_override)        ) p%descr_long        = descr_long_override
+        if( present(descr_placeholder_override) ) p%descr_placeholder = descr_placeholder_override
+        if( present(required_override)          ) p%required          = required_override
         call p%apply_gui_overrides(gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
         select case (which)
             case (UI_IMG);  call self%img_ios%push_back(p)
