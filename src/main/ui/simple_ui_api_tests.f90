@@ -7,6 +7,11 @@ type(ui_program), target :: test_sim_workflow
 
 contains
 
+    subroutine construct_tests_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_test_sim_workflow(prgtab)
+    end subroutine construct_tests_programs
+
     subroutine print_tests_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('TESTS:', C_UNDERLINED)

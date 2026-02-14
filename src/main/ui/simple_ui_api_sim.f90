@@ -10,6 +10,14 @@ type(ui_program), target :: simulate_particles
 
 contains
 
+    subroutine construct_sim_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_pdb2mrc(prgtab)
+        call new_simulate_movie(prgtab)
+        call new_simulate_noise(prgtab)
+        call new_simulate_particles(prgtab)
+    end subroutine construct_sim_programs
+
     subroutine print_sim_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('SIMULATION:', C_UNDERLINED)

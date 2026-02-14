@@ -13,6 +13,17 @@ type(ui_program), target :: simulate_atoms
 
 contains
 
+    subroutine construct_single_atom_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_atoms_register(prgtab)
+        call new_atoms_rmsd(prgtab)
+        call new_atoms_stats(prgtab)
+        call new_core_atoms_analysis(prgtab)
+        call new_crys_score(prgtab)
+        call new_detect_atoms(prgtab)
+        call new_simulate_atoms(prgtab)
+    end subroutine construct_single_atom_programs
+
     subroutine print_single_atom_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('ATOM:', C_UNDERLINED)

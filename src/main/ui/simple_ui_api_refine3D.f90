@@ -3,22 +3,31 @@ module simple_ui_api_refine3D
 use simple_ui_api_modules
 implicit none
 
+type(ui_program), target :: automask
+type(ui_program), target :: postprocess
+type(ui_program), target :: reconstruct3D
 type(ui_program), target :: refine3D
 type(ui_program), target :: refine3D_auto
-type(ui_program), target :: reconstruct3D
-type(ui_program), target :: postprocess
-type(ui_program), target :: automask
 
 contains
+
+    subroutine construct_refine3D_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_automask(prgtab)
+        call new_postprocess(prgtab)
+        call new_reconstruct3D(prgtab)
+        call new_refine3D(prgtab)
+        call new_refine3D_auto(prgtab)
+    end subroutine construct_refine3D_programs
 
     subroutine print_refine3D_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('REFINE 3D WORKFLOWS:', C_UNDERLINED)
+        write(logfhandle,'(A)') automask%name%to_char()
+        write(logfhandle,'(A)') postprocess%name%to_char()
+        write(logfhandle,'(A)') reconstruct3D%name%to_char()
         write(logfhandle,'(A)') refine3D%name%to_char()
         write(logfhandle,'(A)') refine3D_auto%name%to_char()
-        write(logfhandle,'(A)') reconstruct3D%name%to_char()
-        write(logfhandle,'(A)') postprocess%name%to_char()
-        write(logfhandle,'(A)') automask%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_refine3D_programs
 

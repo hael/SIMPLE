@@ -11,6 +11,16 @@ type(ui_program), target :: select_clusters
 
 contains
 
+    subroutine construct_cavgproc_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_cluster_cavgs(prgtab)
+        call new_cluster_cavgs_selection(prgtab)
+        call new_cluster_stack(prgtab)
+        call new_match_cavgs(prgtab)
+        call new_match_stacks(prgtab)
+        call new_select_clusters(prgtab)
+    end subroutine construct_cavgproc_programs
+
     subroutine print_cavgproc_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('CLASS AVERAGE PROCESSING:', C_UNDERLINED)

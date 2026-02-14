@@ -11,6 +11,15 @@ type(ui_program), target :: print_magic_boxes
 
 contains
 
+    subroutine construct_print_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_info_image(prgtab)
+        call new_info_stktab(prgtab)
+        call new_print_dose_weights(prgtab)
+        call new_print_fsc(prgtab)
+        call new_print_magic_boxes(prgtab)
+    end subroutine construct_print_programs
+
     subroutine print_print_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('PRINT INFO:', C_UNDERLINED)

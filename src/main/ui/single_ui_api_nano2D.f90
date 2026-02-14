@@ -10,6 +10,14 @@ type(ui_program), target :: estimate_diam
 
 contains
 
+    subroutine construct_single_nano2D_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_analysis2D_nano(prgtab)
+        call new_center2D_nano(prgtab)
+        call new_cluster2D_nano(prgtab)
+        call new_estimate_diam(prgtab)
+    end subroutine construct_single_nano2D_programs
+
     subroutine print_single_nano2D_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('NANO 2D:', C_UNDERLINED)

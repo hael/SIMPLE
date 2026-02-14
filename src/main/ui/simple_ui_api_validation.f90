@@ -9,6 +9,13 @@ type(ui_program), target :: check_refpick
 
 contains
 
+    subroutine construct_validation_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_model_validation(prgtab)
+        call new_mini_stream(prgtab)
+        call new_check_refpick(prgtab)
+    end subroutine construct_validation_programs
+
     subroutine print_validation_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)

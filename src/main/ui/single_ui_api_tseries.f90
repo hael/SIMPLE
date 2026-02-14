@@ -10,6 +10,14 @@ type(ui_program), target :: tseries_motion_correct
 
 contains
 
+    subroutine construct_single_tseries_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_track_particles(prgtab)
+        call new_tseries_import(prgtab)
+        call new_tseries_make_pickavg(prgtab)
+        call new_tseries_motion_correct(prgtab)
+    end subroutine construct_single_tseries_programs
+
     subroutine print_single_tseries_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('TSERIES:', C_UNDERLINED)

@@ -14,6 +14,18 @@ type(ui_program), target :: write_classes
 
 contains
 
+    subroutine construct_cluster2D_programs( prgtab ) 
+        class(ui_hash), intent(inout) :: prgtab
+        call new_abinitio2D(prgtab)
+        call new_cleanup2D(prgtab)
+        call new_cluster2D(prgtab)
+        call new_cluster2D_subsets(prgtab)
+        call new_make_cavgs(prgtab)
+        call new_map_cavgs_selection(prgtab)
+        call new_sample_classes(prgtab)
+        call new_write_classes(prgtab)
+    end subroutine construct_cluster2D_programs
+
     subroutine print_cluster2D_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)

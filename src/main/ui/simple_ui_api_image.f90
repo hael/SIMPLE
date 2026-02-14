@@ -14,6 +14,18 @@ type(ui_program), target :: stackops
 
 contains
 
+    subroutine construct_image_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_binarize(prgtab)
+        call new_convert(prgtab)
+        call new_ctf_phaseflip(prgtab)
+        call new_ctfops(prgtab)
+        call new_scale(prgtab)
+        call new_select_(prgtab)
+        call new_stack(prgtab)
+        call new_stackops(prgtab)
+    end subroutine construct_image_programs
+
     subroutine print_image_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('GENERAL IMAGE PROCESSING:', C_UNDERLINED)

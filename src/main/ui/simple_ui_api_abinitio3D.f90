@@ -10,6 +10,15 @@ type(ui_program), target :: noisevol
 
 contains
 
+    subroutine construct_abinitio3D_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_abinitio3D(prgtab)
+        call new_abinitio3D_cavgs(prgtab)
+        call new_estimate_lpstages(prgtab)
+        call new_multivol_assign(prgtab)
+        call new_noisevol(prgtab)
+    end subroutine construct_abinitio3D_programs
+
     subroutine print_abinitio3D_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('AB INITIO 3D RECONSTRUCTION:', C_UNDERLINED)

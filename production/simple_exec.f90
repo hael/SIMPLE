@@ -1,68 +1,14 @@
 !@descr: executes SIMPLE workflows
 program simple_exec
 use simple_exec_api
+use simple_exec_project,    only: exec_project_commander
+use simple_exec_preproc,    only: exec_preproc_commander
+use simple_exec_cluster2D,  only: exec_cluster2D_commander
+use simple_exec_cavgproc,   only: exec_cavgproc_commander
+use simple_exec_abinitio3D, only: exec_abinitio3D_commander
+use simple_exec_refine3D,   only: exec_refine3D_commander
 implicit none
 #include "simple_local_flags.inc"
-
-! PROJECT MANAGEMENT
-type(commander_assign_optics_groups)        :: xassign_optics_groups
-type(commander_export_relion)               :: xexport_relion
-type(commander_export_starproject)          :: xexport_starproject
-type(commander_extract_subproj)             :: xextract_subproj
-type(commander_import_boxes)                :: ximport_boxes
-type(commander_import_cavgs)                :: ximport_cavgs
-type(commander_import_movies)               :: ximport_movies
-type(commander_import_particles)            :: ximport_particles
-type(commander_import_starproject)          :: ximport_starproject
-type(commander_merge_projects)              :: xmerge_projects
-type(commander_new_project)                 :: xnew_project
-type(commander_print_project_field)         :: xprint_project_field
-type(commander_print_project_info)          :: xprint_project_info
-type(commander_prune_project_distr)         :: xprune_project
-type(commander_replace_project_field)       :: xreplace_project_field
-type(commander_selection)                   :: xselection
-type(commander_update_project)              :: xupdate_project
-type(commander_zero_project_shifts)         :: xzero_project_shifts
-
-! PRE-PROCESSING
-type(commander_ctf_estimate_distr)          :: xctf_estimate_distr
-type(commander_extract_distr)               :: xextract_distr
-type(commander_gen_pspecs_and_thumbs_distr) :: xgen_pspecs_and_thumbs
-type(commander_motion_correct_distr)        :: xmotion_correct_distr
-type(commander_pick_distr)                  :: xpick_distr
-type(commander_preprocess_distr)            :: xpreprocess
-type(commander_reextract_distr)             :: xreextract_distr
-
-! CLUSTER2D WORKFLOWS
-type(commander_abinitio2D)                  :: xabinitio2D
-type(commander_cleanup2D)                   :: xcleanup2D 
-type(commander_cluster2D_autoscale)         :: xcluster2D
-type(commander_cluster_cavgs)               :: xcluster_cavgs
-type(commander_cluster_cavgs_selection)     :: xcluster_cavgs_selection
-type(commander_cluster_stack)               :: xcluster_stack
-type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
-type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
-type(commander_match_cavgs)                 :: xmatch_cavgs
-type(commander_match_stacks)                :: xmatch_stacks
-type(commander_sample_classes)              :: xsample_classes
-type(commander_select_clusters)             :: xsel_clusts
-type(commander_write_classes)               :: xwrite_classes
-type(commander_write_mic_filetab)           :: xwrite_mic_filetab
-type(stream_cluster2D_subsets)              :: xcluster2D_subsets
-
-! AB INITIO 3D RECONSTRUCTION
-type(commander_abinitio3D)                  :: xabinitio3D
-type(commander_abinitio3D_cavgs)            :: xabinitio3D_cavgs
-type(commander_estimate_lpstages)           :: xestimate_lpstages
-type(commander_multivol_assign)             :: xmultivol_assign
-type(commander_noisevol)                    :: xnoisevol
-
-! REFINE3D
-type(commander_automask)                    :: xautomask
-type(commander_postprocess)                 :: xpostprocess
-type(commander_reconstruct3D_distr)         :: xreconstruct3D
-type(commander_refine3D_auto)               :: xrefine3D_auto
-type(commander_refine3D_distr)              :: xrefine3D_distr
 
 ! DENOISING
 type(commander_icm2D)                       :: xicm2D
@@ -144,7 +90,7 @@ type(cmdline)              :: cline
 integer                    :: cmdstat, cmdlen, pos
 integer(timer_int_kind)    :: t0
 real(timer_int_kind)       :: rt_exec
-logical                    :: l_silent
+logical                    :: l_silent, l_did_execute
 
 ! start timer
 t0 = tic()
@@ -164,150 +110,18 @@ endif
 call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_exec'))
-l_silent = .false.
+l_silent      = .false.
+l_did_execute = .false.
+
+call exec_project_commander(trim(prg),    cline, l_silent, l_did_execute)
+call exec_preproc_commander(trim(prg),    cline, l_silent, l_did_execute)
+call exec_cluster2D_commander(trim(prg),  cline, l_silent, l_did_execute)
+call exec_cavgproc_commander(trim(prg),   cline, l_silent, l_did_execute)
+call exec_abinitio3D_commander(trim(prg), cline, l_silent, l_did_execute)
+call exec_refine3D_commander(trim(prg),   cline, l_silent, l_did_execute)
+
 select case(trim(prg))
 
-    !====================================================================
-    ! PROJECT MANAGEMENT
-    !====================================================================
-    case( 'assign_optics_groups' )
-        call xassign_optics_groups%execute(cline)
-    case( 'export_relion' )
-        call xexport_relion%execute(cline)
-    case( 'export_starproject' )
-        call xexport_starproject%execute(cline)
-    case( 'extract_subproj' )
-        call xextract_subproj%execute(cline)
-    case( 'import_boxes' )
-        call ximport_boxes%execute(cline)
-    case( 'import_cavgs' )
-        call ximport_cavgs%execute(cline)
-    case( 'import_movies' )
-        call ximport_movies%execute(cline)
-    case( 'import_particles' )
-        call ximport_particles%execute(cline)
-    case( 'import_starproject' )
-        call ximport_starproject%execute(cline)
-    case( 'merge_projects' )
-        call xmerge_projects%execute(cline)
-    case( 'new_project' )
-        call xnew_project%execute(cline)
-    case( 'print_project_field' )
-        call xprint_project_field%execute(cline)
-        l_silent = .true.
-    case( 'print_project_info' )
-        call xprint_project_info%execute(cline)
-        l_silent = .true.
-    case( 'prune_project' )
-        call xprune_project%execute(cline)
-    case( 'replace_project_field' )
-        call xreplace_project_field%execute(cline)
-    case( 'selection', 'report_selection' )
-        call xselection%execute(cline)
-    case( 'update_project' )
-        call xupdate_project%execute(cline)
-    case( 'zero_project_shifts' )
-        call xzero_project_shifts%execute(cline)
-
-    !====================================================================
-    ! PRE-PROCESSING
-    !====================================================================
-    case( 'ctf_estimate' )
-        call xctf_estimate_distr%execute(cline)
-    case( 'extract' )
-        call xextract_distr%execute(cline)
-    case( 'gen_pspecs_and_thumbs' )
-        call xgen_pspecs_and_thumbs%execute(cline)
-    case( 'motion_correct' )
-        call xmotion_correct_distr%execute(cline)
-    case( 'pick' )
-        call xpick_distr%execute(cline)
-    case( 'preprocess' )
-        call xpreprocess%execute(cline)
-    case( 'reextract' )
-        call xreextract_distr%execute(cline)
-
-    !====================================================================
-    ! CLUSTER2D WORKFLOWS
-    !====================================================================
-    case( 'abinitio2D' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('abinitio2D'), string('simple_exec'))
-        else
-            call xabinitio2D%execute(cline)
-        endif
-    case( 'cleanup2D')
-        call xcleanup2D%execute(cline)
-    case( 'cluster2D' )
-        call xcluster2D%execute(cline)
-    case( 'cluster2D_subsets' )
-        call xcluster2D_subsets%execute(cline)
-    case( 'cluster_cavgs' )
-        call xcluster_cavgs%execute(cline)
-    case( 'cluster_cavgs_selection' )
-        call xcluster_cavgs_selection%execute(cline)
-    case( 'cluster_stack' )
-        call xcluster_stack%execute(cline)
-    case( 'make_cavgs' )
-        call xmake_cavgs_distr%execute(cline)
-    case( 'map_cavgs_selection' )
-        call xmap_cavgs_selection%execute(cline)
-    case( 'match_cavgs' )
-        call xmatch_cavgs%execute(cline)
-    case( 'match_stacks' )
-        call xmatch_stacks%execute(cline)
-    case( 'sample_classes' )
-        call xsample_classes%execute(cline)
-    case( 'select_clusters' )
-        call xsel_clusts%execute(cline)
-    case( 'write_classes' )
-        call xwrite_classes%execute(cline)
-    case( 'write_mic_filetab' )
-        call xwrite_mic_filetab%execute(cline)
-
-    !====================================================================
-    ! AB INITIO 3D RECONSTRUCTION
-    !====================================================================
-    case( 'abinitio3D' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('abinitio3D'), string('simple_exec'))
-        else
-            call xabinitio3D%execute(cline)
-        endif
-    case( 'abinitio3D_cavgs' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('abinitio3D_cavgs'), string('simple_exec'))
-        else
-            call xabinitio3D_cavgs%execute(cline)
-        endif
-    case( 'estimate_lpstages' )
-        call xestimate_lpstages%execute(cline)
-    case( 'multivol_assign' )
-        call xmultivol_assign%execute(cline)
-    case( 'noisevol' )
-        call xnoisevol%execute(cline)
-
-    !====================================================================
-    ! REFINE3D
-    !====================================================================
-    case( 'automask' )
-        call xautomask%execute(cline)
-    case( 'postprocess' )
-        call xpostprocess%execute(cline)
-    case( 'reconstruct3D' )
-        call xreconstruct3D%execute(cline)
-    case( 'refine3D' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('refine3D'), string('simple_exec'))
-        else
-            call xrefine3D_distr%execute(cline)
-        endif
-    case( 'refine3D_auto' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('refine3D_auto'), string('simple_exec'))
-        else
-            call xrefine3D_auto%execute(cline)
-        endif
 
     !====================================================================
     ! DENOISING
@@ -469,7 +283,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('abfbef94')
+    call simple_print_git_version('9961f231')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

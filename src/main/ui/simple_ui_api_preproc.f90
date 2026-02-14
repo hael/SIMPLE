@@ -14,6 +14,18 @@ type(ui_program), target :: reextract
 
 contains
 
+    subroutine construct_preproc_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_assign_optics_groups(prgtab)
+        call new_ctf_estimate(prgtab)
+        call new_extract(prgtab)
+        call new_gen_pspecs_and_thumbs(prgtab)
+        call new_motion_correct(prgtab)
+        call new_pick(prgtab)
+        call new_preprocess(prgtab)
+        call new_reextract(prgtab)
+    end subroutine construct_preproc_programs
+
     subroutine print_preproc_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('PRE-PROCESSING:', C_UNDERLINED)
