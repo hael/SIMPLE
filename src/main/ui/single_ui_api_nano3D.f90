@@ -8,6 +8,12 @@ type(ui_program), target :: refine3D_nano
 
 contains
 
+    subroutine construct_single_nano3D_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_autorefine3D_nano(prgtab)
+        call new_refine3D_nano(prgtab)
+    end subroutine construct_single_nano3D_programs
+
     subroutine print_single_nano3D_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('NANO 3D:', C_UNDERLINED)

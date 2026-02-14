@@ -13,6 +13,17 @@ type(ui_program), target :: sieve_cavgs
 
 contains
 
+    subroutine construct_stream_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_abinitio2D_stream(prgtab)
+        call new_assign_optics(prgtab)
+        call new_cluster2D_stream(prgtab)
+        call new_gen_pickrefs(prgtab)
+        call new_pick_extract(prgtab)
+        call new_preproc(prgtab)
+        call new_sieve_cavgs(prgtab)
+    end subroutine construct_stream_programs
+
     subroutine print_stream_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('STREAM WORKFLOWS:', C_UNDERLINED)

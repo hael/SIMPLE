@@ -8,6 +8,12 @@ type(ui_program), target :: tsegmaps_core_finder
 
 contains
 
+    subroutine construct_single_map_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_conv_atom_denoise(prgtab)
+        call new_tsegmaps_core_finder(prgtab)
+    end subroutine construct_single_map_programs
+
     subroutine print_single_map_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('MAP:', C_UNDERLINED)

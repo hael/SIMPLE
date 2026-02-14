@@ -13,15 +13,12 @@ chomp($simple_exec);
 chomp($single_exec);
 chomp($stream_exec);
 chomp($git_commit_tag);
-
 if( decide_to_substitute($simple_exec) == 1 ){
     substitute($simple_exec);
 }
-
 if( decide_to_substitute($single_exec) == 1 ){
     substitute($single_exec);
 }
-
 if( decide_to_substitute($stream_exec) == 1 ){
     substitute($stream_exec);
 }
@@ -54,7 +51,6 @@ sub decide_to_substitute{
     }
 }
 
-
 sub read_file_into_array {
     my $filename = $_[0];
     # Use a lexical file handle and the three-argument open for safety
@@ -65,4 +61,3 @@ sub read_file_into_array {
     # Return the array
     return @lines;
 }
-

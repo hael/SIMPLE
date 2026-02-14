@@ -24,6 +24,28 @@ type(ui_program), target :: write_mic_filetab
 
 contains
 
+    subroutine construct_project_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_export_relion(prgtab)
+        call new_export_starproject(prgtab)
+        call new_extract_subproj(prgtab)
+        call new_import_boxes(prgtab)
+        call new_import_cavgs(prgtab)
+        call new_import_movies(prgtab)
+        call new_import_particles(prgtab)
+        call new_import_starproject(prgtab)
+        call new_merge_projects(prgtab)
+        call new_new_project(prgtab)
+        call new_print_project_field(prgtab)
+        call new_print_project_info(prgtab)
+        call new_prune_project(prgtab)
+        call new_replace_project_field(prgtab)
+        call new_selection(prgtab)
+        call new_update_project(prgtab)
+        call new_zero_project_shifts(prgtab)
+        call new_write_mic_filetab(prgtab)
+    end subroutine construct_project_programs
+
     subroutine print_project_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT:', C_UNDERLINED)

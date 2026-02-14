@@ -2,14 +2,20 @@ module simple_ui_api_other
 use simple_ui_api_modules
 implicit none
 
-
 type(ui_program), target :: mkdir_
 type(ui_program), target :: normalize_
-
 type(ui_program), target :: split_
 type(ui_program), target :: split_stack
 
 contains
+
+    subroutine construct_other_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_mkdir_(prgtab)
+        call new_normalize(prgtab)
+        call new_split_(prgtab)
+        call new_split_stack(prgtab)
+    end subroutine construct_other_programs
 
     subroutine print_other_programs(logfhandle)
         integer, intent(in) :: logfhandle

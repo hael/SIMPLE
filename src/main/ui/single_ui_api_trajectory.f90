@@ -13,6 +13,17 @@ type(ui_program), target :: trajectory_swap_stack
 
 contains
 
+    subroutine construct_single_trajectory_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_extract_substk(prgtab)
+        call new_graphene_subtr(prgtab)
+        call new_import_trajectory(prgtab)
+        call new_trajectory_denoise(prgtab)
+        call new_trajectory_make_projavgs(prgtab)
+        call new_trajectory_reconstruct3D(prgtab)
+        call new_trajectory_swap_stack(prgtab)
+    end subroutine construct_single_trajectory_programs
+
     subroutine print_single_trajectory_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('TRAJECTORY:', C_UNDERLINED)

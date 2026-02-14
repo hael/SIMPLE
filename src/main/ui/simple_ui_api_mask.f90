@@ -9,6 +9,13 @@ type(ui_program), target :: mask
 
 contains
 
+    subroutine construct_mask_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_auto_spher_mask(prgtab)
+        call new_automask2D(prgtab)
+        call new_mask(prgtab)
+    end subroutine construct_mask_programs
+
     subroutine print_mask_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('MASKING:', C_UNDERLINED)

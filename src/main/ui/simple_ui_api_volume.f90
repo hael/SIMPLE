@@ -9,6 +9,13 @@ type(ui_program), target :: volops
 
 contains
 
+    subroutine construct_volume_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_center(prgtab)
+        call new_reproject(prgtab)
+        call new_volops(prgtab)
+    end subroutine construct_volume_programs
+
     subroutine print_volume_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('VOLUME PROCESSING:', C_UNDERLINED)

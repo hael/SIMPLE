@@ -10,6 +10,14 @@ type(ui_program), target :: vizoris
 
 contains
 
+    subroutine construct_ori_programs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call new_make_oris(prgtab)
+        call new_orisops(prgtab)
+        call new_oristats(prgtab)
+        call new_vizoris(prgtab)
+    end subroutine construct_ori_programs
+
     subroutine print_ori_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('ORIENTATION PROCESSING:', C_UNDERLINED)
