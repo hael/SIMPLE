@@ -11,6 +11,17 @@ type(ui_program), target :: automask
 
 contains
 
+    subroutine print_refine3D_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('REFINE 3D WORKFLOWS:', C_UNDERLINED)
+        write(logfhandle,'(A)') refine3D%name%to_char()
+        write(logfhandle,'(A)') refine3D_auto%name%to_char()
+        write(logfhandle,'(A)') reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') postprocess%name%to_char()
+        write(logfhandle,'(A)') automask%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_refine3D_programs
+
     subroutine new_automask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

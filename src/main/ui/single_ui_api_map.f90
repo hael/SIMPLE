@@ -8,6 +8,14 @@ type(ui_program), target :: tsegmaps_core_finder
 
 contains
 
+    subroutine print_single_map_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('MAP:', C_UNDERLINED)
+        write(logfhandle,'(A)') conv_atom_denoise%name%to_char()
+        write(logfhandle,'(A)') tsegmaps_core_finder%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_single_map_programs
+
     subroutine new_conv_atom_denoise( prgtab )
         class(ui_hash), intent(inout) :: prgtab           
         ! PROGRAM SPECIFICATION
@@ -36,7 +44,6 @@ contains
         call add_ui_program('conv_atom_denoise', conv_atom_denoise, prgtab)
     end subroutine new_conv_atom_denoise
 
-
     subroutine new_tsegmaps_core_finder( prgtab )
          class(ui_hash), intent(inout) :: prgtab       
         ! PROGRAM SPECIFICATION
@@ -64,6 +71,5 @@ contains
         ! <empty>
         call add_ui_program('tsegmaps_core_finder', tsegmaps_core_finder, prgtab)
     end subroutine new_tsegmaps_core_finder
-
 
 end module single_ui_api_map

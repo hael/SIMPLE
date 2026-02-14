@@ -8,6 +8,14 @@ type(ui_program), target :: volanalyze
 
 contains
 
+    subroutine print_dock_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('VOLUME DOCKING:', C_UNDERLINED)
+        write(logfhandle,'(A)') dock_volpair%name%to_char()
+        write(logfhandle,'(A)') volanalyze%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_dock_programs
+
     subroutine new_dock_volpair( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

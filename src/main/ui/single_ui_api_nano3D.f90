@@ -8,6 +8,13 @@ type(ui_program), target :: refine3D_nano
 
 contains
 
+    subroutine print_single_nano3D_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('NANO 3D:', C_UNDERLINED)
+        write(logfhandle,'(A)') autorefine3D_nano%name%to_char()
+        write(logfhandle,'(A)') refine3D_nano%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_single_nano3D_programs
 
     subroutine new_autorefine3D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -48,7 +55,6 @@ contains
         call autorefine3D_nano%add_input(UI_COMP, script)
         call add_ui_program('autorefine3D_nano', autorefine3D_nano, prgtab)
     end subroutine new_autorefine3D_nano
-
 
     subroutine new_refine3D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -93,6 +99,5 @@ contains
         call refine3D_nano%add_input(UI_COMP, nthr)
         call add_ui_program('refine3D_nano', refine3D_nano, prgtab)
     end subroutine new_refine3D_nano
-
 
 end module single_ui_api_nano3D

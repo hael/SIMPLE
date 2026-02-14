@@ -9,6 +9,15 @@ type(ui_program), target :: uniform_filter3D
 
 contains
 
+    subroutine print_filter_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('FILTERING:', C_UNDERLINED)
+        write(logfhandle,'(A)') filter%name%to_char()
+        write(logfhandle,'(A)') uniform_filter2D%name%to_char()
+        write(logfhandle,'(A)') uniform_filter3D%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_filter_programs
+
     subroutine new_filter( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

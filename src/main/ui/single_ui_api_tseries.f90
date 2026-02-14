@@ -10,6 +10,15 @@ type(ui_program), target :: tseries_motion_correct
 
 contains
 
+    subroutine print_single_tseries_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('TSERIES:', C_UNDERLINED)
+        write(logfhandle,'(A)') track_particles%name%to_char()
+        write(logfhandle,'(A)') tseries_import%name%to_char()
+        write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()
+        write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_single_tseries_programs
 
     subroutine new_track_particles( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -51,7 +60,6 @@ contains
         call add_ui_program('track_particles', track_particles, prgtab)
     end subroutine new_track_particles
 
-
     subroutine new_tseries_import( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -81,7 +89,6 @@ contains
         ! <empty>
         call add_ui_program('tseries_import', tseries_import, prgtab)
     end subroutine new_tseries_import
-
 
     subroutine new_tseries_make_pickavg( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -120,7 +127,6 @@ contains
         call add_ui_program('tseries_make_pickavg', tseries_make_pickavg, prgtab)
     end subroutine new_tseries_make_pickavg
 
-
     subroutine new_tseries_motion_correct( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -158,6 +164,5 @@ contains
         call tseries_motion_correct%add_input(UI_COMP, nthr)
         call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab)
     end subroutine new_tseries_motion_correct
-
 
 end module single_ui_api_tseries

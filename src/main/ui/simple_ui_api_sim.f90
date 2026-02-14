@@ -10,6 +10,16 @@ type(ui_program), target :: simulate_particles
 
 contains
 
+    subroutine print_sim_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('SIMULATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') pdb2mrc%name%to_char()
+        write(logfhandle,'(A)') simulate_movie%name%to_char()
+        write(logfhandle,'(A)') simulate_noise%name%to_char()
+        write(logfhandle,'(A)') simulate_particles%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_sim_programs
+
     subroutine new_pdb2mrc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

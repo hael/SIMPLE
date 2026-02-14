@@ -11,6 +11,17 @@ type(ui_program), target :: ppca_volvar
 
 contains
 
+    subroutine print_denoise_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('DENOISING:', C_UNDERLINED)
+        write(logfhandle,'(A)') icm2D%name%to_char()
+        write(logfhandle,'(A)') icm3D%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
+        write(logfhandle,'(A)') ppca_volvar%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_denoise_programs
+
     subroutine new_icm2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

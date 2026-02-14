@@ -9,7 +9,16 @@ type(ui_program), target :: ptclsproc_nano
 
 contains
 
-      subroutine new_cavgseoproc_nano( prgtab )
+    subroutine print_single_validation_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
+        write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
+        write(logfhandle,'(A)') ptclsproc_nano%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_single_validation_programs
+
+    subroutine new_cavgseoproc_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cavgseoproc_nano%new(&
@@ -36,7 +45,6 @@ contains
         call cavgseoproc_nano%add_input(UI_COMP, script)
         call add_ui_program('cavgseoproc_nano', cavgseoproc_nano, prgtab)
     end subroutine new_cavgseoproc_nano
-
 
     subroutine new_cavgsproc_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -66,7 +74,6 @@ contains
         call add_ui_program('cavgsproc_nano', cavgsproc_nano, prgtab)
     end subroutine new_cavgsproc_nano
 
-
     subroutine new_ptclsproc_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -93,6 +100,5 @@ contains
         call ptclsproc_nano%add_input(UI_COMP, script)
         call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
     end subroutine new_ptclsproc_nano
-
 
 end module single_ui_api_validation

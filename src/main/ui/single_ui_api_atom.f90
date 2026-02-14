@@ -13,6 +13,19 @@ type(ui_program), target :: simulate_atoms
 
 contains
 
+    subroutine print_single_atom_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('ATOM:', C_UNDERLINED)
+        write(logfhandle,'(A)') atoms_register%name%to_char()
+        write(logfhandle,'(A)') atoms_rmsd%name%to_char()
+        write(logfhandle,'(A)') atoms_stats%name%to_char()
+        write(logfhandle,'(A)') core_atoms_analysis%name%to_char()
+        write(logfhandle,'(A)') crys_score%name%to_char()
+        write(logfhandle,'(A)') detect_atoms%name%to_char()
+        write(logfhandle,'(A)') simulate_atoms%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_single_atom_programs
+
     subroutine new_atoms_register( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -37,7 +50,6 @@ contains
         call atoms_register%add_input(UI_COMP, nthr)
         call add_ui_program('atoms_register', atoms_register, prgtab) 
     end subroutine new_atoms_register
-
 
     subroutine new_atoms_rmsd( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -67,7 +79,6 @@ contains
         ! <empty>
         call add_ui_program('atoms_rmsd', atoms_rmsd, prgtab) 
     end subroutine new_atoms_rmsd
-
 
     subroutine new_atoms_stats( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -104,7 +115,6 @@ contains
         call add_ui_program('atoms_stats', atoms_stats, prgtab) 
     end subroutine new_atoms_stats
 
-
     subroutine new_core_atoms_analysis( prgtab )
         class(ui_hash), intent(inout) :: prgtab        
         ! PROGRAM SPECIFICATION
@@ -133,7 +143,6 @@ contains
         ! <empty>
         call add_ui_program('core_atoms_analysis', core_atoms_analysis, prgtab) 
     end subroutine new_core_atoms_analysis
-
 
     subroutine new_crys_score( prgtab )
         class(ui_hash), intent(inout) :: prgtab        
@@ -164,7 +173,6 @@ contains
         call add_ui_program('crys_score', crys_score, prgtab) 
     end subroutine new_crys_score
 
-
     subroutine new_detect_atoms( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -194,7 +202,6 @@ contains
         call detect_atoms%add_input(UI_COMP, nthr)
         call add_ui_program('detect_atoms', detect_atoms, prgtab) 
     end subroutine new_detect_atoms
-
 
     subroutine new_simulate_atoms( prgtab )
         class(ui_hash), intent(inout) :: prgtab

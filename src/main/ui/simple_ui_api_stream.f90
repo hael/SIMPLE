@@ -13,6 +13,19 @@ type(ui_program), target :: sieve_cavgs
 
 contains
 
+    subroutine print_stream_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('STREAM WORKFLOWS:', C_UNDERLINED)
+        write(logfhandle,'(A)') abinitio2D_stream%name%to_char()
+        write(logfhandle,'(A)') assign_optics%name%to_char()
+        write(logfhandle,'(A)') cluster2D_stream%name%to_char()
+        write(logfhandle,'(A)') gen_pickrefs%name%to_char()
+        write(logfhandle,'(A)') pick_extract%name%to_char()
+        write(logfhandle,'(A)') preproc%name%to_char()
+        write(logfhandle,'(A)') sieve_cavgs%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_stream_programs
+
     subroutine new_abinitio2D_stream( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

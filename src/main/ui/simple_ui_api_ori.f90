@@ -10,6 +10,16 @@ type(ui_program), target :: vizoris
 
 contains
 
+    subroutine print_ori_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('ORIENTATION PROCESSING:', C_UNDERLINED)
+        write(logfhandle,'(A)') make_oris%name%to_char()
+        write(logfhandle,'(A)') orisops%name%to_char()
+        write(logfhandle,'(A)') oristats%name%to_char()
+        write(logfhandle,'(A)') vizoris%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_ori_programs
+
     subroutine new_make_oris( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
