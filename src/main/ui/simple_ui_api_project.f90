@@ -20,8 +20,33 @@ type(ui_program), target :: replace_project_field
 type(ui_program), target :: selection
 type(ui_program), target :: update_project
 type(ui_program), target :: zero_project_shifts
+type(ui_program), target :: write_mic_filetab
 
 contains
+
+    subroutine print_project_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT:', C_UNDERLINED)
+        write(logfhandle,'(A)') export_relion%name%to_char()
+        write(logfhandle,'(A)') export_starproject%name%to_char()
+        write(logfhandle,'(A)') extract_subproj%name%to_char()
+        write(logfhandle,'(A)') import_boxes%name%to_char()
+        write(logfhandle,'(A)') import_cavgs%name%to_char()
+        write(logfhandle,'(A)') import_movies%name%to_char()
+        write(logfhandle,'(A)') import_particles%name%to_char()
+        write(logfhandle,'(A)') import_starproject%name%to_char()
+        write(logfhandle,'(A)') merge_projects%name%to_char()
+        write(logfhandle,'(A)') new_project%name%to_char()
+        write(logfhandle,'(A)') print_project_field%name%to_char()
+        write(logfhandle,'(A)') print_project_info%name%to_char()
+        write(logfhandle,'(A)') prune_project%name%to_char()
+        write(logfhandle,'(A)') replace_project_field%name%to_char()
+        write(logfhandle,'(A)') selection%name%to_char()
+        write(logfhandle,'(A)') update_project%name%to_char()
+        write(logfhandle,'(A)') zero_project_shifts%name%to_char()
+        write(logfhandle,'(A)') write_mic_filetab%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_project_programs
 
     subroutine new_export_relion( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -585,5 +610,33 @@ contains
         ! add to ui_hash
         call add_ui_program('zero_project_shifts', zero_project_shifts, prgtab)
     end subroutine new_zero_project_shifts
+
+    subroutine new_write_mic_filetab( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call write_mic_filetab%new(&
+        &'write_mic_filetab',&                                            ! name
+        &'Writes a filetable of state > 0 micrographs',&                  ! descr_short
+        &'is a program for writing a filetable of selected micrographs',& ! descr_long
+        &'simple_exec',&                                                  ! executable
+        &.true.)                                                          ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call write_mic_filetab%add_input(UI_IMG, 'fname', 'file', 'Filename micrograph list', 'Filename for list of micrograph files (*.mrc)', 'e.g. mics.txt', .true., '')
+        ! parameter input/output
+        call write_mic_filetab%add_input(UI_PARM, projfile)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('write_mic_filetab', write_mic_filetab, prgtab)
+    end subroutine new_write_mic_filetab
 
 end module simple_ui_api_project

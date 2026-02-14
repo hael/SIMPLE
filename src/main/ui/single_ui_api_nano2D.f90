@@ -10,6 +10,15 @@ type(ui_program), target :: estimate_diam
 
 contains
 
+    subroutine print_single_nano2D_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('NANO 2D:', C_UNDERLINED)
+        write(logfhandle,'(A)') analysis2D_nano%name%to_char()
+        write(logfhandle,'(A)') center2D_nano%name%to_char()
+        write(logfhandle,'(A)') cluster2D_nano%name%to_char()
+        write(logfhandle,'(A)') estimate_diam%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_single_nano2D_programs
 
     subroutine new_analysis2D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -38,7 +47,6 @@ contains
         call analysis2D_nano%add_input(UI_COMP, script)
         call add_ui_program('analysis2D_nano', analysis2D_nano, prgtab)
     end subroutine new_analysis2D_nano
-
 
     subroutine new_center2D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab       
@@ -69,7 +77,6 @@ contains
         call center2D_nano%add_input(UI_COMP, script)
         call add_ui_program('center2D_nano', center2D_nano, prgtab)
     end subroutine new_center2D_nano
-
 
     subroutine new_cluster2D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -110,7 +117,6 @@ contains
         call cluster2D_nano%add_input(UI_COMP, script)
         call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab)
     end subroutine new_cluster2D_nano
-
 
     subroutine new_estimate_diam( prgtab )
         class(ui_hash), intent(inout) :: prgtab

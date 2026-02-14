@@ -2,44 +2,24 @@ module simple_ui_api_other
 use simple_ui_api_modules
 implicit none
 
-type(ui_program), target :: match_stacks
+
 type(ui_program), target :: mkdir_
 type(ui_program), target :: normalize_
-type(ui_program), target :: print_ui_stream
+
 type(ui_program), target :: split_
 type(ui_program), target :: split_stack
 
 contains
 
-    subroutine new_match_stacks( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call match_stacks%new(&
-        &'match_stack',&                                              ! name
-        &'Analysis of class averages with k-medoids',&                ! descr_short
-        &'is a program for analyzing class averages with k-medoids',& ! descr_long
-        &'simple_exec',&                                              ! executable
-        &.false.)                                                     ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call match_stacks%add_input(UI_IMG, stk,  required_override=.true.)
-        call match_stacks%add_input(UI_IMG, stk2, required_override=.true.)
-        ! parameter input/output
-         ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call match_stacks%add_input(UI_SRCH, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}',&
-        &'(sig|sig_clust|cc|res|hybrid){hybrid}', .false., 'cc')
-        ! filter controls
-        call match_stacks%add_input(UI_FILT, hp, required_override=.true.)
-        call match_stacks%add_input(UI_FILT, lp, required_override=.true.)
-        ! mask controls
-        call match_stacks%add_input(UI_MASK, mskdiam)
-        ! computer controls
-        call match_stacks%add_input(UI_COMP, nthr)
-        call add_ui_program('match_stacks', match_stacks, prgtab)
-    end subroutine new_match_stacks
+    subroutine print_other_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('OTHER UTILITIES:', C_UNDERLINED)
+        write(logfhandle,'(A)') mkdir_%name%to_char()
+        write(logfhandle,'(A)') normalize_%name%to_char()
+        write(logfhandle,'(A)') split_%name%to_char()
+        write(logfhandle,'(A)') split_stack%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_other_programs
 
     subroutine new_mkdir_( prgtab )
         class(ui_hash), intent(inout) :: prgtab

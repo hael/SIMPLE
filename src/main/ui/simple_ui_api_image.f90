@@ -14,7 +14,19 @@ type(ui_program), target :: stackops
 
 contains
 
-
+    subroutine print_image_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('GENERAL IMAGE PROCESSING:', C_UNDERLINED)
+        write(logfhandle,'(A)') binarize%name%to_char()
+        write(logfhandle,'(A)') convert%name%to_char()
+        write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
+        write(logfhandle,'(A)') ctfops%name%to_char()
+        write(logfhandle,'(A)') scale%name%to_char()
+        write(logfhandle,'(A)') select_%name%to_char()
+        write(logfhandle,'(A)') stack%name%to_char()
+        write(logfhandle,'(A)') stackops%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_image_programs
 
     subroutine new_binarize( prgtab )
         class(ui_hash), intent(inout) :: prgtab

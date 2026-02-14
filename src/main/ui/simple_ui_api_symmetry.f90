@@ -9,6 +9,15 @@ type(ui_program), target :: symmetry_test
 
 contains
 
+    subroutine print_symmetry_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('SYMMETRY:', C_UNDERLINED)
+        write(logfhandle,'(A)') symaxis_search%name%to_char()
+        write(logfhandle,'(A)') symmetrize_map%name%to_char()
+        write(logfhandle,'(A)') symmetry_test%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_symmetry_programs
+
     subroutine new_symaxis_search( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

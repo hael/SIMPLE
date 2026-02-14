@@ -7,6 +7,7 @@ use simple_ui_common_params
 ! SIMPLE
 use simple_ui_api_abinitio3D
 use simple_ui_api_cluster2D
+use simple_ui_api_cavgproc
 use simple_ui_api_denoise
 use simple_ui_api_dock
 use simple_ui_api_filter

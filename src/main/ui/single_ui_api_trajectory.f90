@@ -13,6 +13,18 @@ type(ui_program), target :: trajectory_swap_stack
 
 contains
 
+    subroutine print_single_trajectory_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('TRAJECTORY:', C_UNDERLINED)
+        write(logfhandle,'(A)') extract_substk%name%to_char()
+        write(logfhandle,'(A)') graphene_subtr%name%to_char()
+        write(logfhandle,'(A)') import_trajectory%name%to_char()
+        write(logfhandle,'(A)') trajectory_denoise%name%to_char()
+        write(logfhandle,'(A)') trajectory_make_projavgs%name%to_char()
+        write(logfhandle,'(A)') trajectory_reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') trajectory_swap_stack%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_single_trajectory_programs
 
     subroutine new_extract_substk( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -129,7 +141,6 @@ contains
         call add_ui_program('trajectory_denoise', trajectory_denoise, prgtab)
     end subroutine new_trajectory_denoise
 
-
     subroutine new_trajectory_make_projavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -158,7 +169,6 @@ contains
         call trajectory_make_projavgs%add_input(UI_COMP, nthr)
         call add_ui_program('trajectory_make_projavgs', trajectory_make_projavgs, prgtab)
     end subroutine new_trajectory_make_projavgs
-
 
     subroutine new_trajectory_reconstruct3D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -190,7 +200,6 @@ contains
         call trajectory_reconstruct3D%add_input(UI_COMP, nthr)
         call add_ui_program('trajectory_reconstruct3D', trajectory_reconstruct3D, prgtab)
     end subroutine new_trajectory_reconstruct3D
-
 
     subroutine new_trajectory_swap_stack( prgtab )
         class(ui_hash), intent(inout) :: prgtab

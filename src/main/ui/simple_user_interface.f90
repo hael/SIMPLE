@@ -11,24 +11,12 @@ private
 
 character(len=26), parameter :: UI_FNAME = 'simple_user_interface.json'
 logical,           parameter :: DEBUG    = .false.
-
-! this is for making an array of pointers to all programs
-type simple_prg_ptr
-    type(ui_program), pointer :: ptr2prg => null()
-end type simple_prg_ptr
-integer, parameter   :: NMAX_PTRS  = 200
-integer              :: n_prg_ptrs = 0
-type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
-
-type(ui_hash) :: prgtab_other
-type(ui_hash) :: prgtab_all
-
+type(ui_hash)                :: prgtab
+type(string), allocatable    :: prgnames(:)
 contains
 
     subroutine test_ui_refactoring_func
-        type(string), allocatable :: prgnames(:)
         integer :: i
-        prgnames = prgtab_all%keys_sorted()
         do i = 1, size(prgnames)
             call prgnames(i)%print
         end do
@@ -38,634 +26,173 @@ contains
 
     subroutine make_user_interface
         call set_ui_params
-        call set_prg_ptr_array
-        call new_abinitio2D( prgtab_all )
-        call new_abinitio2D_stream( prgtab_all )
-        call new_abinitio3D( prgtab_all )
-        call new_abinitio3D_cavgs( prgtab_all )
-        call new_analysis2D_nano( prgtab_all)
-        call new_assign_optics( prgtab_all )
-        call new_assign_optics_groups( prgtab_all ) 
-        call new_atoms_register( prgtab_all )
-        call new_atoms_stats( prgtab_all )
-        call new_auto_spher_mask( prgtab_all )
-        call new_automask( prgtab_all )
-        call new_automask2D( prgtab_all )
-        call new_autorefine3D_nano( prgtab_all )
-        call new_binarize( prgtab_all )
-        call new_cavgseoproc_nano( prgtab_all)
-        call new_cavgsproc_nano( prgtab_all )
-        call new_center( prgtab_all )
-        call new_center2D_nano( prgtab_all )
-        call new_check_refpick( prgtab_all )
-        call new_cleanup2D( prgtab_all )
-        call new_clin_fsc( prgtab_all )
-        call new_cluster2D( prgtab_all )
-        call new_cluster2D_nano( prgtab_all )
-        call new_cluster2D_stream( prgtab_all )
-        call new_cluster2D_subsets( prgtab_all )
-        call new_cluster_cavgs( prgtab_all )
-        call new_cluster_cavgs_selection( prgtab_all )
-        call new_cluster_stack( prgtab_all )
-        call new_conv_atom_denoise( prgtab_all )
-        call new_convert( prgtab_all )
-        call new_crys_score( prgtab_all )
-        call new_ctf_estimate( prgtab_all )
-        call new_ctf_phaseflip( prgtab_all )
-        call new_ctfops( prgtab_all )
-        call new_trajectory_denoise( prgtab_all )
-        call new_detect_atoms( prgtab_all )
-        call new_dock_volpair( prgtab_all )
-        call new_estimate_diam( prgtab_all )
-        call new_estimate_lpstages( prgtab_all )
-        call new_export_relion( prgtab_all )
-        call new_export_starproject( prgtab_all )
-        call new_extract( prgtab_all )
-        call new_extract_subproj( prgtab_all )
-        call new_extract_substk( prgtab_all )
-        call new_filter( prgtab_all )
-        call new_fsc( prgtab_all )
-        call new_gen_pickrefs( prgtab_all )
-        call new_gen_pspecs_and_thumbs( prgtab_all )
-        call new_graphene_subtr( prgtab_all )
-        call new_icm2D( prgtab_all )
-        call new_icm3D( prgtab_all )
-        call new_import_boxes( prgtab_all )
-        call new_import_cavgs( prgtab_all )
-        call new_import_movies( prgtab_all )
-        call new_import_particles( prgtab_all )
-        call new_import_starproject( prgtab_all )
-        call new_info_image( prgtab_all )
-        call new_info_stktab( prgtab_all )
-        call new_make_cavgs( prgtab_all )
-        call new_make_oris( prgtab_all )
-        call new_map_cavgs_selection( prgtab_all )
-        call new_mask( prgtab_all )
-        call new_match_cavgs( prgtab_all )
-        call new_match_stacks( prgtab_all )
-        call new_merge_projects( prgtab_all )
-        call new_mini_stream( prgtab_all )
-        call new_mkdir_( prgtab_all )
-        call new_model_validation( prgtab_all )
-        call new_motion_correct( prgtab_all )
-        call new_multivol_assign( prgtab_all )
-        call new_new_project( prgtab_all )
-        call new_noisevol( prgtab_all )
-        call new_normalize( prgtab_all )
-        call new_orisops( prgtab_all )
-        call new_oristats( prgtab_all )
-        call new_pdb2mrc( prgtab_all )
-        call new_pick( prgtab_all )
-        call new_pick_extract( prgtab_all )
-        call new_postprocess( prgtab_all )
-        call new_ppca_denoise( prgtab_all )
-        call new_ppca_denoise_classes( prgtab_all )
-        call new_ppca_volvar( prgtab_all )
-        call new_preproc( prgtab_all )
-        call new_preprocess( prgtab_all )
-        call new_print_dose_weights( prgtab_all )
-        call new_print_fsc( prgtab_all )
-        call new_print_magic_boxes( prgtab_all )
-        call new_print_project_field( prgtab_all )
-        call new_print_project_info( prgtab_all )
-        call new_prune_project( prgtab_all )
-        call new_ptclsproc_nano( prgtab_all )
-        call new_reconstruct3D( prgtab_all )
-        call new_reextract( prgtab_all )
-        call new_refine3D( prgtab_all )
-        call new_refine3D_auto( prgtab_all )
-        call new_refine3D_nano( prgtab_all )
-        call new_replace_project_field( prgtab_all )
-        call new_reproject( prgtab_all )
-        call new_sample_classes( prgtab_all )
-        call new_scale( prgtab_all )
-        call new_select_( prgtab_all )
-        call new_select_clusters( prgtab_all )
-        call new_selection( prgtab_all )
-        call new_sieve_cavgs( prgtab_all )
-        call new_simulate_atoms( prgtab_all )
-        call new_simulate_movie( prgtab_all )
-        call new_simulate_noise( prgtab_all )
-        call new_simulate_particles( prgtab_all )
-        call new_split_( prgtab_all )
-        call new_split_stack( prgtab_all )
-        call new_stack( prgtab_all )
-        call new_stackops( prgtab_all )
-        call new_symaxis_search( prgtab_all )
-        call new_symmetrize_map( prgtab_all )
-        call new_symmetry_test( prgtab_all )  
-        call new_atoms_rmsd( prgtab_all )
-        call new_core_atoms_analysis( prgtab_all )
-        call new_tsegmaps_core_finder( prgtab_all )
-        call new_tseries_import( prgtab_all )
-        call new_import_trajectory( prgtab_all )
-        call new_tseries_make_pickavg( prgtab_all )
-        call new_trajectory_make_projavgs( prgtab_all )
-        call new_tseries_motion_correct( prgtab_all )
-        call new_trajectory_reconstruct3D( prgtab_all )
-        call new_trajectory_swap_stack( prgtab_all )
-        call new_track_particles( prgtab_all )
-        call new_uniform_filter2D( prgtab_all )
-        call new_uniform_filter3D( prgtab_all )
-        call new_update_project( prgtab_all )
-        call new_vizoris( prgtab_all )
-        call new_volanalyze( prgtab_all )
-        call new_volops( prgtab_all )
-        call new_write_classes( prgtab_all )
-        call new_write_mic_filetab( prgtab_all )
-        call new_zero_project_shifts( prgtab_all )
-        ! test programs
-        call new_test_sim_workflow( prgtab_all )
+        call new_abinitio2D( prgtab )
+        call new_abinitio2D_stream( prgtab )
+        call new_abinitio3D( prgtab )
+        call new_abinitio3D_cavgs( prgtab )
+        call new_analysis2D_nano( prgtab)
+        call new_assign_optics( prgtab )
+        call new_assign_optics_groups( prgtab ) 
+        call new_atoms_register( prgtab )
+        call new_atoms_rmsd( prgtab )
+        call new_atoms_stats( prgtab )
+        call new_auto_spher_mask( prgtab )
+        call new_automask( prgtab )
+        call new_automask2D( prgtab )
+        call new_autorefine3D_nano( prgtab )
+        call new_binarize( prgtab )
+        call new_cavgseoproc_nano( prgtab)
+        call new_cavgsproc_nano( prgtab )
+        call new_center( prgtab )
+        call new_center2D_nano( prgtab )
+        call new_check_refpick( prgtab )
+        call new_cleanup2D( prgtab )
+        call new_clin_fsc( prgtab )
+        call new_cluster2D( prgtab )
+        call new_cluster2D_nano( prgtab )
+        call new_cluster2D_stream( prgtab )
+        call new_cluster2D_subsets( prgtab )
+        call new_cluster_cavgs( prgtab )
+        call new_cluster_cavgs_selection( prgtab )
+        call new_cluster_stack( prgtab )
+        call new_conv_atom_denoise( prgtab )
+        call new_convert( prgtab )
+        call new_core_atoms_analysis( prgtab )
+        call new_crys_score( prgtab )
+        call new_ctf_estimate( prgtab )
+        call new_ctf_phaseflip( prgtab )
+        call new_ctfops( prgtab )
+        call new_detect_atoms( prgtab )
+        call new_dock_volpair( prgtab )
+        call new_estimate_diam( prgtab )
+        call new_estimate_lpstages( prgtab )
+        call new_export_relion( prgtab )
+        call new_export_starproject( prgtab )
+        call new_extract( prgtab )
+        call new_extract_subproj( prgtab )
+        call new_extract_substk( prgtab )
+        call new_filter( prgtab )
+        call new_fsc( prgtab )
+        call new_gen_pickrefs( prgtab )
+        call new_gen_pspecs_and_thumbs( prgtab )
+        call new_graphene_subtr( prgtab )
+        call new_icm2D( prgtab )
+        call new_icm3D( prgtab )
+        call new_import_boxes( prgtab )
+        call new_import_cavgs( prgtab )
+        call new_import_movies( prgtab )
+        call new_import_particles( prgtab )
+        call new_import_starproject( prgtab )
+        call new_import_trajectory( prgtab )
+        call new_info_image( prgtab )
+        call new_info_stktab( prgtab )
+        call new_make_cavgs( prgtab )
+        call new_make_oris( prgtab )
+        call new_map_cavgs_selection( prgtab )
+        call new_mask( prgtab )
+        call new_match_cavgs( prgtab )
+        call new_match_stacks( prgtab )
+        call new_merge_projects( prgtab )
+        call new_mini_stream( prgtab )
+        call new_mkdir_( prgtab )
+        call new_model_validation( prgtab )
+        call new_motion_correct( prgtab )
+        call new_multivol_assign( prgtab )
+        call new_new_project( prgtab )
+        call new_noisevol( prgtab )
+        call new_normalize( prgtab )
+        call new_orisops( prgtab )
+        call new_oristats( prgtab )
+        call new_pdb2mrc( prgtab )
+        call new_pick( prgtab )
+        call new_pick_extract( prgtab )
+        call new_postprocess( prgtab )
+        call new_ppca_denoise( prgtab )
+        call new_ppca_denoise_classes( prgtab )
+        call new_ppca_volvar( prgtab )
+        call new_preproc( prgtab )
+        call new_preprocess( prgtab )
+        call new_print_dose_weights( prgtab )
+        call new_print_fsc( prgtab )
+        call new_print_magic_boxes( prgtab )
+        call new_print_project_field( prgtab )
+        call new_print_project_info( prgtab )
+        call new_prune_project( prgtab )
+        call new_ptclsproc_nano( prgtab )
+        call new_reconstruct3D( prgtab )
+        call new_reextract( prgtab )
+        call new_refine3D( prgtab )
+        call new_refine3D_auto( prgtab )
+        call new_refine3D_nano( prgtab )
+        call new_replace_project_field( prgtab )
+        call new_reproject( prgtab )
+        call new_sample_classes( prgtab )
+        call new_scale( prgtab )
+        call new_select_( prgtab )
+        call new_select_clusters( prgtab )
+        call new_selection( prgtab )
+        call new_sieve_cavgs( prgtab )
+        call new_simulate_atoms( prgtab )
+        call new_simulate_movie( prgtab )
+        call new_simulate_noise( prgtab )
+        call new_simulate_particles( prgtab )
+        call new_split_( prgtab )
+        call new_split_stack( prgtab )
+        call new_stack( prgtab )
+        call new_stackops( prgtab )
+        call new_symaxis_search( prgtab )
+        call new_symmetrize_map( prgtab )
+        call new_symmetry_test( prgtab )  
+        call new_test_sim_workflow( prgtab )
+        call new_track_particles( prgtab )
+        call new_trajectory_denoise( prgtab )
+        call new_trajectory_make_projavgs( prgtab )
+        call new_trajectory_reconstruct3D( prgtab )
+        call new_trajectory_swap_stack( prgtab )
+        call new_tsegmaps_core_finder( prgtab )
+        call new_tseries_import( prgtab )
+        call new_tseries_make_pickavg( prgtab )
+        call new_tseries_motion_correct( prgtab )
+        call new_uniform_filter2D( prgtab )
+        call new_uniform_filter3D( prgtab )
+        call new_update_project( prgtab )
+        call new_vizoris( prgtab )
+        call new_volanalyze( prgtab )
+        call new_volops( prgtab )
+        call new_write_classes( prgtab )
+        call new_write_mic_filetab( prgtab )
+        call new_zero_project_shifts( prgtab )
+        prgnames = prgtab%keys_sorted()
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
-    subroutine set_prg_ptr_array
-        n_prg_ptrs = 0        
-        call push2prg_ptr_array(abinitio2D)
-        call push2prg_ptr_array(abinitio2D_stream)
-        call push2prg_ptr_array(abinitio3D)
-        call push2prg_ptr_array(abinitio3D_cavgs)
-        call push2prg_ptr_array(analysis2D_nano)
-        call push2prg_ptr_array(assign_optics_groups)
-        call push2prg_ptr_array(atoms_register)
-        call push2prg_ptr_array(atoms_stats)
-        call push2prg_ptr_array(auto_spher_mask)
-        call push2prg_ptr_array(automask)
-        call push2prg_ptr_array(automask2D)
-        call push2prg_ptr_array(autorefine3D_nano)
-        call push2prg_ptr_array(binarize)
-        call push2prg_ptr_array(cavgseoproc_nano)
-        call push2prg_ptr_array(cavgsproc_nano)
-        call push2prg_ptr_array(center)
-        call push2prg_ptr_array(center2D_nano)
-        call push2prg_ptr_array(check_refpick)
-        call push2prg_ptr_array(clin_fsc)
-        call push2prg_ptr_array(cleanup2D)
-        call push2prg_ptr_array(cluster2D)
-        call push2prg_ptr_array(cluster2D_nano)
-        call push2prg_ptr_array(cluster2D_stream)
-        call push2prg_ptr_array(cluster2D_subsets)
-        call push2prg_ptr_array(cluster_cavgs)
-        call push2prg_ptr_array(cluster_cavgs_selection)
-        call push2prg_ptr_array(cluster_stack)
-        call push2prg_ptr_array(conv_atom_denoise)
-        call push2prg_ptr_array(convert)
-        call push2prg_ptr_array(crys_score)
-        call push2prg_ptr_array(ctf_estimate)
-        call push2prg_ptr_array(ctf_phaseflip)
-        call push2prg_ptr_array(ctfops)
-        call push2prg_ptr_array(trajectory_denoise)
-        call push2prg_ptr_array(detect_atoms)
-        call push2prg_ptr_array(dock_volpair)
-        call push2prg_ptr_array(export_relion)
-        call push2prg_ptr_array(export_starproject)
-        call push2prg_ptr_array(extract)
-        call push2prg_ptr_array(extract_subproj)
-        call push2prg_ptr_array(extract_substk)
-        call push2prg_ptr_array(filter)
-        call push2prg_ptr_array(fsc)
-        call push2prg_ptr_array(gen_pickrefs)
-        call push2prg_ptr_array(gen_pspecs_and_thumbs)
-        call push2prg_ptr_array(graphene_subtr)
-        call push2prg_ptr_array(icm2D)
-        call push2prg_ptr_array(icm3D)
-        call push2prg_ptr_array(import_boxes)
-        call push2prg_ptr_array(import_cavgs)
-        call push2prg_ptr_array(import_movies)
-        call push2prg_ptr_array(import_particles)
-        call push2prg_ptr_array(import_starproject)
-        call push2prg_ptr_array(info_image)
-        call push2prg_ptr_array(info_stktab)
-        call push2prg_ptr_array(make_cavgs)
-        call push2prg_ptr_array(make_oris)
-        call push2prg_ptr_array(map_cavgs_selection)
-        call push2prg_ptr_array(mask)
-        call push2prg_ptr_array(match_cavgs)
-        call push2prg_ptr_array(match_stacks)
-        call push2prg_ptr_array(merge_projects)
-        call push2prg_ptr_array(mini_stream)
-        call push2prg_ptr_array(mkdir_)
-        call push2prg_ptr_array(model_validation)
-        call push2prg_ptr_array(motion_correct)
-        call push2prg_ptr_array(multivol_assign)
-        call push2prg_ptr_array(new_project)
-        call push2prg_ptr_array(noisevol)
-        call push2prg_ptr_array(normalize_)
-        call push2prg_ptr_array(orisops)
-        call push2prg_ptr_array(oristats)
-        call push2prg_ptr_array(pdb2mrc)
-        call push2prg_ptr_array(pick)
-        call push2prg_ptr_array(pick_extract)
-        call push2prg_ptr_array(postprocess)
-        call push2prg_ptr_array(ppca_denoise)
-        call push2prg_ptr_array(ppca_denoise_classes)
-        call push2prg_ptr_array(ppca_volvar)
-        call push2prg_ptr_array(preproc)
-        call push2prg_ptr_array(preprocess)
-        call push2prg_ptr_array(print_dose_weights)
-        call push2prg_ptr_array(print_fsc)
-        call push2prg_ptr_array(print_magic_boxes)
-        call push2prg_ptr_array(print_project_field)
-        call push2prg_ptr_array(print_project_info)
-        call push2prg_ptr_array(prune_project)
-        call push2prg_ptr_array(ptclsproc_nano)
-        call push2prg_ptr_array(reconstruct3D)
-        call push2prg_ptr_array(reextract)
-        call push2prg_ptr_array(refine3D)
-        call push2prg_ptr_array(refine3D_auto)
-        call push2prg_ptr_array(refine3D_nano)
-        call push2prg_ptr_array(replace_project_field)
-        call push2prg_ptr_array(reproject)
-        call push2prg_ptr_array(sample_classes)
-        call push2prg_ptr_array(scale)
-        call push2prg_ptr_array(select_)
-        call push2prg_ptr_array(select_clusters)
-        call push2prg_ptr_array(selection)
-        call push2prg_ptr_array(sieve_cavgs)
-        call push2prg_ptr_array(simulate_atoms)
-        call push2prg_ptr_array(simulate_movie)
-        call push2prg_ptr_array(simulate_noise)
-        call push2prg_ptr_array(simulate_particles)
-        call push2prg_ptr_array(split_)
-        call push2prg_ptr_array(split_stack)
-        call push2prg_ptr_array(stack)
-        call push2prg_ptr_array(stackops)
-        call push2prg_ptr_array(symaxis_search)
-        call push2prg_ptr_array(symmetrize_map)
-        call push2prg_ptr_array(symmetry_test)
-        call push2prg_ptr_array(atoms_rmsd)
-        call push2prg_ptr_array(core_atoms_analysis)
-        call push2prg_ptr_array(tsegmaps_core_finder)
-        call push2prg_ptr_array(tseries_import)
-        call push2prg_ptr_array(import_trajectory)
-        call push2prg_ptr_array(tseries_make_pickavg)
-        call push2prg_ptr_array(tseries_motion_correct)
-        call push2prg_ptr_array(trajectory_reconstruct3D)
-        call push2prg_ptr_array(trajectory_swap_stack)
-        call push2prg_ptr_array(track_particles)
-        call push2prg_ptr_array(uniform_filter2D)
-        call push2prg_ptr_array(uniform_filter3D)
-        call push2prg_ptr_array(update_project)
-        call push2prg_ptr_array(vizoris)
-        call push2prg_ptr_array(volanalyze)
-        call push2prg_ptr_array(volops)
-        call push2prg_ptr_array(write_classes)
-        call push2prg_ptr_array(write_mic_filetab)
-        call push2prg_ptr_array(zero_project_shifts)
-
-        call push2prg_ptr_array(test_sim_workflow)
-        if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
-        
-        contains
-
-            subroutine push2prg_ptr_array( prg )
-                type(ui_program), target :: prg
-                n_prg_ptrs = n_prg_ptrs + 1
-                prg_ptr_array(n_prg_ptrs)%ptr2prg => prg
-            end subroutine push2prg_ptr_array
-
-    end subroutine set_prg_ptr_array
-
     subroutine get_prg_ptr( which_program, ptr2prg )
-        class(string), intent(in) :: which_program
-        type(ui_program), pointer :: ptr2prg
-        select case(which_program%to_char())
-            case('abinitio2D');                  ptr2prg => abinitio2D
-            case('abinitio2D_stream');           ptr2prg => abinitio2D_stream
-            case('abinitio3D');                  ptr2prg => abinitio3D
-            case('abinitio3D_cavgs');            ptr2prg => abinitio3D_cavgs
-            case('analysis2D_nano');             ptr2prg => analysis2D_nano
-            case('assign_optics');               ptr2prg => assign_optics   
-            case('assign_optics_groups');        ptr2prg => assign_optics_groups
-            case('atoms_register');              ptr2prg => atoms_register
-            case('atoms_stats');                 ptr2prg => atoms_stats
-            case('auto_spher_mask');             ptr2prg => auto_spher_mask
-            case('automask');                    ptr2prg => automask
-            case('automask2D');                  ptr2prg => automask2D
-            case('autorefine3D_nano');           ptr2prg => autorefine3D_nano
-            case('binarize');                    ptr2prg => binarize
-            case('cavgseoproc_nano');            ptr2prg => cavgseoproc_nano
-            case('cavgsproc_nano');              ptr2prg => cavgsproc_nano
-            case('center');                      ptr2prg => center
-            case('center2D_nano');               ptr2prg => center2D_nano
-            case('check_refpick');               ptr2prg => check_refpick
-            case('cleanup2D');                   ptr2prg => cleanup2D    
-            case('clin_fsc');                    ptr2prg => clin_fsc
-            case('cluster2D');                   ptr2prg => cluster2D
-            case('cluster2D_nano');              ptr2prg => cluster2D_nano
-            case('cluster2D_stream');            ptr2prg => cluster2D_stream
-            case('cluster2D_subsets');           ptr2prg => cluster2D_subsets
-            case('cluster_cavgs');               ptr2prg => cluster_cavgs
-            case('cluster_cavgs_selection');     ptr2prg => cluster_cavgs_selection
-            case('cluster_stack');               ptr2prg => cluster_stack
-            case('conv_atom_denoise');           ptr2prg => conv_atom_denoise
-            case('convert');                     ptr2prg => convert
-            case('crys_score');                  ptr2prg => crys_score
-            case('ctf_estimate');                ptr2prg => ctf_estimate
-            case('ctf_phaseflip');               ptr2prg => ctf_phaseflip
-            case('ctfops');                      ptr2prg => ctfops
-            case('trajectory_denoise');          ptr2prg => trajectory_denoise
-            case('detect_atoms');                ptr2prg => detect_atoms
-            case('dock_volpair');                ptr2prg => dock_volpair
-            case('estimate_diam');               ptr2prg => estimate_diam
-            case('estimate_lpstages');           ptr2prg => estimate_lpstages
-            case('export_relion');               ptr2prg => export_relion
-            case('export_starproject');          ptr2prg => export_starproject
-            case('extract');                     ptr2prg => extract
-            case('extract_subproj');             ptr2prg => extract_subproj
-            case('extract_substk');              ptr2prg => extract_substk
-            case('filter');                      ptr2prg => filter
-            case('fsc');                         ptr2prg => fsc
-            case('gen_pickrefs');                ptr2prg => gen_pickrefs
-            case('gen_pspecs_and_thumbs');       ptr2prg => gen_pspecs_and_thumbs
-            case('graphene_subtr');              ptr2prg => graphene_subtr
-            case('icm2D');                       ptr2prg => icm2D
-            case('icm3D');                       ptr2prg => icm3D
-            case('import_boxes');                ptr2prg => import_boxes
-            case('import_cavgs');                ptr2prg => import_cavgs
-            case('import_movies');               ptr2prg => import_movies
-            case('import_particles');            ptr2prg => import_particles
-            case('import_starproject');          ptr2prg => import_starproject
-            case('info_image');                  ptr2prg => info_image
-            case('info_stktab');                 ptr2prg => info_stktab
-            case('make_cavgs');                  ptr2prg => make_cavgs
-            case('make_oris');                   ptr2prg => make_oris
-            case('map_cavgs_selection');         ptr2prg => map_cavgs_selection
-            case('mask');                        ptr2prg => mask
-            case('match_cavgs');                 ptr2prg => match_cavgs
-            case('match_stacks');                ptr2prg => match_stacks
-            case('merge_projects');              ptr2prg => merge_projects
-            case('mini_stream');                 ptr2prg => mini_stream
-            case('mkdir');                       ptr2prg => mkdir_
-            case('motion_correct');              ptr2prg => motion_correct
-            case('model_validation');            ptr2prg => model_validation
-            case('multivol_assign');             ptr2prg => multivol_assign
-            case('new_project');                 ptr2prg => new_project
-            case('noisevol');                    ptr2prg => noisevol
-            case('normalize');                   ptr2prg => normalize_
-            case('orisops');                     ptr2prg => orisops
-            case('oristats');                    ptr2prg => oristats
-            case('pdb2mrc');                     ptr2prg => pdb2mrc
-            case('pick');                        ptr2prg => pick
-            case('pick_extract');                ptr2prg => pick_extract
-            case('postprocess');                 ptr2prg => postprocess
-            case('ppca_denoise');                ptr2prg => ppca_denoise
-            case('ppca_denoise_classes');        ptr2prg => ppca_denoise_classes
-            case('ppca_volvar');                 ptr2prg => ppca_volvar
-            case('preproc');                     ptr2prg => preproc
-            case('preprocess');                  ptr2prg => preprocess
-            case('print_dose_weights');          ptr2prg => print_dose_weights
-            case('print_fsc');                   ptr2prg => print_fsc
-            case('print_magic_boxes');           ptr2prg => print_magic_boxes
-            case('print_project_field');         ptr2prg => print_project_field
-            case('print_project_info');          ptr2prg => print_project_info
-            case('prune_project');               ptr2prg => prune_project
-            case('ptclsproc_nano');              ptr2prg => ptclsproc_nano
-            case('reconstruct3D');               ptr2prg => reconstruct3D
-            case('reextract');                   ptr2prg => reextract
-            case('refine3D');                    ptr2prg => refine3D
-            case('refine3D_auto');               ptr2prg => refine3D_auto
-            case('refine3D_nano');               ptr2prg => refine3D_nano
-            case('replace_project_field');       ptr2prg => replace_project_field
-            case('reproject');                   ptr2prg => reproject
-            case('sample_classes');              ptr2prg => sample_classes
-            case('scale');                       ptr2prg => scale
-            case('select');                      ptr2prg => select_
-            case('select_clusters');             ptr2prg => select_clusters
-            case('selection');                   ptr2prg => selection
-            case('sieve_cavgs');                 ptr2prg => sieve_cavgs
-            case('simulate_atoms');              ptr2prg => simulate_atoms
-            case('simulate_movie');              ptr2prg => simulate_movie
-            case('simulate_noise');              ptr2prg => simulate_noise
-            case('simulate_particles');          ptr2prg => simulate_particles
-            case('split');                       ptr2prg => split_
-            case('split_stack');                 ptr2prg => split_stack
-            case('stack');                       ptr2prg => stack
-            case('stackops');                    ptr2prg => stackops
-            case('symaxis_search');              ptr2prg => symaxis_search
-            case('symmetrize_map');              ptr2prg => symmetrize_map
-            case('symmetry_test');               ptr2prg => symmetry_test
-            case('atoms_rmsd');          ptr2prg => atoms_rmsd
-            case('core_atoms_analysis'); ptr2prg => core_atoms_analysis
-            case('tsegmaps_core_finder');      ptr2prg => tsegmaps_core_finder
-            case('tseries_import');              ptr2prg => tseries_import
-            case('import_trajectory');    ptr2prg => import_trajectory
-            case('tseries_make_pickavg');        ptr2prg => tseries_make_pickavg
-            case('trajectory_make_projavgs');    ptr2prg => trajectory_make_projavgs
-            case('tseries_motion_correct');      ptr2prg => tseries_motion_correct
-            case('trajectory_reconstruct3D');    ptr2prg => trajectory_reconstruct3D
-            case('trajectory_swap_stack');       ptr2prg => trajectory_swap_stack
-            case('track_particles');             ptr2prg => track_particles
-            case('uniform_filter2D');            ptr2prg => uniform_filter2D
-            case('uniform_filter3D');            ptr2prg => uniform_filter3D
-            case('update_project');              ptr2prg => update_project
-            case('vizoris');                     ptr2prg => vizoris
-            case('volanalyze');                  ptr2prg => volanalyze
-            case('volops');                      ptr2prg => volops
-            case('write_classes');               ptr2prg => write_classes
-            case('write_mic_filetab');           ptr2prg => write_mic_filetab
-            case('zero_project_shifts');         ptr2prg => zero_project_shifts
-            ! test programs
-            case('test_sim_workflow');           ptr2prg => test_sim_workflow
-            case DEFAULT
-                ptr2prg => null()
-        end select
+        class(string),             intent(in)    :: which_program
+        type(ui_program), pointer, intent(inout) :: ptr2prg
+        ptr2prg => null()
+        call prgtab%get_ui_program(which_program, ptr2prg)
     end subroutine get_prg_ptr
 
     subroutine list_simple_prgs_in_ui
-
-        !====================================================================
-        ! PROJECT MANAGEMENT
-        !====================================================================
-        write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT:', C_UNDERLINED)
-        write(logfhandle,'(A)') assign_optics_groups%name%to_char()
-        write(logfhandle,'(A)') export_relion%name%to_char()
-        write(logfhandle,'(A)') export_starproject%name%to_char()
-        write(logfhandle,'(A)') extract_subproj%name%to_char()
-        write(logfhandle,'(A)') import_boxes%name%to_char()
-        write(logfhandle,'(A)') import_cavgs%name%to_char()
-        write(logfhandle,'(A)') import_movies%name%to_char()
-        write(logfhandle,'(A)') import_particles%name%to_char()
-        write(logfhandle,'(A)') import_starproject%name%to_char()
-        write(logfhandle,'(A)') merge_projects%name%to_char()
-        write(logfhandle,'(A)') new_project%name%to_char()
-        write(logfhandle,'(A)') print_project_field%name%to_char()
-        write(logfhandle,'(A)') print_project_info%name%to_char()
-        write(logfhandle,'(A)') prune_project%name%to_char()
-        write(logfhandle,'(A)') replace_project_field%name%to_char()
-        write(logfhandle,'(A)') selection%name%to_char()
-        write(logfhandle,'(A)') update_project%name%to_char()
-        write(logfhandle,'(A)') zero_project_shifts%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! PRE-PROCESSING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('PRE-PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') preprocess%name%to_char()
-        write(logfhandle,'(A)') extract%name%to_char()
-        write(logfhandle,'(A)') reextract%name%to_char()
-        write(logfhandle,'(A)') motion_correct%name%to_char()
-        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
-        write(logfhandle,'(A)') ctf_estimate%name%to_char()
-        write(logfhandle,'(A)') pick%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! CLUSTER2D WORKFLOWS
-        !====================================================================
-        write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
-        write(logfhandle,'(A)') abinitio2D%name%to_char()
-        write(logfhandle,'(A)') cleanup2D%name%to_char()
-        write(logfhandle,'(A)') cluster2D%name%to_char()
-        write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
-        write(logfhandle,'(A)') cluster_cavgs%name%to_char()
-        write(logfhandle,'(A)') cluster_cavgs_selection%name%to_char()
-        write(logfhandle,'(A)') cluster_stack%name%to_char()
-        write(logfhandle,'(A)') make_cavgs%name%to_char()
-        write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
-        write(logfhandle,'(A)') match_cavgs%name%to_char()
-        write(logfhandle,'(A)') match_stacks%name%to_char()
-        write(logfhandle,'(A)') sample_classes%name%to_char()
-        write(logfhandle,'(A)') select_clusters%name%to_char()
-        write(logfhandle,'(A)') write_classes%name%to_char()
-        write(logfhandle,'(A)') write_mic_filetab%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! AB INITIO 3D RECONSTRUCTION
-        !====================================================================
-        write(logfhandle,'(A)') format_str('AB INITIO 3D RECONSTRUCTION:', C_UNDERLINED)
-        write(logfhandle,'(A)') abinitio3D%name%to_char()
-        write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
-        write(logfhandle,'(A)') estimate_lpstages%name%to_char()
-        write(logfhandle,'(A)') multivol_assign%name%to_char()
-        write(logfhandle,'(A)') noisevol%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! REFINE3D
-        !====================================================================
-        write(logfhandle,'(A)') format_str('REFINE3D:', C_UNDERLINED)
-        write(logfhandle,'(A)') refine3D%name%to_char()
-        write(logfhandle,'(A)') refine3D_auto%name%to_char()
-        write(logfhandle,'(A)') reconstruct3D%name%to_char()
-        write(logfhandle,'(A)') postprocess%name%to_char()
-        write(logfhandle,'(A)') automask%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! DENOISING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('DENOISING:', C_UNDERLINED)
-        write(logfhandle,'(A)') icm2D%name%to_char()
-        write(logfhandle,'(A)') icm3D%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
-        write(logfhandle,'(A)') ppca_volvar%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! FILTERING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('FILTERING:', C_UNDERLINED)
-        write(logfhandle,'(A)') filter%name%to_char()
-        write(logfhandle,'(A)') uniform_filter2D%name%to_char()
-        write(logfhandle,'(A)') uniform_filter3D%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! GENERAL IMAGE PROCESSING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('GENERAL IMAGE PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') binarize%name%to_char()
-        write(logfhandle,'(A)') convert%name%to_char()
-        write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
-        write(logfhandle,'(A)') ctfops%name%to_char()
-        write(logfhandle,'(A)') normalize_%name%to_char()
-        write(logfhandle,'(A)') scale%name%to_char()
-        write(logfhandle,'(A)') stack%name%to_char()
-        write(logfhandle,'(A)') stackops%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! MASKING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('MASKING:', C_UNDERLINED)
-        write(logfhandle,'(A)') auto_spher_mask%name%to_char()
-        write(logfhandle,'(A)') automask2D%name%to_char()
-        write(logfhandle,'(A)') mask%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! ORIENTATION PROCESSING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('ORIENTATION PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') make_oris%name%to_char()
-        write(logfhandle,'(A)') orisops%name%to_char()
-        write(logfhandle,'(A)') oristats%name%to_char()
-        write(logfhandle,'(A)') vizoris%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! PARALLEL UTILITIES
-        !====================================================================
-        write(logfhandle,'(A)') format_str('PARALLEL UTILITIES:', C_UNDERLINED)
-        write(logfhandle,'(A)') split_%name%to_char()
-        write(logfhandle,'(A)') split_stack%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! PRINT INFO
-        !====================================================================
-        write(logfhandle,'(A)') format_str('PRINT INFO:', C_UNDERLINED)
-        write(logfhandle,'(A)') info_image%name%to_char()
-        write(logfhandle,'(A)') info_stktab%name%to_char()
-        write(logfhandle,'(A)') print_dose_weights%name%to_char()
-        write(logfhandle,'(A)') print_fsc%name%to_char()
-        write(logfhandle,'(A)') print_magic_boxes%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! RESOLUTION ESTIMATION
-        !====================================================================
-        write(logfhandle,'(A)') format_str('RESOLUTION ESTIMATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') fsc%name%to_char()
-        write(logfhandle,'(A)') clin_fsc%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! SIMULATION
-        !====================================================================
-        write(logfhandle,'(A)') format_str('SIMULATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') pdb2mrc%name%to_char()
-        write(logfhandle,'(A)') simulate_movie%name%to_char()
-        write(logfhandle,'(A)') simulate_noise%name%to_char()
-        write(logfhandle,'(A)') simulate_particles%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! STREAM VALIDATION
-        !====================================================================
-        write(logfhandle,'(A)') format_str('STREAM VALIDATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') mini_stream%name%to_char()
-        write(logfhandle,'(A)') check_refpick%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! SYMMETRY
-        !====================================================================
-        write(logfhandle,'(A)') format_str('SYMMETRY:', C_UNDERLINED)
-        write(logfhandle,'(A)') symaxis_search%name%to_char()
-        write(logfhandle,'(A)') symmetrize_map%name%to_char()
-        write(logfhandle,'(A)') symmetry_test%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! VOLUME DOCKING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('VOLUME DOCKING:', C_UNDERLINED)
-        write(logfhandle,'(A)') dock_volpair%name%to_char()
-        write(logfhandle,'(A)') volanalyze%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! VOLUME PROCESSING
-        !====================================================================
-        write(logfhandle,'(A)') format_str('VOLUME PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') center%name%to_char()
-        write(logfhandle,'(A)') reproject%name%to_char()
-        write(logfhandle,'(A)') volops%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! MODEL ANALYSIS
-        !====================================================================
-        write(logfhandle,'(A)') format_str('MODEL ANALYSIS PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') model_validation%name%to_char()
-        write(logfhandle,'(A)') ''
+        call print_project_programs(logfhandle)
+        call print_preproc_programs(logfhandle)
+        call print_cluster2D_programs(logfhandle)
+        call print_cavgproc_programs(logfhandle)
+        call print_abinitio3D_programs(logfhandle)
+        call print_refine3D_programs(logfhandle)
+        call print_denoise_programs(logfhandle)
+        call print_filter_programs(logfhandle)
+        call print_image_programs(logfhandle)
+        call print_mask_programs(logfhandle)
+        call print_ori_programs(logfhandle)
+        call print_print_programs(logfhandle)
+        call print_resolution_programs(logfhandle)
+        call print_sim_programs(logfhandle)
+        call print_validation_programs(logfhandle)
+        call print_symmetry_programs(logfhandle)
+        call print_dock_programs(logfhandle)
+        call print_volume_programs(logfhandle)
+        call print_other_programs(logfhandle)
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_simple_test_prgs_in_ui
@@ -798,13 +325,7 @@ contains
     end subroutine list_simple_test_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
-        write(logfhandle,'(A)') abinitio2D_stream%name%to_char()
-        write(logfhandle,'(A)') assign_optics%name%to_char()
-        write(logfhandle,'(A)') cluster2D_stream%name%to_char()
-        write(logfhandle,'(A)') gen_pickrefs%name%to_char()
-        write(logfhandle,'(A)') pick_extract%name%to_char()
-        write(logfhandle,'(A)') preproc%name%to_char()
-        write(logfhandle,'(A)') sieve_cavgs%name%to_char()
+        call print_stream_programs(logfhandle)
     end subroutine list_stream_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
@@ -865,13 +386,15 @@ contains
         use simple_linked_list, only: linked_list, list_iterator
         type(json_core)           :: json
         type(json_value), pointer :: all_programs
+        type(ui_program), pointer :: ptr2prg
         integer                   :: iprg
         ! JSON init
         call json%initialize()
         ! create object of program entries
         call json%create_object(all_programs, 'SIMPLE_UI')
-        do iprg = 1, n_prg_ptrs
-            call create_program_entry(json, prg_ptr_array(iprg)%ptr2prg, all_programs)
+        do iprg = 1, prgtab%count()
+            call prgtab%get_ui_program(prgnames(iprg), ptr2prg)
+            call create_program_entry(json, ptr2prg, all_programs)
         end do
         ! write & clean
         call json%print(all_programs, logfhandle)
@@ -996,13 +519,15 @@ contains
         implicit none
         type(json_core)           :: json
         type(json_value), pointer :: all_programs
+        type(ui_program), pointer :: ptr2prg
         integer :: iprg
         ! JSON init
         call json%initialize()
         ! create array of program entries
         call json%create_array(all_programs, 'SIMPLE User Interface')
-        do iprg = 1, n_prg_ptrs
-            call create_program_entry(json, prg_ptr_array(iprg)%ptr2prg, all_programs)
+        do iprg = 1, prgtab%count()
+            call prgtab%get_ui_program(prgnames(iprg), ptr2prg)
+            call create_program_entry(json, ptr2prg, all_programs)
         end do
         ! write & clean
         call json%print(all_programs, UI_FNAME)

@@ -14,6 +14,20 @@ type(ui_program), target :: reextract
 
 contains
 
+    subroutine print_preproc_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('PRE-PROCESSING:', C_UNDERLINED)
+        write(logfhandle,'(A)') assign_optics_groups%name%to_char()
+        write(logfhandle,'(A)') ctf_estimate%name%to_char()
+        write(logfhandle,'(A)') extract%name%to_char()
+        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
+        write(logfhandle,'(A)') motion_correct%name%to_char()
+        write(logfhandle,'(A)') pick%name%to_char()
+        write(logfhandle,'(A)') preprocess%name%to_char()
+        write(logfhandle,'(A)') reextract%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_preproc_programs
+
     subroutine new_assign_optics_groups( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

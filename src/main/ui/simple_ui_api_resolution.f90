@@ -8,6 +8,14 @@ type(ui_program), target :: clin_fsc
 
 contains
 
+    subroutine print_resolution_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('RESOLUTION ESTIMATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') fsc%name%to_char()
+        write(logfhandle,'(A)') clin_fsc%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_resolution_programs
+
     subroutine new_clin_fsc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

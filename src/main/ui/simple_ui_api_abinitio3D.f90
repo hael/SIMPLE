@@ -10,6 +10,17 @@ type(ui_program), target :: noisevol
 
 contains
 
+    subroutine print_abinitio3D_programs(logfhandle)
+        integer, intent(in) :: logfhandle
+        write(logfhandle,'(A)') format_str('AB INITIO 3D RECONSTRUCTION:', C_UNDERLINED)
+        write(logfhandle,'(A)') abinitio3D%name%to_char()
+        write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
+        write(logfhandle,'(A)') estimate_lpstages%name%to_char()
+        write(logfhandle,'(A)') multivol_assign%name%to_char()
+        write(logfhandle,'(A)') noisevol%name%to_char()
+        write(logfhandle,'(A)') ''
+    end subroutine print_abinitio3D_programs
+
     subroutine new_abinitio3D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
