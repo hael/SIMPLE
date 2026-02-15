@@ -7,40 +7,13 @@ use simple_exec_cluster2D,  only: exec_cluster2D_commander
 use simple_exec_cavgproc,   only: exec_cavgproc_commander
 use simple_exec_abinitio3D, only: exec_abinitio3D_commander
 use simple_exec_refine3D,   only: exec_refine3D_commander
+use simple_exec_denoise,    only: exec_denoise_commander
+use simple_exec_filter,     only: exec_filter_commander
+use simple_exec_image,      only: exec_image_commander
+use simple_exec_mask,       only: exec_mask_commander
+use simple_exec_ori,        only: exec_ori_commander
 implicit none
 #include "simple_local_flags.inc"
-
-! DENOISING
-type(commander_icm2D)                       :: xicm2D
-type(commander_icm3D)                       :: xicm3D
-type(commander_ppca_denoise)                :: xppca_denoise
-type(commander_ppca_denoise_classes)        :: xppca_denoise_classes
-
-! FILTERING
-type(commander_filter)                      :: xfilter
-type(commander_uniform_filter2D)            :: xuniform_filter2D
-type(commander_uniform_filter3D)            :: xuniform_filter3D
-
-! GENERAL IMAGE PROCESSING
-type(commander_binarize)                    :: xbinarize
-type(commander_convert)                     :: xconvert
-type(commander_ctf_phaseflip)               :: xctf_phaseflip
-type(commander_ctfops)                      :: xctfops
-type(commander_normalize)                   :: xnormalize
-type(commander_scale)                       :: xscale
-type(commander_stack)                       :: xstack
-type(commander_stackops)                    :: xstackops
-
-! MASKING
-type(commander_auto_spher_mask)             :: xauto_spher_mask
-type(commander_automask2D)                  :: xautomask2D
-type(commander_mask)                        :: xmask
-
-! ORIENTATION PROCESSING
-type(commander_make_oris)                   :: xmake_oris
-type(commander_orisops)                     :: xorisops
-type(commander_oristats)                    :: xoristats
-type(commander_vizoris)                     :: xvizoris
 
 ! PARALLEL UTILITIES
 type(commander_split)                       :: xsplit
@@ -119,73 +92,13 @@ call exec_cluster2D_commander(trim(prg),  cline, l_silent, l_did_execute)
 call exec_cavgproc_commander(trim(prg),   cline, l_silent, l_did_execute)
 call exec_abinitio3D_commander(trim(prg), cline, l_silent, l_did_execute)
 call exec_refine3D_commander(trim(prg),   cline, l_silent, l_did_execute)
+call exec_denoise_commander(trim(prg),    cline, l_silent, l_did_execute)
+call exec_filter_commander(trim(prg),     cline, l_silent, l_did_execute)
+call exec_image_commander(trim(prg),      cline, l_silent, l_did_execute)
+call exec_mask_commander(trim(prg),       cline, l_silent, l_did_execute)
+call exec_ori_commander(trim(prg),        cline, l_silent, l_did_execute)
 
 select case(trim(prg))
-
-
-    !====================================================================
-    ! DENOISING
-    !====================================================================
-    case( 'icm2D' )
-        call xicm2D%execute(cline)
-    case( 'icm3D' )
-        call xicm3D%execute(cline)
-    case( 'ppca_denoise' )
-        call xppca_denoise%execute(cline)
-    case( 'ppca_denoise_classes' )
-        call xppca_denoise_classes%execute(cline)
-
-    !====================================================================
-    ! FILTERING
-    !====================================================================
-    case( 'filter' )
-        call xfilter%execute(cline)
-    case( 'uniform_filter2D' )
-        call xuniform_filter2D%execute(cline)
-    case( 'uniform_filter3D' )
-        call xuniform_filter3D%execute(cline)
-
-    !====================================================================
-    ! GENERAL IMAGE PROCESSING
-    !====================================================================
-    case( 'binarize' )
-        call xbinarize%execute(cline)
-    case( 'convert' )
-        call xconvert%execute(cline)
-    case( 'ctf_phaseflip' )
-        call xctf_phaseflip%execute(cline)
-    case( 'ctfops' )
-        call xctfops%execute(cline)
-    case( 'normalize' )
-        call xnormalize%execute(cline)
-    case( 'scale' )
-        call xscale%execute(cline)
-    case( 'stack' )
-        call xstack%execute(cline)
-    case( 'stackops' )
-        call xstackops%execute(cline)
-
-    !====================================================================
-    ! MASKING
-    !====================================================================
-    case( 'auto_spher_mask' )
-        call xauto_spher_mask%execute(cline)
-    case( 'automask2D' )
-        call xautomask2D%execute(cline)
-    case( 'mask' )
-        call xmask%execute(cline)
-
-    !====================================================================
-    ! ORIENTATION PROCESSING
-    !====================================================================
-    case( 'make_oris' )
-        call xmake_oris%execute(cline)
-    case( 'orisops' )
-        call xorisops%execute(cline)
-    case( 'oristats' )
-        call xoristats%execute(cline)
-    case( 'vizoris' )
-        call xvizoris%execute(cline)
 
     !====================================================================
     ! PARALLEL UTILITIES
@@ -283,7 +196,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('9961f231')
+    call simple_print_git_version('c6603b2e')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

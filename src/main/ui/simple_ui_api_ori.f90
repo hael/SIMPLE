@@ -4,7 +4,7 @@ use simple_ui_api_modules
 implicit none
 
 type(ui_program), target :: make_oris
-type(ui_program), target :: orisops
+type(ui_program), target :: oriops
 type(ui_program), target :: oristats
 type(ui_program), target :: vizoris
 
@@ -13,7 +13,7 @@ contains
     subroutine construct_ori_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_make_oris(prgtab)
-        call new_orisops(prgtab)
+        call new_oriops(prgtab)
         call new_oristats(prgtab)
         call new_vizoris(prgtab)
     end subroutine construct_ori_programs
@@ -22,7 +22,7 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('ORIENTATION PROCESSING:', C_UNDERLINED)
         write(logfhandle,'(A)') make_oris%name%to_char()
-        write(logfhandle,'(A)') orisops%name%to_char()
+        write(logfhandle,'(A)') oriops%name%to_char()
         write(logfhandle,'(A)') oristats%name%to_char()
         write(logfhandle,'(A)') vizoris%name%to_char()
         write(logfhandle,'(A)') ''
@@ -69,11 +69,11 @@ contains
     end subroutine new_make_oris
 
 
-    subroutine new_orisops( prgtab )
+    subroutine new_oriops( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call orisops%new(&
-        &'orisops',&                      ! name
+        call oriops%new(&
+        &'oriops',&                      ! name
         &'Standard orientation editing',& ! descr_short
         &'is a program for modifying SIMPLE orientation/parameter files. If errify=yes,&
         & uniform random angular errors, and uniform origin shift errors, &
@@ -91,27 +91,27 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call orisops%add_input(UI_PARM, oritab, required_override=.true.)
-        call orisops%add_input(UI_PARM, outfile)
-        call orisops%add_input(UI_PARM, e1)
-        call orisops%add_input(UI_PARM, e2)
-        call orisops%add_input(UI_PARM, e3)
-        call orisops%add_input(UI_PARM, 'nstates', 'num', 'Number of random state labels', 'Number of random state labels to insert', '# states', .false., 0.0)
-        call orisops%add_input(UI_PARM, pgrp, required_override=.false.)
-        call orisops%add_input(UI_PARM, ctf,  required_override=.false.)
-        call orisops%add_input(UI_PARM, angerr)
-        call orisops%add_input(UI_PARM, sherr)
-        call orisops%add_input(UI_PARM, dferr)
-        call orisops%add_input(UI_PARM, 'zero', 'binary', 'Zero shifts', 'Zero shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call orisops%add_input(UI_PARM, 'ndiscrete', 'num', 'Number of discrete projection directions',&
+        call oriops%add_input(UI_PARM, oritab, required_override=.true.)
+        call oriops%add_input(UI_PARM, outfile)
+        call oriops%add_input(UI_PARM, e1)
+        call oriops%add_input(UI_PARM, e2)
+        call oriops%add_input(UI_PARM, e3)
+        call oriops%add_input(UI_PARM, 'nstates', 'num', 'Number of random state labels', 'Number of random state labels to insert', '# states', .false., 0.0)
+        call oriops%add_input(UI_PARM, pgrp, required_override=.false.)
+        call oriops%add_input(UI_PARM, ctf,  required_override=.false.)
+        call oriops%add_input(UI_PARM, angerr)
+        call oriops%add_input(UI_PARM, sherr)
+        call oriops%add_input(UI_PARM, dferr)
+        call oriops%add_input(UI_PARM, 'zero', 'binary', 'Zero shifts', 'Zero shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call oriops%add_input(UI_PARM, 'ndiscrete', 'num', 'Number of discrete projection directions',&
         &'Number of projection directions to use for discretization of input orientations', '# discrete projs', .false., 0.)
-        call orisops%add_input(UI_PARM, 'state', 'num', 'State to modify', 'Index of state to modify', 'give state index', .false., 1.)
-        call orisops%add_input(UI_PARM, 'mul', 'num', 'Shift multiplication factor',&
+        call oriops%add_input(UI_PARM, 'state', 'num', 'State to modify', 'Index of state to modify', 'give state index', .false., 1.)
+        call oriops%add_input(UI_PARM, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
-        call orisops%add_input(UI_PARM, 'mirr', 'multi', 'Mirror orientations', 'Mirror orientations(2d|3d|no){no}', '(2d|3d|no){no}', .false., 'no')
-        call orisops%add_input(UI_PARM, 'symrnd', 'binary', 'Randomize over subgroubs of point-group', 'Expand orientations over entire unit sphere by &
+        call oriops%add_input(UI_PARM, 'mirr', 'multi', 'Mirror orientations', 'Mirror orientations(2d|3d|no){no}', '(2d|3d|no){no}', .false., 'no')
+        call oriops%add_input(UI_PARM, 'symrnd', 'binary', 'Randomize over subgroubs of point-group', 'Expand orientations over entire unit sphere by &
         &permutation according to randomly selected subgroup symmetry(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call orisops%add_input(UI_PARM, oritype)
+        call oriops%add_input(UI_PARM, oritype)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -122,8 +122,8 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-        call add_ui_program('orisops', orisops, prgtab)
-    end subroutine new_orisops
+        call add_ui_program('oriops', oriops, prgtab)
+    end subroutine new_oriops
 
 
     subroutine new_oristats( prgtab )

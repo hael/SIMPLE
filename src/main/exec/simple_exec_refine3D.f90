@@ -8,6 +8,9 @@ use simple_commanders_rec,      only: commander_reconstruct3D_distr
 use simple_commanders_refine3D, only: commander_refine3D_distr, commander_refine3D_auto
 implicit none
 
+public :: exec_refine3D_commander
+private
+
 type(commander_automask)            :: xautomask
 type(commander_postprocess)         :: xpostprocess
 type(commander_reconstruct3D_distr) :: xreconstruct3D

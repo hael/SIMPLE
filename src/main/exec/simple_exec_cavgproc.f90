@@ -5,6 +5,9 @@ commander_select_clusters, commander_match_cavgs
 use simple_commanders_stkops, only: commander_cluster_stack, commander_match_stacks
 implicit none
 
+public :: exec_cavgproc_commander
+private
+
 type(commander_cluster_cavgs)           :: xcluster_cavgs
 type(commander_cluster_cavgs_selection) :: xcluster_cavgs_selection
 type(commander_cluster_stack)           :: xcluster_stack

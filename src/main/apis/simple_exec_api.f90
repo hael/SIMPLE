@@ -19,35 +19,22 @@ use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui, li
 use iso_fortran_env,       only: output_unit
 use simple_cmdline,        only: cmdline, cmdline_err
 
-! imgproc commanders, standard image processing routines
-use simple_commanders_imgproc, only: commander_ctfops, commander_ctf_phaseflip
 
-use simple_commanders_cluster2D, only: commander_ppca_denoise_classes
 
-! stkops commanders, image stack operations
-use simple_commanders_stkops, only: commander_convert, commander_stack, commander_stackops
 
-! imgops commanders, standard image operation routines
-use simple_commanders_imgops, only: commander_binarize, commander_filter, commander_normalize, commander_ppca_denoise,&
-commander_scale
+
+
 
 ! resoltest commanders, for resolution estimation and regularization testing
-use simple_commanders_resolest, only: commander_fsc, commander_clin_fsc,&
-commander_uniform_filter2D, commander_uniform_filter3D, commander_icm2D, commander_icm3D
+use simple_commanders_resolest, only: commander_fsc, commander_clin_fsc
 
 ! volops commanders, operations on volumes
 use simple_commanders_volops, only: commander_symaxis_search, commander_symmetry_test,&
 commander_symmetrize_map, commander_dock_volpair, commander_centervol, commander_reproject,&
 commander_volanalyze, commander_volops
 
-! mask commanders, masking and envelope maskign routines
-use simple_commanders_mask, only: commander_auto_spher_mask, commander_mask, commander_automask2D
-
 ! validate commanders, for validation of parts of the pipelined stream process
 use simple_commanders_validate, only: commander_mini_stream, commander_check_refpick
-
-! oris commanders, construction and operations on oris (per-particle parameters)
-use simple_commanders_oris, only: commander_make_oris, commander_orisops, commander_oristats, commander_vizoris
 
 ! check commanders, check number of and dimensions of images
 use simple_commanders_checks, only: commander_info_image, commander_info_stktab

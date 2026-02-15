@@ -54,7 +54,7 @@ mask
 
 simple_ui_api_ori.f90:
 make_oris
-orisops
+oriops
 oristats
 vizoris
 
@@ -109,7 +109,7 @@ reconstruct3D
 postprocess
 automask
 
-simple_ui_api_resolution.f90:
+simple_ui_api_res.f90:
 fsc
 clin_fsc
 

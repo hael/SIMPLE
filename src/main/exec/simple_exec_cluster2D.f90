@@ -11,6 +11,9 @@ use simple_stream_cluster2D_subsets, only: stream_cluster2D_subsets
 use simple_commanders_cavgs,         only: commander_map_cavgs_selection
 implicit none
 
+public :: exec_cluster2D_commander
+private
+
 type(commander_abinitio2D)                  :: xabinitio2D
 type(commander_cleanup2D)                   :: xcleanup2D 
 type(commander_cluster2D_autoscale)         :: xcluster2D

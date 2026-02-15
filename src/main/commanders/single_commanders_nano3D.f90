@@ -1,7 +1,7 @@
 !@descr: 3D refinement and reconstruction commanders used in SINGLE for nanoparticle processing
 module single_commanders_nano3D
 use simple_commanders_api
-use simple_commanders_oris,   only: commander_vizoris
+use simple_commanders_ori,   only: commander_vizoris
 use simple_commanders_rec,    only: commander_reconstruct3D
 use simple_commanders_volops, only: commander_reproject
 use simple_commanders_cluster2D

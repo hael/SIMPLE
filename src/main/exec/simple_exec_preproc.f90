@@ -6,6 +6,9 @@ use simple_commanders_preprocess,  only: commander_preprocess_distr, commander_m
 commander_gen_pspecs_and_thumbs_distr, commander_ctf_estimate_distr
 implicit none
 
+public :: exec_preproc_commander
+private
+
 type(commander_assign_optics_groups)        :: xassign_optics_groups
 type(commander_ctf_estimate_distr)          :: xctf_estimate_distr
 type(commander_extract_distr)               :: xextract_distr

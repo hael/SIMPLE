@@ -73,7 +73,7 @@ new_multivol_assign
 new_new_project
 new_noisevol
 new_normalize
-new_orisops
+new_oriops
 new_oristats
 new_pdb2mrc
 new_pick
