@@ -19,34 +19,14 @@ use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui, li
 use iso_fortran_env,       only: output_unit
 use simple_cmdline,        only: cmdline, cmdline_err
 
-
-
-
-
-
-
-! resoltest commanders, for resolution estimation and regularization testing
-use simple_commanders_resolest, only: commander_fsc, commander_clin_fsc
-
-! volops commanders, operations on volumes
-use simple_commanders_volops, only: commander_symaxis_search, commander_symmetry_test,&
-commander_symmetrize_map, commander_dock_volpair, commander_centervol, commander_reproject,&
-commander_volanalyze, commander_volops
-
 ! validate commanders, for validation of parts of the pipelined stream process
 use simple_commanders_validate, only: commander_mini_stream, commander_check_refpick
-
-! check commanders, check number of and dimensions of images
-use simple_commanders_checks, only: commander_info_image, commander_info_stktab
-
-! misc commanders, miscallenous commanders (mostly printing)
-use simple_commanders_misc, only: commander_print_fsc, commander_print_magic_boxes, commander_print_dose_weights
 
 ! sim commanders, for simulation of nosie, particls & movies
 use simple_commanders_sim, only: commander_simulate_noise, commander_simulate_particles, commander_simulate_movie
 
 ! atoms commanders, routines involving PDB files
-use simple_commanders_atoms, only: commander_map2model_fsc, commander_pdb2mrc, commander_model_validation
+use simple_commanders_atoms, only: commander_map2model_fsc, commander_model_validation
 
 ! distr commanders, support routines for distributed execution
 use simple_commanders_distr, only: commander_split

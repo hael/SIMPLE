@@ -1,6 +1,6 @@
 !@descr: the user interface class (it's a beast)
 module simple_user_interface
-use simple_ui_api_all
+use simple_ui_all
 implicit none
 
 public :: make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui

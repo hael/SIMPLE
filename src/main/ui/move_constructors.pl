@@ -72,7 +72,7 @@ sub norm {
 # --------------------------
 # Parse mapping: proc -> file
 # format like:
-#   simple_ui_api_image.f90:
+#   simple_ui_image.f90:
 #   binarize
 #   convert
 #   ...
