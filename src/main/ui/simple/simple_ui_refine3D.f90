@@ -1,4 +1,4 @@
-!@descr: "refine3D" UI api (concrete implementation)
+!@descr: module defining the user interfaces for 3D refinement programs in the simple_exec suite
 module simple_ui_refine3D
 use simple_ui_modules
 implicit none

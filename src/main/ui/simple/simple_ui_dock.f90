@@ -1,4 +1,4 @@
-!@descr: "dock" UI api (concrete implementation)
+!@descr: module defining the user interfaces for docking programs in the simple_exec suite
 module simple_ui_dock
 use simple_ui_modules
 implicit none

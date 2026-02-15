@@ -1,3 +1,4 @@
+!@descr: module defining the user interfaces for miscellaneous programs in the simple_exec suite
 module simple_ui_other
 use simple_ui_modules
 implicit none

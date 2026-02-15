@@ -1,4 +1,4 @@
-!@descr: "project" UI api (concrete implementation)
+!@descr: module defining the user interfaces for project management programs in the simple_exec suite
 module simple_ui_project
 use simple_ui_modules
 implicit none

@@ -3,7 +3,7 @@ program simple_test_exec
 use simple_core_module_api
 use simple_exec_helpers,    only: script_exec, restarted_exec, update_job_descriptions_in_project
 use simple_jiffys,          only: simple_print_git_version, simple_print_timer
-use simple_ui,  only: make_ui, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
+use simple_ui,              only: make_ui, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
 use iso_fortran_env,        only: output_unit
 use simple_cmdline,         only: cmdline, cmdline_err
 use simple_commanders_test, only: commander_test_sim_workflow

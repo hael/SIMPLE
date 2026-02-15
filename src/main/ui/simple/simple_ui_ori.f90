@@ -1,4 +1,4 @@
-!@descr: "ori" UI api (concrete implementation)
+!@descr: module defining the user interfaces for orientation processing programs in the simple_exec suite
 module simple_ui_ori
 use simple_ui_modules
 implicit none

@@ -1,4 +1,4 @@
-!@descr: the user interface class (it's a beast)
+!@descr: the main user interface module 
 module simple_ui
 use simple_ui_all
 implicit none

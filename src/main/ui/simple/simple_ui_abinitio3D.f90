@@ -1,3 +1,4 @@
+!@ descr: module defining the user interfaces for ab initio 3D reconstruction programs in the simple_exec suite
 module simple_ui_abinitio3D
 use simple_ui_modules
 implicit none

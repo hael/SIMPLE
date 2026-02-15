@@ -1,3 +1,4 @@
+!@descr: module aggregating all simple_ui modules for easy use in the main driver
 module simple_ui_all
 ! helpers
 use simple_core_module_api

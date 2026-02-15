@@ -1,3 +1,4 @@
+!@descr: module defining utility procedures for the simple_ui modules
 module simple_ui_utils
 use simple_ui_program, only: ui_program
 use simple_ui_hash,    only: ui_hash

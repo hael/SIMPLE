@@ -1,4 +1,4 @@
-!@descr: "single_ui_nano2D" UI api (concrete implementation)
+!@descr: module defining the user interfaces for 2D analysis of nanoparticle time-series in the single_exec suite
 module single_ui_nano2D
 use simple_ui_modules
 implicit none

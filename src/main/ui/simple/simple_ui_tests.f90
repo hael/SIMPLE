@@ -1,4 +1,4 @@
-!@descr: "tests" UI api (concrete implementation)
+!@descr: module defining the user interfaces for testing programs in the simple_exec suite
 module simple_ui_tests
 use simple_ui_modules
 implicit none
