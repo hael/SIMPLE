@@ -583,7 +583,7 @@ contains
         call self%split_atoms(split_fname)
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
-        if( WRITE_OUTPUT ) call simatms%write(self%fbody//'_SIM_pre_validation.mrc')
+        if( WRITE_OUTPUT ) call simatms%write(self%fbody//'_SIM_pre_validate.mrc')
         call self%validate_atoms(simatms, l_print=.false.)
         if( WRITE_OUTPUT ) call self%write_centers(string('valid_corr_in_bfac_field_pre_discard.pdb'), 'valid_corr')
         if( l_atom_thres ) call self%discard_atoms(l_print=ll_print)

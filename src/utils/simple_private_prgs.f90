@@ -3,7 +3,7 @@ module simple_private_prgs
 use simple_core_module_api
 implicit none
 
-public :: make_private_user_interface, print_private_cmdline, get_private_keys_required, get_n_private_keys_required, print_cmdline_oldschool
+public :: make_private_ui, print_private_cmdline, get_private_keys_required, get_n_private_keys_required, print_cmdline_oldschool
 private
 #include "simple_local_flags.inc"
 
@@ -56,10 +56,10 @@ contains
 
     ! class methods
 
-    subroutine make_private_user_interface
+    subroutine make_private_ui
         call init_cmd_dict
         call new_private_prgs
-    end subroutine make_private_user_interface
+    end subroutine make_private_ui
 
     function get_n_private_keys_required( prg ) result( nreq )
         character(len=*), intent(in)  :: prg

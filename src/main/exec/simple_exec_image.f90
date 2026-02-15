@@ -1,3 +1,4 @@
+!@descr: execution of image processing commanders
 module simple_exec_image
 use simple_cmdline,            only: cmdline
 use simple_commanders_imgops,  only: commander_binarize, commander_normalize, commander_scale

@@ -40,7 +40,7 @@
       - `simple_test_maxnloc.f90`
       - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
       - `simple_test_mrc2jpeg.f90`
-      - `simple_test_mrc_validation.f90`
+      - `simple_test_mrc_validate.f90`
       - `simple_test_msk_routines.f90`
       - `simple_test_multinomal.f90`
       - `simple_test_nano_mask.f90`
@@ -135,7 +135,7 @@
       - `simple_simulator.f90` — simulation of single-particle images
       - `simple_sym.f90` — defines protein point-group symmetries
       - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
-      - `simple_user_interface.f90` — the user interface class (it's a beast)
+      - `simple_ui.f90` — the user interface class (it's a beast)
       - **apis/** — application programming interfaces for cleaner use inclusion and faster compilation
         - `simple_commanders_api.f90` — API for the commanders
         - `simple_core_module_api.f90` — API for the core modules

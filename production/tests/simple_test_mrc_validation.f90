@@ -1,4 +1,4 @@
-program simple_test_mrc_validation
+program simple_test_mrc_validate
 use simple_core_module_api
 use simple_atoms, only: atoms
 use simple_image, only: image
@@ -9,7 +9,7 @@ type(image)                   :: vol
 real                          :: smpd
 integer                       :: ldim(3), ifoo, slen
 if( command_argument_count() /= 2 )then
-    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mrc_validation vol.mrc smpd'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mrc_validate vol.mrc smpd'
     write(logfhandle,'(a)') 'vol.mrc : volume' 
     write(logfhandle,'(a)') 'smpd    : SMPD value in Angstrom per voxel ' 
 else
@@ -25,4 +25,4 @@ call vol%new(ldim, smpd)
 call vol%read(string(trim(vol_file)))
 call vol%write(string('vol_simple.mrc'))
 call vol%kill
-end program simple_test_mrc_validation
+end program simple_test_mrc_validate

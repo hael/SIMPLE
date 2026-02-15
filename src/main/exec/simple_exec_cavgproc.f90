@@ -1,3 +1,4 @@
+!@descr: execution of cavgs processing commanders
 module simple_exec_cavgproc
 use simple_cmdline,           only: cmdline
 use simple_commanders_cavgs,  only: commander_cluster_cavgs, commander_cluster_cavgs_selection,&

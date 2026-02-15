@@ -2,8 +2,6 @@ module simple_ui_other
 use simple_ui_modules
 implicit none
 
-type(ui_program), target :: mkdir_
-
 type(ui_program), target :: split_
 type(ui_program), target :: split_stack
 
@@ -11,7 +9,6 @@ contains
 
     subroutine construct_other_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_mkdir_(prgtab)
         call new_split_(prgtab)
         call new_split_stack(prgtab)
     end subroutine construct_other_programs
@@ -19,38 +16,10 @@ contains
     subroutine print_other_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('OTHER UTILITIES:', C_UNDERLINED)
-        write(logfhandle,'(A)') mkdir_%name%to_char()
         write(logfhandle,'(A)') split_%name%to_char()
         write(logfhandle,'(A)') split_stack%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_other_programs
-
-    subroutine new_mkdir_( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call mkdir_%new(&
-        &'mkdir',&                                                       ! name
-        &'Make directory',&                                              ! descr_short
-        &'is a program for making an automatically numbered directory',& ! descr_long
-        &'simple_exec',&                                                 ! executable
-        &.false.)                                                        ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call mkdir_%add_input(UI_PARM, 'dir', 'dir', 'Name of directory to create', 'Name of directory name to create(e.g. X_dir/)', 'e.g. X_dir/', .true., ' ')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-        call add_ui_program('mkdir_', mkdir_, prgtab)
-    end subroutine new_mkdir_
 
     subroutine new_split_( prgtab )
         class(ui_hash), intent(inout) :: prgtab

@@ -1,3 +1,4 @@
+!@descr: execution of resolution estimation commanders
 module simple_exec_res
 use simple_cmdline,             only: cmdline
 use simple_commanders_resolest, only: commander_fsc, commander_clin_fsc

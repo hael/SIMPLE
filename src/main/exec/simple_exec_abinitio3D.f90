@@ -1,3 +1,4 @@
+!@descr: execution of abinitio3D commanders
 module simple_exec_abinitio3D
 use simple_cmdline,             only: cmdline
 use simple_string,              only: string

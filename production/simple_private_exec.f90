@@ -89,8 +89,8 @@ pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
 ! make UIs
-call make_user_interface
-call make_private_user_interface
+call make_ui
+call make_private_ui
 ! this parses all key=value pairs on the command line
 call cline%parse_private
 call print_slurm_env

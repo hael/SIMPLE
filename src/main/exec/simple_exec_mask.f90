@@ -1,3 +1,4 @@
+!@descr: execution of masking commanders
 module simple_exec_mask
 use simple_cmdline,         only: cmdline
 use simple_commanders_mask, only: commander_auto_spher_mask, commander_mask, commander_automask2D

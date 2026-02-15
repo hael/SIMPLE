@@ -37,20 +37,20 @@ type, extends(commander_base) :: commander_map2model_fsc
     procedure :: execute      => exec_map2model_fsc
 end type commander_map2model_fsc
 
-type, extends(commander_base) :: commander_map_validation
+type, extends(commander_base) :: commander_map_validate
   contains
-    procedure :: execute      => exec_map_validation
-end type commander_map_validation
+    procedure :: execute      => exec_map_validate
+end type commander_map_validate
 
-type, extends(commander_base) :: commander_model_validation
+type, extends(commander_base) :: commander_model_validate
   contains
-    procedure :: execute      => exec_model_validation
-end type commander_model_validation
+    procedure :: execute      => exec_model_validate
+end type commander_model_validate
 
-type, extends(commander_base) :: commander_model_validation_eo
+type, extends(commander_base) :: commander_model_validate_eo
   contains
-    procedure :: execute      => exec_model_validation_eo
-end type commander_model_validation_eo
+    procedure :: execute      => exec_model_validate_eo
+end type commander_model_validate_eo
 
 type, extends(commander_base) :: commander_pdb2mrc
   contains
@@ -431,8 +431,8 @@ contains
         call simple_end('**** SIMPLE_MAP2MODEL_FSC NORMAL STOP ****')
     end subroutine exec_map2model_fsc
    
-    subroutine exec_map_validation( self, cline )
-        class(commander_map_validation), intent(inout) :: self
+    subroutine exec_map_validate( self, cline )
+        class(commander_map_validate), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
@@ -459,30 +459,30 @@ contains
         call sim_vol%read(sim_vol_file)
         call exp_vol%read_and_crop(params%vols(1), params%smpd, box_new, smpd_new)
         call exp_vol%write(upscale_vol_file)
-        call molecule%map_validation(exp_vol, sim_vol)!, filename='map_val_coor')
+        call molecule%map_validate(exp_vol, sim_vol)!, filename='map_val_coor')
         call molecule%kill()
         call exp_vol%kill()
         call sim_vol%kill()
         ! end gracefully
-        call simple_end('**** SIMPLE_MAP_VALIDATION NORMAL STOP ****')
-    end subroutine exec_map_validation
+        call simple_end('**** SIMPLE_MAP_validate NORMAL STOP ****')
+    end subroutine exec_map_validate
 
-    subroutine exec_model_validation( self, cline )
-        class(commander_model_validation), intent(inout) :: self
+    subroutine exec_model_validate( self, cline )
+        class(commander_model_validate), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
         call params%new(cline)
         call molecule%new(params%pdbfile)
-        call molecule%model_validation(params%pdbfile, params%vols(1), params%smpd, params%smpd_target)
+        call molecule%model_validate(params%pdbfile, params%vols(1), params%smpd, params%smpd_target)
         call molecule%kill()
         ! end gracefully
-        call simple_end('**** SIMPLE_MODEL_VALIDATION NORMAL STOP ****')
-    end subroutine exec_model_validation
+        call simple_end('**** SIMPLE_MODEL_validate NORMAL STOP ****')
+    end subroutine exec_model_validate
 
-    subroutine exec_model_validation_eo( self, cline )
+    subroutine exec_model_validate_eo( self, cline )
         use simple_commanders_volops, only: commander_sharpvol
-        class(commander_model_validation_eo), intent(inout) :: self
+        class(commander_model_validate_eo), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(commander_sharpvol) :: xsharpvol
         type(cmdline)    :: cline_sharpvol1, cline_sharpvol2
@@ -505,11 +505,11 @@ contains
         call molecule%new(params%pdbfile)
         if( .not.cline%defined('vol2') ) params%vols(2) = get_fbody(params%vols(1),'mrc')//'_even.mrc'
         if( .not.cline%defined('vol3') ) params%vols(3) = get_fbody(params%vols(1),'mrc')//'_odd.mrc'
-        call molecule%model_validation_eo(params%pdbfile, params%vols(1), params%vols(2), params%vols(3), params%smpd, params%smpd_target)
+        call molecule%model_validate_eo(params%pdbfile, params%vols(1), params%vols(2), params%vols(3), params%smpd, params%smpd_target)
         call molecule%kill()
         ! end gracefully
-        call simple_end('**** SIMPLE_MODEL_VALIDATION_EO NORMAL STOP ****')
-    end subroutine exec_model_validation_eo
+        call simple_end('**** SIMPLE_MODEL_validate_EO NORMAL STOP ****')
+    end subroutine exec_model_validate_eo
 
     subroutine exec_pdb2mrc( self, cline )
         class(commander_pdb2mrc), intent(inout) :: self

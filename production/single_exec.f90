@@ -72,7 +72,7 @@ pos = index(args, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, args, pos )
 prg = args(pos+1:) ! this is the program name
 ! make UI
-call make_user_interface
+call make_ui
 if( str_has_substr(entire_line, 'prg=list') )then
     call list_single_prgs_in_ui
     stop
@@ -201,7 +201,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('0b2bcd6b')
+    call simple_print_git_version('d8d900e0')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

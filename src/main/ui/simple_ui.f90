@@ -1,32 +1,25 @@
 !@descr: the user interface class (it's a beast)
-module simple_user_interface
+module simple_ui
 use simple_ui_all
 implicit none
 
-public :: make_user_interface, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
+public :: make_ui, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
 public :: print_ui_json, write_ui_json, list_single_prgs_in_ui, list_stream_prgs_in_ui
-public :: print_stream_ui_json, validate_ui_json, test_ui_refactoring_func
+public :: print_stream_ui_json, validate_ui_json
 private
 #include "simple_local_flags.inc"
 
-character(len=26), parameter :: UI_FNAME = 'simple_user_interface.json'
+character(len=26), parameter :: UI_FNAME = 'simple_ui.json'
 logical,           parameter :: DEBUG    = .false.
 type(ui_hash)                :: prgtab
 type(string), allocatable    :: prgnames(:)
-contains
 
-    subroutine test_ui_refactoring_func
-        integer :: i
-        do i = 1, size(prgnames)
-            call prgnames(i)%print
-        end do
-    end subroutine test_ui_refactoring_func
+contains
     
     ! public class methods
 
-    subroutine make_user_interface
+    subroutine make_ui
         call set_ui_params
-
         ! SIMPLE PROGRAMS
         call construct_project_programs(prgtab)
         call construct_preproc_programs(prgtab)
@@ -42,7 +35,7 @@ contains
         call construct_print_programs(prgtab)
         call construct_res_programs(prgtab)
         call construct_sim_programs(prgtab)
-        call construct_validation_programs(prgtab)
+        call construct_validate_programs(prgtab)
         call construct_symmetry_programs(prgtab)
         call construct_dock_programs(prgtab)
         call construct_volume_programs(prgtab)
@@ -55,11 +48,10 @@ contains
         call construct_single_nano3D_programs(prgtab)
         call construct_single_trajectory_programs(prgtab)
         call construct_single_tseries_programs(prgtab)
-        call construct_single_validation_programs(prgtab)
-
+        call construct_single_validate_programs(prgtab)
         prgnames = prgtab%keys_sorted()
-        if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
-    end subroutine make_user_interface
+        if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_ui; make_ui, DONE'
+    end subroutine make_ui
 
     subroutine get_prg_ptr( which_program, ptr2prg )
         class(string),             intent(in)    :: which_program
@@ -83,7 +75,7 @@ contains
         call print_print_programs(logfhandle)
         call print_res_programs(logfhandle)
         call print_sim_programs(logfhandle)
-        call print_validation_programs(logfhandle)
+        call print_validate_programs(logfhandle)
         call print_symmetry_programs(logfhandle)
         call print_dock_programs(logfhandle)
         call print_volume_programs(logfhandle)
@@ -91,132 +83,9 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_simple_test_prgs_in_ui
-        !====================================================================
-        ! HIGH-LEVEL
-        !====================================================================
-        write(logfhandle,'(A)') format_str('HIGH LEVEL:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_mini_stream%name%to_char()
-        write(logfhandle,'(A)') test_sim_workflow%name%to_char()
-        ! write(logfhandle,'(A)') test_inside_write%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! INPUT/OUTPUT
-        !====================================================================
-        write(logfhandle,'(A)') format_str('INPUT/OPTPUT:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_imgfile%name%to_char()
-        ! write(logfhandle,'(A)') test_io%name%to_char()
-        ! write(logfhandle,'(A)') test_io_parallel%name%to_char()
-        ! write(logfhandle,'(A)') test_stack_io%name%to_char()
-        ! write(logfhandle,'(A)') test_mrc_validation%name%to_char()
-        ! write(logfhandle,'(A)') test_mrc2jpeg%name%to_char()
-        ! write(logfhandle,'(A)') test_starfile%name%to_char()
-        ! write(logfhandle,'(A)') test_star_export%name%to_char()
-        ! write(logfhandle,'(A)') test_inside_write%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! NETWORK
-        !====================================================================
-        write(logfhandle,'(A)') format_str('NETWORK:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_socket_client%name%to_char()
-        ! write(logfhandle,'(A)') test_socket_server%name%to_char()
-        ! write(logfhandle,'(A)') test_socket_io%name%to_char()
-        ! write(logfhandle,'(A)') test_socket_comm_distr%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! PARALLEL
-        !====================================================================
-        write(logfhandle,'(A)') format_str('PARALLEL:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_openmp%name%to_char()
-        ! write(logfhandle,'(A)') test_openacc%name%to_char()
-        ! write(logfhandle,'(A)') test_coarrays%name%to_char()
-        ! write(logfhandle,'(A)') test_simd%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! FFT
-        !====================================================================
-        write(logfhandle,'(A)') format_str('FFT:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_phasecorr%name%to_char()
-        ! write(logfhandle,'(A)') test_order_corr%name%to_char()
-        ! write(logfhandle,'(A)') test_gencorrs_fft%name%to_char()
-        ! write(logfhandle,'(A)') test_ft_expanded%name%to_char()
-        ! write(logfhandle,'(A)') test_eval_polarftcc%name%to_char()
-        ! write(logfhandle,'(A)') test_polarops%name%to_char()
-        ! write(logfhandle,'(A)') test_corrs2weights%name%to_char()
-        ! write(logfhandle,'(A)') test_rank_weights%name%to_char()
-        ! write(logfhandle,'(A)') test_rotate_ref%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! GEOMETRY
-        !====================================================================
-        write(logfhandle,'(A)') format_str('GEOMETRY:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_angres%name%to_char()
-        ! write(logfhandle,'(A)') test_ori%name%to_char()
-        ! write(logfhandle,'(A)') test_oris%name%to_char()
-        ! write(logfhandle,'(A)') test_uniform_euler%name%to_char()
-        ! write(logfhandle,'(A)') test_uniform_rot%name%to_char()
-        ! write(logfhandle,'(A)') test_sym%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! MASKS
-        !====================================================================
-        write(logfhandle,'(A)') format_str('MASKS:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_mask%name%to_char()
-        ! write(logfhandle,'(A)') test_msk_routines%name%to_char()
-        ! write(logfhandle,'(A)') test_otsu%name%to_char()
-        ! write(logfhandle,'(A)') test_bounds_from_mask3D%name%to_char()
-        ! write(logfhandle,'(A)') test_graphene_mask%name%to_char()
-        ! write(logfhandle,'(A)') test_nano_mask%name%to_char()
-        ! write(logfhandle,'(A)') test_ptcl_center%name%to_char()
-        ! write(logfhandle,'(A)') test_image_bin%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! OPTIMIZE
-        !====================================================================
-        write(logfhandle,'(A)') format_str('OPTIMIZE:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_lbfgsb%name%to_char()
-        ! write(logfhandle,'(A)') test_lbfgsb_cosine%name%to_char()
-        ! write(logfhandle,'(A)') test_opt_lp%name%to_char()
-        ! write(logfhandle,'(A)') test_lplims%name%to_char()
-        ! write(logfhandle,'(A)') test_lpstages%name%to_char()
-        ! write(logfhandle,'(A)') test_tree_srch%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! NUMERICS
-        !====================================================================
-        write(logfhandle,'(A)') format_str('NUMERICS:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_eigh%name%to_char()
-        ! write(logfhandle,'(A)') test_kbinterpol_fast%name%to_char()
-        ! write(logfhandle,'(A)') test_neigh%name%to_char()
-        ! write(logfhandle,'(A)') test_maxnloc%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! UTILS
-        !====================================================================
-        write(logfhandle,'(A)') format_str('UTILS:', C_UNDERLINED)
-        ! write(logfhandle,'(A)') test_cmdline%name%to_char()
-        ! write(logfhandle,'(A)') test_stringmatch%name%to_char()
-        ! write(logfhandle,'(A)') test_ansi_colors%name%to_char()
-        ! write(logfhandle,'(A)') test_units%name%to_char()
-        ! write(logfhandle,'(A)') test_serialize%name%to_char()
-        ! write(logfhandle,'(A)') test_install%name%to_char()
-        ! write(logfhandle,'(A)') test_nice%name%to_char()
-        ! write(logfhandle,'(A)') test_binoris_io%name%to_char()
-        write(logfhandle,'(A)') ''
-        !====================================================================
-        ! STATS
-        !====================================================================
-        write(logfhandle,'(A)') format_str('STATS:', C_UNDERLINED) 
-        ! write(logfhandle,'(A)') test_binoris%name%to_char()
-        ! write(logfhandle,'(A)') test_clustering%name%to_char()
-        ! write(logfhandle,'(A)') test_pca_all%name%to_char()
-        ! write(logfhandle,'(A)') test_pca_imgvar%name%to_char()
-        ! write(logfhandle,'(A)') test_class_sample%name%to_char()
-        ! write(logfhandle,'(A)') test_multinomal%name%to_char()
-        ! write(logfhandle,'(A)') test_extr_frac%name%to_char()
-        ! write(logfhandle,'(A)') test_eo_diff%name%to_char()
-        ! write(logfhandle,'(A)') test_ctf%name%to_char()
-        ! write(logfhandle,'(A)') test_sp_project%name%to_char()
-        write(logfhandle,'(A)') ''
+
+        ! 2 be implemented
+       
     end subroutine list_simple_test_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
@@ -294,7 +163,7 @@ contains
         ! write & clean
         call json%print(all_programs, logfhandle)
         if ( json%failed() ) then
-            THROW_HARD('json input/output error for simple_user_interface')
+            THROW_HARD('json input/output error for simple_ui')
         endif
         call json%destroy(all_programs)
 
@@ -427,7 +296,7 @@ contains
         ! write & clean
         call json%print(all_programs, UI_FNAME)
         if ( json%failed() ) then
-            THROW_HARD('json input/output error for simple_user_interface')
+            THROW_HARD('json input/output error for simple_ui')
         endif
         call json%destroy(all_programs)
 
@@ -744,7 +613,7 @@ contains
         ! print & clean
         call json%print(ui, logfhandle)
         if( json%failed() )then
-            THROW_HARD('json input/output error for simple_user_interface')
+            THROW_HARD('json input/output error for simple_ui')
         endif
         call json%destroy(ui)
     end subroutine print_stream_ui_json
@@ -757,7 +626,7 @@ contains
         type(json_value),             pointer :: p
         character(kind=CK,len=:), allocatable :: fname
         ! Builds & writes UI
-        call make_user_interface
+        call make_ui
         write(*,*)'Constructed UI'
         call write_ui_json
         write(*,*)'Wrote UI'
@@ -770,4 +639,4 @@ contains
         nullify(p)
     end subroutine validate_ui_json
 
-end module simple_user_interface
+end module simple_ui

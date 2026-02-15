@@ -1,3 +1,4 @@
+!@descr: execution of project management commanders
 module simple_exec_project
 use simple_cmdline,                 only: cmdline
 use simple_commanders_relion,       only: commander_export_relion

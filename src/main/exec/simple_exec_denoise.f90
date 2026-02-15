@@ -1,3 +1,4 @@
+!@descr: execution of denoising commanders
 module simple_exec_denoise
 use simple_cmdline,              only: cmdline
 use simple_commanders_resolest,  only: commander_icm2D, commander_icm3D

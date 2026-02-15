@@ -1,3 +1,4 @@
+!@descr: execution of filtering commanders
 module simple_exec_filter
 use simple_cmdline,             only: cmdline
 use simple_commanders_resolest, only: commander_uniform_filter2D, commander_uniform_filter3D

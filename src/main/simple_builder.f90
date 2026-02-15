@@ -161,7 +161,7 @@ contains
     ! LOW-LEVEL BUILDERS
 
     subroutine build_spproj( self, params, cline, wthreads )
-        use simple_user_interface, only: get_prg_ptr
+        use simple_ui, only: get_prg_ptr
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline

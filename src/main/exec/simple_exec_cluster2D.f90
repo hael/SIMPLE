@@ -1,3 +1,4 @@
+!@descr: execution of cluster2D commanders
 module simple_exec_cluster2D
 use simple_cmdline,                  only: cmdline
 use simple_string,                   only: string

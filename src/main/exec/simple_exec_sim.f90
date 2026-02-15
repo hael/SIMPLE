@@ -1,3 +1,4 @@
+!@descr: execution of simulation commanders
 module simple_exec_sim
 use simple_cmdline,          only: cmdline
 use simple_commanders_sim,   only: commander_simulate_noise, commander_simulate_particles, commander_simulate_movie

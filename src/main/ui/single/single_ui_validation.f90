@@ -1,5 +1,5 @@
-!@descr: "single_ui_validation" UI api (concrete implementation)
-module single_ui_validation
+!@descr: "single_ui_validate" UI api (concrete implementation)
+module single_ui_validate
 use simple_ui_modules
 implicit none
 
@@ -9,21 +9,21 @@ type(ui_program), target :: ptclsproc_nano
 
 contains
 
-    subroutine construct_single_validation_programs(prgtab)
+    subroutine construct_single_validate_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_cavgseoproc_nano(prgtab)
         call new_cavgsproc_nano(prgtab)
         call new_ptclsproc_nano(prgtab)
-    end subroutine construct_single_validation_programs
+    end subroutine construct_single_validate_programs
 
-    subroutine print_single_validation_programs(logfhandle)
+    subroutine print_single_validate_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)
         write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
         write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
         write(logfhandle,'(A)') ptclsproc_nano%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_single_validation_programs
+    end subroutine print_single_validate_programs
 
     subroutine new_cavgseoproc_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -108,4 +108,4 @@ contains
         call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
     end subroutine new_ptclsproc_nano
 
-end module single_ui_validation
+end module single_ui_validate

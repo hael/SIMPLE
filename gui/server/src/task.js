@@ -14,7 +14,7 @@ class Task{
   constructor() {
     this.taskselector = pug.compileFile(global.simplepath + '/gui_data/client/src/taskselector.pug')
     this.taskinput = pug.compileFile(global.simplepath + '/gui_data/client/src/taskinput.pug')
-    var simplejson = require(global.userdata + '/simple_user_interface.json')
+    var simplejson = require(global.userdata + '/simple_ui.json')
     this.simpleTasks = {}
     for (var command of simplejson){
       var commandkeys = Object.keys(command)
